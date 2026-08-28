@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'duediligence-shell-20260827-profile-pedro-release2-1-examination-room-renovation-20260828-5';
+const CACHE_VERSION = 'duediligence-shell-20260828-examination-room-reliability-1';
 const EXAMINATION_STUDENT_SHELL = '/examination-room/student.html';
 const EXAMINATION_OFFLINE_GRADER = '/examination-room/offline-grading.html';
 const SHELL = Object.freeze([
@@ -18,12 +18,12 @@ const SHELL = Object.freeze([
   EXAMINATION_OFFLINE_GRADER,
   '/examination-room/student.css?v=renovation-20260828-4',
   '/examination-room/view-models.js?v=greenfield-v1-20260826-1',
-  '/examination-room/api.js?v=renovation-20260828-4',
-  '/examination-room/media-capture.js?v=renovation-20260828-4',
-  '/examination-room/student.js?v=renovation-20260828-4',
+  '/examination-room/api.js?v=reliability-20260828-1',
+  '/examination-room/media-capture.js?v=reliability-20260828-1',
+  '/examination-room/student.js?v=reliability-20260828-1',
   '/examination-room/offline-grading.css?v=greenfield-v1-20260826-1',
   '/examination-room/offline-grading-core.js?v=greenfield-v1-20260826-3',
-  '/examination-room/offline-grading.js?v=greenfield-v1-20260826-3',
+  '/examination-room/offline-grading.js?v=reliability-20260828-1',
   '/assets/phase2-config.js?v=provider-neutral-release2-20260827-1',
   '/assets/private-beta-session.js?v=beta-all-access-20260802-1',
 ]);

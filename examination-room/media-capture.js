@@ -6,6 +6,9 @@
   var CHUNK_MILLISECONDS = 30000;
   var ENCRYPTED_CHUNK_MAGIC = new Uint8Array([68, 68, 69, 82, 77, 86, 49, 0]); // DDERMV1\0
   var RETRY_DELAYS = [0, 1500, 5000, 15000, 45000];
+  var REQUEST_DEADLINE_MILLISECONDS = 20000;
+  var MEDIA_DB_OPEN_TIMEOUT_MILLISECONDS = 5000;
+  var MAX_UPLOAD_ATTEMPTS = 8;
   var MIME_CANDIDATES = [
     'video/webm;codecs=vp8,opus',
     'video/webm;codecs=vp9,opus',
@@ -14,12 +17,46 @@
     'audio/webm'
   ];
 
-  function mediaError(code, message, cause) {
+  function mediaError(code, message, cause, details) {
     var error = new Error(message);
     error.name = 'ExaminationRoomMediaError';
     error.code = code;
     if (cause) error.cause = cause;
+    if (details && details.retryable === false) error.retryable = false;
+    if (details && Number.isFinite(details.status)) error.status = Number(details.status);
     return error;
+  }
+
+  function requestIsRetryable(status) {
+    return status === 408 || status === 425 || status === 429 || status >= 500;
+  }
+
+  function fetchWithDeadline(url, init, consumeResponse) {
+    var controller = typeof global.AbortController === 'function'
+      ? new global.AbortController()
+      : null;
+    var options = Object.assign({}, init || {});
+    if (controller) options.signal = controller.signal;
+    var timer;
+    var deadline = new Promise(function (_resolve, reject) {
+      timer = global.setTimeout(function () {
+        if (controller) controller.abort();
+        reject(mediaError(
+          'MEDIA_REQUEST_TIMEOUT',
+          'The recording backup request timed out and remains queued on this device.'
+        ));
+      }, REQUEST_DEADLINE_MILLISECONDS);
+    });
+    var request = Promise.resolve()
+      .then(function () { return global.fetch(url, options); })
+      .then(function (response) {
+        return typeof consumeResponse === 'function'
+          ? consumeResponse(response)
+          : response;
+      });
+    return Promise.race([request, deadline]).finally(function () {
+      global.clearTimeout(timer);
+    });
   }
 
   function bytesToBase64(bytes) {
@@ -50,6 +87,20 @@
         return;
       }
       var request = global.indexedDB.open(MEDIA_DB_NAME, MEDIA_DB_VERSION);
+      var settled = false;
+      var timer = global.setTimeout(function () {
+        finish(null, mediaError('MEDIA_STORAGE_UNAVAILABLE', 'The encrypted recording queue took too long to open.'));
+      }, MEDIA_DB_OPEN_TIMEOUT_MILLISECONDS);
+      function finish(database, error) {
+        if (settled) {
+          if (database && typeof database.close === 'function') database.close();
+          return;
+        }
+        settled = true;
+        global.clearTimeout(timer);
+        if (error) reject(error);
+        else resolve(database);
+      }
       request.onupgradeneeded = function () {
         var database = request.result;
         if (!database.objectStoreNames.contains('chunks')) {
@@ -59,8 +110,9 @@
           chunks.createIndex('createdAt', 'createdAt', { unique: false });
         }
       };
-      request.onerror = function () { reject(request.error || mediaError('MEDIA_STORAGE_UNAVAILABLE', 'The encrypted recording queue could not be opened.')); };
-      request.onsuccess = function () { resolve(request.result); };
+      request.onerror = function () { finish(null, request.error || mediaError('MEDIA_STORAGE_UNAVAILABLE', 'The encrypted recording queue could not be opened.')); };
+      request.onblocked = function () { finish(null, mediaError('MEDIA_STORAGE_UNAVAILABLE', 'Another tab is preventing the encrypted recording queue from opening.')); };
+      request.onsuccess = function () { finish(request.result); };
     });
   }
 
@@ -129,18 +181,29 @@
   async function postJson(path, body) {
     var base = String(global.DueDiligencePhase2Config && global.DueDiligencePhase2Config.workerUrl || '').replace(/\/+$/g, '');
     if (!base) throw mediaError('MEDIA_SERVICE_UNAVAILABLE', 'The recording upload service is not configured.');
-    var response = await global.fetch(base + path, {
+    var outcome = await fetchWithDeadline(base + path, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-Request-ID': uuid()
       },
       body: JSON.stringify(body)
+    }, async function (response) {
+      return {
+        response: response,
+        result: await response.json().catch(function () { return null; })
+      };
     });
-    var result = await response.json().catch(function () { return null; });
+    var response = outcome.response;
+    var result = outcome.result;
     if (!response.ok || !result || result.ok !== true) {
       var remote = result && result.error || {};
-      throw mediaError(remote.code || 'MEDIA_SERVICE_UNAVAILABLE', remote.message || 'The recording upload service did not complete the request.');
+      throw mediaError(
+        remote.code || 'MEDIA_SERVICE_UNAVAILABLE',
+        remote.message || 'The recording upload service did not complete the request.',
+        null,
+        { retryable: requestIsRetryable(response.status), status: response.status }
+      );
     }
     return result;
   }
@@ -153,15 +216,28 @@
     var headers = Object.assign({}, instruction.headers || {}, {
       'Content-Type': 'application/octet-stream'
     });
-    var response = await global.fetch(instruction.url, {
+    var outcome = await fetchWithDeadline(instruction.url, {
       method: instruction.method || 'PUT',
       headers: headers,
       body: chunk.encryptedBlob
+    }, async function (response) {
+      return {
+        response: response,
+        providerResult: response.ok
+          ? await response.json().catch(function () { return {}; })
+          : {}
+      };
     });
+    var response = outcome.response;
     if (!response.ok) {
-      throw mediaError('MEDIA_UPLOAD_FAILED', 'Encrypted recording upload failed with status ' + response.status + '.');
+      throw mediaError(
+        'MEDIA_UPLOAD_FAILED',
+        'Encrypted recording upload failed with status ' + response.status + '.',
+        null,
+        { retryable: requestIsRetryable(response.status), status: response.status }
+      );
     }
-    var providerResult = await response.json().catch(function () { return {}; });
+    var providerResult = outcome.providerResult;
     return {
       provider: recording.provider,
       providerObjectId: providerResult && providerResult.id || null
@@ -290,10 +366,11 @@
         }
         while (global.navigator.onLine) {
           var chunks = await readAttemptChunks(database, context.attemptId);
-          if (!chunks.length) break;
+          var eligibleChunks = chunks.filter(function (chunk) { return chunk.status !== 'paused'; });
+          if (!eligibleChunks.length) break;
           var blocked = false;
-          for (var index = 0; index < chunks.length; index += 1) {
-            var chunk = chunks[index];
+          for (var index = 0; index < eligibleChunks.length; index += 1) {
+            var chunk = eligibleChunks[index];
             try {
               await uploadOne(chunk);
               status('active', recorder && recorder.state === 'recording'
@@ -302,11 +379,26 @@
             } catch (error) {
               chunk.attempts = Number(chunk.attempts || 0) + 1;
               chunk.updatedAt = new Date().toISOString();
-              chunk.status = chunk.provider ? 'uploaded' : 'queued';
+              var retryable = !error || error.retryable !== false;
+              var retryExhausted = chunk.attempts >= MAX_UPLOAD_ATTEMPTS;
+              chunk.status = !retryable || retryExhausted
+                ? 'paused'
+                : chunk.provider ? 'uploaded' : 'queued';
+              chunk.lastErrorCode = String(error && error.code || 'MEDIA_UPLOAD_FAILED').slice(0, 120);
               delete chunk.sessionToken;
               await transactionRequest(database, 'readwrite', function (store) { store.put(chunk); });
-              status('queued', 'Recording is safely queued on this device. Answers and submission are not affected.', { error: error });
-              if (global.navigator.onLine) {
+              if (chunk.status === 'paused') {
+                status('paused', retryable
+                  ? 'Recording backup paused after repeated failures. Reopen this examination on this device to retry. Answers and submission remain safe.'
+                  : 'Recording backup needs a fresh examination session before retrying. Reopen this examination on this device. Answers and submission remain safe.', {
+                  error: error,
+                  recoverable: true,
+                  attempts: chunk.attempts
+                });
+              } else {
+                status('queued', 'Recording is safely queued on this device. Answers and submission are not affected.', { error: error });
+              }
+              if (global.navigator.onLine && chunk.status !== 'paused') {
                 var retryDelay = RETRY_DELAYS[Math.min(chunk.attempts, RETRY_DELAYS.length - 1)];
                 retryTimer = global.setTimeout(function () {
                   retryTimer = null;
@@ -400,6 +492,16 @@
           status('disabled', 'No encrypted recording uploads are pending.');
           return { active: false, pending: 0, submissionBlocked: false };
         }
+        var paused = existing.filter(function (chunk) { return chunk.status === 'paused'; });
+        if (paused.length) {
+          await Promise.all(paused.map(function (chunk) {
+            chunk.attempts = 0;
+            chunk.status = chunk.provider ? 'uploaded' : 'queued';
+            chunk.updatedAt = new Date().toISOString();
+            delete chunk.lastErrorCode;
+            return transactionRequest(database, 'readwrite', function (store) { store.put(chunk); });
+          }));
+        }
         status('finishing', 'Finishing encrypted recording backup after submission. Submission remains complete.', {
           pending: existing.length
         });
@@ -420,9 +522,22 @@
       global.setTimeout(function () { flush(); }, 250);
     }
 
-    global.addEventListener('online', function () { flush(); });
+    function handleOnline() { flush(); }
 
-    return Object.freeze({ start: start, resume: resume, stop: stop, flush: flush });
+    function destroy() {
+      if (retryTimer) {
+        global.clearTimeout(retryTimer);
+        retryTimer = null;
+      }
+      stopRecorderOnly();
+      if (typeof global.removeEventListener === 'function') {
+        global.removeEventListener('online', handleOnline);
+      }
+    }
+
+    global.addEventListener('online', handleOnline);
+
+    return Object.freeze({ start: start, resume: resume, stop: stop, flush: flush, destroy: destroy });
   }
 
   global.ExaminationRoomMediaCapture = Object.freeze({

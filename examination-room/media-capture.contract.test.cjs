@@ -162,6 +162,13 @@ function createHarness(options = {}) {
       const body = JSON.parse(init.body);
       if (body.operation === 'prepare_upload') {
         calls.prepare.push(body);
+        if (options.stallPrepareBody) {
+          return {
+            ok: true,
+            status: 200,
+            json: () => new Promise(() => {}),
+          };
+        }
         return Response.json({
           ok: true,
           recording: {
@@ -183,11 +190,17 @@ function createHarness(options = {}) {
       }
       calls.complete.push(body);
       completionAttempts += 1;
-      if (options.failFirstCompletion && completionAttempts === 1) {
+      if ((options.failFirstCompletion && completionAttempts === 1) || options.failCompletionAlways) {
+        const failureStatus = Number(options.failureStatus || 503);
         return Response.json({
           ok: false,
-          error: { code: 'EXAM_ROOM_V1_MEDIA_CONTROL_UNAVAILABLE', message: 'Retry completion.' },
-        }, { status: 503 });
+          error: {
+            code: failureStatus >= 500
+              ? 'EXAM_ROOM_V1_MEDIA_CONTROL_UNAVAILABLE'
+              : 'EXAM_ROOM_V1_SESSION_INVALID',
+            message: failureStatus >= 500 ? 'Retry completion.' : 'Reopen the examination session.',
+          },
+        }, { status: failureStatus });
       }
       return Response.json({
         ok: true,
@@ -216,9 +229,11 @@ function createHarness(options = {}) {
   }
 
   const window = {
+    AbortController,
     DueDiligencePhase2Config: { workerUrl: 'https://worker.example' },
     MediaRecorder: FakeMediaRecorder,
     addEventListener() {},
+    removeEventListener() {},
     btoa: (value) => Buffer.from(value, 'binary').toString('base64'),
     clearTimeout,
     crypto: webcrypto,
@@ -347,5 +362,73 @@ test('a refreshed submitted attempt resumes encrypted completion without request
   assert.match(
     restoredPage.calls.statuses.map((entry) => entry.message).join(' '),
     /Submission remains complete/iu,
+  );
+});
+
+test('a permanent media authorization failure pauses instead of retrying forever', async () => {
+  const harness = createHarness({ failCompletionAlways: true, failureStatus: 401 });
+  await harness.controller.start(startInput());
+  await waitFor(
+    () => harness.calls.complete.length === 1
+      && [...harness.indexedDB.records.values()][0]?.status === 'paused',
+    'non-retryable completion did not enter a recoverable paused state',
+  );
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  await harness.controller.flush();
+  assert.equal(harness.calls.complete.length, 1, 'paused authorization failure must not schedule another request');
+  assert.match(
+    harness.calls.statuses.map((entry) => `${entry.state} ${entry.message}`).join(' '),
+    /paused[\s\S]+fresh examination session/iu,
+  );
+});
+
+test('transient media failures stop at the bounded attempt ceiling and can resume explicitly', async () => {
+  const indexedDB = createFakeIndexedDb();
+  const failingPage = createHarness({ indexedDB, failCompletionAlways: true, failureStatus: 503 });
+  await failingPage.controller.start(startInput());
+  await waitFor(
+    () => failingPage.calls.complete.length === 8
+      && [...indexedDB.records.values()][0]?.status === 'paused',
+    'transient completion did not stop at its attempt ceiling',
+  );
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.equal(failingPage.calls.complete.length, 8, 'attempt ceiling must prevent a ninth automatic request');
+  failingPage.controller.destroy();
+
+  const restoredPage = createHarness({ indexedDB });
+  const resumed = await restoredPage.controller.resume(startInput());
+  assert.equal(resumed.pending, 1);
+  await waitFor(
+    () => restoredPage.calls.complete.length === 1 && indexedDB.records.size === 0,
+    'explicit resume did not retry and clear the paused encrypted chunk',
+  );
+  assert.equal(restoredPage.calls.prepare.length, 0, 'completed provider upload must not be repeated');
+  assert.equal(restoredPage.calls.uploadBodies.length, 0, 'encrypted object must not be uploaded twice');
+});
+
+test('a media response body that never finishes is deadline-bounded and enters the paused queue', async () => {
+  const harness = createHarness({ stallPrepareBody: true });
+  await harness.controller.start(startInput());
+  await waitFor(
+    () => harness.calls.prepare.length === 8
+      && [...harness.indexedDB.records.values()][0]?.status === 'paused',
+    'a stalled media response body did not stop at the bounded attempt ceiling',
+  );
+  const stored = [...harness.indexedDB.records.values()][0];
+  assert.equal(stored.lastErrorCode, 'MEDIA_REQUEST_TIMEOUT');
+  assert.equal(harness.calls.prepare.length, 8, 'the stalled response body must not cause a ninth request');
+  harness.controller.destroy();
+});
+
+test('a blocked media database degrades recording without trapping examination startup', async () => {
+  const blockedDatabase = { open: () => ({}) };
+  const harness = createHarness({ indexedDB: blockedDatabase });
+  const started = await harness.controller.start(startInput());
+  assert.equal(started.active, false);
+  assert.equal(started.reason, 'ExaminationRoomMediaError');
+  assert.equal(harness.calls.getUserMedia, 0, 'camera permission must not be requested while local encryption storage is unavailable');
+  assert.match(
+    harness.calls.statuses.map((entry) => entry.message).join(' '),
+    /examination remains open and answers continue saving/iu,
   );
 });

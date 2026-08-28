@@ -6,6 +6,7 @@
   const DATABASE_NAME = 'duediligence-offline-grading-v1';
   const DATABASE_VERSION = 1;
   const STORE_NAME = 'drafts';
+  const DATABASE_OPEN_TIMEOUT_MS = 5000;
 
   const state = {
     file: null,
@@ -17,6 +18,7 @@
     selectedSessionId: null,
     search: '',
     database: null,
+    databasePromise: null,
     autosaveTimer: null,
     toastTimer: null,
   };
@@ -43,7 +45,7 @@
     bindEvents();
     registerExaminationRoomServiceWorker();
     updateConnectionState();
-    openDatabase().then((database) => { state.database = database; }).catch(() => { state.database = null; });
+    ensureDatabase();
   }
 
   function cacheElements() {
@@ -420,11 +422,30 @@
     if (!('indexedDB' in global)) return Promise.reject(new Error('IndexedDB unavailable'));
     return new Promise((resolve, reject) => {
       const request = global.indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
+      let settled = false;
+      const finish = (database, error = null) => {
+        if (settled) {
+          database?.close?.();
+          return;
+        }
+        settled = true;
+        global.clearTimeout(timeout);
+        if (error) reject(error);
+        else resolve(database);
+      };
+      const timeout = global.setTimeout(
+        () => finish(null, new Error('IndexedDB open timed out')),
+        DATABASE_OPEN_TIMEOUT_MS,
+      );
       request.onupgradeneeded = () => {
         if (!request.result.objectStoreNames.contains(STORE_NAME)) request.result.createObjectStore(STORE_NAME, { keyPath: 'id' });
       };
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        request.result.onversionchange = () => request.result.close();
+        finish(request.result);
+      };
+      request.onerror = () => finish(null, request.error || new Error('IndexedDB unavailable'));
+      request.onblocked = () => finish(null, new Error('IndexedDB open blocked'));
     });
   }
 
@@ -438,9 +459,22 @@
     });
   }
 
+  function ensureDatabase() {
+    if (state.database) return Promise.resolve(state.database);
+    if (!state.databasePromise) {
+      state.databasePromise = openDatabase()
+        .then((database) => {
+          state.database = database;
+          return database;
+        })
+        .catch(() => null);
+    }
+    return state.databasePromise;
+  }
+
   async function readDraft(id) {
     try {
-      if (!state.database) state.database = await openDatabase();
+      if (!await ensureDatabase()) throw new Error('Local database unavailable');
       return await databaseOperation('readonly', (store) => store.get(id));
     } catch (_) {
       try { return JSON.parse(global.localStorage.getItem(`ddgrade:${id}`) || 'null'); } catch (_) { return null; }
@@ -449,7 +483,7 @@
 
   async function writeDraft(draft) {
     try {
-      if (!state.database) state.database = await openDatabase();
+      if (!await ensureDatabase()) throw new Error('Local database unavailable');
       await databaseOperation('readwrite', (store) => store.put(draft));
     } catch (_) {
       global.localStorage.setItem(`ddgrade:${draft.id}`, JSON.stringify(draft));
@@ -458,7 +492,7 @@
 
   async function deleteDraft(id) {
     try {
-      if (!state.database) state.database = await openDatabase();
+      if (!await ensureDatabase()) throw new Error('Local database unavailable');
       await databaseOperation('readwrite', (store) => store.delete(id));
     } catch (_) { /* The local fallback is still cleared below. */ }
     try { global.localStorage.removeItem(`ddgrade:${id}`); } catch (_) { /* Ignore unavailable fallback storage. */ }

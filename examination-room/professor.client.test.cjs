@@ -49,7 +49,7 @@ function fakeIndexedDb() {
   };
 }
 
-function loadProfessorStartupHooks({ storageBlocked = false, indexedDbAvailable = false } = {}) {
+function loadProfessorStartupHooks({ storageBlocked = false, indexedDbAvailable = false, indexedDbOverride = undefined, professorQuery = null } = {}) {
   class ExaminationRoomApiError extends Error {
     constructor(code, message, status, recovery) {
       super(message);
@@ -72,12 +72,17 @@ function loadProfessorStartupHooks({ storageBlocked = false, indexedDbAvailable 
     removeItem(key) { values.delete(key); },
   };
   const window = {
-    ExaminationRoomV1Api: { ExaminationRoomApiError, demoEnabled: () => false },
+    ExaminationRoomV1Api: {
+      ExaminationRoomApiError,
+      demoEnabled: () => false,
+      ...(professorQuery ? { professorQuery } : {}),
+    },
     ExaminationRoomV1ViewModels: null,
     DueDiligencePhase2Config: { features: {} },
     crypto: { randomUUID: () => `00000000-0000-4000-8000-${String(++nextId).padStart(12, '0')}` },
     localStorage,
-    indexedDB: indexedDbAvailable ? fakeIndexedDb() : null,
+    indexedDB: indexedDbOverride === undefined ? (indexedDbAvailable ? fakeIndexedDb() : null) : indexedDbOverride,
+    document: { hidden: false },
   };
   window.__scheduledTimers = new Map();
   window.__clearedTimers = [];
@@ -92,7 +97,7 @@ function loadProfessorStartupHooks({ storageBlocked = false, indexedDbAvailable 
   };
   const exposedSource = professorSource.replace(
     /\n\s*initialize\(\);\s*\n\}\)\(window\);\s*$/,
-    '\n  global.__professorStartupTestHooks = { clientOnlyBlankDraft, editorExamFromStored, examContentFingerprint, normalizeAllowedEmails, invalidAllowedEmails, creatorAccessUnlocked, scheduleActivationPoll, stopActivationPolling, saveLocalDraft, readLocalDraft, readActiveLocalDraft, readLocalDraftIndex, localDraftBelongsToCurrentProfessor, prepareDecryptedGradePayload, validateCompleteGradedPackageSets, serverDraftBackupBlockers, serverBackupWaitingLabel, examSummariesFromSession, examSummariesWithCurrentExam, overviewExamItems, overviewStatusPresentation, lifecycleOperationForExam, summariesAfterRemoval, duplicateDraft, isPristineDraft, normalizeQuestion, questionAfterTypeChange, questionSuggestion, marginSuggestion, state };\n})(window);',
+    '\n  global.__professorStartupTestHooks = { clientOnlyBlankDraft, editorExamFromStored, examContentFingerprint, normalizeAllowedEmails, invalidAllowedEmails, creatorAccessUnlocked, scheduleActivationPoll, stopActivationPolling, resetActivationPollingWindow, activationPollDelay, stopMonitorPolling, scheduleMonitorPoll, refreshMonitor, draftDb, saveLocalDraft, readLocalDraft, readActiveLocalDraft, readLocalDraftIndex, localDraftBelongsToCurrentProfessor, prepareDecryptedGradePayload, validateCompleteGradedPackageSets, serverDraftBackupBlockers, serverBackupWaitingLabel, examSummariesFromSession, examSummariesWithCurrentExam, overviewExamItems, overviewStatusPresentation, lifecycleOperationForExam, summariesAfterRemoval, duplicateDraft, isPristineDraft, normalizeQuestion, questionAfterTypeChange, questionSuggestion, marginSuggestion, state };\n})(window);',
   );
   vm.runInNewContext(exposedSource, { window, indexedDB: window.indexedDB }, { filename: 'professor.js' });
   return { ...window.__professorStartupTestHooks, __testWindow: window };
@@ -125,6 +130,30 @@ async function renderAccessFailure(error) {
   return elements;
 }
 
+async function renderMissingApiModule() {
+  const elements = new Map([
+    ['#loading-gate', { hidden: false, dataset: {}, textContent: '' }],
+    ['#access-gate', { hidden: true, dataset: {}, textContent: '' }],
+    ['#access-title', { textContent: '' }],
+    ['#access-copy', { textContent: '' }],
+    ['#access-primary-action', { href: '', textContent: '' }],
+    ['#access-recovery', { textContent: '' }],
+  ]);
+  const document = {
+    querySelector(selector) { return elements.get(selector) || null; },
+    querySelectorAll() { return []; },
+  };
+  const window = {
+    ExaminationRoomV1Api: null,
+    ExaminationRoomV1ViewModels: null,
+    DueDiligencePhase2Config: { features: {} },
+    location: { search: '', hash: '', href: 'https://duediligence.ph/examination-room/' },
+  };
+  vm.runInNewContext(professorSource, { window, document, URLSearchParams }, { filename: 'professor.js' });
+  await new Promise((resolve) => setImmediate(resolve));
+  return elements;
+}
+
 test('professor text and passphrase entry never depend on blocking browser prompts', () => {
   assert.doesNotMatch(professorSource, /global\.prompt\s*\(/);
   assert.doesNotMatch(professorSource, /global\.confirm\s*\(/);
@@ -150,7 +179,7 @@ test('offline grading copies remain passphrase-encrypted and examination-version
   assert.match(professorSource, /professorCommand\('import_grades'/);
   assert.match(professorSource, /importResult\.atomic !== true/);
   assert.doesNotMatch(professorSource, /for \(const grade of importedGrades\)[\s\S]{0,240}professorCommand\('save_grade'/);
-  assert.match(professorSource, /serviceWorker\.register\('\/service-worker\.js\?v=examination-room-renovation-20260828-4'/);
+  assert.match(professorSource, /serviceWorker\.register\('\/service-worker\.js\?v=examination-room-reliability-20260828-1'/);
   assert.match(professorSource, /await state\.offlineWorkspaceReady/);
   assert.match(professorSource, /MAX_OFFLINE_PACKAGE_BYTES\s*=\s*20\s*\*\s*1024\s*\*\s*1024/);
   assert.match(professorSource, /jsonDownloadSize\(wrapper\)\s*>\s*MAX_OFFLINE_PACKAGE_BYTES/);
@@ -786,7 +815,7 @@ test('Professor Create page contains its question cards at a 319px viewport', ()
   );
   assert.match(professorHtml, /class="questions-list"/);
   assert.match(professorHtml, /professor\.css\?v=creator-overview-20260828-1/);
-  assert.match(professorHtml, /api\.js\?v=renovation-20260828-4/);
+  assert.match(professorHtml, /api\.js\?v=reliability-20260828-1/);
 });
 
 test('optional email allowlist accepts newline or numbered entries and normalizes duplicates', () => {
@@ -820,6 +849,7 @@ test('creator receives monitor and grade access from activation without entering
   await firstPoll();
   assert.equal(state.activationPollInFlight, false);
   assert.equal(state.activationTimer, 1, 'a transient refresh failure schedules the next bounded poll');
+  assert.equal(__testWindow.__scheduledTimers.get(1).delay, 9000, 'approval polling backs off after the first check');
 
   stopActivationPolling();
   assert.equal(state.activationTimer, null);
@@ -831,14 +861,17 @@ test('creator receives monitor and grade access from activation without entering
   assert.doesNotMatch(professorSource, /professor-room-key/);
   assert.match(professorSource, /professorCommand\('open_room', \{ examId: state\.exam\.id \}/);
   assert.doesNotMatch(professorSource, /professorCommand\('open_room',[\s\S]{0,120}roomKey/);
-  assert.match(professorSource, /global\.setTimeout\(async \(\) => \{[\s\S]*\}, 4500\)/);
-  assert.match(professorSource, /finally \{[\s\S]*state\.activationPollInFlight = false;[\s\S]*scheduleActivationPoll\(\)/);
-  assert.match(professorSource, /function stopActivationPolling\(\)[\s\S]*global\.clearTimeout\(state\.activationTimer\)[\s\S]*state\.activationTimer = null/);
+  assert.match(professorSource, /const ACTIVATION_POLL_BASE_DELAY_MS = 4500/);
+  assert.match(professorSource, /ACTIVATION_POLL_BASE_DELAY_MS \* \(2 \*\* Math\.min\(state\.activationPollAttempt, 5\)\)/);
+  assert.match(professorSource, /const ACTIVATION_POLL_LIFETIME_MS = 30 \* 60_000/);
+  assert.match(professorSource, /global\.document\?\.hidden[\s\S]*ACTIVATION_POLL_HIDDEN_MIN_DELAY_MS/);
+  assert.match(professorSource, /finally \{[\s\S]*state\.activationPollInFlight = false;[\s\S]*scheduleNext/);
+  assert.match(professorSource, /function stopActivationPolling\(\{ reset = false, abort = false \} = \{\}\)[\s\S]*global\.clearTimeout\(state\.activationTimer\)[\s\S]*state\.activationTimer = null/);
   assert.match(professorSource, /Monitor and Grade are ready\. You do not need to enter the student key\./);
   assert.match(professorHtml, /data-view="monitor" data-requires-activation="true" disabled aria-label="Monitor examination — available after Admin issues the student key"/);
   assert.match(professorHtml, /data-view="grade" data-requires-activation="true" disabled aria-label="Grade submissions — available after Admin issues the student key"/);
   assert.match(professorSource, /control\.setAttribute\('aria-label', unlocked[\s\S]*viewName/);
-  assert.match(professorHtml, /professor\.js\?v=creator-overview-20260828-1/);
+  assert.match(professorHtml, /professor\.js\?v=reliability-20260828-1/);
 });
 
 test('creator approval survives reload and a published request keeps polling without a manual check', () => {
@@ -863,6 +896,82 @@ test('creator approval survives reload and a published request keeps polling wit
   assert.equal(state.activationTimer, null);
   assert.match(professorSource, /state\.exam\?\.activation\?\.status/);
   assert.match(professorSource, /\['published', 'key_requested', 'awaiting_approval', 'awaiting_activation'\]/);
+});
+
+test('approval checks slow down in hidden tabs and stop with a recoverable lifetime state', () => {
+  const { scheduleActivationPoll, stopActivationPolling, state, __testWindow } = loadProfessorStartupHooks();
+  state.exam = { id: 'exam-hidden-pending', status: 'awaiting_activation' };
+  state.activation = null;
+  __testWindow.document.hidden = true;
+  scheduleActivationPoll();
+  assert.equal(__testWindow.__scheduledTimers.get(1).delay, 30_000);
+  stopActivationPolling();
+  assert.match(professorSource, /Date\.now\(\) - state\.activationPollStartedAt >= ACTIVATION_POLL_LIFETIME_MS/);
+  assert.match(professorSource, /Automatic approval checking paused/);
+  assert.match(professorSource, /Choose Check approval to restart automatic checking/);
+  assert.match(professorSource, /if \(state\.activationPollingExpired\) resetActivationPollingWindow\(\)/);
+});
+
+test('monitor polling is single-flight, ignores a stopped stale response, and uses bounded timeouts', async () => {
+  let calls = 0;
+  let resolveMonitor;
+  const pendingMonitor = new Promise((resolve) => { resolveMonitor = resolve; });
+  const hooks = loadProfessorStartupHooks({
+    professorQuery: async () => {
+      calls += 1;
+      return pendingMonitor;
+    },
+  });
+  const { refreshMonitor, scheduleMonitorPoll, stopMonitorPolling, state, __testWindow } = hooks;
+  state.exam = { id: 'exam-monitor-a', status: 'active' };
+  state.currentView = 'monitor';
+  const generation = state.monitorPollGeneration;
+  const first = refreshMonitor({ pollGeneration: generation });
+  const overlapping = refreshMonitor({ pollGeneration: generation });
+  assert.equal(calls, 1, 'overlapping refreshes share one request');
+
+  stopMonitorPolling();
+  resolveMonitor({ exam: { id: 'exam-monitor-a', status: 'active' }, sessions: [{ id: 'stale' }] });
+  assert.deepEqual(await Promise.all([first, overlapping]), [false, false]);
+  assert.equal(state.monitor, null, 'response from the stopped generation is not rendered');
+  assert.equal(state.monitorPollInFlight, null);
+
+  scheduleMonitorPoll(state.monitorPollGeneration);
+  const timer = [...__testWindow.__scheduledTimers.values()][0];
+  assert.equal(timer.delay, 5000);
+  stopMonitorPolling();
+  assert.equal(__testWindow.__scheduledTimers.size, 0);
+  assert.doesNotMatch(professorSource, /setInterval\(refreshMonitor/);
+  assert.match(professorSource, /pollGeneration !== state\.monitorPollGeneration/);
+});
+
+test('Professor IndexedDB open falls back after a blocked or never-settling request', async () => {
+  const neverSettles = { open: () => ({}) };
+  const neverHooks = loadProfessorStartupHooks({ indexedDbOverride: neverSettles });
+  const neverResult = neverHooks.draftDb();
+  const [timeoutId, timeout] = [...neverHooks.__testWindow.__scheduledTimers.entries()][0];
+  assert.equal(timeout.delay, 5000);
+  neverHooks.__testWindow.__scheduledTimers.delete(timeoutId);
+  timeout.callback();
+  assert.equal(await neverResult, null);
+
+  let blockedRequest;
+  const blockedHooks = loadProfessorStartupHooks({
+    indexedDbOverride: { open: () => (blockedRequest = {}) },
+  });
+  const blockedResult = blockedHooks.draftDb();
+  blockedRequest.onblocked();
+  assert.equal(await blockedResult, null);
+});
+
+test('a missing Professor API module leaves the spinner and offers an in-page reload recovery', async () => {
+  const elements = await renderMissingApiModule();
+  assert.equal(elements.get('#loading-gate').hidden, true);
+  assert.equal(elements.get('#access-gate').hidden, false);
+  assert.equal(elements.get('#access-gate').dataset.accessState, 'module-unavailable');
+  assert.equal(elements.get('#access-primary-action').textContent, 'Reload Examination Room');
+  assert.equal(elements.get('#access-primary-action').href, 'https://duediligence.ph/examination-room/');
+  assert.match(elements.get('#access-recovery').textContent, /no saved examination is deleted/i);
 });
 
 test('the Examination Assistant starts minimized and keeps an explicit accessible toggle state', () => {

@@ -826,18 +826,25 @@ export function createExaminationRoomV1Handlers(dependencies) {
   }
 
   function roomKeyPayload() {
-    const bytes = deps.randomBytes(ROOM_KEY.PAYLOAD_LENGTH * 2);
-    if (!(bytes instanceof Uint8Array) || bytes.length < ROOM_KEY.PAYLOAD_LENGTH) {
-      fail('EXAM_ROOM_V1_CRYPTO_UNAVAILABLE', 'A secure room key could not be created.', 503, 'Wait briefly, then issue the key again.');
+    const maximumSamplingAttempts = 8;
+    for (let attempt = 0; attempt < maximumSamplingAttempts; attempt += 1) {
+      const bytes = deps.randomBytes(ROOM_KEY.PAYLOAD_LENGTH * 2);
+      if (!(bytes instanceof Uint8Array) || bytes.length < ROOM_KEY.PAYLOAD_LENGTH) {
+        fail('EXAM_ROOM_V1_CRYPTO_UNAVAILABLE', 'A secure room key could not be created.', 503, 'Wait briefly, then issue the key again.');
+      }
+      let payload = '';
+      for (const byte of bytes) {
+        if (byte >= 256 - (256 % ROOM_KEY.ALPHABET.length)) continue;
+        payload += ROOM_KEY.ALPHABET[byte % ROOM_KEY.ALPHABET.length];
+        if (payload.length === ROOM_KEY.PAYLOAD_LENGTH) return payload;
+      }
     }
-    let payload = '';
-    for (const byte of bytes) {
-      if (byte >= 256 - (256 % ROOM_KEY.ALPHABET.length)) continue;
-      payload += ROOM_KEY.ALPHABET[byte % ROOM_KEY.ALPHABET.length];
-      if (payload.length === ROOM_KEY.PAYLOAD_LENGTH) break;
-    }
-    if (payload.length !== ROOM_KEY.PAYLOAD_LENGTH) return roomKeyPayload();
-    return payload;
+    fail(
+      'EXAM_ROOM_V1_CRYPTO_UNAVAILABLE',
+      'A secure examination key could not be created.',
+      503,
+      'No key was issued. Wait briefly, then choose Approve and generate key once more.',
+    );
   }
 
   function newSessionToken() {

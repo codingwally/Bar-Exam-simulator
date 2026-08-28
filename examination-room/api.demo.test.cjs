@@ -43,6 +43,170 @@ function demoApi(onStorageWrite = null) {
   return window.ExaminationRoomV1Api;
 }
 
+function demoApiWithCrossTabTransports() {
+  let storageListener = null;
+  let broadcastListener = null;
+  class FakeBroadcastChannel {
+    addEventListener(type, listener) {
+      if (type === 'message') broadcastListener = listener;
+    }
+    postMessage() {}
+  }
+  const values = new Map();
+  const window = {
+    location: { search: '?demo=1', hostname: '127.0.0.1' },
+    localStorage: {
+      getItem(key) { return values.has(key) ? values.get(key) : null; },
+      setItem(key, value) { values.set(key, String(value)); },
+      removeItem(key) { values.delete(key); },
+    },
+    crypto: { randomUUID: crypto.randomUUID },
+    addEventListener(type, listener) {
+      if (type === 'storage') storageListener = listener;
+    },
+  };
+  const sandbox = {
+    window,
+    globalThis: null,
+    BroadcastChannel: FakeBroadcastChannel,
+    URLSearchParams,
+    structuredClone,
+    crypto: window.crypto,
+  };
+  sandbox.globalThis = sandbox;
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, 'view-models.js'), 'utf8'), sandbox, { filename: 'view-models.js' });
+  window.ExaminationRoomV1ViewModels = sandbox.ExaminationRoomV1ViewModels;
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, 'api.js'), 'utf8'), sandbox, { filename: 'api.js' });
+  return {
+    api: window.ExaminationRoomV1Api,
+    broadcast(event) { broadcastListener({ data: event }); },
+    storage(event) { storageListener({ key: 'duediligence.examination-room.v1.demo-event', newValue: JSON.stringify(event) }); },
+    malformedStorage() { storageListener({ key: 'duediligence.examination-room.v1.demo-event', newValue: '{' }); },
+  };
+}
+
+function liveApi(fetchImplementation, options = {}) {
+  const window = {
+    location: { search: '?live=1', hostname: 'duediligence.ph' },
+    localStorage: new Map(),
+    crypto: { randomUUID: crypto.randomUUID },
+    addEventListener() {},
+    AbortController,
+    setTimeout: options.setTimeout || setTimeout,
+    clearTimeout: options.clearTimeout || clearTimeout,
+    fetch: fetchImplementation,
+    DueDiligencePhase2Config: {
+      workerUrl: 'https://worker.example.test',
+      supabase: { url: 'https://supabase.example.test', publishableKey: 'public-test-key' },
+    },
+    supabase: {
+      createClient() {
+        return {
+          auth: {
+            getSession: options.getSession || (async () => ({ data: { session: { access_token: 'test-access-token' } }, error: null })),
+          },
+        };
+      },
+    },
+  };
+  const sandbox = {
+    window,
+    globalThis: null,
+    BroadcastChannel: undefined,
+    URLSearchParams,
+    structuredClone,
+    crypto: window.crypto,
+  };
+  sandbox.globalThis = sandbox;
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, 'api.js'), 'utf8'), sandbox, { filename: 'api.js' });
+  return window.ExaminationRoomV1Api;
+}
+
+test('live API requests time out and preserve caller cancellation through one combined signal', async () => {
+  const pendingFetch = (_url, options) => new Promise((_resolve, reject) => {
+    const cancel = () => reject(options.signal.reason || new Error('aborted'));
+    if (options.signal.aborted) cancel();
+    else options.signal.addEventListener('abort', cancel, { once: true });
+  });
+  const timeoutApi = liveApi(pendingFetch);
+  await assert.rejects(
+    timeoutApi.professorQuery('session', {}, { timeoutMs: 10 }),
+    (error) => error.code === 'REQUEST_TIMEOUT' && error.status === 408,
+  );
+
+  let transportSignal = null;
+  const cancelledApi = liveApi((_url, options) => {
+    transportSignal = options.signal;
+    return pendingFetch(_url, options);
+  });
+  const caller = new AbortController();
+  const request = cancelledApi.professorQuery('session', {}, { signal: caller.signal, timeoutMs: 1000 });
+  await new Promise((resolve) => setImmediate(resolve));
+  caller.abort(new Error('caller stopped polling'));
+  await assert.rejects(request, (error) => error.code === 'REQUEST_CANCELLED' && error.status === 499);
+  assert.equal(caller.signal.aborted, true);
+  assert.equal(transportSignal.aborted, true);
+  assert.notEqual(transportSignal, caller.signal, 'the application deadline and caller signal are composed');
+});
+
+test('the request deadline includes a stalled authentication lookup', async () => {
+  let fetchCalls = 0;
+  const api = liveApi(
+    async () => {
+      fetchCalls += 1;
+      return { ok: true, json: async () => ({ ok: true }) };
+    },
+    { getSession: () => new Promise(() => {}) },
+  );
+  await assert.rejects(
+    api.professorQuery('session', {}, { timeoutMs: 10 }),
+    (error) => error.code === 'REQUEST_TIMEOUT' && error.status === 408,
+  );
+  assert.equal(fetchCalls, 0, 'transport never starts after the authentication deadline expires');
+});
+
+test('assistant and Admin recovery operations receive bounded longer defaults without defeating explicit caller limits', async () => {
+  const scheduled = [];
+  let timerId = 0;
+  const api = liveApi(
+    async () => ({ ok: true, json: async () => ({ ok: true }) }),
+    {
+      setTimeout(_callback, delay) {
+        scheduled.push(delay);
+        timerId += 1;
+        return timerId;
+      },
+      clearTimeout() {},
+    },
+  );
+  await api.professorAssistant({ message: 'Review this draft.' }, 'assistant-request');
+  await api.adminCommand('create_snapshot', { examId: 'exam-1' }, 'snapshot-request');
+  await api.adminQuery('recovery_detail', { examId: 'exam-1', snapshotId: 'snapshot-1' });
+  await api.studentPreview({ roomKey: 'ROOM-KEY' });
+  await api.professorAssistant({ message: 'Use caller deadline.' }, 'assistant-short', { timeoutMs: 7000 });
+  assert.deepEqual(scheduled, [60_000, 120_000, 120_000, 20_000, 7000]);
+});
+
+test('demo cross-tab storage and BroadcastChannel delivery is nonce-deduplicated with a bounded cache', () => {
+  const transport = demoApiWithCrossTabTransports();
+  const received = [];
+  transport.api.subscribe((event) => received.push(event.nonce));
+  const duplicate = { type: 'draft_saved', at: new Date().toISOString(), nonce: 'same-cross-tab-event' };
+  transport.broadcast(duplicate);
+  transport.storage(duplicate);
+  assert.deepEqual(received, ['same-cross-tab-event']);
+  assert.doesNotThrow(() => transport.malformedStorage());
+
+  for (let index = 0; index < 300; index += 1) {
+    transport.broadcast({ type: 'stress', nonce: `bounded-${index}`, at: new Date().toISOString() });
+  }
+  const afterUniqueEvents = received.length;
+  transport.storage({ type: 'stress', nonce: 'bounded-299', at: new Date().toISOString() });
+  assert.equal(received.length, afterUniqueEvents, 'a recent nonce remains deduplicated');
+  transport.storage(duplicate);
+  assert.equal(received.length, afterUniqueEvents + 1, 'the oldest nonce is eventually evicted from the bounded cache');
+});
+
 test('demo monitor and grading polling are read-only for the selected examination', async () => {
   const writes = [];
   const api = demoApi((key) => writes.push(key));

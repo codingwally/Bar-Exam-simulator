@@ -22,8 +22,16 @@
     retryAction: null,
     monitor: null,
     monitorTimer: null,
+    monitorPollInFlight: null,
+    monitorPollGeneration: 0,
+    monitorAbortController: null,
     activationTimer: null,
     activationPollInFlight: false,
+    activationPollAttempt: 0,
+    activationPollStartedAt: 0,
+    activationPollExamId: '',
+    activationPollingExpired: false,
+    activationAbortController: null,
     activationAnnounced: false,
     grading: null,
     selectedGradingSessionId: null,
@@ -46,6 +54,13 @@
   const DRAFT_INDEX_KEY = 'duediligence.examination-room.v1.professor-draft-index';
   const DRAFT_FALLBACK_PREFIX = 'duediligence.examination-room.v1.professor-draft.';
   const MAX_OFFLINE_PACKAGE_BYTES = 20 * 1024 * 1024;
+  const INDEXED_DB_OPEN_TIMEOUT_MS = 5000;
+  const MONITOR_POLL_INTERVAL_MS = 5000;
+  const MONITOR_HIDDEN_POLL_INTERVAL_MS = 15_000;
+  const ACTIVATION_POLL_BASE_DELAY_MS = 4500;
+  const ACTIVATION_POLL_MAX_DELAY_MS = 60_000;
+  const ACTIVATION_POLL_HIDDEN_MIN_DELAY_MS = 30_000;
+  const ACTIVATION_POLL_LIFETIME_MS = 30 * 60_000;
   const QUESTION_TYPES = Object.freeze({
     essay: 'Essay',
     short_answer: 'Short answer',
@@ -55,7 +70,7 @@
   function registerExaminationRoomServiceWorker() {
     const serviceWorker = global.navigator?.serviceWorker;
     if (!serviceWorker?.register) return Promise.resolve(false);
-    return serviceWorker.register('/service-worker.js?v=examination-room-renovation-20260828-4')
+    return serviceWorker.register('/service-worker.js?v=examination-room-reliability-20260828-1')
       .then(() => Promise.race([
         serviceWorker.ready.then(() => true),
         new Promise((resolve) => global.setTimeout(() => resolve(false), 5000)),
@@ -894,8 +909,11 @@
   }
 
   function hydrateForm(exam) {
+    stopMonitorPolling();
+    stopActivationPolling({ abort: true });
     state.hydrating = true;
     state.exam = exam;
+    resetActivationPollingWindow();
     if (exam?.activation && typeof exam.activation === 'object' && !Array.isArray(exam.activation)) {
       state.activation = exam.activation;
     }
@@ -1017,15 +1035,27 @@
   async function draftDb() {
     if (!global.indexedDB) return null;
     if (draftDb.promise) return draftDb.promise;
-    draftDb.promise = new Promise((resolve, reject) => {
-      const request = indexedDB.open('duediligence-examination-room-v1-professor', 1);
+    draftDb.promise = new Promise((resolve) => {
+      const request = global.indexedDB.open('duediligence-examination-room-v1-professor', 1);
+      let settled = false;
+      const finish = (database = null) => {
+        if (settled) {
+          database?.close?.();
+          return;
+        }
+        settled = true;
+        global.clearTimeout(timeout);
+        resolve(database);
+      };
+      const timeout = global.setTimeout(() => finish(null), INDEXED_DB_OPEN_TIMEOUT_MS);
       request.onupgradeneeded = () => {
         const db = request.result;
         if (!db.objectStoreNames.contains('drafts')) db.createObjectStore('drafts', { keyPath: 'examId' });
       };
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    }).catch(() => null);
+      request.onsuccess = () => finish(request.result);
+      request.onerror = () => finish(null);
+      request.onblocked = () => finish(null);
+    });
     return draftDb.promise;
   }
 
@@ -1436,24 +1466,63 @@
       || ['waiting', 'pending', 'awaiting_activation', 'requested'].includes(activationStatus());
   }
 
-  function stopActivationPolling() {
+  function resetActivationPollingWindow() {
+    state.activationPollAttempt = 0;
+    state.activationPollStartedAt = 0;
+    state.activationPollExamId = safeText(state.exam?.id, 80);
+    state.activationPollingExpired = false;
+  }
+
+  function stopActivationPolling({ reset = false, abort = false } = {}) {
     if (state.activationTimer) global.clearTimeout(state.activationTimer);
     state.activationTimer = null;
+    if (abort) state.activationAbortController?.abort?.();
+    if (abort) state.activationAbortController = null;
+    if (reset) resetActivationPollingWindow();
+  }
+
+  function activationPollDelay() {
+    const exponential = Math.min(
+      ACTIVATION_POLL_MAX_DELAY_MS,
+      ACTIVATION_POLL_BASE_DELAY_MS * (2 ** Math.min(state.activationPollAttempt, 5)),
+    );
+    return global.document?.hidden
+      ? Math.max(ACTIVATION_POLL_HIDDEN_MIN_DELAY_MS, exponential)
+      : exponential;
+  }
+
+  function showActivationPollingPaused() {
+    const strip = $('#creator-access-status');
+    if (!strip || creatorAccessUnlocked()) return;
+    strip.hidden = false;
+    strip.dataset.state = 'pending';
+    $('#creator-access-title').textContent = 'Automatic approval checking paused';
+    $('#creator-access-copy').textContent = 'The examination is still saved and waiting for Admin. Choose Check approval to restart automatic checking.';
+    $('#check-activation').textContent = 'Check approval';
   }
 
   function scheduleActivationPoll() {
     if (state.activationTimer || state.activationPollInFlight || !creatorAccessPending()) return;
+    const examId = safeText(state.exam?.id, 80);
+    if (state.activationPollExamId !== examId) resetActivationPollingWindow();
+    if (state.activationPollingExpired) {
+      showActivationPollingPaused();
+      return;
+    }
+    if (!state.activationPollStartedAt) state.activationPollStartedAt = Date.now();
+    if (Date.now() - state.activationPollStartedAt >= ACTIVATION_POLL_LIFETIME_MS) {
+      state.activationPollingExpired = true;
+      showActivationPollingPaused();
+      return;
+    }
+    const delay = activationPollDelay();
     state.activationTimer = global.setTimeout(async () => {
       state.activationTimer = null;
-      if (!creatorAccessPending()) return;
-      state.activationPollInFlight = true;
-      try {
-        await refreshCreatorAccess();
-      } finally {
-        state.activationPollInFlight = false;
-        if (creatorAccessPending()) scheduleActivationPoll();
-      }
-    }, 4500);
+      if (!creatorAccessPending() || state.activationPollExamId !== safeText(state.exam?.id, 80)) return;
+      await refreshCreatorAccess({ scheduleNext: false });
+      state.activationPollAttempt += 1;
+      if (creatorAccessPending()) scheduleActivationPoll();
+    }, delay);
   }
 
   function syncCreatorAccess({ announce = false } = {}) {
@@ -1478,15 +1547,19 @@
     if (strip) {
       strip.hidden = state.exam.status === 'draft' && !pending && !unlocked;
       strip.dataset.state = unlocked ? 'approved' : pending ? 'pending' : 'draft';
-      $('#creator-access-title').textContent = unlocked ? 'Student key issued · creator access unlocked' : 'Student key request sent to Admin';
+      $('#creator-access-title').textContent = unlocked
+        ? 'Student key issued · creator access unlocked'
+        : state.activationPollingExpired ? 'Automatic approval checking paused' : 'Student key request sent to Admin';
       $('#creator-access-copy').textContent = unlocked
         ? 'Monitor and Grade are ready. You do not need to enter the student key.'
-        : 'Your examination is saved and sealed. This page checks automatically; no creator key entry is required.';
+        : state.activationPollingExpired
+          ? 'The examination is still saved and waiting for Admin. Choose Check approval to restart automatic checking.'
+          : 'Your examination is saved and sealed. This page checks automatically; no creator key entry is required.';
       $('#check-activation').textContent = unlocked ? 'Open monitoring' : 'Check approval';
     }
 
     if (unlocked) {
-      stopActivationPolling();
+      stopActivationPolling({ reset: true });
       if ((announce || !state.activationAnnounced) && pending === false) {
         state.activationAnnounced = true;
         if (announce) toast('Admin issued the student key. Monitor and Grade are now unlocked.');
@@ -1498,10 +1571,16 @@
     }
   }
 
-  async function refreshCreatorAccess({ silent = true } = {}) {
+  async function refreshCreatorAccess({ silent = true, scheduleNext = true } = {}) {
+    if (state.activationPollInFlight) return creatorAccessUnlocked();
+    const examId = safeText(state.exam?.id, 80);
     const wasUnlocked = creatorAccessUnlocked();
+    const controller = typeof global.AbortController === 'function' ? new global.AbortController() : null;
+    state.activationAbortController = controller;
+    state.activationPollInFlight = true;
     try {
-      const result = await api.professorQuery('monitor', { examId: state.exam.id });
+      const result = await api.professorQuery('monitor', { examId }, { signal: controller?.signal });
+      if (examId !== safeText(state.exam?.id, 80)) return false;
       state.monitor = result;
       state.exam = result.exam || state.exam;
       state.activation = result.activation || null;
@@ -1513,8 +1592,12 @@
       if (!silent && nowUnlocked && wasUnlocked) toast('Creator access is active. Monitor and Grade are ready.');
       return nowUnlocked;
     } catch (error) {
-      if (!silent) showError(error, () => refreshCreatorAccess({ silent: false }), 'Approval status not refreshed');
+      if (!silent && error?.code !== 'REQUEST_CANCELLED') showError(error, () => refreshCreatorAccess({ silent: false }), 'Approval status not refreshed');
       return false;
+    } finally {
+      if (state.activationAbortController === controller) state.activationAbortController = null;
+      state.activationPollInFlight = false;
+      if (scheduleNext && creatorAccessPending() && !state.activationPollingExpired) scheduleActivationPoll();
     }
   }
 
@@ -1575,6 +1658,7 @@
       updatePublishState();
       state.activation = result.activation || null;
       state.activationAnnounced = false;
+      resetActivationPollingWindow();
       syncCreatorAccess();
       toast('Published and key requested. Admin can approve it now; this page will unlock Monitor and Grade automatically.');
     } catch (error) {
@@ -1861,28 +1945,71 @@
     if (skipLink) skipLink.href = view === 'overview' ? '#overview-title' : view === 'create' ? '#exam-editor' : view === 'monitor' ? '#monitor-title' : '#grade-title';
     $('#assistant-panel').hidden = view !== 'create';
     if (view === 'overview') renderExamOverview();
-    clearInterval(state.monitorTimer);
-    state.monitorTimer = null;
+    stopMonitorPolling();
     if (view === 'monitor') {
-      refreshMonitor();
-      state.monitorTimer = setInterval(refreshMonitor, 5000);
+      const generation = state.monitorPollGeneration;
+      refreshMonitor({ pollGeneration: generation })
+        .finally(() => scheduleMonitorPoll(generation));
     }
     if (view === 'grade') refreshGrading();
     replaceWorkspaceUrl(view);
   }
 
-  async function refreshMonitor({ silent = true } = {}) {
-    try {
-      const result = await api.professorQuery('monitor', { examId: state.exam.id });
-      state.monitor = result;
-      state.exam = result.exam || state.exam;
-      state.activation = result.activation || null;
-      syncCreatorAccess();
-      renderMonitor();
-      if (!silent) toast('Live student status refreshed.');
-    } catch (error) {
-      if (!silent) showError(error, () => refreshMonitor({ silent: false }), 'Monitor not refreshed');
-    }
+  function stopMonitorPolling() {
+    state.monitorPollGeneration += 1;
+    if (state.monitorTimer) global.clearTimeout(state.monitorTimer);
+    state.monitorTimer = null;
+    state.monitorAbortController?.abort?.();
+    state.monitorAbortController = null;
+  }
+
+  function scheduleMonitorPoll(generation = state.monitorPollGeneration) {
+    if (
+      state.currentView !== 'monitor'
+      || generation !== state.monitorPollGeneration
+      || state.monitorTimer
+    ) return;
+    const delay = global.document?.hidden
+      ? MONITOR_HIDDEN_POLL_INTERVAL_MS
+      : MONITOR_POLL_INTERVAL_MS;
+    state.monitorTimer = global.setTimeout(async () => {
+      state.monitorTimer = null;
+      if (state.currentView !== 'monitor' || generation !== state.monitorPollGeneration) return;
+      await refreshMonitor({ pollGeneration: generation });
+      scheduleMonitorPoll(generation);
+    }, delay);
+  }
+
+  async function refreshMonitor({ silent = true, pollGeneration = state.monitorPollGeneration } = {}) {
+    if (state.monitorPollInFlight) return state.monitorPollInFlight;
+    const examId = safeText(state.exam?.id, 80);
+    const controller = typeof global.AbortController === 'function' ? new global.AbortController() : null;
+    state.monitorAbortController = controller;
+    const request = (async () => {
+      try {
+        const result = await api.professorQuery('monitor', { examId }, { signal: controller?.signal });
+        if (
+          pollGeneration !== state.monitorPollGeneration
+          || state.currentView !== 'monitor'
+          || examId !== safeText(state.exam?.id, 80)
+        ) return false;
+        state.monitor = result;
+        state.exam = result.exam || state.exam;
+        state.activation = result.activation || null;
+        syncCreatorAccess();
+        renderMonitor();
+        if (!silent) toast('Live student status refreshed.');
+        return true;
+      } catch (error) {
+        if (!silent && error?.code !== 'REQUEST_CANCELLED') showError(error, () => refreshMonitor({ silent: false }), 'Monitor not refreshed');
+        return false;
+      } finally {
+        if (state.monitorAbortController === controller) state.monitorAbortController = null;
+        if (state.monitorPollInFlight === request) state.monitorPollInFlight = null;
+      }
+    })();
+    state.monitorPollInFlight = request;
+    return request;
   }
 
   function renderMonitor() {
@@ -2899,7 +3026,10 @@
     $('#refresh-monitor').addEventListener('click', () => refreshMonitor({ silent: false }));
     $('#check-activation').addEventListener('click', async () => {
       if (creatorAccessUnlocked()) switchView('monitor');
-      else await refreshCreatorAccess({ silent: false });
+      else {
+        if (state.activationPollingExpired) resetActivationPollingWindow();
+        await refreshCreatorAccess({ silent: false });
+      }
     });
     $('#monitor-search').addEventListener('input', renderMonitor);
     $('#monitor-table-body').addEventListener('click', (event) => {
@@ -2952,7 +3082,20 @@
       if (!event.target.closest('#add-question-menu-button, #add-question-menu')) { $('#add-question-menu').hidden = true; $('#add-question-menu-button').setAttribute('aria-expanded', 'false'); }
       $$('.question-options').forEach((menu) => { if (!event.target.closest('[data-question-options-button], .question-options')) menu.hidden = true; });
     });
+    document.addEventListener('visibilitychange', () => {
+      if (creatorAccessPending() && !state.activationPollingExpired) {
+        stopActivationPolling();
+        scheduleActivationPoll();
+      }
+      if (state.currentView === 'monitor') {
+        if (state.monitorTimer) global.clearTimeout(state.monitorTimer);
+        state.monitorTimer = null;
+        scheduleMonitorPoll(state.monitorPollGeneration);
+      }
+    });
     global.addEventListener('beforeunload', () => {
+      stopMonitorPolling();
+      stopActivationPolling({ abort: true });
       if (!state.exam) return;
       const record = localDraftRecord(collectExam());
       try {
@@ -2972,6 +3115,7 @@
   function showProfessorAccessFailure(error) {
     const code = String(error?.code || 'INITIALIZATION_FAILED');
     const status = Number(error?.status || 0);
+    const moduleUnavailable = code === 'API_MODULE_UNAVAILABLE';
     const signInRequired = status === 401 || [
       'SIGN_IN_REQUIRED',
       'AUTHENTICATION_REQUIRED',
@@ -2988,9 +3132,12 @@
     const recovery = $('#access-recovery');
 
     gate.hidden = false;
-    gate.dataset.accessState = signInRequired ? 'sign-in-required' : workspaceUnavailable ? 'workspace-unavailable' : 'check-interrupted';
-    primary.href = '../#examination-room';
-    if (signInRequired) {
+    gate.dataset.accessState = moduleUnavailable ? 'module-unavailable' : signInRequired ? 'sign-in-required' : workspaceUnavailable ? 'workspace-unavailable' : 'check-interrupted';
+    primary.href = moduleUnavailable ? (global.location?.href || './') : '../#examination-room';
+    if (moduleUnavailable) {
+      $('#access-title').textContent = 'The secure connection module did not load';
+      primary.textContent = 'Reload Examination Room';
+    } else if (signInRequired) {
       $('#access-title').textContent = 'Sign in to create or manage an examination';
       primary.textContent = 'Sign in through Due Diligence';
     } else if (workspaceUnavailable) {
@@ -3001,7 +3148,9 @@
       primary.textContent = 'Check access from Examination Room';
     }
     $('#access-copy').textContent = error?.message || 'The creator workspace could not be opened. No Professor role or license approval is required.';
-    recovery.textContent = error?.recovery || (signInRequired
+    recovery.textContent = error?.recovery || (moduleUnavailable
+      ? 'Reload this page. If it still does not open, check your connection and return through the Examination Room menu; no saved examination is deleted.'
+      : signInRequired
       ? 'Sign in through Due Diligence. After sign-in, reopen the Examination Room menu and enter the Professor door.'
       : workspaceUnavailable
         ? 'Ask Admin to create or reopen the correct law-school workspace, then try again.'
@@ -3010,7 +3159,12 @@
 
   async function initialize() {
     if (!api) {
-      $('#loading-copy').textContent = 'Examination Room could not load its secure connection module.';
+      $('#loading-gate').hidden = true;
+      showProfessorAccessFailure({
+        code: 'API_MODULE_UNAVAILABLE',
+        message: 'Examination Room could not load its secure connection module.',
+        recovery: 'Reload this page. If it still does not open, check your connection and return through the Examination Room menu; no saved examination is deleted.',
+      });
       return;
     }
     state.offlineWorkspaceReady = registerExaminationRoomServiceWorker();

@@ -6,7 +6,14 @@
   const DEMO_KEY = 'DD26-LAW1-826K';
   const DEMO_STATE_KEY = 'duediligence.examination-room.v1.demo-state';
   const DEMO_EVENT_KEY = 'duediligence.examination-room.v1.demo-event';
+  const DEFAULT_REQUEST_TIMEOUT_MS = 20_000;
+  const ASSISTANT_REQUEST_TIMEOUT_MS = 60_000;
+  const ADMIN_RECOVERY_REQUEST_TIMEOUT_MS = 120_000;
+  const ADMIN_RECOVERY_OPERATIONS = new Set(['create_snapshot', 'retry_snapshot', 'restore_snapshot', 'recovery_detail']);
+  const DEMO_EVENT_DEDUPE_TTL_MS = 5 * 60_000;
+  const DEMO_EVENT_DEDUPE_LIMIT = 256;
   const listeners = new Set();
+  const seenDemoEventNonces = new Map();
   const studentCompatibility = {
     lastEntry: null,
     lastPreview: null,
@@ -200,6 +207,23 @@
     const event = { type: eventType, at: iso(), nonce: requestId() };
     global.localStorage?.setItem(DEMO_EVENT_KEY, JSON.stringify(event));
     channel?.postMessage(event);
+    notifyDemoEvent(event);
+  }
+
+  function notifyDemoEvent(event) {
+    if (!event || typeof event !== 'object') return;
+    const nonce = String(event.nonce || '').trim();
+    if (!nonce) return;
+    const cutoff = Date.now() - DEMO_EVENT_DEDUPE_TTL_MS;
+    for (const [seenNonce, seenAt] of seenDemoEventNonces) {
+      if (seenAt >= cutoff) break;
+      seenDemoEventNonces.delete(seenNonce);
+    }
+    if (seenDemoEventNonces.has(nonce)) return;
+    seenDemoEventNonces.set(nonce, Date.now());
+    while (seenDemoEventNonces.size > DEMO_EVENT_DEDUPE_LIMIT) {
+      seenDemoEventNonces.delete(seenDemoEventNonces.keys().next().value);
+    }
     listeners.forEach((listener) => listener(event));
   }
 
@@ -1545,22 +1569,118 @@
     return data?.session || null;
   }
 
-  async function post(path, body = {}, options = {}) {
-    const session = options.auth === false ? null : await authSession();
-    if (options.auth === true && !session?.access_token) {
-      throw new ExaminationRoomApiError('SIGN_IN_REQUIRED', 'Professor or administrator sign-in is required.', 401, 'Sign in through Due Diligence, then return to Examination Room.');
+  function boundedRequestSignal(callerSignal, timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS) {
+    const duration = Number.isFinite(Number(timeoutMs)) && Number(timeoutMs) > 0
+      ? Number(timeoutMs)
+      : DEFAULT_REQUEST_TIMEOUT_MS;
+    if (typeof global.AbortController !== 'function') {
+      return {
+        signal: callerSignal || undefined,
+        timedOut: () => false,
+        cleanup() {},
+      };
     }
-    const response = await fetch(`${config.workerUrl}${path}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Request-ID': options.idempotencyKey || requestId(),
-        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-        ...(global.DueDiligencePrivateBeta?.accessHeaders?.() || {}),
+
+    const controller = new global.AbortController();
+    let deadlineReached = false;
+    const abortFromCaller = () => controller.abort(callerSignal?.reason);
+    if (callerSignal?.aborted) abortFromCaller();
+    else callerSignal?.addEventListener?.('abort', abortFromCaller, { once: true });
+    const timer = global.setTimeout(() => {
+      deadlineReached = true;
+      controller.abort(new Error('Examination Room request deadline reached'));
+    }, duration);
+    return {
+      signal: controller.signal,
+      timedOut: () => deadlineReached,
+      cleanup() {
+        global.clearTimeout(timer);
+        callerSignal?.removeEventListener?.('abort', abortFromCaller);
       },
-      body: JSON.stringify(body),
+    };
+  }
+
+  function waitForRequestStage(promise, signal) {
+    if (!signal) return Promise.resolve(promise);
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (callback, value) => {
+        if (settled) return;
+        settled = true;
+        signal.removeEventListener?.('abort', abort);
+        callback(value);
+      };
+      const abort = () => finish(reject, signal.reason || new Error('Examination Room request cancelled'));
+      if (signal.aborted) {
+        abort();
+        return;
+      }
+      signal.addEventListener?.('abort', abort, { once: true });
+      Promise.resolve(promise).then(
+        (value) => finish(resolve, value),
+        (error) => finish(reject, error),
+      );
     });
-    const result = await response.json().catch(() => null);
+  }
+
+  function requestOptionsWithDefault(options, timeoutMs) {
+    return {
+      ...(options || {}),
+      timeoutMs: options?.timeoutMs ?? timeoutMs,
+    };
+  }
+
+  async function post(path, body = {}, options = {}) {
+    const requestSignal = boundedRequestSignal(options.signal, options.timeoutMs);
+    let response;
+    let result;
+    try {
+      const session = options.auth === false
+        ? null
+        : await waitForRequestStage(authSession(), requestSignal.signal);
+      if (options.auth === true && !session?.access_token) {
+        throw new ExaminationRoomApiError('SIGN_IN_REQUIRED', 'Professor or administrator sign-in is required.', 401, 'Sign in through Due Diligence, then return to Examination Room.');
+      }
+      response = await global.fetch(`${config.workerUrl}${path}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Request-ID': options.idempotencyKey || requestId(),
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+          ...(global.DueDiligencePrivateBeta?.accessHeaders?.() || {}),
+        },
+        body: JSON.stringify(body),
+        signal: requestSignal.signal,
+      });
+      result = await response.json().catch(() => null);
+    } catch (error) {
+      if (requestSignal.timedOut()) {
+        throw new ExaminationRoomApiError(
+          'REQUEST_TIMEOUT',
+          'The Examination Room request took too long to finish.',
+          408,
+          'Your work is unchanged. Check your connection, then try the action again.',
+        );
+      }
+      if (options.signal?.aborted) {
+        throw new ExaminationRoomApiError(
+          'REQUEST_CANCELLED',
+          'The Examination Room request was cancelled.',
+          499,
+          'Nothing was changed by this cancelled request. Try again when you are ready.',
+        );
+      }
+      if (error instanceof ExaminationRoomApiError) throw error;
+      throw new ExaminationRoomApiError(
+        'NETWORK_UNAVAILABLE',
+        'The Examination Room could not reach its service.',
+        503,
+        'Your work on this device is preserved. Check your connection, then try again.',
+        { cause: error?.name || 'NetworkError' },
+      );
+    } finally {
+      requestSignal.cleanup();
+    }
     if (!response.ok || !result?.ok) {
       const error = result?.error || {};
       throw new ExaminationRoomApiError(
@@ -1574,19 +1694,19 @@
     return result;
   }
 
-  async function professorQuery(operation, payload = {}) {
+  async function professorQuery(operation, payload = {}, requestOptions = {}) {
     return demoEnabled()
       ? demoProfessorQuery(operation, payload)
-      : post('/examination-room/v1/professor/query', { operation, payload: staffPayload(payload) }, { auth: true });
+      : post('/examination-room/v1/professor/query', { operation, payload: staffPayload(payload) }, { ...requestOptions, auth: true });
   }
 
-  async function professorCommand(operation, payload = {}, idempotencyKey = requestId()) {
+  async function professorCommand(operation, payload = {}, idempotencyKey = requestId(), requestOptions = {}) {
     return demoEnabled()
       ? demoProfessorCommand(operation, payload, idempotencyKey)
-      : post('/examination-room/v1/professor/command', { operation, payload: staffPayload(payload), idempotencyKey }, { auth: true, idempotencyKey });
+      : post('/examination-room/v1/professor/command', { operation, payload: staffPayload(payload), idempotencyKey }, { ...requestOptions, auth: true, idempotencyKey });
   }
 
-  async function professorAssistant(payload = {}, idempotencyKey = requestId()) {
+  async function professorAssistant(payload = {}, idempotencyKey = requestId(), requestOptions = {}) {
     if (demoEnabled()) {
       const exam = payload.examContext || {};
       const message = String(payload.message || '').trim();
@@ -1618,43 +1738,53 @@
           : `I reviewed “${exam.title || 'this examination'}” in ${exam.subject || 'the selected subject'}. Ask me to check readiness, points, question wording, timing, navigation, grading identity, or safeguards; I will keep the conversation connected to this draft.`;
       return { ok: true, assistant: { reply, suggestedActionIds: [] } };
     }
-    return post('/examination-room/v1/professor/assistant', payload, { auth: true, idempotencyKey });
+    return post('/examination-room/v1/professor/assistant', payload, {
+      ...requestOptionsWithDefault(requestOptions, ASSISTANT_REQUEST_TIMEOUT_MS),
+      auth: true,
+      idempotencyKey,
+    });
   }
 
-  async function studentPreview(payload) {
+  async function studentPreview(payload, requestOptions = {}) {
     return demoEnabled()
       ? demoStudentPreview(payload)
-      : post('/examination-room/v1/student/preview', payload, { auth: false });
+      : post('/examination-room/v1/student/preview', payload, { ...requestOptions, auth: false });
   }
 
-  async function studentBegin(payload, idempotencyKey = requestId()) {
+  async function studentBegin(payload, idempotencyKey = requestId(), requestOptions = {}) {
     return demoEnabled()
       ? demoStudentBegin(payload, idempotencyKey)
-      : post('/examination-room/v1/student/begin', { ...payload, idempotencyKey }, { auth: false, idempotencyKey });
+      : post('/examination-room/v1/student/begin', { ...payload, idempotencyKey }, { ...requestOptions, auth: false, idempotencyKey });
   }
 
-  async function studentQuery(operation, payload = {}) {
+  async function studentQuery(operation, payload = {}, requestOptions = {}) {
     return demoEnabled()
       ? demoStudentQuery(operation, payload)
-      : post('/examination-room/v1/student/query', { operation, payload }, { auth: false });
+      : post('/examination-room/v1/student/query', { operation, payload }, { ...requestOptions, auth: false });
   }
 
-  async function studentCommand(operation, payload = {}, idempotencyKey = requestId()) {
+  async function studentCommand(operation, payload = {}, idempotencyKey = requestId(), requestOptions = {}) {
     return demoEnabled()
       ? demoStudentCommand(operation, payload, idempotencyKey)
-      : post('/examination-room/v1/student/command', { operation, payload, idempotencyKey }, { auth: false, idempotencyKey });
+      : post('/examination-room/v1/student/command', { operation, payload, idempotencyKey }, { ...requestOptions, auth: false, idempotencyKey });
   }
 
-  async function adminQuery(operation, payload = {}) {
+  async function adminQuery(operation, payload = {}, requestOptions = {}) {
+    const operationOptions = ADMIN_RECOVERY_OPERATIONS.has(operation)
+      ? requestOptionsWithDefault(requestOptions, ADMIN_RECOVERY_REQUEST_TIMEOUT_MS)
+      : requestOptions;
     return demoEnabled()
       ? demoAdminQuery(operation, payload)
-      : post('/examination-room/v1/admin/query', { operation, payload: staffPayload(payload) }, { auth: true });
+      : post('/examination-room/v1/admin/query', { operation, payload: staffPayload(payload) }, { ...operationOptions, auth: true });
   }
 
-  async function adminCommand(operation, payload = {}, idempotencyKey = requestId()) {
+  async function adminCommand(operation, payload = {}, idempotencyKey = requestId(), requestOptions = {}) {
+    const operationOptions = ADMIN_RECOVERY_OPERATIONS.has(operation)
+      ? requestOptionsWithDefault(requestOptions, ADMIN_RECOVERY_REQUEST_TIMEOUT_MS)
+      : requestOptions;
     return demoEnabled()
       ? demoAdminCommand(operation, payload, idempotencyKey)
-      : post('/examination-room/v1/admin/command', { operation, payload: staffPayload(payload), idempotencyKey }, { auth: true, idempotencyKey });
+      : post('/examination-room/v1/admin/command', { operation, payload: staffPayload(payload), idempotencyKey }, { ...operationOptions, auth: true, idempotencyKey });
   }
 
   // Compatibility surface used by the resilient student client. It keeps the
@@ -1779,9 +1909,14 @@
     return () => listeners.delete(listener);
   }
 
-  channel?.addEventListener('message', (event) => listeners.forEach((listener) => listener(event.data)));
+  channel?.addEventListener('message', (event) => notifyDemoEvent(event.data));
   global.addEventListener?.('storage', (event) => {
-    if (event.key === DEMO_EVENT_KEY) listeners.forEach((listener) => listener(JSON.parse(event.newValue || 'null')));
+    if (event.key !== DEMO_EVENT_KEY) return;
+    try {
+      notifyDemoEvent(JSON.parse(event.newValue || 'null'));
+    } catch {
+      // An invalid cross-tab demo event is ignored; the persisted demo state remains authoritative.
+    }
   });
 
   global.ExaminationRoomV1Api = Object.freeze({

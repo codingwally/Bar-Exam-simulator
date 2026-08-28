@@ -244,7 +244,7 @@ function dependencyFixture(options = {}) {
     },
     hmacHex: async (key, value) => createHmac('sha256', key).update(value).digest('hex'),
     sha256Hex: async (value) => createHash('sha256').update(value).digest('hex'),
-    randomBytes: (length) => Uint8Array.from({ length }, (_, index) => (index * 13 + 7) % 224),
+    randomBytes: options.randomBytes || ((length) => Uint8Array.from({ length }, (_, index) => (index * 13 + 7) % 224)),
     randomUUID: () => {
       uuidCounter += 1;
       return `77777777-7777-4777-8777-${String(uuidCounter).padStart(12, '0')}`;
@@ -1629,6 +1629,26 @@ test('admin activation generates a checksum-valid key but persists only the HMAC
   assert.equal(normalizeRoomKey(result.roomKey), result.roomKey);
   assert.match(calls[0].payload.roomKeyHash, /^[0-9a-f]{64}$/u);
   assert.equal(JSON.stringify(calls[0]).includes(result.roomKey), false);
+});
+
+test('admin key generation remains bounded even at the highest random byte value', async () => {
+  let samplingAttempts = 0;
+  const { handlers, calls } = dependencyFixture({
+    randomBytes: (length) => {
+      samplingAttempts += 1;
+      return new Uint8Array(length).fill(255);
+    },
+  });
+  const response = await handlers.adminCommand(
+    makeRequest('/examination-room/v1/admin/command', {
+      operation: 'activate_exam', payload: { examId: IDS.exam }, idempotencyKey: REQUEST_KEY,
+    }, 'admin'), ENV, ORIGIN, ORIGIN,
+  );
+  const result = await json(response);
+  assert.equal(response.status, 201);
+  assert.equal(normalizeRoomKey(result.roomKey), result.roomKey);
+  assert.equal(samplingAttempts, 1, 'the 32-character alphabet accepts every byte without recursion');
+  assert.equal(calls.length, 1);
 });
 
 test('100 repeated admin approval requests preserve one idempotency hash and never persist raw keys', async () => {

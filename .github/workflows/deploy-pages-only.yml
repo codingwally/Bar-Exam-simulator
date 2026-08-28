@@ -59,7 +59,7 @@ jobs:
           git cat-file -e "$EXPECTED_BASE_SHA^{commit}"
           git merge-base --is-ancestor "$EXPECTED_BASE_SHA" "$EXPECTED_SOURCE_SHA"
 
-          allowed='^(\.github/workflows/deploy-pages-only\.yml|assets/feature-loader\.js|assets/lex-forum\.js|assets/subscription-cta\.css|assets/subscription-cta\.js|index\.html|scripts/build-pages-artifact\.mjs|scripts/test-lex-forum\.mjs|scripts/test-pages-artifact\.mjs|scripts/test-public-home-responsive-css\.mjs|scripts/test-quorum\.mjs)$'
+          allowed='^(\.github/workflows/deploy-pages-only\.yml|assets/feature-loader\.js|assets/lex-forum\.css|assets/lex-forum\.js|assets/subscription-cta\.css|assets/subscription-cta\.js|index\.html|scripts/build-pages-artifact\.mjs|scripts/test-home-post-collapse\.mjs|scripts/test-lex-forum\.mjs|scripts/test-pages-artifact\.mjs|scripts/test-public-home-responsive-css\.mjs|scripts/test-quorum\.mjs)$'
           unexpected="$(git diff --name-only "$EXPECTED_BASE_SHA..$EXPECTED_SOURCE_SHA" | grep -Ev "$allowed" || true)"
           if [[ -n "$unexpected" ]]; then
             echo "The frontend-only release contains files outside the approved isolation boundary:" >&2
@@ -106,11 +106,16 @@ jobs:
             cta_js="$(curl -fsS "$SITE_URL/assets/subscription-cta.js?release=$GITHUB_SHA" || true)"
             cta_css="$(curl -fsS "$SITE_URL/assets/subscription-cta.css?release=$GITHUB_SHA" || true)"
             loader="$(curl -fsS "$SITE_URL/assets/feature-loader.js?release=$GITHUB_SHA" || true)"
+            forum_js="$(curl -fsS "$SITE_URL/assets/lex-forum.js?release=$GITHUB_SHA" || true)"
+            forum_css="$(curl -fsS "$SITE_URL/assets/lex-forum.css?release=$GITHUB_SHA" || true)"
             if grep -q 'home-subscription-cta-20260828-3' <<<"$index" \
               && grep -q 'home-subscription-20260828-2' <<<"$loader" \
+              && grep -q 'collapse=home-read-more-20260828-1' <<<"$loader" \
               && grep -q 'refreshWhenAuthReady' <<<"$cta_js" \
               && grep -q 'duediligence:subscription-cta' <<<"$cta_js" \
-              && grep -q 'dd2-subscription-invitation' <<<"$cta_css"; then
+              && grep -q 'dd2-subscription-invitation' <<<"$cta_css" \
+              && grep -q 'function renderPostBody(item)' <<<"$forum_js" \
+              && grep -q 'lex-post-read-more' <<<"$forum_css"; then
               verified=true
               break
             fi

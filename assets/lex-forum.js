@@ -103,6 +103,8 @@
     feedRequestSequence: 0,
     feedController: null,
     viewController: null,
+    expandedPostBodies: new Set(),
+    postBodyResizeFrame: 0,
   };
 
   const $ = (selector, root = document) => root.querySelector(selector);
@@ -157,6 +159,11 @@
     return `quorum-comments-${safeEntryId}`;
   }
 
+  function postBodyRegionId(entryId) {
+    const safeEntryId = String(entryId || '').replace(/[^a-zA-Z0-9_-]/g, '-');
+    return `quorum-post-body-${safeEntryId}`;
+  }
+
   function safeStorage(storage, method, key, value) {
     try {
       if (method === 'get') return storage.getItem(key);
@@ -203,6 +210,9 @@
   function clearPrivateView() {
     beginCommunityViewRequest();
     global.DueDiligencePedro?.unmount?.();
+    state.expandedPostBodies.clear();
+    if (state.postBodyResizeFrame) cancelAnimationFrame(state.postBodyResizeFrame);
+    state.postBodyResizeFrame = 0;
     state.items = [];
     state.cursor = null;
     state.hasMore = false;
@@ -690,6 +700,85 @@
     return textElement('span', className, value);
   }
 
+  function updatePostBodyDisclosure(body, toggle, expanded, overflows) {
+    body.classList.toggle('is-collapsed', overflows && !expanded);
+    toggle.hidden = !overflows;
+    toggle.textContent = expanded ? 'Show less' : 'Read more';
+    toggle.setAttribute('aria-expanded', String(expanded));
+  }
+
+  function preparePostBodyDisclosure(wrapper) {
+    if (!wrapper?.isConnected) return;
+    const body = $('.lex-post-body', wrapper);
+    const toggle = $('.lex-post-read-more', wrapper);
+    const entryId = String(wrapper.dataset.entryId || '');
+    if (!body || !toggle || !entryId) return;
+
+    // Apply the shared measurement state before reading layout.
+    body.classList.add('is-collapsed');
+    return { body, toggle, entryId };
+  }
+
+  function applyPostBodyDisclosure(disclosure, overflows) {
+    const { body, toggle, entryId } = disclosure;
+    const expanded = overflows && state.expandedPostBodies.has(entryId);
+    updatePostBodyDisclosure(body, toggle, expanded, overflows);
+  }
+
+  function syncPostBodyDisclosure(wrapper) {
+    const disclosure = preparePostBodyDisclosure(wrapper);
+    if (!disclosure) return;
+    const overflows = disclosure.body.scrollHeight > disclosure.body.clientHeight + 1;
+    applyPostBodyDisclosure(disclosure, overflows);
+  }
+
+  function syncPostBodyDisclosures() {
+    const feed = $('#lex-feed');
+    if (!feed) return;
+    // Batch DOM writes, reads, then final writes to avoid one forced layout per post.
+    const disclosures = $$('.lex-post-copy', feed)
+      .map(preparePostBodyDisclosure)
+      .filter(Boolean);
+    const measurements = disclosures.map((disclosure) => ({
+      disclosure,
+      overflows: disclosure.body.scrollHeight > disclosure.body.clientHeight + 1,
+    }));
+    measurements.forEach(({ disclosure, overflows }) => {
+      applyPostBodyDisclosure(disclosure, overflows);
+    });
+  }
+
+  function schedulePostBodyDisclosureSync() {
+    if (state.postBodyResizeFrame) cancelAnimationFrame(state.postBodyResizeFrame);
+    state.postBodyResizeFrame = requestAnimationFrame(() => {
+      state.postBodyResizeFrame = 0;
+      syncPostBodyDisclosures();
+    });
+  }
+
+  function renderPostBody(item) {
+    const body = textElement('p', 'lex-post-body', item.body);
+    if (state.view !== 'home' || !item.entryId) return body;
+
+    const entryId = String(item.entryId);
+    const wrapper = document.createElement('div');
+    wrapper.className = 'lex-post-copy';
+    wrapper.dataset.entryId = entryId;
+    body.id = postBodyRegionId(entryId);
+    body.classList.add('is-collapsed');
+
+    const toggle = button('Read more', 'quorum-text-button lex-post-read-more', () => {
+      if (state.expandedPostBodies.has(entryId)) state.expandedPostBodies.delete(entryId);
+      else state.expandedPostBodies.add(entryId);
+      syncPostBodyDisclosure(wrapper);
+    });
+    toggle.hidden = true;
+    toggle.setAttribute('aria-controls', body.id);
+    toggle.setAttribute('aria-expanded', 'false');
+    wrapper.append(body, toggle);
+    return wrapper;
+  }
+
   function renderEntry(item) {
     const article = document.createElement('article');
     article.className = 'lex-post-card';
@@ -727,7 +816,7 @@
     if (item.circle?.name) chips.append(chip(`Study Circle: ${item.circle.name}`));
     if (chips.childElementCount) inner.append(chips);
 
-    inner.append(textElement('p', 'lex-post-body', item.body));
+    inner.append(renderPostBody(item));
 
     const indicators = document.createElement('div');
     indicators.className = 'quorum-entry-indicators';
@@ -938,6 +1027,7 @@
     } else {
       state.items.forEach((item) => feed.append(renderEntry(item)));
     }
+    schedulePostBodyDisclosureSync();
     const loadMore = $('#lex-load-more');
     if (loadMore) loadMore.hidden = !state.hasMore;
   }
@@ -3159,6 +3249,7 @@
     global.addEventListener('offline', () => {
       if (state.active) setFeedStatus('You are offline. Existing posts remain visible until you reconnect.', 'error');
     });
+    global.addEventListener('resize', schedulePostBodyDisclosureSync, { passive: true });
     global.addEventListener('duediligence:subscription-cta', () => {
       if (state.active && state.view === 'home') renderFeed();
     });
@@ -3185,6 +3276,7 @@
       const accountChanged = state.draftOwnerId !== (nextUserId || null);
       if (accountChanged) {
         beginCommunityViewRequest();
+        state.expandedPostBodies.clear();
         state.items = [];
         state.cursor = null;
         state.hasMore = false;

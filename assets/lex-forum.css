@@ -1739,6 +1739,33 @@ button.lex-author {
   white-space: pre-wrap;
 }
 
+#page-community .lex-post-body.is-collapsed {
+  max-height: calc(1.45em * 5);
+  overflow: hidden;
+}
+
+#page-community .lex-post-read-more {
+  display: flex;
+  width: max-content;
+  min-height: 44px;
+  align-items: center;
+  margin: -9px 0 -4px auto;
+  padding: 0 4px;
+  color: #725418;
+  font-size: 12px;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+#page-community .lex-post-read-more[hidden] {
+  display: none;
+}
+
+#page-community .lex-post-read-more:hover {
+  color: #4f3910;
+}
+
 #page-community .quorum-entry-image {
   width: 100%;
   max-height: 430px;

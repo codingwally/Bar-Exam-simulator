@@ -234,3 +234,5 @@ assert.match(build, /'assets\/lex-forum\.css'/);
 assert.match(build, /'assets\/lex-forum\.js'/);
 
 console.log('Home community frontend, Worker, admin, migration, and safety contracts passed.');
+
+await import('./test-home-post-collapse.mjs');

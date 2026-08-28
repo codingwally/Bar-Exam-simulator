@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import worker, {
   absoluteSupabaseStorageUrl,
+  authenticatedUserTokenCacheSizeForTest,
   outboundEmailMode,
+  resetAuthenticatedUserTokenCacheForTest,
   sendSecureNotification,
 } from './index.mjs';
 
@@ -367,6 +369,37 @@ test('Worker requests integer-tenths precision and applies the existing cap', as
 
 const reliabilityOrigin = 'https://duediligence.ph';
 const reliabilityBankUrl = `${reliabilityOrigin}/content/question-bank/website-upload.json`;
+
+function authTestJwt({
+  subject = '11111111-1111-4111-8111-111111111111',
+  expiresAt = Math.floor(Date.now() / 1000) + 300,
+  issuer = 'https://test.supabase.co/auth/v1',
+  nonce = subject,
+} = {}) {
+  const encode = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
+  return [
+    encode({ alg: 'HS256', typ: 'JWT' }),
+    encode({ sub: subject, exp: expiresAt, iss: issuer, role: 'authenticated' }),
+    Buffer.from(`test-signature-${nonce}`).toString('base64url'),
+  ].join('.');
+}
+
+function authenticatedGuestAccessRequest(token, ip) {
+  return new Request('https://worker.example/guest-access', {
+    method: 'POST',
+    headers: {
+      Origin: reliabilityOrigin,
+      Authorization: `Bearer ${token}`,
+      'CF-Connecting-IP': ip,
+    },
+  });
+}
+
+const authenticationTestEnv = {
+  ALLOWED_ORIGIN: reliabilityOrigin,
+  SUPABASE_URL: 'https://test.supabase.co',
+  SUPABASE_SERVICE_ROLE_KEY: 'test-only-service-role',
+};
 const reliabilityAnswer = [
   'Answer: Yes. The claim succeeds.',
   'Legal Basis: Article 1174 of the Civil Code governs fortuitous events.',
@@ -770,6 +803,552 @@ test('guest-access status rejects an invalid authenticated session without trust
     assert.equal(payload.error.code, 'INVALID_SESSION');
     assert.equal(guestStorageCalls, 0);
   } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('a successfully verified Supabase JWT is reused across distinct Request objects', async () => {
+  const originalFetch = globalThis.fetch;
+  const subject = 'a1111111-1111-4111-8111-111111111111';
+  const token = authTestJwt({ subject, nonce: 'cross-request-reuse' });
+  let authCalls = 0;
+  resetAuthenticatedUserTokenCacheForTest();
+  globalThis.fetch = async (url) => {
+    const target = String(url);
+    if (target.endsWith('/auth/v1/user')) {
+      authCalls += 1;
+      return Response.json({ id: subject, email: 'cache-test@example.test' });
+    }
+    throw new Error(`Unexpected JWT cache request: ${target}`);
+  };
+
+  try {
+    const first = await worker.fetch(
+      authenticatedGuestAccessRequest(token, '203.0.113.201'),
+      authenticationTestEnv,
+    );
+    const second = await worker.fetch(
+      authenticatedGuestAccessRequest(token, '203.0.113.202'),
+      authenticationTestEnv,
+    );
+    assert.equal(first.status, 200);
+    assert.equal(second.status, 200);
+    assert.equal(authCalls, 1);
+    assert.equal(authenticatedUserTokenCacheSizeForTest(), 1);
+  } finally {
+    resetAuthenticatedUserTokenCacheForTest();
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('a verified JWT cache entry expires after at most 30 seconds', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalDateNow = Date.now;
+  let now = 1_800_000_000_000;
+  const subject = 'a1212121-1212-4212-8212-121212121212';
+  const token = authTestJwt({
+    subject,
+    expiresAt: Math.floor(now / 1000) + 300,
+    nonce: 'ttl-expiry',
+  });
+  let authCalls = 0;
+  resetAuthenticatedUserTokenCacheForTest();
+  Date.now = () => now;
+  globalThis.fetch = async (url) => {
+    const target = String(url);
+    if (target.endsWith('/auth/v1/user')) {
+      authCalls += 1;
+      return Response.json({ id: subject });
+    }
+    throw new Error(`Unexpected JWT TTL request: ${target}`);
+  };
+
+  try {
+    const first = await worker.fetch(
+      authenticatedGuestAccessRequest(token, '203.0.113.203'),
+      authenticationTestEnv,
+    );
+    now += 29_999;
+    const withinTtl = await worker.fetch(
+      authenticatedGuestAccessRequest(token, '203.0.113.204'),
+      authenticationTestEnv,
+    );
+    now += 2;
+    const afterTtl = await worker.fetch(
+      authenticatedGuestAccessRequest(token, '203.0.113.205'),
+      authenticationTestEnv,
+    );
+
+    assert.equal(first.status, 200);
+    assert.equal(withinTtl.status, 200);
+    assert.equal(afterTtl.status, 200);
+    assert.equal(authCalls, 2);
+    assert.equal(authenticatedUserTokenCacheSizeForTest(), 1);
+  } finally {
+    resetAuthenticatedUserTokenCacheForTest();
+    globalThis.fetch = originalFetch;
+    Date.now = originalDateNow;
+  }
+});
+
+test('invalid, expired, wrong-issuer, placeholder, and oversized bearer tokens are never reused', async () => {
+  const originalFetch = globalThis.fetch;
+  const future = Math.floor(Date.now() / 1000) + 300;
+  const oversizedJwtParts = authTestJwt({
+    subject: 'a4343434-4343-4343-8343-434343434343',
+    expiresAt: future,
+    nonce: 'oversized',
+  }).split('.');
+  const tokens = [
+    authTestJwt({ subject: 'not-a-uuid', expiresAt: future, nonce: 'bad-subject' }),
+    authTestJwt({
+      subject: 'a2222222-2222-4222-8222-222222222222',
+      expiresAt: Math.floor(Date.now() / 1000) - 10,
+      nonce: 'expired',
+    }),
+    authTestJwt({
+      subject: 'a3333333-3333-4333-8333-333333333333',
+      expiresAt: future,
+      issuer: 'https://another-project.supabase.co/auth/v1',
+      nonce: 'wrong-issuer',
+    }),
+    'verified-user-token',
+    `${oversizedJwtParts[0]}.${oversizedJwtParts[1]}.${'a'.repeat(17_000)}`,
+  ];
+  const verifiedIds = [
+    'a2111111-1111-4111-8111-111111111111',
+    'a2222222-2222-4222-8222-222222222222',
+    'a3333333-3333-4333-8333-333333333333',
+    'a4444444-4444-4444-8444-444444444444',
+    'a4343434-4343-4343-8343-434343434343',
+  ];
+  let authCalls = 0;
+  resetAuthenticatedUserTokenCacheForTest();
+  globalThis.fetch = async (url) => {
+    const target = String(url);
+    if (target.endsWith('/auth/v1/user')) {
+      const id = verifiedIds[Math.floor(authCalls / 2)];
+      authCalls += 1;
+      return Response.json({ id });
+    }
+    throw new Error(`Unexpected uncacheable JWT request: ${target}`);
+  };
+
+  try {
+    for (let index = 0; index < tokens.length; index += 1) {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const response = await worker.fetch(
+          authenticatedGuestAccessRequest(tokens[index], `203.0.114.${index}-${attempt}`),
+          authenticationTestEnv,
+        );
+        assert.equal(response.status, 200);
+      }
+    }
+    assert.equal(authCalls, tokens.length * 2);
+    assert.equal(authenticatedUserTokenCacheSizeForTest(), 0);
+  } finally {
+    resetAuthenticatedUserTokenCacheForTest();
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('transient Supabase Auth failures return a retryable typed 503 and are not cached', async () => {
+  const originalFetch = globalThis.fetch;
+  const token429 = authTestJwt({
+    subject: 'a5555555-5555-4555-8555-555555555555',
+    nonce: 'rate-limited',
+  });
+  const token500 = authTestJwt({
+    subject: 'a6666666-6666-4666-8666-666666666666',
+    nonce: 'upstream-error',
+  });
+  const upstreamResponses = [
+    new Response(null, { status: 429, headers: { 'Retry-After': '7' } }),
+    new Response(null, { status: 503 }),
+    new Response(null, { status: 503 }),
+  ];
+  let authCalls = 0;
+  resetAuthenticatedUserTokenCacheForTest();
+  globalThis.fetch = async (url) => {
+    const target = String(url);
+    if (target.endsWith('/auth/v1/user')) {
+      const response = upstreamResponses[authCalls];
+      authCalls += 1;
+      return response;
+    }
+    throw new Error(`Unexpected transient auth request: ${target}`);
+  };
+
+  try {
+    const rateLimited = await worker.fetch(
+      authenticatedGuestAccessRequest(token429, '203.0.113.211'),
+      authenticationTestEnv,
+    );
+    const unavailable = await worker.fetch(
+      authenticatedGuestAccessRequest(token500, '203.0.113.212'),
+      authenticationTestEnv,
+    );
+    const rateLimitedPayload = await rateLimited.json();
+    const unavailablePayload = await unavailable.json();
+
+    assert.equal(rateLimited.status, 503);
+    assert.equal(rateLimitedPayload.error.code, 'AUTH_SESSION_VERIFICATION_UNAVAILABLE');
+    assert.equal(rateLimitedPayload.error.retryable, true);
+    assert.equal(rateLimitedPayload.error.retryAfterSeconds, 7);
+    assert.equal(rateLimited.headers.get('Retry-After'), '7');
+    assert.equal(rateLimited.headers.get('Access-Control-Expose-Headers'), 'Retry-After');
+    assert.equal(unavailable.status, 503);
+    assert.equal(unavailablePayload.error.code, 'AUTH_SESSION_VERIFICATION_UNAVAILABLE');
+    assert.equal(unavailablePayload.error.retryable, true);
+    assert.equal(unavailablePayload.error.retryAfterSeconds, 5);
+    assert.equal(unavailable.headers.get('Retry-After'), '5');
+    assert.equal(authenticatedUserTokenCacheSizeForTest(), 0);
+    assert.equal(authCalls, 3, '429 should not retry immediately; 5xx should retry once');
+  } finally {
+    resetAuthenticatedUserTokenCacheForTest();
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Supabase Auth verification retries 5xx and preserves only true 401 and 403 session errors', async () => {
+  const originalFetch = globalThis.fetch;
+  const recoveredSubject = 'a7777777-7777-4777-8777-777777777777';
+  const recoveredToken = authTestJwt({ subject: recoveredSubject, nonce: 'recovered' });
+  const deniedToken = authTestJwt({
+    subject: 'a8888888-8888-4888-8888-888888888888',
+    nonce: 'denied',
+  });
+  const forbiddenToken = authTestJwt({
+    subject: 'a8989898-8989-4989-8989-898989898989',
+    nonce: 'forbidden',
+  });
+  const missingUserToken = authTestJwt({
+    subject: 'a9090909-9090-4090-8090-909090909090',
+    nonce: 'missing-user',
+  });
+  const upstreamResponses = [
+    new Response(null, { status: 503 }),
+    Response.json({ id: recoveredSubject }),
+    Response.json({ message: 'expired' }, { status: 401 }),
+    Response.json({ message: 'forbidden' }, { status: 403 }),
+    Response.json({ email: 'missing-id@example.test' }),
+    Response.json({ email: 'missing-id@example.test' }),
+  ];
+  let authCalls = 0;
+  resetAuthenticatedUserTokenCacheForTest();
+  globalThis.fetch = async (url) => {
+    const target = String(url);
+    if (target.endsWith('/auth/v1/user')) {
+      const response = upstreamResponses[authCalls];
+      authCalls += 1;
+      return response;
+    }
+    throw new Error(`Unexpected auth retry request: ${target}`);
+  };
+
+  try {
+    const recovered = await worker.fetch(
+      authenticatedGuestAccessRequest(recoveredToken, '203.0.113.213'),
+      authenticationTestEnv,
+    );
+    const denied = await worker.fetch(
+      authenticatedGuestAccessRequest(deniedToken, '203.0.113.214'),
+      authenticationTestEnv,
+    );
+    const forbidden = await worker.fetch(
+      authenticatedGuestAccessRequest(forbiddenToken, '203.0.113.217'),
+      authenticationTestEnv,
+    );
+    const missingUser = await worker.fetch(
+      authenticatedGuestAccessRequest(missingUserToken, '203.0.113.218'),
+      authenticationTestEnv,
+    );
+    const deniedPayload = await denied.json();
+    const forbiddenPayload = await forbidden.json();
+    const missingUserPayload = await missingUser.json();
+
+    assert.equal(recovered.status, 200);
+    assert.equal(denied.status, 401);
+    assert.equal(deniedPayload.error.code, 'INVALID_SESSION');
+    assert.equal(forbidden.status, 401);
+    assert.equal(forbiddenPayload.error.code, 'INVALID_SESSION');
+    assert.equal(missingUser.status, 503);
+    assert.equal(missingUserPayload.error.code, 'AUTH_SESSION_VERIFICATION_UNAVAILABLE');
+    assert.equal(missingUserPayload.error.retryable, true);
+    assert.equal(authCalls, 6, '401 and 403 must not retry; missing user id must retry once');
+  } finally {
+    resetAuthenticatedUserTokenCacheForTest();
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('malformed, missing-id, and JWT-sub-mismatched 2xx auth bodies retry then return typed 503', async () => {
+  const originalFetch = globalThis.fetch;
+  const malformedToken = authTestJwt({
+    subject: 'ab111111-1111-4111-8111-111111111111',
+    nonce: 'malformed-body',
+  });
+  const missingIdToken = authTestJwt({
+    subject: 'ab222222-2222-4222-8222-222222222222',
+    nonce: 'missing-id-body',
+  });
+  const mismatchedToken = authTestJwt({
+    subject: 'ab333333-3333-4333-8333-333333333333',
+    nonce: 'mismatched-id-body',
+  });
+  const upstreamResponses = [
+    new Response('{not-json', { status: 200 }),
+    new Response('{still-not-json', { status: 200 }),
+    Response.json({ email: 'missing-id@example.test' }),
+    Response.json({ email: 'still-missing-id@example.test' }),
+    Response.json({ id: 'ab444444-4444-4444-8444-444444444444' }),
+    Response.json({ id: 'ab444444-4444-4444-8444-444444444444' }),
+  ];
+  let authCalls = 0;
+  resetAuthenticatedUserTokenCacheForTest();
+  globalThis.fetch = async (url) => {
+    const target = String(url);
+    if (target.endsWith('/auth/v1/user')) {
+      const response = upstreamResponses[authCalls];
+      authCalls += 1;
+      return response;
+    }
+    throw new Error(`Unexpected unusable auth body request: ${target}`);
+  };
+
+  try {
+    const responses = [];
+    for (const [index, token] of [malformedToken, missingIdToken, mismatchedToken].entries()) {
+      responses.push(await worker.fetch(
+        authenticatedGuestAccessRequest(token, `203.0.113.22${index}`),
+        authenticationTestEnv,
+      ));
+    }
+    for (const response of responses) {
+      const payload = await response.json();
+      assert.equal(response.status, 503);
+      assert.equal(payload.error.code, 'AUTH_SESSION_VERIFICATION_UNAVAILABLE');
+      assert.equal(payload.error.retryable, true);
+    }
+    assert.equal(authCalls, 6);
+    assert.equal(authenticatedUserTokenCacheSizeForTest(), 0);
+  } finally {
+    resetAuthenticatedUserTokenCacheForTest();
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('a never-ending 200 auth body is aborted, retried once, and returned as typed 503', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalSetTimeout = globalThis.setTimeout;
+  const token = authTestJwt({
+    subject: 'ab555555-5555-4555-8555-555555555555',
+    nonce: 'stream-timeout',
+  });
+  let authCalls = 0;
+  resetAuthenticatedUserTokenCacheForTest();
+  globalThis.setTimeout = (callback, delay, ...args) => originalSetTimeout(
+    callback,
+    delay >= 5_000 ? 0 : delay,
+    ...args,
+  );
+  globalThis.fetch = async (url) => {
+    const target = String(url);
+    if (target.endsWith('/auth/v1/user')) {
+      authCalls += 1;
+      return new Response(new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('{"id":"unfinished'));
+        },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    throw new Error(`Unexpected streaming auth request: ${target}`);
+  };
+
+  try {
+    const response = await worker.fetch(
+      authenticatedGuestAccessRequest(token, '203.0.113.226'),
+      authenticationTestEnv,
+    );
+    const payload = await response.json();
+    assert.equal(response.status, 503);
+    assert.equal(payload.error.code, 'AUTH_SESSION_VERIFICATION_UNAVAILABLE');
+    assert.equal(payload.error.retryable, true);
+    assert.equal(authCalls, 2);
+    assert.equal(authenticatedUserTokenCacheSizeForTest(), 0);
+  } finally {
+    resetAuthenticatedUserTokenCacheForTest();
+    globalThis.fetch = originalFetch;
+    globalThis.setTimeout = originalSetTimeout;
+  }
+});
+
+test('Supabase Auth 408 is retried once and can recover', async () => {
+  const originalFetch = globalThis.fetch;
+  const subject = 'ab666666-6666-4666-8666-666666666666';
+  const token = authTestJwt({ subject, nonce: 'upstream-408' });
+  let authCalls = 0;
+  resetAuthenticatedUserTokenCacheForTest();
+  globalThis.fetch = async (url) => {
+    const target = String(url);
+    if (target.endsWith('/auth/v1/user')) {
+      authCalls += 1;
+      return authCalls === 1
+        ? new Response(null, { status: 408 })
+        : Response.json({ id: subject });
+    }
+    throw new Error(`Unexpected auth 408 retry request: ${target}`);
+  };
+
+  try {
+    const response = await worker.fetch(
+      authenticatedGuestAccessRequest(token, '203.0.113.227'),
+      authenticationTestEnv,
+    );
+    assert.equal(response.status, 200);
+    assert.equal(authCalls, 2);
+    assert.equal(authenticatedUserTokenCacheSizeForTest(), 1);
+  } finally {
+    resetAuthenticatedUserTokenCacheForTest();
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Supabase Auth timeout retries once then returns retryable 503 without caching', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalSetTimeout = globalThis.setTimeout;
+  const token = authTestJwt({
+    subject: 'a9999999-9999-4999-8999-999999999999',
+    nonce: 'timeout',
+  });
+  let authCalls = 0;
+  resetAuthenticatedUserTokenCacheForTest();
+  globalThis.setTimeout = (callback, delay, ...args) => originalSetTimeout(
+    callback,
+    delay >= 5_000 ? 0 : delay,
+    ...args,
+  );
+  globalThis.fetch = async (url, options = {}) => {
+    const target = String(url);
+    if (target.endsWith('/auth/v1/user')) {
+      authCalls += 1;
+      return new Promise((_resolve, reject) => {
+        options.signal.addEventListener('abort', () => {
+          reject(new DOMException('Timed out', 'AbortError'));
+        }, { once: true });
+      });
+    }
+    throw new Error(`Unexpected auth timeout request: ${target}`);
+  };
+
+  try {
+    const response = await worker.fetch(
+      authenticatedGuestAccessRequest(token, '203.0.113.215'),
+      authenticationTestEnv,
+    );
+    const payload = await response.json();
+    assert.equal(response.status, 503);
+    assert.equal(payload.error.code, 'AUTH_SESSION_VERIFICATION_UNAVAILABLE');
+    assert.equal(payload.error.retryable, true);
+    assert.equal(payload.error.retryAfterSeconds, 5);
+    assert.equal(authCalls, 2);
+    assert.equal(authenticatedUserTokenCacheSizeForTest(), 0);
+  } finally {
+    resetAuthenticatedUserTokenCacheForTest();
+    globalThis.fetch = originalFetch;
+    globalThis.setTimeout = originalSetTimeout;
+  }
+});
+
+test('a generic Supabase Auth network failure is retried once and can recover', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWarn = console.warn;
+  const subject = 'aa111111-1111-4111-8111-111111111111';
+  const token = authTestJwt({ subject, nonce: 'network-recovery' });
+  let authCalls = 0;
+  const warnings = [];
+  resetAuthenticatedUserTokenCacheForTest();
+  console.warn = (...args) => warnings.push(args);
+  globalThis.fetch = async (url) => {
+    const target = String(url);
+    if (target.endsWith('/auth/v1/user')) {
+      authCalls += 1;
+      if (authCalls === 1) throw new TypeError('network unavailable');
+      return Response.json({ id: subject });
+    }
+    throw new Error(`Unexpected auth network retry request: ${target}`);
+  };
+
+  try {
+    const response = await worker.fetch(
+      authenticatedGuestAccessRequest(token, '203.0.113.216'),
+      authenticationTestEnv,
+    );
+    assert.equal(response.status, 200);
+    assert.equal(authCalls, 2);
+    assert.equal(authenticatedUserTokenCacheSizeForTest(), 1);
+    assert.deepEqual(warnings, [[
+      'Supabase Auth verification transient failure',
+      { category: 'network_error', status: null, attempt: 1 },
+    ]]);
+    assert.equal(JSON.stringify(warnings).includes(token), false);
+  } finally {
+    resetAuthenticatedUserTokenCacheForTest();
+    globalThis.fetch = originalFetch;
+    console.warn = originalWarn;
+  }
+});
+
+test('the cross-request verified JWT cache remains bounded to 512 entries', async () => {
+  const originalFetch = globalThis.fetch;
+  const tokens = Array.from({ length: 513 }, (_, index) => {
+    const suffix = (index + 1).toString(16).padStart(12, '0');
+    return authTestJwt({
+      subject: `b0000000-0000-4000-8000-${suffix}`,
+      nonce: `bounded-${index}`,
+    });
+  });
+  let authCalls = 0;
+  resetAuthenticatedUserTokenCacheForTest();
+  globalThis.fetch = async (url, options = {}) => {
+    const target = String(url);
+    if (target.endsWith('/auth/v1/user')) {
+      authCalls += 1;
+      const authorization = new Headers(options.headers).get('Authorization') || '';
+      const payloadPart = authorization.replace(/^Bearer\s+/i, '').split('.')[1];
+      const payload = JSON.parse(Buffer.from(payloadPart, 'base64url').toString('utf8'));
+      return Response.json({ id: payload.sub });
+    }
+    throw new Error(`Unexpected bounded JWT cache request: ${target}`);
+  };
+
+  try {
+    for (let index = 0; index < tokens.length; index += 1) {
+      const response = await worker.fetch(
+        authenticatedGuestAccessRequest(tokens[index], `bounded-cache-${index}`),
+        authenticationTestEnv,
+      );
+      assert.equal(response.status, 200);
+    }
+    assert.equal(authCalls, 513);
+    assert.equal(authenticatedUserTokenCacheSizeForTest(), 512);
+
+    const newest = await worker.fetch(
+      authenticatedGuestAccessRequest(tokens.at(-1), 'bounded-cache-newest-reuse'),
+      authenticationTestEnv,
+    );
+    assert.equal(newest.status, 200);
+    assert.equal(authCalls, 513, 'the newest cached token should be reused');
+
+    const oldest = await worker.fetch(
+      authenticatedGuestAccessRequest(tokens[0], 'bounded-cache-oldest-retry'),
+      authenticationTestEnv,
+    );
+    assert.equal(oldest.status, 200);
+    assert.equal(authCalls, 514, 'the oldest entry should have been evicted');
+    assert.equal(authenticatedUserTokenCacheSizeForTest(), 512);
+  } finally {
+    resetAuthenticatedUserTokenCacheForTest();
     globalThis.fetch = originalFetch;
   }
 });

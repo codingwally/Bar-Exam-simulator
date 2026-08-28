@@ -52,6 +52,12 @@ for (const required of [
   'assets/feature-loader.js',
   'assets/subscription-cta.css',
   'assets/subscription-cta.js',
+  'assets/study-room-preview.css',
+  'assets/study-room-preview.js',
+  'assets/study-room/dimasalang-library.webp',
+  'assets/study-room/participant-2-tropical.webp',
+  'assets/study-room/participant-3-bedroom.webp',
+  'assets/study-room/participant-4-condo.webp',
   'assets/maintenance-gate.js',
   'assets/quorum-first-shell.css',
   'assets/quorum-first-shell.js',
@@ -129,7 +135,11 @@ assert.match(index, /id="private-beta-landing"/);
 assert.match(index, /<h1 id="pb-pillars-title">Prepare with purpose\.<\/h1>/);
 assert.equal((index.match(/id="site-header"/g) || []).length, 1);
 assert.match(index, /id="site-header"[\s\S]*id="site-menu-toggle"[\s\S]*>Home<[\s\S]*>Study Features<[\s\S]*Quick Drills[\s\S]*Doctrine Review[\s\S]*Syllabus-Based Review[\s\S]*Bar Question Practice[\s\S]*Bar Exam Simulation[\s\S]*Analytics[\s\S]*>Profile<[\s\S]*Plans &amp; Pricing[\s\S]*>Support/);
-assert.match(index, /id="dd2-header-role-button"[\s\S]*id="dd2-header-exam-button"[\s\S]*>Examination Room<[\s\S]*id="dd2-header-pricing-button"[\s\S]*>Plans &amp; Pricing</);
+assert.match(index, /id="dd2-header-role-button"[\s\S]*id="dd2-header-exam-button"[\s\S]*>Examination Room<[\s\S]*id="dd-study-room-trigger"[\s\S]*>Study Room<[\s\S]*id="dd2-header-pricing-button"[\s\S]*>Plans &amp; Pricing</);
+assert.match(index, /id="dd-study-room-dialog" role="dialog" aria-modal="true"/);
+assert.match(index, /You won&rsquo;t have to study alone\./);
+assert.match(index, /phase2-experience\.js[^"\n]*pricing=study-room-recovery-20260829-1/);
+assert.doesNotMatch(index, /href=["']\/study-room\//i);
 assert.doesNotMatch(index, />The Academy<|>The Commons<|>BarBound<|>The Docket</);
 assert.doesNotMatch(index, /class="pb-chamber-index"/);
 assert.doesNotMatch(index, /class="pb-pillar-grid"|class="pb-pillar-card"/);

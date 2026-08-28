@@ -14,7 +14,7 @@
       ],
       scripts: [
         'assets/pedro.js?v=pedro-release2-20260827-1',
-        'assets/lex-forum.js?v=profile-photo-release2-20260827-1&baseline=public-reliability-20260827-1&profile=chambers-20260827-1',
+        'assets/lex-forum.js?v=profile-photo-release2-20260827-1&baseline=public-reliability-20260827-1&profile=chambers-20260827-1&cta=home-subscription-20260828-2',
       ],
     }),
     examinations: Object.freeze({

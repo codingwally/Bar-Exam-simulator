@@ -1,0 +1,294 @@
+#site-header.qfs-shell .dd2-header-pricing-button {
+  position: relative;
+  isolation: isolate;
+  order: 1;
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 15px;
+  overflow: hidden;
+  border: 1px solid #e2bd5a;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #f1d77f 0%, #d9ae45 100%);
+  box-shadow: 0 0 0 1px rgba(255, 230, 151, 0.18), 0 6px 18px rgba(217, 174, 69, 0.24);
+  color: #07182d;
+  font: 800 12px/1 Inter, sans-serif;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+#site-header.qfs-shell .dd2-header-pricing-button::before {
+  position: absolute;
+  z-index: -1;
+  inset: 1px;
+  border-radius: 7px;
+  background: linear-gradient(112deg, rgba(255, 250, 219, 0.54), transparent 38%, rgba(255, 237, 174, 0.18));
+  content: '';
+}
+
+#site-header.qfs-shell .dd2-header-pricing-button:hover {
+  border-color: #f0d57e;
+  background: linear-gradient(135deg, #f4dc89 0%, #dfb84f 100%);
+  box-shadow: 0 0 0 2px rgba(235, 198, 94, 0.16), 0 8px 22px rgba(217, 174, 69, 0.3);
+  transform: translateY(-1px);
+}
+
+#site-header.qfs-shell .dd2-header-pricing-button:focus-visible,
+.dd2-subscription-invitation__action:focus-visible {
+  outline: 3px solid #fff3be;
+  outline-offset: 3px;
+}
+
+#site-header.qfs-shell .dd2-header-pricing-button > img {
+  width: 17px;
+  height: 17px;
+  filter: brightness(0) saturate(100%) invert(8%) sepia(27%) saturate(1838%) hue-rotate(174deg) brightness(94%) contrast(101%);
+}
+
+#site-header.qfs-shell .dd2-header-pricing-button[hidden] {
+  display: none !important;
+}
+
+#site-header.qfs-shell .dd2-header-exam-button {
+  order: 2;
+}
+
+#site-header.qfs-shell .dd2-header-role-button {
+  order: 3;
+  min-height: 44px;
+  gap: 8px;
+  padding-inline: 9px 11px;
+}
+
+#site-header.qfs-shell .dd2-header-role-copy small {
+  display: none;
+}
+
+#site-header.qfs-shell .dd2-header-role-copy strong {
+  font-size: 12px;
+}
+
+#site-header.qfs-shell .dd2-header-role-caret {
+  width: 12px;
+  height: 12px;
+  opacity: 0.78;
+  transform: rotate(90deg);
+}
+
+.dd2-subscription-invitation {
+  position: relative;
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  gap: 12px;
+  margin: 0 0 12px;
+  padding: 15px 17px 13px;
+  overflow: hidden;
+  border: 1px solid rgba(9, 36, 65, 0.13);
+  border-radius: 13px;
+  background: linear-gradient(115deg, #fffefb 0%, #fffefa 78%, #fbf4e3 100%);
+  box-shadow: 0 7px 20px rgba(9, 36, 65, 0.065);
+  color: #07182d;
+}
+
+.dd2-subscription-invitation::after {
+  position: absolute;
+  top: -64px;
+  right: -42px;
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(223, 184, 79, 0.2), rgba(223, 184, 79, 0) 70%);
+  pointer-events: none;
+  content: '';
+}
+
+.dd2-subscription-invitation__identity {
+  position: relative;
+  z-index: 1;
+  display: contents;
+}
+
+.dd2-subscription-invitation__logo {
+  grid-column: 1;
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(217, 174, 69, 0.72);
+  border-radius: 50%;
+  background: #07182d;
+  box-shadow: 0 5px 14px rgba(7, 24, 45, 0.17);
+  object-fit: cover;
+}
+
+.dd2-subscription-invitation__identity > div {
+  grid-column: 2;
+  align-self: center;
+  min-width: 0;
+}
+
+.dd2-subscription-invitation__identity strong {
+  display: block;
+  color: #092441;
+  font: 800 12px/1.2 Inter, sans-serif;
+}
+
+.dd2-subscription-invitation__metadata {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin-top: 4px;
+  color: #7d5d16;
+  font: 800 9px/1.2 Inter, sans-serif;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.dd2-subscription-invitation__pin {
+  padding: 3px 6px;
+  border: 1px solid rgba(185, 137, 31, 0.28);
+  border-radius: 999px;
+  background: rgba(232, 199, 111, 0.18);
+  letter-spacing: 0.08em;
+}
+
+.dd2-subscription-invitation__body {
+  position: relative;
+  z-index: 1;
+  grid-column: 2;
+  min-width: 0;
+}
+
+.dd2-subscription-invitation__body h3 {
+  max-width: 720px;
+  margin: 0 0 6px;
+  color: #07182d;
+  font: 700 16px/1.25 Inter, sans-serif;
+  letter-spacing: -0.005em;
+}
+
+.dd2-subscription-invitation__message {
+  max-width: 820px;
+  margin: 0;
+  color: #334a62;
+  font: 450 12.5px/1.46 Inter, sans-serif;
+}
+
+.dd2-subscription-invitation__benefits {
+  display: none;
+}
+
+.dd2-subscription-invitation__benefits li {
+  position: relative;
+  padding-left: 14px;
+}
+
+.dd2-subscription-invitation__benefits li::before {
+  position: absolute;
+  top: 0.45em;
+  left: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #c49327;
+  content: '';
+}
+
+.dd2-subscription-invitation__action {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 2px;
+  padding: 5px 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #9c6908;
+  font: 750 12.5px/1.2 Inter, sans-serif;
+  cursor: pointer;
+}
+
+.dd2-subscription-invitation__action:hover {
+  background: transparent;
+  box-shadow: none;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.dd2-subscription-invitation__action img {
+  width: 14px;
+  height: 14px;
+}
+
+@media (max-width: 700px) {
+  .dd2-subscription-invitation {
+    grid-template-columns: 42px minmax(0, 1fr);
+    gap: 10px;
+    padding: 14px;
+    border-radius: 12px;
+  }
+
+  .dd2-subscription-invitation__logo {
+    width: 38px;
+    height: 38px;
+  }
+
+  .dd2-subscription-invitation__body h3 {
+    font-size: 15px;
+  }
+}
+
+@media (max-width: 560px) {
+  #site-header.qfs-shell .dd2-header-pricing-button {
+    min-width: 0;
+    padding-inline: 11px;
+  }
+
+  #site-header.qfs-shell .dd2-header-pricing-label-wide {
+    display: none;
+  }
+
+  #site-header.qfs-shell .dd2-header-pricing-label-short {
+    display: inline;
+  }
+
+  #site-header.qfs-shell .dd2-header-role-copy {
+    display: none;
+  }
+
+  #site-header.qfs-shell .dd2-header-role-button {
+    width: 44px;
+    min-width: 44px;
+    padding: 4px;
+  }
+
+  #site-header.qfs-shell .dd2-header-role-caret {
+    display: none;
+  }
+
+  .dd2-subscription-invitation__body {
+    grid-column: 1 / -1;
+    margin-top: 3px;
+  }
+
+  .dd2-subscription-invitation__action {
+    width: 100%;
+  }
+}
+
+@media (min-width: 561px) {
+  #site-header.qfs-shell .dd2-header-pricing-label-short {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #site-header.qfs-shell .dd2-header-pricing-button,
+  .dd2-subscription-invitation__action {
+    transition: none;
+  }
+}

@@ -1158,6 +1158,73 @@ test('owner bundle normalizer derives release, verification, and roster academic
   assert.equal(fallbackGrade.released, true);
 });
 
+test('owner bundle renders only the current publication questions while retaining version history', () => {
+  const window = { ExaminationRoomV1Api: {} };
+  const instrumented = source.replace(
+    'global.DueDiligenceExaminationRoomAdmin = Object.freeze({ render, bind });',
+    'global.__ExaminationRoomQuestionVersionTest = Object.freeze({ state, normalizeOwnerDetail, questions, renderQuestions, renderCohesiveCommandCenter }); global.DueDiligenceExaminationRoomAdmin = Object.freeze({ render, bind });',
+  );
+  vm.runInNewContext(instrumented, { window, URLSearchParams, Intl, Date, Map, Set });
+  const harness = window.__ExaminationRoomQuestionVersionTest;
+  const normalized = harness.normalizeOwnerDetail({
+    bundle: {
+      currentPublishedVersionId: 'version-2',
+      tables: {
+        exams: [{ id: 'exam-1', title: 'Republished Civil Law Exam', subject: 'Civil Law' }],
+        examVersions: [
+          { id: 'version-1', version_number: 1 },
+          { id: 'version-2', version_number: 2 },
+        ],
+        questions: [
+          { id: 'old-q1', exam_version_id: 'version-1', position: 1, prompt: 'Historical question one', points: 10 },
+          { id: 'old-q2', exam_version_id: 'version-1', position: 2, prompt: 'Historical question two', points: 10 },
+          { id: 'current-q1', exam_version_id: 'version-2', position: 1, prompt: 'Current question one', points: 10 },
+          { id: 'current-q2', exam_version_id: 'version-2', position: 2, prompt: 'Current question two', points: 10 },
+        ],
+        studentIdentities: [],
+        examRoster: [],
+        studentSessions: [],
+        submissions: [],
+        submissionReceipts: [],
+        answerRevisions: [],
+        submissionAnswers: [],
+        gradeRevisions: [],
+        gradeRevisionItems: [],
+        resultReleases: [],
+        roomActivations: [],
+        ownerKeyEnvelopes: [],
+        emailDeliveryEvents: [],
+        recoverySnapshots: [],
+        auditEvents: [],
+      },
+    },
+  });
+
+  assert.equal(normalized.examVersion.id, 'version-2');
+  assert.deepEqual(Array.from(normalized.questions, (question) => question.id), ['current-q1', 'current-q2']);
+  assert.equal(normalized.bundle.tables.questions.length, 4);
+
+  harness.state.institutionId = 'institution-1';
+  harness.state.selectedExamId = 'exam-1';
+  harness.state.data = {
+    institution: { institutionName: 'Test Law School' },
+    exams: [{ id: 'exam-1', title: 'Republished Civil Law Exam', subject: 'Civil Law', questionCount: 2 }],
+    counts: {},
+    staff: [],
+  };
+  harness.state.examPaging = { loaded: 1, total: 1, hasMore: false, fullyLoaded: true };
+  harness.state.details.set('exam-1', normalized);
+
+  const questionsHtml = harness.renderQuestions();
+  assert.equal((questionsHtml.match(/<article data-exam-admin-searchable/g) || []).length, 2);
+  assert.match(questionsHtml, /Current question one/);
+  assert.match(questionsHtml, /Current question two/);
+  assert.doesNotMatch(questionsHtml, /Historical question one|Historical question two/);
+
+  const commandCenterHtml = harness.renderCohesiveCommandCenter();
+  assert.match(commandCenterHtml, /data-exam-admin-section="examination"[\s\S]*?<em>2<\/em>/);
+});
+
 test('flat question grade revisions render one released student result without changing aggregate grade payloads', () => {
   const window = { ExaminationRoomV1Api: {} };
   const instrumented = source.replace(

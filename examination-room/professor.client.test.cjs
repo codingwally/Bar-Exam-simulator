@@ -92,7 +92,7 @@ function loadProfessorStartupHooks({ storageBlocked = false, indexedDbAvailable 
   };
   const exposedSource = professorSource.replace(
     /\n\s*initialize\(\);\s*\n\}\)\(window\);\s*$/,
-    '\n  global.__professorStartupTestHooks = { clientOnlyBlankDraft, editorExamFromStored, examContentFingerprint, normalizeAllowedEmails, invalidAllowedEmails, creatorAccessUnlocked, scheduleActivationPoll, stopActivationPolling, saveLocalDraft, readLocalDraft, readActiveLocalDraft, readLocalDraftIndex, localDraftBelongsToCurrentProfessor, prepareDecryptedGradePayload, validateCompleteGradedPackageSets, state };\n})(window);',
+    '\n  global.__professorStartupTestHooks = { clientOnlyBlankDraft, editorExamFromStored, examContentFingerprint, normalizeAllowedEmails, invalidAllowedEmails, creatorAccessUnlocked, scheduleActivationPoll, stopActivationPolling, saveLocalDraft, readLocalDraft, readActiveLocalDraft, readLocalDraftIndex, localDraftBelongsToCurrentProfessor, prepareDecryptedGradePayload, validateCompleteGradedPackageSets, serverDraftBackupBlockers, serverBackupWaitingLabel, examSummariesWithCurrentExam, state };\n})(window);',
   );
   vm.runInNewContext(exposedSource, { window, indexedDB: window.indexedDB }, { filename: 'professor.js' });
   return { ...window.__professorStartupTestHooks, __testWindow: window };
@@ -485,6 +485,52 @@ test('server and device draft conflicts use a content baseline instead of compar
   assert.doesNotMatch(professorSource, /localTime\s*>\s*serverTime/);
 });
 
+test('incomplete creator questions remain device-safe without producing an immutable-state server error', () => {
+  const {
+    clientOnlyBlankDraft,
+    serverDraftBackupBlockers,
+    serverBackupWaitingLabel,
+  } = loadProfessorStartupHooks();
+  const draft = clientOnlyBlankDraft('22222222-2222-4222-8222-222222222222');
+  draft.title = 'Obligations and Contracts';
+  draft.questions = [{ id: 'question-1', prompt: '', points: 10, type: 'essay' }];
+
+  const incomplete = Array.from(serverDraftBackupBlockers(draft));
+  assert.deepEqual(incomplete, ['complete Question 1']);
+  assert.equal(
+    serverBackupWaitingLabel(incomplete),
+    'Saved on this device · complete Question 1 for server backup',
+  );
+  draft.questions[0].prompt = 'Apply the Civil Code to the stated facts.';
+  assert.deepEqual(Array.from(serverDraftBackupBlockers(draft)), []);
+  assert.match(
+    professorSource,
+    /const backupBlockers = serverDraftBackupBlockers\(exam\);[\s\S]*if \(backupBlockers\.length\)[\s\S]*await api\.professorCommand\('save_draft'/,
+  );
+});
+
+test('a later successful backup clears only its stale draft-save error and refreshes the selector title', () => {
+  const { examSummariesWithCurrentExam } = loadProfessorStartupHooks();
+  const examId = '11111111-1111-4111-8111-111111111111';
+  const summaries = examSummariesWithCurrentExam([
+    { id: examId, title: '', status: 'draft' },
+    { id: '22222222-2222-4222-8222-222222222222', title: 'Another exam', status: 'draft' },
+  ], {
+    id: examId,
+    title: 'Creator Black-Box Test 1 — Obligations and Contracts',
+    status: 'draft',
+  });
+
+  assert.equal(summaries[0].title, 'Creator Black-Box Test 1 — Obligations and Contracts');
+  assert.equal(summaries[1].title, 'Another exam');
+  assert.match(professorSource, /showError\(error,[\s\S]*'Server backup delayed', 'draft-save'\)/);
+  assert.match(
+    professorSource,
+    /state\.lastSavedJson = JSON\.stringify\(exam\);[\s\S]*syncCurrentExamSummary\(state\.exam\);[\s\S]*dismissErrorScope\('draft-save'\);/,
+  );
+  assert.doesNotMatch(professorSource, /dismissError\(\);\s*setSavedStatus\('saved'/);
+});
+
 test('Professor result release selection respects an intentional unchecked student', () => {
   assert.match(professorSource, /releaseSelectionSeenIds: new Set\(\)/);
   assert.match(professorSource, /if \(state\.releaseSelectionSeenIds\.has\(session\.id\)\) return/);
@@ -598,7 +644,7 @@ test('Professor Create page contains its question cards at a 319px viewport', ()
     /@media \(max-width: 390px\) \{[\s\S]*?\.questions-list[\s\S]*?\.question-layout[\s\S]*?\.choice-row/,
   );
   assert.match(professorHtml, /class="questions-list"/);
-  assert.match(professorHtml, /professor\.css\?v=renovation-20260828-4/);
+  assert.match(professorHtml, /professor\.css\?v=renovation-20260828-5/);
   assert.match(professorHtml, /api\.js\?v=renovation-20260828-4/);
 });
 
@@ -651,7 +697,7 @@ test('creator receives monitor and grade access from activation without entering
   assert.match(professorHtml, /data-view="monitor" data-requires-activation="true" disabled aria-label="Monitor examination — available after Admin issues the student key"/);
   assert.match(professorHtml, /data-view="grade" data-requires-activation="true" disabled aria-label="Grade submissions — available after Admin issues the student key"/);
   assert.match(professorSource, /control\.setAttribute\('aria-label', unlocked[\s\S]*viewName/);
-  assert.match(professorHtml, /professor\.js\?v=renovation-20260828-4/);
+  assert.match(professorHtml, /professor\.js\?v=renovation-20260828-4&amp;hotfix=creator-save-sync-20260828-1/);
 });
 
 test('creator approval survives reload and a published request keeps polling without a manual check', () => {

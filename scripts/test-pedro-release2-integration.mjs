@@ -83,7 +83,7 @@ assert.doesNotMatch(worker, /pedroHandlers[\s\S]{0,900}generated\.model/);
 
 assert.match(
   serviceWorker,
-  /CACHE_VERSION = 'duediligence-shell-20260827-profile-pedro-release2-1-examination-room-renovation-20260828-4'/,
+  /CACHE_VERSION = 'duediligence-shell-20260827-profile-pedro-release2-1-examination-room-renovation-20260828-5'/,
 );
 assert.match(serviceWorker, /assets\/pedro-navigation\.js\?v=pedro-release2-20260827-1/);
 assert.match(serviceWorker, /assets\/phase2-config\.js\?v=provider-neutral-release2-20260827-1/);

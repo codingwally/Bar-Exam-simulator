@@ -1176,7 +1176,14 @@ body { font-size: 15px; line-height: 1.55; }
   .review-items span { display: none; }
   #exam-form { width: 100%; margin: 0; padding: 24px 16px 180px; }
   .editor-section { scroll-margin-top: 270px; margin-bottom: 18px; padding: 24px; }
-  .hero-title-field textarea { font-size: 36px; }
+  .hero-title-field textarea {
+    min-height: calc(2.2em + 2px);
+    height: auto;
+    max-height: none;
+    overflow-y: hidden;
+    field-sizing: content;
+    font-size: 36px;
+  }
   .details-grid,
   .settings-grid,
   .identity-options,
@@ -1214,7 +1221,7 @@ body { font-size: 15px; line-height: 1.55; }
   .section-rail { top: 202px; }
   .section-rail nav button { min-width: 102px; }
   .editor-section { scroll-margin-top: 280px; padding: 20px 17px; }
-  .hero-title-field textarea { font-size: 32px; }
+  .hero-title-field textarea { min-height: calc(3.3em + 2px); font-size: 32px; }
   .exam-meta-row { grid-template-columns: 1fr; }
   .section-heading h2 { font-size: 25px; }
   .questions-list,

@@ -109,8 +109,9 @@
     node.timer = setTimeout(() => node.classList.remove('is-visible'), 3600);
   }
 
-  function showError(error, retryAction = null, title = 'Action not completed') {
+  function showError(error, retryAction = null, title = 'Action not completed', scope = '') {
     const node = $('#error-banner');
+    node.dataset.errorScope = safeText(scope, 80);
     $('#error-title').textContent = title;
     $('#error-message').textContent = error?.message || 'Examination Room could not complete that action.';
     $('#error-recovery').textContent = error?.recovery || 'Your work on this device is preserved. Check your connection, then try again.';
@@ -120,8 +121,15 @@
   }
 
   function dismissError() {
-    $('#error-banner').hidden = true;
+    const node = $('#error-banner');
+    node.hidden = true;
+    delete node.dataset.errorScope;
     state.retryAction = null;
+  }
+
+  function dismissErrorScope(scope) {
+    const node = $('#error-banner');
+    if (!node.hidden && node.dataset.errorScope === scope) dismissError();
   }
 
   function setButtonBusy(button, busy, busyLabel = 'Working…') {
@@ -331,6 +339,31 @@
       const label = safeText(summary?.title, 180) || 'Untitled examination';
       return `<option value="${escapeHtml(id)}" ${id === currentExamId ? 'selected' : ''}>${escapeHtml(label)}</option>`;
     }).join('');
+  }
+
+  function examSummariesWithCurrentExam(summaries, exam) {
+    const examId = examSummaryId(exam);
+    if (!examId) return Array.isArray(summaries) ? summaries : [];
+    const current = (Array.isArray(summaries) ? summaries : [])
+      .find((summary) => examSummaryId(summary) === examId) || {};
+    const nextSummary = {
+      ...current,
+      id: examId,
+      title: safeText(exam?.title, 180),
+      status: safeText(exam?.status || current?.status, 40) || 'draft',
+      updatedAt: exam?.updatedAt || current?.updatedAt || null,
+    };
+    const found = (Array.isArray(summaries) ? summaries : [])
+      .some((summary) => examSummaryId(summary) === examId);
+    return found
+      ? summaries.map((summary) => (examSummaryId(summary) === examId ? nextSummary : summary))
+      : [...(Array.isArray(summaries) ? summaries : []), nextSummary];
+  }
+
+  function syncCurrentExamSummary(exam) {
+    const examId = examSummaryId(exam);
+    if (!examId) return;
+    renderExamSwitcher(examSummariesWithCurrentExam(state.examSummaries, exam), examId);
   }
 
   function navigateToExam(examId, view = state.currentView) {
@@ -1051,6 +1084,20 @@
     $('span', status).textContent = label;
   }
 
+  function serverDraftBackupBlockers(exam) {
+    const blockers = [];
+    if (!safeText(exam?.title, 180)) blockers.push('add an examination title');
+    (Array.isArray(exam?.questions) ? exam.questions : []).forEach((question, index) => {
+      if (!safeText(question?.prompt, 20_000)) blockers.push(`complete Question ${index + 1}`);
+    });
+    return blockers;
+  }
+
+  function serverBackupWaitingLabel(blockers) {
+    if (blockers.length === 1) return `Saved on this device · ${blockers[0]} for server backup`;
+    return `Saved on this device · complete ${blockers.length} items for server backup`;
+  }
+
   async function saveDraft({ announce = false, force = false } = {}) {
     const exam = collectExam();
     const serialized = JSON.stringify(exam);
@@ -1062,7 +1109,32 @@
       localSaveError = error;
       setSavedStatus('error', 'Device copy unavailable');
     }
+    syncCurrentExamSummary(exam);
+    const backupBlockers = serverDraftBackupBlockers(exam);
+    if (backupBlockers.length) {
+      if (localSaveError) {
+        setSavedStatus('error', 'Not saved — keep this page open');
+        showError({
+          code: 'DRAFT_NOT_PRESERVED',
+          message: 'The incomplete draft could not be saved on this device.',
+          recovery: 'Keep this page open. Allow site storage or free browser space, then choose Save draft again.',
+        }, () => saveDraft({ announce: true, force: true }), 'Draft not saved', 'draft-save');
+        throw localSaveError;
+      }
+      dismissErrorScope('draft-save');
+      const waitingLabel = serverBackupWaitingLabel(backupBlockers);
+      setSavedStatus('unsaved', waitingLabel);
+      if (announce) toast(`${waitingLabel}.`);
+      return {
+        exam,
+        localOnly: true,
+        awaitingCompletion: true,
+        backupBlockers,
+        deviceCopySaved: true,
+      };
+    }
     if (!force && serialized === state.lastSavedJson) {
+      dismissErrorScope('draft-save');
       setSavedStatus('saved', localSavedAt ? `Saved ${timeAgo(localSavedAt)}` : 'Saved on server');
       if (announce) toast('Draft is already up to date.');
       return { exam, deviceCopySaved: Boolean(localSavedAt) };
@@ -1074,6 +1146,7 @@
       state.exam = result.exam || exam;
       state.serverBaselineFingerprint = examContentFingerprint(state.exam);
       state.lastSavedJson = JSON.stringify(exam);
+      syncCurrentExamSummary(state.exam);
       if (localSavedAt) {
         try {
           localSavedAt = await saveLocalDraft(state.exam);
@@ -1081,6 +1154,7 @@
           localSavedAt = null;
         }
       }
+      dismissErrorScope('draft-save');
       setSavedStatus('saved', localSavedAt ? `Saved ${timeAgo(result.savedAt || new Date())}` : 'Saved on server');
       if (announce) toast(localSavedAt
         ? 'Draft saved on this device and backed up to the server.'
@@ -1097,11 +1171,11 @@
           code: 'DRAFT_NOT_PRESERVED',
           message: 'The draft could not be saved on this device or backed up to the server.',
           recovery: 'Keep this page open. Allow site storage or free browser space, restore your connection, then choose Save draft again.',
-        }, () => saveDraft({ announce: true, force: true }), 'Draft not saved');
+        }, () => saveDraft({ announce: true, force: true }), 'Draft not saved', 'draft-save');
         throw localSaveError;
       }
       setSavedStatus('error', 'Saved on this device');
-      showError(error, () => saveDraft({ announce: true, force: true }), 'Server backup delayed');
+      showError(error, () => saveDraft({ announce: true, force: true }), 'Server backup delayed', 'draft-save');
       return { exam, localOnly: true };
     } finally {
       state.saveInFlight = null;
@@ -1112,6 +1186,7 @@
     if (!state.exam) return;
     clearTimeout(state.saveTimer);
     const exam = collectExam();
+    syncCurrentExamSummary(exam);
     saveLocalDraft(exam)
       .then((savedAt) => setSavedStatus('saved', `Saved on this device ${timeAgo(savedAt)}`))
       .catch(() => setSavedStatus('error', 'Device copy unavailable'));

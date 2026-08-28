@@ -853,6 +853,17 @@
 }
 
 @media (max-width: 560px) {
+  .exam-admin-command-center,
+  .exam-admin-page,
+  .exam-admin-global-queue,
+  .exam-admin-request-grid,
+  .exam-admin-selected-header,
+  .exam-admin-selected-title,
+  .exam-admin-selected-title > div {
+    min-width: 0;
+    max-width: 100%;
+  }
+
   .exam-admin-global-queue,
   .exam-admin-selected-header,
   .exam-admin-section-body { padding: .85rem; }
@@ -863,8 +874,16 @@
   .exam-admin-selected-facts article { border-bottom-color: rgba(255, 255, 255, .17); }
   .exam-admin-command-metrics .exam-admin-metric:last-child,
   .exam-admin-selected-facts article:last-child { border-bottom: 0; }
-  .exam-admin-request-card { grid-template-columns: 40px minmax(0, 1fr); }
-  .exam-admin-request-card > button { grid-column: 1 / -1; width: 100%; }
+  .exam-admin-request-card { grid-template-columns: minmax(0, 1fr); align-items: stretch; }
+  .exam-admin-request-state { display: flex; align-items: center; justify-content: flex-start; gap: .55rem; min-width: 0; }
+  .exam-admin-request-state > i { width: 36px; height: 36px; flex: none; }
+  .exam-admin-request-state .exam-admin-status { max-width: 100%; white-space: normal; line-height: 1.25; text-align: left; }
+  .exam-admin-request-card > div:nth-child(2) { grid-column: 1; }
+  .exam-admin-request-card > div:nth-child(2) > span,
+  .exam-admin-request-card h3,
+  .exam-admin-selected-title h2,
+  .exam-admin-selected-title p { max-width: 100%; overflow-wrap: anywhere; }
+  .exam-admin-request-card > button { grid-column: 1; width: 100%; min-width: 0; }
   .exam-admin-section-summary { min-height: 68px; grid-template-columns: 36px minmax(0, 1fr) 18px; gap: .6rem; padding: .75rem; }
   .exam-admin-section-summary > i:first-child { width: 36px; height: 36px; }
   .exam-admin-command-strip button,
@@ -872,5 +891,6 @@
   .exam-admin-section-export button { width: 100%; }
   .exam-admin-section-export button { flex: 1; }
   .exam-admin-selected-header .exam-admin-exam-selector { align-items: stretch; flex-direction: column; }
-  .exam-admin-selected-header .exam-admin-exam-selector select { width: 100%; min-width: 0; }
+  .exam-admin-selected-header .exam-admin-exam-selector,
+  .exam-admin-selected-header .exam-admin-exam-selector select { width: 100%; min-width: 0; max-width: 100%; }
 }

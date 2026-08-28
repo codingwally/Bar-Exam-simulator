@@ -48,10 +48,12 @@ assert.match(adminPhoneCss, /\.exam-admin-request-state\s*\{[^}]*display:\s*flex
 assert.match(adminPhoneCss, /\.exam-admin-request-state \.exam-admin-status\s*\{[^}]*white-space:\s*normal;/s);
 assert.match(adminPhoneCss, /\.exam-admin-selected-title h2,[\s\S]*overflow-wrap:\s*anywhere;/);
 assert.match(adminPhoneCss, /\.exam-admin-selected-header \.exam-admin-exam-selector select\s*\{[^}]*max-width:\s*100%;/s);
+assert.match(adminPhoneCss, /\.exam-admin-section-body > \*,[\s\S]*\.exam-admin-selected-record > \*\s*\{[^}]*min-width:\s*0;[^}]*max-width:\s*100%;/s);
+assert.match(adminPhoneCss, /\.exam-admin-section-export > span\s*\{[^}]*min-width:\s*0;[^}]*overflow-wrap:\s*anywhere;/s);
 
 assert.match(homeHtml, /quorum-first-shell\.css\?v=profile-photo-release2-20260827-1&amp;baseline=public-reliability-20260827-3/);
 assert.match(professorHtml, /professor\.css\?v=renovation-20260828-5/);
-assert.match(adminHtml, /examination-room-admin\.css\?v=owner-command-center-20260828-5/);
+assert.match(adminHtml, /examination-room-admin\.css\?v=owner-command-center-20260828-6/);
 assert.match(adminHtml, /examination-room-admin\.js\?v=owner-command-center-20260828-3/);
 assert.match(serviceWorker, /CACHE_VERSION = 'duediligence-shell-20260827-profile-pedro-release2-1-examination-room-renovation-20260828-5'/);
 assert.match(serviceWorker, /quorum-first-shell\.css\?v=profile-photo-release2-20260827-1&baseline=public-reliability-20260827-3/);

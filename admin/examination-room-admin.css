@@ -859,7 +859,11 @@
   .exam-admin-request-grid,
   .exam-admin-selected-header,
   .exam-admin-selected-title,
-  .exam-admin-selected-title > div {
+  .exam-admin-selected-title > div,
+  .exam-admin-section-body,
+  .exam-admin-section-body > *,
+  .exam-admin-selected-record,
+  .exam-admin-selected-record > * {
     min-width: 0;
     max-width: 100%;
   }
@@ -889,6 +893,7 @@
   .exam-admin-command-strip button,
   .exam-admin-command-strip .exam-admin-danger,
   .exam-admin-section-export button { width: 100%; }
+  .exam-admin-section-export > span { min-width: 0; overflow-wrap: anywhere; }
   .exam-admin-section-export button { flex: 1; }
   .exam-admin-selected-header .exam-admin-exam-selector { align-items: stretch; flex-direction: column; }
   .exam-admin-selected-header .exam-admin-exam-selector,

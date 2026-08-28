@@ -7,6 +7,7 @@ const R2_REFERENCE_PREFIX = 'r2:EXAMINATION_ROOM_BACKUPS:';
 const SUPABASE_REFERENCE_PREFIX = `supabase-storage:${SUPABASE_STORAGE_BUCKET}:`;
 const DEFAULT_MAX_OBJECT_BYTES = 8 * 1024 * 1024;
 const DEFAULT_MAX_PLAINTEXT_BYTES = 8 * 1024 * 1024;
+const DEFAULT_STORAGE_REQUEST_TIMEOUT_MS = 15_000;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const KEY_VERSION_PATTERN = /^v[1-9][0-9]{0,2}$/u;
 const BASE64_PATTERN = /^[A-Za-z0-9+/_-]+={0,2}$/u;
@@ -184,6 +185,13 @@ function runtimeFrom(dependencies = {}) {
     Response: dependencies.Response || globalThis.Response,
     btoa: dependencies.btoa || globalThis.btoa,
     atob: dependencies.atob || globalThis.atob,
+    AbortController: dependencies.AbortController || globalThis.AbortController,
+    setTimeout: dependencies.setTimeout || globalThis.setTimeout,
+    clearTimeout: dependencies.clearTimeout || globalThis.clearTimeout,
+    storageRequestTimeoutMs: positiveLimit(
+      dependencies.storageRequestTimeoutMs,
+      DEFAULT_STORAGE_REQUEST_TIMEOUT_MS,
+    ),
     fetch: typeof fetchImplementation === 'function'
       ? (...args) => Reflect.apply(fetchImplementation, globalThis, args)
       : fetchImplementation,
@@ -195,6 +203,25 @@ function runtimeFrom(dependencies = {}) {
     throw recoveryError(RECOVERY_ERROR_CODES.CRYPTO_UNAVAILABLE);
   }
   return runtime;
+}
+
+async function storageFetch(runtime, input, init = {}) {
+  const controller = typeof runtime.AbortController === 'function'
+    ? new runtime.AbortController()
+    : null;
+  const options = controller ? { ...init, signal: controller.signal } : init;
+  let timer;
+  const deadline = new Promise((_, reject) => {
+    timer = runtime.setTimeout(() => {
+      controller?.abort();
+      reject(new TypeError('private storage request timed out'));
+    }, runtime.storageRequestTimeoutMs);
+  });
+  try {
+    return await Promise.race([runtime.fetch(input, options), deadline]);
+  } finally {
+    runtime.clearTimeout(timer);
+  }
 }
 
 function positiveLimit(value, fallback) {
@@ -518,7 +545,7 @@ function createSupabaseStorageBinding(env, runtime) {
   const objectUrl = (objectKey, authenticated = true) => `${configuration.baseUrl}/storage/v1/object/${authenticated ? 'authenticated/' : ''}${configuration.bucketPath}/${supabaseStoragePath(objectKey)}`;
   const bucketUrl = `${configuration.baseUrl}/storage/v1/bucket/${configuration.bucketPath}`;
   const bucketReady = async () => {
-    const response = await runtime.fetch(bucketUrl, { headers: configuration.headers });
+    const response = await storageFetch(runtime, bucketUrl, { headers: configuration.headers });
     if (!response.ok) throw new TypeError(`private storage unavailable (${response.status})`);
     const body = await response.json().catch(() => null);
     if (!body || body.id !== SUPABASE_STORAGE_BUCKET || body.public === true) {
@@ -526,7 +553,7 @@ function createSupabaseStorageBinding(env, runtime) {
     }
   };
   const read = async (objectKey) => {
-    const response = await runtime.fetch(objectUrl(objectKey), { headers: configuration.headers });
+    const response = await storageFetch(runtime, objectUrl(objectKey), { headers: configuration.headers });
     if (response.status === 400 || response.status === 404) {
       await bucketReady();
       return null;
@@ -539,7 +566,7 @@ function createSupabaseStorageBinding(env, runtime) {
     get: read,
     async put(objectKey, value, options = {}) {
       const bytes = value instanceof Uint8Array ? value : new Uint8Array(value);
-      const response = await runtime.fetch(objectUrl(objectKey, false), {
+      const response = await storageFetch(runtime, objectUrl(objectKey, false), {
         method: 'POST',
         headers: {
           ...configuration.headers,

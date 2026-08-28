@@ -16,6 +16,7 @@
   const EXAM_PAGE_SIZE = 100;
   const SNAPSHOT_PAGE_SIZE = 100;
   const AUDIT_PAGE_SIZE = 250;
+  const MAX_PAGINATION_PAGES = 100;
   const OWNER_ACTION_STORAGE_PREFIX = 'duediligence:examination-room:v1:pending-owner-action';
   const LEGACY_OWNER_ROTATION_STORAGE_PREFIX = 'duediligence:examination-room:v1:pending-owner-rotation';
   const PERSISTED_OWNER_ACTIONS = new Set(['approve_and_email_key', 'reopen_exam', 'resend_key', 'rotate_key']);
@@ -571,7 +572,7 @@
     let pageResult = firstPage;
     let offset = 0;
     let partial = false;
-    for (let pageNumber = 0; pageNumber < 100; pageNumber += 1) {
+    for (let pageNumber = 0; pageNumber < MAX_PAGINATION_PAGES; pageNumber += 1) {
       if (!pageResult) pageResult = await centerQueryForInstitution(institutionId, offset);
       const page = centerPageRows(pageResult);
       const signature = page.map((exam) => examId(exam)).filter(Boolean).join('|');
@@ -594,7 +595,7 @@
       visitedOffsets.add(nextOffset);
       offset = nextOffset;
       pageResult = null;
-      if (pageNumber === 99) partial = true;
+      if (pageNumber === MAX_PAGINATION_PAGES - 1) partial = true;
     }
     return { requests, partial };
   }
@@ -685,13 +686,19 @@
   async function loadAllExams() {
     let current = examProgress();
     const visitedOffsets = new Set();
-    while (current.hasMore) {
+    for (let pageNumber = 0; current.hasMore && pageNumber < MAX_PAGINATION_PAGES; pageNumber += 1) {
       const offset = Number(state.examPaging?.nextOffset);
       if (visitedOffsets.has(offset)) {
         throw ownerControlError('Examination paging repeated the same page marker.', 'The records already loaded are safe. Refresh the command center, then choose Load all examinations again.');
       }
       visitedOffsets.add(offset);
       current = await appendExamPage();
+    }
+    if (current.hasMore) {
+      throw ownerControlError(
+        `Examination paging stopped after ${MAX_PAGINATION_PAGES} pages to prevent a stuck Load all request.`,
+        `The records already loaded are safe. Choose Load next ${EXAM_PAGE_SIZE} to continue in smaller batches, or refresh the command center and try again.`,
+      );
     }
     if (!current.fullyLoaded) {
       throw ownerControlError('The examination list changed while its pages were loading.', 'The records already loaded are safe. Refresh the command center, then export all again.');
@@ -1382,13 +1389,19 @@
       throw ownerControlError('The full audit service is temporarily unavailable.', 'The overview records remain visible. Refresh Recovery & Audit when the owner service is restored.');
     }
     const visitedOffsets = new Set();
-    while (current.hasMore) {
+    for (let pageNumber = 0; current.hasMore && pageNumber < MAX_PAGINATION_PAGES; pageNumber += 1) {
       const offset = Number(current.nextOffset);
       if (visitedOffsets.has(offset)) {
         throw ownerControlError('Audit paging repeated the same page marker.', 'The records already loaded are safe. Refresh Recovery & Audit, then choose Load all records again.');
       }
       visitedOffsets.add(offset);
       current = await appendAuditPage();
+    }
+    if (current.hasMore) {
+      throw ownerControlError(
+        `Audit paging stopped after ${MAX_PAGINATION_PAGES} pages to prevent a stuck Load all request.`,
+        `The records already loaded are safe. Choose Load next ${AUDIT_PAGE_SIZE} to continue in smaller batches, or refresh Recovery & Audit and try again.`,
+      );
     }
     if (!current.fullyLoaded) {
       throw ownerControlError('The audit trail changed while its pages were loading.', 'The records already loaded are safe. Reload the audit trail, then export all again.');
@@ -1471,13 +1484,19 @@
       throw ownerControlError('The full recovery index is temporarily unavailable.', 'The overview checkpoints remain visible. Reload Recovery & Audit when the owner service is restored.');
     }
     const visitedOffsets = new Set();
-    while (current.hasMore) {
+    for (let pageNumber = 0; current.hasMore && pageNumber < MAX_PAGINATION_PAGES; pageNumber += 1) {
       const offset = Number(current.nextOffset);
       if (visitedOffsets.has(offset)) {
         throw ownerControlError('Recovery paging repeated the same page marker.', 'The checkpoints already loaded are safe. Reload Recovery & Audit, then choose Load all checkpoints again.');
       }
       visitedOffsets.add(offset);
       current = await appendRecoveryPage();
+    }
+    if (current.hasMore) {
+      throw ownerControlError(
+        `Recovery paging stopped after ${MAX_PAGINATION_PAGES} pages to prevent a stuck Load all request.`,
+        `The checkpoints already loaded are safe. Choose Load next ${SNAPSHOT_PAGE_SIZE} to continue in smaller batches, or reload Recovery & Audit and try again.`,
+      );
     }
     if (!current.fullyLoaded) {
       throw ownerControlError('The recovery index changed while its pages were loading.', 'The checkpoints already loaded are safe. Reload Recovery & Audit, then export all again.');

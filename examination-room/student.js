@@ -23,6 +23,7 @@
   var APP_VERSION = '1.0.0';
   var DB_NAME = 'duediligence-examination-room-v1';
   var DB_VERSION = 1;
+  var DB_OPEN_TIMEOUT_MS = 5000;
   var DEMO_MODE = new URLSearchParams(window.location.search).get('demo') === '1';
   var REQUIRED_API_METHODS = [
     'previewRoom',
@@ -85,6 +86,11 @@
       prefillDemoEntry();
     }
     updateConnectionUI();
+    if (!state.api) {
+      showError(elements.entryError, { code: 'API_UNAVAILABLE' }, function () {
+        window.location.reload();
+      });
+    }
 
     try {
       state.db = await openDatabase();
@@ -102,7 +108,7 @@
   function registerExaminationRoomServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
 
-    navigator.serviceWorker.register('/service-worker.js?v=examination-room-renovation-20260828-4')
+    navigator.serviceWorker.register('/service-worker.js?v=examination-room-reliability-20260828-1')
       .catch(function () {
         // Registration failure must never block a student who still has a
         // working network connection. The exam UI already reports offline
@@ -1981,8 +1987,22 @@
         return;
       }
       var request = window.indexedDB.open(DB_NAME, DB_VERSION);
-      request.onerror = function () { reject(request.error || createAppError('STORAGE_UNAVAILABLE')); };
-      request.onblocked = function () { reject(createAppError('STORAGE_UNAVAILABLE')); };
+      var settled = false;
+      var timeout = window.setTimeout(function () {
+        finish(null, createAppError('STORAGE_UNAVAILABLE'));
+      }, DB_OPEN_TIMEOUT_MS);
+      function finish(database, error) {
+        if (settled) {
+          if (database && typeof database.close === 'function') database.close();
+          return;
+        }
+        settled = true;
+        window.clearTimeout(timeout);
+        if (error) reject(error);
+        else resolve(database);
+      }
+      request.onerror = function () { finish(null, request.error || createAppError('STORAGE_UNAVAILABLE')); };
+      request.onblocked = function () { finish(null, createAppError('STORAGE_UNAVAILABLE')); };
       request.onupgradeneeded = function () {
         var db = request.result;
         if (!db.objectStoreNames.contains('cache')) {
@@ -2002,7 +2022,7 @@
       request.onsuccess = function () {
         var db = request.result;
         db.onversionchange = function () { db.close(); };
-        resolve(db);
+        finish(db);
       };
     });
   }

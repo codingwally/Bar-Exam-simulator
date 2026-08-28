@@ -57,8 +57,8 @@ assert.match(adminPhoneCss, /\.exam-admin-question-list > article > footer > :is
 assert.match(homeHtml, /quorum-first-shell\.css\?v=profile-photo-release2-20260827-1&amp;baseline=public-reliability-20260827-3/);
 assert.match(professorHtml, /professor\.css\?v=creator-overview-20260828-1/);
 assert.match(adminHtml, /examination-room-admin\.css\?v=owner-command-center-20260828-7/);
-assert.match(adminHtml, /examination-room-admin\.js\?v=owner-command-center-20260828-3/);
-assert.match(serviceWorker, /CACHE_VERSION = 'duediligence-shell-20260827-profile-pedro-release2-1-examination-room-renovation-20260828-5'/);
+assert.match(adminHtml, /examination-room-admin\.js\?v=reliability-20260828-1/);
+assert.match(serviceWorker, /CACHE_VERSION = 'duediligence-shell-20260828-examination-room-reliability-1'/);
 assert.match(serviceWorker, /quorum-first-shell\.css\?v=profile-photo-release2-20260827-1&baseline=public-reliability-20260827-3/);
 
 console.log('Mobile header, creator-title, and Admin Examination Room responsive hotfix contracts passed.');

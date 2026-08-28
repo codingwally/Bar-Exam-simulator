@@ -4,16 +4,38 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
 
 const studentSource = fs.readFileSync(path.join(__dirname, 'student.js'), 'utf8');
 const studentHtml = fs.readFileSync(path.join(__dirname, 'student.html'), 'utf8');
 const apiSource = fs.readFileSync(path.join(__dirname, 'api.js'), 'utf8');
 const mediaSource = fs.readFileSync(path.join(__dirname, 'media-capture.js'), 'utf8');
+const offlineGradingSource = fs.readFileSync(path.join(__dirname, 'offline-grading.js'), 'utf8');
 const studentApiRuntime = [
   apiSource.slice(apiSource.indexOf('function demoStudentPreview'), apiSource.indexOf('function demoStudentQuery')),
   apiSource.slice(apiSource.indexOf('async function studentPreview'), apiSource.indexOf('async function studentQuery')),
   apiSource.slice(apiSource.indexOf('// Compatibility surface used by the resilient student client'), apiSource.indexOf('async function loadExam')),
 ].join('\n');
+
+function loadStudentStorageHooks(indexedDB) {
+  const timers = new Map();
+  let nextTimer = 0;
+  const window = {
+    location: { search: '', reload() {} },
+    indexedDB,
+    setTimeout(callback, delay) {
+      const id = ++nextTimer;
+      timers.set(id, { callback, delay });
+      return id;
+    },
+    clearTimeout(id) { timers.delete(id); },
+  };
+  const exposedSource = studentSource
+    .replace("  document.addEventListener('DOMContentLoaded', initialise);", '')
+    .replace(/\n\}\(\)\);\s*$/, '\n  window.__studentStorageTestHooks = { openDatabase };\n}());');
+  vm.runInNewContext(exposedSource, { window, URLSearchParams }, { filename: 'student.js' });
+  return { ...window.__studentStorageTestHooks, timers };
+}
 
 test('the student enters directly after preview with no custom policy-gating payload or label', () => {
   assert.doesNotMatch(studentHtml, /privacyTitle|privacyDialog|I understand — begin exam/);
@@ -35,7 +57,7 @@ test('technical attempt binding remains versioned while recorded media is non-bl
   assert.doesNotMatch(studentSource, /Recorded proctoring is unavailable/);
   assert.match(studentSource, /state\.media\.start/);
   assert.match(studentSource, /Your examination remains open and answers continue saving/);
-  assert.match(studentHtml, /media-capture\.js\?v=renovation-20260828-4/);
+  assert.match(studentHtml, /media-capture\.js\?v=reliability-20260828-1/);
   assert.match(studentApiRuntime, /studentBegin\(\{/);
   assert.doesNotMatch(studentApiRuntime, /recordingAccepted|noticeVersion|acceptedAt/);
 });
@@ -56,7 +78,7 @@ test('recorded-media upload uses the live idempotent contract and a self-contain
 });
 
 test('pending and submitted attempts resume only the encrypted media queue', () => {
-  assert.match(mediaSource, /return Object\.freeze\(\{ start: start, resume: resume, stop: stop, flush: flush \}\)/);
+  assert.match(mediaSource, /return Object\.freeze\(\{ start: start, resume: resume, stop: stop, flush: flush, destroy: destroy \}\)/);
   assert.match(mediaSource, /Submission remains complete/);
   assert.match(studentSource, /if \(attempt\.status === 'submitted'\) \{\s*resumeMediaUploads\(\)/);
   assert.match(studentSource, /if \(attempt\.status === 'pending_submit'\) \{\s*resumeMediaUploads\(\)/);
@@ -104,5 +126,30 @@ test('the final-question action remains enabled and opens review instead of trap
   assert.match(studentSource, /state\.currentIndex === state\.questions\.length - 1 \? 'Review and submit'/);
   assert.match(studentSource, /navigateToQuestion\(state\.currentIndex \+ 1\)/);
   assert.match(studentSource, /if \(index >= state\.questions\.length\) \{[\s\S]*openSubmitDialog\(\)/);
-  assert.match(studentHtml, /student\.js\?v=renovation-20260828-4/);
+  assert.match(studentHtml, /student\.js\?v=reliability-20260828-1/);
+});
+
+test('student storage open fails safely when IndexedDB is blocked or never settles', async () => {
+  const never = loadStudentStorageHooks({ open: () => ({}) });
+  const neverResult = never.openDatabase();
+  const [timeoutId, timeout] = [...never.timers.entries()][0];
+  assert.equal(timeout.delay, 5000);
+  never.timers.delete(timeoutId);
+  timeout.callback();
+  await assert.rejects(neverResult, (error) => error.code === 'STORAGE_UNAVAILABLE');
+
+  let blockedRequest;
+  const blocked = loadStudentStorageHooks({ open: () => (blockedRequest = {}) });
+  const blockedResult = blocked.openDatabase();
+  blockedRequest.onblocked();
+  await assert.rejects(blockedResult, (error) => error.code === 'STORAGE_UNAVAILABLE');
+});
+
+test('missing student API and all grading storage opens remain bounded and recoverable', () => {
+  assert.match(studentSource, /if \(!state\.api\) \{[\s\S]*showError\(elements\.entryError, \{ code: 'API_UNAVAILABLE' \}[\s\S]*window\.location\.reload\(\)/);
+  assert.match(studentSource, /var DB_OPEN_TIMEOUT_MS = 5000/);
+  assert.match(studentSource, /request\.onblocked = function \(\) \{ finish\(null, createAppError\('STORAGE_UNAVAILABLE'\)\); \}/);
+  assert.match(offlineGradingSource, /const DATABASE_OPEN_TIMEOUT_MS = 5000/);
+  assert.match(offlineGradingSource, /request\.onblocked = \(\) => finish\(null, new Error\('IndexedDB open blocked'\)\)/);
+  assert.match(offlineGradingSource, /if \(!state\.databasePromise\) \{[\s\S]*state\.databasePromise = openDatabase\(\)/);
 });

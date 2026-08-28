@@ -504,6 +504,118 @@ test('owner can reach every examination and recovery checkpoint beyond the 100-r
   assert.match(source, /data-exam-admin-load-recovery="all"/);
 });
 
+test('Load all pagination guards stop endlessly advancing cursors with owner recovery guidance', async (t) => {
+  const createHarness = () => {
+    const calls = { examinations: 0, audit: 0, recovery: 0 };
+    const window = {
+      ExaminationRoomV1Api: {
+        async adminQuery(operation, payload) {
+          if (operation === 'command_center') {
+            calls.examinations += 1;
+            return {
+              exams: [{ exam_id: `exam-${payload.offset}`, title: `Examination ${payload.offset}` }],
+              examLimit: payload.limit,
+              examOffset: payload.offset,
+              examHasMore: true,
+              examNextOffset: payload.offset + payload.limit,
+            };
+          }
+          if (operation === 'audit_log') {
+            calls.audit += 1;
+            return {
+              items: [{ id: `audit-${payload.offset}`, event_type: 'owner.test_event' }],
+              limit: payload.limit,
+              offset: payload.offset,
+              hasMore: true,
+              nextOffset: payload.offset + payload.limit,
+            };
+          }
+          assert.equal(operation, 'recovery_detail');
+          calls.recovery += 1;
+          return {
+            snapshots: [{ id: `snapshot-${payload.offset}`, exam_id: 'exam-0' }],
+            limit: payload.limit,
+            offset: payload.offset,
+            hasMore: true,
+            nextOffset: payload.offset + payload.limit,
+          };
+        },
+      },
+    };
+    const instrumented = source.replace(
+      'global.DueDiligenceExaminationRoomAdmin = Object.freeze({ render, bind });',
+      'global.__ExaminationRoomPageCeilingTest = Object.freeze({ state, loadAllExams, loadAllAudit, loadAllRecovery }); global.DueDiligenceExaminationRoomAdmin = Object.freeze({ render, bind });',
+    );
+    vm.runInNewContext(instrumented, { window, URLSearchParams, Intl, Date, Map, Set });
+    const harness = window.__ExaminationRoomPageCeilingTest;
+    harness.state.institutionId = 'institution-1';
+    harness.state.selectedExamId = 'exam-0';
+    harness.state.data = { exams: [{ id: 'exam-0', title: 'Initial examination' }], counts: {} };
+    return { calls, harness };
+  };
+
+  await t.test('examinations stop after 100 advancing pages', async () => {
+    const { calls, harness } = createHarness();
+    harness.state.examPaging = {
+      loaded: 1,
+      total: null,
+      limit: 100,
+      offset: 0,
+      nextOffset: 100,
+      hasMore: true,
+      fullyLoaded: false,
+    };
+    await assert.rejects(harness.loadAllExams(), (error) => {
+      assert.match(error.message, /stopped after 100 pages to prevent a stuck Load all request/i);
+      assert.match(error.recovery, /Load next 100 to continue in smaller batches/i);
+      return true;
+    });
+    assert.equal(calls.examinations, 100);
+  });
+
+  await t.test('audit records stop after 100 advancing pages', async () => {
+    const { calls, harness } = createHarness();
+    harness.state.audit.set('exam-0', {
+      events: [{ id: 'audit-0' }],
+      loaded: 1,
+      total: null,
+      limit: 250,
+      offset: 0,
+      nextOffset: 250,
+      hasMore: true,
+      fullyLoaded: false,
+      unsupported: false,
+    });
+    await assert.rejects(harness.loadAllAudit(), (error) => {
+      assert.match(error.message, /stopped after 100 pages to prevent a stuck Load all request/i);
+      assert.match(error.recovery, /Load next 250 to continue in smaller batches/i);
+      return true;
+    });
+    assert.equal(calls.audit, 100);
+  });
+
+  await t.test('recovery checkpoints stop after 100 advancing pages', async () => {
+    const { calls, harness } = createHarness();
+    harness.state.recovery.set('exam-0', {
+      snapshots: [{ id: 'snapshot-0', examId: 'exam-0' }],
+      loaded: 1,
+      total: null,
+      limit: 100,
+      offset: 0,
+      nextOffset: 100,
+      hasMore: true,
+      fullyLoaded: false,
+      unsupported: false,
+    });
+    await assert.rejects(harness.loadAllRecovery(), (error) => {
+      assert.match(error.message, /stopped after 100 pages to prevent a stuck Load all request/i);
+      assert.match(error.recovery, /Load next 100 to continue in smaller batches/i);
+      return true;
+    });
+    assert.equal(calls.recovery, 100);
+  });
+});
+
 test('owner mutation retry reuses every receipt key after a lost response', async () => {
   let counter = 0;
   const seen = [];

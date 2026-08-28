@@ -277,6 +277,24 @@ test('Supabase Storage calls preserve the Cloudflare global fetch receiver', asy
   assert.equal(calls, 2);
 });
 
+test('Supabase Storage fallback fails closed when a storage request never settles', async () => {
+  const service = recovery({
+    fetch: async () => new Promise(() => {}),
+    storageRequestTimeoutMs: 20,
+  });
+  const started = Date.now();
+  await assert.rejects(
+    service.preflight({
+      EXAMINATION_ROOM_BACKUP_MASTER_KEY_V1: MASTER_KEY,
+      EXAMINATION_ROOM_RECOVERY_MODE: 'supabase_storage',
+      SUPABASE_URL: 'https://project.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role-test-key',
+    }),
+    (error) => error.code === RECOVERY_ERROR_CODES.STORAGE_UNAVAILABLE,
+  );
+  assert.ok(Date.now() - started < 500, 'storage preflight must not wait forever');
+});
+
 test('preflight distinguishes an unavailable R2 bucket from missing configuration', async () => {
   const unavailableBucket = new FakeR2();
   unavailableBucket.head = async () => { throw new Error('simulated R2 outage'); };

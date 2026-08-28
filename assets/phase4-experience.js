@@ -300,11 +300,14 @@
       const basis = String(access?.basis || '').trim().toLowerCase();
       const accountLabel = String(access?.accountLabel || '').trim().toLowerCase();
       const identity = `${role} ${basis} ${accountLabel}`;
+      const provisionalPayment = basis === 'provisional_payment'
+        || String(access?.accessMode || '').trim().toLowerCase() === 'provisional';
       let label = '';
       if (access) {
         if (/\badmin(?:istrator)?\b|super_admin|founder_admin/.test(identity)) label = 'Admin';
         else if (/founding[_\s-]*beta/.test(identity) || access?.freeBeta?.active === true) label = 'Founding Beta';
         else if (setupRequired(access)) label = 'Complete profile';
+        else if (provisionalPayment) label = 'Early Access - pending';
         else if (access.unlimited) label = 'Paid Access';
         else if (paidSubscriptionExpired(access)) label = 'Renew Bar access';
         else label = `${Math.max(0, Number(access.tokensRemaining) || 0)} tokens remaining`;

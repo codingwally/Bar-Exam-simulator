@@ -92,7 +92,7 @@ function loadProfessorStartupHooks({ storageBlocked = false, indexedDbAvailable 
   };
   const exposedSource = professorSource.replace(
     /\n\s*initialize\(\);\s*\n\}\)\(window\);\s*$/,
-    '\n  global.__professorStartupTestHooks = { clientOnlyBlankDraft, editorExamFromStored, examContentFingerprint, normalizeAllowedEmails, invalidAllowedEmails, creatorAccessUnlocked, scheduleActivationPoll, stopActivationPolling, saveLocalDraft, readLocalDraft, readActiveLocalDraft, readLocalDraftIndex, localDraftBelongsToCurrentProfessor, prepareDecryptedGradePayload, validateCompleteGradedPackageSets, serverDraftBackupBlockers, serverBackupWaitingLabel, examSummariesWithCurrentExam, state };\n})(window);',
+    '\n  global.__professorStartupTestHooks = { clientOnlyBlankDraft, editorExamFromStored, examContentFingerprint, normalizeAllowedEmails, invalidAllowedEmails, creatorAccessUnlocked, scheduleActivationPoll, stopActivationPolling, saveLocalDraft, readLocalDraft, readActiveLocalDraft, readLocalDraftIndex, localDraftBelongsToCurrentProfessor, prepareDecryptedGradePayload, validateCompleteGradedPackageSets, serverDraftBackupBlockers, serverBackupWaitingLabel, examSummariesFromSession, examSummariesWithCurrentExam, normalizeQuestion, questionAfterTypeChange, questionSuggestion, marginSuggestion, state };\n})(window);',
   );
   vm.runInNewContext(exposedSource, { window, indexedDB: window.indexedDB }, { filename: 'professor.js' });
   return { ...window.__professorStartupTestHooks, __testWindow: window };
@@ -328,6 +328,78 @@ test('Professor can create, duplicate, and switch among multiple creator-owned e
   assert.match(professorSource, /navigateToExam\(savedExamId, 'create'\)/);
   assert.match(professorSource, /\$\('#exam-switcher'\)\.addEventListener\('change'/);
   assert.doesNotMatch(professorSource, /A duplicate will be created after the current draft finishes saving/);
+});
+
+test('the creator examination selector removes repeated IDs from a device-only first save', () => {
+  const { examSummariesFromSession } = loadProfessorStartupHooks();
+  const newId = '11111111-1111-4111-8111-111111111111';
+  const summaries = examSummariesFromSession({
+    exams: [
+      { id: '22222222-2222-4222-8222-222222222222', title: 'Existing examination', status: 'draft' },
+      { id: newId, title: 'New examination', status: 'draft' },
+      { id: newId, title: 'New examination', status: 'draft' },
+    ],
+  });
+
+  assert.equal(summaries.length, 2);
+  assert.equal(summaries.filter((summary) => summary.id === newId).length, 1);
+  assert.match(professorSource, /state\.examSummaries = examSummariesFromSession\(\{/);
+  assert.doesNotMatch(professorSource, /renderExamSwitcher\(\[\.\.\.state\.examSummaries, draft\], draft\.id\)/);
+});
+
+test('question type changes render and remove multiple-choice options without losing question content', () => {
+  const { questionAfterTypeChange } = loadProfessorStartupHooks();
+  const essay = {
+    id: 'question-1',
+    type: 'essay',
+    points: 15,
+    prompt: 'Apply the law to the facts.',
+    wordGuideline: '500 words',
+    required: true,
+  };
+
+  const multipleChoice = questionAfterTypeChange(essay, 'multiple_choice', 0);
+  assert.equal(multipleChoice.type, 'multiple_choice');
+  assert.deepEqual(Array.from(multipleChoice.options), ['', '', '', '']);
+  assert.equal(multipleChoice.correctOption, 0);
+  assert.equal(multipleChoice.prompt, essay.prompt);
+  assert.equal(multipleChoice.points, essay.points);
+  assert.equal(multipleChoice.wordGuideline, essay.wordGuideline);
+  assert.equal(multipleChoice.required, true);
+
+  const shortAnswer = questionAfterTypeChange({
+    ...multipleChoice,
+    options: ['First', 'Second', 'Third', 'Fourth'],
+    correctOption: 2,
+  }, 'short_answer', 0);
+  assert.equal(shortAnswer.type, 'short_answer');
+  assert.equal(shortAnswer.options, undefined);
+  assert.equal(shortAnswer.correctOption, 0);
+  assert.equal(shortAnswer.prompt, essay.prompt);
+  assert.equal(shortAnswer.points, essay.points);
+  assert.equal(shortAnswer.wordGuideline, essay.wordGuideline);
+  assert.match(professorSource, /state\.questions\[index\] = questionAfterTypeChange/);
+  assert.doesNotMatch(professorSource, /if \(!question \|\| question\.type === type\) return/);
+});
+
+test('a fresh examination has no inherited course code or unrelated Assistant claim', () => {
+  const { clientOnlyBlankDraft, questionSuggestion, marginSuggestion, state } = loadProfessorStartupHooks();
+  const draft = clientOnlyBlankDraft('11111111-1111-4111-8111-111111111111');
+  state.exam = draft;
+
+  assert.equal(draft.courseCode, '');
+  assert.match(professorHtml, /id="course-code" maxlength="40"/);
+  assert.doesNotMatch(professorHtml, /id="course-code" value="LAW-202"/);
+  assert.equal(
+    questionSuggestion({ type: 'essay', prompt: 'Discuss adverse possession of the parcel.' }, 0),
+    'Check that the property, competing claims, and requested remedy are stated clearly.',
+  );
+  assert.equal(
+    marginSuggestion({ type: 'essay', prompt: 'Discuss adverse possession.' }, 0),
+    'Assistant check for Question 1: review the wording and point value before publishing.',
+  );
+  assert.doesNotMatch(professorSource, /index === 0 \|\| prompt\.includes\('separation of powers'\)/);
+  assert.doesNotMatch(professorSource, /starting on page 4/);
 });
 
 test('a new Professor draft remains reachable after its first server save fails', async () => {
@@ -697,7 +769,7 @@ test('creator receives monitor and grade access from activation without entering
   assert.match(professorHtml, /data-view="monitor" data-requires-activation="true" disabled aria-label="Monitor examination — available after Admin issues the student key"/);
   assert.match(professorHtml, /data-view="grade" data-requires-activation="true" disabled aria-label="Grade submissions — available after Admin issues the student key"/);
   assert.match(professorSource, /control\.setAttribute\('aria-label', unlocked[\s\S]*viewName/);
-  assert.match(professorHtml, /professor\.js\?v=renovation-20260828-4&amp;hotfix=creator-save-sync-20260828-1/);
+  assert.match(professorHtml, /professor\.js\?v=renovation-20260828-4&amp;hotfix=creator-trial-repairs-20260828-1/);
 });
 
 test('creator approval survives reload and a published request keeps polling without a manual check', () => {

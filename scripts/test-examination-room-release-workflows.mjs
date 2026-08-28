@@ -14,6 +14,7 @@ const [
   bootstrapWorkflow,
   stagingWorkflow,
   stagingSmoke,
+  stagingUiVerifier,
   releaseBundleBuilder,
   adminAnalyticsProbe,
   adminAnalyticsBundleBuilder,
@@ -24,10 +25,30 @@ const [
   read('.github/workflows/bootstrap-examination-room-key-pepper.yml'),
   read('.github/workflows/staging-e2e-gate.yml'),
   read('scripts/test-examination-room-v1-staging-smoke.mjs'),
+  read('scripts/verify-examinations-staging-ui.mjs'),
   read('scripts/build-examination-room-release-bundle.mjs'),
   read('scripts/probe-admin-analytics-release.sql'),
   read('scripts/build-admin-analytics-release-bundle.mjs'),
 ]);
+
+const visuallyClippedLayoutExclusions = stagingUiVerifier.match(
+  /closest\('\[hidden\], \[inert\], \[aria-hidden="true"\], \.dd2-sr-only'\)/gu,
+) || [];
+assert.equal(
+  visuallyClippedLayoutExclusions.length,
+  2,
+  'Both staging overflow scans must ignore descendants clipped inside the assistive-only live region.',
+);
+assert.match(
+  stagingUiVerifier,
+  /horizontalScrollReach > 1 \|\| offenders\.length > 0/u,
+  'The catalog verifier must still fail on real document scrolling or an ordinary visible off-viewport element.',
+);
+assert.match(
+  stagingUiVerifier,
+  /item\.right > innerWidth \+ 1 \|\| item\.left < -1/u,
+  'The catalog verifier must retain its visible off-viewport negative control.',
+);
 
 for (const [label, workflow] of [
   ['Pages release', pagesWorkflow],

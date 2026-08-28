@@ -248,5 +248,21 @@
   } else {
     refresh();
   }
-  Promise.resolve(global.DueDiligencePhase2?.whenAuthReady?.()).then(() => refresh()).catch(() => {});
+
+  async function refreshWhenAuthReady() {
+    await Promise.resolve(global.DueDiligencePhase2?.whenAuthReady?.());
+    refresh();
+    if (!isSignedIn(currentSession) || currentAccess) return;
+
+    const resolvedAccess = await global.DueDiligencePhase4?.refreshAccess?.({
+      enforce: false,
+      force: true,
+    }).catch(() => null);
+    refresh({
+      session: sessionFromRuntime(),
+      access: resolvedAccess || accessFromRuntime(),
+    });
+  }
+
+  Promise.resolve().then(refreshWhenAuthReady).catch(() => {});
 })(typeof window !== 'undefined' ? window : globalThis);

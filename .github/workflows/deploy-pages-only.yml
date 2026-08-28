@@ -59,7 +59,7 @@ jobs:
           git cat-file -e "$EXPECTED_BASE_SHA^{commit}"
           git merge-base --is-ancestor "$EXPECTED_BASE_SHA" "$EXPECTED_SOURCE_SHA"
 
-          allowed='^(\.github/workflows/deploy-pages-only\.yml|assets/feature-loader\.js|assets/lex-forum\.css|assets/lex-forum\.js|assets/subscription-cta\.css|assets/subscription-cta\.js|index\.html|scripts/build-pages-artifact\.mjs|scripts/test-home-post-collapse\.mjs|scripts/test-lex-forum\.mjs|scripts/test-pages-artifact\.mjs|scripts/test-public-home-responsive-css\.mjs|scripts/test-quorum\.mjs)$'
+          allowed='^(\.github/workflows/deploy-pages-only\.yml|assets/feature-loader\.js|assets/lex-forum\.css|assets/lex-forum\.js|assets/pedro-navigation\.js|assets/private-beta-landing\.js|assets/subscription-cta\.css|assets/subscription-cta\.js|index\.html|scripts/build-pages-artifact\.mjs|scripts/test-home-post-collapse\.mjs|scripts/test-lex-forum\.mjs|scripts/test-pages-artifact\.mjs|scripts/test-pedro-navigation\.mjs|scripts/test-public-home-responsive-css\.mjs|scripts/test-public-release1-reliability\.mjs|scripts/test-quorum\.mjs)$'
           unexpected="$(git diff --name-only "$EXPECTED_BASE_SHA..$EXPECTED_SOURCE_SHA" | grep -Ev "$allowed" || true)"
           if [[ -n "$unexpected" ]]; then
             echo "The frontend-only release contains files outside the approved isolation boundary:" >&2
@@ -78,6 +78,8 @@ jobs:
           node scripts/test-quorum.mjs
           node scripts/test-public-home-responsive-css.mjs
           node scripts/test-lex-forum.mjs
+          node scripts/test-public-release1-reliability.mjs
+          node scripts/test-pedro-navigation.mjs
 
       - name: Build and verify the sanitized Pages artifact
         run: node scripts/test-pages-artifact.mjs
@@ -108,14 +110,20 @@ jobs:
             loader="$(curl -fsS "$SITE_URL/assets/feature-loader.js?release=$GITHUB_SHA" || true)"
             forum_js="$(curl -fsS "$SITE_URL/assets/lex-forum.js?release=$GITHUB_SHA" || true)"
             forum_css="$(curl -fsS "$SITE_URL/assets/lex-forum.css?release=$GITHUB_SHA" || true)"
+            navigation_js="$(curl -fsS "$SITE_URL/assets/private-beta-landing.js?release=$GITHUB_SHA" || true)"
+            pedro_js="$(curl -fsS "$SITE_URL/assets/pedro-navigation.js?release=$GITHUB_SHA" || true)"
             if grep -q 'home-subscription-cta-20260828-3' <<<"$index" \
+              && grep -q 'private-beta-landing.js?v=public-reliability-20260827-2&amp;feedback=quiet-navigation-20260828-1' <<<"$index" \
+              && grep -q 'pedro-navigation.js?v=pedro-release2-20260827-1&amp;feedback=quiet-navigation-20260828-1' <<<"$index" \
               && grep -q 'home-subscription-20260828-2' <<<"$loader" \
               && grep -q 'collapse=home-read-more-20260828-1' <<<"$loader" \
               && grep -q 'refreshWhenAuthReady' <<<"$cta_js" \
               && grep -q 'duediligence:subscription-cta' <<<"$cta_js" \
               && grep -q 'dd2-subscription-invitation' <<<"$cta_css" \
               && grep -q 'function renderPostBody(item)' <<<"$forum_js" \
-              && grep -q 'lex-post-read-more' <<<"$forum_css"; then
+              && grep -q 'lex-post-read-more' <<<"$forum_css" \
+              && grep -q "classList.toggle('dd2-sr-only'" <<<"$navigation_js" \
+              && grep -q "announcementOnly = kind === 'loading'" <<<"$pedro_js"; then
               verified=true
               break
             fi

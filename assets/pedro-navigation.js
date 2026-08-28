@@ -275,7 +275,8 @@
     state.statusMessage = message;
     region.hidden = !message;
     region.dataset.kind = kind;
-    region.className = `public-navigation-status${kind ? ` is-${kind}` : ''}`;
+    const announcementOnly = kind === 'loading' || kind === 'success' ? ' dd2-sr-only' : '';
+    region.className = `public-navigation-status${kind ? ` is-${kind}` : ''}${announcementOnly}`;
     region.setAttribute('role', kind === 'error' ? 'alert' : 'status');
     copy.textContent = message;
     if (retry) {

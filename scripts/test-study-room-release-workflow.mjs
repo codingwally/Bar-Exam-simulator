@@ -69,10 +69,7 @@ assert.match(
   workflow,
   /node worker\/study-room-staging-positive-smoke\.mjs --self-test/u,
 );
-assert.match(
-  workflow,
-  /npm audit --prefix worker --audit-level=high/u,
-);
+assert.match(workflow, /npm audit --prefix worker --audit-level=high/u);
 assert.match(
   workflow,
   /npm audit --prefix worker --omit=dev --audit-level=high/u,
@@ -81,6 +78,7 @@ assert.match(
 const stagingJob = workflow.indexOf("deploy_staging:");
 const workerJob = workflow.indexOf("deploy_production_worker:");
 const pagesJob = workflow.indexOf("deploy_production_pages:");
+const pagesVerificationJob = workflow.indexOf("verify_production_pages:");
 const stagingSmoke = workflow.indexOf(
   "Verify staging access boundary and shipped room assets",
   stagingJob,
@@ -160,10 +158,14 @@ assert.match(
 assert.match(productionConfig, /compatibility_flags = \["nodejs_compat"\]/u);
 
 assert.ok(
-  workerJob >= 0 && pagesJob > workerJob,
-  "The Worker job must be declared before Pages.",
+  workerJob >= 0 && pagesJob > workerJob && pagesVerificationJob > pagesJob,
+  "The Worker, Pages deployment, and post-deploy verification jobs must stay ordered.",
 );
 assert.match(workflow.slice(pagesJob), /needs: deploy_production_worker/u);
+assert.match(
+  workflow.slice(pagesVerificationJob),
+  /needs: deploy_production_pages/u,
+);
 assert.match(
   workflow.slice(workerJob, pagesJob),
   /test-study-room-deployment-smoke\.mjs/u,
@@ -211,13 +213,24 @@ assert.match(
   /deployed_sha[\s\S]*EXPECTED_CURRENT_PAGES_SHA/u,
 );
 assert.match(workflow.slice(pagesJob), /Deploy Pages after the Worker gate/u);
-assert.match(workflow.slice(pagesMutation), /latest_successful_pages_sha/u);
+assert.ok(
+  pagesMutation < pagesVerificationJob,
+  "The Pages deployment job must finish before exact-SHA verification starts.",
+);
+assert.doesNotMatch(
+  workflow.slice(pagesMutation, pagesVerificationJob),
+  /latest_successful_pages_sha/u,
+);
 assert.match(
-  workflow.slice(pagesMutation),
+  workflow.slice(pagesVerificationJob),
+  /latest_successful_pages_sha/u,
+);
+assert.match(
+  workflow.slice(pagesVerificationJob),
   /deployed_sha[\s\S]*== "\$GITHUB_SHA"/u,
 );
 assert.match(
-  workflow.slice(pagesMutation),
+  workflow.slice(pagesVerificationJob),
   /exact_sha_is_latest[\s\S]*!= "true"/u,
 );
 

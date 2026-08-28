@@ -428,6 +428,16 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
+  verify_production_pages:
+    name: Verify the completed Study Room Pages deployment
+    if: inputs.target == 'production'
+    needs: deploy_production_pages
+    permissions:
+      contents: read
+      deployments: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
       - name: Verify the exact Pages SHA and live Study Room assets
         env:
           GH_TOKEN: ${{ github.token }}

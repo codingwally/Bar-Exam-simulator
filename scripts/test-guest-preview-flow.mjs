@@ -101,7 +101,9 @@ for (const mode of ['strict', 'selfPaced', 'none']) {
   const context = {
     currentIdx: 0,
     currentQuestionIndex: -1,
+    examStage: 'answering',
     window: {
+      addEventListener() {},
       DueDiligencePhase2: {
         getSession() { return null; },
       },
@@ -200,6 +202,7 @@ for (const mode of ['strict', 'selfPaced', 'none']) {
       snapshot() { return { questionElapsedSeconds: 12 }; },
     },
     window: {
+      addEventListener() {},
       DueDiligencePhase2: {
         beforeGrade() {
           accessChecks += 1;
@@ -254,6 +257,7 @@ for (const mode of ['strict', 'selfPaced', 'none']) {
       snapshot() { return { questionElapsedSeconds: 12 }; },
     },
     window: {
+      addEventListener() {},
       DueDiligencePhase2: {
         async beforeGrade() { return false; },
       },
@@ -300,6 +304,9 @@ async function reconcileScenario({ session = null, responses }) {
     AbortController,
     setTimeout,
     clearTimeout,
+    window: {
+      addEventListener() {},
+    },
     guestDeviceId() { return 'device_123456789012345678901234567890'; },
     async refreshAuthenticatedSession() { return null; },
     async clearInvalidLocalSession() {
@@ -418,6 +425,9 @@ for (const completed of [0, 1, 2, 3]) {
       return 1;
     },
     clearTimeout() {},
+    window: {
+      addEventListener() {},
+    },
     guestDeviceId() { return 'device_123456789012345678901234567890'; },
     syncAuthUi() {},
     requireSignInForGuestLimit() {},

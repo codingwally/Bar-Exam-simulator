@@ -43,9 +43,14 @@ assert.match(content, /authenticatedUserId\(\) \|\| 'signed-out'/,
 assert.match(content, /rotation\.remaining\.shift\(\)/);
 assert.match(contentCss, /\.dd26-subject-picker/);
 
-for (const label of ['Admin', 'Founding Beta', 'Paid Access', 'tokens remaining']) {
+for (const label of ['Admin', 'Founding Beta', 'Early Access - pending', 'Paid Access', 'tokens remaining']) {
   assert.match(phase4, new RegExp(label));
 }
+assert.match(
+  phase4,
+  /else if \(provisionalPayment\) label = 'Early Access - pending';\s*else if \(access\.unlimited\) label = 'Paid Access';/,
+  'Provisional payment access must not be presented as confirmed Paid Access.',
+);
 assert.match(html, /id="dd2-guest-badge"[\s\S]*data-public-action="docket"/);
 assert.match(shellCss, /\.dd2-guest-badge\.is-visible:not\(\[hidden\]\)/);
 assert.doesNotMatch(shellCss, /\.dd2-guest-badge,\s*\n#site-header\.qfs-shell #session-clock/);

@@ -9,12 +9,12 @@
   const manifests = Object.freeze({
     quorum: Object.freeze({
       styles: [
-        'assets/lex-forum.css?v=profile-photo-release2-20260827-1&baseline=public-reliability-20260827-1&profile=chambers-20260827-1',
+        'assets/lex-forum.css?v=profile-photo-release2-20260827-1&baseline=public-reliability-20260827-1&profile=chambers-20260827-1&collapse=home-read-more-20260828-1',
         'assets/pedro.css?v=pedro-release2-20260827-1',
       ],
       scripts: [
         'assets/pedro.js?v=pedro-release2-20260827-1',
-        'assets/lex-forum.js?v=profile-photo-release2-20260827-1&baseline=public-reliability-20260827-1&profile=chambers-20260827-1&cta=home-subscription-20260828-2',
+        'assets/lex-forum.js?v=profile-photo-release2-20260827-1&baseline=public-reliability-20260827-1&profile=chambers-20260827-1&cta=home-subscription-20260828-2&collapse=home-read-more-20260828-1',
       ],
     }),
     examinations: Object.freeze({

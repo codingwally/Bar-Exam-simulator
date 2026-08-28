@@ -757,7 +757,7 @@
     state.navigationStatusTimer = null;
     if (!navigationStatus) return;
     navigationStatus.hidden = true;
-    navigationStatus.classList.remove('is-error');
+    navigationStatus.classList.remove('is-error', 'is-success', 'is-loading', 'dd2-sr-only');
     navigationStatus.setAttribute('role', 'status');
     if (navigationStatusCopy) navigationStatusCopy.textContent = '';
     if (navigationRetry) {
@@ -775,6 +775,7 @@
     navigationStatus.classList.toggle('is-error', kind === 'error');
     navigationStatus.classList.toggle('is-success', kind === 'success');
     navigationStatus.classList.toggle('is-loading', kind === 'loading');
+    navigationStatus.classList.toggle('dd2-sr-only', kind === 'loading' || kind === 'success');
     navigationStatus.setAttribute('role', kind === 'error' ? 'alert' : 'status');
     navigationStatusCopy.textContent = message;
     if (navigationRetry) {
@@ -791,7 +792,7 @@
     }
     navigationStatus.hidden = false;
     navigationStatus.classList.add('is-error');
-    navigationStatus.classList.remove('is-success', 'is-loading');
+    navigationStatus.classList.remove('is-success', 'is-loading', 'dd2-sr-only');
     navigationStatus.setAttribute('role', 'alert');
     navigationStatusCopy.textContent = message;
     if (navigationRetry) {

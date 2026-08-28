@@ -356,6 +356,8 @@ assert.equal(activeUrl.searchParams.get('pedroAction'), IDS.doctrineAction);
 assert.equal(activeUrl.hash, '#doctrines');
 assert.equal(doctrineTrigger.disabled, false);
 assert.equal(doctrineTrigger.getAttribute('aria-busy'), null);
+assert.match(publicStatusRegion.className, /\bdd2-sr-only\b/,
+  'Pedro loading and success feedback must be announced without covering the current page.');
 
 assertOutcome(
   await navigation.open({ id: IDS.syllabusAction, type: 'syllabus', label: LABELS.syllabus }),
@@ -394,6 +396,7 @@ let statusRegion = fakeDocument.getElementById('public-navigation-status');
 let retryButton = fakeDocument.getElementById('public-navigation-retry');
 let closeButton = fakeDocument.getElementById('pedro-navigation-dismiss');
 assert.equal(statusRegion, publicStatusRegion, 'Pedro must reuse the one public navigation region.');
+assert.doesNotMatch(statusRegion.className, /\bdd2-sr-only\b/, 'Pedro errors must remain visible.');
 assert.equal(retryButton.hidden, true, 'Expired actions must not promise a retry.');
 assert.equal(retryButton.disabled, true, 'A hidden Retry control must not be focusable.');
 assert.equal(closeButton.hidden, false);

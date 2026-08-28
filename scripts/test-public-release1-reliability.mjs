@@ -27,7 +27,7 @@ function extractNamedFunction(source, name) {
 }
 
 const root = new URL('../', import.meta.url);
-const [html, landing, loader, home, examinations, study, shellCss, homeCss, examinationsCss, studyCss] = await Promise.all([
+const [html, landing, loader, home, examinations, study, shellCss, phase2Css, homeCss, examinationsCss, studyCss] = await Promise.all([
   readFile(new URL('index.html', root), 'utf8'),
   readFile(new URL('assets/private-beta-landing.js', root), 'utf8'),
   readFile(new URL('assets/feature-loader.js', root), 'utf8'),
@@ -35,6 +35,7 @@ const [html, landing, loader, home, examinations, study, shellCss, homeCss, exam
   readFile(new URL('assets/examinations.js', root), 'utf8'),
   readFile(new URL('assets/duediligence-2026.js', root), 'utf8'),
   readFile(new URL('assets/quorum-first-shell.css', root), 'utf8'),
+  readFile(new URL('assets/phase2.css', root), 'utf8'),
   readFile(new URL('assets/lex-forum.css', root), 'utf8'),
   readFile(new URL('assets/examinations.css', root), 'utf8'),
   readFile(new URL('assets/duediligence-2026.css', root), 'utf8'),
@@ -158,6 +159,10 @@ assert.match(landing, /state\.publicNavigationBusy \|\| home\.getAttribute\('ari
 assert.match(landing, /if \(state\.publicNavigationBusy\) return false/);
 assert.match(landing, /showNavigationStatus\(`Opening \$\{label\}…`\)/);
 assert.match(landing, /showNavigationStatus\(`\$\{label\} opened\.`,'?\s*'success'\)|showNavigationStatus\(`\$\{label\} opened\.`\s*,\s*'success'\)/);
+assert.match(landing, /classList\.toggle\('dd2-sr-only', kind === 'loading' \|\| kind === 'success'\)/);
+assert.match(landing, /classList\.remove\('is-success', 'is-loading', 'dd2-sr-only'\)/);
+assert.match(phase2Css, /\.dd2-sr-only\s*\{[\s\S]*?width:\s*1px\s*!important;[\s\S]*?overflow:\s*hidden\s*!important;[\s\S]*?white-space:\s*nowrap\s*!important;/,
+  'Routine navigation feedback must remain live for assistive technology without covering the current page.');
 assert.match(landing, /if \(outcome\?\.status === 'stale'\) return false;/);
 assert.match(landing, /outcome == null/);
 assert.match(html, /const opened = await request;[\s\S]*?return \{ status: 'stale' \};[\s\S]*?if \(opened !== true\)/);
@@ -266,9 +271,28 @@ await successfulRetryButton.onclick();
 assert.equal(successfulStatusCopy.textContent, 'Bar Question Practice opened.');
 assert.equal(successfulStatusClasses.has('is-success'), true);
 assert.equal(successfulStatusClasses.has('is-error'), false);
+assert.equal(successfulStatusClasses.has('dd2-sr-only'), true,
+  'Successful navigation is announced without showing a floating confirmation tab.');
 assert.equal(successfulRetryButton.hidden, true);
 assert.equal(successfulRetryButton.onclick, null);
 assert.equal(successfulRetryButton.disabled, false);
+
+const showNavigationStatus = vm.runInContext('showNavigationStatus', successfulRetryContext);
+const reportSuccessfulNavigationError = vm.runInContext('reportNavigationError', successfulRetryContext);
+showNavigationStatus('Opening Doctrine Review…', 'loading');
+assert.equal(successfulStatusClasses.has('dd2-sr-only'), true,
+  'Routine loading feedback must be assistive-only.');
+assert.equal(successfulStatus.role, 'status');
+assert.equal(successfulStatus.hidden, false, 'The live region must remain exposed to assistive technology.');
+showNavigationStatus('Sign in to continue to Doctrine Review.', 'info');
+assert.equal(successfulStatusClasses.has('dd2-sr-only'), false,
+  'Sign-in guidance must remain visibly actionable.');
+assert.equal(successfulStatus.hidden, false);
+reportSuccessfulNavigationError('Doctrine Review could not be opened.', null);
+assert.equal(successfulStatusClasses.has('dd2-sr-only'), false,
+  'Navigation errors and recovery must remain visible.');
+assert.equal(successfulStatusClasses.has('is-error'), true);
+assert.equal(successfulStatus.role, 'alert');
 
 // Failed lazy assets must be evicted so the next click performs a real network retry.
 assert.match(loader, /loadedStyles\.get\(href\) === pending[\s\S]*?loadedStyles\.delete\(href\)/);

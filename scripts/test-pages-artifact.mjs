@@ -37,6 +37,7 @@ for (const { file, source } of publicTextSources) {
 }
 for (const required of [
   'index.html',
+  'study-room/index.html',
   'CNAME',
   'favicon.svg',
   'manifest.webmanifest',
@@ -54,6 +55,10 @@ for (const required of [
   'assets/subscription-cta.js',
   'assets/study-room-preview.css',
   'assets/study-room-preview.js',
+  'assets/study-room-live.css',
+  'assets/study-room-live.js',
+  'assets/vendor/livekit-client.umd.js',
+  'assets/vendor/livekit-client.LICENSE.txt',
   'assets/study-room/dimasalang-library.webp',
   'assets/study-room/participant-2-tropical.webp',
   'assets/study-room/participant-3-bedroom.webp',
@@ -116,6 +121,9 @@ assert.ok(files.every((file) => !/^assets\/private-beta\/.+\.(?:avif|webp|jpe?g)
 assert.ok(!files.includes('assets/phase2-law-library.jpg'));
 
 const index = await readFile(path.join(output, 'index.html'), 'utf8');
+const studyRoomPage = await readFile(path.join(output, 'study-room/index.html'), 'utf8');
+const studyRoomLive = await readFile(path.join(output, 'assets/study-room-live.js'), 'utf8');
+const liveKitClient = await readFile(path.join(output, 'assets/vendor/livekit-client.umd.js'));
 const examinations = await readFile(path.join(output, 'assets/examinations.js'), 'utf8');
 const featureLoader = await readFile(path.join(output, 'assets/feature-loader.js'), 'utf8');
 const phase2Config = await readFile(path.join(output, 'assets/phase2-config.js'), 'utf8');
@@ -140,6 +148,18 @@ assert.match(index, /id="dd-study-room-dialog" role="dialog" aria-modal="true"/)
 assert.match(index, /You won&rsquo;t have to study alone\./);
 assert.match(index, /phase2-experience\.js[^"\n]*pricing=study-room-recovery-20260829-1/);
 assert.doesNotMatch(index, /href=["']\/study-room\//i);
+assert.match(studyRoomPage, /<title>Study Room — Due Diligence<\/title>/);
+assert.match(studyRoomPage, /Admin test room/);
+assert.match(studyRoomPage, /camera and microphone remain off/i);
+assert.match(studyRoomPage, /assets\/vendor\/livekit-client\.umd\.js\?v=2\.22\.1/);
+assert.match(studyRoomLive, /\/admin\/study-room\/access/);
+assert.match(studyRoomLive, /\/admin\/study-room\/join/);
+assert.match(studyRoomLive, /\/admin\/study-room\/moderate/);
+assert.match(studyRoomLive, /operation:\s*'mute'/);
+assert.match(studyRoomLive, /operation:\s*'rename'/);
+assert.match(studyRoomLive, /Block locally/);
+assert.doesNotMatch(`${studyRoomPage}\n${studyRoomLive}`, /LIVEKIT_API_SECRET|LIVEKIT_API_KEY\s*=|participant_token[^\n]*(?:localStorage|sessionStorage)|roomAdmin/);
+assert.ok(liveKitClient.byteLength > 500_000, 'the reviewed LiveKit browser client must ship locally');
 assert.doesNotMatch(index, />The Academy<|>The Commons<|>BarBound<|>The Docket</);
 assert.doesNotMatch(index, /class="pb-chamber-index"/);
 assert.doesNotMatch(index, /class="pb-pillar-grid"|class="pb-pillar-card"/);

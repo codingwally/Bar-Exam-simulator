@@ -69,6 +69,8 @@ const navigationIconFiles = Object.freeze([
 const studyRoomPreviewFiles = Object.freeze([
   'assets/study-room-preview.css',
   'assets/study-room-preview.js',
+  'assets/study-room-live.css',
+  'assets/study-room-live.js',
   'assets/study-room/dimasalang-library.webp',
   'assets/study-room/participant-2-tropical.webp',
   'assets/study-room/participant-3-bedroom.webp',
@@ -77,6 +79,7 @@ const studyRoomPreviewFiles = Object.freeze([
 
 const publicFiles = Object.freeze([
   'index.html',
+  'study-room/index.html',
   'CNAME',
   'favicon.svg',
   'manifest.webmanifest',
@@ -192,6 +195,19 @@ async function listFiles(directory, prefix = '') {
 await rm(outputRoot, { recursive: true, force: true });
 await mkdir(outputRoot, { recursive: true });
 await Promise.all(publicFiles.map(copyPublicFile));
+await mkdir(path.join(outputRoot, 'assets/vendor'), { recursive: true });
+await Promise.all([
+  cp(
+    path.join(repositoryRoot, 'worker/node_modules/livekit-client/dist/livekit-client.umd.js'),
+    path.join(outputRoot, 'assets/vendor/livekit-client.umd.js'),
+    { force: true },
+  ),
+  cp(
+    path.join(repositoryRoot, 'worker/node_modules/livekit-client/LICENSE'),
+    path.join(outputRoot, 'assets/vendor/livekit-client.LICENSE.txt'),
+    { force: true },
+  ),
+]);
 await writeFile(path.join(outputRoot, '.nojekyll'), '', 'utf8');
 
 for (const [relativePath, expectedHash] of Object.entries(qrHashes)) {

@@ -5,6 +5,7 @@ const [
   html, css, observatoryCss, js, analytics, worker, migration, directoryMigration,
   engagementMigration, globalBetaMigration, answerHistoryMigration,
   businessDetailsMigration, monitoringMigration, recentActivityMigration, preflight,
+  internalTestAttestation,
 ] = await Promise.all([
   readFile(new URL('../admin/index.html', import.meta.url), 'utf8'),
   readFile(new URL('../admin/admin.css', import.meta.url), 'utf8'),
@@ -21,6 +22,7 @@ const [
   readFile(new URL('../supabase/migrations/20260823080651_admin_sign_in_monitoring.sql', import.meta.url), 'utf8'),
   readFile(new URL('../supabase/migrations/20260824014625_admin_recent_user_activity_directory.sql', import.meta.url), 'utf8'),
   readFile(new URL('../supabase/review/phase3_production_preflight.sql', import.meta.url), 'utf8'),
+  readFile(new URL('../supabase/review/internal_test_account_production_attestation.sql', import.meta.url), 'utf8'),
 ]);
 
 const sectionLabels = [
@@ -97,6 +99,8 @@ assert.match(js, /dataScopedSections = new Set\(\[[\s\S]*'subjects'/);
 const reportSectionsBlock = js.match(/const reportSections = new Set\(\[([\s\S]*?)\]\);/)?.[1] || '';
 assert.doesNotMatch(reportSectionsBlock, /'forum'/);
 assert.match(js, /dataScope:\s*state\.dataScope/);
+assert.match(internalTestAttestation, /version = '20260828095004'[\s\S]*name = 'internal_test_account_reporting_scope_20260828'/);
+assert.match(internalTestAttestation, /version = '20260828095534'[\s\S]*name = 'internal_test_account_scoped_admin_rpcs_20260828'/);
 assert.match(js, /Showing \$\{dataScopeLabel\(\)\.toLowerCase\(\)\} only/);
 
 assert.match(analytics, /90_000/);

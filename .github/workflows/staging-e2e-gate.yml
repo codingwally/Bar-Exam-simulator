@@ -102,6 +102,7 @@ jobs:
           node --test examination-room/*.test.cjs
           node --test admin/examination-room-admin.test.cjs
           node --test worker/*.test.mjs
+          node scripts/test-admin-support-results-discoverability.mjs
           node scripts/test-examination-room-database.mjs
           node scripts/test-examination-room-commercial-stress.mjs
           node scripts/test-examination-room-door-menu.mjs

@@ -83,6 +83,7 @@ jobs:
           node --check worker/maintenance-entry.mjs
           node --test admin/examination-room-admin.test.cjs
           node --test worker/*.test.mjs
+          node scripts/test-admin-support-results-discoverability.mjs
           node scripts/test-examination-room-database.mjs
           node scripts/test-examination-room-commercial-stress.mjs
           node --test scripts/test-profile-photo-release2.mjs

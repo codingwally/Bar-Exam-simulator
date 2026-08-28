@@ -25,6 +25,40 @@ assert.match(workflow, /test "\$GITHUB_REF" = "refs\/heads\/main"/u);
 assert.match(workflow, /deployments\?environment=github-pages&per_page=10/u);
 assert.match(workflow, /deployment_state[\s\S]*== "success"/u);
 assert.match(workflow, /Enforce the Study Room-only diff/u);
+const allowlistSource = workflow.match(/allowed='([^']+)'/u)?.[1];
+assert.ok(allowlistSource, "The Study Room release allowlist must be present.");
+const releaseAllowlist = new RegExp(allowlistSource, "u");
+for (const expectedReleaseFile of [
+  ".github/workflows/release-study-room-admin-beta.yml",
+  "assets/study-room-live.css",
+  "assets/study-room-live.js",
+  "assets/study-room-preview.js",
+  "index.html",
+  "scripts/build-pages-artifact.mjs",
+  "scripts/test-pages-artifact.mjs",
+  "scripts/test-study-room-deployment-smoke.mjs",
+  "scripts/test-study-room-live.mjs",
+  "scripts/test-study-room-preview.mjs",
+  "scripts/test-study-room-release-workflow.mjs",
+  "study-room/index.html",
+  "worker/index.mjs",
+  "worker/livekit-credentials-smoke.mjs",
+  "worker/livekit-credentials-smoke.test.mjs",
+  "worker/package-lock.json",
+  "worker/package.json",
+  "worker/study-room-core.mjs",
+  "worker/study-room-routes.mjs",
+  "worker/study-room-staging-positive-smoke.mjs",
+  "worker/study-room.test.mjs",
+  "worker/wrangler.staging.toml",
+  "worker/wrangler.toml",
+]) {
+  assert.match(
+    expectedReleaseFile,
+    releaseAllowlist,
+    `${expectedReleaseFile} must pass the workflow's Study Room-only allowlist.`,
+  );
+}
 assert.match(workflow, /node --test worker\/\*\.test\.mjs/u);
 assert.match(workflow, /node scripts\/test-pages-artifact\.mjs/u);
 assert.match(

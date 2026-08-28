@@ -99,7 +99,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          allowed='^(\.github/workflows/release-study-room-admin-beta\.yml|assets/study-room-live\.(css|js)|assets/study-room-preview\.js|index\.html|scripts/build-pages-artifact\.mjs|scripts/test-pages-artifact\.mjs|scripts/test-study-room-(deployment-smoke|live|preview|release-workflow)\.mjs|study-room/index\.html|worker/index\.mjs|worker/livekit-credentials-smoke(\.test)?\.mjs|worker/package(-lock)?\.json|worker/study-room-(core|routes|staging-positive-smoke|test)\.mjs|worker/wrangler(\.staging)?\.toml)$'
+          allowed='^(\.github/workflows/release-study-room-admin-beta\.yml|assets/study-room-live\.(css|js)|assets/study-room-preview\.js|index\.html|scripts/build-pages-artifact\.mjs|scripts/test-pages-artifact\.mjs|scripts/test-study-room-(deployment-smoke|live|preview|release-workflow)\.mjs|study-room/index\.html|worker/index\.mjs|worker/livekit-credentials-smoke(\.test)?\.mjs|worker/package(-lock)?\.json|worker/study-room-(core|routes|staging-positive-smoke)\.mjs|worker/study-room\.test\.mjs|worker/wrangler(\.staging)?\.toml)$'
           changed="$(git diff --name-only "$EXPECTED_CURRENT_PAGES_SHA" "$GITHUB_SHA")"
           test -n "$changed"
           unexpected="$(printf '%s\n' "$changed" | grep -Ev "$allowed" || true)"

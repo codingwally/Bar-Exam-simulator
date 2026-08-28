@@ -195,4 +195,6 @@ grant execute on function public.admin_support_queue_v1(uuid, text, integer, int
 comment on function public.admin_support_queue_v1(uuid, text, integer, integer, text)
   is 'Audited support-admin-only queue with linked profile identity, account email, and requester-supplied reply email.';
 
+notify pgrst, 'reload schema';
+
 commit;

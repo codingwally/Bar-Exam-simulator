@@ -112,4 +112,6 @@ grant execute on function public.examination_history_by_track_v1(uuid, text, int
 comment on function public.examination_history_by_track_v1(uuid, text, integer, integer)
   is 'Worker-only owner-scoped examination history filtered by an explicitly authorized track.';
 
+notify pgrst, 'reload schema';
+
 commit;

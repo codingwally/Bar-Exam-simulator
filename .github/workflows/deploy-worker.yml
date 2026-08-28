@@ -23,6 +23,11 @@ on:
         required: true
         default: false
         type: boolean
+      support_results_database_preapplied:
+        description: "Exact Support identity + Bar Simulation history bundle, ledger hashes, privileges, and rollback-only probe are complete"
+        required: true
+        default: false
+        type: boolean
       approval_reference:
         description: "Approval/change reference recorded in the release log"
         required: true
@@ -109,6 +114,7 @@ jobs:
           node scripts/test-auxiliary-writing-diagnostics.mjs
           node scripts/test-examination-room-release-workflows.mjs
           node scripts/test-admin-analytics-release-bundle.mjs
+          node scripts/test-support-results-release-bundle.mjs
           node scripts/test-import-duediligence-2026-content.mjs
           node scripts/validate-duediligence-2026-content.mjs
 
@@ -176,6 +182,30 @@ jobs:
             echo "The production database URL is absent. The explicit admin_analytics_database_preapplied confirmation attests that the reviewed bundle atomically applied exactly 20260828133000_optimize_internal_test_scoped_usage_helpers.sql, 20260828133500_admin_marketing_live_home_metrics.sql, and 20260828134000_exclude_admins_from_recent_sign_in_directory.sql, recorded their exact ledger names and source hashes, and passed the rollback-only live probe before Worker cutover."
           else
             echo "EXAMINATION_ROOM_PRODUCTION_DATABASE_URL is missing. Configure it, or manually run this reviewed Admin analytics bundle and verify its exact ledger-name/source-hash postflight and rollback-only live probe before rerunning with admin_analytics_database_preapplied=true." >&2
+            exit 1
+          fi
+
+      - name: Apply and live-probe the exact Support identity and results migrations
+        env:
+          SUPPORT_RESULTS_DATABASE_URL: ${{ secrets.EXAMINATION_ROOM_PRODUCTION_DATABASE_URL }}
+          SUPPORT_RESULTS_DATABASE_PREAPPLIED: ${{ inputs.support_results_database_preapplied }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          support_results_release_bundle="$RUNNER_TEMP/support-results-release.sql"
+          trap 'rm -f -- "$support_results_release_bundle"' EXIT
+          node scripts/build-support-results-release-bundle.mjs --output "$support_results_release_bundle"
+          if [[ -n "$SUPPORT_RESULTS_DATABASE_URL" ]]; then
+            if ! command -v psql >/dev/null 2>&1; then
+              sudo apt-get update
+              sudo apt-get install --yes postgresql-client
+            fi
+            psql --version
+            psql "$SUPPORT_RESULTS_DATABASE_URL" -X --set=ON_ERROR_STOP=1 --file "$support_results_release_bundle"
+          elif [[ "$SUPPORT_RESULTS_DATABASE_PREAPPLIED" == "true" ]]; then
+            echo "The production database URL is absent. The explicit support_results_database_preapplied confirmation attests that the exact two-migration bundle, ledger names and source hashes, service-role-only privileges, and rollback-only live probe passed before Worker cutover."
+          else
+            echo "EXAMINATION_ROOM_PRODUCTION_DATABASE_URL is missing. Configure it, or manually run the exact Support results bundle and verify its ledger hashes, privileges, and rollback-only live probe before rerunning with support_results_database_preapplied=true." >&2
             exit 1
           fi
 

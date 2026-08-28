@@ -87,6 +87,7 @@
   let currentSession = null;
   let currentVisibility = false;
   let lastPublishedVisibility = null;
+  let roleObserver = null;
 
   function sessionFromRuntime() {
     return global.DueDiligencePhase2?.getSession?.()
@@ -106,10 +107,18 @@
     return Boolean(global.document?.getElementById('dd2-header-pricing-button'));
   }
 
+  function accessForEligibility() {
+    const verifiedHeaderRole = normalized(
+      global.document?.getElementById('dd2-header-role-label')?.textContent,
+    );
+    if (verifiedHeaderRole !== 'admin') return currentAccess;
+    return { ...(currentAccess || {}), role: 'admin' };
+  }
+
   function publishVisibility() {
     if (!global.document) return;
     const signedIn = isSignedIn(currentSession);
-    const visible = featureIsPresent() && signedIn && isAudienceEligible(currentAccess);
+    const visible = featureIsPresent() && signedIn && isAudienceEligible(accessForEligibility());
     const pricingButton = global.document.getElementById('dd2-header-pricing-button');
     const duplicateAccountBadge = global.document.getElementById('dd2-guest-badge');
 
@@ -243,9 +252,20 @@
   global.document.addEventListener('duediligence:access', accessEventHandler);
   global.document.addEventListener('duediligence:session', sessionEventHandler);
 
+  function observeVerifiedHeaderRole() {
+    const roleLabel = global.document.getElementById('dd2-header-role-label');
+    if (!roleLabel || typeof global.MutationObserver !== 'function' || roleObserver) return;
+    roleObserver = new global.MutationObserver(() => publishVisibility());
+    roleObserver.observe(roleLabel, { childList: true, characterData: true, subtree: true });
+  }
+
   if (global.document.readyState === 'loading') {
-    global.document.addEventListener('DOMContentLoaded', () => refresh(), { once: true });
+    global.document.addEventListener('DOMContentLoaded', () => {
+      observeVerifiedHeaderRole();
+      refresh();
+    }, { once: true });
   } else {
+    observeVerifiedHeaderRole();
     refresh();
   }
 

@@ -297,12 +297,15 @@ assert.match(subscriptionCta, /action\.dataset\.dd2View = 'pricing'/, 'The post 
 assert.match(subscriptionCta, /duplicateAccountBadge\.hidden = true/, 'Signed-in users must not see the duplicate account badge.');
 assert.match(subscriptionCta, /refreshWhenAuthReady/);
 assert.match(subscriptionCta, /refreshAccess\?\.\(\{[\s\S]*?enforce: false,[\s\S]*?force: true/);
+assert.match(subscriptionCta, /dd2-header-role-label/);
+assert.match(subscriptionCta, /verifiedHeaderRole !== 'admin'/);
+assert.match(subscriptionCta, /new global\.MutationObserver/);
 assert.match(subscriptionCtaCss, /dd2-header-pricing-button[\s\S]*?min-height:\s*44px/);
 assert.match(subscriptionCtaCss, /dd2-subscription-invitation__action[\s\S]*?min-height:\s*44px/);
 assert.match(subscriptionCtaCss, /@media \(max-width: 560px\)/);
 assert.match(subscriptionCtaCss, /prefers-reduced-motion/);
-assert.match(html, /assets\/subscription-cta\.css\?v=home-subscription-cta-20260828-2/);
-assert.match(html, /assets\/subscription-cta\.js\?v=home-subscription-cta-20260828-2/);
+assert.match(html, /assets\/subscription-cta\.css\?v=home-subscription-cta-20260828-3/);
+assert.match(html, /assets\/subscription-cta\.js\?v=home-subscription-cta-20260828-3/);
 const pricingButtonIndex = html.indexOf('id="dd2-header-pricing-button"');
 const examinationButtonIndex = html.indexOf('id="dd2-header-exam-button"');
 const profileButtonIndex = html.indexOf('id="dd2-header-role-button"');

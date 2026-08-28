@@ -1,7 +1,7 @@
 #site-header.qfs-shell .dd2-header-pricing-button {
   position: relative;
   isolation: isolate;
-  order: 1;
+  order: 3;
   display: inline-flex;
   min-height: 44px;
   align-items: center;
@@ -57,7 +57,7 @@
 }
 
 #site-header.qfs-shell .dd2-header-role-button {
-  order: 3;
+  order: 1;
   min-height: 44px;
   gap: 8px;
   padding-inline: 9px 11px;

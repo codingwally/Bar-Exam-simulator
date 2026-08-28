@@ -304,15 +304,18 @@ assert.match(subscriptionCtaCss, /dd2-header-pricing-button[\s\S]*?min-height:\s
 assert.match(subscriptionCtaCss, /dd2-subscription-invitation__action[\s\S]*?min-height:\s*44px/);
 assert.match(subscriptionCtaCss, /@media \(max-width: 560px\)/);
 assert.match(subscriptionCtaCss, /prefers-reduced-motion/);
-assert.match(html, /assets\/subscription-cta\.css\?v=home-subscription-cta-20260828-3/);
+assert.match(html, /assets\/subscription-cta\.css\?v=home-subscription-cta-20260828-4/);
 assert.match(html, /assets\/subscription-cta\.js\?v=home-subscription-cta-20260828-3/);
 const pricingButtonIndex = html.indexOf('id="dd2-header-pricing-button"');
 const examinationButtonIndex = html.indexOf('id="dd2-header-exam-button"');
 const profileButtonIndex = html.indexOf('id="dd2-header-role-button"');
 assert.ok(
-  pricingButtonIndex >= 0 && pricingButtonIndex < examinationButtonIndex && examinationButtonIndex < profileButtonIndex,
-  'Header tab order must be Plans & Pricing, Examination Room, then the single profile control.',
+  profileButtonIndex >= 0 && profileButtonIndex < examinationButtonIndex && examinationButtonIndex < pricingButtonIndex,
+  'Header tab order must be the single profile control, Examination Room, then Plans & Pricing.',
 );
+assert.match(subscriptionCtaCss, /dd2-header-role-button[\s\S]*?order:\s*1/);
+assert.match(subscriptionCtaCss, /dd2-header-exam-button[\s\S]*?order:\s*2/);
+assert.match(subscriptionCtaCss, /dd2-header-pricing-button[\s\S]*?order:\s*3/);
 assert.match(client, /state\.view === 'home'[\s\S]*?createHomeInvitation/);
 assert.match(client, /duediligence:subscription-cta/);
 assert.match(client, /DueDiligenceSubscriptionCta\?\.shouldShow\?\.\(\)[\s\S]*?dd2-subscription-team-post[\s\S]*?renderFeed\(\)/);

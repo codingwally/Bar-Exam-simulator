@@ -315,5 +315,7 @@ assert.ok(
 );
 assert.match(client, /state\.view === 'home'[\s\S]*?createHomeInvitation/);
 assert.match(client, /duediligence:subscription-cta/);
+assert.match(client, /DueDiligenceSubscriptionCta\?\.shouldShow\?\.\(\)[\s\S]*?dd2-subscription-team-post[\s\S]*?renderFeed\(\)/);
+assert.match(html, /feature-loader\.js[^"']*cta=home-subscription-20260828-2/);
 
 console.log('Quorum static architecture, control, security, naming, and subscription CTA tests passed.');

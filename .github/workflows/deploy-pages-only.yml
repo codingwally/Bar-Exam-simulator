@@ -105,7 +105,9 @@ jobs:
             index="$(curl -fsS "$SITE_URL/?release=$GITHUB_SHA" || true)"
             cta_js="$(curl -fsS "$SITE_URL/assets/subscription-cta.js?release=$GITHUB_SHA" || true)"
             cta_css="$(curl -fsS "$SITE_URL/assets/subscription-cta.css?release=$GITHUB_SHA" || true)"
+            loader="$(curl -fsS "$SITE_URL/assets/feature-loader.js?release=$GITHUB_SHA" || true)"
             if grep -q 'home-subscription-cta-20260828-3' <<<"$index" \
+              && grep -q 'home-subscription-20260828-2' <<<"$loader" \
               && grep -q 'refreshWhenAuthReady' <<<"$cta_js" \
               && grep -q 'duediligence:subscription-cta' <<<"$cta_js" \
               && grep -q 'dd2-subscription-invitation' <<<"$cta_css"; then

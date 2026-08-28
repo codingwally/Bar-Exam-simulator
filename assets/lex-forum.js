@@ -2974,6 +2974,11 @@
         ? await setView('home', { route: false })
         : await restoreRoute({ loadChrome: false });
       if (restored !== true) await setView('home', { route: false });
+      if (state.view === 'home'
+          && global.DueDiligenceSubscriptionCta?.shouldShow?.()
+          && !$('#dd2-subscription-team-post')) {
+        renderFeed();
+      }
       return true;
     } catch (error) {
       handleError(error);

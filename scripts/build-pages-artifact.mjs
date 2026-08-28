@@ -91,6 +91,8 @@ const publicFiles = Object.freeze([
   'assets/quorum-first-shell.js',
   'assets/private-beta-landing.js',
   'assets/feature-loader.js',
+  'assets/subscription-cta.css',
+  'assets/subscription-cta.js',
   'assets/private-workspace.js',
   'examination-room/index.html',
   'examination-room/professor.css',

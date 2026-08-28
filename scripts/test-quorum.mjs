@@ -239,4 +239,76 @@ assert.match(starterMigration, /forum_ensure_anonymous_alias/);
 assert.match(starterMigration, /on conflict \(starter_content_key\)/);
 assert.match(starterMigration, /Paano|niyo|pero|ako|yung/);
 
-console.log('Quorum static architecture, control, security, and naming tests passed.');
+const { readFile: readSubscriptionAsset } = await import('node:fs/promises');
+const subscriptionCta = await readSubscriptionAsset('assets/subscription-cta.js', 'utf8');
+const subscriptionCtaCss = await readSubscriptionAsset('assets/subscription-cta.css', 'utf8');
+const vmModule = await import('node:vm');
+const subscriptionContext = vmModule.createContext({});
+vmModule.runInContext(subscriptionCta, subscriptionContext);
+const { isAudienceEligible } = subscriptionContext.DueDiligenceSubscriptionCta;
+
+assert.equal(isAudienceEligible(null), false, 'Unknown access must fail closed.');
+assert.equal(isAudienceEligible({ role: 'admin', unlimited: true }), true, 'Admins must see the QA CTA.');
+assert.equal(
+  isAudienceEligible({ basis: 'founding_beta', freeBeta: { active: true }, unlimited: true }),
+  true,
+  'Founding Beta members must see the CTA by explicit product decision.',
+);
+assert.equal(
+  isAudienceEligible({ basis: 'introductory', introductoryTokensEligible: true, unlimited: true }),
+  true,
+  'Introductory members must see the CTA.',
+);
+assert.equal(isAudienceEligible({ unlimited: false, subscription: null }), true, 'Unpaid members must see the CTA.');
+assert.equal(
+  isAudienceEligible({ paidSubscriptionExpired: true, unlimited: false, subscription: { status: 'expired' } }),
+  true,
+  'Expired members must see the CTA.',
+);
+assert.equal(
+  isAudienceEligible({
+    introductoryTokensEligible: true,
+    unlimited: true,
+    subscription: { status: 'active', planCode: 'monthly', source: 'stripe' },
+  }),
+  false,
+  'An active paid subscription must override stale introductory eligibility.',
+);
+assert.equal(
+  isAudienceEligible({ unlimited: true, accountLabel: 'Paid Access', subscription: { status: 'active' } }),
+  false,
+  'Active paid members must not see the CTA.',
+);
+assert.equal(
+  isAudienceEligible({ unlimited: true, basis: 'complimentary' }),
+  false,
+  'Paid-equivalent access must not see the CTA.',
+);
+assert.equal(
+  isAudienceEligible({ globalBeta: { active: true }, unlimited: false }),
+  false,
+  'Active non-founding beta access must not see the CTA.',
+);
+
+assert.match(subscriptionCta, /logo\.src = 'assets\/brand\/icon-192\.png'/, 'The post must use the exact website crest.');
+assert.match(subscriptionCta, /Your journey deserves a platform that keeps getting better\./);
+assert.match(subscriptionCta, /maintained by diligent law students, advised by law professors/);
+assert.match(subscriptionCta, /action\.dataset\.dd2View = 'pricing'/, 'The post CTA must open native pricing.');
+assert.match(subscriptionCta, /duplicateAccountBadge\.hidden = true/, 'Signed-in users must not see the duplicate account badge.');
+assert.match(subscriptionCtaCss, /dd2-header-pricing-button[\s\S]*?min-height:\s*44px/);
+assert.match(subscriptionCtaCss, /dd2-subscription-invitation__action[\s\S]*?min-height:\s*44px/);
+assert.match(subscriptionCtaCss, /@media \(max-width: 560px\)/);
+assert.match(subscriptionCtaCss, /prefers-reduced-motion/);
+assert.match(html, /assets\/subscription-cta\.css\?v=home-subscription-cta-20260828-1/);
+assert.match(html, /assets\/subscription-cta\.js\?v=home-subscription-cta-20260828-1/);
+const pricingButtonIndex = html.indexOf('id="dd2-header-pricing-button"');
+const examinationButtonIndex = html.indexOf('id="dd2-header-exam-button"');
+const profileButtonIndex = html.indexOf('id="dd2-header-role-button"');
+assert.ok(
+  pricingButtonIndex >= 0 && pricingButtonIndex < examinationButtonIndex && examinationButtonIndex < profileButtonIndex,
+  'Header tab order must be Plans & Pricing, Examination Room, then the single profile control.',
+);
+assert.match(client, /state\.view === 'home'[\s\S]*?createHomeInvitation/);
+assert.match(client, /duediligence:subscription-cta/);
+
+console.log('Quorum static architecture, control, security, naming, and subscription CTA tests passed.');

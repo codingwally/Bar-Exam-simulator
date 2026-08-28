@@ -911,6 +911,10 @@
     const feed = $('#lex-feed');
     if (!feed) return;
     feed.replaceChildren();
+    if (state.view === 'home') {
+      const invitation = global.DueDiligenceSubscriptionCta?.createHomeInvitation?.();
+      if (invitation) feed.append(invitation);
+    }
     if (state.view === 'circle' && state.circleDetail) {
       feed.append(circleDetailPanel(state.circleDetail));
     }
@@ -3149,6 +3153,9 @@
     });
     global.addEventListener('offline', () => {
       if (state.active) setFeedStatus('You are offline. Existing posts remain visible until you reconnect.', 'error');
+    });
+    global.addEventListener('duediligence:subscription-cta', () => {
+      if (state.active && state.view === 'home') renderFeed();
     });
     global.addEventListener('duediligence:profile-photo', (event) => {
       const eventUserId = String(event.detail?.userId || '');

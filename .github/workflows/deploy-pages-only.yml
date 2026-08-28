@@ -1,0 +1,116 @@
+name: Deploy approved frontend-only release to Pages
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_production:
+        description: "I confirm this isolated frontend-only production release has explicit approval"
+        required: true
+        default: false
+        type: boolean
+      approval_reference:
+        description: "Approval/change reference recorded in the release log"
+        required: true
+        type: string
+      expected_base_sha:
+        description: "Exact currently deployed Pages source SHA"
+        required: true
+        type: string
+      expected_source_sha:
+        description: "Exact reviewed frontend release source SHA"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "github-pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy_pages:
+    name: Verify and deploy the isolated Pages artifact
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout the exact reviewed frontend release
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Authorize the isolated production release
+        env:
+          CONFIRM_PRODUCTION: ${{ inputs.confirm_production }}
+          APPROVAL_REFERENCE: ${{ inputs.approval_reference }}
+          EXPECTED_BASE_SHA: ${{ inputs.expected_base_sha }}
+          EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$CONFIRM_PRODUCTION" = "true"
+          test -n "${APPROVAL_REFERENCE//[[:space:]]/}"
+          test "$GITHUB_SHA" = "$EXPECTED_SOURCE_SHA"
+          git cat-file -e "$EXPECTED_BASE_SHA^{commit}"
+          git merge-base --is-ancestor "$EXPECTED_BASE_SHA" "$EXPECTED_SOURCE_SHA"
+
+          allowed='^(\.github/workflows/deploy-pages-only\.yml|assets/feature-loader\.js|assets/lex-forum\.js|assets/subscription-cta\.css|assets/subscription-cta\.js|index\.html|scripts/build-pages-artifact\.mjs|scripts/test-lex-forum\.mjs|scripts/test-pages-artifact\.mjs|scripts/test-public-home-responsive-css\.mjs|scripts/test-quorum\.mjs)$'
+          unexpected="$(git diff --name-only "$EXPECTED_BASE_SHA..$EXPECTED_SOURCE_SHA" | grep -Ev "$allowed" || true)"
+          if [[ -n "$unexpected" ]]; then
+            echo "The frontend-only release contains files outside the approved isolation boundary:" >&2
+            printf '%s\n' "$unexpected" >&2
+            exit 1
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify the subscription CTA and unchanged community contracts
+        run: |
+          node --check assets/subscription-cta.js
+          node scripts/test-quorum.mjs
+          node scripts/test-public-home-responsive-css.mjs
+          node scripts/test-lex-forum.mjs
+
+      - name: Build and verify the sanitized Pages artifact
+        run: node scripts/test-pages-artifact.mjs
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload the reviewed artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.pages-dist'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Verify the exact frontend release is live
+        env:
+          SITE_URL: https://duediligence.ph
+        shell: bash
+        run: |
+          set -euo pipefail
+          verified=false
+          for attempt in $(seq 1 36); do
+            index="$(curl -fsS "$SITE_URL/?release=$GITHUB_SHA" || true)"
+            cta_js="$(curl -fsS "$SITE_URL/assets/subscription-cta.js?release=$GITHUB_SHA" || true)"
+            cta_css="$(curl -fsS "$SITE_URL/assets/subscription-cta.css?release=$GITHUB_SHA" || true)"
+            if grep -q 'home-subscription-cta-20260828-1' <<<"$index" \
+              && grep -q 'duediligence:subscription-cta' <<<"$cta_js" \
+              && grep -q 'dd-subscription-invitation' <<<"$cta_css"; then
+              verified=true
+              break
+            fi
+            sleep 5
+          done
+          test "$verified" = "true"

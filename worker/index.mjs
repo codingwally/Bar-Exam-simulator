@@ -8261,6 +8261,14 @@ async function handleAdminDashboard(request, env, origin, allowedOrigin) {
     p_previous_to: report.previousTo,
     p_data_scope: report.dataScope,
   });
+  const marketingSummary = await protectedSupabaseRpc(env, 'admin_marketing_summary_scoped_v1', {
+    p_actor_user_id: user.id,
+    p_from: report.from,
+    p_to: report.to,
+    p_previous_from: report.previousFrom,
+    p_previous_to: report.previousTo,
+    p_data_scope: report.dataScope,
+  });
   let engagement = null;
   try {
     engagement = await protectedSupabaseRpc(env, 'admin_overview_engagement_metrics_scoped_v1', {
@@ -8285,8 +8293,33 @@ async function handleAdminDashboard(request, env, origin, allowedOrigin) {
       definition: 'The global Beta All Access policy is temporarily unavailable.',
     };
   }
+  const currentMarketing = marketingSummary?.current || {};
+  const previousMarketing = marketingSummary?.previous || {};
   const result = {
     ...(dashboardSnapshot || {}),
+    current: {
+      ...(dashboardSnapshot?.current || {}),
+      traffic: {
+        ...(dashboardSnapshot?.current?.traffic || {}),
+        home_viewers: currentMarketing.home_viewers ?? null,
+      },
+      funnel: {
+        ...(dashboardSnapshot?.current?.funnel || {}),
+        new_accounts: currentMarketing.new_accounts ?? null,
+      },
+    },
+    previous: {
+      ...(dashboardSnapshot?.previous || {}),
+      traffic: {
+        ...(dashboardSnapshot?.previous?.traffic || {}),
+        home_viewers: previousMarketing.home_viewers ?? null,
+      },
+      funnel: {
+        ...(dashboardSnapshot?.previous?.funnel || {}),
+        new_accounts: previousMarketing.new_accounts ?? null,
+      },
+    },
+    marketingDefinitions: marketingSummary?.definitions || null,
     engagement: engagement || null,
     betaAllAccess,
   };

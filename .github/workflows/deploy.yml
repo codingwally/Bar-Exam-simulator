@@ -18,6 +18,11 @@ on:
         required: true
         default: false
         type: boolean
+      admin_analytics_database_preapplied:
+        description: "Exact 20260828133000 + 20260828133500 + 20260828134000 bundle, ledger hashes, and live probe are complete"
+        required: true
+        default: false
+        type: boolean
       approval_reference:
         description: "Approval/change reference recorded in the release log"
         required: true
@@ -99,6 +104,7 @@ jobs:
           node scripts/test-audience-menu.mjs
           node scripts/test-examination-room-door-menu.mjs
           node scripts/test-examination-room-release-workflows.mjs
+          node scripts/test-admin-analytics-release-bundle.mjs
           node scripts/test-approved-renovation-shell.mjs
           node scripts/test-design-correction-release.mjs
           node scripts/test-subject-matter-consolidation.mjs
@@ -181,6 +187,30 @@ jobs:
             exit 1
           fi
           echo "The explicit Release 2 attestation confirms the reviewed Pedro and profile-photo database contract was manually applied and live-probed before cutover."
+
+      - name: Apply and live-probe the exact Admin analytics migrations
+        env:
+          ADMIN_ANALYTICS_DATABASE_URL: ${{ secrets.EXAMINATION_ROOM_PRODUCTION_DATABASE_URL }}
+          ADMIN_ANALYTICS_DATABASE_PREAPPLIED: ${{ inputs.admin_analytics_database_preapplied }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          admin_analytics_release_bundle="$RUNNER_TEMP/admin-analytics-release.sql"
+          trap 'rm -f -- "$admin_analytics_release_bundle"' EXIT
+          node scripts/build-admin-analytics-release-bundle.mjs --output "$admin_analytics_release_bundle"
+          if [[ -n "$ADMIN_ANALYTICS_DATABASE_URL" ]]; then
+            if ! command -v psql >/dev/null 2>&1; then
+              sudo apt-get update
+              sudo apt-get install --yes postgresql-client
+            fi
+            psql --version
+            psql "$ADMIN_ANALYTICS_DATABASE_URL" -X --set=ON_ERROR_STOP=1 --file "$admin_analytics_release_bundle"
+          elif [[ "$ADMIN_ANALYTICS_DATABASE_PREAPPLIED" == "true" ]]; then
+            echo "The production database URL is absent. The explicit admin_analytics_database_preapplied confirmation attests that the reviewed bundle atomically applied exactly 20260828133000_optimize_internal_test_scoped_usage_helpers.sql, 20260828133500_admin_marketing_live_home_metrics.sql, and 20260828134000_exclude_admins_from_recent_sign_in_directory.sql, recorded their exact ledger names and source hashes, and passed the rollback-only live probe before Worker cutover."
+          else
+            echo "EXAMINATION_ROOM_PRODUCTION_DATABASE_URL is missing. Configure it, or manually run this reviewed Admin analytics bundle and verify its exact ledger-name/source-hash postflight and rollback-only live probe before rerunning with admin_analytics_database_preapplied=true." >&2
+            exit 1
+          fi
 
       - name: Verify production Examination Room Worker secrets exist
         working-directory: worker

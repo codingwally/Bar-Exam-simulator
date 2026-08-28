@@ -1141,7 +1141,7 @@ test('administrator session is verified by Supabase before aggregate RPC', async
   }
 });
 
-test('admin dashboard includes all-time signed-in and answer engagement metrics', async () => {
+test('admin dashboard includes scoped Home marketing totals and engagement metrics', async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];
   const scopedBodies = [];
@@ -1153,7 +1153,19 @@ test('admin dashboard includes all-time signed-in and answer engagement metrics'
     }
     if (url.endsWith('/rest/v1/rpc/admin_dashboard_snapshot_scoped_v1')) {
       scopedBodies.push(JSON.parse(init.body));
-      return Response.json({ meta: { freshness: 'current' } });
+      return Response.json({
+        meta: { freshness: 'current' },
+        current: { traffic: { unique_visitors: 50 }, funnel: { registrations: 9 } },
+        previous: { traffic: { unique_visitors: 40 }, funnel: { registrations: 7 } },
+      });
+    }
+    if (url.endsWith('/rest/v1/rpc/admin_marketing_summary_scoped_v1')) {
+      scopedBodies.push(JSON.parse(init.body));
+      return Response.json({
+        current: { home_viewers: 18, new_accounts: 11 },
+        previous: { home_viewers: 12, new_accounts: 8 },
+        definitions: { home_viewers: 'Distinct signed-in non-administrator Home viewers.' },
+      });
     }
     if (url.endsWith('/rest/v1/rpc/admin_overview_engagement_metrics_scoped_v1')) {
       scopedBodies.push(JSON.parse(init.body));
@@ -1193,9 +1205,14 @@ test('admin dashboard includes all-time signed-in and answer engagement metrics'
     const body = await response.json();
     assert.equal(body.report.engagement.signedInAccounts, 27);
     assert.equal(body.report.engagement.questionsAnswered, 41);
+    assert.equal(body.report.current.traffic.unique_visitors, 50);
+    assert.equal(body.report.current.traffic.home_viewers, 18);
+    assert.equal(body.report.current.funnel.new_accounts, 11);
+    assert.equal(body.report.previous.traffic.home_viewers, 12);
     assert.equal(body.report.betaAllAccess.enabled, true);
+    assert.equal(calls.some((url) => url.endsWith('/admin_marketing_summary_scoped_v1')), true);
     assert.equal(calls.some((url) => url.endsWith('/admin_overview_engagement_metrics_scoped_v1')), true);
-    assert.deepEqual(scopedBodies.map((body) => body.p_data_scope), ['internal_test', 'internal_test']);
+    assert.deepEqual(scopedBodies.map((body) => body.p_data_scope), ['internal_test', 'internal_test', 'internal_test']);
     assert.equal(calls.some((url) => url.endsWith('/phase4_global_beta_policy_snapshot')), true);
   } finally {
     globalThis.fetch = originalFetch;

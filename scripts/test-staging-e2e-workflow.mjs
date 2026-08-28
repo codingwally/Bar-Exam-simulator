@@ -22,12 +22,36 @@ assert.match(workflow, /refs\/heads\/agent\/master-experience-release-20260813/)
 assert.match(workflow, /refs\/heads\/agent\/header-subject-review-correction-20260814/);
 assert.match(workflow, /refs\/heads\/agent\/soft-launch-five-token-20260821/);
 assert.match(workflow, /refs\/heads\/codex\/examination-room-greenfield-20260826/);
+assert.match(workflow, /refs\/heads\/fix\/admin-marketing-live-20260828/);
 assert.match(workflow, /deploy_greenfield:/);
 assert.match(workflow, /smoke_greenfield:/);
+assert.match(
+  workflow,
+  /admin_analytics_database_preapplied:\s*\r?\n\s+description:.*20260828133000 \+ 20260828133500 \+ 20260828134000.*ledger hashes, and live probe are complete/,
+);
 assert.match(workflow, /EXAMINATION_ROOM_KEY_PEPPER/);
 assert.match(workflow, /deploy --config wrangler\.staging\.toml/);
 assert.match(workflow, /test-examination-room-v1-staging-smoke\.mjs/);
 assert.doesNotMatch(workflow, /secret put EXAMINATION_ROOM_KEY_PEPPER|randomBytes\(48\)/);
+const analyticsDatabaseGate = workflow.indexOf('Apply and live-probe the exact Admin analytics migrations');
+const stagingWorkerCutover = workflow.indexOf('Deploy reviewed Worker and static artifact to staging');
+assert.ok(
+  analyticsDatabaseGate >= 0 && stagingWorkerCutover > analyticsDatabaseGate,
+  'The exact Admin analytics database gate must complete before the staging Worker cutover.',
+);
+assert.match(workflow, /node scripts\/test-admin-analytics-release-bundle\.mjs/);
+assert.match(
+  workflow,
+  /node scripts\/build-admin-analytics-release-bundle\.mjs --output "\$admin_analytics_release_bundle"/,
+);
+assert.match(
+  workflow,
+  /psql "\$ADMIN_ANALYTICS_DATABASE_URL" -X --set=ON_ERROR_STOP=1 --file "\$admin_analytics_release_bundle"/,
+);
+assert.doesNotMatch(
+  workflow,
+  /--file "\$(?:scoped_helpers_migration|marketing_live_migration|recent_sign_ins_migration|live_probe)"/,
+);
 assert.equal(
   (workflow.match(/STAGING_SUPABASE_SERVICE_ROLE_KEY:\s*\$\{\{ secrets\.STAGING_SUPABASE_SERVICE_ROLE_KEY \}\}/g) || []).length,
   3,

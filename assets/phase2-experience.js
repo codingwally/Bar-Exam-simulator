@@ -2609,7 +2609,16 @@
       renderCommercialPlanCards(plansPayload.plans, access);
     } catch (error) {
       if (state.nativeViewSequence !== viewSequence || state.nativeView !== 'pricing') return;
-      host.innerHTML = `<div class="dd2-status is-error">${escapeHtml(error.message || 'Current access options could not be loaded. Please retry.')}</div>`;
+      host.innerHTML = `
+        <div class="dd2-status is-error" role="alert">
+          <strong>Plans &amp; Pricing could not load just now.</strong>
+          <span>Your account was not changed. Check your connection, then try again.</span>
+          <button class="dd2-button dd2-button-primary" id="dd2-pricing-retry" type="button">Try again</button>
+        </div>`;
+      document.getElementById('dd2-pricing-retry')?.addEventListener('click', () => {
+        host.innerHTML = '<div class="dd2-status">Checking current plans and account access&hellip;</div>';
+        loadCommercialPricing(viewSequence);
+      }, { once: true });
     }
   }
 

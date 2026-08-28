@@ -66,6 +66,15 @@ const navigationIconFiles = Object.freeze([
   'LICENSE.txt',
 ].map((name) => `assets/icons/navigation/${name}`));
 
+const studyRoomPreviewFiles = Object.freeze([
+  'assets/study-room-preview.css',
+  'assets/study-room-preview.js',
+  'assets/study-room/dimasalang-library.webp',
+  'assets/study-room/participant-2-tropical.webp',
+  'assets/study-room/participant-3-bedroom.webp',
+  'assets/study-room/participant-4-condo.webp',
+]);
+
 const publicFiles = Object.freeze([
   'index.html',
   'CNAME',
@@ -110,6 +119,7 @@ const publicFiles = Object.freeze([
   ...featurePreviewFiles,
   ...communityIconFiles,
   ...navigationIconFiles,
+  ...studyRoomPreviewFiles,
   'assets/phase2-experience.js',
   'assets/profile-photo.js',
   'assets/pedro-navigation.js',

@@ -934,7 +934,22 @@ body:has(#page-community.active) #site-header.qfs-shell .quorum-home-tools {
 }
 
 @media (max-width: 560px) {
+  #site-header.qfs-shell {
+    min-height: 116px;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: 60px 56px;
+    align-content: start;
+  }
+
+  #site-header.qfs-shell .qfs-menu-toggle {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
   #site-header.qfs-shell .brand {
+    grid-column: 2;
+    grid-row: 1;
+    max-width: 100%;
     gap: 8px;
   }
 
@@ -953,6 +968,20 @@ body:has(#page-community.active) #site-header.qfs-shell .quorum-home-tools {
     left: 10px;
     width: 7px;
     height: 7px;
+  }
+
+  #site-header.qfs-shell .topbar-actions {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    min-width: 0;
+    justify-self: stretch;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+
+  #site-header.qfs-shell .dd2-header-member-tools {
+    min-width: 0;
   }
 
   #site-header.qfs-shell #spa-nav.qfs-drawer {
@@ -996,6 +1025,12 @@ body:has(#page-community.active) #site-header.qfs-shell .quorum-home-tools {
 @media (max-width: 900px) {
   .public-navigation-status {
     top: 72px;
+  }
+}
+
+@media (max-width: 560px) {
+  .public-navigation-status {
+    top: 128px;
   }
 }
 

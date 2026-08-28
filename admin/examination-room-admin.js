@@ -437,6 +437,13 @@
     if (!Object.keys(tables).length) return response;
     const exams = uiList(tables.exams);
     const versions = uiList(tables.examVersions);
+    const currentVersion = versions.find((version) => version.id === bundle.currentPublishedVersionId)
+      || versions.at(-1)
+      || null;
+    const questionRows = uiList(tables.questions);
+    const currentQuestions = currentVersion?.id
+      ? questionRows.filter((question) => question.examVersionId === currentVersion.id)
+      : questionRows;
     const identities = uiList(tables.studentIdentities);
     const rosterRows = uiList(tables.examRoster);
     const sessionRows = uiList(tables.studentSessions);
@@ -493,9 +500,9 @@
       ...response,
       bundle,
       exam: exams[0] || null,
-      examVersion: versions.find((version) => version.id === bundle.currentPublishedVersionId) || versions.at(-1) || null,
+      examVersion: currentVersion,
       examVersions: versions,
-      questions: uiList(tables.questions),
+      questions: currentQuestions,
       students,
       roster: students,
       studentIdentities: identities,

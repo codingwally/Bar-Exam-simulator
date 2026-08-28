@@ -1936,7 +1936,7 @@
             <span class="dd2-door-role">Room key required</span>
           </div>
           <h3 id="dd2-student-door-title">Student door</h3>
-          <p>Enter the room key, your real name, student number, subject, and year level. A short privacy warning appears before the exam begins.</p>
+          <p>Enter the room key, your real name, student number, subject, and year level. Questions stay sealed until the examination opens.</p>
           <div class="dd2-door-status is-ready" role="status">Ready for your room key. You do not need a Due Diligence account.</div>
           <a class="dd2-button dd2-button-primary dd2-door-action" id="dd2-student-door" href="/examination-room/student.html">Enter student door</a>
         </article>

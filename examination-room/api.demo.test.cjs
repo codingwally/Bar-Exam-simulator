@@ -145,6 +145,51 @@ test('demo Professor can create another examination with a new durable identifie
   assert.equal((await api.professorQuery('session')).exams.length, 2);
 });
 
+test('demo creator can delete any selected draft and reach a genuine empty overview', async () => {
+  const api = demoApi();
+  api.resetDemo();
+  const first = await api.professorQuery('session');
+  const secondId = crypto.randomUUID();
+  await api.professorCommand('save_draft', {
+    exam: {
+      ...first.exam,
+      id: secondId,
+      versionId: null,
+      status: 'draft',
+      title: 'Civil Law — Practice Examination',
+      publishedAt: null,
+    },
+  }, 'create-overview-second');
+
+  const removedFirst = await api.professorCommand('delete_draft', { examId: first.exam.id }, 'delete-overview-first');
+  assert.equal(removedFirst.deleted, true);
+  assert.equal(removedFirst.recoverable, true);
+  let session = await api.professorQuery('session');
+  assert.deepEqual(Array.from(session.exams, (exam) => exam.id), [secondId]);
+
+  const removedSecond = await api.professorCommand('delete_draft', { examId: secondId }, 'delete-overview-second');
+  assert.equal(removedSecond.deleted, true);
+  session = await api.professorQuery('session');
+  assert.equal(session.exams.length, 0);
+});
+
+test('demo published examination uses recoverable archive instead of draft deletion', async () => {
+  const api = demoApi();
+  api.resetDemo();
+  const creator = await api.professorQuery('session');
+  const published = await api.professorCommand('publish', { exam: creator.exam }, 'publish-for-overview-delete');
+  assert.equal(published.exam.status, 'awaiting_activation');
+
+  await assert.rejects(
+    api.professorCommand('delete_draft', { examId: creator.exam.id }, 'reject-published-draft-delete'),
+    (error) => error.code === 'DRAFT_DELETE_STATE_INVALID' && error.status === 409,
+  );
+  const archived = await api.professorCommand('archive_exam', { examId: creator.exam.id }, 'archive-published-overview');
+  assert.equal(archived.archived, true);
+  assert.equal(archived.recoverable, true);
+  assert.equal((await api.professorQuery('session')).exams.length, 0);
+});
+
 test('demo switching preserves each examination bundle and never duplicates an existing inactive exam', async () => {
   const api = demoApi();
   api.resetDemo();

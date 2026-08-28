@@ -10,10 +10,11 @@
     professor: null,
     exam: null,
     examSummaries: [],
+    serverExamIds: new Set(),
     activation: null,
     questions: [],
     roster: [],
-    currentView: 'create',
+    currentView: 'overview',
     saveTimer: null,
     saveInFlight: null,
     lastSavedJson: '',
@@ -37,6 +38,7 @@
     revokingSessions: new Set(),
     assistantHistory: [],
     assistantInFlight: false,
+    overviewActionInFlight: false,
   };
 
   const DRAFT_STORAGE_KEY = 'duediligence.examination-room.v1.professor-draft';
@@ -322,10 +324,69 @@
     const seen = new Set();
     return [...candidates, ...fallback].filter((summary) => {
       const id = examSummaryId(summary);
-      if (!id || seen.has(id) || summary?.deletedAt || safeText(summary?.status, 40) === 'archived') return false;
+      const lifecycle = safeText(summary?.lifecycleState || summary?.status, 40).toLowerCase();
+      if (!id || seen.has(id) || summary?.deletedAt || lifecycle === 'archived') return false;
       seen.add(id);
       return true;
     });
+  }
+
+  function overviewExamItems(summaries) {
+    return examSummariesFromSession({ exams: Array.isArray(summaries) ? summaries : [] });
+  }
+
+  function overviewStatusPresentation(summary) {
+    const status = safeText(summary?.lifecycleState || summary?.status, 40).toLowerCase();
+    if (status === 'draft') return { tone: 'draft', label: 'Draft', help: 'Ready to continue editing' };
+    if (['published', 'key_requested', 'awaiting_approval', 'awaiting_activation', 'requested', 'pending'].includes(status)) {
+      return { tone: 'waiting', label: 'Waiting for Admin', help: 'Student key requested' };
+    }
+    if (['active', 'open', 'scheduled'].includes(status)) return { tone: 'active', label: 'Student key issued', help: 'Monitor and Grade are available' };
+    if (status === 'grading') return { tone: 'active', label: 'Grading', help: 'Submissions are ready to review' };
+    if (status === 'results_released') return { tone: 'active', label: 'Results released', help: 'Results were sent to selected students' };
+    if (status === 'blocked') return { tone: 'waiting', label: 'Blocked by Admin', help: 'Open the examination for recovery details' };
+    return { tone: 'draft', label: 'Saved examination', help: 'Open to review its current state' };
+  }
+
+  function lifecycleOperationForExam(summary) {
+    const status = safeText(summary?.lifecycleState || summary?.status, 40).toLowerCase();
+    const hasPublishedRecord = Boolean(summary?.currentPublishedVersionId || summary?.publishedAt);
+    return status === 'draft' && !hasPublishedRecord ? 'delete_draft' : 'archive_exam';
+  }
+
+  function summariesAfterRemoval(summaries, examId) {
+    const id = safeText(examId, 80);
+    return overviewExamItems(summaries).filter((summary) => examSummaryId(summary) !== id);
+  }
+
+  function renderExamOverview() {
+    const list = $('#exam-overview-list');
+    const empty = $('#exam-overview-empty');
+    const count = $('#exam-overview-count');
+    const deleteHelp = $('#overview-delete-help');
+    if (!list || !empty || !count) return;
+    const items = overviewExamItems(state.examSummaries);
+    count.textContent = items.length === 1 ? '1 saved examination' : `${items.length} saved examinations`;
+    empty.hidden = items.length > 0;
+    list.hidden = items.length === 0;
+    if (deleteHelp) deleteHelp.hidden = items.length === 0;
+    list.innerHTML = items.map((summary) => {
+      const id = examSummaryId(summary);
+      const title = safeText(summary?.title, 180) || 'Untitled examination';
+      const subject = safeText(summary?.subject, 120) || 'Subject not set';
+      const status = overviewStatusPresentation(summary);
+      const deleteLabel = lifecycleOperationForExam(summary) === 'delete_draft' ? 'Delete draft' : 'Delete examination';
+      const current = id === examSummaryId(state.exam);
+      return `<article class="exam-overview-row${current ? ' is-current' : ''}" data-overview-exam-id="${escapeHtml(id)}">
+        <div class="exam-overview-copy"><h3>${escapeHtml(title)}</h3><p>${escapeHtml(subject)}</p></div>
+        <div class="exam-overview-status"><span class="exam-status-chip" data-status="${escapeHtml(status.tone)}">${escapeHtml(status.label)}</span><small>${escapeHtml(status.help)}</small></div>
+        <div class="exam-overview-actions">
+          <button class="button primary overview-open" type="button" data-overview-action="open" data-exam-id="${escapeHtml(id)}"><i class="ph ph-pencil-simple-line" aria-hidden="true"></i>${current ? 'Continue' : 'Open'}</button>
+          <button class="button secondary" type="button" data-overview-action="duplicate" data-exam-id="${escapeHtml(id)}"><i class="ph ph-copy" aria-hidden="true"></i>Duplicate</button>
+          <button class="button overview-delete" type="button" data-overview-action="delete" data-exam-id="${escapeHtml(id)}"><i class="ph ph-trash" aria-hidden="true"></i>${escapeHtml(deleteLabel)}</button>
+        </div>
+      </article>`;
+    }).join('');
   }
 
   function renderExamSwitcher(summaries, currentExamId) {
@@ -334,6 +395,7 @@
     });
     const wrap = $('#exam-switcher-wrap');
     const select = $('#exam-switcher');
+    renderExamOverview();
     if (!wrap || !select) return;
     wrap.hidden = state.examSummaries.length < 2;
     select.innerHTML = state.examSummaries.map((summary) => {
@@ -352,7 +414,11 @@
       ...current,
       id: examId,
       title: safeText(exam?.title, 180),
+      subject: safeText(exam?.subject || current?.subject, 120),
       status: safeText(exam?.status || current?.status, 40) || 'draft',
+      currentPublishedVersionId: exam?.currentPublishedVersionId || current?.currentPublishedVersionId || null,
+      publishedAt: exam?.publishedAt || current?.publishedAt || null,
+      versionId: exam?.versionId || current?.versionId || null,
       updatedAt: exam?.updatedAt || current?.updatedAt || null,
     };
     const found = (Array.isArray(summaries) ? summaries : [])
@@ -376,6 +442,16 @@
     next.searchParams.delete('reset');
     next.hash = `#${['create', 'monitor', 'grade'].includes(view) ? view : 'create'}`;
     global.location.assign(next.toString());
+  }
+
+  function replaceWorkspaceUrl(view) {
+    if (!global.history?.replaceState) return;
+    const next = new URL(global.location.href);
+    next.searchParams.delete('reset');
+    if (view === 'overview') next.searchParams.delete('exam');
+    else if (examSummaryId(state.exam)) next.searchParams.set('exam', examSummaryId(state.exam));
+    next.hash = `#${view}`;
+    global.history.replaceState(null, '', next.toString());
   }
 
   function replaceCurrentExamUrl(examId, view = state.currentView) {
@@ -412,17 +488,29 @@
     delete draft.submissions;
     delete draft.gradeRevisions;
     delete draft.releases;
+    delete draft.publicationStatus;
+    delete draft.version;
+    delete draft.lifecycleState;
+    delete draft.deletedAt;
+    delete draft.deletedReason;
+    delete draft.deleteReason;
+    delete draft.blockedAt;
+    delete draft.blockReason;
+    delete draft.canRestore;
+    delete draft.needsNewKey;
     return draft;
   }
 
-  async function createAnotherExam({ duplicate = false, preserveCurrent = true } = {}) {
-    toast(duplicate
-      ? 'Saving this draft and preparing a duplicate…'
-      : 'Saving this draft and opening a fresh examination…');
-    if (preserveCurrent) await saveDraft({ force: true });
-    const draft = duplicate
-      ? duplicateDraft(collectExam())
-      : clientOnlyBlankDraft(state.professor?.institutionId);
+  function isPristineDraft(exam) {
+    return safeText(exam?.status, 40) === 'draft'
+      && !safeText(exam?.title, 180)
+      && !safeText(exam?.subject, 120)
+      && !safeText(exam?.instructions, 10_000)
+      && !safeText(exam?.sourceFileName, 255)
+      && !(Array.isArray(exam?.questions) && exam.questions.length);
+  }
+
+  async function persistNewCreatorDraft(draft, { duplicate = false } = {}) {
     state.activation = null;
     state.activationAnnounced = false;
     state.monitor = null;
@@ -441,48 +529,111 @@
       return;
     }
     const savedExamId = examSummaryId(result.exam) || draft.id;
+    state.serverExamIds.add(savedExamId);
     navigateToExam(savedExamId, 'create');
   }
 
-  async function archiveCurrentExam() {
-    const exam = collectExam();
+  async function createAnotherExam({ duplicate = false, preserveCurrent = true } = {}) {
+    toast(duplicate
+      ? 'Saving this draft and preparing a duplicate…'
+      : 'Saving this draft and opening a fresh examination…');
+    if (preserveCurrent) await saveDraft({ force: true });
+    const draft = duplicate
+      ? duplicateDraft(collectExam())
+      : clientOnlyBlankDraft(state.professor?.institutionId);
+    await persistNewCreatorDraft(draft, { duplicate });
+  }
+
+  async function openNewExamFromOverview() {
+    const current = collectExam();
+    if (isPristineDraft(current)) {
+      switchView('create');
+      toast('Blank examination opened. Add a title or your first question to begin.');
+      return;
+    }
+    await createAnotherExam();
+  }
+
+  async function openExamFromOverview(examId) {
+    const id = safeText(examId, 80);
+    if (!id) return;
+    if (id === examSummaryId(state.exam)) {
+      switchView('create');
+      return;
+    }
+    const currentListed = state.examSummaries.some((entry) => examSummaryId(entry) === examSummaryId(state.exam));
+    if (currentListed || !isPristineDraft(collectExam())) await saveDraft({ force: true });
+    navigateToExam(id, 'create');
+  }
+
+  async function duplicateExamFromOverview(examId) {
+    const id = safeText(examId, 80);
+    if (!id) return;
+    toast('Saving your current work and preparing the duplicate…');
+    const currentListed = state.examSummaries.some((entry) => examSummaryId(entry) === examSummaryId(state.exam));
+    if (currentListed || !isPristineDraft(collectExam())) await saveDraft({ force: true });
+    let source;
+    if (id === examSummaryId(state.exam)) {
+      source = collectExam();
+    } else {
+      const summary = state.examSummaries.find((entry) => examSummaryId(entry) === id) || { id };
+      const details = await api.professorQuery('exam', { examId: id });
+      source = editorExamFromStored(details?.exam, summary, state.professor?.institutionId);
+    }
+    await persistNewCreatorDraft(duplicateDraft(source), { duplicate: true });
+  }
+
+  async function deleteExamFromOverview(examId) {
+    const id = safeText(examId, 80);
+    const summary = state.examSummaries.find((entry) => examSummaryId(entry) === id);
+    if (!id || !summary) {
+      showError({
+        message: 'That examination is no longer in your active list.',
+        recovery: 'Return to My examinations and choose one of the examinations currently shown.',
+      }, null, 'Examination not found');
+      return;
+    }
+    const current = id === examSummaryId(state.exam);
+    const source = current ? { ...summary, ...collectExam() } : summary;
+    const operation = lifecycleOperationForExam(source);
+    const isDraft = operation === 'delete_draft';
+    const serverBacked = state.serverExamIds.has(id);
+    const title = safeText(source?.title, 180) || 'Untitled examination';
     const confirmed = await requestConfirmation({
-      eyebrow: 'Delete examination',
-      title: `Delete “${exam.title || 'Untitled examination'}” from active rooms?`,
-      copy: 'The examination leaves your active list immediately, but its questions, keys, student answers, grades, receipts, and audit history remain preserved in the recoverable archive.',
-      help: 'Admin can restore the examination later. Deleting from active rooms never erases student evidence.',
-      confirmLabel: 'Delete examination',
+      eyebrow: isDraft ? 'Delete draft' : 'Delete examination',
+      title: `Delete “${title}” from My examinations?`,
+      copy: serverBacked
+        ? 'It leaves your active list immediately. Its questions, keys, student answers, grades, receipts, and audit history remain preserved in the recoverable Admin archive.'
+        : 'This device-only draft leaves your active list immediately. It has not reached the server, so no student answers or key records are attached to it.',
+      help: serverBacked
+        ? 'Admin can restore this examination later. Deleting it never erases student evidence.'
+        : 'This removes the local draft from this browser. Download a recovery copy first if you may need it again.',
+      confirmLabel: isDraft ? 'Delete draft' : 'Delete examination',
       cancelLabel: 'Keep examination',
     });
     if (!confirmed) return;
-    await api.professorCommand('archive_exam', { examId: exam.id }, api.requestId());
-    await removeLocalDraft(exam.id);
-    toast('Examination deleted from active rooms. Its complete record remains recoverable in Admin.');
-    await createAnotherExam({ preserveCurrent: false });
-  }
-
-  async function deleteCurrentDraft() {
-    const exam = collectExam();
-    if (safeText(exam.status, 40) !== 'draft') {
-      showError({
-        message: 'Only an unpublished draft can be deleted from the creator workspace.',
-        recovery: 'Use Delete examination for a published room. Admin can restore either record from the command center.',
-      }, null, 'Examination not deleted');
-      return;
+    if (current) {
+      clearTimeout(state.saveTimer);
+      state.saveTimer = null;
+      if (state.saveInFlight) await state.saveInFlight.catch(() => null);
     }
-    const confirmed = await requestConfirmation({
-      eyebrow: 'Delete draft',
-      title: `Delete “${exam.title || 'Untitled examination'}”?`,
-      copy: 'This removes the unpublished draft from your active workspace and this device. Admin retains a recoverable record so an accidental click does not destroy work.',
-      help: 'Download a recovery copy first if you may need this draft again.',
-      confirmLabel: 'Delete draft',
-      cancelLabel: 'Keep draft',
-    });
-    if (!confirmed) return;
-    await api.professorCommand('delete_draft', { examId: exam.id }, api.requestId());
-    await removeLocalDraft(exam.id);
-    toast('Unpublished draft deleted from your workspace. Admin can restore it if needed.');
-    await createAnotherExam({ preserveCurrent: false });
+    if (serverBacked) await api.professorCommand(operation, { examId: id }, api.requestId());
+    await removeLocalDraft(id);
+    state.examSummaries = summariesAfterRemoval(state.examSummaries, id);
+    state.serverExamIds.delete(id);
+    if (current) {
+      state.activation = null;
+      state.activationAnnounced = false;
+      state.monitor = null;
+      state.grading = null;
+      state.serverBaselineFingerprint = null;
+      hydrateForm(clientOnlyBlankDraft(state.professor?.institutionId));
+    }
+    renderExamSwitcher(state.examSummaries, current ? '' : examSummaryId(state.exam));
+    switchView('overview');
+    toast(serverBacked
+      ? 'Examination removed from My examinations. Admin can restore its complete record.'
+      : 'Device-only draft removed from My examinations.');
   }
 
   function editorExamFromStored(storedExam, summary = {}, institutionId = '') {
@@ -1161,6 +1312,7 @@
     const action = async () => {
       const result = await api.professorCommand('save_draft', { exam }, api.requestId());
       state.exam = result.exam || exam;
+      state.serverExamIds.add(examSummaryId(state.exam));
       state.serverBaselineFingerprint = examContentFingerprint(state.exam);
       state.lastSavedJson = JSON.stringify(exam);
       syncCurrentExamSummary(state.exam);
@@ -1257,10 +1409,6 @@
       button.textContent = 'Publish & request key';
       button.disabled = false;
     }
-    const deleteAction = $('[data-action="delete-exam"]');
-    const archiveAction = $('[data-action="archive-exam"]');
-    if (deleteAction) deleteAction.hidden = status !== 'draft';
-    if (archiveAction) archiveAction.hidden = status === 'archived';
     syncCreatorAccess();
   }
 
@@ -1694,8 +1842,8 @@
   }
 
   function switchView(view) {
-    if (!['create', 'monitor', 'grade'].includes(view)) return;
-    if (view !== 'create' && !creatorAccessUnlocked()) {
+    if (!['overview', 'create', 'monitor', 'grade'].includes(view)) return;
+    if (['monitor', 'grade'].includes(view) && !creatorAccessUnlocked()) {
       view = 'create';
       if (creatorAccessPending()) {
         toast('Monitor and Grade unlock automatically when Admin issues the student key.');
@@ -1709,7 +1857,10 @@
       node.classList.toggle('is-active', active);
     });
     $$('[data-view]').forEach((button) => button.classList.toggle('is-active', button.dataset.view === view));
+    const skipLink = $('.skip-link');
+    if (skipLink) skipLink.href = view === 'overview' ? '#overview-title' : view === 'create' ? '#exam-editor' : view === 'monitor' ? '#monitor-title' : '#grade-title';
     $('#assistant-panel').hidden = view !== 'create';
+    if (view === 'overview') renderExamOverview();
     clearInterval(state.monitorTimer);
     state.monitorTimer = null;
     if (view === 'monitor') {
@@ -1717,7 +1868,7 @@
       state.monitorTimer = setInterval(refreshMonitor, 5000);
     }
     if (view === 'grade') refreshGrading();
-    global.history.replaceState(null, '', `${global.location.pathname}${global.location.search}#${view}`);
+    replaceWorkspaceUrl(view);
   }
 
   async function refreshMonitor({ silent = true } = {}) {
@@ -2529,9 +2680,41 @@
       .forEach((id) => state.sectionObserver.observe(document.getElementById(id)));
   }
 
+  async function runOverviewAction(button, action, errorTitle) {
+    if (state.overviewActionInFlight) return;
+    state.overviewActionInFlight = true;
+    if (button) {
+      button.disabled = true;
+      button.setAttribute('aria-busy', 'true');
+    }
+    try {
+      await action();
+    } catch (error) {
+      showError(error, () => runOverviewAction(button, action, errorTitle), errorTitle);
+    } finally {
+      state.overviewActionInFlight = false;
+      if (button?.isConnected) {
+        button.disabled = false;
+        button.removeAttribute('aria-busy');
+      }
+    }
+  }
+
   function bindEvents() {
     $$('[data-close-dialog]').forEach((button) => button.addEventListener('click', () => closeDialog(button.dataset.closeDialog)));
     $$('[data-view]').forEach((button) => button.addEventListener('click', () => switchView(button.dataset.view)));
+    [$('#overview-new-exam'), $('#overview-empty-new-exam')].forEach((button) => button?.addEventListener('click', () => {
+      runOverviewAction(button, openNewExamFromOverview, 'New examination not opened');
+    }));
+    $('#exam-overview-list').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-overview-action][data-exam-id]');
+      if (!button) return;
+      const examId = safeText(button.dataset.examId, 80);
+      const action = button.dataset.overviewAction;
+      if (action === 'open') runOverviewAction(button, () => openExamFromOverview(examId), 'Examination not opened');
+      else if (action === 'duplicate') runOverviewAction(button, () => duplicateExamFromOverview(examId), 'Examination not duplicated');
+      else if (action === 'delete') runOverviewAction(button, () => deleteExamFromOverview(examId), 'Examination not deleted');
+    });
     $('#exam-switcher').addEventListener('change', async (event) => {
       const targetExamId = safeText(event.currentTarget.value, 80);
       if (!targetExamId || targetExamId === state.exam?.id) return;
@@ -2578,14 +2761,6 @@
       if (button.dataset.action === 'download-draft') {
         downloadJson(`examination-draft-${state.exam.id.slice(0, 8)}.json`, { exportedAt: new Date().toISOString(), exam: collectExam(), note: 'Private recovery copy. Store securely.' });
         toast('Recovery copy downloaded.');
-      } else if (button.dataset.action === 'new-exam') {
-        await createAnotherExam();
-      } else if (button.dataset.action === 'duplicate-exam') {
-        await createAnotherExam({ duplicate: true });
-      } else if (button.dataset.action === 'archive-exam') {
-        await archiveCurrentExam().catch((error) => showError(error, archiveCurrentExam, 'Examination not archived'));
-      } else if (button.dataset.action === 'delete-exam') {
-        await deleteCurrentDraft().catch((error) => showError(error, deleteCurrentDraft, 'Draft not deleted'));
       } else {
         toast('Version history is preserved after each publish, grade save, and recovery snapshot.');
       }
@@ -2867,6 +3042,7 @@
       $('#professor-short-name').textContent = result.professor.displayName || 'Exam creator';
       $('.profile-initials').textContent = initials(result.professor.displayName || 'Exam creator');
       const summaries = examSummariesFromSession(result);
+      state.serverExamIds = new Set(summaries.map(examSummaryId).filter(Boolean));
       const requestedExamId = safeText(params.get('exam'), 80);
       const localDrafts = params.get('reset') === '1' ? [] : await readLocalDraftIndex();
       const activeLocalDraft = params.get('reset') === '1'
@@ -2879,7 +3055,8 @@
         activeLocalPreferred
         && !activeLocalServerSummary
       );
-      const defaultSummary = result.exam && typeof result.exam === 'object' ? result.exam : summaries[0] || null;
+      const resultExamId = examSummaryId(result.exam);
+      const defaultSummary = summaries.find((candidate) => examSummaryId(candidate) === resultExamId) || summaries[0] || null;
       const summary = requestedExamId
         ? summaries.find((candidate) => examSummaryId(candidate) === requestedExamId) || { id: requestedExamId }
         : activeLocalPreferred ? (activeLocalServerSummary || activeLocalDraft.exam) : defaultSummary;
@@ -2947,7 +3124,6 @@
       hydrateForm(exam);
       if (clientOnlyDraft) {
         await saveLocalDraft(exam);
-        replaceCurrentExamUrl(exam.id, global.location.hash.replace('#', '') || 'create');
       }
       bindEvents();
       bindSectionObserver();
@@ -2959,8 +3135,9 @@
       }
       $('#loading-gate').hidden = true;
       $('#app-shell').hidden = false;
-      const requestedView = global.location.hash.replace('#', '') || params.get('view') || 'create';
-      switchView(['create', 'monitor', 'grade'].includes(requestedView) ? requestedView : 'create');
+      const explicitView = global.location.hash.replace('#', '') || params.get('view');
+      const requestedView = explicitView || (requestedExamId ? 'create' : 'overview');
+      switchView(['overview', 'create', 'monitor', 'grade'].includes(requestedView) ? requestedView : 'overview');
       if (restoredLocalDraft) {
         setSavedStatus('error', 'Restored from this device');
         toast(resolvedConflict

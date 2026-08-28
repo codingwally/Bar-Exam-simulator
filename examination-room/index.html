@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&amp;family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/regular/style.css">
-  <link rel="stylesheet" href="professor.css?v=renovation-20260828-5">
+  <link rel="stylesheet" href="professor.css?v=creator-overview-20260828-1">
 </head>
 <body>
   <a class="skip-link" href="#exam-editor">Skip to examination editor</a>
@@ -50,8 +50,9 @@
         <span class="sr-only">Open examination</span>
         <select id="exam-switcher" aria-label="Open examination"></select>
       </label>
-      <nav class="workspace-tabs" aria-label="Professor examination views">
-        <button class="workspace-tab is-active" type="button" data-view="create" aria-label="Prepare examination"><i class="ph ph-pencil-simple-line" aria-hidden="true"></i><span>Prepare</span></button>
+      <nav class="workspace-tabs" aria-label="Examination creator views">
+        <button class="workspace-tab is-active" type="button" data-view="overview" aria-label="My examinations overview"><i class="ph ph-squares-four" aria-hidden="true"></i><span>Overview</span></button>
+        <button class="workspace-tab" type="button" data-view="create" aria-label="Prepare examination"><i class="ph ph-pencil-simple-line" aria-hidden="true"></i><span>Prepare</span></button>
         <button class="workspace-tab" type="button" data-view="monitor" data-requires-activation="true" disabled aria-label="Monitor examination — available after Admin issues the student key" title="Publish the examination and wait for Admin to issue the student key"><i class="ph ph-monitor" aria-hidden="true"></i><span>Monitor</span></button>
         <button class="workspace-tab" type="button" data-view="grade" data-requires-activation="true" disabled aria-label="Grade submissions — available after Admin issues the student key" title="Publish the examination and wait for Admin to issue the student key"><i class="ph ph-seal-check" aria-hidden="true"></i><span>Grade</span></button>
       </nav>
@@ -62,7 +63,36 @@
       </button>
     </header>
 
-    <section class="app-view is-active" id="create-view" data-app-view="create">
+    <section class="app-view overview-view is-active" id="overview-view" data-app-view="overview" aria-labelledby="overview-title">
+      <header class="overview-header">
+        <div>
+          <p class="section-kicker">Examination Room</p>
+          <h1 id="overview-title">My examinations</h1>
+          <p>Create a new examination, reopen an existing one, make a copy, or remove it from your workspace.</p>
+        </div>
+        <button class="button primary overview-new-exam" id="overview-new-exam" type="button"><i class="ph ph-plus" aria-hidden="true"></i><span>New examination</span></button>
+      </header>
+      <main class="overview-main">
+        <section class="exam-overview-panel" aria-labelledby="exam-overview-list-title">
+          <header>
+            <div>
+              <h2 id="exam-overview-list-title">Your examinations</h2>
+              <p id="exam-overview-count" aria-live="polite">Loading your examinations…</p>
+            </div>
+            <p class="overview-delete-help" id="overview-delete-help"><i class="ph ph-info" aria-hidden="true"></i><span>Use the visible <strong>Delete</strong> button beside any examination. Server-backed work remains recoverable by Admin.</span></p>
+          </header>
+          <div class="exam-overview-list" id="exam-overview-list" aria-live="polite"></div>
+          <div class="exam-overview-empty" id="exam-overview-empty" hidden>
+            <i class="ph ph-file-plus" aria-hidden="true"></i>
+            <h2>No examinations yet</h2>
+            <p>Start with a blank examination. You can save it at any time and request the student key only when you are ready.</p>
+            <button class="button primary" id="overview-empty-new-exam" type="button"><i class="ph ph-plus" aria-hidden="true"></i>New examination</button>
+          </div>
+        </section>
+      </main>
+    </section>
+
+    <section class="app-view" id="create-view" data-app-view="create" hidden>
       <header class="command-bar">
         <div class="command-context">
           <strong>Prepare examination</strong>
@@ -79,12 +109,8 @@
           <div class="action-menu" id="more-actions-menu" hidden>
             <button type="button" data-view="monitor" data-requires-activation="true" disabled><i class="ph ph-monitor" aria-hidden="true"></i>Open monitoring</button>
             <button type="button" data-view="grade" data-requires-activation="true" disabled><i class="ph ph-seal-check" aria-hidden="true"></i>Grade submissions</button>
-            <button type="button" data-action="new-exam"><i class="ph ph-plus" aria-hidden="true"></i>New examination</button>
-            <button type="button" data-action="duplicate-exam"><i class="ph ph-copy" aria-hidden="true"></i>Duplicate examination</button>
             <button type="button" data-action="download-draft"><i class="ph ph-download-simple" aria-hidden="true"></i>Download recovery copy</button>
             <button type="button" data-action="version-history"><i class="ph ph-clock-counter-clockwise" aria-hidden="true"></i>Version history</button>
-            <button class="danger-menu-action" type="button" data-action="archive-exam"><i class="ph ph-trash" aria-hidden="true"></i>Delete examination</button>
-            <button class="danger-menu-action" type="button" data-action="delete-exam"><i class="ph ph-trash" aria-hidden="true"></i>Delete draft</button>
           </div>
         </div>
       </header>
@@ -336,6 +362,6 @@
   <script src="view-models.js?v=greenfield-v1-20260826-1"></script>
   <script src="api.js?v=renovation-20260828-4"></script>
   <script src="offline-grading-core.js?v=greenfield-v1-20260826-3"></script>
-  <script src="professor.js?v=renovation-20260828-4&amp;hotfix=creator-trial-repairs-20260828-1"></script>
+  <script src="professor.js?v=creator-overview-20260828-1"></script>
 </body>
 </html>

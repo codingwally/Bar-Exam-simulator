@@ -92,7 +92,7 @@ function loadProfessorStartupHooks({ storageBlocked = false, indexedDbAvailable 
   };
   const exposedSource = professorSource.replace(
     /\n\s*initialize\(\);\s*\n\}\)\(window\);\s*$/,
-    '\n  global.__professorStartupTestHooks = { clientOnlyBlankDraft, editorExamFromStored, examContentFingerprint, normalizeAllowedEmails, invalidAllowedEmails, creatorAccessUnlocked, scheduleActivationPoll, stopActivationPolling, saveLocalDraft, readLocalDraft, readActiveLocalDraft, readLocalDraftIndex, localDraftBelongsToCurrentProfessor, prepareDecryptedGradePayload, validateCompleteGradedPackageSets, serverDraftBackupBlockers, serverBackupWaitingLabel, examSummariesFromSession, examSummariesWithCurrentExam, normalizeQuestion, questionAfterTypeChange, questionSuggestion, marginSuggestion, state };\n})(window);',
+    '\n  global.__professorStartupTestHooks = { clientOnlyBlankDraft, editorExamFromStored, examContentFingerprint, normalizeAllowedEmails, invalidAllowedEmails, creatorAccessUnlocked, scheduleActivationPoll, stopActivationPolling, saveLocalDraft, readLocalDraft, readActiveLocalDraft, readLocalDraftIndex, localDraftBelongsToCurrentProfessor, prepareDecryptedGradePayload, validateCompleteGradedPackageSets, serverDraftBackupBlockers, serverBackupWaitingLabel, examSummariesFromSession, examSummariesWithCurrentExam, overviewExamItems, overviewStatusPresentation, lifecycleOperationForExam, summariesAfterRemoval, duplicateDraft, isPristineDraft, normalizeQuestion, questionAfterTypeChange, questionSuggestion, marginSuggestion, state };\n})(window);',
   );
   vm.runInNewContext(exposedSource, { window, indexedDB: window.indexedDB }, { filename: 'professor.js' });
   return { ...window.__professorStartupTestHooks, __testWindow: window };
@@ -319,15 +319,84 @@ test('Professor startup accepts any signed-in creator and loads the full owner-b
 });
 
 test('Professor can create, duplicate, and switch among multiple creator-owned examinations', () => {
-  assert.match(professorHtml, /data-action="new-exam"/);
-  assert.match(professorHtml, /data-action="duplicate-exam"/);
+  assert.match(professorHtml, /id="overview-view"[^>]*data-app-view="overview"/);
+  assert.match(professorHtml, /id="overview-title">My examinations</);
+  assert.match(professorHtml, /id="overview-new-exam"[^>]*>[^<]*<i[^>]*><\/i><span>New examination<\/span>/);
+  assert.match(professorHtml, /id="exam-overview-list"/);
+  assert.match(professorHtml, /id="exam-overview-empty"/);
+  assert.doesNotMatch(professorHtml, /data-action="new-exam"|data-action="duplicate-exam"|data-action="archive-exam"|data-action="delete-exam"/);
   assert.match(professorSource, /function duplicateDraft\(source\)/);
   assert.match(professorSource, /id: global\.crypto\.randomUUID\(\)[\s\S]*versionId: null[\s\S]*status: 'draft'/);
   assert.match(professorSource, /questions: \(source\?\.questions \|\| \[\]\)\.map[\s\S]*id: global\.crypto\.randomUUID\(\)/);
   assert.match(professorSource, /async function createAnotherExam\(\{ duplicate = false, preserveCurrent = true \} = \{\}\)/);
   assert.match(professorSource, /navigateToExam\(savedExamId, 'create'\)/);
+  assert.match(professorSource, /data-overview-action="open"[\s\S]*data-overview-action="duplicate"[\s\S]*data-overview-action="delete"/);
+  assert.match(professorSource, /deleteExamFromOverview\(examId\)/);
+  assert.match(professorSource, /professorCommand\(operation, \{ examId: id \}/);
+  assert.match(professorSource, /switchView\('overview'\)/);
+  assert.doesNotMatch(professorSource, /deleteExamFromOverview[\s\S]{0,2500}createAnotherExam\(\{ preserveCurrent: false \}\)/);
   assert.match(professorSource, /\$\('#exam-switcher'\)\.addEventListener\('change'/);
   assert.doesNotMatch(professorSource, /A duplicate will be created after the current draft finishes saving/);
+});
+
+test('My examinations overview classifies, duplicates, and removes the clicked examination deterministically', () => {
+  const {
+    overviewExamItems,
+    overviewStatusPresentation,
+    lifecycleOperationForExam,
+    summariesAfterRemoval,
+    duplicateDraft,
+  } = loadProfessorStartupHooks();
+  const firstId = '11111111-1111-4111-8111-111111111111';
+  const secondId = '22222222-2222-4222-8222-222222222222';
+  const summaries = overviewExamItems([
+    { id: firstId, title: 'Civil Law draft', status: 'draft' },
+    { id: secondId, title: 'Constitutional Law final', status: 'awaiting_activation', publishedAt: '2026-08-28T00:00:00.000Z' },
+    { id: secondId, title: 'Repeated record', status: 'awaiting_activation' },
+    { id: '33333333-3333-4333-8333-333333333333', status: 'active', lifecycleState: 'archived' },
+  ]);
+
+  assert.deepEqual(Array.from(summaries, (summary) => summary.id), [firstId, secondId]);
+  assert.equal(overviewStatusPresentation(summaries[0]).label, 'Draft');
+  assert.equal(overviewStatusPresentation(summaries[1]).label, 'Waiting for Admin');
+  assert.equal(lifecycleOperationForExam(summaries[0]), 'delete_draft');
+  assert.equal(lifecycleOperationForExam({ status: 'draft', currentPublishedVersionId: secondId }), 'archive_exam');
+  assert.equal(lifecycleOperationForExam(summaries[1]), 'archive_exam');
+  assert.deepEqual(Array.from(summariesAfterRemoval(summaries, firstId), (summary) => summary.id), [secondId]);
+  assert.deepEqual(Array.from(summariesAfterRemoval([summaries[0]], firstId)), []);
+
+  const source = {
+    id: firstId,
+    status: 'active',
+    title: 'Civil Law final',
+    currentPublishedVersionId: secondId,
+    lifecycleState: 'active',
+    deletedAt: '2026-08-28T00:00:00.000Z',
+    questions: [{ id: 'question-source', type: 'essay', prompt: 'Discuss.', points: 10 }],
+    roster: [{ id: 'student-source', fullName: 'Student One', yearLevel: 'Second year' }],
+  };
+  const duplicate = duplicateDraft(source);
+  assert.notEqual(duplicate.id, source.id);
+  assert.notEqual(duplicate.questions[0].id, source.questions[0].id);
+  assert.notEqual(duplicate.roster[0].id, source.roster[0].id);
+  assert.equal(duplicate.status, 'draft');
+  assert.equal(duplicate.currentPublishedVersionId, undefined);
+  assert.equal(duplicate.lifecycleState, undefined);
+  assert.equal(duplicate.deletedAt, undefined);
+  assert.equal(source.status, 'active');
+});
+
+test('My examinations overview is the default route and remains usable on phones', () => {
+  assert.match(professorSource, /currentView: 'overview'/);
+  assert.match(professorSource, /const requestedView = explicitView \|\| \(requestedExamId \? 'create' : 'overview'\)/);
+  assert.match(professorSource, /\['overview', 'create', 'monitor', 'grade'\]\.includes\(view\)/);
+  assert.match(professorCss, /\.exam-overview-row \{[^}]*min-width: 0;/s);
+  assert.match(professorCss, /\.exam-overview-copy h3 \{[^}]*overflow-wrap: anywhere;/s);
+  const phoneStart = professorCss.lastIndexOf('@media (max-width: 560px)');
+  const phoneCss = professorCss.slice(phoneStart);
+  assert.match(phoneCss, /\.exam-overview-row \{[^}]*grid-template-columns: minmax\(0, 1fr\);/s);
+  assert.match(phoneCss, /\.exam-overview-actions \{[^}]*grid-template-columns: 1fr 1fr;/s);
+  assert.match(phoneCss, /\.exam-overview-actions \.button \{[^}]*min-height: 48px;/s);
 });
 
 test('the creator examination selector removes repeated IDs from a device-only first save', () => {
@@ -716,7 +785,7 @@ test('Professor Create page contains its question cards at a 319px viewport', ()
     /@media \(max-width: 390px\) \{[\s\S]*?\.questions-list[\s\S]*?\.question-layout[\s\S]*?\.choice-row/,
   );
   assert.match(professorHtml, /class="questions-list"/);
-  assert.match(professorHtml, /professor\.css\?v=renovation-20260828-5/);
+  assert.match(professorHtml, /professor\.css\?v=creator-overview-20260828-1/);
   assert.match(professorHtml, /api\.js\?v=renovation-20260828-4/);
 });
 
@@ -769,7 +838,7 @@ test('creator receives monitor and grade access from activation without entering
   assert.match(professorHtml, /data-view="monitor" data-requires-activation="true" disabled aria-label="Monitor examination — available after Admin issues the student key"/);
   assert.match(professorHtml, /data-view="grade" data-requires-activation="true" disabled aria-label="Grade submissions — available after Admin issues the student key"/);
   assert.match(professorSource, /control\.setAttribute\('aria-label', unlocked[\s\S]*viewName/);
-  assert.match(professorHtml, /professor\.js\?v=renovation-20260828-4&amp;hotfix=creator-trial-repairs-20260828-1/);
+  assert.match(professorHtml, /professor\.js\?v=creator-overview-20260828-1/);
 });
 
 test('creator approval survives reload and a published request keeps polling without a manual check', () => {

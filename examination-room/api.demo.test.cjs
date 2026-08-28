@@ -100,7 +100,8 @@ function liveApi(fetchImplementation, options = {}) {
       supabase: { url: 'https://supabase.example.test', publishableKey: 'public-test-key' },
     },
     supabase: {
-      createClient() {
+      createClient(...args) {
+        if (typeof options.createClient === 'function') return options.createClient(...args);
         return {
           auth: {
             getSession: options.getSession || (async () => ({ data: { session: { access_token: 'test-access-token' } }, error: null })),
@@ -121,6 +122,37 @@ function liveApi(fetchImplementation, options = {}) {
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, 'api.js'), 'utf8'), sandbox, { filename: 'api.js' });
   return window.ExaminationRoomV1Api;
 }
+
+test('live API reuses an injected Admin auth client without constructing a duplicate', async () => {
+  let createClientCalls = 0;
+  let sharedSessionReads = 0;
+  const api = liveApi(
+    async () => ({ ok: true, json: async () => ({ ok: true }) }),
+    {
+      createClient() {
+        createClientCalls += 1;
+        throw new Error('A second Supabase client must not be constructed.');
+      },
+    },
+  );
+  const sharedClient = {
+    auth: {
+      async getSession() {
+        sharedSessionReads += 1;
+        return { data: { session: { access_token: 'shared-admin-token' } }, error: null };
+      },
+    },
+  };
+  api.authSession.client = sharedClient;
+
+  const session = await api.authSession();
+  await api.adminQuery('access');
+
+  assert.equal(session.access_token, 'shared-admin-token');
+  assert.equal(api.authSession.client, sharedClient);
+  assert.equal(createClientCalls, 0);
+  assert.equal(sharedSessionReads, 2);
+});
 
 test('live API requests time out and preserve caller cancellation through one combined signal', async () => {
   const pendingFetch = (_url, options) => new Promise((_resolve, reject) => {

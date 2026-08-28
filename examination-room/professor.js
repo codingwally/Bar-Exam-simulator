@@ -329,7 +329,9 @@
   }
 
   function renderExamSwitcher(summaries, currentExamId) {
-    state.examSummaries = Array.isArray(summaries) ? summaries : [];
+    state.examSummaries = examSummariesFromSession({
+      exams: Array.isArray(summaries) ? summaries : [],
+    });
     const wrap = $('#exam-switcher-wrap');
     const select = $('#exam-switcher');
     if (!wrap || !select) return;
@@ -414,6 +416,9 @@
   }
 
   async function createAnotherExam({ duplicate = false, preserveCurrent = true } = {}) {
+    toast(duplicate
+      ? 'Saving this draft and preparing a duplicate…'
+      : 'Saving this draft and opening a fresh examination…');
     if (preserveCurrent) await saveDraft({ force: true });
     const draft = duplicate
       ? duplicateDraft(collectExam())
@@ -429,8 +434,10 @@
     const result = await saveDraft({ force: true, announce: true });
     if (result.localOnly) {
       replaceCurrentExamUrl(draft.id, 'create');
-      renderExamSwitcher([...state.examSummaries, draft], draft.id);
-      toast('The new draft is safe on this device. Retry server backup before leaving this page.');
+      renderExamSwitcher(state.examSummaries, draft.id);
+      toast(result.awaitingCompletion
+        ? 'Fresh draft opened. Add a title and questions; server backup starts automatically as you work.'
+        : 'The new draft is safe on this device. Choose Save draft to retry server backup.');
       return;
     }
     const savedExamId = examSummaryId(result.exam) || draft.id;
@@ -600,22 +607,32 @@
 
   function questionSuggestion(question, index) {
     const prompt = String(question.prompt || '').toLowerCase();
-    if (index === 0 || prompt.includes('separation of powers')) {
+    if (question.type === 'multiple_choice') {
+      return 'Confirm that one option is clearly correct and the distractors remain plausible.';
+    }
+    if (prompt.includes('separation of powers')) {
       return 'Consider asking students to distinguish structural and functional separation of powers.';
     }
     if (prompt.includes('judicial review')) {
       return 'You may want to invite discussion of political question doctrine and expanded judicial power.';
     }
-    if (question.type === 'multiple_choice') {
-      return 'Confirm that one option is clearly correct and the distractors remain plausible.';
+    if (/property|ownership|possession|title|easement|land/.test(prompt)) {
+      return 'Check that the property, competing claims, and requested remedy are stated clearly.';
+    }
+    if (/obligation|contract|breach|damages/.test(prompt)) {
+      return 'Check that students can identify the obligation, breach, available defenses, and remedy.';
+    }
+    if (/crime|criminal|felony|offense|defense/.test(prompt)) {
+      return 'Check that the facts support analysis of each element, participation, and any defense.';
     }
     return 'Check that the facts, task verb, point value, and expected depth are aligned.';
   }
 
   function marginSuggestion(question, index) {
-    if (index === 0) return 'AI noted that your source included discussion on separation of powers starting on page 4.';
-    if (index === 1) return 'AI suggests including standards such as “grave abuse of discretion” and “substantial evidence.”';
-    return `AI organized this as Question ${index + 1}. Review the wording and point value before publishing.`;
+    if (state.exam?.sourceFileName) {
+      return `Imported from your source as Question ${index + 1}. Check the wording against the original before publishing.`;
+    }
+    return `Assistant check for Question ${index + 1}: review the wording and point value before publishing.`;
   }
 
   function choiceEditor(question) {
@@ -741,7 +758,7 @@
     $('#subject').value = exam.subject || '';
     $('#instructions').value = exam.instructions || '';
     $('#year-level').value = exam.yearLevel || 'Second year';
-    $('#course-code').value = exam.courseCode || 'LAW-202';
+    $('#course-code').value = exam.courseCode || '';
     $('#late-control').value = exam.lateSubmissions === 'professor_review' || exam.lateSubmissions === 'grace_5'
       ? 'professor_review'
       : 'not_allowed';
@@ -1490,18 +1507,29 @@
 
   function changeQuestionType(questionId, type) {
     syncQuestionsFromDom();
-    const question = state.questions.find((entry) => entry.id === questionId);
-    if (!question || question.type === type) return;
-    question.type = QUESTION_TYPES[type] ? type : 'essay';
-    if (question.type === 'multiple_choice') {
-      question.options = question.options?.length ? question.options : ['', '', '', ''];
-      question.correctOption = 0;
-    } else {
-      delete question.options;
-      delete question.correctOption;
-    }
+    const index = state.questions.findIndex((entry) => entry.id === questionId);
+    if (index < 0) return;
+    state.questions[index] = questionAfterTypeChange(state.questions[index], type, index);
     renderQuestions(questionId);
     scheduleAutosave();
+  }
+
+  function questionAfterTypeChange(question, type, index = 0) {
+    const nextType = QUESTION_TYPES[type] ? type : 'essay';
+    const next = { ...question, type: nextType };
+    if (nextType === 'multiple_choice') {
+      next.options = Array.isArray(question?.options) && question.options.length
+        ? question.options
+        : ['', '', '', ''];
+      const requestedCorrectOption = Number(question?.correctOption);
+      next.correctOption = Number.isInteger(requestedCorrectOption)
+        ? Math.max(0, Math.min(next.options.length - 1, requestedCorrectOption))
+        : 0;
+    } else {
+      delete next.options;
+      delete next.correctOption;
+    }
+    return normalizeQuestion(next, index);
   }
 
   async function handleFormat(button, questionNode) {
@@ -2546,6 +2574,7 @@
       const button = event.target.closest('[data-action]');
       if (!button) return;
       $('#more-actions-menu').hidden = true;
+      $('#more-actions').setAttribute('aria-expanded', 'false');
       if (button.dataset.action === 'download-draft') {
         downloadJson(`examination-draft-${state.exam.id.slice(0, 8)}.json`, { exportedAt: new Date().toISOString(), exam: collectExam(), note: 'Private recovery copy. Store securely.' });
         toast('Recovery copy downloaded.');

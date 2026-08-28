@@ -4963,6 +4963,9 @@
         detectSessionInUrl: true,
       },
     });
+    if (typeof global.ExaminationRoomV1Api?.authSession === 'function') {
+      global.ExaminationRoomV1Api.authSession.client = state.client;
+    }
     state.client.auth.onAuthStateChange((event, session) => {
       state.session = session || null;
       if (event === 'SIGNED_OUT' && !$('#admin-shell').hidden) {

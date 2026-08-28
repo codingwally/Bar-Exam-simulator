@@ -15,6 +15,7 @@ assert.match(html, /Return to website/);
 assert.match(html, /id="download-current-section"[^>]+disabled/);
 assert.doesNotMatch(html, /id="download-current-section"[\s\S]{0,160}ph-caret-down/);
 assert.match(html, /admin-observatory\.css\?v=public-admin-reliability-20260827-2/);
+assert.match(html, /admin\.js\?v=auth-singleton-20260828-1/);
 
 assert.match(js, /renderEpoch:\s*0/);
 assert.match(js, /new AbortController\(\)/);
@@ -45,6 +46,24 @@ assert.doesNotMatch(js, /loadAllPhase4Operational\('payments'\)\.catch\(\(\) => 
 assert.doesNotMatch(js, /loadAllUserDirectory\(\)\.catch\(\(\) => \(\{ items: \[\]/);
 assert.doesNotMatch(js, /label:\s*'First answer'/);
 assert.doesNotMatch(js, /Number\((?:data|page)\.total \|\|/, 'Verified zero totals must not fall back to stale values.');
+
+const adminClientCreation = js.indexOf('state.client = global.supabase.createClient');
+const examinationRoomClientHandoff = js.indexOf('global.ExaminationRoomV1Api.authSession.client = state.client');
+const adminAuthSubscription = js.indexOf('state.client.auth.onAuthStateChange');
+assert.ok(adminClientCreation >= 0, 'Admin must create its authenticated Supabase client.');
+assert.ok(
+  examinationRoomClientHandoff > adminClientCreation,
+  'Admin must hand its client to Examination Room after the client is created.',
+);
+assert.ok(
+  adminAuthSubscription > examinationRoomClientHandoff,
+  'The shared client handoff must finish before Admin subscribes and renders protected sections.',
+);
+assert.equal(
+  (js.match(/global\.supabase\.createClient/g) || []).length,
+  1,
+  'Admin must construct exactly one Supabase client.',
+);
 
 const extractNamedFunction = (source, name) => {
   const signature = `async function ${name}`;

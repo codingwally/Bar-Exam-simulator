@@ -3181,6 +3181,7 @@ async function examinationRpc(env, functionName, body) {
     'examination_fail_ai_job',
     'examination_record_delivery',
     'examination_authorize_access',
+    'examination_history_by_track_v1',
     'subject_matter_catalog',
     'subject_matter_next_question',
     'subject_matter_next_question_v2',
@@ -6789,6 +6790,19 @@ Return one complete schema-valid JSON assessment. Preserve the stored legal subs
   };
 }
 
+async function failExaminationAiJob(env, user, gradingPackage, error) {
+  if (!gradingPackage?.jobId || !user?.id) return;
+  try {
+    await examinationRpc(env, 'examination_fail_ai_job', {
+      p_user_id: user.id,
+      p_job_id: gradingPackage.jobId,
+      p_safe_error_code: error?.code || 'grading_failed',
+    });
+  } catch {
+    console.error('Examination grading failure state requires operator review');
+  }
+}
+
 async function processExaminationAiJob(env, user, gradingPackage, commercialReservation = null) {
   const questions = Array.isArray(gradingPackage?.questions)
     ? gradingPackage.questions
@@ -6858,15 +6872,7 @@ async function processExaminationAiJob(env, user, gradingPackage, commercialRese
     }
     return finalState;
   } catch (error) {
-    try {
-      await examinationRpc(env, 'examination_fail_ai_job', {
-        p_user_id: user.id,
-        p_job_id: gradingPackage.jobId,
-        p_safe_error_code: error?.code || 'grading_failed',
-      });
-    } catch {
-      console.error('Examination grading failure state requires operator review');
-    }
+    await failExaminationAiJob(env, user, gradingPackage, error);
     throw error;
   }
 }
@@ -6944,14 +6950,24 @@ async function handleExaminationQuery(request, env, origin, allowedOrigin) {
         allowHistorical: true,
       });
     } else if (query.operation === 'history') {
-      await authorizeExaminationAccess(env, user.id, { allowHistorical: true });
+      await authorizeExaminationAccess(env, user.id, {
+        track: query.track,
+        allowHistorical: true,
+      });
     }
   }
-  const result = await examinationRpc(env, 'examination_query', {
-    p_user_id: user?.id || null,
-    p_operation: query.operation,
-    p_payload: query,
-  });
+  const result = query.operation === 'history' && query.track
+    ? await examinationRpc(env, 'examination_history_by_track_v1', {
+      p_user_id: user.id,
+      p_track: query.track,
+      p_limit: query.limit,
+      p_offset: query.offset,
+    })
+    : await examinationRpc(env, 'examination_query', {
+      p_user_id: user?.id || null,
+      p_operation: query.operation,
+      p_payload: query,
+    });
   const learnerResult = ['verdict', 'history'].includes(query.operation)
     ? sanitizeLearnerFacingPayload(result)
     : result;
@@ -7153,14 +7169,22 @@ async function handleExaminationCommand(request, env, origin, allowedOrigin) {
       const commercialTrack = authorizedAccess?.track === 'bar_feels'
         ? 'bar_feels'
         : 'subject_matter';
-      reservation = await reserveCommercialSubmission(
-        request,
-        env,
-        user,
-        commercialTrack,
-        pendingQuestion.questionId,
-        command.requestKey,
-      );
+      try {
+        reservation = await reserveCommercialSubmission(
+          request,
+          env,
+          user,
+          commercialTrack,
+          pendingQuestion.questionId,
+          command.requestKey,
+        );
+      } catch (error) {
+        // examination_command creates (or reopens) the grading job before
+        // commercial capacity is reserved. Preserve an honest resumable state
+        // when access or capacity prevents this question from being processed.
+        await failExaminationAiJob(env, user, result, error);
+        throw error;
+      }
     }
     let state;
     try {
@@ -8359,13 +8383,21 @@ async function handleAdminData(request, env, origin, allowedOrigin) {
     }
     throw error;
   }
-  const result = await protectedSupabaseRpc(env, 'admin_operational_data', {
-    p_actor_user_id: user.id,
-    p_section: query.section,
-    p_search: query.search,
-    p_limit: query.limit,
-    p_offset: query.offset,
-  });
+  const result = query.section === 'support'
+    ? await protectedSupabaseRpc(env, 'admin_support_queue_v1', {
+      p_actor_user_id: user.id,
+      p_search: query.search,
+      p_limit: query.limit,
+      p_offset: query.offset,
+      p_request_key: normalizeRequestKey(request.headers.get('X-Request-ID')),
+    })
+    : await protectedSupabaseRpc(env, 'admin_operational_data', {
+      p_actor_user_id: user.id,
+      p_section: query.section,
+      p_search: query.search,
+      p_limit: query.limit,
+      p_offset: query.offset,
+    });
   return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
 }
 

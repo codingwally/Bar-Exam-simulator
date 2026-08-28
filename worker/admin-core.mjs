@@ -14,6 +14,7 @@ export const ADMIN_DIRECTORY_RECIPIENT_KEYS = Object.freeze([
 ]);
 
 export const ADMIN_DIRECTORY_EXPORT_MAX_BYTES = 5 * 1024 * 1024;
+const ADMIN_OPERATIONAL_MAX_OFFSET = 1_000_000;
 
 export const ADMIN_DATA_SCOPES = Object.freeze([
   'regular', 'internal_test',
@@ -445,10 +446,24 @@ export function utf8Base64(value) {
 export function normalizeOperationalRequest(payload) {
   const section = String(payload?.section || '').trim();
   if (!ADMIN_SECTIONS.includes(section)) throw new AdminValidationError('Unsupported admin section.');
-  const search = String(payload?.search || '').trim().slice(0, 180) || null;
-  const limit = Math.min(100, Math.max(1, Number(payload?.limit) || 50));
-  const offset = Math.max(0, Number(payload?.offset) || 0);
-  return { section, search, limit, offset };
+  const search = String(payload?.search || '').trim();
+  if (search.length > 180) {
+    throw new AdminValidationError('Admin search exceeds 180 characters.');
+  }
+  if (/[\u0000-\u001f\u007f]/u.test(search)) {
+    throw new AdminValidationError('Admin search contains unsupported characters.');
+  }
+  const requestedLimit = payload?.limit == null ? 50 : Number(payload.limit);
+  const requestedOffset = payload?.offset == null ? 0 : Number(payload.offset);
+  const limit = Math.min(
+    100,
+    Math.max(1, Number.isFinite(requestedLimit) ? Math.trunc(requestedLimit) : 50),
+  );
+  const offset = Math.min(
+    ADMIN_OPERATIONAL_MAX_OFFSET,
+    Math.max(0, Number.isFinite(requestedOffset) ? Math.trunc(requestedOffset) : 0),
+  );
+  return { section, search: search || null, limit, offset };
 }
 
 export function normalizeAdminAction(payload) {

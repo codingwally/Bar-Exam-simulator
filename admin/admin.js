@@ -95,6 +95,8 @@
     subscriptionRows: new Map(),
     premiumStatus: 'all',
     examinationData: null,
+    supportSearch: '',
+    supportOffset: 0,
     userSearch: '',
     userOffset: 0,
     userTotal: 0,
@@ -137,6 +139,8 @@
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
   }[character]));
   const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const SUPPORT_PAGE_SIZE = 100;
+  const ADMIN_OPERATIONAL_MAX_OFFSET = 1_000_000;
   const EARLY_ACCESS_PLAN = Object.freeze({
     id: 'early_access_beta',
     name: 'Early Access',
@@ -464,6 +468,33 @@
     const key = `${section}:${search || ''}`;
     if (!force && state.operational.has(key)) return state.operational.get(key);
     const payload = await readApi('/admin/data', { section, search, limit: 100, offset: 0 }, context);
+    assertRenderActive(context);
+    state.operational.set(key, payload.data);
+    return payload.data;
+  }
+
+  async function loadSupportQueue(
+    force = false,
+    search = state.supportSearch,
+    offset = state.supportOffset,
+    context = currentRenderContext(),
+  ) {
+    assertRenderActive(context);
+    const normalizedSearch = String(search || '').trim().slice(0, 180);
+    const requestedOffset = Number(offset);
+    const normalizedOffset = Math.min(
+      ADMIN_OPERATIONAL_MAX_OFFSET,
+      Math.max(0, Number.isFinite(requestedOffset) ? Math.trunc(requestedOffset) : 0),
+    );
+    const key = `support-queue:${normalizedSearch}:${normalizedOffset}`;
+    if (!force && state.operational.has(key)) return state.operational.get(key);
+    const payload = await readApi('/admin/data', {
+      section: 'support',
+      search: normalizedSearch || null,
+      limit: SUPPORT_PAGE_SIZE,
+      offset: normalizedOffset,
+    }, context);
+    requireVerifiedTotal(payload.data, 'The Support queue');
     assertRenderActive(context);
     state.operational.set(key, payload.data);
     return payload.data;
@@ -2134,19 +2165,41 @@
 
   async function renderSupport(context) {
     const [support, recovery] = await Promise.all([
-      loadOperational('support', false, null, context),
+      loadSupportQueue(false, state.supportSearch, state.supportOffset, context),
       has('account_recovery_admin') ? loadOperational('recovery', false, null, context) : Promise.resolve({ items: [], total: 0 }),
     ]);
     const supportRows = (support.items || []).map((row) => [
+      row.display_name || 'Not provided',
+      row.account_claimed_name || 'Not provided',
+      row.account_email || 'Not linked to an account',
+      row.reply_email || 'Not provided',
       humanizeAuditValue(row.category), row.message, humanizeAuditValue(row.priority),
       { html: true, value: `<span class="status ${row.overdue_24h ? 'danger' : 'warn'}">${escapeHtml(humanizeAuditValue(row.status))}</span>` },
       dateTime(row.created_at), row.overdue_24h ? 'Overdue' : 'Within target',
       actionButton('Update', 'support_update', row.id, { status: row.status, priority: row.priority }),
     ]);
+    const supportTotal = Number(support.total) || 0;
+    const pageStart = supportRows.length ? state.supportOffset + 1 : 0;
+    const pageEnd = supportRows.length ? state.supportOffset + supportRows.length : 0;
+    const canGoBack = state.supportOffset > 0;
+    const canGoForward = pageEnd < supportTotal;
     return `
       ${heading('Support', 'Resolve only what is necessary. Support messages may contain personal information and are limited to approved administrators.')}
       <div class="notice"><strong>Public recovery copy:</strong> Contact Support. We respond within 24 hours.</div>
-      ${table(['Category', 'Message', 'Priority', 'Status', 'Created', '24-hour target', 'Action'], supportRows)}
+      <div class="notice"><strong>Name provenance:</strong> Profile name is the linked DueDiligence profile. Account-provided name comes from user-editable sign-in metadata and is not independently verified.</div>
+      <div class="table-tools">
+        <input id="support-search" type="search" maxlength="180" value="${escapeHtml(state.supportSearch)}" placeholder="Search case, name, email, category, status, or message" aria-label="Search support cases">
+        <button class="secondary-button" id="support-search-button" type="button">Search</button>
+        <button class="secondary-button" id="support-search-clear" type="button"${state.supportSearch ? '' : ' hidden'}>Clear</button>
+      </div>
+      <div class="pagination-bar">
+        <p class="panel-note" id="support-progress" role="status">Showing ${number(pageStart)}–${number(pageEnd)} of ${number(supportTotal)} matching support case(s).</p>
+        <div class="row-actions">
+          <button class="secondary-button" id="support-previous" type="button"${canGoBack ? '' : ' disabled'}>Previous</button>
+          <button class="secondary-button" id="support-next" type="button"${canGoForward ? '' : ' disabled'}>Next</button>
+        </div>
+      </div>
+      ${table(['Profile name', 'Account-provided name', 'Account email', 'Reply email', 'Category', 'Message', 'Priority', 'Status', 'Created', '24-hour target', 'Action'], supportRows)}
       <section class="panel">
         <h3>Account help cases</h3>
         <div class="notice danger">Final account transfer is disabled because the current Google sign-in handoff has not been proven safe.</div>
@@ -4538,6 +4591,33 @@
       else toast('Your administrator role does not have access to that section.');
     }));
     bindAdminActionButtons();
+    const submitSupportSearch = async () => {
+      state.supportSearch = String($('#support-search')?.value || '').trim().slice(0, 180);
+      state.supportOffset = 0;
+      await navigateSection('support', 'replace');
+    };
+    $('#support-search-button')?.addEventListener('click', submitSupportSearch);
+    $('#support-search')?.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      submitSupportSearch();
+    });
+    $('#support-search-clear')?.addEventListener('click', async () => {
+      state.supportSearch = '';
+      state.supportOffset = 0;
+      await navigateSection('support', 'replace');
+    });
+    $('#support-previous')?.addEventListener('click', async () => {
+      state.supportOffset = Math.max(0, state.supportOffset - SUPPORT_PAGE_SIZE);
+      await navigateSection('support', 'replace');
+    });
+    $('#support-next')?.addEventListener('click', async () => {
+      state.supportOffset = Math.min(
+        ADMIN_OPERATIONAL_MAX_OFFSET,
+        state.supportOffset + SUPPORT_PAGE_SIZE,
+      );
+      await navigateSection('support', 'replace');
+    });
     $('#recent-user-search-button')?.addEventListener('click', async () => {
       state.recentUserSearch = $('#recent-user-search')?.value?.trim() || '';
       state.recentUserOffset = 0;

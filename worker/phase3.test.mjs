@@ -140,6 +140,29 @@ test('commercial Admin data permits only the two explicit reporting scopes', () 
 
 test('operational sections and administrator actions are allowlisted', () => {
   assert.equal(normalizeOperationalRequest({ section: 'support' }).section, 'support');
+  assert.deepEqual(normalizeOperationalRequest({
+    section: 'support',
+    search: '  pending student  ',
+    limit: 25.9,
+    offset: 1_500_000.8,
+  }), {
+    section: 'support',
+    search: 'pending student',
+    limit: 25,
+    offset: 1_000_000,
+  });
+  assert.equal(normalizeOperationalRequest({
+    section: 'support',
+    offset: -100,
+  }).offset, 0);
+  assert.throws(() => normalizeOperationalRequest({
+    section: 'support',
+    search: 'x'.repeat(181),
+  }), AdminValidationError);
+  assert.throws(() => normalizeOperationalRequest({
+    section: 'support',
+    search: 'student\nemail@example.com',
+  }), AdminValidationError);
   assert.throws(() => normalizeOperationalRequest({ section: 'raw_sql' }), AdminValidationError);
   const action = normalizeAdminAction({
     action: 'support_update',
@@ -551,6 +574,65 @@ const workerEnv = {
   SUPABASE_SERVICE_ROLE_KEY: 'synthetic-service-role',
   GUEST_USAGE_HMAC_KEY: 'synthetic-hmac',
 };
+
+test('Support Admin data uses the audited identity queue RPC', async () => {
+  const originalFetch = globalThis.fetch;
+  let rpcBody;
+  globalThis.fetch = async (input, init = {}) => {
+    const url = String(input);
+    if (url.endsWith('/auth/v1/user')) {
+      return Response.json({ id: '91000000-0000-4000-8000-000000000001' });
+    }
+    if (url.endsWith('/rest/v1/rpc/admin_support_queue_v1')) {
+      rpcBody = JSON.parse(init.body);
+      return Response.json({
+        section: 'support',
+        total: 201,
+        limit: 100,
+        offset: 100,
+        items: [{
+          id: '92000000-0000-4000-8000-000000000001',
+          user_id: '93000000-0000-4000-8000-000000000001',
+          display_name: 'Synthetic Student',
+          account_claimed_name: 'Student-entered Name',
+          account_email: 'student@example.com',
+          reply_email: 'reply@example.com',
+        }],
+      });
+    }
+    throw new Error(`Unexpected fetch: ${url}`);
+  };
+  try {
+    const response = await worker.fetch(new Request('https://worker.example/admin/data', {
+      method: 'POST',
+      headers: {
+        Origin: 'https://duediligence.ph',
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer synthetic-user-token',
+        'X-Request-ID': 'support_identity_test_0001',
+      },
+      body: JSON.stringify({
+        section: 'support',
+        search: 'student@example.com',
+        limit: 100,
+        offset: 100,
+      }),
+    }), workerEnv);
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(body.data.items[0].display_name, 'Synthetic Student');
+    assert.equal(body.data.items[0].account_claimed_name, 'Student-entered Name');
+    assert.deepEqual(rpcBody, {
+      p_actor_user_id: '91000000-0000-4000-8000-000000000001',
+      p_search: 'student@example.com',
+      p_limit: 100,
+      p_offset: 100,
+      p_request_key: 'support_identity_test_0001',
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 
 test('commercial Admin route forwards the explicit scope to the scoped RPC', async () => {
   const originalFetch = globalThis.fetch;

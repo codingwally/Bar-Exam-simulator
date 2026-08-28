@@ -19,12 +19,12 @@
     }),
     examinations: Object.freeze({
       styles: [
-        'assets/examinations.css?v=public-reliability-20260827-1',
+        'assets/examinations.css?v=public-reliability-20260827-1&results=history-20260828-1',
         'assets/study-workspace.css?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4&feedback=offline-save-20260827-1',
       ],
       scripts: [
         'assets/study-workspace.js?v=syllabus-reveal-p0-20260826-2&feedback=offline-save-20260827-1',
-        'assets/examinations.js?v=pedro-release2-20260827-1&baseline=public-reliability-20260827-1&hotfix=ian-provisional-reveal-20260828-1&recovery=subject-review-timeout-20260828-1',
+        'assets/examinations.js?v=pedro-release2-20260827-1&baseline=public-reliability-20260827-1&hotfix=ian-provisional-reveal-20260828-1&recovery=subject-review-timeout-20260828-1&results=history-20260828-1',
       ],
     }),
     content: Object.freeze({

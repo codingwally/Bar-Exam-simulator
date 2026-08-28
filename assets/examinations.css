@@ -1016,6 +1016,112 @@ details[open] > summary .dd-subject-chevron {
   line-height: 1.65;
 }
 
+.dd-bar-history {
+  margin-top: 28px;
+  padding: 28px;
+  border: 1px solid #d4d9e1;
+  border-radius: 12px;
+  background: var(--dd-exam-paper);
+  box-shadow: 0 12px 32px rgba(20, 36, 59, .06);
+}
+
+.dd-bar-history-heading h2 {
+  margin: 0 0 8px;
+  color: var(--dd-exam-navy);
+  font: 700 27px/1.2 "Playfair Display", Georgia, serif;
+}
+
+.dd-bar-history-heading p:last-child,
+.dd-bar-history-copy > p,
+.dd-bar-history-empty {
+  color: #526076;
+  line-height: 1.6;
+}
+
+.dd-bar-history-heading .dd-bar-history-count {
+  margin: 10px 0 0;
+  color: #667286;
+  font-size: 13px;
+}
+
+.dd-bar-history-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.dd-bar-history-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(190px, auto);
+  gap: 20px;
+  align-items: center;
+  padding: 18px;
+  border: 1px solid #dde2e9;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.dd-bar-history-title {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.dd-bar-history-title h3 {
+  margin: 0;
+  color: var(--dd-exam-navy);
+  font-size: 18px;
+}
+
+.dd-bar-history-copy > p {
+  margin: 6px 0;
+}
+
+.dd-bar-history-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  color: #667286;
+  font-size: 13px;
+}
+
+.dd-bar-history-actions {
+  justify-content: flex-end;
+}
+
+.dd-bar-history-pagination {
+  justify-content: center;
+  margin-top: 18px;
+}
+
+.dd-bar-history-empty {
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px dashed #c9d0da;
+  border-radius: 10px;
+  background: #fff;
+}
+
+@media (max-width: 720px) {
+  .dd-bar-history {
+    padding: 20px;
+  }
+
+  .dd-bar-history-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dd-bar-history-title {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .dd-bar-history-actions {
+    justify-content: flex-start;
+  }
+}
+
 .dd-upload-drop {
   display: grid;
   place-items: center;

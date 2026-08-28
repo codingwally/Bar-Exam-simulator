@@ -118,6 +118,72 @@ test('authenticated examination catalog reaches only the allowlisted RPC', async
   });
 });
 
+test('Bar Simulation history is owner-authorized and read from the track-filtered RPC', async () => {
+  await withFetchMock(async (url, options = {}) => {
+    const auth = authResponse(url);
+    if (auth) return auth;
+    const target = String(url);
+    const payload = JSON.parse(options.body);
+    if (target === `${supabaseUrl}/rest/v1/rpc/examination_authorize_access`) {
+      assert.deepEqual(payload, {
+        p_user_id: userId,
+        p_track: 'bar_feels',
+        p_version_id: null,
+        p_attempt_id: null,
+        p_allow_historical: true,
+      });
+      return Response.json({ allowed: true, basis: 'historical_owner', track: 'bar_feels' });
+    }
+    assert.equal(target, `${supabaseUrl}/rest/v1/rpc/examination_history_by_track_v1`);
+    assert.deepEqual(payload, {
+      p_user_id: userId,
+      p_track: 'bar_feels',
+      p_limit: 50,
+      p_offset: 0,
+    });
+    return Response.json({
+      track: 'bar_feels',
+      limit: 50,
+      offset: 0,
+      total: 75,
+      hasMore: true,
+      items: [{ attemptId, track: 'bar_feels', status: 'submitted' }],
+    });
+  }, async () => {
+    const response = await worker.fetch(request('/examinations/query', {
+      operation: 'history',
+      track: 'bar_feels',
+      limit: 50,
+      offset: 0,
+    }), env);
+    const body = await response.json();
+    assert.equal(response.status, 200, JSON.stringify(body));
+    assert.equal(body.data.track, 'bar_feels');
+    assert.equal(body.data.total, 75);
+    assert.equal(body.data.hasMore, true);
+    assert.equal(body.data.items[0].attemptId, attemptId);
+  });
+});
+
+test('examination history rejects an explicitly invalid track before database access', async () => {
+  let fetchCalls = 0;
+  await withFetchMock(async () => {
+    fetchCalls += 1;
+    throw new Error('Invalid history input must fail before authentication or storage access.');
+  }, async () => {
+    const response = await worker.fetch(request('/examinations/query', {
+      operation: 'history',
+      track: 'all',
+      limit: 50,
+      offset: 0,
+    }), env);
+    const body = await response.json();
+    assert.equal(response.status, 400, JSON.stringify(body));
+    assert.equal(body.error.code, 'INVALID_EXAMINATION_TRACK');
+  });
+  assert.equal(fetchCalls, 0);
+});
+
 test('already-owned attempt continuation commands stay historical after current access ends', async () => {
   const operations = [
     {
@@ -672,6 +738,119 @@ test(`${track} AI completion suppresses email without calling a provider or fail
   });
 });
 }
+
+test('3-of-20 token exhaustion fails truthfully and resumes at question four after access changes', async () => {
+  let failedJob = null;
+  let providerCalls = 0;
+  let gradingRequests = 0;
+  let reservationRequests = 0;
+  let persistedAssessment = null;
+  await withFetchMock(async (url, options = {}) => {
+    const target = String(url);
+    const auth = authResponse(url);
+    if (auth) return auth;
+    if (target === `${supabaseUrl}/rest/v1/rpc/examination_authorize_access`) {
+      return Response.json({ allowed: true, basis: 'current_owner', track: 'bar_feels' });
+    }
+    if (target === `${supabaseUrl}/rest/v1/rpc/examination_command`) {
+      gradingRequests += 1;
+      return Response.json({
+        jobId,
+        attemptId,
+        status: gradingRequests === 1 ? 'processing' : 'queued',
+        completedQuestions: 3,
+        questionCount: 20,
+        questions: [{ questionId: versionId }],
+      });
+    }
+    if (target === `${supabaseUrl}/rest/v1/rpc/phase4_reserve_grade_v2`) {
+      reservationRequests += 1;
+      const payload = JSON.parse(options.body);
+      assert.equal(payload.p_user_id, userId);
+      assert.equal(payload.p_question_bank_id, versionId);
+      assert.equal(payload.p_examination_track, 'bar_feels');
+      if (reservationRequests === 1) {
+        assert.equal(payload.p_request_key, 'route_subject_ai_denied_0001');
+        return Response.json({
+          allowed: false,
+          basis: 'trial_tokens_exhausted',
+          tokenLimit: 5,
+          tokensRemaining: 0,
+          reservationId: null,
+        });
+      }
+      assert.equal(payload.p_request_key, 'route_subject_ai_recovered_0002');
+      return Response.json({
+        allowed: true,
+        basis: 'early_access',
+        unlimited: true,
+        reservationId: '66666666-6666-4666-8666-666666666666',
+      });
+    }
+    if (target === `${supabaseUrl}/rest/v1/rpc/examination_fail_ai_job`) {
+      failedJob = JSON.parse(options.body);
+      return Response.json(null);
+    }
+    if (target.includes('generativelanguage.googleapis.com')) {
+      providerCalls += 1;
+      return Response.json({
+        candidates: [{ content: { parts: [{ text: JSON.stringify(examinationAssessment()) }] } }],
+      });
+    }
+    if (target === `${supabaseUrl}/rest/v1/rpc/examination_store_ai_assessment_commercial`) {
+      persistedAssessment = JSON.parse(options.body);
+      return Response.json({
+        jobId,
+        attemptId,
+        status: 'processing',
+        completedQuestions: 4,
+        questionCount: 20,
+        modelsReleased: false,
+        access: { allowed: true, basis: 'early_access', unlimited: true },
+      });
+    }
+    throw new Error(`Unexpected request: ${target}`);
+  }, async () => {
+    const deniedResponse = await worker.fetch(request('/examinations/command', {
+      operation: 'request_ai_grading',
+      attemptId,
+      requestKey: 'route_subject_ai_denied_0001',
+    }), env);
+    const deniedBody = await deniedResponse.json();
+    assert.equal(deniedResponse.status, 403, JSON.stringify(deniedBody));
+    assert.equal(deniedBody.error.code, 'INTRODUCTORY_TOKENS_EXHAUSTED');
+    assert.match(deniedBody.error.message, /five one-time practice tokens have been used/i);
+    assert.deepEqual(failedJob, {
+      p_user_id: userId,
+      p_job_id: jobId,
+      p_safe_error_code: 'INTRODUCTORY_TOKENS_EXHAUSTED',
+    });
+    assert.equal(providerCalls, 0, 'token exhaustion must stop before provider grading');
+
+    const recoveredResponse = await worker.fetch(request('/examinations/command', {
+      operation: 'request_ai_grading',
+      attemptId,
+      requestKey: 'route_subject_ai_recovered_0002',
+    }), {
+      ...env,
+      GEMINI_API_KEY: 'test-only-gemini-key',
+      GEMINI_MODEL: 'gemini-test',
+      GEMINI_GROUNDING_ENABLED: 'false',
+    });
+    const recoveredBody = await recoveredResponse.json();
+    assert.equal(recoveredResponse.status, 200, JSON.stringify(recoveredBody));
+    assert.equal(recoveredBody.data.status, 'processing');
+    assert.equal(recoveredBody.data.completedQuestions, 4);
+    assert.equal(recoveredBody.data.questionCount, 20);
+    assert.equal(providerCalls, 1);
+    assert.equal(
+      persistedAssessment.p_reservation_id,
+      '66666666-6666-4666-8666-666666666666',
+    );
+    assert.equal(persistedAssessment.p_job_id, jobId);
+    assert.equal(persistedAssessment.p_question_id, versionId);
+  });
+});
 
 test('Human Examiner assignment returns a manual link without calling an email provider', async () => {
   const assignmentId = '55555555-5555-4555-8555-555555555555';

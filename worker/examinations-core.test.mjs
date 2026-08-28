@@ -73,6 +73,37 @@ test('query operations normalize catalog and private assignment tokens', () => {
     subject: 'Criminal Law I',
     limit: 25,
   });
+  assert.deepEqual(normalizeExaminationQuery({
+    operation: 'history',
+    track: 'bar_feels',
+    limit: 50,
+    offset: 0,
+  }), {
+    operation: 'history',
+    track: 'bar_feels',
+    limit: 50,
+    offset: 0,
+    attemptId: null,
+  });
+  assert.deepEqual(normalizeExaminationQuery({
+    operation: 'history',
+  }), {
+    operation: 'history',
+    track: null,
+    limit: 30,
+    offset: 0,
+    attemptId: null,
+  });
+  throwsCode(() => normalizeExaminationQuery({
+    operation: 'history',
+    track: 'all',
+    limit: 50,
+    offset: 0,
+  }), 'INVALID_EXAMINATION_TRACK');
+  throwsCode(() => normalizeExaminationQuery({
+    operation: 'history',
+    track: null,
+  }), 'INVALID_EXAMINATION_TRACK');
 });
 
 test('Subject Matter complete review reveal requires only a valid attempt identifier', () => {

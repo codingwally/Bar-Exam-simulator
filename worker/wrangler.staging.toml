@@ -1,6 +1,7 @@
 name = "duediligence-examinations-staging"
 main = "commercial-entry.mjs"
 compatibility_date = "2026-07-26"
+compatibility_flags = ["nodejs_compat"]
 preview_urls = true
 
 [placement]
@@ -39,6 +40,11 @@ BAR_QUESTION_PRACTICE_RANDOMIZATION_V2_ENABLED = "true"
 SYLLABUS_BASED_REVIEW_RANDOMIZATION_V2_ENABLED = "true"
 BAR_EXAM_SIMULATION_RANDOMIZATION_V1_SCHEMA_READY = "true"
 BAR_EXAM_SIMULATION_RANDOMIZATION_V1_ENABLED = "true"
+STUDY_ROOM_ENABLED = "true"
+STUDY_ROOM_NAME = "dd-study-room-admin-beta-staging-v1"
+
+[secrets]
+required = ["LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET"]
 
 [assets]
 directory = "../.staging-dist"
@@ -67,3 +73,6 @@ crons = ["*/2 * * * *"]
 # GOOGLE_OAUTH_CLIENT_ID
 # GOOGLE_OAUTH_CLIENT_SECRET
 # GOOGLE_OAUTH_REFRESH_TOKEN
+# LIVEKIT_URL
+# LIVEKIT_API_KEY
+# LIVEKIT_API_SECRET

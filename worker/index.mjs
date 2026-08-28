@@ -177,6 +177,8 @@ import {
 } from './duediligence-2026-core.mjs';
 import { createDD2026Handlers } from './duediligence-2026-routes.mjs';
 import { createAuxiliaryWritingDiagnosticsHandlers } from './auxiliary-writing-diagnostics-routes.mjs';
+import { StudyRoomError } from './study-room-core.mjs';
+import { createStudyRoomHandlers } from './study-room-routes.mjs';
 import {
   EXAMINATION_ROOM_V1_PATHS,
   ExaminationRoomV1RouteError,
@@ -245,6 +247,9 @@ const correctionRateWindows = new Map();
 const supportRateWindows = new Map();
 const analyticsRateWindows = new Map();
 const adminRateWindows = new Map();
+const studyRoomAccessRateWindows = new Map();
+const studyRoomJoinRateWindows = new Map();
+const studyRoomModerationRateWindows = new Map();
 const guestStatusRateWindows = new Map();
 const paymentRateWindows = new Map();
 const partnershipRateWindows = new Map();
@@ -9256,6 +9261,38 @@ async function resolveVerdictQuestion(questionId, env) {
   return questionFromBankRow(records.get(String(questionId || '')));
 }
 
+async function enforceStudyRoomRateLimit(request, env, scope) {
+  const policies = {
+    access: [studyRoomAccessRateWindows, 60],
+    join: [studyRoomJoinRateWindows, 20],
+    moderate: [studyRoomModerationRateWindows, 60],
+  };
+  const policy = policies[scope];
+  if (!policy) {
+    throw new StudyRoomError(
+      'STUDY_ROOM_OPERATION_UNSUPPORTED',
+      'That Study Room operation is not available.',
+      400,
+    );
+  }
+  enforceWindow(
+    policy[0],
+    await transientRateKey(request, env, `study-room-${scope}`),
+    policy[1],
+    'Too many Study Room requests. Please wait and try again.',
+  );
+}
+
+const studyRoomHandlers = createStudyRoomHandlers({
+  authenticate: verifiedAuthenticatedUser,
+  authorizeAdmin: (env, user) => protectedSupabaseRpc(env, 'admin_authorization_context', {
+    p_actor_user_id: user.id,
+  }),
+  parseJson: parseBoundedJson,
+  rateLimit: enforceStudyRoomRateLimit,
+  respond: jsonResponse,
+});
+
 const dd2026Handlers = createDD2026Handlers({
   corsHeaders,
   dd2026Rpc,
@@ -9679,6 +9716,15 @@ export default {
       if (pathname === '/admin/session') {
         return await handleAdminSession(request, env, origin, allowedOrigin);
       }
+      if (pathname === '/admin/study-room/access') {
+        return await studyRoomHandlers.access(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/study-room/join') {
+        return await studyRoomHandlers.join(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/study-room/moderate') {
+        return await studyRoomHandlers.moderate(request, env, origin, allowedOrigin);
+      }
       if (pathname === '/admin/forum/queue') {
         return await handleForumAdminQueue(request, env, origin, allowedOrigin);
       }
@@ -9765,7 +9811,8 @@ export default {
         || error instanceof ForumValidationError
         || error instanceof ExaminationValidationError
         || error instanceof ReleaseContentError
-        || error instanceof DD2026ValidationError;
+        || error instanceof DD2026ValidationError
+        || error instanceof StudyRoomError;
       const errorResponse = jsonResponse({
         ok: false,
         error: {
@@ -9780,6 +9827,9 @@ export default {
           ...(known && error.retryable === true ? { retryable: true } : {}),
           ...(known && Number.isSafeInteger(error.retryAfterSeconds)
             ? { retryAfterSeconds: Number(error.retryAfterSeconds) }
+            : {}),
+          ...(error instanceof StudyRoomError && error.recovery
+            ? { recovery: String(error.recovery) }
             : {}),
         },
       }, known ? error.status : 500, requestOrigin, allowedOrigin);

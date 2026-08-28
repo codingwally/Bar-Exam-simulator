@@ -67,6 +67,11 @@ assert.match(client, /DueDiligenceSubscriptionCta\?\.isAudienceEligible\?\.\(val
 assert.match(client, /const subscribed = known && !eligible/);
 assert.match(client, /subscribe\.disabled = !eligible/);
 assert.match(client, /subscribed \? 'Already subscribed' : 'Subscribe now'/);
+assert.match(client, /signedIn\(\) && isAdmin\(access\)[\s\S]*openAdminRoom\(trigger\)/);
+assert.match(client, /new URL\('\/study-room\/', global\.location\.origin\)/);
+assert.match(client, /popup\.opener = null/);
+assert.match(client, /popup\.location\.replace\(roomUrl\.href\)/);
+assert.match(client, /Allow pop-ups for Due Diligence/);
 assert.match(client, /return openMarketingPreview\(trigger\)/);
 assert.match(client, /target\?\.click\(\)/);
 assert.match(client, /study_room_preview_opened/);
@@ -113,8 +118,6 @@ for (const forbidden of [
   /home-current/,
   /\blocalhost\b/,
   /127\.0\.0\.1/,
-  /\/study-room\//,
-  /(?:global|window)\.open\s*\(/,
   /\bfetch\s*\(/,
   /\.rpc\s*\(/,
   /navigator\.mediaDevices/,

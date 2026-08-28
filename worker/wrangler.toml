@@ -1,6 +1,7 @@
 name = "duediligence-gemini-examiner"
 main = "maintenance-entry.mjs"
 compatibility_date = "2026-07-26"
+compatibility_flags = ["nodejs_compat"]
 preview_urls = false
 
 [placement]
@@ -43,6 +44,11 @@ BAR_QUESTION_PRACTICE_RANDOMIZATION_V2_ENABLED = "true"
 SYLLABUS_BASED_REVIEW_RANDOMIZATION_V2_ENABLED = "true"
 BAR_EXAM_SIMULATION_RANDOMIZATION_V1_SCHEMA_READY = "true"
 BAR_EXAM_SIMULATION_RANDOMIZATION_V1_ENABLED = "true"
+STUDY_ROOM_ENABLED = "true"
+STUDY_ROOM_NAME = "dd-study-room-admin-beta-prod-v1"
+
+[secrets]
+required = ["LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET"]
 
 [observability]
 enabled = true
@@ -73,6 +79,9 @@ crons = ["*/2 * * * *"]
 # ADMIN_DIRECTORY_RECIPIENTS_JSON must remain a Cloudflare secret containing
 # only the approved founder recipient-key to personal-email mapping.
 # SUPABASE_URL must be configured as a Worker environment variable.
+# LIVEKIT_URL, LIVEKIT_API_KEY, and LIVEKIT_API_SECRET must remain Cloudflare
+# secrets. They are injected atomically by the Study Room release workflow and
+# are never exposed in Pages, logs, or committed configuration.
 # Never add secret values to this file.
 # Google OAuth client ID, client secret, and refresh token must remain encrypted
 # Worker secrets for the retained content synchronization path.

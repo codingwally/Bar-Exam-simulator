@@ -1,0 +1,474 @@
+name: Release Study Room admin beta
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Deploy the isolated Study Room release to staging or production"
+        required: true
+        default: staging
+        type: choice
+        options:
+          - staging
+          - production
+      confirm_release:
+        description: "I confirm this release is limited to the reviewed Study Room files"
+        required: true
+        default: false
+        type: boolean
+      expected_current_pages_sha:
+        description: "Exact SHA currently serving duediligence.ph"
+        required: true
+        type: string
+      approval_reference:
+        description: "Approval/change reference for this Study Room release"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  deployments: read
+
+concurrency:
+  group: examination-room-production-cutover
+  cancel-in-progress: false
+
+jobs:
+  verify_release:
+    name: Verify the isolated Study Room release
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout the exact release commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Enforce authorization, main, and the deployed baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CONFIRM_RELEASE: ${{ inputs.confirm_release }}
+          EXPECTED_CURRENT_PAGES_SHA: ${{ inputs.expected_current_pages_sha }}
+          APPROVAL_REFERENCE: ${{ inputs.approval_reference }}
+          RELEASE_TARGET: ${{ inputs.target }}
+          STAGING_MARKER_ENVIRONMENT: study-room-admin-beta-staging-approved
+          STAGING_MARKER_TASK: study-room-admin-beta-staging-gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "codingwally/Bar-Exam-simulator"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$GITHUB_ACTOR" != "dependabot[bot]"
+          test "$CONFIRM_RELEASE" = "true"
+          test -n "${APPROVAL_REFERENCE//[[:space:]]/}"
+          [[ "$EXPECTED_CURRENT_PAGES_SHA" =~ ^[0-9a-f]{40}$ ]]
+          git cat-file -e "$EXPECTED_CURRENT_PAGES_SHA^{commit}"
+          git merge-base --is-ancestor "$EXPECTED_CURRENT_PAGES_SHA" "$GITHUB_SHA"
+          deployed_sha=""
+          while IFS=$'\t' read -r deployment_id deployment_sha; do
+            deployment_state="$(gh api "repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses?per_page=1" --jq '.[0].state')"
+            if [[ "$deployment_state" == "success" ]]; then
+              deployed_sha="$deployment_sha"
+              break
+            fi
+          done < <(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=10" --jq '.[] | [.id, .sha] | @tsv')
+          test -n "$deployed_sha"
+          if [[ "$deployed_sha" != "$EXPECTED_CURRENT_PAGES_SHA" ]]; then
+            echo "The live Pages SHA changed. Stop and review the newer deployment before releasing Study Room." >&2
+            exit 1
+          fi
+          if [[ "$RELEASE_TARGET" == "production" ]]; then
+            marker_json="$(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=$STAGING_MARKER_ENVIRONMENT&sha=$GITHUB_SHA&task=$STAGING_MARKER_TASK&per_page=1")"
+            marker_id="$(jq -r '.[0].id // empty' <<<"$marker_json")"
+            marker_sha="$(jq -r '.[0].sha // empty' <<<"$marker_json")"
+            marker_task="$(jq -r '.[0].task // empty' <<<"$marker_json")"
+            if [[ -z "$marker_id" || "$marker_sha" != "$GITHUB_SHA" || "$marker_task" != "$STAGING_MARKER_TASK" ]]; then
+              echo "Production requires the successful Study Room staging marker for this exact SHA." >&2
+              exit 1
+            fi
+            marker_state="$(gh api "repos/$GITHUB_REPOSITORY/deployments/$marker_id/statuses?per_page=1" --jq '.[0].state // empty')"
+            if [[ "$marker_state" != "success" ]]; then
+              echo "The exact-SHA Study Room staging marker is not successful." >&2
+              exit 1
+            fi
+          fi
+
+      - name: Enforce the Study Room-only diff
+        env:
+          EXPECTED_CURRENT_PAGES_SHA: ${{ inputs.expected_current_pages_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          allowed='^(\.github/workflows/release-study-room-admin-beta\.yml|assets/study-room-live\.(css|js)|assets/study-room-preview\.js|index\.html|scripts/build-pages-artifact\.mjs|scripts/test-pages-artifact\.mjs|scripts/test-study-room-(deployment-smoke|live|preview|release-workflow)\.mjs|study-room/index\.html|worker/index\.mjs|worker/livekit-credentials-smoke(\.test)?\.mjs|worker/package(-lock)?\.json|worker/study-room-(core|routes|staging-positive-smoke|test)\.mjs|worker/wrangler(\.staging)?\.toml)$'
+          changed="$(git diff --name-only "$EXPECTED_CURRENT_PAGES_SHA" "$GITHUB_SHA")"
+          test -n "$changed"
+          unexpected="$(printf '%s\n' "$changed" | grep -Ev "$allowed" || true)"
+          if [[ -n "$unexpected" ]]; then
+            echo "The release contains files outside the approved Study Room boundary:" >&2
+            printf '%s\n' "$unexpected" >&2
+            exit 1
+          fi
+          deleted="$(git diff --diff-filter=D --name-only "$EXPECTED_CURRENT_PAGES_SHA" "$GITHUB_SHA")"
+          if [[ -n "$deleted" ]]; then
+            echo "The isolated Study Room release may not delete files." >&2
+            exit 1
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install reviewed Worker dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Verify Study Room and existing Worker contracts
+        run: |
+          set -euo pipefail
+          node --check assets/study-room-live.js
+          node --check assets/study-room-preview.js
+          node --check worker/index.mjs
+          node --check worker/study-room-core.mjs
+          node --check worker/study-room-routes.mjs
+          node --check worker/livekit-credentials-smoke.mjs
+          node --check worker/study-room-staging-positive-smoke.mjs
+          node scripts/test-study-room-preview.mjs
+          node scripts/test-study-room-live.mjs
+          node scripts/test-study-room-release-workflow.mjs
+          node worker/study-room-staging-positive-smoke.mjs --preflight
+          node worker/study-room-staging-positive-smoke.mjs --self-test
+          node --test worker/*.test.mjs
+          node scripts/test-pages-artifact.mjs
+          npm audit --prefix worker --audit-level=high
+          npm audit --prefix worker --omit=dev --audit-level=high
+
+  deploy_staging:
+    name: Deploy and verify the admin beta on staging
+    if: inputs.target == 'staging'
+    needs: verify_release
+    environment: staging-e2e
+    permissions:
+      contents: read
+      deployments: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout the verified release commit
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install reviewed Worker dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Resolve the existing staging publishable configuration
+        env:
+          CONFIGURED_STAGING_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          staging_publishable_key="$CONFIGURED_STAGING_PUBLISHABLE_KEY"
+          if [[ -z "$staging_publishable_key" ]]; then
+            staging_publishable_key="$(node --input-type=module -e "const response = await fetch('https://duediligence-examinations-staging.wallyesteban1993.workers.dev/assets/phase2-config.js', { headers: { 'cache-control': 'no-cache' } }); if (!response.ok) process.exit(1); const source = await response.text(); const match = source.match(/sb_publishable_[A-Za-z0-9_-]{20,}/); if (!match) process.exit(1); process.stdout.write(match[0]);")"
+          fi
+          [[ "$staging_publishable_key" =~ ^sb_publishable_[A-Za-z0-9_-]{20,}$ ]]
+          echo "::add-mask::$staging_publishable_key"
+          echo "STAGING_SUPABASE_PUBLISHABLE_KEY=$staging_publishable_key" >> "$GITHUB_ENV"
+
+      - name: Build and verify the isolated staging artifact
+        run: node scripts/test-staging-artifact.mjs
+
+      - name: Prepare an ephemeral LiveKit secret file
+        env:
+          LIVEKIT_URL: ${{ secrets.LIVEKIT_URL }}
+          LIVEKIT_API_KEY: ${{ secrets.LIVEKIT_API_KEY }}
+          LIVEKIT_API_SECRET: ${{ secrets.LIVEKIT_API_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          secret_file="$RUNNER_TEMP/study-room-livekit-secrets.json"
+          LIVEKIT_SECRET_FILE="$secret_file" node --input-type=module <<'NODE'
+          import { writeFile } from 'node:fs/promises';
+          const names = ['LIVEKIT_URL', 'LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET'];
+          const values = Object.fromEntries(names.map((name) => [name, String(process.env[name] || '').trim()]));
+          if (Object.values(values).some((value) => !value)) throw new Error('The LiveKit release secrets are incomplete.');
+          await writeFile(process.env.LIVEKIT_SECRET_FILE, JSON.stringify(values), { mode: 0o600 });
+          NODE
+          echo "LIVEKIT_SECRET_FILE=$secret_file" >> "$GITHUB_ENV"
+
+      - name: Verify LiveKit credentials without exposing them
+        env:
+          LIVEKIT_URL: ${{ secrets.LIVEKIT_URL }}
+          LIVEKIT_API_KEY: ${{ secrets.LIVEKIT_API_KEY }}
+          LIVEKIT_API_SECRET: ${{ secrets.LIVEKIT_API_SECRET }}
+          STUDY_ROOM_RELEASE_TARGET: staging
+        run: node worker/livekit-credentials-smoke.mjs
+
+      - name: Dry-run and deploy the staging Worker with its static room
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.114.0 deploy --config wrangler.staging.toml --secrets-file "$LIVEKIT_SECRET_FILE" --dry-run
+          npx --yes wrangler@4.114.0 deploy --config wrangler.staging.toml --secrets-file "$LIVEKIT_SECRET_FILE"
+
+      - name: Remove the ephemeral secret file
+        if: always()
+        shell: bash
+        run: rm -f -- "$LIVEKIT_SECRET_FILE"
+
+      - name: Verify staging access boundary and shipped room assets
+        env:
+          STUDY_ROOM_WORKER_URL: https://duediligence-examinations-staging.wallyesteban1993.workers.dev
+          STUDY_ROOM_ALLOWED_ORIGIN: https://duediligence-examinations-staging.wallyesteban1993.workers.dev
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/test-study-room-deployment-smoke.mjs
+          curl --fail --silent --show-error "$STUDY_ROOM_WORKER_URL/study-room/" | grep -F '<title>Study Room — Due Diligence</title>'
+          curl --fail --silent --show-error "$STUDY_ROOM_WORKER_URL/assets/study-room-live.js" | grep -F '/admin/study-room/join'
+
+      - name: Verify authenticated admins and two-participant media on staging
+        env:
+          STAGING_SUPABASE_URL: https://hlzqmreeoghbldnhlybr.supabase.co
+          STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+          STAGING_EXAMINATION_WORKER_URL: https://duediligence-examinations-staging.wallyesteban1993.workers.dev
+          STAGING_EXAMINATION_ORIGIN: https://duediligence-examinations-staging.wallyesteban1993.workers.dev
+          LIVEKIT_API_KEY: ${{ secrets.LIVEKIT_API_KEY }}
+        run: node worker/study-room-staging-positive-smoke.mjs
+
+      - name: Record the successful exact-SHA staging marker
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STAGING_MARKER_ENVIRONMENT: study-room-admin-beta-staging-approved
+          STAGING_MARKER_TASK: study-room-admin-beta-staging-gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          deployment_body="$(jq -nc \
+            --arg ref "$GITHUB_SHA" \
+            --arg environment "$STAGING_MARKER_ENVIRONMENT" \
+            --arg task "$STAGING_MARKER_TASK" \
+            --arg run_id "$GITHUB_RUN_ID" \
+            --arg run_attempt "$GITHUB_RUN_ATTEMPT" \
+            '{ref: $ref, environment: $environment, task: $task, auto_merge: false, required_contexts: [], transient_environment: false, production_environment: false, description: "Study Room staging smoke passed", payload: {release: "study-room-admin-beta", workflow_run_id: $run_id, workflow_run_attempt: $run_attempt}}')"
+          deployment_id="$(gh api "repos/$GITHUB_REPOSITORY/deployments" --method POST --input - --jq '.id' <<<"$deployment_body")"
+          test -n "$deployment_id"
+          status_body="$(jq -nc '{state: "success", description: "Exact-SHA staging smoke passed", auto_inactive: false}')"
+          gh api "repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses" --method POST --input - <<<"$status_body" >/dev/null
+
+  deploy_production_worker:
+    name: Deploy and verify the production Worker first
+    if: inputs.target == 'production'
+    needs: verify_release
+    environment: production-worker
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout the verified release commit
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install reviewed Worker dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Prepare an ephemeral LiveKit secret file
+        env:
+          LIVEKIT_URL: ${{ secrets.LIVEKIT_URL }}
+          LIVEKIT_API_KEY: ${{ secrets.LIVEKIT_API_KEY }}
+          LIVEKIT_API_SECRET: ${{ secrets.LIVEKIT_API_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          secret_file="$RUNNER_TEMP/study-room-livekit-secrets.json"
+          LIVEKIT_SECRET_FILE="$secret_file" node --input-type=module <<'NODE'
+          import { writeFile } from 'node:fs/promises';
+          const names = ['LIVEKIT_URL', 'LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET'];
+          const values = Object.fromEntries(names.map((name) => [name, String(process.env[name] || '').trim()]));
+          if (Object.values(values).some((value) => !value)) throw new Error('The LiveKit release secrets are incomplete.');
+          await writeFile(process.env.LIVEKIT_SECRET_FILE, JSON.stringify(values), { mode: 0o600 });
+          NODE
+          echo "LIVEKIT_SECRET_FILE=$secret_file" >> "$GITHUB_ENV"
+
+      - name: Verify LiveKit credentials without exposing them
+        env:
+          LIVEKIT_URL: ${{ secrets.LIVEKIT_URL }}
+          LIVEKIT_API_KEY: ${{ secrets.LIVEKIT_API_KEY }}
+          LIVEKIT_API_SECRET: ${{ secrets.LIVEKIT_API_SECRET }}
+          STUDY_ROOM_RELEASE_TARGET: production
+        run: node worker/livekit-credentials-smoke.mjs
+
+      - name: Dry-run the application Worker
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.114.0 deploy --secrets-file "$LIVEKIT_SECRET_FILE" --dry-run
+
+      - name: Recheck the live Pages baseline immediately before Worker mutation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_CURRENT_PAGES_SHA: ${{ inputs.expected_current_pages_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          deployed_sha=""
+          while IFS=$'\t' read -r deployment_id deployment_sha; do
+            deployment_state="$(gh api "repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses?per_page=1" --jq '.[0].state')"
+            if [[ "$deployment_state" == "success" ]]; then
+              deployed_sha="$deployment_sha"
+              break
+            fi
+          done < <(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=100" --jq '.[] | [.id, .sha] | @tsv')
+          test -n "$deployed_sha"
+          if [[ "$deployed_sha" != "$EXPECTED_CURRENT_PAGES_SHA" ]]; then
+            echo "The live Pages SHA changed immediately before the Worker release. No production mutation was made." >&2
+            exit 1
+          fi
+
+      - name: Deploy the application Worker
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.114.0 deploy --secrets-file "$LIVEKIT_SECRET_FILE"
+          npx --yes wrangler@4.114.0 deploy --config wrangler.public-api.toml
+
+      - name: Remove the ephemeral secret file
+        if: always()
+        shell: bash
+        run: rm -f -- "$LIVEKIT_SECRET_FILE"
+
+      - name: Verify the production access boundary before Pages
+        env:
+          STUDY_ROOM_WORKER_URL: https://duediligence-api.wallyesteban1993.workers.dev
+          STUDY_ROOM_ALLOWED_ORIGIN: https://duediligence.ph
+        run: node scripts/test-study-room-deployment-smoke.mjs
+
+  deploy_production_pages:
+    name: Deploy and verify the Study Room Pages client second
+    if: inputs.target == 'production'
+    needs: deploy_production_worker
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      deployments: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout the Worker-verified release commit
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install reviewed Worker dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Build and verify the sanitized Pages artifact
+        run: node scripts/test-pages-artifact.mjs
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload the isolated public artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .pages-dist
+
+      - name: Recheck the live Pages baseline inside the Pages lock
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_CURRENT_PAGES_SHA: ${{ inputs.expected_current_pages_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          deployed_sha=""
+          while IFS=$'\t' read -r deployment_id deployment_sha; do
+            deployment_state="$(gh api "repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses?per_page=1" --jq '.[0].state')"
+            if [[ "$deployment_state" == "success" ]]; then
+              deployed_sha="$deployment_sha"
+              break
+            fi
+          done < <(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=100" --jq '.[] | [.id, .sha] | @tsv')
+          test -n "$deployed_sha"
+          if [[ "$deployed_sha" != "$EXPECTED_CURRENT_PAGES_SHA" ]]; then
+            echo "The live Pages SHA changed while the Worker was being released. Preserve the newer Pages deployment and stop." >&2
+            exit 1
+          fi
+
+      - name: Deploy Pages after the Worker gate
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Verify the exact Pages SHA and live Study Room assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          latest_successful_pages_sha() {
+            local deployment_id deployment_sha deployment_state
+            while IFS=$'\t' read -r deployment_id deployment_sha; do
+              deployment_state="$(gh api "repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses?per_page=1" --jq '.[0].state')"
+              if [[ "$deployment_state" == "success" ]]; then
+                printf '%s' "$deployment_sha"
+                return 0
+              fi
+            done < <(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=100" --jq '.[] | [.id, .sha] | @tsv')
+            return 1
+          }
+          exact_sha_is_latest=false
+          for attempt in {1..12}; do
+            deployed_sha="$(latest_successful_pages_sha || true)"
+            if [[ "$deployed_sha" == "$GITHUB_SHA" ]]; then
+              exact_sha_is_latest=true
+              break
+            fi
+            sleep 5
+          done
+          if [[ "$exact_sha_is_latest" != "true" ]]; then
+            echo "The new Study Room SHA is not the latest successful Pages deployment." >&2
+            exit 1
+          fi
+          for attempt in {1..12}; do
+            room="$(curl --fail --silent --show-error -H 'Cache-Control: no-cache' "https://duediligence.ph/study-room/?release=$GITHUB_SHA" || true)"
+            live="$(curl --fail --silent --show-error -H 'Cache-Control: no-cache' "https://duediligence.ph/assets/study-room-live.js?release=$GITHUB_SHA" || true)"
+            home="$(curl --fail --silent --show-error -H 'Cache-Control: no-cache' "https://duediligence.ph/?release=$GITHUB_SHA" || true)"
+            if grep -Fq '<title>Study Room — Due Diligence</title>' <<<"$room" \
+              && grep -Fq '/admin/study-room/join' <<<"$live" \
+              && grep -Fq 'study-room-admin-window-20260829-1' <<<"$home"; then
+              echo "The Study Room page and admin-only window handoff are live at the exact release SHA."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "The production Pages deployment completed but the exact Study Room assets did not become visible in time." >&2
+          exit 1

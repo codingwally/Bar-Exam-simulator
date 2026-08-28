@@ -103,8 +103,34 @@
     return true;
   }
 
+  function openAdminRoom(trigger = null) {
+    const roomUrl = new URL('/study-room/', global.location.origin);
+    const popup = global.open(
+      'about:blank',
+      'DueDiligenceStudyRoom',
+      'popup=yes,width=1440,height=900,left=40,top=40,resizable=yes,scrollbars=yes',
+    );
+    if (!popup) {
+      openMarketingPreview(trigger);
+      setPreviewStatus('Allow pop-ups for Due Diligence, then choose Study Room again.');
+      return false;
+    }
+    try {
+      popup.opener = null;
+      popup.location.replace(roomUrl.href);
+      global.DueDiligenceAnalytics?.track?.('study_room_admin_window_opened');
+      return true;
+    } catch {
+      popup.close();
+      openMarketingPreview(trigger);
+      setPreviewStatus('The separate Study Room window could not open. Try again from this button.');
+      return false;
+    }
+  }
+
   function open(trigger = null) {
     access = accessWithVerifiedRole() || access;
+    if (signedIn() && isAdmin(access)) return openAdminRoom(trigger);
     return openMarketingPreview(trigger);
   }
 

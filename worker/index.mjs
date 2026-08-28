@@ -221,6 +221,17 @@ const GEMINI_TIMEOUT_MS = 45 * 1000;
 const SUBJECT_MATTER_TEACHING_TIMEOUT_MS = 8 * 1000;
 const GEMINI_TRANSIENT_ATTEMPTS = 2;
 const GEMINI_RETRY_DELAY_MS = 750;
+// Deliberate availability tradeoff: a successfully verified token can remain
+// accepted by the same warm isolate for at most 30 seconds after revocation,
+// deletion, or profile changes. Keep this TTL short and cache no failures or
+// identity that was not first verified by this project's Auth server.
+const AUTHENTICATED_USER_TOKEN_CACHE_TTL_MS = 30 * 1000;
+const AUTHENTICATED_USER_TOKEN_CACHE_MAX_ENTRIES = 512;
+const AUTHENTICATED_USER_TOKEN_CACHE_MAX_TOKEN_CHARS = 16 * 1024;
+const AUTHENTICATED_USER_VERIFICATION_TIMEOUT_MS = 5 * 1000;
+const AUTHENTICATED_USER_VERIFICATION_ATTEMPTS = 2;
+const AUTHENTICATED_USER_VERIFICATION_RETRY_DELAY_MS = 100;
+const AUTHENTICATED_USER_RESPONSE_MAX_BYTES = 256 * 1024;
 const WEBSITE_VISIBILITY_CACHE_URL = 'https://question-visibility-cache.invalid/v1.csv';
 const WEBSITE_BANK_MINIMUM_RECORDS = 320;
 const WEBSITE_BANK_MAXIMUM_RECORDS = 10_000;
@@ -247,6 +258,7 @@ const pedroWriteRateWindows = new Map();
 const recentSubmissions = new Map();
 const recentSignInNotificationSessions = new Map();
 const authenticatedUserCache = new WeakMap();
+const authenticatedUserTokenCache = new Map();
 let laborBankCache = null;
 let websiteBankCache = null;
 
@@ -266,6 +278,7 @@ function corsHeaders(origin, allowedOrigin) {
       'X-DD-Beta-Access',
       'X-DD-Beta-Flow-ID',
     ].join(', '),
+    'Access-Control-Expose-Headers': 'Retry-After',
     'Access-Control-Max-Age': '86400',
     'Vary': 'Origin',
   };
@@ -3977,6 +3990,212 @@ function decodeJwtPayload(authorization) {
   }
 }
 
+function configuredSupabaseJwtIssuer(baseUrl) {
+  return new URL('/auth/v1', baseUrl).toString().replace(/\/+$/, '');
+}
+
+function validatedSupabaseJwtClaims(authorization, baseUrl, now = Date.now()) {
+  const token = String(authorization || '').replace(/^Bearer\s+/i, '');
+  const parts = token.split('.');
+  if (parts.length !== 3 || parts.some((part) => !part)) return null;
+  const payload = decodeJwtPayload(authorization);
+  const subject = String(payload.sub || '').trim().toLowerCase();
+  const issuer = String(payload.iss || '').trim().replace(/\/+$/, '');
+  const expiresAt = Number(payload.exp) * 1000;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(subject)
+      || !Number.isSafeInteger(payload.exp)
+      || expiresAt <= now
+      || issuer !== configuredSupabaseJwtIssuer(baseUrl)) {
+    return null;
+  }
+  return {
+    token,
+    subject,
+    issuer,
+    expiresAt,
+    cacheable: token.length <= AUTHENTICATED_USER_TOKEN_CACHE_MAX_TOKEN_CHARS,
+  };
+}
+
+function pruneAuthenticatedUserTokenCache(now = Date.now()) {
+  for (const [digest, entry] of authenticatedUserTokenCache) {
+    if (!entry || entry.expiresAt <= now) authenticatedUserTokenCache.delete(digest);
+  }
+  while (authenticatedUserTokenCache.size > AUTHENTICATED_USER_TOKEN_CACHE_MAX_ENTRIES) {
+    const oldestDigest = authenticatedUserTokenCache.keys().next().value;
+    if (oldestDigest === undefined) break;
+    authenticatedUserTokenCache.delete(oldestDigest);
+  }
+}
+
+export function resetAuthenticatedUserTokenCacheForTest() {
+  authenticatedUserTokenCache.clear();
+}
+
+export function authenticatedUserTokenCacheSizeForTest() {
+  pruneAuthenticatedUserTokenCache();
+  return authenticatedUserTokenCache.size;
+}
+
+function transientAuthenticationError(response = null) {
+  const retryAfterHeader = String(response?.headers?.get('Retry-After') || '').trim();
+  const retryAfterNumber = Number(retryAfterHeader);
+  const retryAfterDate = Date.parse(retryAfterHeader);
+  const retryAfterSeconds = Number.isSafeInteger(retryAfterNumber) && retryAfterNumber > 0
+    ? Math.min(3_600, retryAfterNumber)
+    : (Number.isFinite(retryAfterDate) && retryAfterDate > Date.now()
+      ? Math.min(3_600, Math.max(1, Math.ceil((retryAfterDate - Date.now()) / 1000)))
+      : 5);
+  const error = new GuestAccessError(
+    'AUTH_SESSION_VERIFICATION_UNAVAILABLE',
+    `Your sign-in could not be verified right now. Please try again in ${retryAfterSeconds} seconds.`,
+    503,
+  );
+  error.retryable = true;
+  error.retryAfterSeconds = retryAfterSeconds;
+  return error;
+}
+
+function logTransientAuthenticationFailure(category, status, attempt) {
+  console.warn('Supabase Auth verification transient failure', {
+    category,
+    status: Number.isInteger(status) ? status : null,
+    attempt,
+  });
+}
+
+async function readBoundedAuthenticationJson(response, signal) {
+  if (!response.body) return null;
+  const reader = response.body.getReader();
+  const chunks = [];
+  let total = 0;
+  let finished = false;
+  let abortHandler;
+  const aborted = new Promise((_resolve, reject) => {
+    abortHandler = () => reject(new DOMException('Authentication response timed out.', 'AbortError'));
+    if (signal.aborted) abortHandler();
+    else signal.addEventListener('abort', abortHandler, { once: true });
+  });
+  try {
+    while (true) {
+      const { done, value } = await Promise.race([reader.read(), aborted]);
+      if (done) {
+        finished = true;
+        break;
+      }
+      const chunk = value instanceof Uint8Array ? value : new Uint8Array(value);
+      total += chunk.byteLength;
+      if (total > AUTHENTICATED_USER_RESPONSE_MAX_BYTES) {
+        throw new Error('Authentication response exceeded the safe size limit.');
+      }
+      chunks.push(chunk);
+    }
+  } finally {
+    signal.removeEventListener('abort', abortHandler);
+    if (!finished) void reader.cancel().catch(() => undefined);
+    else reader.releaseLock();
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  return JSON.parse(text);
+}
+
+async function waitForAuthenticationRetry() {
+  await new Promise((resolve) => setTimeout(
+    resolve,
+    AUTHENTICATED_USER_VERIFICATION_RETRY_DELAY_MS,
+  ));
+}
+
+async function fetchAuthenticatedUserVerification(
+  authorization,
+  env,
+  baseUrl,
+  expectedSubject = null,
+) {
+  let lastTransientResponse = null;
+  for (let attempt = 0; attempt < AUTHENTICATED_USER_VERIFICATION_ATTEMPTS; attempt += 1) {
+    const controller = new AbortController();
+    const deadline = setTimeout(
+      () => controller.abort(),
+      AUTHENTICATED_USER_VERIFICATION_TIMEOUT_MS,
+    );
+    let response = null;
+    let fetchError = null;
+    let user = null;
+    try {
+      response = await fetch(new URL('/auth/v1/user', baseUrl), {
+        headers: {
+          apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: authorization,
+        },
+        signal: controller.signal,
+      });
+      if (response.ok) {
+        user = await readBoundedAuthenticationJson(response, controller.signal);
+      }
+    } catch (error) {
+      fetchError = error;
+    } finally {
+      clearTimeout(deadline);
+    }
+
+    if (fetchError) {
+      const timedOut = controller.signal.aborted
+        || fetchError?.name === 'AbortError'
+        || fetchError?.name === 'TimeoutError';
+      logTransientAuthenticationFailure(
+        timedOut ? 'timeout' : (response?.ok ? 'invalid_response' : 'network_error'),
+        response?.status || null,
+        attempt + 1,
+      );
+      if (attempt + 1 >= AUTHENTICATED_USER_VERIFICATION_ATTEMPTS) {
+        throw transientAuthenticationError();
+      }
+      await waitForAuthenticationRetry();
+      continue;
+    }
+
+    if (response.status === 401 || response.status === 403) {
+      return { response, user: null };
+    }
+    if (response.status === 429) {
+      logTransientAuthenticationFailure('rate_limited', response.status, attempt + 1);
+      throw transientAuthenticationError(response);
+    }
+    if (response.status === 408 || response.status >= 500) {
+      lastTransientResponse = response;
+      logTransientAuthenticationFailure('upstream_error', response.status, attempt + 1);
+      if (attempt + 1 >= AUTHENTICATED_USER_VERIFICATION_ATTEMPTS) {
+        throw transientAuthenticationError(lastTransientResponse);
+      }
+      await waitForAuthenticationRetry();
+      continue;
+    }
+    if (!response.ok) {
+      logTransientAuthenticationFailure('unexpected_status', response.status, attempt + 1);
+      throw transientAuthenticationError(response);
+    }
+    const userId = String(user?.id || '').trim().toLowerCase();
+    const unusableUser = !userId || (expectedSubject && userId !== expectedSubject);
+    if (unusableUser) {
+      logTransientAuthenticationFailure('invalid_response', response.status, attempt + 1);
+      if (attempt + 1 >= AUTHENTICATED_USER_VERIFICATION_ATTEMPTS) {
+        throw transientAuthenticationError();
+      }
+      await waitForAuthenticationRetry();
+      continue;
+    }
+    return { response, user };
+  }
+  throw transientAuthenticationError(lastTransientResponse);
+}
+
 export function verifiedAccessTokenContext(authorization) {
   const payload = decodeJwtPayload(authorization);
   const sessionId = String(payload.session_id || '').trim().toLowerCase();
@@ -4201,25 +4420,38 @@ async function verifiedAuthenticatedUser(request, env) {
     throw new GuestAccessError('INVALID_SESSION', 'Your session is invalid. Please sign in again.', 401);
   }
   const baseUrl = configuredSupabaseUrl(env);
-  const response = await fetch(new URL('/auth/v1/user', baseUrl), {
-    headers: {
-      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-      Authorization: authorization,
-    },
-  });
-  if (!response.ok) {
+  const now = Date.now();
+  const jwtClaims = validatedSupabaseJwtClaims(authorization, baseUrl, now);
+  let tokenDigest = null;
+  if (jwtClaims?.cacheable) {
+    tokenDigest = await sha256Hex(new TextEncoder().encode(jwtClaims.token));
+    pruneAuthenticatedUserTokenCache(now);
+    const cached = authenticatedUserTokenCache.get(tokenDigest);
+    if (cached
+        && cached.expiresAt > now
+        && cached.subject === jwtClaims.subject
+        && cached.issuer === jwtClaims.issuer
+        && String(cached.user?.id || '').toLowerCase() === jwtClaims.subject) {
+      authenticatedUserCache.set(request, cached.user);
+      return cached.user;
+    }
+  }
+  const verification = await fetchAuthenticatedUserVerification(
+    authorization,
+    env,
+    baseUrl,
+    jwtClaims?.subject || null,
+  );
+  if (verification.response.status === 401 || verification.response.status === 403) {
     throw new GuestAccessError('INVALID_SESSION', 'Your session expired. Please sign in again.', 401);
   }
-  const user = await response.json().catch(() => null);
-  if (!user?.id) {
-    throw new GuestAccessError('INVALID_SESSION', 'Your session expired. Please sign in again.', 401);
-  }
+  const user = verification.user;
   // `/auth/v1/user` has just authenticated this exact bearer token. Only
   // after that verification do we decode its AAL and session claims for
   // server-side step-up authorization; client JSON fields are never used.
   const accessTokenContext = verifiedAccessTokenContext(authorization);
   const verified = {
-    id: String(user.id),
+    id: String(user.id).trim(),
     email: String(user.email || '').trim().toLowerCase() || null,
     displayName: safeSingleLine(
       user.user_metadata?.full_name || user.user_metadata?.name,
@@ -4230,6 +4462,17 @@ async function verifiedAuthenticatedUser(request, env) {
     ...accessTokenContext,
   };
   authenticatedUserCache.set(request, verified);
+  if (jwtClaims?.cacheable
+      && tokenDigest
+      && String(verified.id || '').toLowerCase() === jwtClaims.subject) {
+    authenticatedUserTokenCache.set(tokenDigest, {
+      user: verified,
+      subject: jwtClaims.subject,
+      issuer: jwtClaims.issuer,
+      expiresAt: Math.min(jwtClaims.expiresAt, now + AUTHENTICATED_USER_TOKEN_CACHE_TTL_MS),
+    });
+    pruneAuthenticatedUserTokenCache(now);
+  }
   return verified;
 }
 
@@ -9430,7 +9673,7 @@ export default {
         || error instanceof ExaminationValidationError
         || error instanceof ReleaseContentError
         || error instanceof DD2026ValidationError;
-      return jsonResponse({
+      const errorResponse = jsonResponse({
         ok: false,
         error: {
           code: known ? error.code : 'INTERNAL_ERROR',
@@ -9441,8 +9684,16 @@ export default {
           ...(known && Number.isFinite(error.retryAfterHours)
             ? { retryAfterHours: Number(error.retryAfterHours) }
             : {}),
+          ...(known && error.retryable === true ? { retryable: true } : {}),
+          ...(known && Number.isSafeInteger(error.retryAfterSeconds)
+            ? { retryAfterSeconds: Number(error.retryAfterSeconds) }
+            : {}),
         },
       }, known ? error.status : 500, requestOrigin, allowedOrigin);
+      if (known && Number.isSafeInteger(error.retryAfterSeconds)) {
+        errorResponse.headers.set('Retry-After', String(error.retryAfterSeconds));
+      }
+      return errorResponse;
     }
   },
   scheduled(_controller, env, ctx) {

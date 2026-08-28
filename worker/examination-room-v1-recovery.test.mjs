@@ -295,6 +295,56 @@ test('Supabase Storage fallback fails closed when a storage request never settle
   assert.ok(Date.now() - started < 500, 'storage preflight must not wait forever');
 });
 
+test('Supabase Storage response bodies share the storage request deadline', async (t) => {
+  const environment = {
+    EXAMINATION_ROOM_BACKUP_MASTER_KEY_V1: MASTER_KEY,
+    EXAMINATION_ROOM_RECOVERY_MODE: 'supabase_storage',
+    SUPABASE_URL: 'https://project.supabase.co',
+    SUPABASE_SERVICE_ROLE_KEY: 'service-role-test-key',
+  };
+
+  await t.test('bucket JSON body', async () => {
+    let calls = 0;
+    const service = recovery({
+      fetch: async () => {
+        calls += 1;
+        if (calls === 1) return new Response(null, { status: 404 });
+        return {
+          ok: true,
+          status: 200,
+          json: async () => new Promise(() => {}),
+        };
+      },
+      storageRequestTimeoutMs: 20,
+    });
+    const started = Date.now();
+    await assert.rejects(
+      service.preflight(environment),
+      (error) => error.code === RECOVERY_ERROR_CODES.STORAGE_UNAVAILABLE,
+    );
+    assert.equal(calls, 2);
+    assert.ok(Date.now() - started < 500, 'bucket JSON parsing must share the storage deadline');
+  });
+
+  await t.test('private object body', async () => {
+    const service = recovery({
+      fetch: async () => ({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        arrayBuffer: async () => new Promise(() => {}),
+      }),
+      storageRequestTimeoutMs: 20,
+    });
+    const started = Date.now();
+    await assert.rejects(
+      service.preflight(environment),
+      (error) => error.code === RECOVERY_ERROR_CODES.STORAGE_UNAVAILABLE,
+    );
+    assert.ok(Date.now() - started < 500, 'private object reads must share the storage deadline');
+  });
+});
+
 test('preflight distinguishes an unavailable R2 bucket from missing configuration', async () => {
   const unavailableBucket = new FakeR2();
   unavailableBucket.head = async () => { throw new Error('simulated R2 outage'); };

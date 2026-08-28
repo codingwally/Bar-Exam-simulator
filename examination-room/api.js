@@ -7,6 +7,9 @@
   const DEMO_STATE_KEY = 'duediligence.examination-room.v1.demo-state';
   const DEMO_EVENT_KEY = 'duediligence.examination-room.v1.demo-event';
   const DEFAULT_REQUEST_TIMEOUT_MS = 20_000;
+  const ASSISTANT_REQUEST_TIMEOUT_MS = 60_000;
+  const ADMIN_RECOVERY_REQUEST_TIMEOUT_MS = 120_000;
+  const ADMIN_RECOVERY_OPERATIONS = new Set(['create_snapshot', 'retry_snapshot', 'restore_snapshot', 'recovery_detail']);
   const DEMO_EVENT_DEDUPE_TTL_MS = 5 * 60_000;
   const DEMO_EVENT_DEDUPE_LIMIT = 256;
   const listeners = new Set();
@@ -1597,15 +1600,47 @@
     };
   }
 
+  function waitForRequestStage(promise, signal) {
+    if (!signal) return Promise.resolve(promise);
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (callback, value) => {
+        if (settled) return;
+        settled = true;
+        signal.removeEventListener?.('abort', abort);
+        callback(value);
+      };
+      const abort = () => finish(reject, signal.reason || new Error('Examination Room request cancelled'));
+      if (signal.aborted) {
+        abort();
+        return;
+      }
+      signal.addEventListener?.('abort', abort, { once: true });
+      Promise.resolve(promise).then(
+        (value) => finish(resolve, value),
+        (error) => finish(reject, error),
+      );
+    });
+  }
+
+  function requestOptionsWithDefault(options, timeoutMs) {
+    return {
+      ...(options || {}),
+      timeoutMs: options?.timeoutMs ?? timeoutMs,
+    };
+  }
+
   async function post(path, body = {}, options = {}) {
-    const session = options.auth === false ? null : await authSession();
-    if (options.auth === true && !session?.access_token) {
-      throw new ExaminationRoomApiError('SIGN_IN_REQUIRED', 'Professor or administrator sign-in is required.', 401, 'Sign in through Due Diligence, then return to Examination Room.');
-    }
     const requestSignal = boundedRequestSignal(options.signal, options.timeoutMs);
     let response;
     let result;
     try {
+      const session = options.auth === false
+        ? null
+        : await waitForRequestStage(authSession(), requestSignal.signal);
+      if (options.auth === true && !session?.access_token) {
+        throw new ExaminationRoomApiError('SIGN_IN_REQUIRED', 'Professor or administrator sign-in is required.', 401, 'Sign in through Due Diligence, then return to Examination Room.');
+      }
       response = await global.fetch(`${config.workerUrl}${path}`, {
         method: 'POST',
         headers: {
@@ -1635,6 +1670,7 @@
           'Nothing was changed by this cancelled request. Try again when you are ready.',
         );
       }
+      if (error instanceof ExaminationRoomApiError) throw error;
       throw new ExaminationRoomApiError(
         'NETWORK_UNAVAILABLE',
         'The Examination Room could not reach its service.',
@@ -1661,13 +1697,13 @@
   async function professorQuery(operation, payload = {}, requestOptions = {}) {
     return demoEnabled()
       ? demoProfessorQuery(operation, payload)
-      : post('/examination-room/v1/professor/query', { operation, payload: staffPayload(payload) }, { auth: true, ...requestOptions });
+      : post('/examination-room/v1/professor/query', { operation, payload: staffPayload(payload) }, { ...requestOptions, auth: true });
   }
 
   async function professorCommand(operation, payload = {}, idempotencyKey = requestId(), requestOptions = {}) {
     return demoEnabled()
       ? demoProfessorCommand(operation, payload, idempotencyKey)
-      : post('/examination-room/v1/professor/command', { operation, payload: staffPayload(payload), idempotencyKey }, { auth: true, ...requestOptions, idempotencyKey });
+      : post('/examination-room/v1/professor/command', { operation, payload: staffPayload(payload), idempotencyKey }, { ...requestOptions, auth: true, idempotencyKey });
   }
 
   async function professorAssistant(payload = {}, idempotencyKey = requestId(), requestOptions = {}) {
@@ -1702,43 +1738,53 @@
           : `I reviewed “${exam.title || 'this examination'}” in ${exam.subject || 'the selected subject'}. Ask me to check readiness, points, question wording, timing, navigation, grading identity, or safeguards; I will keep the conversation connected to this draft.`;
       return { ok: true, assistant: { reply, suggestedActionIds: [] } };
     }
-    return post('/examination-room/v1/professor/assistant', payload, { auth: true, ...requestOptions, idempotencyKey });
+    return post('/examination-room/v1/professor/assistant', payload, {
+      ...requestOptionsWithDefault(requestOptions, ASSISTANT_REQUEST_TIMEOUT_MS),
+      auth: true,
+      idempotencyKey,
+    });
   }
 
   async function studentPreview(payload, requestOptions = {}) {
     return demoEnabled()
       ? demoStudentPreview(payload)
-      : post('/examination-room/v1/student/preview', payload, { auth: false, ...requestOptions });
+      : post('/examination-room/v1/student/preview', payload, { ...requestOptions, auth: false });
   }
 
   async function studentBegin(payload, idempotencyKey = requestId(), requestOptions = {}) {
     return demoEnabled()
       ? demoStudentBegin(payload, idempotencyKey)
-      : post('/examination-room/v1/student/begin', { ...payload, idempotencyKey }, { auth: false, ...requestOptions, idempotencyKey });
+      : post('/examination-room/v1/student/begin', { ...payload, idempotencyKey }, { ...requestOptions, auth: false, idempotencyKey });
   }
 
   async function studentQuery(operation, payload = {}, requestOptions = {}) {
     return demoEnabled()
       ? demoStudentQuery(operation, payload)
-      : post('/examination-room/v1/student/query', { operation, payload }, { auth: false, ...requestOptions });
+      : post('/examination-room/v1/student/query', { operation, payload }, { ...requestOptions, auth: false });
   }
 
   async function studentCommand(operation, payload = {}, idempotencyKey = requestId(), requestOptions = {}) {
     return demoEnabled()
       ? demoStudentCommand(operation, payload, idempotencyKey)
-      : post('/examination-room/v1/student/command', { operation, payload, idempotencyKey }, { auth: false, ...requestOptions, idempotencyKey });
+      : post('/examination-room/v1/student/command', { operation, payload, idempotencyKey }, { ...requestOptions, auth: false, idempotencyKey });
   }
 
   async function adminQuery(operation, payload = {}, requestOptions = {}) {
+    const operationOptions = ADMIN_RECOVERY_OPERATIONS.has(operation)
+      ? requestOptionsWithDefault(requestOptions, ADMIN_RECOVERY_REQUEST_TIMEOUT_MS)
+      : requestOptions;
     return demoEnabled()
       ? demoAdminQuery(operation, payload)
-      : post('/examination-room/v1/admin/query', { operation, payload: staffPayload(payload) }, { auth: true, ...requestOptions });
+      : post('/examination-room/v1/admin/query', { operation, payload: staffPayload(payload) }, { ...operationOptions, auth: true });
   }
 
   async function adminCommand(operation, payload = {}, idempotencyKey = requestId(), requestOptions = {}) {
+    const operationOptions = ADMIN_RECOVERY_OPERATIONS.has(operation)
+      ? requestOptionsWithDefault(requestOptions, ADMIN_RECOVERY_REQUEST_TIMEOUT_MS)
+      : requestOptions;
     return demoEnabled()
       ? demoAdminCommand(operation, payload, idempotencyKey)
-      : post('/examination-room/v1/admin/command', { operation, payload: staffPayload(payload), idempotencyKey }, { auth: true, ...requestOptions, idempotencyKey });
+      : post('/examination-room/v1/admin/command', { operation, payload: staffPayload(payload), idempotencyKey }, { ...operationOptions, auth: true, idempotencyKey });
   }
 
   // Compatibility surface used by the resilient student client. It keeps the

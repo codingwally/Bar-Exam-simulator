@@ -561,7 +561,7 @@
     return { hasMore, nextOffset, offset };
   }
 
-  async function pendingRequestsForInstitution(institution, firstPage = null) {
+  async function pendingRequestsForInstitution(institution, firstPage = null, requestToken = state.loadRequest) {
     const institutionId = String(institution?.institutionId || institution?.id || '').trim();
     const institutionName = institution?.institutionName || institution?.name || institution?.institutionCode || institutionId;
     if (!institutionId) return { requests: [], partial: true };
@@ -573,7 +573,11 @@
     let offset = 0;
     let partial = false;
     for (let pageNumber = 0; pageNumber < MAX_PAGINATION_PAGES; pageNumber += 1) {
-      if (!pageResult) pageResult = await centerQueryForInstitution(institutionId, offset);
+      if (requestToken !== state.loadRequest) return { requests: [], partial: false, obsolete: true };
+      if (!pageResult) {
+        pageResult = await centerQueryForInstitution(institutionId, offset);
+        if (requestToken !== state.loadRequest) return { requests: [], partial: false, obsolete: true };
+      }
       const page = centerPageRows(pageResult);
       const signature = page.map((exam) => examId(exam)).filter(Boolean).join('|');
       if (pageNumber > 0 && signature && pageSignatures.has(signature)) { partial = true; break; }
@@ -597,15 +601,18 @@
       pageResult = null;
       if (pageNumber === MAX_PAGINATION_PAGES - 1) partial = true;
     }
-    return { requests, partial };
+    return { requests, partial, obsolete: false };
   }
 
-  async function loadGlobalPendingQueue(currentCenter) {
+  async function loadGlobalPendingQueue(currentCenter, requestToken = state.loadRequest) {
+    if (requestToken !== state.loadRequest) return null;
     const currentId = String(state.institutionId || '').trim();
     const results = await Promise.allSettled(institutions().map((institution) => {
       const id = String(institution?.institutionId || institution?.id || '').trim();
-      return pendingRequestsForInstitution(institution, id === currentId ? currentCenter : null);
+      return pendingRequestsForInstitution(institution, id === currentId ? currentCenter : null, requestToken);
     }));
+    if (requestToken !== state.loadRequest
+      || results.some((result) => result.status === 'fulfilled' && result.value?.obsolete === true)) return null;
     const requests = [];
     let partial = false;
     results.forEach((result) => {
@@ -644,7 +651,8 @@
     state.examPaging = examPageProgress(center, state.data.exams, 0, state.data.exams.length);
     if (state.examPaging.total != null) state.data.counts.exams = state.examPaging.total;
     if (!state.data.exams.some((exam) => examId(exam) === state.selectedExamId)) state.selectedExamId = examId(state.data.exams[0]) || null;
-    await loadGlobalPendingQueue(center);
+    await loadGlobalPendingQueue(center, requestToken);
+    if (requestToken !== state.loadRequest) return null;
     return renderContent();
   }
   async function render() {

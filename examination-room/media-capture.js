@@ -31,7 +31,7 @@
     return status === 408 || status === 425 || status === 429 || status >= 500;
   }
 
-  function fetchWithDeadline(url, init) {
+  function fetchWithDeadline(url, init, consumeResponse) {
     var controller = typeof global.AbortController === 'function'
       ? new global.AbortController()
       : null;
@@ -47,7 +47,14 @@
         ));
       }, REQUEST_DEADLINE_MILLISECONDS);
     });
-    return Promise.race([global.fetch(url, options), deadline]).finally(function () {
+    var request = Promise.resolve()
+      .then(function () { return global.fetch(url, options); })
+      .then(function (response) {
+        return typeof consumeResponse === 'function'
+          ? consumeResponse(response)
+          : response;
+      });
+    return Promise.race([request, deadline]).finally(function () {
       global.clearTimeout(timer);
     });
   }
@@ -174,15 +181,21 @@
   async function postJson(path, body) {
     var base = String(global.DueDiligencePhase2Config && global.DueDiligencePhase2Config.workerUrl || '').replace(/\/+$/g, '');
     if (!base) throw mediaError('MEDIA_SERVICE_UNAVAILABLE', 'The recording upload service is not configured.');
-    var response = await fetchWithDeadline(base + path, {
+    var outcome = await fetchWithDeadline(base + path, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-Request-ID': uuid()
       },
       body: JSON.stringify(body)
+    }, async function (response) {
+      return {
+        response: response,
+        result: await response.json().catch(function () { return null; })
+      };
     });
-    var result = await response.json().catch(function () { return null; });
+    var response = outcome.response;
+    var result = outcome.result;
     if (!response.ok || !result || result.ok !== true) {
       var remote = result && result.error || {};
       throw mediaError(
@@ -203,11 +216,19 @@
     var headers = Object.assign({}, instruction.headers || {}, {
       'Content-Type': 'application/octet-stream'
     });
-    var response = await fetchWithDeadline(instruction.url, {
+    var outcome = await fetchWithDeadline(instruction.url, {
       method: instruction.method || 'PUT',
       headers: headers,
       body: chunk.encryptedBlob
+    }, async function (response) {
+      return {
+        response: response,
+        providerResult: response.ok
+          ? await response.json().catch(function () { return {}; })
+          : {}
+      };
     });
+    var response = outcome.response;
     if (!response.ok) {
       throw mediaError(
         'MEDIA_UPLOAD_FAILED',
@@ -216,7 +237,7 @@
         { retryable: requestIsRetryable(response.status), status: response.status }
       );
     }
-    var providerResult = await response.json().catch(function () { return {}; });
+    var providerResult = outcome.providerResult;
     return {
       provider: recording.provider,
       providerObjectId: providerResult && providerResult.id || null

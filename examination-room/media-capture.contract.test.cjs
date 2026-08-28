@@ -162,6 +162,13 @@ function createHarness(options = {}) {
       const body = JSON.parse(init.body);
       if (body.operation === 'prepare_upload') {
         calls.prepare.push(body);
+        if (options.stallPrepareBody) {
+          return {
+            ok: true,
+            status: 200,
+            json: () => new Promise(() => {}),
+          };
+        }
         return Response.json({
           ok: true,
           recording: {
@@ -397,6 +404,20 @@ test('transient media failures stop at the bounded attempt ceiling and can resum
   );
   assert.equal(restoredPage.calls.prepare.length, 0, 'completed provider upload must not be repeated');
   assert.equal(restoredPage.calls.uploadBodies.length, 0, 'encrypted object must not be uploaded twice');
+});
+
+test('a media response body that never finishes is deadline-bounded and enters the paused queue', async () => {
+  const harness = createHarness({ stallPrepareBody: true });
+  await harness.controller.start(startInput());
+  await waitFor(
+    () => harness.calls.prepare.length === 8
+      && [...harness.indexedDB.records.values()][0]?.status === 'paused',
+    'a stalled media response body did not stop at the bounded attempt ceiling',
+  );
+  const stored = [...harness.indexedDB.records.values()][0];
+  assert.equal(stored.lastErrorCode, 'MEDIA_REQUEST_TIMEOUT');
+  assert.equal(harness.calls.prepare.length, 8, 'the stalled response body must not cause a ninth request');
+  harness.controller.destroy();
 });
 
 test('a blocked media database degrades recording without trapping examination startup', async () => {

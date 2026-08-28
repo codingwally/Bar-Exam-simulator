@@ -85,15 +85,15 @@ function demoApiWithCrossTabTransports() {
   };
 }
 
-function liveApi(fetchImplementation) {
+function liveApi(fetchImplementation, options = {}) {
   const window = {
     location: { search: '?live=1', hostname: 'duediligence.ph' },
     localStorage: new Map(),
     crypto: { randomUUID: crypto.randomUUID },
     addEventListener() {},
     AbortController,
-    setTimeout,
-    clearTimeout,
+    setTimeout: options.setTimeout || setTimeout,
+    clearTimeout: options.clearTimeout || clearTimeout,
     fetch: fetchImplementation,
     DueDiligencePhase2Config: {
       workerUrl: 'https://worker.example.test',
@@ -101,7 +101,11 @@ function liveApi(fetchImplementation) {
     },
     supabase: {
       createClient() {
-        return { auth: { getSession: async () => ({ data: { session: { access_token: 'test-access-token' } }, error: null }) } };
+        return {
+          auth: {
+            getSession: options.getSession || (async () => ({ data: { session: { access_token: 'test-access-token' } }, error: null })),
+          },
+        };
       },
     },
   };
@@ -143,6 +147,44 @@ test('live API requests time out and preserve caller cancellation through one co
   assert.equal(caller.signal.aborted, true);
   assert.equal(transportSignal.aborted, true);
   assert.notEqual(transportSignal, caller.signal, 'the application deadline and caller signal are composed');
+});
+
+test('the request deadline includes a stalled authentication lookup', async () => {
+  let fetchCalls = 0;
+  const api = liveApi(
+    async () => {
+      fetchCalls += 1;
+      return { ok: true, json: async () => ({ ok: true }) };
+    },
+    { getSession: () => new Promise(() => {}) },
+  );
+  await assert.rejects(
+    api.professorQuery('session', {}, { timeoutMs: 10 }),
+    (error) => error.code === 'REQUEST_TIMEOUT' && error.status === 408,
+  );
+  assert.equal(fetchCalls, 0, 'transport never starts after the authentication deadline expires');
+});
+
+test('assistant and Admin recovery operations receive bounded longer defaults without defeating explicit caller limits', async () => {
+  const scheduled = [];
+  let timerId = 0;
+  const api = liveApi(
+    async () => ({ ok: true, json: async () => ({ ok: true }) }),
+    {
+      setTimeout(_callback, delay) {
+        scheduled.push(delay);
+        timerId += 1;
+        return timerId;
+      },
+      clearTimeout() {},
+    },
+  );
+  await api.professorAssistant({ message: 'Review this draft.' }, 'assistant-request');
+  await api.adminCommand('create_snapshot', { examId: 'exam-1' }, 'snapshot-request');
+  await api.adminQuery('recovery_detail', { examId: 'exam-1', snapshotId: 'snapshot-1' });
+  await api.studentPreview({ roomKey: 'ROOM-KEY' });
+  await api.professorAssistant({ message: 'Use caller deadline.' }, 'assistant-short', { timeoutMs: 7000 });
+  assert.deepEqual(scheduled, [60_000, 120_000, 120_000, 20_000, 7000]);
 });
 
 test('demo cross-tab storage and BroadcastChannel delivery is nonce-deduplicated with a bounded cache', () => {

@@ -205,7 +205,7 @@ function runtimeFrom(dependencies = {}) {
   return runtime;
 }
 
-async function storageFetch(runtime, input, init = {}) {
+async function storageFetch(runtime, input, init = {}, consumeResponse = (response) => response) {
   const controller = typeof runtime.AbortController === 'function'
     ? new runtime.AbortController()
     : null;
@@ -218,7 +218,9 @@ async function storageFetch(runtime, input, init = {}) {
     }, runtime.storageRequestTimeoutMs);
   });
   try {
-    return await Promise.race([runtime.fetch(input, options), deadline]);
+    const request = Promise.resolve(runtime.fetch(input, options))
+      .then((response) => consumeResponse(response));
+    return await Promise.race([request, deadline]);
   } finally {
     runtime.clearTimeout(timer);
   }
@@ -545,21 +547,33 @@ function createSupabaseStorageBinding(env, runtime) {
   const objectUrl = (objectKey, authenticated = true) => `${configuration.baseUrl}/storage/v1/object/${authenticated ? 'authenticated/' : ''}${configuration.bucketPath}/${supabaseStoragePath(objectKey)}`;
   const bucketUrl = `${configuration.baseUrl}/storage/v1/bucket/${configuration.bucketPath}`;
   const bucketReady = async () => {
-    const response = await storageFetch(runtime, bucketUrl, { headers: configuration.headers });
+    const { response, body } = await storageFetch(
+      runtime,
+      bucketUrl,
+      { headers: configuration.headers },
+      async (response) => ({ response, body: await response.json().catch(() => null) }),
+    );
     if (!response.ok) throw new TypeError(`private storage unavailable (${response.status})`);
-    const body = await response.json().catch(() => null);
     if (!body || body.id !== SUPABASE_STORAGE_BUCKET || body.public === true) {
       throw new TypeError('private storage configuration mismatch');
     }
   };
   const read = async (objectKey) => {
-    const response = await storageFetch(runtime, objectUrl(objectKey), { headers: configuration.headers });
-    if (response.status === 400 || response.status === 404) {
+    const result = await storageFetch(
+      runtime,
+      objectUrl(objectKey),
+      { headers: configuration.headers },
+      async (response) => ({
+        response,
+        object: response.ok ? await supabaseStorageObject(response, runtime) : null,
+      }),
+    );
+    if (result.response.status === 400 || result.response.status === 404) {
       await bucketReady();
       return null;
     }
-    if (!response.ok) throw new TypeError(`private object read failed (${response.status})`);
-    return supabaseStorageObject(response, runtime);
+    if (!result.response.ok) throw new TypeError(`private object read failed (${result.response.status})`);
+    return result.object;
   };
   return Object.freeze({
     head: read,

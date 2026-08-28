@@ -20,9 +20,11 @@ const studentApiRuntime = [
 function loadStudentStorageHooks(indexedDB) {
   const timers = new Map();
   let nextTimer = 0;
+  const document = { hidden: false };
   const window = {
     location: { search: '', reload() {} },
     indexedDB,
+    document,
     setTimeout(callback, delay) {
       const id = ++nextTimer;
       timers.set(id, { callback, delay });
@@ -32,9 +34,9 @@ function loadStudentStorageHooks(indexedDB) {
   };
   const exposedSource = studentSource
     .replace("  document.addEventListener('DOMContentLoaded', initialise);", '')
-    .replace(/\n\}\(\)\);\s*$/, '\n  window.__studentStorageTestHooks = { openDatabase };\n}());');
-  vm.runInNewContext(exposedSource, { window, URLSearchParams }, { filename: 'student.js' });
-  return { ...window.__studentStorageTestHooks, timers };
+    .replace(/\n\}\(\)\);\s*$/, '\n  window.__studentStorageTestHooks = { openDatabase, resultPollDelay, scheduleResultCheck, stopResultWatch, resetResultPollingWindow, state };\n}());');
+  vm.runInNewContext(exposedSource, { window, document, URLSearchParams }, { filename: 'student.js' });
+  return { ...window.__studentStorageTestHooks, timers, document };
 }
 
 test('the student enters directly after preview with no custom policy-gating payload or label', () => {
@@ -152,4 +154,23 @@ test('missing student API and all grading storage opens remain bounded and recov
   assert.match(offlineGradingSource, /const DATABASE_OPEN_TIMEOUT_MS = 5000/);
   assert.match(offlineGradingSource, /request\.onblocked = \(\) => finish\(null, new Error\('IndexedDB open blocked'\)\)/);
   assert.match(offlineGradingSource, /if \(!state\.databasePromise\) \{[\s\S]*state\.databasePromise = openDatabase\(\)/);
+});
+
+test('student result checking uses bounded backoff, hidden-tab throttling, and manual recovery', () => {
+  const hooks = loadStudentStorageHooks(null);
+  hooks.state.attempt = { attemptId: 'attempt-1', status: 'submitted' };
+  hooks.state.view = 'receipt';
+  hooks.state.receipt = { result: null };
+  hooks.scheduleResultCheck(hooks.state.resultWatchGeneration);
+  assert.equal([...hooks.timers.values()][0].delay, 15_000);
+  hooks.stopResultWatch(false);
+
+  hooks.state.resultPollAttempt = 1;
+  hooks.document.hidden = true;
+  assert.equal(hooks.resultPollDelay(), 2 * 60 * 1000);
+  assert.doesNotMatch(studentSource, /setInterval\(function \(\) \{[\s\S]*checkForReleasedResult/);
+  assert.match(studentSource, /var RESULT_POLL_LIFETIME_MS = 2 \* 60 \* 60 \* 1000/);
+  assert.match(studentSource, /Date\.now\(\) - state\.resultPollStartedAt >= RESULT_POLL_LIFETIME_MS/);
+  assert.match(studentSource, /Automatic result checking paused after two hours\. Choose Check for result to restart it\./);
+  assert.match(studentSource, /if \(manual && state\.resultPollingExpired\) \{[\s\S]*resetResultPollingWindow\(\)[\s\S]*subscribeForResultUpdates\(\)/);
 });

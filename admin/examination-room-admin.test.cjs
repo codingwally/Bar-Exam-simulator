@@ -204,6 +204,59 @@ test('global key queue reaches every owner workspace and every paged request', a
   assert.equal(harness.state.globalQueuePartial, false);
 });
 
+test('a superseded Admin refresh stops old global-queue pagination before another page request', async () => {
+  const calls = [];
+  let harness;
+  const window = {
+    ExaminationRoomV1Api: {
+      async adminQuery(operation, payload) {
+        assert.equal(operation, 'command_center');
+        calls.push([payload.institutionId, payload.offset]);
+        harness.state.loadRequest += 1;
+        return {
+          exams: Array.from({ length: payload.limit }, (_, index) => ({
+            id: `${payload.institutionId}-${payload.offset + index}`,
+            publicationStatus: 'draft',
+          })),
+          examTotal: 10_000,
+          examLimit: payload.limit,
+          examOffset: payload.offset,
+          examHasMore: true,
+          examNextOffset: payload.offset + payload.limit,
+        };
+      },
+    },
+  };
+  const instrumented = source.replace(
+    'global.DueDiligenceExaminationRoomAdmin = Object.freeze({ render, bind });',
+    'global.__ExaminationRoomStaleQueueTest = Object.freeze({ state, loadGlobalPendingQueue }); global.DueDiligenceExaminationRoomAdmin = Object.freeze({ render, bind });',
+  );
+  vm.runInNewContext(instrumented, { window, URLSearchParams, Intl, Date, Map, Set, Promise });
+  harness = window.__ExaminationRoomStaleQueueTest;
+  harness.state.loadRequest = 41;
+  harness.state.institutionId = 'institution-1';
+  harness.state.access = {
+    institutions: [
+      { institutionId: 'institution-1', institutionName: 'Current Law School' },
+      { institutionId: 'institution-2', institutionName: 'Remote Law School' },
+    ],
+  };
+  harness.state.globalQueue = [{ id: 'newer-refresh-result' }];
+
+  const result = await harness.loadGlobalPendingQueue({
+    exams: [{ id: 'current-page', publicationStatus: 'draft' }],
+    examTotal: 1,
+    examLimit: 100,
+    examOffset: 0,
+    examHasMore: false,
+    examNextOffset: null,
+  }, 41);
+
+  assert.equal(result, null);
+  assert.deepEqual(calls, [['institution-2', 0]]);
+  assert.deepEqual(Array.from(harness.state.globalQueue, (exam) => exam.id), ['newer-refresh-result']);
+});
+
 test('owner command center uses only the greenfield Admin transport for privileged operations', () => {
   for (const operation of [
     'command_center',

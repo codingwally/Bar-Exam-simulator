@@ -1260,6 +1260,52 @@ test('Supabase Auth timeout retries once then returns retryable 503 without cach
   }
 });
 
+test('Supabase Auth verification survives latency beyond the former five-second deadline', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  const subject = 'a9898989-9898-4989-8989-989898989898';
+  const token = authTestJwt({ subject, nonce: 'regional-latency' });
+  let authCalls = 0;
+  resetAuthenticatedUserTokenCacheForTest();
+  globalThis.setTimeout = (callback, delay, ...args) => originalSetTimeout(
+    callback,
+    delay >= 5_000 ? delay / 100 : delay,
+    ...args,
+  );
+  globalThis.fetch = async (url, options = {}) => {
+    const target = String(url);
+    if (target.endsWith('/auth/v1/user')) {
+      authCalls += 1;
+      return new Promise((resolve, reject) => {
+        const responseTimer = originalSetTimeout(
+          () => resolve(Response.json({ id: subject })),
+          80,
+        );
+        options.signal.addEventListener('abort', () => {
+          originalClearTimeout(responseTimer);
+          reject(new DOMException('Timed out', 'AbortError'));
+        }, { once: true });
+      });
+    }
+    throw new Error(`Unexpected regional-latency auth request: ${target}`);
+  };
+
+  try {
+    const response = await worker.fetch(
+      authenticatedGuestAccessRequest(token, '203.0.113.228'),
+      authenticationTestEnv,
+    );
+    assert.equal(response.status, 200);
+    assert.equal(authCalls, 1);
+    assert.equal(authenticatedUserTokenCacheSizeForTest(), 1);
+  } finally {
+    resetAuthenticatedUserTokenCacheForTest();
+    globalThis.fetch = originalFetch;
+    globalThis.setTimeout = originalSetTimeout;
+  }
+});
+
 test('a generic Supabase Auth network failure is retried once and can recover', async () => {
   const originalFetch = globalThis.fetch;
   const originalWarn = console.warn;

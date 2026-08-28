@@ -228,7 +228,11 @@ const GEMINI_RETRY_DELAY_MS = 750;
 const AUTHENTICATED_USER_TOKEN_CACHE_TTL_MS = 30 * 1000;
 const AUTHENTICATED_USER_TOKEN_CACHE_MAX_ENTRIES = 512;
 const AUTHENTICATED_USER_TOKEN_CACHE_MAX_TOKEN_CHARS = 16 * 1024;
-const AUTHENTICATED_USER_VERIFICATION_TIMEOUT_MS = 5 * 1000;
+// Supabase documents that Auth-server verification can be slow across regions.
+// Production also showed valid /user requests reaching Supabase after the old
+// five-second deadline even though Supabase completed them successfully. Keep
+// the request bounded, but allow enough time for the cross-region connection.
+const AUTHENTICATED_USER_VERIFICATION_TIMEOUT_MS = 15 * 1000;
 const AUTHENTICATED_USER_VERIFICATION_ATTEMPTS = 2;
 const AUTHENTICATED_USER_VERIFICATION_RETRY_DELAY_MS = 100;
 const AUTHENTICATED_USER_RESPONSE_MAX_BYTES = 256 * 1024;

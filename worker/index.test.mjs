@@ -996,7 +996,10 @@ test('transient Supabase Auth failures return a retryable typed 503 and are not 
     assert.equal(rateLimitedPayload.error.retryable, true);
     assert.equal(rateLimitedPayload.error.retryAfterSeconds, 7);
     assert.equal(rateLimited.headers.get('Retry-After'), '7');
-    assert.equal(rateLimited.headers.get('Access-Control-Expose-Headers'), 'Retry-After');
+    assert.equal(
+      rateLimited.headers.get('Access-Control-Expose-Headers'),
+      'Retry-After, Content-Disposition, X-Admin-Data-Scope',
+    );
     assert.equal(unavailable.status, 503);
     assert.equal(unavailablePayload.error.code, 'AUTH_SESSION_VERIFICATION_UNAVAILABLE');
     assert.equal(unavailablePayload.error.retryable, true);

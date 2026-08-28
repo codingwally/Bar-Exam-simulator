@@ -15,6 +15,10 @@ export const ADMIN_DIRECTORY_RECIPIENT_KEYS = Object.freeze([
 
 export const ADMIN_DIRECTORY_EXPORT_MAX_BYTES = 5 * 1024 * 1024;
 
+export const ADMIN_DATA_SCOPES = Object.freeze([
+  'regular', 'internal_test',
+]);
+
 export class AdminValidationError extends Error {
   constructor(message) {
     super(message);
@@ -28,6 +32,16 @@ function isoDate(value, label) {
   return date.toISOString();
 }
 
+export function normalizeAdminDataScope(value) {
+  const dataScope = value == null || value === ''
+    ? 'regular'
+    : typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (!ADMIN_DATA_SCOPES.includes(dataScope)) {
+    throw new AdminValidationError('Choose Regular users or Internal testing data.');
+  }
+  return dataScope;
+}
+
 export function normalizeDashboardRequest(payload) {
   const to = isoDate(payload?.to, 'Reporting end');
   const from = isoDate(payload?.from, 'Reporting start');
@@ -39,7 +53,13 @@ export function normalizeDashboardRequest(payload) {
   if (new Date(to) - new Date(from) > 366 * 86_400_000) {
     throw new AdminValidationError('Reporting window exceeds 366 days.');
   }
-  return { from, to, previousFrom, previousTo };
+  return {
+    from,
+    to,
+    previousFrom,
+    previousTo,
+    dataScope: normalizeAdminDataScope(payload?.dataScope),
+  };
 }
 
 export function normalizeUserResponseExport(payload) {
@@ -61,7 +81,15 @@ export function normalizeUserResponseExport(payload) {
   if (span <= 0 || span > 366 * 86_400_000) {
     throw new AdminValidationError('Export window must be between 1 minute and 366 days.');
   }
-  return { targetUserId, reason, requestKey, from, to, limit: 2000 };
+  return {
+    targetUserId,
+    reason,
+    requestKey,
+    from,
+    to,
+    limit: 2000,
+    dataScope: normalizeAdminDataScope(payload?.dataScope),
+  };
 }
 
 export function normalizeUserDirectoryRequest(payload, accessPurpose = 'dashboard') {
@@ -77,11 +105,25 @@ export function normalizeUserDirectoryRequest(payload, accessPurpose = 'dashboar
     throw new AdminValidationError('Request key is invalid.');
   }
   if (accessPurpose === 'csv_export') {
-    return { search: search || null, limit: 5000, offset: 0, requestKey, accessPurpose };
+    return {
+      search: search || null,
+      limit: 5000,
+      offset: 0,
+      requestKey,
+      accessPurpose,
+      dataScope: normalizeAdminDataScope(payload?.dataScope),
+    };
   }
   const limit = Math.min(100, Math.max(1, Number(payload?.limit) || 100));
   const offset = Math.max(0, Number(payload?.offset) || 0);
-  return { search: search || null, limit, offset, requestKey, accessPurpose };
+  return {
+    search: search || null,
+    limit,
+    offset,
+    requestKey,
+    accessPurpose,
+    dataScope: normalizeAdminDataScope(payload?.dataScope),
+  };
 }
 
 export function normalizeUserDirectoryEmailExport(payload) {
@@ -89,7 +131,7 @@ export function normalizeUserDirectoryEmailExport(payload) {
     throw new AdminValidationError('Directory email export payload is invalid.');
   }
   const allowedFields = new Set([
-    'recipientKey', 'search', 'reason', 'requestKey', 'confirmed',
+    'recipientKey', 'search', 'reason', 'requestKey', 'confirmed', 'dataScope',
   ]);
   if (Object.keys(payload).some((key) => !allowedFields.has(key))) {
     throw new AdminValidationError('Directory email export contains an unsupported field.');
@@ -143,6 +185,7 @@ export function normalizeAnswerHistoryRequest(payload, accessPurpose = 'summary'
   }
   const allowedFields = new Set([
     'targetUserId', 'from', 'to', 'limit', 'reason', 'requestKey', 'confirmed',
+    'dataScope',
   ]);
   if (Object.keys(payload).some((key) => !allowedFields.has(key))) {
     throw new AdminValidationError('Answer-history request contains an unsupported field.');
@@ -190,6 +233,7 @@ export function normalizeAnswerHistoryRequest(payload, accessPurpose = 'summary'
     requestKey,
     confirmed: true,
     accessPurpose,
+    dataScope: normalizeAdminDataScope(payload.dataScope),
   };
 }
 
@@ -199,7 +243,7 @@ export function normalizeAnswerHistoryPreviewRequest(payload) {
   }
   const allowedFields = new Set([
     'targetUserId', 'from', 'to', 'search', 'feature', 'recordSource',
-    'limit', 'offset', 'requestKey',
+    'limit', 'offset', 'requestKey', 'dataScope',
   ]);
   if (Object.keys(payload).some((key) => !allowedFields.has(key))) {
     throw new AdminValidationError('Answer-history preview contains an unsupported field.');
@@ -279,6 +323,7 @@ export function normalizeAnswerHistoryPreviewRequest(payload) {
     limit,
     offset,
     requestKey,
+    dataScope: normalizeAdminDataScope(payload.dataScope),
   };
 }
 
@@ -286,7 +331,7 @@ export function normalizeLiveActivityRequest(payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     throw new AdminValidationError('Live activity request is invalid.');
   }
-  const allowedFields = new Set(['limit', 'requestKey']);
+  const allowedFields = new Set(['limit', 'requestKey', 'dataScope']);
   if (Object.keys(payload).some((key) => !allowedFields.has(key))) {
     throw new AdminValidationError('Live activity request contains an unsupported field.');
   }
@@ -295,7 +340,11 @@ export function normalizeLiveActivityRequest(payload) {
     throw new AdminValidationError('Request key is invalid.');
   }
   const limit = Math.min(100, Math.max(1, Number(payload.limit) || 100));
-  return { limit, requestKey };
+  return {
+    limit,
+    requestKey,
+    dataScope: normalizeAdminDataScope(payload.dataScope),
+  };
 }
 
 export function normalizeRecentUserActivityRequest(payload) {
@@ -303,7 +352,7 @@ export function normalizeRecentUserActivityRequest(payload) {
     throw new AdminValidationError('Recent user activity request is invalid.');
   }
   const allowedFields = new Set([
-    'search', 'from', 'to', 'limit', 'offset', 'requestKey',
+    'search', 'from', 'to', 'limit', 'offset', 'requestKey', 'dataScope',
   ]);
   if (Object.keys(payload).some((key) => !allowedFields.has(key))) {
     throw new AdminValidationError('Recent user activity request contains an unsupported field.');
@@ -341,6 +390,7 @@ export function normalizeRecentUserActivityRequest(payload) {
     limit,
     offset,
     requestKey,
+    dataScope: normalizeAdminDataScope(payload.dataScope),
   };
 }
 

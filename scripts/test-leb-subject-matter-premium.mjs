@@ -184,7 +184,8 @@ assert.doesNotMatch(admin, /Select a future Premium expiration/);
 assert.match(worker, /examination_authorize_access/);
 assert.match(worker, /phase4_admin_manage_subscription/);
 assert.match(worker, /phase4_admin_review_payment/);
-assert.match(worker, /phase4_admin_premium_access/);
+assert.match(worker, /phase4_admin_operational_data_scoped_v1/);
+assert.match(worker, /p_section:\s*query\.section === 'introductory_access' \? 'access' : query\.section/);
 assert.match(paymentCore, /\['early_access_beta', 'standard', 'premium'\]/);
 assert.match(
   publicPage,

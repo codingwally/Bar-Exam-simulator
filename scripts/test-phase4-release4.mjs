@@ -49,7 +49,10 @@ for (const rpc of [
   'phase4_payment_proof_context',
 ]) {
   assert.match(migration, new RegExp(`function public\\.${rpc}\\b`));
-  assert.ok(worker.includes(`'${rpc}'`), `${rpc} must be called by the Worker`);
+  const workerRpc = rpc === 'phase4_admin_operational_data'
+    ? 'phase4_admin_operational_data_scoped_v1'
+    : rpc;
+  assert.ok(worker.includes(`'${workerRpc}'`), `${workerRpc} must be called by the Worker`);
 }
 
 assert.match(accessMigration, /alter table public\.plan_catalog[\s\S]*duration_days[\s\S]*checkout_enabled/);

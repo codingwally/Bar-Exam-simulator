@@ -73,6 +73,9 @@ assert.match(css, /@media print/);
 assert.match(observatoryCss, /recent-user-activity-table/);
 assert.match(observatoryCss, /recent-user-chart-grid/);
 assert.match(observatoryCss, /--obs-muted-bright:\s*#f0f4f5/);
+assert.match(html, /id="data-scope"[\s\S]*value="regular" selected>Regular users<[\s\S]*value="internal_test">Internal testing</);
+assert.doesNotMatch(html, /id="data-scope"[\s\S]{0,400}value="all"/);
+assert.match(observatoryCss, /#reporting-data-scope\[hidden\][\s\S]*display:\s*none\s*!important/);
 
 assert.match(js, /operational records, not bank settlement or accounting statements/i);
 assert.match(js, /Planning estimate only:[\s\S]*not actual or forecast-guaranteed revenue/i);
@@ -87,6 +90,14 @@ assert.match(js, /const report = reportSections\.has\(section\) \? await loadRep
 assert.match(js, /Aggregate export|aggregate-report\.csv/i);
 assert.match(js, /Mastery average/);
 assert.match(js, /One-day, seven-day, and 30-day return rates/);
+assert.match(js, /dataScope:\s*'regular'/);
+assert.match(js, /dataScopedSections = new Set/);
+assert.match(js, /dataScopedSections = new Set\(\[[\s\S]*'partnerships'/);
+assert.match(js, /dataScopedSections = new Set\(\[[\s\S]*'subjects'/);
+const reportSectionsBlock = js.match(/const reportSections = new Set\(\[([\s\S]*?)\]\);/)?.[1] || '';
+assert.doesNotMatch(reportSectionsBlock, /'forum'/);
+assert.match(js, /dataScope:\s*state\.dataScope/);
+assert.match(js, /Showing \$\{dataScopeLabel\(\)\.toLowerCase\(\)\} only/);
 
 assert.match(analytics, /90_000/);
 assert.match(analytics, /document\.visibilityState/);
@@ -117,6 +128,20 @@ for (const route of [
   '/admin/export',
   '/admin/user-responses/export',
 ]) assert.match(worker, new RegExp(route.replace('/', '\\/')));
+
+for (const rpc of [
+  'admin_dashboard_snapshot_scoped_v1',
+  'admin_overview_engagement_metrics_scoped_v1',
+  'admin_live_activity_scoped_v1',
+  'admin_user_monitoring_directory_scoped_v1',
+  'admin_recent_sign_in_directory_scoped_v1',
+  'admin_recent_user_activity_directory_scoped_v1',
+  'admin_preview_answer_history_by_feature_scoped_v1',
+  'admin_export_answer_history_scoped_v1',
+  'admin_prepare_user_directory_email_export_scoped_v1',
+  'phase4_admin_operational_data_scoped_v1',
+]) assert.match(worker, new RegExp(rpc));
+assert.match(worker, /p_data_scope:/);
 
 assert.match(js, /Download Q&amp;A|Download Q&A/);
 assert.match(js, /user_response_export/);

@@ -73,6 +73,16 @@
     business_projections: 'subscription_admin',
     business_comparisons: 'learner_analytics_viewer',
   });
+  const dataScopedSections = new Set([
+    'executive', 'realtime', 'recent_users', 'users', 'acquisition', 'marketing',
+    'learning', 'reliability', 'subscriptions', 'paid_subscribers', 'payments',
+    'refunds', 'answer_exports', 'business_revenue', 'business_projections',
+    'business_comparisons', 'partnerships', 'subjects',
+  ]);
+  const dataScopeLabels = Object.freeze({
+    regular: 'Regular users',
+    internal_test: 'Internal testing',
+  });
   const state = {
     client: null,
     session: null,
@@ -119,6 +129,7 @@
     quorumPostsKey: null,
     sectionReady: false,
     exportInFlight: false,
+    dataScope: 'regular',
   };
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -348,7 +359,16 @@
       to: to.toISOString(),
       previousFrom: previousFrom.toISOString(),
       previousTo: previousTo.toISOString(),
+      dataScope: state.dataScope,
     };
+  }
+
+  function dataScopeLabel() {
+    return dataScopeLabels[state.dataScope] || dataScopeLabels.regular;
+  }
+
+  function dataScopeFileSlug() {
+    return state.dataScope === 'internal_test' ? 'internal-testing' : 'regular-users';
   }
 
   async function api(path, body = {}, options = {}) {
@@ -424,13 +444,13 @@
       ? `Updated ${dateTime(meta.generated_at)}`
       : 'No verified analytics events yet';
     $('#system-banner').textContent = meta.data_collection_start
-      ? `Data available since ${dateTime(meta.data_collection_start)}. Times shown in Asia/Manila.`
-      : 'Analytics collection has no verified events yet. Historical figures are not fabricated.';
+      ? `${dataScopeLabel()} data available since ${dateTime(meta.data_collection_start)}. Times shown in Asia/Manila.`
+      : `${dataScopeLabel()} analytics has no verified events yet. Historical figures are not fabricated.`;
   }
 
   async function loadReport(force = false, context = currentRenderContext()) {
     assertRenderActive(context);
-    const windowKey = context.windowKey || String($('#date-range')?.value || 30);
+    const windowKey = context.windowKey || `${state.dataScope}:${String($('#date-range')?.value || 30)}`;
     if (state.report && state.reportWindowKey === windowKey && !force) return state.report;
     const payload = await readApi('/admin/dashboard', context.window || reportingWindow(), context);
     assertRenderActive(context);
@@ -461,17 +481,19 @@
     search = state.userSearch,
     offset = state.userOffset,
     context = currentRenderContext(),
+    dataScope = state.dataScope,
   ) {
     assertRenderActive(context);
     const normalizedSearch = String(search || '').trim();
     const normalizedOffset = Math.max(0, Number(offset) || 0);
-    const key = `directory:${normalizedSearch}:${normalizedOffset}`;
+    const key = `directory:${dataScope}:${normalizedSearch}:${normalizedOffset}`;
     if (!force && state.operational.has(key)) return state.operational.get(key);
     const payload = await readApi('/admin/user-directory', {
       search: normalizedSearch,
       limit: 100,
       offset: normalizedOffset,
       requestKey: uuidKey(),
+      dataScope,
     }, context);
     requireVerifiedTotal(payload.data, 'The account directory');
     assertRenderActive(context);
@@ -481,11 +503,12 @@
 
   async function loadRecentSignIns(force = false, context = currentRenderContext()) {
     assertRenderActive(context);
-    const key = 'recent-sign-ins';
+    const key = `recent-sign-ins:${state.dataScope}`;
     if (!force && state.operational.has(key)) return state.operational.get(key);
     const payload = await readApi('/admin/recent-sign-ins', {
       limit: 7,
       requestKey: uuidKey(),
+      dataScope: state.dataScope,
     }, context);
     assertRenderActive(context);
     state.operational.set(key, payload.data);
@@ -502,7 +525,7 @@
     const window = reportingWindow();
     const normalizedSearch = String(search || '').trim();
     const normalizedOffset = Math.max(0, Number(offset) || 0);
-    const key = `recent-user-activity:${window.from}:${window.to}:${normalizedSearch}:${normalizedOffset}`;
+    const key = `recent-user-activity:${state.dataScope}:${window.from}:${window.to}:${normalizedSearch}:${normalizedOffset}`;
     if (!force && state.operational.has(key)) return state.operational.get(key);
     const payload = await readApi('/admin/recent-user-activity', {
       search: normalizedSearch,
@@ -511,6 +534,7 @@
       limit: 100,
       offset: normalizedOffset,
       requestKey: uuidKey(),
+      dataScope: state.dataScope,
     }, context);
     requireVerifiedTotal(payload.data, 'Recent user activity');
     assertRenderActive(context);
@@ -522,7 +546,7 @@
     assertRenderActive(context);
     const premiumStatus = section === 'access' ? state.premiumStatus : 'all';
     const normalizedOffset = Math.max(0, Number(offset) || 0);
-    const key = `phase4:${section}:${search || ''}:${premiumStatus}:${normalizedOffset}`;
+    const key = `phase4:${state.dataScope}:${section}:${search || ''}:${premiumStatus}:${normalizedOffset}`;
     if (!force && state.operational.has(key)) return state.operational.get(key);
     const payload = await readApi('/admin/phase4-data', {
       section,
@@ -530,6 +554,7 @@
       limit: 100,
       offset: normalizedOffset,
       premiumStatus,
+      dataScope: state.dataScope,
     }, context);
     requireVerifiedTotal(payload.data, humanizeAuditValue(section));
     assertRenderActive(context);
@@ -537,16 +562,21 @@
     return payload.data;
   }
 
-  async function loadAllUserDirectory(force = false, search = '', context = currentRenderContext()) {
+  async function loadAllUserDirectory(
+    force = false,
+    search = '',
+    context = currentRenderContext(),
+    dataScope = state.dataScope,
+  ) {
     assertRenderActive(context);
     const normalizedSearch = String(search || '').trim();
-    const key = `directory:all:${normalizedSearch}`;
+    const key = `directory:all:${dataScope}:${normalizedSearch}`;
     if (!force && state.operational.has(key)) return state.operational.get(key);
     const items = [];
     let offset = 0;
     let total = null;
     do {
-      const page = await loadUserDirectory(force, normalizedSearch, offset, context);
+      const page = await loadUserDirectory(force, normalizedSearch, offset, context, dataScope);
       const pageItems = Array.isArray(page.items) ? page.items : [];
       if (offset === 0) {
         if (page.total == null || !Number.isFinite(Number(page.total))) {
@@ -564,10 +594,27 @@
     return result;
   }
 
+  async function loadAdministratorIdentityDirectory(context = currentRenderContext()) {
+    assertRenderActive(context);
+    const [regular, internal] = await Promise.all([
+      loadAllUserDirectory(false, '', context, 'regular'),
+      loadAllUserDirectory(false, '', context, 'internal_test'),
+    ]);
+    assertRenderActive(context);
+    const accounts = new Map();
+    [...(regular.items || []), ...(internal.items || [])].forEach((account) => {
+      accounts.set(String(account.id), account);
+    });
+    return {
+      items: [...accounts.values()],
+      truncated: regular.truncated || internal.truncated,
+    };
+  }
+
   async function loadAllPhase4Operational(section, force = false, search = '', context = currentRenderContext()) {
     assertRenderActive(context);
     const normalizedSearch = String(search || '').trim();
-    const key = `phase4:all:${section}:${normalizedSearch}`;
+    const key = `phase4:all:${state.dataScope}:${section}:${normalizedSearch}`;
     if (!force && state.operational.has(key)) return state.operational.get(key);
     const items = [];
     let offset = 0;
@@ -593,7 +640,7 @@
 
   async function loadRecentUserActivityWindow(from, to, force = false, context = currentRenderContext()) {
     assertRenderActive(context);
-    const key = `recent-user-activity:all:${from}:${to}`;
+    const key = `recent-user-activity:all:${state.dataScope}:${from}:${to}`;
     if (!force && state.operational.has(key)) return state.operational.get(key);
     // Aggregate totals, duration, daily activity, and activity mix already
     // cover the complete period. A bounded page is sufficient for the clearly
@@ -605,6 +652,7 @@
       limit: 100,
       offset: 0,
       requestKey: uuidKey(),
+      dataScope: state.dataScope,
     }, context);
     requireVerifiedTotal(payload.data, 'Recent user activity');
     const page = payload.data || {};
@@ -644,11 +692,12 @@
 
   async function loadLiveActivity(force = false, context = currentRenderContext()) {
     assertRenderActive(context);
-    const key = 'live-activity';
+    const key = `live-activity:${state.dataScope}`;
     if (!force && state.operational.has(key)) return state.operational.get(key);
     const payload = await readApi('/admin/live-activity', {
       limit: 100,
       requestKey: uuidKey(),
+      dataScope: state.dataScope,
     }, context);
     assertRenderActive(context);
     state.operational.set(key, payload.data);
@@ -657,7 +706,7 @@
 
   async function loadAnswerHistory(force = false, context = currentRenderContext()) {
     assertRenderActive(context);
-    const key = `answers:${state.answerFeature}:${state.answerSearch}:${state.answerOffset}`;
+    const key = `answers:${state.dataScope}:${state.answerFeature}:${state.answerSearch}:${state.answerOffset}`;
     if (!force && state.operational.has(key)) return state.operational.get(key);
     const payload = await readApi('/admin/answer-history', {
       targetUserId: null,
@@ -667,6 +716,7 @@
       feature: state.answerFeature,
       limit: 100,
       offset: state.answerOffset,
+      dataScope: state.dataScope,
     }, context);
     requireVerifiedTotal(payload.data, 'Answer history');
     assertRenderActive(context);
@@ -811,7 +861,12 @@
     }
     const filenameSection = String(titles[state.section] || 'admin')
       .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-    downloadCsv(`due-diligence-${filenameSection || 'admin'}-current-page.csv`, rows[0], rows.slice(1));
+    const scopeSuffix = dataScopedSections.has(state.section) ? `-${dataScopeFileSlug()}` : '';
+    downloadCsv(
+      `due-diligence-${filenameSection || 'admin'}${scopeSuffix}-current-page.csv`,
+      rows[0],
+      rows.slice(1),
+    );
     toast('Current page data downloaded for Google Sheets. Use the page-specific download for the complete record set.');
     if (button) button.innerHTML = '<i class="ph ph-check" aria-hidden="true"></i><span>Downloaded</span>';
     await new Promise((resolve) => setTimeout(resolve, 700));
@@ -2062,7 +2117,7 @@
             && row.target_resource_type === 'payment_proof')
           .slice(0, 20)
       )),
-      loadAllUserDirectory(false, '', context),
+      loadAdministratorIdentityDirectory(context),
     ]);
     const directoryById = new Map((directory.items || []).map((account) => [String(account.id), account]));
     return `
@@ -2249,7 +2304,7 @@
   async function renderSecurity(context) {
     const [data, directory] = await Promise.all([
       loadOperational('security', false, null, context),
-      loadAllUserDirectory(false, '', context),
+      loadAdministratorIdentityDirectory(context),
     ]);
     const directoryById = new Map((directory.items || []).map((account) => [String(account.id), account]));
     return `
@@ -3213,6 +3268,8 @@
     }
     const isExaminationRoom = section === 'examination_room_v1';
     const rangeControl = $('#reporting-range');
+    const dataScopeControl = $('#reporting-data-scope');
+    if (dataScopeControl) dataScopeControl.hidden = !dataScopedSections.has(section);
     const rangeApplies = ['executive', 'realtime', 'recent_users', 'acquisition', 'marketing', 'learning', 'subjects', 'reliability', 'forum', 'business_projections', 'business_comparisons'].includes(section);
     if (rangeControl) {
       rangeControl.hidden = isExaminationRoom;
@@ -3252,11 +3309,11 @@
     try {
       const reportSections = new Set([
         'executive', 'realtime', 'acquisition', 'marketing', 'learning', 'subjects',
-        'reliability', 'subscriptions', 'forum', 'answer_exports',
+        'reliability', 'subscriptions', 'answer_exports',
         'business_projections', 'business_comparisons',
       ]);
       const window = reportingWindow();
-      const windowKey = String($('#date-range')?.value || 30);
+      const windowKey = `${state.dataScope}:${String($('#date-range')?.value || 30)}`;
       context.window = window;
       context.windowKey = windowKey;
       const report = reportSections.has(section) ? await loadReport(false, context) : {};
@@ -3303,7 +3360,9 @@
       if (reportSections.has(section)) commitReportMeta(report);
       else {
         $('#freshness b').textContent = `Loaded ${dateTime(new Date().toISOString())}`;
-        $('#system-banner').textContent = `${title} shows current records for the filters on this page. The date-range selector does not apply.`;
+        $('#system-banner').textContent = dataScopedSections.has(section)
+          ? `${title} shows ${dataScopeLabel().toLowerCase()} records for the filters on this page. The date-range selector does not apply.`
+          : `${title} shows current records for the filters on this page. The date-range selector does not apply.`;
       }
       state.sectionReady = true;
       if (exportButton) exportButton.disabled = false;
@@ -4196,6 +4255,7 @@
             requestKey: state.action.requestKey,
             from: from.toISOString(),
             to: to.toISOString(),
+            dataScope: state.dataScope,
           }),
         });
         if (!response.ok) {
@@ -4205,7 +4265,7 @@
         const blob = await response.blob();
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = `due-diligence-user-${state.action.targetId}-questions-answers.csv`;
+        link.download = `due-diligence-user-${state.action.targetId}-${dataScopeFileSlug()}-questions-answers.csv`;
         link.click();
         setTimeout(() => URL.revokeObjectURL(link.href), 1000);
         toast('Private questions-and-answers file downloaded and recorded.');
@@ -4580,7 +4640,7 @@
       state.userDirectoryObserver.observe(directorySentinel);
     }
     $('#download-live-activity')?.addEventListener('click', () => {
-      downloadCsv('due-diligence-activity-summary.csv', [
+      downloadCsv(`due-diligence-activity-summary-${dataScopeFileSlug()}.csv`, [
         'Measure', 'Value', 'Meaning', 'Generated at',
       ], [
         ['Activity in the last 5 minutes', state.liveActivity?.activeSignedInLast5Minutes, 'Approximate signed-in-session records; not exact people online', state.liveActivity?.generatedAt],
@@ -4629,7 +4689,7 @@
         (item.questionSourceLinks || []).map((source) => source.url).filter(Boolean).join('\n'),
         item.submittedAt || item.answerSavedAt || item.completedAt,
       ]);
-      downloadCsv('due-diligence-answer-records-current-view.csv', [
+      downloadCsv(`due-diligence-answer-records-${dataScopeFileSlug()}-current-view.csv`, [
         'Name', 'Email', 'Subscription', 'Feature', 'Subject', 'Exam', 'Question',
         'Question source', 'Question availability', 'Student answer', 'Score', 'Feedback',
         'Suggested answer', 'Suggested answer source', 'Suggested answer availability',
@@ -4653,7 +4713,7 @@
       $('#paid-subscriber-search-button')?.click();
     });
     $('#download-paid-subscribers')?.addEventListener('click', () => {
-      downloadCsv('due-diligence-paid-subscribers.csv', [
+      downloadCsv(`due-diligence-paid-subscribers-${dataScopeFileSlug()}.csv`, [
         'Name', 'Email', 'School', 'Plan', 'Payment state', 'Access state', 'Amount PHP',
         'Payment recorded', 'Access starts', 'Access expires', 'Expiry attention', 'Last sign-in',
       ], state.paidSubscriberRows.map(({ account, payment }) => {
@@ -4691,7 +4751,11 @@
             Authorization: `Bearer ${token}`,
             ...(global.DueDiligencePrivateBeta?.accessHeaders?.() || {}),
           },
-          body: JSON.stringify({ search: state.subscriptionSearch, requestKey: uuidKey() }),
+          body: JSON.stringify({
+            search: state.subscriptionSearch,
+            requestKey: uuidKey(),
+            dataScope: state.dataScope,
+          }),
         });
         if (!response.ok) {
           const problem = await response.json().catch(() => null);
@@ -4700,7 +4764,7 @@
         const blob = await response.blob();
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = 'due-diligence-subscriptions.csv';
+        link.download = `due-diligence-subscriptions-${dataScopeFileSlug()}.csv`;
         link.click();
         setTimeout(() => URL.revokeObjectURL(link.href), 1_000);
         toast('Subscriptions downloaded for Google Sheets.');
@@ -4778,7 +4842,11 @@
             Authorization: `Bearer ${token}`,
             ...(global.DueDiligencePrivateBeta?.accessHeaders?.() || {}),
           },
-          body: JSON.stringify({ search: state.userSearch, requestKey: uuidKey() }),
+          body: JSON.stringify({
+            search: state.userSearch,
+            requestKey: uuidKey(),
+            dataScope: state.dataScope,
+          }),
         });
         if (!response.ok) {
           const problem = await response.json().catch(() => null);
@@ -4787,7 +4855,7 @@
         const blob = await response.blob();
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = 'due-diligence-users.csv';
+        link.download = `due-diligence-users-${dataScopeFileSlug()}.csv`;
         link.click();
         setTimeout(() => URL.revokeObjectURL(link.href), 1000);
         toast('User list downloaded for Google Sheets.');
@@ -4811,6 +4879,7 @@
           reason,
           requestKey: uuidKey(),
           confirmed: true,
+          dataScope: state.dataScope,
         });
         toast(result.delivery?.status === 'sent'
           ? 'User list sent to the selected founder.'
@@ -4862,6 +4931,7 @@
             reason,
             requestKey: uuidKey(),
             confirmed: true,
+            dataScope: state.dataScope,
           }),
         });
         if (!response.ok) {
@@ -4871,7 +4941,7 @@
         const blob = await response.blob();
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = 'due-diligence-all-answer-history.csv';
+        link.download = `due-diligence-${dataScopeFileSlug()}-answer-history.csv`;
         link.click();
         setTimeout(() => URL.revokeObjectURL(link.href), 1000);
         toast('Answer-history file downloaded for Google Sheets and recorded.');
@@ -4899,7 +4969,7 @@
         const blob = await response.blob();
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = 'due-diligence-aggregate-report.csv';
+        link.download = `due-diligence-${dataScopeFileSlug()}-aggregate-report.csv`;
         link.click();
         setTimeout(() => URL.revokeObjectURL(link.href), 1000);
       } catch (error) { toast(error.message); }
@@ -5008,6 +5078,32 @@
     state.report = null;
     state.reportWindowKey = null;
     state.operational.clear();
+    await renderSection(state.section);
+  });
+  $('#data-scope')?.addEventListener('change', async (event) => {
+    const nextScope = String(event.currentTarget.value || '').trim();
+    if (!Object.prototype.hasOwnProperty.call(dataScopeLabels, nextScope)) {
+      event.currentTarget.value = state.dataScope;
+      toast('Choose Regular users or Internal testing data.');
+      return;
+    }
+    if (nextScope === state.dataScope) return;
+    state.dataScope = nextScope;
+    state.report = null;
+    state.reportWindowKey = null;
+    state.operational.clear();
+    state.liveActivity = null;
+    state.recentUserActivity = null;
+    state.answerHistory = null;
+    state.answerHistoryKey = null;
+    state.subscriptionRows.clear();
+    state.subscriptionExportRows = [];
+    state.paidSubscriberRows = [];
+    state.userOffset = 0;
+    state.recentUserOffset = 0;
+    state.subscriptionOffset = 0;
+    state.answerOffset = 0;
+    toast(`Showing ${dataScopeLabel().toLowerCase()} only.`);
     await renderSection(state.section);
   });
   $('#refresh-dashboard')?.addEventListener('click', async () => {

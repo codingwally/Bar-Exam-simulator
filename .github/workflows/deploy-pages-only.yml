@@ -107,7 +107,7 @@ jobs:
             cta_css="$(curl -fsS "$SITE_URL/assets/subscription-cta.css?release=$GITHUB_SHA" || true)"
             if grep -q 'home-subscription-cta-20260828-1' <<<"$index" \
               && grep -q 'duediligence:subscription-cta' <<<"$cta_js" \
-              && grep -q 'dd-subscription-invitation' <<<"$cta_css"; then
+              && grep -q 'dd2-subscription-invitation' <<<"$cta_css"; then
               verified=true
               break
             fi

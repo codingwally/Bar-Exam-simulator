@@ -50,8 +50,8 @@ assert.match(html, /Nickname privacy/);
 assert.match(html, /Separate-window study/);
 assert.match(html, /Admin beta currently in testing/);
 assert.match(html, /Interface preview only\. No camera or microphone is active\./);
-assert.match(html, /The branded backdrop is automatic and cannot be disabled\./);
-assert.match(html, /Always applied before video is shared/);
+assert.match(html, /Turn the backdrop off with one click for a lighter, faster video mode\./);
+assert.match(html, /aria-label="Backdrop can be turned off"/);
 assert.doesNotMatch(html, /data-study-room-background=|>None<|>Blur</);
 assert.doesNotMatch(client, /data-study-room-background|studyRoomBackground/);
 
@@ -87,8 +87,8 @@ assert.doesNotMatch(client, /Allow pop-ups for Due Diligence/);
 assert.match(client, /return openMarketingPreview\(trigger\)/);
 assert.match(client, /target\?\.click\(\)/);
 assert.match(client, /study_room_preview_opened/);
-assert.match(html, /study-room-preview\.css\?v=study-room-mandatory-backdrop-20260829-1/);
-assert.match(html, /study-room-preview\.js\?v=study-room-mandatory-backdrop-20260829-1/);
+assert.match(html, /study-room-preview\.css\?v=study-room-performance-controls-20260829-1/);
+assert.match(html, /study-room-preview\.js\?v=study-room-performance-controls-20260829-1/);
 
 function extractNamedFunction(source, name) {
   const start = source.indexOf(`function ${name}(`);

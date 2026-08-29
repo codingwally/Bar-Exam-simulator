@@ -99,7 +99,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          allowed='^(\.github/workflows/(deploy-pages-only|release-study-room-admin-beta)\.yml|assets/icons/navigation/mic\.svg|assets/study-room-backgrounds\.js|assets/study-room-live\.(css|js)|assets/study-room-preview\.(css|js)|assets/study-room/virtual-background-due-diligence-branded\.webp|assets/vendor/mediapipe/(LICENSE|PROVENANCE)\.txt|assets/vendor/mediapipe/selfie_segmenter-float16-2023-05-07\.tflite|index\.html|scripts/build-pages-artifact\.mjs|scripts/test-pages-artifact\.mjs|scripts/test-study-room-(backgrounds|deployment-smoke|hotfix-behavior|live|preview|release-workflow)\.mjs|study-room/index\.html|worker/index\.mjs|worker/livekit-credentials-smoke(\.test)?\.mjs|worker/package(-lock)?\.json|worker/study-room-(core|routes|staging-positive-smoke)\.mjs|worker/study-room\.test\.mjs|worker/wrangler(\.staging)?\.toml)$'
+          allowed='^(\.github/workflows/(deploy-pages-only|release-study-room-admin-beta)\.yml|assets/icons/(community/image|navigation/mic)\.svg|assets/study-room-backgrounds\.js|assets/study-room-live\.(css|js)|assets/study-room-preview\.(css|js)|assets/study-room/virtual-background-due-diligence-branded\.webp|assets/vendor/mediapipe/(LICENSE|PROVENANCE)\.txt|assets/vendor/mediapipe/selfie_segmenter-float16-2023-05-07\.tflite|index\.html|scripts/build-pages-artifact\.mjs|scripts/test-pages-artifact\.mjs|scripts/test-study-room-(backgrounds|deployment-smoke|hotfix-behavior|live|preview|release-workflow)\.mjs|study-room/index\.html|worker/index\.mjs|worker/livekit-credentials-smoke(\.test)?\.mjs|worker/package(-lock)?\.json|worker/study-room-(core|routes|staging-positive-smoke)\.mjs|worker/study-room\.test\.mjs|worker/wrangler(\.staging)?\.toml)$'
           changed="$(git diff --name-only "$EXPECTED_CURRENT_PAGES_SHA" "$GITHUB_SHA")"
           test -n "$changed"
           unexpected="$(printf '%s\n' "$changed" | grep -Ev "$allowed" || true)"
@@ -239,11 +239,12 @@ jobs:
           live="$(curl --fail --silent --show-error "$STUDY_ROOM_WORKER_URL/assets/study-room-live.js?release=$GITHUB_SHA")"
           backgrounds="$(curl --fail --silent --show-error "$STUDY_ROOM_WORKER_URL/assets/study-room-backgrounds.js?release=$GITHUB_SHA")"
           processors="$(curl --fail --silent --show-error "$STUDY_ROOM_WORKER_URL/assets/vendor/livekit-track-processors.iife.js?release=$GITHUB_SHA")"
-          grep -Fq 'study-room-media-hotfix-20260829-1' <<<"$room"
+          grep -Fq 'study-room-performance-controls-20260829-1' <<<"$room"
           grep -Fq '/admin/study-room/rooms' <<<"$live"
           grep -Fq 'DueDiligenceStudyRoomMandatoryBackground' <<<"$backgrounds"
           grep -Fq 'due-diligence-mandatory-virtual-background-no-raw-first-frame' <<<"$processors"
           for asset in \
+            assets/icons/community/image.svg \
             assets/icons/navigation/mic.svg \
             assets/study-room/virtual-background-due-diligence-branded.webp \
             assets/vendor/mediapipe/selfie_segmenter-float16-2023-05-07.tflite \
@@ -493,6 +494,7 @@ jobs:
             preview="$(curl --fail --silent --show-error -H 'Cache-Control: no-cache' "https://duediligence.ph/assets/study-room-preview.js?release=$GITHUB_SHA" || true)"
             background_assets=true
             for asset in \
+              assets/icons/community/image.svg \
               assets/icons/navigation/mic.svg \
               assets/study-room/virtual-background-due-diligence-branded.webp \
               assets/vendor/mediapipe/selfie_segmenter-float16-2023-05-07.tflite \
@@ -505,8 +507,8 @@ jobs:
               fi
             done
             if grep -Fq '<title>Study Room — Due Diligence</title>' <<<"$room" \
-              && grep -Fq 'study-room-media-hotfix-20260829-1' <<<"$room" \
-              && grep -Fq 'study-room-mandatory-background-20260829-1' <<<"$room" \
+              && grep -Fq 'study-room-performance-controls-20260829-1' <<<"$room" \
+              && grep -Fq 'study-room-optional-background-20260829-1' <<<"$room" \
               && grep -Fq '/admin/study-room/rooms' <<<"$live" \
               && grep -Fq '/admin/study-room/join' <<<"$live" \
               && grep -Fq 'async function discoverDevices()' <<<"$live" \
@@ -514,12 +516,12 @@ jobs:
               && grep -Fq 'DueDiligenceStudyRoomMandatoryBackground' <<<"$backgrounds" \
               && grep -Fq 'virtual-background-due-diligence-branded.webp' <<<"$backgrounds" \
               && grep -Fq 'due-diligence-mandatory-virtual-background-no-raw-first-frame' <<<"$processors" \
-              && grep -Fq 'study-room-mandatory-backdrop-20260829-1' <<<"$home" \
+              && grep -Fq 'study-room-performance-controls-20260829-1' <<<"$home" \
               && grep -Fq "new URL('/study-room/', global.location.origin)" <<<"$preview" \
               && grep -Fq 'global.location.assign(roomUrl.href)' <<<"$preview" \
               && grep -Fq 'accessResolutionFailed = signedIn(latestSession) && !latestAccess' <<<"$preview" \
               && test "$background_assets" = "true"; then
-              echo "The four-room client, mandatory background runtime, and device discovery are live at the exact release SHA."
+              echo "The four-room client, optional background runtime, low-bandwidth video profile, and device discovery are live at the exact release SHA."
               exit 0
             fi
             sleep 5

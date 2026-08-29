@@ -37,7 +37,7 @@ for (const simulatorDestination of [
 }
 assert.match(page, /class="sr-brand"[^>]*aria-label="Return to Due Diligence"/u);
 assert.match(page, /class="sr-return-link"[^>]*>Return to simulator<\/a>/u);
-assert.match(page, /id="sr-toggle-microphone"[\s\S]*?<span>Unmute<\/span>/u);
+assert.match(page, /id="sr-toggle-microphone"[\s\S]*?<span class="sr-control-label">Unmute<\/span>/u);
 assert.doesNotMatch(page, /Turn mic on/iu);
 assert.match(page, /Camera and microphone are off/);
 assert.match(page, /Nothing is shared until you choose to join/);
@@ -50,14 +50,15 @@ assert.match(page, /id="sr-room-lobby"[\s\S]*data-max-rooms="4"/u);
 assert.match(page, /id="sr-room-lobby-count"/u);
 assert.match(page, /id="sr-room-card-grid"[\s\S]*id="sr-create-room"/u);
 assert.match(page, /id="sr-room-selector"[\s\S]*id="sr-room-selector-menu"/u);
-assert.match(page, /id="sr-branded-backdrop-status"[\s\S]*data-backdrop-enforcement="required"/u);
+assert.match(page, /id="sr-branded-backdrop-status"[\s\S]*data-backdrop-enforcement="optional"/u);
 assert.match(page, /id="sr-branded-backdrop-copy"/u);
-assert.match(page, /Branded backdrop enforced/u);
+assert.match(page, /id="sr-toggle-backdrop"[\s\S]*aria-pressed="true"/u);
+assert.match(page, /Due Diligence backdrop/u);
 assert.doesNotMatch(page, /Virtual backgrounds|Coming after the quality test/iu);
 assert.match(page, /assets\/vendor\/livekit-client\.umd\.js\?v=2\.22\.1/);
 assert.match(page, /assets\/vendor\/livekit-track-processors\.iife\.js\?v=0\.7\.2/);
-assert.match(page, /study-room-backgrounds\.js\?v=study-room-mandatory-background-20260829-1/);
-assert.match(page, /study-room-live\.js\?v=study-room-media-hotfix-20260829-1/);
+assert.match(page, /study-room-backgrounds\.js\?v=study-room-optional-background-20260829-1/);
+assert.match(page, /study-room-live\.js\?v=study-room-performance-controls-20260829-1/);
 assert.doesNotMatch(page, /facebook|fb\.com|recording is on|Recording enabled/i);
 
 for (const endpoint of ['access', 'rooms', 'join', 'moderate']) {
@@ -69,14 +70,17 @@ assert.match(client, /Authorization: `Bearer \$\{token\}`/);
 assert.match(client, /cache: 'no-store'/);
 assert.match(client, /new LiveKit\.Room/);
 assert.match(client, /bindRoomEvents\(room\);[\s\S]*await room\.connect/);
-assert.match(client, /const MEDIA_RELIABILITY_VERSION = 'study-room-media-hotfix-20260829-1'/);
+assert.match(client, /const MEDIA_RELIABILITY_VERSION = 'study-room-performance-controls-20260829-1'/);
 assert.match(client, /adaptiveStream:\s*\{[\s\S]*pixelDensity:\s*1[\s\S]*pauseVideoInBackground:\s*true/);
-assert.match(client, /dynacast: true/);
-assert.match(client, /width:\s*640,[\s\S]*height:\s*360,[\s\S]*frameRate:\s*15/);
-assert.match(client, /maxBitrate:\s*450_000,[\s\S]*maxFramerate:\s*15/);
+assert.match(client, /dynacast: false/);
+assert.match(client, /width:\s*320,[\s\S]*height:\s*180,[\s\S]*frameRate:\s*12/);
+assert.match(client, /maxBitrate:\s*200_000,[\s\S]*maxFramerate:\s*12/);
 assert.match(client, /dtx:\s*false,[\s\S]*red:\s*true,[\s\S]*forceStereo:\s*false/);
 assert.match(client, /videoCodec:\s*'vp8'/);
-assert.match(client, /maxFps:\s*STUDY_VIDEO_CAPTURE\.frameRate/);
+assert.match(client, /const BACKDROP_PROCESSOR_MAX_FPS = 8/);
+assert.match(client, /maxFps:\s*BACKDROP_PROCESSOR_MAX_FPS/);
+assert.match(client, /simulcast:\s*false/);
+assert.doesNotMatch(client, /videoSimulcastLayers/);
 assert.doesNotMatch(client, /operation:\s*['"]mute['"]/u);
 assert.match(client, /operation: 'rename'/);
 assert.doesNotMatch(client, /operation:\s*['"]unmute['"]/);
@@ -147,6 +151,9 @@ assert.match(
   /await controller\.enableCamera\([\s\S]{0,120}captureOptions\('camera', deviceId\)[\s\S]{0,120}cameraPublishOptions\(\)/,
 );
 assert.match(client, /await ensureBackgroundController\(\)\.switchCamera\(captureOptions\('camera', deviceId\)\)/);
+assert.match(client, /function toggleBackdrop\(\)[\s\S]*state\.backdropEnabled = false/);
+assert.match(client, /function setRawCameraEnabled\([\s\S]*rawCameraPublishAuthorized = true/);
+assert.match(client, /userApprovedRawCameraTracks/);
 assert.match(client, /Video fails closed, while room access and audio remain available/);
 
 assert.match(backgroundClient, /const REQUIRED_EFFECTS_POLICY = 'due-diligence-mandatory-virtual-background-no-raw-first-frame'/);
@@ -172,8 +179,10 @@ assert.match(css, /\.sr-button[\s\S]*min-height:\s*44px/);
 assert.match(css, /\.sr-room-card-grid\s*\{[\s\S]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/u);
 assert.match(css, /\.sr-live-layout\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) minmax\(330px, 0\.34fr\)/u);
 assert.match(css, /\.sr-participant-grid\s*\{[\s\S]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/u);
-assert.match(css, /\.sr-control-dock button[\s\S]*min-height:\s*56px/u);
-assert.match(css, /\.sr-control-dock button img[\s\S]*border-radius:\s*50%/u);
+assert.match(css, /\.sr-control-dock button[\s\S]*min-height:\s*48px/u);
+assert.match(css, /\.sr-control-dock button img[\s\S]*width:\s*21px/u);
+assert.match(css, /\.sr-control-label\s*\{[\s\S]*clip:\s*rect\(0 0 0 0\)/u);
+assert.match(css, /#sr-toggle-backdrop\[aria-pressed="true"\]/u);
 assert.match(css, /\.sr-backdrop-enforcement\s*\{/u);
 assert.match(css, /\.sr-device-drawer\[hidden\]\s*\{[\s\S]*display:\s*none/u);
 assert.match(css, /@media \(max-width:\s*480px\)/);

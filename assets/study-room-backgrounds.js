@@ -1,7 +1,7 @@
 (function dueDiligenceStudyRoomMandatoryBackground(global) {
   'use strict';
 
-  const VERSION = 'study-room-mandatory-background-20260829-1';
+  const VERSION = 'study-room-optional-background-20260829-1';
   const REQUIRED_EFFECTS_POLICY = 'due-diligence-mandatory-virtual-background-no-raw-first-frame';
   const DEFAULT_IMAGE_PATH = '/assets/study-room/virtual-background-due-diligence-branded.webp';
   const DEFAULT_TASKS_VISION_PATH = '/assets/vendor/mediapipe/wasm';

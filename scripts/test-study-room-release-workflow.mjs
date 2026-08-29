@@ -32,6 +32,7 @@ const releaseAllowlist = new RegExp(allowlistSource, "u");
 for (const expectedReleaseFile of [
   ".github/workflows/deploy-pages-only.yml",
   ".github/workflows/release-study-room-admin-beta.yml",
+  "assets/icons/community/image.svg",
   "assets/icons/navigation/mic.svg",
   "assets/study-room-backgrounds.js",
   "assets/study-room-live.css",
@@ -102,6 +103,7 @@ assert.ok(
 const pagesOnlyAllowlist = new RegExp(pagesOnlyAllowlistSource, "u");
 for (const expectedPagesFile of [
   ".github/workflows/deploy-pages-only.yml",
+  "assets/icons/community/image.svg",
   "assets/icons/navigation/mic.svg",
   "assets/study-room-backgrounds.js",
   "assets/study-room-live.css",
@@ -167,7 +169,7 @@ assert.ok(
 );
 const stagingAssetChecks = workflow.slice(stagingSmoke, stagingPositiveSmoke);
 for (const requiredStagingMarker of [
-  "study-room-media-hotfix-20260829-1",
+  "study-room-performance-controls-20260829-1",
   "/admin/study-room/rooms",
   "DueDiligenceStudyRoomMandatoryBackground",
   "due-diligence-mandatory-virtual-background-no-raw-first-frame",
@@ -312,23 +314,24 @@ assert.match(
 );
 assert.match(
   workflow.slice(pagesVerificationJob),
-  /study-room-mandatory-backdrop-20260829-1/u,
+  /study-room-performance-controls-20260829-1/u,
 );
 assert.match(
   home,
-  /study-room-mandatory-backdrop-20260829-1/u,
+  /study-room-performance-controls-20260829-1/u,
   "Production verification must use a marker that exists in the shipped Home document.",
 );
 assert.match(
   workflow.slice(pagesVerificationJob),
-  /study-room-media-hotfix-20260829-1/u,
+  /study-room-performance-controls-20260829-1/u,
 );
 assert.match(
   workflow.slice(pagesVerificationJob),
-  /study-room-mandatory-background-20260829-1/u,
+  /study-room-optional-background-20260829-1/u,
 );
 for (const requiredProductionAsset of [
   "/admin/study-room/rooms",
+  "assets/icons/community/image.svg",
   "assets/icons/navigation/mic.svg",
   "assets/study-room/virtual-background-due-diligence-branded.webp",
   "assets/vendor/livekit-track-processors.iife.js",
@@ -349,10 +352,10 @@ for (const requiredProductionAsset of [
     `Pages-only production verification must check ${requiredProductionAsset}.`,
   );
 }
-assert.match(pagesOnlyWorkflow, /study-room-media-hotfix-20260829-1/u);
+assert.match(pagesOnlyWorkflow, /study-room-performance-controls-20260829-1/u);
 assert.match(
   pagesOnlyWorkflow,
-  /study-room-mandatory-background-20260829-1/u,
+  /study-room-optional-background-20260829-1/u,
 );
 assert.match(
   workflow.slice(pagesVerificationJob),

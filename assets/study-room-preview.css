@@ -518,6 +518,10 @@ body.dd-study-room-open { overflow: hidden; }
   grid-template-columns: minmax(0, 1fr);
 }
 
+.dd-study-room-backgrounds-choice {
+  grid-template-columns: minmax(0, 1fr) 68px;
+}
+
 .dd-study-room-background-option {
   display: grid;
   min-height: 64px;

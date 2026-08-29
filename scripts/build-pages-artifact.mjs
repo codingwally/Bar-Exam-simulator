@@ -51,6 +51,7 @@ const communityIconFiles = Object.freeze([
   'share-fat.svg',
   'bookmark-simple.svg',
   'camera.svg',
+  'image.svg',
   'paper-plane-tilt.svg',
   'magnifying-glass.svg',
   'arrows-clockwise.svg',

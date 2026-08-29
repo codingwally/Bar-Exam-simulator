@@ -155,8 +155,10 @@ assert.match(studyRoomPage, /assets\/vendor\/livekit-client\.umd\.js\?v=2\.22\.1
 assert.match(studyRoomLive, /\/admin\/study-room\/access/);
 assert.match(studyRoomLive, /\/admin\/study-room\/join/);
 assert.match(studyRoomLive, /\/admin\/study-room\/moderate/);
-assert.match(studyRoomLive, /operation:\s*'mute'/);
+assert.doesNotMatch(studyRoomLive, /operation:\s*['"]mute['"]/);
 assert.match(studyRoomLive, /operation:\s*'rename'/);
+assert.doesNotMatch(studyRoomLive, /Mute for room/i);
+assert.match(studyRoomLive, /Mute for me/);
 assert.match(studyRoomLive, /Block locally/);
 assert.doesNotMatch(`${studyRoomPage}\n${studyRoomLive}`, /LIVEKIT_API_SECRET|LIVEKIT_API_KEY\s*=|participant_token[^\n]*(?:localStorage|sessionStorage)|roomAdmin/);
 assert.ok(liveKitClient.byteLength > 500_000, 'the reviewed LiveKit browser client must ship locally');

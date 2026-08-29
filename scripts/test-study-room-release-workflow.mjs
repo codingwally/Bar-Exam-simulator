@@ -241,7 +241,7 @@ assert.match(
 );
 assert.match(
   workflow.slice(pagesVerificationJob),
-  /study-room-admin-beta-20260829-2/u,
+  /study-room-audio-controls-20260829-1/u,
 );
 assert.match(
   workflow.slice(pagesVerificationJob),

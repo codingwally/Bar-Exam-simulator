@@ -37,6 +37,11 @@
     activeSpeakers: new Set(),
     joinWithMicrophone: false,
     joinWithCamera: false,
+    selectedDevices: {
+      videoinput: '',
+      audioinput: '',
+      audiooutput: '',
+    },
     joining: false,
     leaving: false,
     focusStartedAt: null,
@@ -134,6 +139,67 @@
     const message = String(error?.message || '').trim();
     if (message && !/failed to fetch|networkerror|load failed/iu.test(message)) return message;
     return fallback;
+  }
+
+  function isPermissionError(error) {
+    return ['NotAllowedError', 'PermissionDeniedError', 'SecurityError'].includes(error?.name);
+  }
+
+  function isRetryableDeviceError(error) {
+    return [
+      'NotFoundError',
+      'DevicesNotFoundError',
+      'NotReadableError',
+      'TrackStartError',
+      'OverconstrainedError',
+      'ConstraintNotSatisfiedError',
+      'AbortError',
+    ].includes(error?.name);
+  }
+
+  function deviceErrorMessage(kind, error) {
+    const label = kind === 'microphone' ? 'microphone' : 'camera';
+    if (error?.code === 'MEDIA_TRACK_NOT_LIVE') {
+      return `The ${label} did not produce a live signal. Choose another device and try again.`;
+    }
+    if (isPermissionError(error)) {
+      return `${label === 'microphone' ? 'Microphone' : 'Camera'} access is blocked. Allow it for duediligence.ph in your browser site permissions, then try again.`;
+    }
+    if (error?.name === 'PermissionTimeoutError') {
+      return `The browser is still waiting for ${label} permission. Choose Allow in the browser prompt, then try again.`;
+    }
+    if (['NotReadableError', 'TrackStartError'].includes(error?.name)) {
+      return `The selected ${label} is busy in another app. Close the other app or choose a different device.`;
+    }
+    if (['NotFoundError', 'DevicesNotFoundError'].includes(error?.name)) {
+      return `No available ${label} was found. Connect one and try again.`;
+    }
+    if (['OverconstrainedError', 'ConstraintNotSatisfiedError'].includes(error?.name)) {
+      return `The selected ${label} is no longer available. The device list was refreshed; try the system default.`;
+    }
+    return `The ${label} could not start. Check browser permission and choose another device.`;
+  }
+
+  async function requestUserMediaWithTimeout(mediaDevices, constraints, timeoutMs = 12000) {
+    let timedOut = false;
+    let timer = 0;
+    const mediaPromise = Promise.resolve().then(() => mediaDevices.getUserMedia(constraints));
+    mediaPromise.then((stream) => {
+      if (timedOut) stream?.getTracks?.().forEach((track) => track.stop());
+    }).catch(() => {});
+    const timeoutPromise = new Promise((_resolve, reject) => {
+      timer = global.setTimeout(() => {
+        timedOut = true;
+        const error = new Error('The browser is still waiting for device permission.');
+        error.name = 'PermissionTimeoutError';
+        reject(error);
+      }, timeoutMs);
+    });
+    try {
+      return await Promise.race([mediaPromise, timeoutPromise]);
+    } finally {
+      global.clearTimeout(timer);
+    }
   }
 
   async function workerRequest(path, body = {}) {
@@ -250,11 +316,14 @@
     byId('sr-microphone-meter')?.querySelectorAll('span').forEach((bar) => bar.classList.remove('is-active'));
   }
 
-  function startMeter(stream) {
+  async function startMeter(stream) {
     stopMeter();
     const audioTrack = stream.getAudioTracks()[0];
     if (!audioTrack || !global.AudioContext) return;
     state.audioContext = new global.AudioContext();
+    if (state.audioContext.state === 'suspended') {
+      await state.audioContext.resume().catch(() => {});
+    }
     const source = state.audioContext.createMediaStreamSource(new global.MediaStream([audioTrack]));
     state.analyser = state.audioContext.createAnalyser();
     state.analyser.fftSize = 256;
@@ -293,14 +362,43 @@
     return value ? { deviceId: { exact: value } } : true;
   }
 
-  function fillSelect(select, devices, fallback) {
+  const DEVICE_SELECT_IDS = Object.freeze({
+    videoinput: ['sr-camera-select', 'sr-live-camera-select'],
+    audioinput: ['sr-microphone-select', 'sr-live-microphone-select'],
+    audiooutput: ['sr-speaker-select', 'sr-live-speaker-select'],
+  });
+
+  function selectedDeviceId(kind) {
+    const remembered = state.selectedDevices[kind];
+    if (remembered) return remembered;
+    for (const id of DEVICE_SELECT_IDS[kind] || []) {
+      const value = byId(id)?.value || '';
+      if (value) return value;
+    }
+    return '';
+  }
+
+  function rememberDeviceSelection(kind, value) {
+    const normalized = String(value || '');
+    state.selectedDevices[kind] = normalized;
+    for (const id of DEVICE_SELECT_IDS[kind] || []) {
+      const select = byId(id);
+      const options = select?.options || select?.children || [];
+      if (select && [...options].some((option) => option.value === normalized)) {
+        select.value = normalized;
+      }
+    }
+  }
+
+  function fillSelect(select, devices, fallback, kind) {
     if (!select) return;
-    const previous = select.value;
+    const previous = selectedDeviceId(kind) || select.value;
     select.replaceChildren();
     if (!devices.length) {
       const option = new Option(fallback, '');
       select.append(option);
       select.disabled = true;
+      if (state.selectedDevices[kind] === previous) state.selectedDevices[kind] = '';
       return;
     }
     devices.forEach((device, index) => {
@@ -309,6 +407,9 @@
     });
     select.disabled = false;
     if (devices.some((device) => device.deviceId === previous)) select.value = previous;
+    if (!state.selectedDevices[kind] || !devices.some((device) => device.deviceId === state.selectedDevices[kind])) {
+      state.selectedDevices[kind] = select.value;
+    }
   }
 
   async function refreshDeviceLists() {
@@ -318,15 +419,15 @@
     const microphones = devices.filter((device) => device.kind === 'audioinput');
     const speakers = devices.filter((device) => device.kind === 'audiooutput');
     for (const prefix of ['sr-', 'sr-live-']) {
-      fillSelect(byId(`${prefix}camera-select`), cameras, 'Camera');
-      fillSelect(byId(`${prefix}microphone-select`), microphones, 'Microphone');
-      fillSelect(byId(`${prefix}speaker-select`), speakers, 'Speaker');
+      fillSelect(byId(`${prefix}camera-select`), cameras, 'Camera', 'videoinput');
+      fillSelect(byId(`${prefix}microphone-select`), microphones, 'Microphone', 'audioinput');
+      fillSelect(byId(`${prefix}speaker-select`), speakers, 'Speaker', 'audiooutput');
     }
     return devices;
   }
 
   async function brieflyRequestDevicePermission(mediaDevices, constraints) {
-    const temporaryStream = await mediaDevices.getUserMedia(constraints);
+    const temporaryStream = await requestUserMediaWithTimeout(mediaDevices, constraints, 10000);
     temporaryStream?.getTracks?.().forEach((track) => track.stop());
   }
 
@@ -358,7 +459,7 @@
       permissionError = error;
       const canRetrySeparately = needsCameraLabel
         && needsMicrophoneLabel
-        && ['NotFoundError', 'DevicesNotFoundError', 'NotReadableError', 'TrackStartError', 'OverconstrainedError', 'ConstraintNotSatisfiedError', 'AbortError'].includes(error?.name);
+        && isRetryableDeviceError(error);
       if (canRetrySeparately) {
         let successes = 0;
         const failures = [];
@@ -389,11 +490,14 @@
         setStatus('sr-prejoin-status', 'Camera and microphone are off. Your available devices were detected.', 'ok');
         return;
       }
-      const denied = ['NotAllowedError', 'PermissionDeniedError'].includes(permissionError?.name);
+      const denied = isPermissionError(permissionError);
+      const waiting = permissionError?.name === 'PermissionTimeoutError';
       setStatus(
         'sr-prejoin-status',
         partialAccess
           ? 'Camera and microphone are off. Available devices were refreshed, but one device type could not be identified.'
+          : waiting
+          ? 'Camera and microphone are off. The browser is still waiting for permission. Choose Allow in the browser prompt, then select Test devices.'
           : denied
           ? 'Camera and microphone are off. Allow device permission when you are ready to test them.'
           : 'Camera and microphone are off. Some device names could not be detected automatically.',
@@ -411,6 +515,64 @@
     state.deviceChangeBound = true;
   }
 
+  async function captureOneDeviceTest(mediaDevices, kind, selected) {
+    const constraints = kind === 'camera'
+      ? { video: selected, audio: false }
+      : { video: false, audio: selected };
+    try {
+      return await requestUserMediaWithTimeout(mediaDevices, constraints);
+    } catch (error) {
+      if (selected === true || !isRetryableDeviceError(error)) throw error;
+      await refreshDeviceLists();
+      return requestUserMediaWithTimeout(
+        mediaDevices,
+        kind === 'camera' ? { video: true, audio: false } : { video: false, audio: true },
+      );
+    }
+  }
+
+  async function captureSelectedDeviceTest(mediaDevices) {
+    const selectedCamera = selectedConstraint('sr-camera-select');
+    const selectedMicrophone = selectedConstraint('sr-microphone-select');
+    const combinedConstraints = { video: selectedCamera, audio: selectedMicrophone };
+    try {
+      const stream = await requestUserMediaWithTimeout(mediaDevices, combinedConstraints);
+      return { stream, cameraError: null, microphoneError: null };
+    } catch (combinedError) {
+      if (!isRetryableDeviceError(combinedError)) throw combinedError;
+
+      const capturedStreams = [];
+      let cameraError = null;
+      let microphoneError = null;
+      try {
+        capturedStreams.push(await captureOneDeviceTest(mediaDevices, 'camera', selectedCamera));
+      } catch (error) {
+        cameraError = error;
+      }
+      try {
+        capturedStreams.push(await captureOneDeviceTest(mediaDevices, 'microphone', selectedMicrophone));
+      } catch (error) {
+        microphoneError = error;
+      }
+
+      const tracks = capturedStreams.flatMap((stream) => stream?.getTracks?.() || []);
+      if (!tracks.length) throw microphoneError || cameraError || combinedError;
+      return {
+        stream: new global.MediaStream(tracks),
+        cameraError,
+        microphoneError,
+      };
+    }
+  }
+
+  function syncTestedDeviceSelections(stream) {
+    for (const track of stream?.getTracks?.() || []) {
+      const deviceId = track.getSettings?.().deviceId || '';
+      const kind = track.kind === 'audio' ? 'audioinput' : track.kind === 'video' ? 'videoinput' : '';
+      if (deviceId && kind) rememberDeviceSelection(kind, deviceId);
+    }
+  }
+
   async function testDevices() {
     if (state.previewStream) {
       stopDeviceTest();
@@ -425,28 +587,40 @@
     button.disabled = true;
     setStatus('sr-prejoin-status', 'Waiting for camera and microphone permission…');
     try {
-      state.previewStream = await global.navigator.mediaDevices.getUserMedia({
-        video: selectedConstraint('sr-camera-select'),
-        audio: selectedConstraint('sr-microphone-select'),
-      });
+      const result = await captureSelectedDeviceTest(global.navigator.mediaDevices);
+      state.previewStream = result.stream;
       const video = byId('sr-local-preview');
       video.srcObject = state.previewStream;
       video.hidden = state.previewStream.getVideoTracks().length === 0;
       byId('sr-camera-placeholder').hidden = !video.hidden;
       await video.play().catch(() => {});
-      startMeter(state.previewStream);
+      await startMeter(state.previewStream).catch(() => {});
       await refreshDeviceLists();
+      syncTestedDeviceSelections(state.previewStream);
       const label = button.querySelector('span');
       if (label) label.textContent = 'Stop device test';
-      setStatus('sr-prejoin-status', 'Device test is active only on this computer. Nothing has been shared.', 'ok');
+      const hasCamera = state.previewStream.getVideoTracks().length > 0;
+      const hasMicrophone = state.previewStream.getAudioTracks().length > 0;
+      setStatus(
+        'sr-prejoin-status',
+        hasCamera && hasMicrophone
+          ? 'Camera and microphone are working on this computer. Nothing has been shared.'
+          : hasMicrophone
+          ? 'Microphone is working; the camera could not start. Nothing has been shared.'
+          : 'Camera is working; the microphone could not start. Nothing has been shared.',
+        'ok',
+      );
     } catch (error) {
       stopDeviceTest();
-      const denied = ['NotAllowedError', 'PermissionDeniedError'].includes(error?.name);
+      const denied = isPermissionError(error);
+      const waiting = error?.name === 'PermissionTimeoutError';
       setStatus(
         'sr-prejoin-status',
         denied
-          ? 'Camera or microphone permission was not granted. You can still join with both off.'
-          : 'The selected camera or microphone could not start. Choose another device or join with both off.',
+          ? 'Camera or microphone permission was not granted. Allow access for duediligence.ph in browser site permissions, then retry. You can still join with both off.'
+          : waiting
+          ? 'The browser is still waiting for device permission. Choose Allow in the browser prompt, then try again.'
+          : 'The selected camera or microphone could not start. Close other calling apps, choose another device, or join with both off.',
         'error',
       );
     } finally {
@@ -560,24 +734,6 @@
       : `${displayName(participant)} is visible and audible again.`);
   }
 
-  async function muteParticipantForRoom(participant, button) {
-    const publication = publicationFor(participant, LiveKit?.Track?.Source?.Microphone || 'microphone');
-    if (!publication?.trackSid || publication.isMuted) return;
-    button.disabled = true;
-    try {
-      await workerRequest('/admin/study-room/moderate', {
-        operation: 'mute',
-        participantIdentity: participant.identity,
-        trackSid: publication.trackSid,
-      });
-      toast(`${displayName(participant)} was muted for the room. Only they can unmute again.`);
-    } catch (error) {
-      toast(friendlyError(error, 'That participant could not be muted just now.'));
-    } finally {
-      button.disabled = false;
-    }
-  }
-
   function createPersonRow(participant) {
     const row = document.createElement('div');
     row.className = 'sr-person-row';
@@ -596,32 +752,35 @@
       const locallyMuted = state.localMutedParticipants.has(participant.identity);
       localMute.type = 'button';
       localMute.textContent = locallyMuted ? 'Hear again' : 'Mute for me';
+      localMute.setAttribute(
+        'aria-label',
+        locallyMuted
+          ? `Hear ${displayName(participant)} again`
+          : `Mute ${displayName(participant)} only for you`,
+      );
       localMute.addEventListener('click', () => {
         if (locallyMuted) {
           state.localMutedParticipants.delete(participant.identity);
-          setParticipantVolume(participant, state.participantVolumes.get(participant.identity) ?? 75);
+          setParticipantVolume(participant, state.participantVolumes.get(participant.identity) ?? 100);
         } else {
           state.localMutedParticipants.add(participant.identity);
           participant.setVolume?.(0);
         }
-        renderPeople();
+        renderParticipants();
       });
-
-      const audioPublication = publicationFor(participant, LiveKit?.Track?.Source?.Microphone || 'microphone');
-      const roomMute = document.createElement('button');
-      roomMute.type = 'button';
-      roomMute.textContent = 'Mute for room';
-      roomMute.disabled = !audioPublication?.trackSid || audioPublication?.isMuted;
-      roomMute.addEventListener('click', () => muteParticipantForRoom(participant, roomMute));
 
       const block = document.createElement('button');
       const blocked = state.blockedParticipants.has(participant.identity);
       block.type = 'button';
       block.textContent = blocked ? 'Unblock' : 'Block locally';
+      block.setAttribute(
+        'aria-label',
+        blocked ? `Unblock ${displayName(participant)}` : `Block ${displayName(participant)} only for you`,
+      );
       block.addEventListener('click', () => setParticipantBlocked(participant, !blocked).catch(() => {
         toast('This participant could not be blocked just now.');
       }));
-      actions.append(localMute, roomMute, block);
+      actions.append(localMute, block);
       row.append(actions);
 
       const volume = document.createElement('label');
@@ -632,8 +791,9 @@
       slider.type = 'range';
       slider.min = '0';
       slider.max = '100';
-      slider.value = String(state.participantVolumes.get(participant.identity) ?? 75);
+      slider.value = String(state.participantVolumes.get(participant.identity) ?? 100);
       slider.disabled = blocked || locallyMuted;
+      slider.setAttribute('aria-label', `${displayName(participant)} volume`);
       const volumeValue = document.createElement('span');
       volumeValue.textContent = `${slider.value}%`;
       slider.addEventListener('input', () => {
@@ -649,11 +809,14 @@
   function attachRemoteAudio(participants) {
     const audioBin = byId('sr-audio-bin');
     participants.filter((participant) => !participant.isLocal).forEach((participant) => {
-      if (state.blockedParticipants.has(participant.identity)) return;
+      if (
+        state.blockedParticipants.has(participant.identity)
+        || state.localMutedParticipants.has(participant.identity)
+      ) return;
       const publication = publicationFor(participant, LiveKit?.Track?.Source?.Microphone || 'microphone');
       if (publication?.track && !publication.isMuted) {
         attachTrack(publication.track, audioBin, 'audio', false);
-        if (!state.participantVolumes.has(participant.identity)) setParticipantVolume(participant, 75);
+        setParticipantVolume(participant, state.participantVolumes.get(participant.identity) ?? 100);
       }
     });
   }
@@ -729,23 +892,38 @@
   function syncSelfMediaState() {
     const local = state.room?.localParticipant;
     if (!local) return;
-    const mic = publicationFor(local, LiveKit?.Track?.Source?.Microphone || 'microphone');
-    const camera = publicationFor(local, LiveKit?.Track?.Source?.Camera || 'camera');
-    const micOn = Boolean(mic && !mic.isMuted);
-    const cameraOn = Boolean(camera && !camera.isMuted);
+    const micOn = isLocalSourceEnabled(local, 'microphone');
+    const cameraOn = isLocalSourceEnabled(local, 'camera');
     byId('sr-microphone-state').textContent = micOn ? 'On' : 'Off';
     byId('sr-camera-state').textContent = cameraOn ? 'On' : 'Off';
     const micButton = byId('sr-toggle-microphone');
     const cameraButton = byId('sr-toggle-camera');
     micButton.setAttribute('aria-pressed', String(micOn));
     cameraButton.setAttribute('aria-pressed', String(cameraOn));
-    micButton.querySelector('span').textContent = micOn ? 'Mute' : 'Turn mic on';
-    cameraButton.querySelector('span').textContent = cameraOn ? 'Turn camera off' : 'Turn camera on';
+    micButton.setAttribute('aria-label', micOn ? 'Mute your microphone' : 'Unmute your microphone');
+    cameraButton.setAttribute('aria-label', cameraOn ? 'Stop your camera' : 'Start your camera');
+    micButton.querySelector('span').textContent = micOn ? 'Mute' : 'Unmute';
+    cameraButton.querySelector('span').textContent = cameraOn ? 'Stop video' : 'Start video';
+    const mediaStatus = byId('sr-live-media-status');
+    if (mediaStatus) {
+      mediaStatus.textContent = micOn
+        ? 'Your microphone is on. Others can hear you.'
+        : 'Your microphone is muted. Press Unmute when you want others to hear you.';
+      mediaStatus.classList.toggle('is-on', micOn);
+    }
   }
 
   function updateAudioPrompt() {
     const prompt = byId('sr-audio-prompt');
     prompt.hidden = !state.room || state.room.canPlaybackAudio !== false;
+  }
+
+  function startRoomAudioFromGesture(room = state.room) {
+    try {
+      return Promise.resolve(room?.startAudio?.()).catch(() => {});
+    } catch {
+      return Promise.resolve();
+    }
   }
 
   function bindRoomEvents(room) {
@@ -771,6 +949,35 @@
       syncConnectionState(connectionState);
     });
     room.on(event.AudioPlaybackStatusChanged, updateAudioPrompt);
+    if (event.MediaDevicesChanged) {
+      room.on(event.MediaDevicesChanged, () => refreshDeviceLists().catch(() => {}));
+    }
+    if (event.ActiveDeviceChanged) {
+      room.on(event.ActiveDeviceChanged, (deviceKind, deviceId) => {
+        if (!DEVICE_SELECT_IDS[deviceKind] || !deviceId) return;
+        refreshDeviceLists()
+          .then(() => rememberDeviceSelection(deviceKind, deviceId))
+          .catch(() => {});
+      });
+    }
+    if (event.MediaDevicesError) {
+      room.on(event.MediaDevicesError, (error, deviceKind) => {
+        const kind = deviceKind === 'videoinput'
+          ? 'camera'
+          : deviceKind === 'audioinput'
+          ? 'microphone'
+          : /camera|video/iu.test(String(error?.message || ''))
+          ? 'camera'
+          : 'microphone';
+        toast(deviceErrorMessage(kind, error));
+        syncSelfMediaState();
+      });
+    }
+    if (event.LocalAudioSilenceDetected) {
+      room.on(event.LocalAudioSilenceDetected, () => {
+        toast('Your microphone is on, but no sound is detected. Check the selected microphone and its physical mute switch.');
+      });
+    }
     room.on(event.Disconnected, () => {
       recoverFromTerminalDisconnect(room);
     });
@@ -793,12 +1000,119 @@
   }
 
   function selectedDeviceOptions() {
-    const cameraId = byId('sr-camera-select')?.value || '';
-    const microphoneId = byId('sr-microphone-select')?.value || '';
+    const cameraId = selectedDeviceId('videoinput');
+    const microphoneId = selectedDeviceId('audioinput');
+    const speakerId = selectedDeviceId('audiooutput');
     return {
-      camera: cameraId ? { deviceId: cameraId } : undefined,
-      microphone: microphoneId ? { deviceId: microphoneId } : undefined,
+      camera: cameraId ? { deviceId: { exact: cameraId } } : undefined,
+      microphone: {
+        ...(microphoneId ? { deviceId: { exact: microphoneId } } : {}),
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+      speakerId,
     };
+  }
+
+  function localSourcePublication(local, kind) {
+    const isMicrophone = kind === 'microphone';
+    return publicationFor(
+      local,
+      isMicrophone
+        ? (LiveKit.Track?.Source?.Microphone || 'microphone')
+        : (LiveKit.Track?.Source?.Camera || 'camera'),
+    );
+  }
+
+  function isLocalSourceEnabled(local, kind) {
+    const publication = localSourcePublication(local, kind);
+    const mediaStreamTrack = publication?.track?.mediaStreamTrack;
+    return Boolean(
+      publication
+      && publication.track
+      && !publication.isMuted
+      && mediaStreamTrack
+      && mediaStreamTrack.readyState === 'live'
+      && mediaStreamTrack.enabled !== false
+      && mediaStreamTrack.muted !== true
+      && publication.isUpstreamPaused !== true
+    );
+  }
+
+  function captureOptions(kind, deviceId = '') {
+    if (kind === 'microphone') {
+      return {
+        ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      };
+    }
+    return deviceId ? { deviceId: { exact: deviceId } } : undefined;
+  }
+
+  function sourceStartError(kind) {
+    const error = new Error(`The ${kind} did not produce a live media track.`);
+    error.name = 'TrackStartError';
+    error.code = 'MEDIA_TRACK_NOT_LIVE';
+    return error;
+  }
+
+  async function syncActualInputDevice(kind) {
+    const local = state.room?.localParticipant;
+    const publication = localSourcePublication(local, kind);
+    const deviceKind = kind === 'microphone' ? 'audioinput' : 'videoinput';
+    const actualId = publication?.track?.mediaStreamTrack?.getSettings?.().deviceId
+      || state.room?.getActiveDevice?.(deviceKind)
+      || '';
+    if (!actualId || actualId === 'default') return;
+    await refreshDeviceLists();
+    rememberDeviceSelection(deviceKind, actualId);
+  }
+
+  async function setLocalSourceEnabled(kind, enabled) {
+    const local = state.room?.localParticipant;
+    if (!local) throw new Error('The room is not connected.');
+    const isMicrophone = kind === 'microphone';
+    const deviceKind = isMicrophone ? 'audioinput' : 'videoinput';
+    const deviceId = selectedDeviceId(deviceKind);
+    const setEnabled = isMicrophone
+      ? local.setMicrophoneEnabled.bind(local)
+      : local.setCameraEnabled.bind(local);
+    if (!enabled) {
+      await setEnabled(false);
+      return;
+    }
+
+    const existingPublication = localSourcePublication(local, kind);
+    try {
+      if (
+        existingPublication
+        && deviceId
+        && state.room.switchActiveDevice
+        && state.room.getActiveDevice?.(deviceKind) !== deviceId
+      ) {
+        await state.room.switchActiveDevice(deviceKind, deviceId, true);
+      }
+      await setEnabled(true, captureOptions(kind, deviceId));
+      if (!isLocalSourceEnabled(local, kind)) throw sourceStartError(kind);
+    } catch (error) {
+      if (!deviceId || !isRetryableDeviceError(error)) throw error;
+      await refreshDeviceLists();
+      if (state.room.switchActiveDevice) {
+        await state.room.switchActiveDevice(deviceKind, 'default', false);
+      }
+      await setEnabled(true, captureOptions(kind));
+      if (!isLocalSourceEnabled(local, kind)) throw sourceStartError(kind);
+    }
+    await syncActualInputDevice(kind);
+  }
+
+  async function applySelectedSpeaker() {
+    const speakerId = selectedDeviceId('audiooutput');
+    if (!speakerId || !state.room?.switchActiveDevice) return;
+    await state.room.switchActiveDevice('audiooutput', speakerId, true);
   }
 
   async function enableInitialMedia() {
@@ -807,17 +1121,20 @@
     const warnings = [];
     if (state.joinWithCamera) {
       try {
-        await local.setCameraEnabled(true, devices.camera);
+        await setLocalSourceEnabled('camera', true);
       } catch {
         warnings.push('camera');
       }
     }
     if (state.joinWithMicrophone) {
       try {
-        await local.setMicrophoneEnabled(true, devices.microphone);
+        await setLocalSourceEnabled('microphone', true);
       } catch {
         warnings.push('microphone');
       }
+    }
+    if (devices.speakerId) {
+      await applySelectedSpeaker().catch(() => warnings.push('speaker'));
     }
     if (warnings.length) toast(`The ${warnings.join(' and ')} could not start. You joined with it off.`);
   }
@@ -845,19 +1162,26 @@
     stopDeviceTest();
     let room;
     try {
-      const credential = await workerRequest('/admin/study-room/join', { nickname });
       room = new LiveKit.Room({
         adaptiveStream: true,
         dynacast: true,
         disconnectOnPageLeave: true,
         stopLocalTrackOnUnpublish: true,
+        audioCaptureDefaults: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
       });
       state.room = room;
+      const audioUnlock = startRoomAudioFromGesture(room);
+      const credential = await workerRequest('/admin/study-room/join', { nickname });
       bindRoomEvents(room);
       await room.connect(credential.server_url, credential.participant_token, {
         autoSubscribe: true,
         maxRetries: 5,
       });
+      await audioUnlock;
       state.focusStartedAt = Date.parse(credential.focus_started_at || '') || Date.now();
       byId('sr-live-nickname').value = credential.participant_name || nickname;
       await enableInitialMedia();
@@ -889,24 +1213,17 @@
     if (!local) return;
     const button = byId(kind === 'microphone' ? 'sr-toggle-microphone' : 'sr-toggle-camera');
     button.disabled = true;
+    startRoomAudioFromGesture();
     try {
-      const publication = publicationFor(
-        local,
-        kind === 'microphone'
-          ? (LiveKit.Track?.Source?.Microphone || 'microphone')
-          : (LiveKit.Track?.Source?.Camera || 'camera'),
-      );
-      const enabled = !(publication && !publication.isMuted);
-      if (kind === 'microphone') {
-        const id = byId('sr-live-microphone-select')?.value || '';
-        await local.setMicrophoneEnabled(enabled, id ? { deviceId: id } : undefined);
-      } else {
-        const id = byId('sr-live-camera-select')?.value || '';
-        await local.setCameraEnabled(enabled, id ? { deviceId: id } : undefined);
-      }
+      const enabled = !isLocalSourceEnabled(local, kind);
+      await setLocalSourceEnabled(kind, enabled);
       renderParticipants();
-    } catch {
-      toast(`The ${kind} could not change. Check browser permission and the selected device.`);
+      toast(kind === 'microphone'
+        ? (enabled ? 'Microphone is on. Others can hear you.' : 'Microphone muted.')
+        : (enabled ? 'Camera is on.' : 'Camera turned off.'));
+    } catch (error) {
+      toast(deviceErrorMessage(kind, error));
+      syncSelfMediaState();
     } finally {
       button.disabled = false;
     }
@@ -944,13 +1261,49 @@
 
   async function switchDevice(kind, select) {
     const deviceId = select.value;
-    if (!state.room || !deviceId) return;
+    const previousDeviceId = selectedDeviceId(kind);
+    if (!state.room || !deviceId) {
+      rememberDeviceSelection(kind, deviceId);
+      return;
+    }
+    const sourceKind = kind === 'audioinput'
+      ? 'microphone'
+      : kind === 'videoinput'
+      ? 'camera'
+      : '';
+    const local = state.room.localParticipant;
+    const publication = sourceKind ? localSourcePublication(local, sourceKind) : null;
+    const previousActualDeviceId = publication?.track?.mediaStreamTrack?.getSettings?.().deviceId
+      || state.room.getActiveDevice?.(kind)
+      || previousDeviceId;
+    const sourceWasLive = sourceKind ? isLocalSourceEnabled(local, sourceKind) : false;
     try {
       const switched = await state.room.switchActiveDevice(kind, deviceId, true);
       if (!switched) throw new Error('Device switch was not confirmed.');
+      if (sourceWasLive && !isLocalSourceEnabled(local, sourceKind)) throw sourceStartError(sourceKind);
+      if (sourceKind && sourceWasLive) await syncActualInputDevice(sourceKind);
+      else rememberDeviceSelection(kind, deviceId);
       toast('Device updated.');
     } catch {
-      toast('That device could not be selected. It may be in use or unavailable.');
+      let rolledBack = false;
+      if (previousActualDeviceId && previousActualDeviceId !== deviceId) {
+        try {
+          rolledBack = await state.room.switchActiveDevice(kind, previousActualDeviceId, true) !== false;
+        } catch {
+          rolledBack = false;
+        }
+      }
+      await refreshDeviceLists();
+      rememberDeviceSelection(kind, rolledBack ? previousActualDeviceId : previousDeviceId);
+      if (sourceKind) syncSelfMediaState();
+      const sourceStillLive = sourceKind && isLocalSourceEnabled(local, sourceKind);
+      toast(
+        rolledBack && (!sourceWasLive || sourceStillLive)
+          ? 'That device could not start. Your previous device is still active.'
+          : sourceWasLive && !sourceStillLive
+          ? `That device could not start, and your previous ${sourceKind} could not restart. ${sourceKind === 'microphone' ? 'Your microphone' : 'Your camera'} is off.`
+          : 'That device could not be selected. It may be in use or unavailable.',
+      );
     }
   }
 
@@ -1021,6 +1374,15 @@
       byId('sr-device-drawer').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     });
     byId('sr-nickname-form').addEventListener('submit', updateNickname);
+    byId('sr-camera-select').addEventListener('change', (event) => {
+      rememberDeviceSelection('videoinput', event.target.value);
+    });
+    byId('sr-microphone-select').addEventListener('change', (event) => {
+      rememberDeviceSelection('audioinput', event.target.value);
+    });
+    byId('sr-speaker-select').addEventListener('change', (event) => {
+      rememberDeviceSelection('audiooutput', event.target.value);
+    });
     byId('sr-live-camera-select').addEventListener('change', (event) => switchDevice('videoinput', event.target));
     byId('sr-live-microphone-select').addEventListener('change', (event) => switchDevice('audioinput', event.target));
     byId('sr-live-speaker-select').addEventListener('change', (event) => switchDevice('audiooutput', event.target));

@@ -20,18 +20,19 @@
   const MAX_NICKNAME_LENGTH = 32;
   const MAX_ROOMS = 4;
   const ROOM_REFRESH_INTERVAL_MS = 15_000;
-  const MEDIA_RELIABILITY_VERSION = 'study-room-media-hotfix-20260829-1';
+  const MEDIA_RELIABILITY_VERSION = 'study-room-performance-controls-20260829-1';
   const MICROPHONE_STATS_INTERVAL_MS = 400;
   const MICROPHONE_STATS_ATTEMPTS = 10;
   const STUDY_VIDEO_CAPTURE = Object.freeze({
-    width: 640,
-    height: 360,
-    frameRate: 15,
+    width: 320,
+    height: 180,
+    frameRate: 12,
   });
   const STUDY_VIDEO_ENCODING = Object.freeze({
-    maxBitrate: 450_000,
-    maxFramerate: 15,
+    maxBitrate: 200_000,
+    maxFramerate: 12,
   });
+  const BACKDROP_PROCESSOR_MAX_FPS = 8;
   const MANDATORY_BACKGROUND_POLICY = 'due-diligence-mandatory-virtual-background-no-raw-first-frame';
   const DISALLOWED_NICKNAME = /[\p{Cc}\p{Cf}<>]/u;
   const RESERVED_NICKNAME = /\b(?:admin|administrator|founder|moderator|staff|support)\b|\bdue\s+diligence\b/iu;
@@ -73,6 +74,9 @@
     cameraGuard: Promise.resolve(),
     cameraPublishGuard: null,
     controllerProtectedCameraTracks: new Set(),
+    userApprovedRawCameraTracks: new Set(),
+    rawCameraPublishAuthorized: false,
+    backdropEnabled: true,
     recovering: false,
     previewStream: null,
     audioContext: null,
@@ -1320,6 +1324,8 @@
     cameraButton.setAttribute('aria-pressed', String(cameraOn));
     micButton.setAttribute('aria-label', micOn ? 'Mute your microphone' : 'Unmute your microphone');
     cameraButton.setAttribute('aria-label', cameraOn ? 'Stop your camera' : 'Start your camera');
+    micButton.title = micOn ? 'Mute microphone' : 'Unmute microphone';
+    cameraButton.title = cameraOn ? 'Stop camera' : 'Start camera';
     micButton.querySelector('span').textContent = micOn ? 'Mute' : 'Unmute';
     cameraButton.querySelector('span').textContent = cameraOn ? 'Stop video' : 'Start video';
     const mediaStatus = byId('sr-live-media-status');
@@ -1502,11 +1508,10 @@
   function cameraPublishOptions() {
     return {
       source: LiveKit.Track?.Source?.Camera || 'camera',
-      simulcast: true,
+      simulcast: false,
       videoCodec: 'vp8',
       degradationPreference: 'maintain-framerate',
       videoEncoding: { ...STUDY_VIDEO_ENCODING },
-      ...(LiveKit.VideoPresets?.h180 ? { videoSimulcastLayers: [LiveKit.VideoPresets.h180] } : {}),
     };
   }
 
@@ -1516,7 +1521,7 @@
         pixelDensity: 1,
         pauseVideoInBackground: true,
       },
-      dynacast: true,
+      dynacast: false,
       disconnectOnPageLeave: true,
       stopLocalTrackOnUnpublish: true,
       audioCaptureDefaults: {
@@ -1530,11 +1535,10 @@
       },
       publishDefaults: {
         ...microphonePublishOptions(),
-        simulcast: true,
+        simulcast: false,
         videoCodec: 'vp8',
         degradationPreference: 'maintain-framerate',
         videoEncoding: { ...STUDY_VIDEO_ENCODING },
-        ...(LiveKit.VideoPresets?.h180 ? { videoSimulcastLayers: [LiveKit.VideoPresets.h180] } : {}),
       },
     };
   }
@@ -1655,6 +1659,16 @@
     return track;
   }
 
+  function isUserApprovedRawCameraTrack(track) {
+    return Boolean(
+      state.backdropEnabled === false
+      && track
+      && state.userApprovedRawCameraTracks.has(track)
+      && track?.mediaStreamTrack?.readyState === 'live'
+      && track.mediaStreamTrack.enabled !== false
+    );
+  }
+
   function isCameraPublishAttempt(track, publishOptions = {}) {
     const cameraSource = LiveKit?.Track?.Source?.Camera || 'camera';
     const screenShareSource = LiveKit?.Track?.Source?.ScreenShare || 'screen_share';
@@ -1694,8 +1708,20 @@
     if (typeof originalPublishTrack !== 'function') return true;
     const originalDescriptor = Object.getOwnPropertyDescriptor(participant, 'publishTrack');
     const guardedPublishTrack = function guardedStudyRoomPublishTrack(track, publishOptions) {
-      if (isCameraPublishAttempt(track, publishOptions)) assertMandatoryProcessedCameraTrack(track);
-      return originalPublishTrack.call(this, track, publishOptions);
+      if (isCameraPublishAttempt(track, publishOptions) && !isMandatoryProcessedCameraTrack(track)) {
+        if (state.backdropEnabled !== false || state.rawCameraPublishAuthorized !== true) {
+          throw mandatoryCameraError();
+        }
+        state.userApprovedRawCameraTracks.add(track);
+      }
+      const result = originalPublishTrack.call(this, track, publishOptions);
+      if (result && typeof result.catch === 'function') {
+        return result.catch((error) => {
+          state.userApprovedRawCameraTracks.delete(track);
+          throw error;
+        });
+      }
+      return result;
     };
     try {
       participant.publishTrack = guardedPublishTrack;
@@ -1721,6 +1747,7 @@
       !publication
       || isStaticQualityCameraPublication(publication)
       || isMandatoryProcessedCameraTrack(publication.track)
+      || isUserApprovedRawCameraTrack(publication.track)
     ) return true;
 
     try {
@@ -1764,24 +1791,59 @@
     );
     if (!live || kind !== 'camera') return live;
     return isStaticQualityCameraPublication(publication)
-      || isMandatoryProcessedCameraTrack(publication.track);
+      || isMandatoryProcessedCameraTrack(publication.track)
+      || isUserApprovedRawCameraTrack(publication.track);
   }
 
   function syncBrandedBackdropState(snapshot = {}) {
     const status = String(snapshot.status || 'idle');
     const node = byId('sr-branded-backdrop-status');
+    const title = byId('sr-branded-backdrop-title');
     const copy = byId('sr-branded-backdrop-copy');
+    const backdropButton = byId('sr-toggle-backdrop');
+    if (backdropButton) {
+      backdropButton.setAttribute('aria-pressed', String(state.backdropEnabled));
+      backdropButton.setAttribute(
+        'aria-label',
+        state.backdropEnabled ? 'Remove the Due Diligence backdrop' : 'Apply the Due Diligence backdrop',
+      );
+      backdropButton.title = state.backdropEnabled ? 'Remove backdrop' : 'Apply backdrop';
+      const label = backdropButton.querySelector('span');
+      if (label) label.textContent = state.backdropEnabled ? 'Remove backdrop' : 'Apply backdrop';
+    }
+
+    if (!state.backdropEnabled) {
+      if (node) node.dataset.backdropState = 'off';
+      if (title) title.textContent = 'Backdrop off';
+      if (copy) copy.textContent = 'Your real background is visible. Turn the Due Diligence backdrop on whenever you want it.';
+      for (const id of ['sr-join-camera', 'sr-toggle-camera']) {
+        const button = byId(id);
+        if (!button) continue;
+        button.disabled = state.cameraOperationBusy;
+        if (!state.cameraOperationBusy) button.removeAttribute?.('title');
+      }
+      if (backdropButton) backdropButton.disabled = state.cameraOperationBusy;
+      return;
+    }
+
     if (node) node.dataset.backdropState = status;
+    if (title) {
+      title.textContent = status === 'enabled'
+        ? 'Due Diligence backdrop on'
+        : status === 'unavailable'
+        ? 'Backdrop unavailable'
+        : 'Due Diligence backdrop';
+    }
     if (copy) {
       copy.textContent = status === 'enabled'
         ? 'Due Diligence backdrop is active on your camera.'
         : status === 'preparing'
-        ? 'Preparing the required Due Diligence backdrop before video is shared…'
+        ? 'Preparing the Due Diligence backdrop before video is shared…'
         : status === 'unavailable'
-        ? (snapshot.error || 'This device cannot safely apply the required backdrop, so video remains off.')
+        ? (snapshot.error || 'This device cannot apply the backdrop. Remove it to use your camera without processing.')
         : status === 'destroyed'
-        ? 'The protected camera has been closed.'
-        : 'Your real background is never shared; the Due Diligence backdrop is applied before video starts.';
+          ? 'The protected camera has been closed.'
+        : 'On by default. Remove it at any time if your device needs a lighter video mode.';
     }
     const unavailable = snapshot.supported === false || status === 'unavailable';
     for (const id of ['sr-join-camera', 'sr-toggle-camera']) {
@@ -1797,6 +1859,7 @@
         button.removeAttribute?.('title');
       }
     }
+    if (backdropButton) backdropButton.disabled = state.cameraOperationBusy;
   }
 
   function ensureBackgroundController() {
@@ -1812,7 +1875,7 @@
       liveKit: LiveKit,
       getLocalParticipant: () => state.room?.localParticipant || null,
       onStateChange: syncBrandedBackdropState,
-      maxFps: STUDY_VIDEO_CAPTURE.frameRate,
+      maxFps: BACKDROP_PROCESSOR_MAX_FPS,
     });
     const capabilities = state.backgroundController.capabilities();
     syncBrandedBackdropState({
@@ -1904,6 +1967,108 @@
     }
   }
 
+  async function discardUserApprovedRawCamera(local = state.room?.localParticipant) {
+    if (!local) {
+      state.userApprovedRawCameraTracks.clear();
+      return;
+    }
+    const publication = localSourcePublication(local, 'camera');
+    const track = publication?.track;
+    if (!track || !state.userApprovedRawCameraTracks.has(track)) {
+      state.userApprovedRawCameraTracks.clear();
+      return;
+    }
+    try {
+      await publication.mute?.();
+    } catch {
+      // Unpublishing and stopping below are the definitive cleanup path.
+    }
+    try {
+      await local.unpublishTrack?.(track, true);
+    } catch {
+      // A stopped local track cannot continue sending even if disconnect cleanup races.
+    }
+    state.userApprovedRawCameraTracks.delete(track);
+    track.stop?.();
+  }
+
+  async function setRawCameraEnabled(enabled, requestedDeviceId = selectedDeviceId('videoinput')) {
+    const room = state.room;
+    const local = room?.localParticipant;
+    if (!local) throw new Error('The room is not connected.');
+    if (!installLocalCameraPublishGuard(room)) throw mandatoryCameraError();
+    if (!enabled) {
+      await discardUserApprovedRawCamera(local);
+      return;
+    }
+    if (typeof local.setCameraEnabled !== 'function') throw sourceStartError('camera');
+
+    state.rawCameraPublishAuthorized = true;
+    try {
+      const candidate = await local.setCameraEnabled(
+        true,
+        captureOptions('camera', requestedDeviceId),
+        cameraPublishOptions(),
+      );
+      const publication = candidate?.track ? candidate : localSourcePublication(local, 'camera');
+      if (publication?.track) state.userApprovedRawCameraTracks.add(publication.track);
+      if (!isLocalSourceEnabled(local, 'camera')) throw sourceStartError('camera');
+      await syncActualInputDevice('camera', requestedDeviceId);
+      return publication;
+    } catch (error) {
+      await discardUserApprovedRawCamera(local);
+      throw error;
+    } finally {
+      state.rawCameraPublishAuthorized = false;
+    }
+  }
+
+  async function toggleBackdrop() {
+    const local = state.room?.localParticipant;
+    if (!local || state.cameraOperationBusy) return;
+    if (LOCAL_TEST_MODE === 'live') {
+      state.backdropEnabled = !state.backdropEnabled;
+      syncBrandedBackdropState({
+        status: state.backdropEnabled ? 'enabled' : 'off',
+        supported: true,
+      });
+      toast(state.backdropEnabled
+        ? 'Due Diligence backdrop applied.'
+        : 'Backdrop removed. Your real background is now visible.');
+      return;
+    }
+    const backdropWasEnabled = state.backdropEnabled;
+    const cameraWasOn = isLocalSourceEnabled(local, 'camera');
+    state.cameraOperationBusy = true;
+    syncBrandedBackdropState(state.backgroundController?.snapshot?.() || { status: 'idle', supported: true });
+    try {
+      if (backdropWasEnabled) {
+        await destroyBackgroundController();
+        state.backdropEnabled = false;
+      } else {
+        await discardUserApprovedRawCamera(local);
+        state.backdropEnabled = true;
+      }
+      if (cameraWasOn) {
+        if (state.backdropEnabled) await setProtectedCameraEnabled(true);
+        else await setRawCameraEnabled(true);
+      }
+      syncSelfMediaState();
+      toast(state.backdropEnabled
+        ? 'Due Diligence backdrop applied.'
+        : 'Backdrop removed. Your real background is now visible.');
+    } catch (error) {
+      syncSelfMediaState();
+      toast(deviceErrorMessage('camera', error));
+    } finally {
+      state.cameraOperationBusy = false;
+      syncBrandedBackdropState(state.backgroundController?.snapshot?.() || {
+        status: state.backdropEnabled ? 'idle' : 'off',
+        supported: true,
+      });
+    }
+  }
+
   function captureOptions(kind, deviceId = '') {
     if (kind === 'microphone') {
       return {
@@ -1956,7 +2121,18 @@
     if (!local) throw new Error('The room is not connected.');
     const isMicrophone = kind === 'microphone';
     if (!isMicrophone) {
-      await setProtectedCameraEnabled(enabled);
+      state.cameraOperationBusy = true;
+      syncBrandedBackdropState(state.backgroundController?.snapshot?.() || { status: 'idle', supported: true });
+      try {
+        if (state.backdropEnabled) await setProtectedCameraEnabled(enabled);
+        else await setRawCameraEnabled(enabled);
+      } finally {
+        state.cameraOperationBusy = false;
+        syncBrandedBackdropState(state.backgroundController?.snapshot?.() || {
+          status: state.backdropEnabled ? 'idle' : 'off',
+          supported: true,
+        });
+      }
       return;
     }
     const deviceKind = 'audioinput';
@@ -2211,10 +2387,36 @@
     const sourceWasLive = sourceKind ? isLocalSourceEnabled(local, sourceKind) : false;
     if (kind === 'videoinput' && !sourceWasLive) {
       rememberDeviceSelection(kind, deviceId);
-      toast('Camera selected. The Due Diligence backdrop will be applied before it starts.');
+      toast(state.backdropEnabled
+        ? 'Camera selected. The Due Diligence backdrop will be applied when it starts.'
+        : 'Camera selected. Your real background will be visible when it starts.');
       return;
     }
     if (kind === 'videoinput' && sourceWasLive) {
+      if (!state.backdropEnabled) {
+        try {
+          await discardUserApprovedRawCamera(local);
+          rememberDeviceSelection(kind, deviceId);
+          await setRawCameraEnabled(true, deviceId);
+          toast('Camera updated. Backdrop remains off.');
+        } catch (error) {
+          let rolledBack = false;
+          try {
+            rememberDeviceSelection(kind, previousActualDeviceId || previousDeviceId);
+            await setRawCameraEnabled(true, previousActualDeviceId || previousDeviceId);
+            rolledBack = true;
+          } catch {
+            rolledBack = false;
+          }
+          await refreshDeviceLists();
+          rememberDeviceSelection(kind, rolledBack ? (previousActualDeviceId || previousDeviceId) : previousDeviceId);
+          syncSelfMediaState();
+          toast(rolledBack
+            ? 'That camera could not start. Your previous camera is still active.'
+            : deviceErrorMessage('camera', error));
+        }
+        return;
+      }
       try {
         await switchProtectedCameraDevice(deviceId);
         rememberDeviceSelection(kind, deviceId);
@@ -2274,6 +2476,8 @@
     state.focusStartedAt = null;
     state.audioPlaybackBlocked = false;
     state.microphoneTransport = 'off';
+    state.rawCameraPublishAuthorized = false;
+    state.userApprovedRawCameraTracks.clear();
     state.blockedParticipants.clear();
     state.localMutedParticipants.clear();
     state.participantVolumes.clear();
@@ -2423,11 +2627,13 @@
     byId('sr-join').addEventListener('click', joinRoom);
     byId('sr-toggle-microphone').addEventListener('click', () => toggleLocalTrack('microphone'));
     byId('sr-toggle-camera').addEventListener('click', () => toggleLocalTrack('camera'));
+    byId('sr-toggle-backdrop').addEventListener('click', toggleBackdrop);
     byId('sr-open-devices').addEventListener('click', () => {
       const drawer = byId('sr-device-drawer');
       drawer.hidden = !drawer.hidden;
       byId('sr-open-devices').setAttribute('aria-expanded', String(!drawer.hidden));
       byId('sr-open-devices').textContent = drawer.hidden ? 'Choose devices' : 'Hide device settings';
+      byId('sr-dock-devices').setAttribute('aria-expanded', String(!drawer.hidden));
     });
     byId('sr-dock-devices').addEventListener('click', () => {
       byId('sr-device-drawer').hidden = false;

@@ -8,7 +8,7 @@
   <meta name="robots" content="noindex,nofollow,noarchive">
   <title>Study Room — Due Diligence</title>
   <link rel="icon" href="../assets/brand/favicon.ico" sizes="any">
-  <link rel="stylesheet" href="../assets/study-room-live.css?v=study-room-four-rooms-20260829-1">
+  <link rel="stylesheet" href="../assets/study-room-live.css?v=study-room-performance-controls-20260829-1">
 </head>
 <body>
   <a class="sr-skip-link" href="#study-room-main">Skip to Study Room</a>
@@ -241,13 +241,13 @@
                 Your microphone is muted. Press Unmute when you want others to hear you.
               </p>
               <div class="sr-backdrop-enforcement" id="sr-branded-backdrop-status"
-                data-backdrop-enforcement="required" data-backdrop-state="preparing" role="status" aria-live="polite">
+                data-backdrop-enforcement="optional" data-backdrop-state="preparing" role="status" aria-live="polite">
                 <span class="sr-backdrop-enforcement-icon" aria-hidden="true">
                   <img src="../assets/icons/community/camera.svg" width="20" height="20" alt="">
                 </span>
                 <span>
-                  <strong>Branded backdrop enforced</strong>
-                  <small id="sr-branded-backdrop-copy">Camera stays off until the secure Due Diligence backdrop is ready.</small>
+                  <strong id="sr-branded-backdrop-title">Due Diligence backdrop</strong>
+                  <small id="sr-branded-backdrop-copy">On by default. You can turn it off at any time to improve video performance.</small>
                 </span>
               </div>
               <button class="sr-text-button" id="sr-open-devices" type="button"
@@ -271,22 +271,30 @@
 
         <div class="sr-control-dock" aria-label="Call controls">
           <button class="is-primary-control" id="sr-toggle-microphone" type="button" data-call-control="microphone"
-            aria-pressed="false" aria-label="Unmute your microphone">
+            aria-pressed="false" aria-label="Unmute your microphone" title="Unmute microphone">
             <img src="../assets/icons/navigation/mic.svg" width="22" height="22" alt="" aria-hidden="true">
-            <span>Unmute</span>
+            <span class="sr-control-label">Unmute</span>
           </button>
-          <button id="sr-toggle-camera" type="button" data-call-control="camera" aria-pressed="false" aria-label="Start your camera">
+          <button id="sr-toggle-camera" type="button" data-call-control="camera" aria-pressed="false"
+            aria-label="Start your camera" title="Start camera">
             <img src="../assets/icons/community/camera.svg" width="22" height="22" alt="" aria-hidden="true">
-            <span>Start video</span>
+            <span class="sr-control-label">Start video</span>
+          </button>
+          <button id="sr-toggle-backdrop" type="button" data-call-control="backdrop" aria-pressed="true"
+            aria-label="Remove the Due Diligence backdrop" title="Remove backdrop">
+            <img src="../assets/icons/community/image.svg" width="22" height="22" alt="" aria-hidden="true">
+            <span class="sr-control-label">Remove backdrop</span>
           </button>
           <button id="sr-dock-devices" type="button" data-call-control="devices"
-            aria-controls="sr-device-drawer">
+            aria-controls="sr-device-drawer" aria-expanded="false" aria-label="Choose camera, microphone, and speaker"
+            title="Device settings">
             <img src="../assets/icons/navigation/headphones.svg" width="22" height="22" alt="" aria-hidden="true">
-            <span>Device settings</span>
+            <span class="sr-control-label">Device settings</span>
           </button>
-          <button class="is-leave" id="sr-leave" type="button" data-call-control="leave">
+          <button class="is-leave" id="sr-leave" type="button" data-call-control="leave"
+            aria-label="Leave Study Room" title="Leave room">
             <img src="../assets/icons/navigation/door-open.svg" width="22" height="22" alt="" aria-hidden="true">
-            <span>Leave room</span>
+            <span class="sr-control-label">Leave room</span>
           </button>
         </div>
       </section>
@@ -303,7 +311,7 @@
   <script src="../assets/auth-session-storage.js?v=auth-persistence-20260812-1"></script>
   <script src="../assets/vendor/livekit-client.umd.js?v=2.22.1"></script>
   <script src="../assets/vendor/livekit-track-processors.iife.js?v=0.7.2"></script>
-  <script src="../assets/study-room-backgrounds.js?v=study-room-mandatory-background-20260829-1"></script>
-  <script src="../assets/study-room-live.js?v=study-room-media-hotfix-20260829-1"></script>
+  <script src="../assets/study-room-backgrounds.js?v=study-room-optional-background-20260829-1"></script>
+  <script src="../assets/study-room-live.js?v=study-room-performance-controls-20260829-1"></script>
 </body>
 </html>

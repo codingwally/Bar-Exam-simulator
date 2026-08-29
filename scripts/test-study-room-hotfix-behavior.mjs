@@ -28,6 +28,7 @@ const instrumentedLiveClient = liveClient.replace(
     startRoomAudioFromGesture,
     studyRoomMediaOptions,
     cameraPublishOptions,
+    toggleBackdrop,
   };
   ${liveClientTestHooksMarker}`,
 );
@@ -709,7 +710,7 @@ async function eventually(check, message) {
   assert.equal(harness.document.getElementById('sr-room-lobby-count').textContent, '3 of 4 rooms open');
   assert.equal(roomCards.find(({ id }) => id === 'sr-create-room')?.dataset.roomKey, '4');
   assert.equal(harness.document.getElementById('sr-branded-backdrop-status').dataset.backdropState, 'disabled');
-  assert.match(harness.document.getElementById('sr-branded-backdrop-copy').textContent, /real background is never shared/iu);
+  assert.match(harness.document.getElementById('sr-branded-backdrop-copy').textContent, /lighter video mode/iu);
 }
 
 {
@@ -892,23 +893,24 @@ function fakeLocalTrack(kind, deviceId) {
   const options = harness.hooks.studyRoomMediaOptions();
   assert.equal(options.adaptiveStream.pixelDensity, 1);
   assert.equal(options.adaptiveStream.pauseVideoInBackground, true);
-  assert.equal(options.dynacast, true);
+  assert.equal(options.dynacast, false);
   assert.equal(options.audioCaptureDefaults.voiceIsolation, true);
-  assert.equal(options.videoCaptureDefaults.resolution.width, 640);
-  assert.equal(options.videoCaptureDefaults.resolution.height, 360);
-  assert.equal(options.videoCaptureDefaults.resolution.frameRate, 15);
+  assert.equal(options.videoCaptureDefaults.resolution.width, 320);
+  assert.equal(options.videoCaptureDefaults.resolution.height, 180);
+  assert.equal(options.videoCaptureDefaults.resolution.frameRate, 12);
   assert.equal(options.publishDefaults.audioPreset, speechPreset);
   assert.equal(options.publishDefaults.dtx, false, 'Study microphones must keep sending RTP during quiet focus periods.');
   assert.equal(options.publishDefaults.red, true, 'Study microphones must retain redundant-audio resilience.');
   assert.equal(options.publishDefaults.videoCodec, 'vp8');
-  assert.equal(options.publishDefaults.videoEncoding.maxBitrate, 450_000);
-  assert.equal(options.publishDefaults.videoEncoding.maxFramerate, 15);
-  assert.equal(options.publishDefaults.videoSimulcastLayers[0], lowVideoLayer);
+  assert.equal(options.publishDefaults.videoEncoding.maxBitrate, 200_000);
+  assert.equal(options.publishDefaults.videoEncoding.maxFramerate, 12);
+  assert.equal(options.publishDefaults.simulcast, false);
+  assert.equal('videoSimulcastLayers' in options.publishDefaults, false);
 
   const cameraOptions = harness.hooks.cameraPublishOptions();
   assert.equal(cameraOptions.source, liveKitSources.Camera);
-  assert.equal(cameraOptions.simulcast, true);
-  assert.equal(cameraOptions.videoEncoding.maxBitrate, 450_000);
+  assert.equal(cameraOptions.simulcast, false);
+  assert.equal(cameraOptions.videoEncoding.maxBitrate, 200_000);
 }
 
 {
@@ -969,8 +971,35 @@ function fakeLocalTrack(kind, deviceId) {
       publication.track.mediaStreamTrack.enabled = enabled;
       publications.set(liveKitSources.Microphone, publication);
     },
-    async setCameraEnabled(enabled, options) {
-      rawCameraCalls.push({ enabled, options });
+    async publishTrack(track, publishOptions) {
+      const publication = {
+        source: publishOptions?.source || liveKitSources.Camera,
+        isMuted: false,
+        track,
+        async mute() {
+          this.isMuted = true;
+          this.track.isMuted = true;
+        },
+      };
+      publications.set(publication.source, publication);
+      return publication;
+    },
+    async setCameraEnabled(enabled, options, publishOptions) {
+      rawCameraCalls.push({ enabled, options, publishOptions });
+      if (!enabled) return undefined;
+      const track = fakeLocalTrack('video', selectedDeviceId(options));
+      track.stop = () => {
+        track.stopped = true;
+        track.mediaStreamTrack.readyState = 'ended';
+      };
+      track.attach = () => new FakeHTMLElement('raw-camera-video', 'video');
+      track.detach = (element) => element?.remove?.();
+      return this.publishTrack(track, publishOptions);
+    },
+    async unpublishTrack(track) {
+      const publication = publications.get(liveKitSources.Camera);
+      if (publication?.track === track) publications.delete(liveKitSources.Camera);
+      return publication;
     },
   };
   const harness = createLiveHarness({
@@ -1023,13 +1052,35 @@ function fakeLocalTrack(kind, deviceId) {
   assert.equal(harness.document.getElementById('sr-branded-backdrop-status').dataset.backdropState, 'enabled');
   assert.match(harness.document.getElementById('sr-branded-backdrop-copy').textContent, /backdrop is active/iu);
 
+  const backdropButton = harness.document.getElementById('sr-toggle-backdrop');
+  await backdropButton.emit('click');
+  assert.equal(backdropButton.getAttribute('aria-pressed'), 'false');
+  assert.equal(rawCameraCalls.length, 1, 'Removing the backdrop must replace the processed track with one low-cost raw track.');
+  assert.equal(rawCameraCalls[0].enabled, true);
+  assert.equal(rawCameraCalls[0].options.resolution.width, 320);
+  assert.equal(rawCameraCalls[0].options.resolution.height, 180);
+  assert.equal(publications.get(liveKitSources.Camera).track.getProcessor, undefined);
+  assert.equal(cameraButton.getAttribute('aria-pressed'), 'true');
+  assert.equal(harness.document.getElementById('sr-branded-backdrop-status').dataset.backdropState, 'off');
+  assert.match(harness.document.getElementById('sr-branded-backdrop-copy').textContent, /real background is visible/iu);
+
+  await backdropButton.emit('click');
+  assert.equal(backdropButton.getAttribute('aria-pressed'), 'true');
+  assert.equal(
+    harness.backgroundCalls.filter(({ operation }) => operation === 'enableCamera').length,
+    2,
+    'Reapplying the backdrop while video is on must replace the raw track with a processed track.',
+  );
+  assert.equal(publications.get(liveKitSources.Camera).track.getProcessor().mode, 'virtual-background');
+  assert.equal(cameraButton.getAttribute('aria-pressed'), 'true');
+
   await cameraButton.emit('click');
   assert.equal(
     harness.backgroundCalls.filter(({ operation }) => operation === 'disableCamera').length,
     1,
     'Stopping video must remain inside the mandatory-background controller.',
   );
-  assert.equal(rawCameraCalls.length, 0);
+  assert.equal(rawCameraCalls.length, 1);
   assert.equal(cameraButton.getAttribute('aria-pressed'), 'false');
   assert.equal(harness.document.getElementById('sr-camera-state').textContent, 'Off');
   assert.equal(harness.document.getElementById('sr-branded-backdrop-status').dataset.backdropState, 'disabled');

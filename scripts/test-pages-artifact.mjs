@@ -85,6 +85,7 @@ for (const required of [
   'assets/pedro.js',
   'assets/private-workspace.js',
   'assets/icons/navigation/door-open.svg',
+  'assets/icons/community/image.svg',
   'assets/icons/navigation/mic.svg',
   'examination-room/index.html',
   'examination-room/professor.css',
@@ -188,8 +189,9 @@ assert.match(studyRoomPage, /<title>Study Room — Due Diligence<\/title>/);
 assert.match(studyRoomPage, /Admin test room/);
 assert.match(studyRoomPage, /camera and microphone remain off/i);
 assert.match(studyRoomPage, /assets\/vendor\/livekit-client\.umd\.js\?v=2\.22\.1/);
-assert.match(studyRoomPage, /study-room-backgrounds\.js\?v=study-room-mandatory-background-20260829-1/);
-assert.match(studyRoomPage, /study-room-live\.js\?v=study-room-media-hotfix-20260829-1/);
+assert.match(studyRoomPage, /study-room-backgrounds\.js\?v=study-room-optional-background-20260829-1/);
+assert.match(studyRoomPage, /study-room-live\.js\?v=study-room-performance-controls-20260829-1/);
+assert.match(studyRoomPage, /id="sr-toggle-backdrop"[\s\S]*aria-pressed="true"/u);
 assert.match(studyRoomLive, /\/admin\/study-room\/access/);
 assert.match(studyRoomLive, /\/admin\/study-room\/rooms/);
 assert.match(studyRoomLive, /\/admin\/study-room\/join/);
@@ -199,6 +201,9 @@ assert.match(studyRoomLive, /operation:\s*'rename'/);
 assert.doesNotMatch(studyRoomLive, /Mute for room/i);
 assert.match(studyRoomLive, /Mute for me/);
 assert.match(studyRoomLive, /Block locally/);
+assert.match(studyRoomLive, /width:\s*320,[\s\S]*height:\s*180,[\s\S]*frameRate:\s*12/u);
+assert.match(studyRoomLive, /maxBitrate:\s*200_000,[\s\S]*simulcast:\s*false/u);
+assert.match(studyRoomLive, /function toggleBackdrop\(/u);
 assert.match(studyRoomBackgrounds, /DueDiligenceStudyRoomMandatoryBackground/);
 assert.match(studyRoomBackgrounds, /virtual-background-due-diligence-branded\.webp/);
 assert.match(studyRoomBackgrounds, /mode:\s*'virtual-background'/);

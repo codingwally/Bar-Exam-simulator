@@ -189,7 +189,7 @@ assert.match(studyRoomPage, /Admin test room/);
 assert.match(studyRoomPage, /camera and microphone remain off/i);
 assert.match(studyRoomPage, /assets\/vendor\/livekit-client\.umd\.js\?v=2\.22\.1/);
 assert.match(studyRoomPage, /study-room-backgrounds\.js\?v=study-room-mandatory-background-20260829-1/);
-assert.match(studyRoomPage, /study-room-live\.js\?v=study-room-four-rooms-20260829-1/);
+assert.match(studyRoomPage, /study-room-live\.js\?v=study-room-media-hotfix-20260829-1/);
 assert.match(studyRoomLive, /\/admin\/study-room\/access/);
 assert.match(studyRoomLive, /\/admin\/study-room\/rooms/);
 assert.match(studyRoomLive, /\/admin\/study-room\/join/);

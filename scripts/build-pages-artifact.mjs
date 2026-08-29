@@ -206,8 +206,17 @@ async function requirePackageVersion(packageName, expectedVersion) {
   }
 }
 
-async function copyVerifiedFile(source, destination, expectedHash, label) {
-  const contents = await readFile(source);
+async function copyVerifiedFile(
+  source,
+  destination,
+  expectedHash,
+  label,
+  { canonicalizeTextLineEndings = false } = {},
+) {
+  const sourceContents = await readFile(source);
+  const contents = canonicalizeTextLineEndings
+    ? Buffer.from(sourceContents.toString('utf8').replace(/\r\n/gu, '\n'), 'utf8')
+    : sourceContents;
   const actualHash = sha256(contents);
   if (actualHash !== expectedHash) {
     throw new Error(`${label} failed its pinned SHA-256 verification.`);
@@ -359,6 +368,7 @@ async function copyStudyRoomBackgroundAssets() {
       path.join(outputMediaPipeRoot, 'LICENSE.txt'),
       MEDIAPIPE_LICENSE_SHA256,
       'MediaPipe Apache-2.0 license',
+      { canonicalizeTextLineEndings: true },
     ),
     ...Object.entries(MEDIAPIPE_WASM_FILES).map(([fileName, expectedHash]) => copyVerifiedFile(
       path.join(mediaPipeSourceRoot, 'wasm', fileName),

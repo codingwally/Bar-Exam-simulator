@@ -20,6 +20,18 @@
   const MAX_NICKNAME_LENGTH = 32;
   const MAX_ROOMS = 4;
   const ROOM_REFRESH_INTERVAL_MS = 15_000;
+  const MEDIA_RELIABILITY_VERSION = 'study-room-media-hotfix-20260829-1';
+  const MICROPHONE_STATS_INTERVAL_MS = 400;
+  const MICROPHONE_STATS_ATTEMPTS = 10;
+  const STUDY_VIDEO_CAPTURE = Object.freeze({
+    width: 640,
+    height: 360,
+    frameRate: 15,
+  });
+  const STUDY_VIDEO_ENCODING = Object.freeze({
+    maxBitrate: 450_000,
+    maxFramerate: 15,
+  });
   const MANDATORY_BACKGROUND_POLICY = 'due-diligence-mandatory-virtual-background-no-raw-first-frame';
   const DISALLOWED_NICKNAME = /[\p{Cc}\p{Cf}<>]/u;
   const RESERVED_NICKNAME = /\b(?:admin|administrator|founder|moderator|staff|support)\b|\bdue\s+diligence\b/iu;
@@ -66,6 +78,8 @@
     audioContext: null,
     analyser: null,
     meterFrame: 0,
+    audioPlaybackBlocked: false,
+    microphoneTransport: 'off',
     attachedTracks: [],
     blockedParticipants: new Set(),
     localMutedParticipants: new Set(),
@@ -198,6 +212,9 @@
     if (kind === 'camera' && /^STUDY_ROOM_BACKGROUND_/u.test(String(error?.code || ''))) {
       return String(error?.message || 'The required Due Diligence backdrop could not start, so video remains off.');
     }
+    if (kind === 'microphone' && error?.code === 'MICROPHONE_TRANSPORT_STALLED') {
+      return 'Microphone permission is on, but the browser is not sending audio. The Study Room retried the system-default microphone; choose another microphone if this continues.';
+    }
     if (error?.code === 'MEDIA_TRACK_NOT_LIVE') {
       return `The ${label} did not produce a live signal. Choose another device and try again.`;
     }
@@ -239,6 +256,10 @@
     } finally {
       global.clearTimeout(timer);
     }
+  }
+
+  function waitForMediaSample(delayMs = MICROPHONE_STATS_INTERVAL_MS) {
+    return new Promise((resolve) => global.setTimeout(resolve, delayMs));
   }
 
   async function workerRequest(path, body = {}) {
@@ -992,9 +1013,27 @@
     if (kind === 'video') {
       element.playsInline = true;
       element.muted = isLocal;
+    } else if (kind === 'audio') {
+      element.muted = false;
     }
     container.append(element);
     state.attachedTracks.push({ track, element });
+    if (kind === 'audio' && typeof element.play === 'function') {
+      try {
+        Promise.resolve(element.play())
+          .then(() => {
+            state.audioPlaybackBlocked = false;
+            updateAudioPrompt();
+          })
+          .catch(() => {
+            state.audioPlaybackBlocked = true;
+            updateAudioPrompt();
+          });
+      } catch {
+        state.audioPlaybackBlocked = true;
+        updateAudioPrompt();
+      }
+    }
     return element;
   }
 
@@ -1286,7 +1325,11 @@
     const mediaStatus = byId('sr-live-media-status');
     if (mediaStatus) {
       mediaStatus.textContent = micOn
-        ? 'Your microphone is on. Others can hear you.'
+        ? state.microphoneTransport === 'sending'
+          ? 'Your microphone is sending audio to the room.'
+          : state.microphoneTransport === 'checking'
+          ? 'Your microphone is on. Confirming the outgoing audio connection…'
+          : 'Your microphone is on, but this browser could not expose outgoing packet confirmation.'
         : 'Your microphone is muted. Press Unmute when you want others to hear you.';
       mediaStatus.classList.toggle('is-on', micOn);
     }
@@ -1294,14 +1337,24 @@
 
   function updateAudioPrompt() {
     const prompt = byId('sr-audio-prompt');
-    prompt.hidden = !state.room || state.room.canPlaybackAudio !== false;
+    prompt.hidden = !state.room
+      || (!state.audioPlaybackBlocked && state.room.canPlaybackAudio !== false);
   }
 
-  function startRoomAudioFromGesture(room = state.room) {
+  async function startRoomAudioFromGesture(room = state.room) {
     try {
-      return Promise.resolve(room?.startAudio?.()).catch(() => {});
+      await room?.startAudio?.();
+      const audioElements = state.attachedTracks
+        .filter(({ element }) => String(element?.tagName || '').toLowerCase() === 'audio')
+        .map(({ element }) => element);
+      await Promise.all(audioElements.map((element) => element.play?.()));
+      state.audioPlaybackBlocked = false;
+      updateAudioPrompt();
+      return true;
     } catch {
-      return Promise.resolve();
+      state.audioPlaybackBlocked = true;
+      updateAudioPrompt();
+      return false;
     }
   }
 
@@ -1324,6 +1377,13 @@
     rerenderEvents.forEach((eventName) => room.on(eventName, renderParticipants));
     room.on(event.ActiveSpeakersChanged, (speakers) => {
       state.activeSpeakers = new Set((speakers || []).map((participant) => participant.identity));
+      if (
+        state.activeSpeakers.has(room.localParticipant?.identity)
+        && isLocalSourceEnabled(room.localParticipant, 'microphone')
+      ) {
+        state.microphoneTransport = 'sending';
+        syncSelfMediaState();
+      }
       // Keep attached audio/video elements stable while only the speaking halo changes.
       syncActiveSpeakerTiles();
     });
@@ -1333,7 +1393,10 @@
         scheduleLocalCameraGuard(room);
       }
     });
-    room.on(event.AudioPlaybackStatusChanged, updateAudioPrompt);
+    room.on(event.AudioPlaybackStatusChanged, (canPlayAudio) => {
+      state.audioPlaybackBlocked = canPlayAudio === false || room.canPlaybackAudio === false;
+      updateAudioPrompt();
+    });
     if (event.MediaDevicesChanged) {
       room.on(event.MediaDevicesChanged, () => refreshDeviceLists().catch(() => {}));
     }
@@ -1354,6 +1417,7 @@
           : /camera|video/iu.test(String(error?.message || ''))
           ? 'camera'
           : 'microphone';
+        if (kind === 'microphone') state.microphoneTransport = 'failed';
         toast(deviceErrorMessage(kind, error));
         syncSelfMediaState();
       });
@@ -1408,6 +1472,130 @@
         ? (LiveKit.Track?.Source?.Microphone || 'microphone')
         : (LiveKit.Track?.Source?.Camera || 'camera'),
     );
+  }
+
+  function microphonePublicationIsLive(publication) {
+    const track = publication?.track;
+    const mediaStreamTrack = track?.mediaStreamTrack;
+    return Boolean(
+      publication
+      && track
+      && !publication.isMuted
+      && track.isMuted !== true
+      && mediaStreamTrack
+      && mediaStreamTrack.readyState === 'live'
+      && mediaStreamTrack.enabled !== false
+      && publication.isUpstreamPaused !== true
+      && track.isUpstreamPaused !== true
+    );
+  }
+
+  function microphonePublishOptions() {
+    return {
+      ...(LiveKit.AudioPresets?.speech ? { audioPreset: LiveKit.AudioPresets.speech } : {}),
+      dtx: false,
+      red: true,
+      forceStereo: false,
+    };
+  }
+
+  function cameraPublishOptions() {
+    return {
+      source: LiveKit.Track?.Source?.Camera || 'camera',
+      simulcast: true,
+      videoCodec: 'vp8',
+      degradationPreference: 'maintain-framerate',
+      videoEncoding: { ...STUDY_VIDEO_ENCODING },
+      ...(LiveKit.VideoPresets?.h180 ? { videoSimulcastLayers: [LiveKit.VideoPresets.h180] } : {}),
+    };
+  }
+
+  function studyRoomMediaOptions() {
+    return {
+      adaptiveStream: {
+        pixelDensity: 1,
+        pauseVideoInBackground: true,
+      },
+      dynacast: true,
+      disconnectOnPageLeave: true,
+      stopLocalTrackOnUnpublish: true,
+      audioCaptureDefaults: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        voiceIsolation: true,
+      },
+      videoCaptureDefaults: {
+        resolution: { ...STUDY_VIDEO_CAPTURE },
+      },
+      publishDefaults: {
+        ...microphonePublishOptions(),
+        simulcast: true,
+        videoCodec: 'vp8',
+        degradationPreference: 'maintain-framerate',
+        videoEncoding: { ...STUDY_VIDEO_ENCODING },
+        ...(LiveKit.VideoPresets?.h180 ? { videoSimulcastLayers: [LiveKit.VideoPresets.h180] } : {}),
+      },
+    };
+  }
+
+  async function microphoneTransportSample(publication) {
+    const getSenderStats = publication?.track?.getSenderStats;
+    if (typeof getSenderStats !== 'function') return null;
+    try {
+      const stats = await getSenderStats.call(publication.track);
+      const bytesSent = Number(stats?.bytesSent);
+      const packetsSent = Number(stats?.packetsSent);
+      if (!Number.isFinite(bytesSent) && !Number.isFinite(packetsSent)) return null;
+      return {
+        bytesSent: Number.isFinite(bytesSent) ? bytesSent : 0,
+        packetsSent: Number.isFinite(packetsSent) ? packetsSent : 0,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  async function verifyMicrophoneTransport(local, candidatePublication) {
+    const publication = candidatePublication?.track
+      ? candidatePublication
+      : localSourcePublication(local, 'microphone');
+    if (!microphonePublicationIsLive(publication)) throw sourceStartError('microphone');
+
+    if (typeof publication.track?.getSenderStats !== 'function') return 'unverified';
+    let previous = null;
+    for (let attempt = 0; attempt <= MICROPHONE_STATS_ATTEMPTS; attempt += 1) {
+      if (attempt > 0) await waitForMediaSample();
+      if (state.room?.localParticipant !== local) throw new Error('The Study Room changed while checking the microphone.');
+      if (!microphonePublicationIsLive(publication)) throw sourceStartError('microphone');
+      const current = await microphoneTransportSample(publication);
+      if (
+        current
+        && previous
+        && (
+          current.bytesSent > previous.bytesSent
+          || current.packetsSent > previous.packetsSent
+        )
+      ) return 'sending';
+      if (current) previous = current;
+    }
+    if (!previous) return 'unverified';
+    const error = new Error('The microphone track is live, but no outgoing audio packets were detected.');
+    error.name = 'TrackStartError';
+    error.code = 'MICROPHONE_TRANSPORT_STALLED';
+    throw error;
+  }
+
+  async function discardMicrophonePublication(local) {
+    const publication = localSourcePublication(local, 'microphone');
+    const track = publication?.track;
+    if (!track) return;
+    try {
+      await local.unpublishTrack?.(track, true);
+    } catch {
+      // The stopped track below prevents a stale capture from being reused.
+    }
+    track.stop?.();
   }
 
   function isStaticQualityCameraPublication(publication) {
@@ -1562,6 +1750,7 @@
 
   function isLocalSourceEnabled(local, kind) {
     const publication = localSourcePublication(local, kind);
+    if (kind === 'microphone') return microphonePublicationIsLive(publication);
     const mediaStreamTrack = publication?.track?.mediaStreamTrack;
     const live = Boolean(
       publication
@@ -1623,6 +1812,7 @@
       liveKit: LiveKit,
       getLocalParticipant: () => state.room?.localParticipant || null,
       onStateChange: syncBrandedBackdropState,
+      maxFps: STUDY_VIDEO_CAPTURE.frameRate,
     });
     const capabilities = state.backgroundController.capabilities();
     syncBrandedBackdropState({
@@ -1681,9 +1871,10 @@
         return;
       }
       const deviceId = selectedDeviceId('videoinput');
-      const result = await controller.enableCamera(captureOptions('camera', deviceId), {
-        source: LiveKit?.Track?.Source?.Camera || 'camera',
-      });
+      const result = await controller.enableCamera(
+        captureOptions('camera', deviceId),
+        cameraPublishOptions(),
+      );
       if (result?.publication?.track) state.controllerProtectedCameraTracks.add(result.publication.track);
       assertMandatoryProcessedCameraTrack(result?.publication?.track);
       if (!isLocalSourceEnabled(room.localParticipant, 'camera')) throw sourceStartError('camera');
@@ -1720,9 +1911,13 @@
         echoCancellation: true,
         noiseSuppression: true,
         autoGainControl: true,
+        voiceIsolation: true,
       };
     }
-    return deviceId ? { deviceId: { exact: deviceId } } : undefined;
+    return {
+      ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
+      resolution: { ...STUDY_VIDEO_CAPTURE },
+    };
   }
 
   function sourceStartError(kind) {
@@ -1769,10 +1964,19 @@
     const setEnabled = local.setMicrophoneEnabled.bind(local);
     if (!enabled) {
       await setEnabled(false);
+      state.microphoneTransport = 'off';
       return;
     }
 
     const existingPublication = localSourcePublication(local, kind);
+    const enableAndVerify = async (options) => {
+      state.microphoneTransport = 'checking';
+      syncSelfMediaState();
+      const publication = await setEnabled(true, options, microphonePublishOptions());
+      const verification = await verifyMicrophoneTransport(local, publication);
+      state.microphoneTransport = verification;
+      return publication || localSourcePublication(local, kind);
+    };
     try {
       if (
         existingPublication
@@ -1782,16 +1986,24 @@
       ) {
         await state.room.switchActiveDevice(deviceKind, deviceId, true);
       }
-      await setEnabled(true, captureOptions(kind, deviceId));
-      if (!isLocalSourceEnabled(local, kind)) throw sourceStartError(kind);
+      await enableAndVerify(captureOptions(kind, deviceId));
     } catch (error) {
-      if (!deviceId || !isRetryableDeviceError(error)) throw error;
-      await refreshDeviceLists();
-      if (state.room.switchActiveDevice) {
-        await state.room.switchActiveDevice(deviceKind, 'default', false);
+      if (!isRetryableDeviceError(error)) {
+        state.microphoneTransport = 'failed';
+        throw error;
       }
-      await setEnabled(true, captureOptions(kind));
-      if (!isLocalSourceEnabled(local, kind)) throw sourceStartError(kind);
+      await discardMicrophonePublication(local);
+      await refreshDeviceLists();
+      try {
+        if (state.room.switchActiveDevice) {
+          await state.room.switchActiveDevice(deviceKind, 'default', false);
+        }
+        await enableAndVerify(captureOptions(kind));
+      } catch (retryError) {
+        state.microphoneTransport = 'failed';
+        await discardMicrophonePublication(local);
+        throw retryError;
+      }
     }
     await syncActualInputDevice(kind);
   }
@@ -1858,17 +2070,7 @@
     stopDeviceTest();
     let room;
     try {
-      room = new LiveKit.Room({
-        adaptiveStream: true,
-        dynacast: true,
-        disconnectOnPageLeave: true,
-        stopLocalTrackOnUnpublish: true,
-        audioCaptureDefaults: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
+      room = new LiveKit.Room(studyRoomMediaOptions());
       state.room = room;
       if (!installLocalCameraPublishGuard(room)) {
         syncBrandedBackdropState({
@@ -1936,7 +2138,11 @@
       await setLocalSourceEnabled(kind, enabled);
       renderParticipants();
       toast(kind === 'microphone'
-        ? (enabled ? 'Microphone is on. Others can hear you.' : 'Microphone muted.')
+        ? (enabled
+          ? state.microphoneTransport === 'sending'
+            ? 'Microphone is on and sending audio.'
+            : 'Microphone is on. Ask a study partner to confirm audio.'
+          : 'Microphone muted.')
         : (enabled ? 'Camera is on.' : 'Camera turned off.'));
     } catch (error) {
       toast(deviceErrorMessage(kind, error));
@@ -2066,6 +2272,8 @@
     state.room = null;
     state.currentRoomKey = '';
     state.focusStartedAt = null;
+    state.audioPlaybackBlocked = false;
+    state.microphoneTransport = 'off';
     state.blockedParticipants.clear();
     state.localMutedParticipants.clear();
     state.participantVolumes.clear();
@@ -2249,10 +2457,8 @@
     byId('sr-live-speaker-select').addEventListener('change', (event) => switchDevice('audiooutput', event.target));
     byId('sr-leave').addEventListener('click', leaveRoom);
     byId('sr-audio-prompt').addEventListener('click', async () => {
-      try {
-        await state.room?.startAudio?.();
-        updateAudioPrompt();
-      } catch {
+      const started = await startRoomAudioFromGesture();
+      if (!started) {
         toast('Your browser still blocked room audio. Check the site sound permission.');
       }
     });
@@ -2352,6 +2558,7 @@
   }
 
   global.DueDiligenceStudyRoom = Object.freeze({
+    mediaReliabilityVersion: MEDIA_RELIABILITY_VERSION,
     normalizeNickname,
     verifyAccess,
   });

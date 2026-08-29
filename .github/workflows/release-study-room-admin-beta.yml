@@ -475,7 +475,7 @@ jobs:
             home="$(curl --fail --silent --show-error -H 'Cache-Control: no-cache' "https://duediligence.ph/?release=$GITHUB_SHA" || true)"
             preview="$(curl --fail --silent --show-error -H 'Cache-Control: no-cache' "https://duediligence.ph/assets/study-room-preview.js?release=$GITHUB_SHA" || true)"
             if grep -Fq '<title>Study Room — Due Diligence</title>' <<<"$room" \
-              && grep -Fq 'study-room-admin-beta-20260829-2' <<<"$room" \
+              && grep -Fq 'study-room-audio-controls-20260829-1' <<<"$room" \
               && grep -Fq '/admin/study-room/join' <<<"$live" \
               && grep -Fq 'async function discoverDevices()' <<<"$live" \
               && grep -Fq 'bindDeviceChangeDetection();' <<<"$live" \

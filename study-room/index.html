@@ -8,7 +8,7 @@
   <meta name="robots" content="noindex,nofollow,noarchive">
   <title>Study Room — Due Diligence</title>
   <link rel="icon" href="../assets/brand/favicon.ico" sizes="any">
-  <link rel="stylesheet" href="../assets/study-room-live.css?v=study-room-admin-beta-20260829-1">
+  <link rel="stylesheet" href="../assets/study-room-live.css?v=study-room-audio-controls-20260829-1">
 </head>
 <body>
   <a class="sr-skip-link" href="#study-room-main">Skip to Study Room</a>
@@ -27,16 +27,6 @@
         <a class="sr-return-link" href="../#quorum">Return to simulator</a>
       </div>
     </div>
-    <nav class="sr-nav" aria-label="Study Room context">
-      <a href="../#quorum">Home</a>
-      <a href="../#bar-easy">Quick Drills</a>
-      <a href="../#doctrines">Doctrine Review</a>
-      <a href="../#subject-matter">Syllabus-Based Review</a>
-      <a href="../#mock">Bar Question Practice</a>
-      <a href="../#bar-feels">Bar Exam Simulation</a>
-      <span class="is-current" aria-current="page">Study Room <small>BETA</small></span>
-      <a href="../#verdict">Analytics</a>
-    </nav>
   </header>
 
   <main class="sr-main" id="study-room-main">
@@ -149,7 +139,7 @@
         </aside>
       </section>
 
-      <section class="sr-live-room" id="sr-live-room" hidden aria-label="Live Study Room">
+      <section class="sr-live-room" id="sr-live-room" hidden tabindex="-1" aria-label="Live Study Room">
         <div class="sr-live-layout">
           <section class="sr-stage-shell" aria-label="Live participants">
             <div class="sr-stage-header">
@@ -186,6 +176,9 @@
                 <div><dt>Camera</dt><dd id="sr-camera-state">Off</dd></div>
                 <div><dt>Connection</dt><dd id="sr-connection-state">Connecting</dd></div>
               </dl>
+              <p class="sr-live-media-status" id="sr-live-media-status" role="status" aria-live="polite">
+                Your microphone is muted. Press Unmute when you want others to hear you.
+              </p>
               <button class="sr-text-button" id="sr-open-devices" type="button">Choose devices</button>
               <div class="sr-device-drawer" id="sr-device-drawer" hidden>
                 <label class="sr-field" for="sr-live-camera-select"><span>Camera</span><select id="sr-live-camera-select"></select></label>
@@ -206,13 +199,13 @@
         </div>
 
         <div class="sr-control-dock" aria-label="Call controls">
-          <button id="sr-toggle-microphone" type="button" aria-pressed="false">
+          <button class="is-primary-control" id="sr-toggle-microphone" type="button" aria-pressed="false" aria-label="Unmute your microphone">
             <img src="../assets/icons/navigation/headphones.svg" width="22" height="22" alt="" aria-hidden="true">
-            <span>Turn mic on</span>
+            <span>Unmute</span>
           </button>
-          <button id="sr-toggle-camera" type="button" aria-pressed="false">
+          <button id="sr-toggle-camera" type="button" aria-pressed="false" aria-label="Start your camera">
             <img src="../assets/icons/community/camera.svg" width="22" height="22" alt="" aria-hidden="true">
-            <span>Turn camera on</span>
+            <span>Start video</span>
           </button>
           <button id="sr-dock-devices" type="button">
             <img src="../assets/icons/navigation/headphones.svg" width="22" height="22" alt="" aria-hidden="true">
@@ -236,6 +229,6 @@
   <script src="../assets/phase2-config.js?v=provider-neutral-release2-20260827-1"></script>
   <script src="../assets/auth-session-storage.js?v=auth-persistence-20260812-1"></script>
   <script src="../assets/vendor/livekit-client.umd.js?v=2.22.1"></script>
-  <script src="../assets/study-room-live.js?v=study-room-admin-beta-20260829-2"></script>
+  <script src="../assets/study-room-live.js?v=study-room-audio-controls-20260829-1"></script>
 </body>
 </html>

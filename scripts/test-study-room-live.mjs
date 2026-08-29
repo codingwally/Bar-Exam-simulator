@@ -18,6 +18,26 @@ assert.match(page, /<meta name="robots" content="noindex,nofollow,noarchive">/);
 assert.match(page, /id="sr-access-state"/);
 assert.match(page, /id="sr-prejoin"/);
 assert.match(page, /id="sr-live-room" hidden/);
+assert.match(page, /id="sr-live-room" hidden tabindex="-1"/);
+assert.doesNotMatch(
+  page,
+  /<nav\b[^>]*class="[^"]*\bsr-nav\b/iu,
+  'The separate Study Room window must not repeat the simulator navigation menu.',
+);
+for (const simulatorDestination of [
+  'Quick Drills',
+  'Doctrine Review',
+  'Syllabus-Based Review',
+  'Bar Question Practice',
+  'Bar Exam Simulation',
+  'Analytics',
+]) {
+  assert.doesNotMatch(page, new RegExp(`>${simulatorDestination}<`, 'u'));
+}
+assert.match(page, /class="sr-brand"[^>]*aria-label="Return to Due Diligence"/u);
+assert.match(page, /class="sr-return-link"[^>]*>Return to simulator<\/a>/u);
+assert.match(page, /id="sr-toggle-microphone"[\s\S]*?<span>Unmute<\/span>/u);
+assert.doesNotMatch(page, /Turn mic on/iu);
 assert.match(page, /Camera and microphone are off/);
 assert.match(page, /Nothing is shared until you choose to join/);
 assert.match(page, /camera indicator may turn on briefly during this local check, but nothing is shared/);
@@ -27,7 +47,7 @@ assert.match(page, /Use a nickname\. Real names are not required\./);
 assert.match(page, /value="Participant 1"/);
 assert.match(page, /Virtual backgrounds[\s\S]*Coming after the quality test/);
 assert.match(page, /assets\/vendor\/livekit-client\.umd\.js\?v=2\.22\.1/);
-assert.match(page, /study-room-live\.js\?v=study-room-admin-beta-20260829-2/);
+assert.match(page, /study-room-live\.js\?v=study-room-audio-controls-20260829-1/);
 assert.doesNotMatch(page, /facebook|fb\.com|recording is on|Recording enabled/i);
 
 for (const endpoint of ['access', 'join', 'moderate']) {
@@ -39,19 +59,28 @@ assert.match(client, /new LiveKit\.Room/);
 assert.match(client, /bindRoomEvents\(room\);[\s\S]*await room\.connect/);
 assert.match(client, /adaptiveStream: true/);
 assert.match(client, /dynacast: true/);
-assert.match(client, /operation: 'mute'/);
+assert.doesNotMatch(client, /operation:\s*['"]mute['"]/u);
 assert.match(client, /operation: 'rename'/);
 assert.doesNotMatch(client, /operation:\s*['"]unmute['"]/);
 assert.match(client, /Block locally/);
+assert.doesNotMatch(
+  client,
+  /Mute for room/iu,
+  'Participant sound controls must remain reversible and local to the current listener.',
+);
 assert.match(client, /publication\.setSubscribed\(!blocked\)/);
 assert.match(client, /participant\.setVolume\?\.\(volume \/ 100\)/);
+assert.match(client, /state\.localMutedParticipants\.has\(participant\.identity\)/);
+assert.match(client, /mediaStreamTrack\.readyState === 'live'/);
+assert.match(client, /deviceId: \{ exact: deviceId \}/);
 assert.match(client, /ActiveSpeakersChanged[\s\S]*syncActiveSpeakerTiles\(\)/);
+assert.match(client, /ActiveDeviceChanged[\s\S]*rememberDeviceSelection\(deviceKind, deviceId\)/);
 assert.doesNotMatch(client, /ActiveSpeakersChanged[\s\S]{0,260}renderParticipants\(\)/);
 assert.match(client, /function recoverFromTerminalDisconnect\(room\)/);
 assert.match(client, /state\.room = null;[\s\S]*Rejoin Study Room[\s\S]*camera and microphone are off/);
 assert.match(client, /event\.Disconnected[\s\S]*recoverFromTerminalDisconnect\(room\)/);
 assert.match(client, /state\.room\?\.startAudio/);
-assert.match(client, /global\.navigator\.mediaDevices\.getUserMedia/);
+assert.match(client, /mediaDevices\.getUserMedia\(constraints\)/);
 assert.match(client, /joinWithMicrophone:\s*false/);
 assert.match(client, /joinWithCamera:\s*false/);
 assert.match(client, /const STORAGE_KEY = 'duediligence\.study-room\.nickname\.v2'/);
@@ -62,7 +91,10 @@ assert.match(client, /function bindDeviceChangeDetection\(\)[\s\S]*addEventListe
 assert.doesNotMatch(client, /console\.(?:log|debug|info)|participant_token[^\n]*(?:localStorage|sessionStorage)|LIVEKIT_API_SECRET|LIVEKIT_API_KEY\s*=/);
 
 const permissionHelperStart = client.indexOf('async function brieflyRequestDevicePermission(');
-const temporaryMediaRequest = client.indexOf('mediaDevices.getUserMedia', permissionHelperStart);
+const temporaryMediaRequest = client.indexOf(
+  'requestUserMediaWithTimeout(mediaDevices, constraints, 10000)',
+  permissionHelperStart,
+);
 const stopTemporaryTracks = client.indexOf('temporaryStream?.getTracks?.().forEach((track) => track.stop())', temporaryMediaRequest);
 const discoverDevicesStart = client.indexOf('async function discoverDevices()');
 const verifyAccessStart = client.indexOf('async function verifyAccess()');
@@ -80,7 +112,7 @@ assert.match(client, /canRetrySeparately[\s\S]*\{ video: true, audio: false \}[\
 assert.match(client, /partialAccess = successes > 0 && failures\.length > 0/);
 assert.match(client, /cameraLabelResolved[\s\S]*microphoneLabelResolved[\s\S]*available devices were detected/);
 
-const openRoom = previewClient.indexOf('popup = global.open(\n        roomUrl.href');
+const openRoom = previewClient.indexOf('popup = global.open(');
 const fallbackNavigation = previewClient.indexOf('global.location.assign(roomUrl.href)', openRoom);
 const severOpener = previewClient.indexOf('popup.opener = null', fallbackNavigation);
 assert.ok(openRoom >= 0 && fallbackNavigation > openRoom && severOpener > fallbackNavigation);
@@ -90,6 +122,11 @@ assert.match(previewClient, /return openMarketingPreview\(trigger\)/);
 assert.match(css, /min-width:\s*320px/);
 assert.match(css, /prefers-reduced-motion/);
 assert.match(css, /\.sr-button[\s\S]*min-height:\s*44px/);
+assert.doesNotMatch(
+  css,
+  /\.sr-control-dock button span\s*\{[\s\S]{0,220}(?:clip-path|clip:)/u,
+  'Call-control labels must remain visible on narrow screens.',
+);
 assert.match(css, /\.sr-control-dock button[\s\S]*min-height:\s*58px/);
 assert.match(css, /@media \(max-width:\s*480px\)/);
 assert.doesNotMatch(css, /overflow-x:\s*hidden/);

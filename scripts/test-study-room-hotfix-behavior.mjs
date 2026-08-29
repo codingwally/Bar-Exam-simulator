@@ -9,6 +9,22 @@ const [previewClient, liveClient] = await Promise.all([
   readFile(path.join(root, 'assets/study-room-preview.js'), 'utf8'),
   readFile(path.join(root, 'assets/study-room-live.js'), 'utf8'),
 ]);
+const liveClientTestHooksMarker = 'global.DueDiligenceStudyRoom = Object.freeze({';
+assert.ok(liveClient.includes(liveClientTestHooksMarker), 'Study Room test hooks marker is missing.');
+const instrumentedLiveClient = liveClient.replace(
+  liveClientTestHooksMarker,
+  `global.__DueDiligenceStudyRoomTestHooks = {
+    state,
+    createPersonRow,
+    renderParticipants,
+    setParticipantBlocked,
+    setParticipantVolume,
+    syncSelfMediaState,
+    testDevices,
+    toggleLocalTrack,
+  };
+  ${liveClientTestHooksMarker}`,
+);
 
 class FakeClassList {
   constructor() {
@@ -36,8 +52,9 @@ class FakeClassList {
 }
 
 class FakeHTMLElement {
-  constructor(id = '') {
+  constructor(id = '', tagName = 'div') {
     this.id = id;
+    this.tagName = String(tagName).toUpperCase();
     this.hidden = false;
     this.disabled = false;
     this.textContent = '';
@@ -54,6 +71,21 @@ class FakeHTMLElement {
     const listeners = this.listeners.get(type) || [];
     listeners.push(handler);
     this.listeners.set(type, listeners);
+  }
+
+  async emit(type, event = {}) {
+    const payload = {
+      target: this,
+      currentTarget: this,
+      preventDefault() {
+        this.defaultPrevented = true;
+      },
+      ...event,
+    };
+    for (const handler of this.listeners.get(type) || []) {
+      await handler(payload);
+    }
+    return payload;
   }
 
   setAttribute(name, value) {
@@ -84,9 +116,11 @@ class FakeHTMLElement {
     if (!children.length) this.value = '';
   }
 
-  append(child) {
-    this.children.push(child);
-    if (this.children.length === 1) this.value = child.value;
+  append(...children) {
+    this.children.push(...children);
+    if (this.children.length === children.length && children.length === 1 && 'value' in children[0]) {
+      this.value = children[0].value;
+    }
   }
 
   focus() {
@@ -95,6 +129,10 @@ class FakeHTMLElement {
 
   click() {
     this.clicked = true;
+  }
+
+  remove() {
+    this.removed = true;
   }
 
   pause() {}
@@ -128,6 +166,9 @@ function createDocument() {
     getElementById(id) {
       if (!elements.has(id)) elements.set(id, new FakeHTMLElement(id));
       return elements.get(id);
+    },
+    createElement(tagName) {
+      return new FakeHTMLElement('', tagName);
     },
     querySelectorAll(selector) {
       if (selector === '[data-study-room-trigger]') return studyRoomTriggers;
@@ -318,7 +359,14 @@ function response({ ok, status, payload }) {
   };
 }
 
-function createLiveHarness({ fetch, enumerateDevices, getUserMedia }) {
+function createLiveHarness({
+  fetch,
+  enumerateDevices,
+  getUserMedia,
+  liveKit = {},
+  AudioContext,
+  MediaStream,
+}) {
   const { document } = createDocument();
   const storage = new Map();
   const windowListeners = new Map();
@@ -376,7 +424,9 @@ function createLiveHarness({ fetch, enumerateDevices, getUserMedia }) {
       setItem: (key, value) => storage.set(key, value),
     },
     sessionStorage: null,
-    LivekitClient: {},
+    LivekitClient: liveKit,
+    AudioContext,
+    MediaStream,
     addEventListener(type, handler) {
       const handlers = windowListeners.get(type) || [];
       handlers.push(handler);
@@ -391,7 +441,7 @@ function createLiveHarness({ fetch, enumerateDevices, getUserMedia }) {
     close() {},
     closed: false,
   };
-  vm.runInNewContext(liveClient, {
+  vm.runInNewContext(instrumentedLiveClient, {
     window,
     Option: FakeOption,
     URLSearchParams,
@@ -412,7 +462,12 @@ function createLiveHarness({ fetch, enumerateDevices, getUserMedia }) {
     JSON,
     Promise,
   });
-  return { window, document, deviceChangeHandlers };
+  return {
+    window,
+    document,
+    deviceChangeHandlers,
+    hooks: window.__DueDiligenceStudyRoomTestHooks,
+  };
 }
 
 async function eventually(check, message) {
@@ -544,4 +599,680 @@ async function eventually(check, message) {
   assert.equal(harness.document.getElementById('sr-join-microphone').getAttribute('aria-pressed'), 'false');
 }
 
-console.log('Study Room admin-window and automatic-device behavioral tests passed.');
+const liveKitSources = {
+  Microphone: 'microphone',
+  Camera: 'camera',
+};
+
+const labeledDevices = [
+  { kind: 'videoinput', deviceId: 'camera-selected', label: 'External Study Camera' },
+  { kind: 'audioinput', deviceId: 'microphone-selected', label: 'USB Study Microphone' },
+  { kind: 'audioinput', deviceId: 'microphone-default', label: 'Built-in Microphone' },
+  { kind: 'audiooutput', deviceId: 'speaker-selected', label: 'Desk Speakers' },
+];
+
+function authorizedResponse() {
+  return response({
+    ok: true,
+    status: 200,
+    payload: { ok: true, allowed: true, role: 'admin', maxParticipants: 12 },
+  });
+}
+
+async function waitForAuthorizedPrejoin(harness) {
+  await eventually(
+    () => harness.document.getElementById('sr-prejoin-status').textContent.includes('available devices were detected'),
+    'The authorized Study Room prejoin did not finish loading.',
+  );
+}
+
+function descendants(node) {
+  return [node, ...(node?.children || []).flatMap(descendants)];
+}
+
+function descendantWithText(node, text) {
+  return descendants(node).find((child) => child.textContent === text);
+}
+
+function selectedDeviceId(options) {
+  const value = options?.deviceId;
+  return value && typeof value === 'object' ? value.exact : value;
+}
+
+function fakeLocalTrack(kind, deviceId) {
+  return {
+    mediaStreamTrack: {
+      kind,
+      readyState: 'live',
+      enabled: true,
+      getSettings: () => ({ deviceId }),
+    },
+  };
+}
+
+{
+  const microphoneCalls = [];
+  const cameraCalls = [];
+  const publications = new Map();
+  const localParticipant = {
+    identity: 'local-admin',
+    name: 'Participant 101',
+    isLocal: true,
+    trackPublications: publications,
+    getTrackPublication: (source) => publications.get(source) || null,
+    async setMicrophoneEnabled(enabled, options) {
+      microphoneCalls.push({ enabled, options });
+      const publication = publications.get(liveKitSources.Microphone) || {
+        source: liveKitSources.Microphone,
+        isMuted: true,
+        track: fakeLocalTrack('audio', 'microphone-selected'),
+      };
+      publication.isMuted = !enabled;
+      publication.track.mediaStreamTrack.readyState = enabled ? 'live' : 'ended';
+      publication.track.mediaStreamTrack.enabled = enabled;
+      publications.set(liveKitSources.Microphone, publication);
+    },
+    async setCameraEnabled(enabled, options) {
+      cameraCalls.push({ enabled, options });
+      const publication = publications.get(liveKitSources.Camera) || {
+        source: liveKitSources.Camera,
+        isMuted: true,
+        track: fakeLocalTrack('video', 'camera-selected'),
+      };
+      publication.isMuted = !enabled;
+      publication.track.mediaStreamTrack.readyState = enabled ? 'live' : 'ended';
+      publication.track.mediaStreamTrack.enabled = enabled;
+      publications.set(liveKitSources.Camera, publication);
+    },
+  };
+  const harness = createLiveHarness({
+    fetch: async () => authorizedResponse(),
+    enumerateDevices: async () => labeledDevices,
+    getUserMedia: async () => { throw new Error('Automatic permission should not be needed for labeled devices.'); },
+    liveKit: { Track: { Source: liveKitSources } },
+  });
+  await waitForAuthorizedPrejoin(harness);
+  harness.hooks.state.room = {
+    localParticipant,
+    remoteParticipants: new Map(),
+    connectionState: 'connected',
+    canPlaybackAudio: true,
+  };
+  harness.document.getElementById('sr-live-microphone-select').value = 'microphone-selected';
+  harness.document.getElementById('sr-live-camera-select').value = 'camera-selected';
+  harness.hooks.syncSelfMediaState();
+
+  const microphoneButton = harness.document.getElementById('sr-toggle-microphone');
+  assert.equal(microphoneButton.getAttribute('aria-pressed'), 'false', 'A muted join must start with the microphone off.');
+  assert.equal(microphoneButton.querySelector('span').textContent, 'Unmute');
+  await microphoneButton.emit('click');
+  assert.equal(microphoneCalls.length, 1);
+  assert.equal(microphoneCalls[0].enabled, true, 'The first microphone click must publish/enable audio.');
+  assert.equal(microphoneCalls[0].options.deviceId.exact, 'microphone-selected');
+  assert.equal(selectedDeviceId(microphoneCalls[0].options), 'microphone-selected');
+  assert.equal(microphoneButton.getAttribute('aria-pressed'), 'true');
+  assert.equal(microphoneButton.querySelector('span').textContent, 'Mute');
+  assert.equal(harness.document.getElementById('sr-microphone-state').textContent, 'On');
+
+  await microphoneButton.emit('click');
+  assert.equal(microphoneCalls.length, 2);
+  assert.equal(microphoneCalls[1].enabled, false, 'The second microphone click must mute audio again.');
+  assert.equal(selectedDeviceId(microphoneCalls[1].options), undefined, 'Muting must not reopen or switch the microphone device.');
+  assert.equal(microphoneButton.getAttribute('aria-pressed'), 'false');
+  assert.equal(microphoneButton.querySelector('span').textContent, 'Unmute');
+  assert.equal(harness.document.getElementById('sr-microphone-state').textContent, 'Off');
+
+  const cameraButton = harness.document.getElementById('sr-toggle-camera');
+  await cameraButton.emit('click');
+  assert.equal(cameraCalls.length, 1);
+  assert.equal(cameraCalls[0].enabled, true);
+  assert.equal(cameraCalls[0].options.deviceId.exact, 'camera-selected');
+  assert.equal(selectedDeviceId(cameraCalls[0].options), 'camera-selected');
+  assert.equal(cameraButton.getAttribute('aria-pressed'), 'true');
+  assert.equal(harness.document.getElementById('sr-camera-state').textContent, 'On');
+}
+
+{
+  let enumerateCalls = 0;
+  const microphoneCalls = [];
+  const switchCalls = [];
+  let roomDefaultDevice = 'microphone-selected';
+  const publications = new Map();
+  const localParticipant = {
+    identity: 'local-admin-stale-device',
+    name: 'Participant 303',
+    isLocal: true,
+    trackPublications: publications,
+    getTrackPublication: (source) => publications.get(source) || null,
+    async setMicrophoneEnabled(enabled, options) {
+      microphoneCalls.push({ enabled, options });
+      if (microphoneCalls.length === 1) {
+        const error = new Error('Selected microphone is busy');
+        error.name = 'NotReadableError';
+        throw error;
+      }
+      if (roomDefaultDevice !== 'default') {
+        const error = new Error('Room retained the stale exact microphone default');
+        error.name = 'NotReadableError';
+        throw error;
+      }
+      publications.set(liveKitSources.Microphone, {
+        source: liveKitSources.Microphone,
+        isMuted: !enabled,
+        track: fakeLocalTrack('audio', 'microphone-default'),
+      });
+    },
+  };
+  const harness = createLiveHarness({
+    fetch: async () => authorizedResponse(),
+    enumerateDevices: async () => {
+      enumerateCalls += 1;
+      return labeledDevices;
+    },
+    getUserMedia: async () => { throw new Error('Automatic permission should not be needed for labeled devices.'); },
+    liveKit: { Track: { Source: liveKitSources } },
+  });
+  await waitForAuthorizedPrejoin(harness);
+  const enumerationsBeforeToggle = enumerateCalls;
+  harness.hooks.state.room = {
+    localParticipant,
+    remoteParticipants: new Map(),
+    connectionState: 'connected',
+    canPlaybackAudio: true,
+    getActiveDevice: () => roomDefaultDevice,
+    async switchActiveDevice(kind, deviceId, exact) {
+      switchCalls.push({ kind, deviceId, exact });
+      roomDefaultDevice = deviceId;
+      return true;
+    },
+  };
+  harness.document.getElementById('sr-live-microphone-select').value = 'microphone-selected';
+
+  const microphoneButton = harness.document.getElementById('sr-toggle-microphone');
+  await microphoneButton.emit('click');
+  assert.equal(microphoneCalls.length, 2, 'A stale or busy selected microphone must receive one safe default-device retry.');
+  assert.equal(selectedDeviceId(microphoneCalls[0].options), 'microphone-selected');
+  assert.equal(selectedDeviceId(microphoneCalls[1].options), undefined, 'The retry must use the system-default microphone.');
+  assert.deepEqual(
+    switchCalls,
+    [{ kind: 'audioinput', deviceId: 'default', exact: false }],
+    'The retry must clear a stale exact Room default even before a publication exists.',
+  );
+  assert.ok(enumerateCalls > enumerationsBeforeToggle, 'Device choices must refresh before retrying the default microphone.');
+  assert.equal(microphoneButton.getAttribute('aria-pressed'), 'true');
+  assert.equal(microphoneButton.querySelector('span').textContent, 'Mute');
+  assert.equal(harness.document.getElementById('sr-microphone-state').textContent, 'On');
+}
+
+{
+  const microphoneCalls = [];
+  const switchCalls = [];
+  let activeDevice = 'microphone-selected';
+  const track = fakeLocalTrack('audio', activeDevice);
+  track.mediaStreamTrack.readyState = 'ended';
+  track.mediaStreamTrack.enabled = false;
+  track.mediaStreamTrack.getSettings = () => ({
+    deviceId: activeDevice === 'default' ? 'microphone-default' : activeDevice,
+  });
+  const publication = {
+    source: liveKitSources.Microphone,
+    isMuted: true,
+    track,
+  };
+  const publications = new Map([[liveKitSources.Microphone, publication]]);
+  const localParticipant = {
+    identity: 'local-admin-muted-stale-device',
+    name: 'Participant 313',
+    isLocal: true,
+    trackPublications: publications,
+    getTrackPublication: (source) => publications.get(source) || null,
+    async setMicrophoneEnabled(enabled, options) {
+      microphoneCalls.push({ enabled, options });
+      if (microphoneCalls.length === 1) {
+        const error = new Error('Muted selected microphone cannot restart');
+        error.name = 'NotReadableError';
+        throw error;
+      }
+      publication.isMuted = !enabled;
+      track.mediaStreamTrack.readyState = enabled ? 'live' : 'ended';
+      track.mediaStreamTrack.enabled = enabled;
+    },
+  };
+  const harness = createLiveHarness({
+    fetch: async () => authorizedResponse(),
+    enumerateDevices: async () => labeledDevices,
+    getUserMedia: async () => { throw new Error('Automatic permission should not be needed for labeled devices.'); },
+    liveKit: { Track: { Source: liveKitSources } },
+  });
+  await waitForAuthorizedPrejoin(harness);
+  harness.hooks.state.room = {
+    localParticipant,
+    remoteParticipants: new Map(),
+    connectionState: 'connected',
+    canPlaybackAudio: true,
+    getActiveDevice: () => activeDevice,
+    async switchActiveDevice(kind, deviceId, exact) {
+      switchCalls.push({ kind, deviceId, exact });
+      activeDevice = deviceId;
+      return true;
+    },
+  };
+  harness.document.getElementById('sr-live-microphone-select').value = 'microphone-selected';
+
+  await harness.document.getElementById('sr-toggle-microphone').emit('click');
+  assert.equal(microphoneCalls.length, 2, 'A muted stale publication must retry once after switching its pending device.');
+  assert.deepEqual(
+    switchCalls,
+    [{ kind: 'audioinput', deviceId: 'default', exact: false }],
+    'The retry must override the stale publication with the system-default input.',
+  );
+  assert.equal(selectedDeviceId(microphoneCalls[1].options), undefined);
+  assert.equal(harness.document.getElementById('sr-live-microphone-select').value, 'microphone-default');
+  assert.equal(harness.document.getElementById('sr-toggle-microphone').getAttribute('aria-pressed'), 'true');
+}
+
+{
+  let enumerateCalls = 0;
+  let microphoneCalls = 0;
+  const localParticipant = {
+    identity: 'local-admin-permission-denied',
+    name: 'Participant 404',
+    isLocal: true,
+    trackPublications: new Map(),
+    getTrackPublication: () => null,
+    async setMicrophoneEnabled() {
+      microphoneCalls += 1;
+      const error = new Error('Microphone permission denied');
+      error.name = 'NotAllowedError';
+      throw error;
+    },
+  };
+  const harness = createLiveHarness({
+    fetch: async () => authorizedResponse(),
+    enumerateDevices: async () => {
+      enumerateCalls += 1;
+      return labeledDevices;
+    },
+    getUserMedia: async () => { throw new Error('Automatic permission should not be needed for labeled devices.'); },
+    liveKit: { Track: { Source: liveKitSources } },
+  });
+  await waitForAuthorizedPrejoin(harness);
+  harness.hooks.state.room = {
+    localParticipant,
+    remoteParticipants: new Map(),
+    connectionState: 'connected',
+    canPlaybackAudio: true,
+  };
+  harness.document.getElementById('sr-live-microphone-select').value = 'microphone-selected';
+
+  const microphoneButton = harness.document.getElementById('sr-toggle-microphone');
+  await microphoneButton.emit('click');
+  assert.equal(microphoneCalls, 1, 'Permission denial must not trigger a second microphone permission request.');
+  assert.ok(enumerateCalls >= 1, 'The existing device list may be refreshed without reprompting for permission.');
+  assert.equal(microphoneButton.getAttribute('aria-pressed'), 'false');
+  assert.equal(microphoneButton.querySelector('span').textContent, 'Unmute');
+  assert.equal(harness.document.getElementById('sr-microphone-state').textContent, 'Off');
+  assert.match(harness.document.getElementById('sr-toast').textContent, /permission/iu);
+  assert.equal(microphoneButton.disabled, false);
+}
+
+{
+  const switchCalls = [];
+  let activeDevice = 'microphone-selected';
+  const track = fakeLocalTrack('audio', activeDevice);
+  track.mediaStreamTrack.getSettings = () => ({ deviceId: activeDevice });
+  const publication = {
+    source: liveKitSources.Microphone,
+    isMuted: false,
+    track,
+  };
+  const localParticipant = {
+    identity: 'local-admin-live-switch-rollback',
+    name: 'Participant 454',
+    isLocal: true,
+    trackPublications: new Map([[liveKitSources.Microphone, publication]]),
+    getTrackPublication: (source) => source === liveKitSources.Microphone ? publication : null,
+  };
+  const harness = createLiveHarness({
+    fetch: async () => authorizedResponse(),
+    enumerateDevices: async () => labeledDevices,
+    getUserMedia: async () => { throw new Error('Automatic permission should not be needed for labeled devices.'); },
+    liveKit: { Track: { Source: liveKitSources } },
+  });
+  await waitForAuthorizedPrejoin(harness);
+  harness.hooks.state.room = {
+    localParticipant,
+    remoteParticipants: new Map(),
+    connectionState: 'connected',
+    canPlaybackAudio: true,
+    getActiveDevice: () => activeDevice,
+    async switchActiveDevice(kind, deviceId, exact) {
+      switchCalls.push({ kind, deviceId, exact });
+      if (switchCalls.length === 1) {
+        track.mediaStreamTrack.readyState = 'ended';
+        track.mediaStreamTrack.enabled = false;
+        const error = new Error('Replacement microphone cannot start');
+        error.name = 'NotReadableError';
+        throw error;
+      }
+      activeDevice = deviceId;
+      track.mediaStreamTrack.readyState = 'live';
+      track.mediaStreamTrack.enabled = true;
+      return true;
+    },
+  };
+  harness.hooks.syncSelfMediaState();
+  const liveMicrophoneSelect = harness.document.getElementById('sr-live-microphone-select');
+  liveMicrophoneSelect.value = 'microphone-default';
+
+  await liveMicrophoneSelect.emit('change');
+  assert.deepEqual(switchCalls, [
+    { kind: 'audioinput', deviceId: 'microphone-default', exact: true },
+    { kind: 'audioinput', deviceId: 'microphone-selected', exact: true },
+  ]);
+  assert.equal(liveMicrophoneSelect.value, 'microphone-selected');
+  assert.equal(harness.document.getElementById('sr-toggle-microphone').getAttribute('aria-pressed'), 'true');
+  assert.equal(harness.document.getElementById('sr-microphone-state').textContent, 'On');
+  assert.match(harness.document.getElementById('sr-toast').textContent, /previous device is still active/iu);
+}
+
+{
+  let microphoneCalls = 0;
+  const endedTrack = fakeLocalTrack('audio', 'microphone-selected');
+  endedTrack.mediaStreamTrack.readyState = 'ended';
+  endedTrack.mediaStreamTrack.enabled = false;
+  const publication = {
+    source: liveKitSources.Microphone,
+    isMuted: false,
+    track: endedTrack,
+  };
+  const localParticipant = {
+    identity: 'local-admin-ended-microphone',
+    name: 'Participant 505',
+    isLocal: true,
+    isMicrophoneEnabled: true,
+    trackPublications: new Map([[liveKitSources.Microphone, publication]]),
+    getTrackPublication: (source) => source === liveKitSources.Microphone ? publication : null,
+    async setMicrophoneEnabled() {
+      microphoneCalls += 1;
+      // Simulate metadata saying "unmuted" while capture never becomes live.
+    },
+  };
+  const harness = createLiveHarness({
+    fetch: async () => authorizedResponse(),
+    enumerateDevices: async () => labeledDevices,
+    getUserMedia: async () => { throw new Error('Automatic permission should not be needed for labeled devices.'); },
+    liveKit: { Track: { Source: liveKitSources } },
+  });
+  await waitForAuthorizedPrejoin(harness);
+  harness.hooks.state.room = {
+    localParticipant,
+    remoteParticipants: new Map(),
+    connectionState: 'connected',
+    canPlaybackAudio: true,
+    getActiveDevice: () => 'microphone-selected',
+  };
+  harness.hooks.syncSelfMediaState();
+  const microphoneButton = harness.document.getElementById('sr-toggle-microphone');
+  assert.equal(microphoneButton.getAttribute('aria-pressed'), 'false');
+  assert.equal(harness.document.getElementById('sr-microphone-state').textContent, 'Off');
+
+  await microphoneButton.emit('click');
+  assert.equal(microphoneCalls, 2, 'An ended track may receive one default-device retry, but no false success.');
+  assert.equal(microphoneButton.getAttribute('aria-pressed'), 'false');
+  assert.match(harness.document.getElementById('sr-toast').textContent, /microphone/iu);
+  assert.doesNotMatch(harness.document.getElementById('sr-toast').textContent, /others can hear/iu);
+}
+
+class FakeMediaStream {
+  constructor(tracks = []) {
+    this.tracks = [...tracks];
+  }
+
+  getTracks() {
+    return [...this.tracks];
+  }
+
+  getAudioTracks() {
+    return this.tracks.filter((track) => track.kind === 'audio');
+  }
+
+  getVideoTracks() {
+    return this.tracks.filter((track) => track.kind === 'video');
+  }
+}
+
+{
+  const mediaCalls = [];
+  const audioTrack = { kind: 'audio', stopped: false, stop() { this.stopped = true; } };
+  const harness = createLiveHarness({
+    fetch: async () => authorizedResponse(),
+    enumerateDevices: async () => labeledDevices,
+    getUserMedia: async (constraints) => {
+      mediaCalls.push(constraints);
+      const wantsVideo = Boolean(constraints.video);
+      const wantsAudio = Boolean(constraints.audio);
+      if (wantsVideo) {
+        const error = new Error('Camera is already in use');
+        error.name = 'NotReadableError';
+        throw error;
+      }
+      if (wantsAudio) return new FakeMediaStream([audioTrack]);
+      return new FakeMediaStream();
+    },
+    liveKit: { Track: { Source: liveKitSources } },
+    MediaStream: FakeMediaStream,
+  });
+  await waitForAuthorizedPrejoin(harness);
+  harness.document.getElementById('sr-camera-select').value = 'camera-selected';
+  harness.document.getElementById('sr-microphone-select').value = 'microphone-selected';
+
+  const testButton = harness.document.getElementById('sr-test-devices');
+  await testButton.emit('click');
+  const cameraOnly = mediaCalls.find((constraints) => constraints.video && constraints.audio === false);
+  const microphoneOnly = mediaCalls.find((constraints) => constraints.video === false && constraints.audio);
+  assert.ok(cameraOnly, 'A failed combined device test must retry the selected camera separately.');
+  assert.ok(microphoneOnly, 'A failed combined device test must retry the selected microphone separately.');
+  assert.equal(cameraOnly.video.deviceId.exact, 'camera-selected');
+  assert.equal(microphoneOnly.audio.deviceId.exact, 'microphone-selected');
+  assert.equal(harness.hooks.state.previewStream.getAudioTracks().length, 1);
+  assert.equal(harness.hooks.state.previewStream.getVideoTracks().length, 0);
+  assert.equal(harness.document.getElementById('sr-local-preview').hidden, true);
+  assert.equal(harness.document.getElementById('sr-camera-placeholder').hidden, false);
+  assert.equal(testButton.querySelector('span').textContent, 'Stop device test');
+  assert.match(harness.document.getElementById('sr-prejoin-status').textContent, /microphone/iu);
+  assert.match(harness.document.getElementById('sr-prejoin-status').textContent, /camera/iu);
+
+  await testButton.emit('click');
+  assert.equal(audioTrack.stopped, true, 'Stopping the partial device test must stop its microphone track.');
+  assert.equal(harness.hooks.state.previewStream, null);
+  assert.match(harness.document.getElementById('sr-prejoin-status').textContent, /off/iu);
+}
+
+{
+  const mediaCalls = [];
+  const cameraTrack = { kind: 'video', stopped: false, stop() { this.stopped = true; } };
+  const audioTrack = { kind: 'audio', stopped: false, stop() { this.stopped = true; } };
+  const harness = createLiveHarness({
+    fetch: async () => authorizedResponse(),
+    enumerateDevices: async () => labeledDevices,
+    getUserMedia: async (constraints) => {
+      mediaCalls.push(constraints);
+      if (constraints.video && constraints.audio) {
+        const error = new Error('Combined selection is stale');
+        error.name = 'NotReadableError';
+        throw error;
+      }
+      if (constraints.video) return new FakeMediaStream([cameraTrack]);
+      if (constraints.audio?.deviceId?.exact) {
+        const error = new Error('Selected microphone disconnected');
+        error.name = 'NotFoundError';
+        throw error;
+      }
+      if (constraints.audio) return new FakeMediaStream([audioTrack]);
+      return new FakeMediaStream();
+    },
+    liveKit: { Track: { Source: liveKitSources } },
+    MediaStream: FakeMediaStream,
+  });
+  await waitForAuthorizedPrejoin(harness);
+  harness.document.getElementById('sr-camera-select').value = 'camera-selected';
+  harness.document.getElementById('sr-microphone-select').value = 'microphone-selected';
+
+  await harness.document.getElementById('sr-test-devices').emit('click');
+  assert.ok(
+    mediaCalls.some((constraints) => constraints.video === false && constraints.audio === true),
+    'A stale selected microphone must receive one test with the system-default input.',
+  );
+  assert.equal(harness.hooks.state.previewStream.getAudioTracks().length, 1);
+  assert.equal(harness.hooks.state.previewStream.getVideoTracks().length, 1);
+  assert.match(harness.document.getElementById('sr-prejoin-status').textContent, /camera and microphone are working/iu);
+
+  await harness.document.getElementById('sr-test-devices').emit('click');
+  assert.equal(cameraTrack.stopped, true);
+  assert.equal(audioTrack.stopped, true);
+}
+
+{
+  let permissionCalls = 0;
+  const harness = createLiveHarness({
+    fetch: async () => authorizedResponse(),
+    enumerateDevices: async () => labeledDevices,
+    getUserMedia: async () => {
+      permissionCalls += 1;
+      const error = new Error('Permission denied');
+      error.name = 'NotAllowedError';
+      throw error;
+    },
+    liveKit: { Track: { Source: liveKitSources } },
+    MediaStream: FakeMediaStream,
+  });
+  await waitForAuthorizedPrejoin(harness);
+  await harness.document.getElementById('sr-test-devices').emit('click');
+  assert.equal(permissionCalls, 1, 'A denied device test must not repeatedly reprompt the user.');
+  const status = harness.document.getElementById('sr-prejoin-status');
+  assert.match(status.textContent, /permission/iu);
+  assert.match(status.textContent, /join with both off/iu);
+  assert.equal(status.classList.contains('is-error'), true);
+  assert.equal(harness.document.getElementById('sr-test-devices').disabled, false);
+}
+
+{
+  const requests = [];
+  const volumeCalls = [];
+  const subscriptionCalls = [];
+  let audioAttachCount = 0;
+  const remoteAudioTrack = {
+    attachedElements: [],
+    attach() {
+      audioAttachCount += 1;
+      const element = new FakeHTMLElement(`remote-audio-${audioAttachCount}`, 'audio');
+      element.volume = 1;
+      this.attachedElements.push(element);
+      return element;
+    },
+    detach(element) {
+      this.attachedElements = this.attachedElements.filter((candidate) => candidate !== element);
+      element.remove();
+    },
+  };
+  const microphonePublication = {
+    source: liveKitSources.Microphone,
+    trackSid: 'remote-microphone-track',
+    isMuted: false,
+    track: remoteAudioTrack,
+    async setSubscribed(value) {
+      subscriptionCalls.push(value);
+    },
+  };
+  const remoteParticipant = {
+    identity: 'remote-study-partner',
+    name: 'Study Partner',
+    isLocal: false,
+    trackPublications: new Map([['microphone', microphonePublication]]),
+    getTrackPublication: (source) => source === liveKitSources.Microphone ? microphonePublication : null,
+    setVolume(value) {
+      volumeCalls.push(value);
+      remoteAudioTrack.attachedElements.forEach((element) => {
+        element.volume = value;
+      });
+    },
+  };
+  const localParticipant = {
+    identity: 'local-admin',
+    name: 'Participant 202',
+    isLocal: true,
+    trackPublications: new Map(),
+    getTrackPublication: () => null,
+  };
+  const harness = createLiveHarness({
+    fetch: async (url) => {
+      requests.push(url);
+      return authorizedResponse();
+    },
+    enumerateDevices: async () => labeledDevices,
+    getUserMedia: async () => { throw new Error('Automatic permission should not be needed for labeled devices.'); },
+    liveKit: { Track: { Source: liveKitSources } },
+  });
+  await waitForAuthorizedPrejoin(harness);
+  harness.hooks.state.room = {
+    localParticipant,
+    remoteParticipants: new Map([[remoteParticipant.identity, remoteParticipant]]),
+    connectionState: 'connected',
+    canPlaybackAudio: true,
+  };
+  harness.hooks.renderParticipants();
+  assert.equal(remoteAudioTrack.attachedElements.length, 1);
+  assert.equal(remoteAudioTrack.attachedElements[0].volume, 1);
+
+  let row = harness.hooks.createPersonRow(remoteParticipant);
+  assert.equal(
+    descendantWithText(row, 'Mute for room'),
+    undefined,
+    'Remote-participant controls must not expose irreversible room-wide muting.',
+  );
+  const slider = descendants(row).find((child) => child.type === 'range');
+  slider.value = '42';
+  await slider.emit('input');
+  assert.equal(volumeCalls.at(-1), 0.42);
+  assert.equal(harness.hooks.state.participantVolumes.get(remoteParticipant.identity), 42);
+
+  await descendantWithText(row, 'Mute for me').emit('click');
+  assert.equal(volumeCalls.at(-1), 0);
+  assert.equal(harness.hooks.state.localMutedParticipants.has(remoteParticipant.identity), true);
+  assert.equal(remoteAudioTrack.attachedElements.length, 0, 'Mute for me must detach that participant’s audio.');
+  const attachCountWhileMuted = audioAttachCount;
+  harness.hooks.renderParticipants();
+  assert.equal(audioAttachCount, attachCountWhileMuted, 'A participant rerender must not reattach locally muted audio.');
+  row = harness.hooks.createPersonRow(remoteParticipant);
+  await descendantWithText(row, 'Hear again').emit('click');
+  assert.equal(volumeCalls.at(-1), 0.42, 'Hear again must restore the participant’s prior local volume.');
+  assert.equal(harness.hooks.state.localMutedParticipants.has(remoteParticipant.identity), false);
+  assert.equal(remoteAudioTrack.attachedElements.length, 1);
+  assert.equal(remoteAudioTrack.attachedElements[0].volume, 0.42);
+
+  row = harness.hooks.createPersonRow(remoteParticipant);
+  await descendantWithText(row, 'Block locally').emit('click');
+  assert.equal(subscriptionCalls.at(-1), false);
+  assert.equal(harness.hooks.state.blockedParticipants.has(remoteParticipant.identity), true);
+  row = harness.hooks.createPersonRow(remoteParticipant);
+  await descendantWithText(row, 'Unblock').emit('click');
+  assert.equal(subscriptionCalls.at(-1), true);
+  assert.equal(harness.hooks.state.blockedParticipants.has(remoteParticipant.identity), false);
+
+  row = harness.hooks.createPersonRow(remoteParticipant);
+  const zeroSlider = descendants(row).find((child) => child.type === 'range');
+  zeroSlider.value = '0';
+  await zeroSlider.emit('input');
+  harness.hooks.renderParticipants();
+  assert.equal(volumeCalls.at(-1), 0, 'A saved 0% volume must be reapplied after audio elements are recreated.');
+  assert.equal(remoteAudioTrack.attachedElements[0].volume, 0);
+
+  assert.equal(
+    requests.some((url) => String(url).includes('/admin/study-room/moderate')),
+    false,
+    'Mute-for-me, volume, and block controls must remain local and reversible.',
+  );
+}
+
+console.log('Study Room admin-window, device, microphone, and local-control behavioral tests passed.');

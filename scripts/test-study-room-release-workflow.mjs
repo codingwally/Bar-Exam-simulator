@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const [workflow, pagesOnlyWorkflow, productionConfig, stagingConfig] =
+const [workflow, pagesOnlyWorkflow, productionConfig, stagingConfig, home] =
   await Promise.all([
     readFile(
       path.join(root, ".github/workflows/release-study-room-admin-beta.yml"),
@@ -16,6 +16,7 @@ const [workflow, pagesOnlyWorkflow, productionConfig, stagingConfig] =
     ),
     readFile(path.join(root, "worker/wrangler.toml"), "utf8"),
     readFile(path.join(root, "worker/wrangler.staging.toml"), "utf8"),
+    readFile(path.join(root, "index.html"), "utf8"),
   ]);
 
 assert.match(workflow, /workflow_dispatch:/u);
@@ -311,7 +312,12 @@ assert.match(
 );
 assert.match(
   workflow.slice(pagesVerificationJob),
-  /study-room-admin-window-20260829-2/u,
+  /study-room-mandatory-backdrop-20260829-1/u,
+);
+assert.match(
+  home,
+  /study-room-mandatory-backdrop-20260829-1/u,
+  "Production verification must use a marker that exists in the shipped Home document.",
 );
 assert.match(
   workflow.slice(pagesVerificationJob),

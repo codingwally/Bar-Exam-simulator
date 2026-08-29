@@ -514,7 +514,7 @@ jobs:
               && grep -Fq 'DueDiligenceStudyRoomMandatoryBackground' <<<"$backgrounds" \
               && grep -Fq 'virtual-background-due-diligence-branded.webp' <<<"$backgrounds" \
               && grep -Fq 'due-diligence-mandatory-virtual-background-no-raw-first-frame' <<<"$processors" \
-              && grep -Fq 'study-room-admin-window-20260829-2' <<<"$home" \
+              && grep -Fq 'study-room-mandatory-backdrop-20260829-1' <<<"$home" \
               && grep -Fq "new URL('/study-room/', global.location.origin)" <<<"$preview" \
               && grep -Fq 'global.location.assign(roomUrl.href)' <<<"$preview" \
               && grep -Fq 'accessResolutionFailed = signedIn(latestSession) && !latestAccess' <<<"$preview" \

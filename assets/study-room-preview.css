@@ -514,6 +514,10 @@ body.dd-study-room-open { overflow: hidden; }
   gap: 7px;
 }
 
+.dd-study-room-backgrounds-enforced {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .dd-study-room-background-option {
   display: grid;
   min-height: 64px;
@@ -534,11 +538,39 @@ body.dd-study-room-open { overflow: hidden; }
   box-shadow: 0 0 0 1px rgba(231, 186, 82, 0.18);
 }
 
+.dd-study-room-background-enforced {
+  grid-template-columns: 76px minmax(0, 1fr);
+  min-height: 72px;
+  align-items: center;
+  justify-items: stretch;
+  padding: 8px;
+  border-color: #e7ba52;
+  box-shadow: 0 0 0 1px rgba(231, 186, 82, 0.18);
+  cursor: default;
+}
+
+.dd-study-room-background-enforced-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  text-align: left;
+}
+
+.dd-study-room-background-enforced-copy strong {
+  color: #f5d17b;
+  font-size: 11px;
+}
+
 .dd-study-room-background-option img {
   width: 100%;
   height: 42px;
   object-fit: cover;
   border-radius: 4px;
+}
+
+.dd-study-room-background-enforced img {
+  width: 76px;
+  height: 52px;
 }
 
 .dd-study-room-background-option:not(.has-photo) img {

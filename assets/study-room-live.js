@@ -18,14 +18,50 @@
   const STORAGE_KEY = 'duediligence.study-room.nickname.v2';
   const FALLBACK_NICKNAME = 'Participant 1';
   const MAX_NICKNAME_LENGTH = 32;
+  const MAX_ROOMS = 4;
+  const ROOM_REFRESH_INTERVAL_MS = 15_000;
+  const MANDATORY_BACKGROUND_POLICY = 'due-diligence-mandatory-virtual-background-no-raw-first-frame';
   const DISALLOWED_NICKNAME = /[\p{Cc}\p{Cf}<>]/u;
   const RESERVED_NICKNAME = /\b(?:admin|administrator|founder|moderator|staff|support)\b|\bdue\s+diligence\b/iu;
+  const ROOM_PRESENTATION = Object.freeze({
+    '1': Object.freeze({
+      name: 'Library Study Room',
+      cover: '../assets/study-room/dimasalang-library.webp',
+    }),
+    '2': Object.freeze({
+      name: 'Tropical Study Room',
+      cover: '../assets/study-room/participant-2-tropical.webp',
+    }),
+    '3': Object.freeze({
+      name: 'Quiet Study Room',
+      cover: '../assets/study-room/participant-3-bedroom.webp',
+    }),
+    '4': Object.freeze({
+      name: 'Condo Study Room',
+      cover: '../assets/study-room/participant-4-condo.webp',
+    }),
+  });
 
   const state = {
     client: null,
     session: null,
     access: null,
+    rooms: [],
+    selectedRoomKey: '',
+    currentRoomKey: '',
+    roomCatalogBusy: false,
+    roomCatalogPromise: null,
+    roomMutationBusy: false,
+    roomRefreshTimer: 0,
     room: null,
+    switchingRoom: false,
+    backgroundController: null,
+    backgroundCleanup: Promise.resolve(),
+    cameraOperationBusy: false,
+    cameraGuard: Promise.resolve(),
+    cameraPublishGuard: null,
+    controllerProtectedCameraTracks: new Set(),
+    recovering: false,
     previewStream: null,
     audioContext: null,
     analyser: null,
@@ -159,6 +195,9 @@
 
   function deviceErrorMessage(kind, error) {
     const label = kind === 'microphone' ? 'microphone' : 'camera';
+    if (kind === 'camera' && /^STUDY_ROOM_BACKGROUND_/u.test(String(error?.code || ''))) {
+      return String(error?.message || 'The required Due Diligence backdrop could not start, so video remains off.');
+    }
     if (error?.code === 'MEDIA_TRACK_NOT_LIVE') {
       return `The ${label} did not produce a live signal. Choose another device and try again.`;
     }
@@ -268,6 +307,268 @@
     byId('sr-live-room').hidden = true;
   }
 
+  function roomPresentation(roomKey) {
+    return ROOM_PRESENTATION[String(roomKey)] || Object.freeze({
+      name: `Study Room ${String(roomKey || '')}`.trim(),
+      cover: '../assets/study-room/virtual-background-due-diligence-branded.webp',
+    });
+  }
+
+  function normalizeRoomCatalog(payload) {
+    const listed = Array.isArray(payload?.rooms) ? payload.rooms : [];
+    const byRoomKey = new Map();
+    listed.forEach((candidate) => {
+      const roomKey = String(candidate?.roomKey || '').trim();
+      if (!/^[1-4]$/u.test(roomKey) || byRoomKey.has(roomKey)) return;
+      const participantCount = Number(candidate?.participantCount);
+      const capacity = Number(candidate?.capacity);
+      byRoomKey.set(roomKey, Object.freeze({
+        roomKey,
+        active: candidate?.active === true,
+        participantCount: Number.isSafeInteger(participantCount) && participantCount >= 0
+          ? Math.min(participantCount, 12)
+          : 0,
+        capacity: Number.isSafeInteger(capacity) && capacity > 0 ? Math.min(capacity, 12) : 12,
+        focusStartedAt: Number.isFinite(Date.parse(String(candidate?.focusStartedAt || '')))
+          ? String(candidate.focusStartedAt)
+          : null,
+      }));
+    });
+    return Array.from({ length: MAX_ROOMS }, (_unused, index) => {
+      const roomKey = String(index + 1);
+      return byRoomKey.get(roomKey) || Object.freeze({
+        roomKey,
+        active: false,
+        participantCount: 0,
+        capacity: 12,
+        focusStartedAt: null,
+      });
+    });
+  }
+
+  function selectedRoom() {
+    return state.rooms.find((room) => room.roomKey === state.selectedRoomKey) || null;
+  }
+
+  function activeRoom(roomKey) {
+    return state.rooms.find((room) => room.roomKey === String(roomKey) && room.active) || null;
+  }
+
+  function syncJoinButton() {
+    const button = byId('sr-join');
+    if (!button || state.joining) return;
+    const room = selectedRoom();
+    button.disabled = !room?.active;
+    button.textContent = room?.active
+      ? `Join ${roomPresentation(room.roomKey).name}`
+      : 'Open a room to join';
+  }
+
+  function selectRoom(roomKey) {
+    const room = activeRoom(roomKey);
+    if (!room) return false;
+    state.selectedRoomKey = room.roomKey;
+    renderRoomCatalog();
+    return true;
+  }
+
+  function roomCountCopy(room) {
+    if (!room.active) return 'Open this room';
+    if (room.participantCount === 0) return 'Ready for the first study partner';
+    return `${room.participantCount} ${room.participantCount === 1 ? 'person' : 'people'} studying`;
+  }
+
+  function createRoomCard(room, firstInactiveRoomKey) {
+    const presentation = roomPresentation(room.roomKey);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `sr-room-card${room.active ? '' : ' sr-room-card-create'}${state.selectedRoomKey === room.roomKey ? ' is-selected' : ''}`;
+    button.id = room.active ? `sr-room-card-${room.roomKey}` : (room.roomKey === firstInactiveRoomKey ? 'sr-create-room' : `sr-create-room-${room.roomKey}`);
+    button.dataset.roomKey = room.roomKey;
+    button.dataset.roomAction = room.active ? 'select' : 'create';
+    button.dataset.roomState = room.active ? 'available' : 'create';
+    button.disabled = state.roomCatalogBusy
+      || state.roomMutationBusy
+      || state.joining
+      || state.switchingRoom;
+    button.setAttribute('aria-label', room.active
+      ? `${presentation.name}, ${roomCountCopy(room)}`
+      : `Open ${presentation.name}`);
+    if (room.active) button.setAttribute('aria-pressed', String(state.selectedRoomKey === room.roomKey));
+
+    if (room.active) {
+      const cover = document.createElement('img');
+      cover.className = 'sr-room-card-cover';
+      cover.src = presentation.cover;
+      cover.alt = '';
+      cover.setAttribute('aria-hidden', 'true');
+      button.append(cover);
+    } else {
+      const createIcon = document.createElement('span');
+      createIcon.className = 'sr-room-create-icon';
+      createIcon.setAttribute('aria-hidden', 'true');
+      const createIconImage = document.createElement('img');
+      createIconImage.src = '../assets/icons/navigation/layout-grid.svg';
+      createIconImage.width = 24;
+      createIconImage.height = 24;
+      createIconImage.alt = '';
+      createIcon.append(createIconImage);
+      button.append(createIcon);
+    }
+
+    const copy = document.createElement('span');
+    copy.className = 'sr-room-card-copy';
+    const title = document.createElement('strong');
+    title.textContent = presentation.name;
+    const status = document.createElement('small');
+    if (room.active) {
+      const peopleIcon = document.createElement('img');
+      peopleIcon.src = '../assets/icons/navigation/users.svg';
+      peopleIcon.width = 15;
+      peopleIcon.height = 15;
+      peopleIcon.alt = '';
+      peopleIcon.setAttribute('aria-hidden', 'true');
+      status.append(peopleIcon);
+    }
+    const statusText = document.createElement('span');
+    statusText.textContent = roomCountCopy(room);
+    status.append(statusText);
+    copy.append(title, status);
+    button.append(copy);
+    button.addEventListener('click', () => {
+      if (room.active) selectRoom(room.roomKey);
+      else createRoomSlot(room.roomKey);
+    });
+    return button;
+  }
+
+  function renderRoomSelector() {
+    const menu = byId('sr-room-selector-menu');
+    if (!menu) return;
+    const activeRooms = state.rooms.filter((room) => room.active);
+    menu.replaceChildren(...activeRooms.map((room) => {
+      const option = document.createElement('button');
+      option.type = 'button';
+      option.role = 'option';
+      option.dataset.roomKey = room.roomKey;
+      option.setAttribute('aria-selected', String(room.roomKey === state.currentRoomKey));
+      option.textContent = `${roomPresentation(room.roomKey).name} · ${room.participantCount}`;
+      option.disabled = state.joining || state.switchingRoom || state.roomMutationBusy;
+      option.addEventListener('click', () => switchToRoom(room.roomKey));
+      return option;
+    }));
+    const selector = byId('sr-room-selector');
+    if (selector) selector.disabled = activeRooms.length < 2;
+  }
+
+  function renderRoomCatalog() {
+    const grid = byId('sr-room-card-grid');
+    const firstInactiveRoomKey = state.rooms.find((room) => !room.active)?.roomKey || '';
+    if (grid) grid.replaceChildren(...state.rooms.map((room) => createRoomCard(room, firstInactiveRoomKey)));
+    const activeCount = state.rooms.filter((room) => room.active).length;
+    const count = byId('sr-room-lobby-count');
+    if (count) count.textContent = `${activeCount} of ${MAX_ROOMS} rooms open`;
+    const selected = selectedRoom();
+    const activeName = byId('sr-active-room-name');
+    if (activeName) activeName.textContent = roomPresentation(state.currentRoomKey || selected?.roomKey || '1').name;
+    renderRoomSelector();
+    syncJoinButton();
+  }
+
+  function localQualityRoomCatalog() {
+    const activeCount = LOCAL_TEST_MODE === 'live' ? 4 : 3;
+    return normalizeRoomCatalog({
+      rooms: Array.from({ length: MAX_ROOMS }, (_unused, index) => ({
+        roomKey: String(index + 1),
+        active: index < activeCount,
+        participantCount: index === 0 ? 4 : index < activeCount ? index : 0,
+        capacity: 12,
+        focusStartedAt: new Date(Date.now() - ((index + 1) * 900_000)).toISOString(),
+      })),
+    });
+  }
+
+  async function refreshRoomCatalog(options = {}) {
+    if (state.roomCatalogPromise) return state.roomCatalogPromise;
+    state.roomCatalogBusy = true;
+    renderRoomCatalog();
+    const operation = (async () => {
+      try {
+        const payload = LOCAL_TEST_MODE
+          ? { rooms: state.rooms.length ? state.rooms : localQualityRoomCatalog() }
+          : await workerRequest('/admin/study-room/rooms', { operation: 'list' });
+        state.rooms = normalizeRoomCatalog(payload);
+        if (!activeRoom(state.selectedRoomKey)) {
+          state.selectedRoomKey = state.rooms.find((room) => room.active)?.roomKey || '';
+        }
+        renderRoomCatalog();
+        return state.rooms;
+      } catch (error) {
+        if (!options.quiet) {
+          setStatus('sr-prejoin-status', friendlyError(error, 'The Study Room list could not refresh.'), 'error');
+        }
+        throw error;
+      }
+    })();
+    state.roomCatalogPromise = operation;
+    try {
+      return await operation;
+    } finally {
+      if (state.roomCatalogPromise === operation) state.roomCatalogPromise = null;
+      state.roomCatalogBusy = false;
+      renderRoomCatalog();
+    }
+  }
+
+  async function createRoomSlot(roomKey) {
+    if (state.roomCatalogBusy || state.roomMutationBusy || state.joining || state.switchingRoom) return;
+    const requestedKey = String(roomKey || '');
+    if (!/^[1-4]$/u.test(requestedKey)) return;
+    const requestedRoom = state.rooms.find((room) => room.roomKey === requestedKey);
+    if (!requestedRoom) return;
+    if (requestedRoom.active) {
+      selectRoom(requestedKey);
+      return;
+    }
+    if (state.rooms.filter((room) => room.active).length >= MAX_ROOMS) {
+      setStatus('sr-prejoin-status', 'All four Study Rooms are already open. Choose one to join.', 'error');
+      await refreshRoomCatalog({ quiet: true }).catch(() => {});
+      return;
+    }
+    state.roomMutationBusy = true;
+    renderRoomCatalog();
+    setStatus('sr-prejoin-status', `Opening ${roomPresentation(requestedKey).name}…`);
+    try {
+      if (LOCAL_TEST_MODE) {
+        state.rooms = state.rooms.map((room) => room.roomKey === requestedKey
+          ? Object.freeze({ ...room, active: true, focusStartedAt: new Date().toISOString() })
+          : room);
+      } else {
+        await workerRequest('/admin/study-room/rooms', { operation: 'create', roomKey: requestedKey });
+        state.rooms = state.rooms.map((room) => room.roomKey === requestedKey
+          ? Object.freeze({ ...room, active: true, focusStartedAt: new Date().toISOString() })
+          : room);
+        await refreshRoomCatalog({ quiet: true }).catch(() => state.rooms);
+      }
+      state.selectedRoomKey = requestedKey;
+      renderRoomCatalog();
+      setStatus('sr-prejoin-status', `${roomPresentation(requestedKey).name} is open. Camera and microphone are still off.`, 'ok');
+    } catch (error) {
+      setStatus('sr-prejoin-status', friendlyError(error, 'That Study Room could not open just now.'), 'error');
+      await refreshRoomCatalog({ quiet: true }).catch(() => {});
+    } finally {
+      state.roomMutationBusy = false;
+      renderRoomCatalog();
+    }
+  }
+
+  function startRoomCatalogRefresh() {
+    global.clearInterval(state.roomRefreshTimer);
+    state.roomRefreshTimer = global.setInterval(() => {
+      refreshRoomCatalog({ quiet: true }).catch(() => {});
+    }, ROOM_REFRESH_INTERVAL_MS);
+  }
+
   function initializeDateClock() {
     const update = () => {
       const now = new Date();
@@ -300,6 +601,14 @@
 
   function setJoinOption(kind, enabled) {
     const isMicrophone = kind === 'microphone';
+    if (!isMicrophone && enabled) {
+      try {
+        if (ensureBackgroundController().capabilities().supported !== true) enabled = false;
+      } catch (error) {
+        enabled = false;
+        setStatus('sr-prejoin-status', deviceErrorMessage('camera', error), 'error');
+      }
+    }
     if (isMicrophone) state.joinWithMicrophone = enabled;
     else state.joinWithCamera = enabled;
     const button = byId(isMicrophone ? 'sr-join-microphone' : 'sr-join-camera');
@@ -367,6 +676,20 @@
     audioinput: ['sr-microphone-select', 'sr-live-microphone-select'],
     audiooutput: ['sr-speaker-select', 'sr-live-speaker-select'],
   });
+  const DEVICE_LABEL_COPY = Object.freeze({
+    videoinput: Object.freeze({
+      noun: 'camera',
+      generic: /^(?:camera|webcam|video(?: input| device)?|default(?: device)?)(?:\s*(?:#|-)?\s*\d+)?$/iu,
+    }),
+    audioinput: Object.freeze({
+      noun: 'microphone',
+      generic: /^(?:microphone|mic|audio(?: input| device)?|default(?: device)?)(?:\s*(?:#|-)?\s*\d+)?$/iu,
+    }),
+    audiooutput: Object.freeze({
+      noun: 'speaker',
+      generic: /^(?:speaker|speakers|audio(?: output| device)?|default(?: device)?)(?:\s*(?:#|-)?\s*\d+)?$/iu,
+    }),
+  });
 
   function selectedDeviceId(kind) {
     const remembered = state.selectedDevices[kind];
@@ -390,19 +713,29 @@
     }
   }
 
-  function fillSelect(select, devices, fallback, kind) {
+  function deviceOptionLabel(device, index, kind) {
+    const copy = DEVICE_LABEL_COPY[kind] || Object.freeze({ noun: 'device', generic: /^$/u });
+    const provided = String(device?.label || '').trim();
+    if (provided && !copy.generic.test(provided)) return provided;
+    if (index === 0 || String(device?.deviceId || '').toLowerCase() === 'default') {
+      return `System default ${copy.noun}`;
+    }
+    return `Alternate ${copy.noun} ${index + 1}`;
+  }
+
+  function fillSelect(select, devices, kind) {
     if (!select) return;
     const previous = selectedDeviceId(kind) || select.value;
     select.replaceChildren();
     if (!devices.length) {
-      const option = new Option(fallback, '');
+      const option = new Option(deviceOptionLabel(null, 0, kind), '');
       select.append(option);
       select.disabled = true;
       if (state.selectedDevices[kind] === previous) state.selectedDevices[kind] = '';
       return;
     }
     devices.forEach((device, index) => {
-      const label = device.label || `${fallback} ${index + 1}`;
+      const label = deviceOptionLabel(device, index, kind);
       select.append(new Option(label, device.deviceId));
     });
     select.disabled = false;
@@ -419,9 +752,9 @@
     const microphones = devices.filter((device) => device.kind === 'audioinput');
     const speakers = devices.filter((device) => device.kind === 'audiooutput');
     for (const prefix of ['sr-', 'sr-live-']) {
-      fillSelect(byId(`${prefix}camera-select`), cameras, 'Camera', 'videoinput');
-      fillSelect(byId(`${prefix}microphone-select`), microphones, 'Microphone', 'audioinput');
-      fillSelect(byId(`${prefix}speaker-select`), speakers, 'Speaker', 'audiooutput');
+      fillSelect(byId(`${prefix}camera-select`), cameras, 'videoinput');
+      fillSelect(byId(`${prefix}microphone-select`), microphones, 'audioinput');
+      fillSelect(byId(`${prefix}speaker-select`), speakers, 'audiooutput');
     }
     return devices;
   }
@@ -682,7 +1015,13 @@
 
     const videoPublication = publicationFor(participant, LiveKit?.Track?.Source?.Camera || 'camera');
     const videoTrack = videoPublication?.track;
-    const cameraVisible = Boolean(videoTrack && !videoPublication?.isMuted);
+    const localCameraProtected = !participant.isLocal
+      || isStaticQualityCameraPublication(videoPublication)
+      || isMandatoryProcessedCameraTrack(videoTrack);
+    const cameraVisible = Boolean(videoTrack && !videoPublication?.isMuted && localCameraProtected);
+    if (participant.isLocal && videoTrack && !videoPublication?.isMuted && !localCameraProtected) {
+      scheduleLocalCameraGuard(state.room);
+    }
     if (cameraVisible) {
       attachTrack(videoTrack, tile, 'video', participant.isLocal);
     } else {
@@ -705,7 +1044,17 @@
     name.textContent = participant.isLocal ? `You · ${displayName(participant)}` : displayName(participant);
     const mediaState = document.createElement('span');
     mediaState.className = 'sr-tile-media-state';
-    mediaState.textContent = audioPublication && !audioPublication.isMuted ? 'Mic on' : 'Muted';
+    const microphoneOn = Boolean(audioPublication && !audioPublication.isMuted);
+    mediaState.classList.toggle('is-muted', !microphoneOn);
+    mediaState.setAttribute('aria-label', microphoneOn ? 'Microphone on' : 'Microphone muted');
+    mediaState.title = microphoneOn ? 'Microphone on' : 'Microphone muted';
+    const microphoneIcon = document.createElement('img');
+    microphoneIcon.src = '../assets/icons/navigation/mic.svg';
+    microphoneIcon.width = 17;
+    microphoneIcon.height = 17;
+    microphoneIcon.alt = '';
+    microphoneIcon.setAttribute('aria-hidden', 'true');
+    mediaState.append(microphoneIcon);
     meta.append(name, mediaState);
     tile.append(meta);
     return tile;
@@ -751,13 +1100,23 @@
       const localMute = document.createElement('button');
       const locallyMuted = state.localMutedParticipants.has(participant.identity);
       localMute.type = 'button';
-      localMute.textContent = locallyMuted ? 'Hear again' : 'Mute for me';
+      localMute.title = locallyMuted ? 'Hear again' : 'Mute for me';
       localMute.setAttribute(
         'aria-label',
         locallyMuted
           ? `Hear ${displayName(participant)} again`
           : `Mute ${displayName(participant)} only for you`,
       );
+      const localMuteIcon = document.createElement('img');
+      localMuteIcon.src = '../assets/icons/navigation/mic.svg';
+      localMuteIcon.width = 17;
+      localMuteIcon.height = 17;
+      localMuteIcon.alt = '';
+      localMuteIcon.setAttribute('aria-hidden', 'true');
+      const localMuteCopy = document.createElement('span');
+      localMuteCopy.className = 'sr-visually-hidden';
+      localMuteCopy.textContent = locallyMuted ? 'Hear again' : 'Mute for me';
+      localMute.append(localMuteIcon, localMuteCopy);
       localMute.addEventListener('click', () => {
         if (locallyMuted) {
           state.localMutedParticipants.delete(participant.identity);
@@ -772,11 +1131,21 @@
       const block = document.createElement('button');
       const blocked = state.blockedParticipants.has(participant.identity);
       block.type = 'button';
-      block.textContent = blocked ? 'Unblock' : 'Block locally';
+      block.title = blocked ? 'Unblock' : 'Block locally';
       block.setAttribute(
         'aria-label',
         blocked ? `Unblock ${displayName(participant)}` : `Block ${displayName(participant)} only for you`,
       );
+      const blockIcon = document.createElement('img');
+      blockIcon.src = '../assets/icons/community/eye-slash.svg';
+      blockIcon.width = 17;
+      blockIcon.height = 17;
+      blockIcon.alt = '';
+      blockIcon.setAttribute('aria-hidden', 'true');
+      const blockCopy = document.createElement('span');
+      blockCopy.className = 'sr-visually-hidden';
+      blockCopy.textContent = blocked ? 'Unblock' : 'Block locally';
+      block.append(blockIcon, blockCopy);
       block.addEventListener('click', () => setParticipantBlocked(participant, !blocked).catch(() => {
         toast('This participant could not be blocked just now.');
       }));
@@ -842,6 +1211,12 @@
     renderPeople(participants);
     const countCopy = `${participants.length} ${participants.length === 1 ? 'studying' : 'studying'}`;
     byId('sr-room-count').textContent = countCopy;
+    if (state.currentRoomKey) {
+      state.rooms = state.rooms.map((room) => room.roomKey === state.currentRoomKey
+        ? Object.freeze({ ...room, active: true, participantCount: participants.length })
+        : room);
+      renderRoomSelector();
+    }
     syncSelfMediaState();
   }
 
@@ -851,29 +1226,33 @@
     });
   }
 
-  function recoverFromTerminalDisconnect(room) {
-    if (state.leaving || state.room !== room) return;
-    global.clearInterval(state.focusTimer);
-    state.focusTimer = 0;
-    detachTracks();
-    state.room = null;
-    state.focusStartedAt = null;
-    state.blockedParticipants.clear();
-    state.localMutedParticipants.clear();
-    state.participantVolumes.clear();
-    state.activeSpeakers.clear();
-    state.joining = false;
-    const joinButton = byId('sr-join');
-    joinButton.disabled = false;
-    joinButton.textContent = 'Rejoin Study Room';
-    byId('sr-live-room').hidden = true;
-    byId('sr-prejoin').hidden = false;
-    setStatus(
-      'sr-prejoin-status',
-      'The room connection ended. Your camera and microphone are off. You can rejoin when ready.',
-      'error',
-    );
-    toast('The Study Room connection ended. Your camera and microphone are off.');
+  async function recoverFromTerminalDisconnect(room) {
+    if (state.leaving || state.recovering || state.room !== room) return;
+    state.recovering = true;
+    state.leaving = true;
+    try {
+      global.clearInterval(state.focusTimer);
+      state.focusTimer = 0;
+      detachTracks();
+      // Keep state.room available until controller cleanup has muted,
+      // unpublished, and stopped any protected camera track.
+      await destroyBackgroundController();
+      removeLocalCameraPublishGuard(room);
+      if (state.room === room) clearConnectedRoomState();
+      state.joining = false;
+      syncJoinButton();
+      byId('sr-live-room').hidden = true;
+      byId('sr-prejoin').hidden = false;
+      setStatus(
+        'sr-prejoin-status',
+        'The room connection ended. Your camera and microphone are off. You can rejoin when ready.',
+        'error',
+      );
+      toast('The Study Room connection ended. Your camera and microphone are off.');
+    } finally {
+      state.leaving = false;
+      state.recovering = false;
+    }
   }
 
   function connectionLabel(value) {
@@ -928,6 +1307,9 @@
 
   function bindRoomEvents(room) {
     const event = LiveKit.RoomEvent;
+    [event.LocalTrackPublished, event.TrackUnmuted].filter(Boolean).forEach((eventName) => {
+      room.on(eventName, () => scheduleLocalCameraGuard(room));
+    });
     const rerenderEvents = [
       event.ParticipantConnected,
       event.ParticipantDisconnected,
@@ -947,6 +1329,9 @@
     });
     room.on(event.ConnectionStateChanged, (connectionState) => {
       syncConnectionState(connectionState);
+      if (String(connectionState || '').toLowerCase() === 'connected') {
+        scheduleLocalCameraGuard(room);
+      }
     });
     room.on(event.AudioPlaybackStatusChanged, updateAudioPrompt);
     if (event.MediaDevicesChanged) {
@@ -979,7 +1364,7 @@
       });
     }
     room.on(event.Disconnected, () => {
-      recoverFromTerminalDisconnect(room);
+      recoverFromTerminalDisconnect(room).catch(() => {});
     });
   }
 
@@ -1025,10 +1410,160 @@
     );
   }
 
+  function isStaticQualityCameraPublication(publication) {
+    return LOCAL_TEST_MODE === 'live' && publication?.__studyRoomStaticPreview === true;
+  }
+
+  function isMandatoryProcessedCameraTrack(track) {
+    try {
+      const effects = global.LivekitTrackProcessors;
+      const processor = track?.getProcessor?.();
+      const processedTrack = processor?.processedTrack;
+      const processorOptions = processor?.transformer?.options;
+      const strictProductionVerification = Boolean(
+        effects?.POLICY === MANDATORY_BACKGROUND_POLICY
+        && typeof effects.MANDATORY_IMAGE_PATH === 'string'
+        && effects.MANDATORY_IMAGE_PATH.length > 0
+        && processor
+        && processor.mode === 'virtual-background'
+        && processorOptions?.imagePath === effects.MANDATORY_IMAGE_PATH
+        && processorOptions.backgroundDisabled !== true
+        && typeof processorOptions.blurRadius === 'undefined'
+        && processedTrack
+        && processedTrack.readyState === 'live'
+        && processedTrack.enabled !== false
+        && track.mediaStreamTrack === processedTrack
+        && track.getProcessor?.() === processor
+      );
+      if (strictProductionVerification) return true;
+
+      // The controller contract is also tracked after enableCamera returns.
+      // This fallback supports isolated controller test doubles only when the
+      // production processor bundle is absent; production always takes the
+      // stronger identity/processedTrack verification above.
+      return Boolean(
+        !effects
+        && state.controllerProtectedCameraTracks.has(track)
+        && processor?.mode === 'virtual-background'
+        && (processor?.imagePath || processorOptions?.imagePath)
+          === '/assets/study-room/virtual-background-due-diligence-branded.webp'
+        && track?.mediaStreamTrack?.readyState === 'live'
+        && track.mediaStreamTrack.enabled !== false
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  function mandatoryCameraError() {
+    const error = new Error('The required Due Diligence backdrop was not verified, so video remains off.');
+    error.name = 'StudyRoomBackgroundError';
+    error.code = 'STUDY_ROOM_BACKGROUND_NOT_VERIFIED';
+    return error;
+  }
+
+  function assertMandatoryProcessedCameraTrack(track) {
+    if (!isMandatoryProcessedCameraTrack(track)) throw mandatoryCameraError();
+    return track;
+  }
+
+  function isCameraPublishAttempt(track, publishOptions = {}) {
+    const cameraSource = LiveKit?.Track?.Source?.Camera || 'camera';
+    const screenShareSource = LiveKit?.Track?.Source?.ScreenShare || 'screen_share';
+    const source = publishOptions?.source || track?.source || '';
+    if (source === screenShareSource || source === 'screen_share') return false;
+    return source === cameraSource
+      || source === 'camera'
+      || track?.kind === 'video'
+      || track?.mediaStreamTrack?.kind === 'video';
+  }
+
+  function removeLocalCameraPublishGuard(room = state.cameraPublishGuard?.room) {
+    const guard = state.cameraPublishGuard;
+    if (!guard || (room && guard.room !== room)) return;
+    try {
+      if (guard.participant.publishTrack === guard.guardedPublishTrack) {
+        if (guard.hadOwnPublishTrack) {
+          Object.defineProperty(guard.participant, 'publishTrack', guard.originalDescriptor);
+        } else {
+          delete guard.participant.publishTrack;
+        }
+      }
+    } catch {
+      // The room is being discarded; retaining the fail-closed wrapper is safe.
+    }
+    state.cameraPublishGuard = null;
+  }
+
+  function installLocalCameraPublishGuard(room) {
+    if (state.cameraPublishGuard?.room === room) return true;
+    removeLocalCameraPublishGuard();
+    const participant = room?.localParticipant;
+    const originalPublishTrack = participant?.publishTrack;
+    if (!participant) return false;
+    // The real LiveKit participant always exposes publishTrack. A controller
+    // test double may publish into an in-memory collection directly.
+    if (typeof originalPublishTrack !== 'function') return true;
+    const originalDescriptor = Object.getOwnPropertyDescriptor(participant, 'publishTrack');
+    const guardedPublishTrack = function guardedStudyRoomPublishTrack(track, publishOptions) {
+      if (isCameraPublishAttempt(track, publishOptions)) assertMandatoryProcessedCameraTrack(track);
+      return originalPublishTrack.call(this, track, publishOptions);
+    };
+    try {
+      participant.publishTrack = guardedPublishTrack;
+      if (participant.publishTrack !== guardedPublishTrack) return false;
+      state.cameraPublishGuard = {
+        room,
+        participant,
+        guardedPublishTrack,
+        hadOwnPublishTrack: Boolean(originalDescriptor),
+        originalDescriptor,
+      };
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function failClosedUnprotectedLocalCamera(room) {
+    if (!room || state.room !== room) return true;
+    const local = room.localParticipant;
+    const publication = localSourcePublication(local, 'camera');
+    if (
+      !publication
+      || isStaticQualityCameraPublication(publication)
+      || isMandatoryProcessedCameraTrack(publication.track)
+    ) return true;
+
+    try {
+      await publication.mute?.();
+    } catch {
+      // Unpublishing and stopping below remain the fail-closed fallback.
+    }
+    try {
+      if (publication.track) await local.unpublishTrack?.(publication.track, false);
+    } catch {
+      // Disconnecting or stopping the local track below still prevents video.
+    }
+    publication.track?.stop?.();
+    if (state.backgroundController) await destroyBackgroundController();
+    syncSelfMediaState();
+    toast('An unprotected camera track was blocked. Video is off.');
+    return false;
+  }
+
+  function scheduleLocalCameraGuard(room) {
+    state.cameraGuard = state.cameraGuard
+      .catch(() => {})
+      .then(() => failClosedUnprotectedLocalCamera(room))
+      .catch(() => false);
+    return state.cameraGuard;
+  }
+
   function isLocalSourceEnabled(local, kind) {
     const publication = localSourcePublication(local, kind);
     const mediaStreamTrack = publication?.track?.mediaStreamTrack;
-    return Boolean(
+    const live = Boolean(
       publication
       && publication.track
       && !publication.isMuted
@@ -1038,6 +1573,144 @@
       && mediaStreamTrack.muted !== true
       && publication.isUpstreamPaused !== true
     );
+    if (!live || kind !== 'camera') return live;
+    return isStaticQualityCameraPublication(publication)
+      || isMandatoryProcessedCameraTrack(publication.track);
+  }
+
+  function syncBrandedBackdropState(snapshot = {}) {
+    const status = String(snapshot.status || 'idle');
+    const node = byId('sr-branded-backdrop-status');
+    const copy = byId('sr-branded-backdrop-copy');
+    if (node) node.dataset.backdropState = status;
+    if (copy) {
+      copy.textContent = status === 'enabled'
+        ? 'Due Diligence backdrop is active on your camera.'
+        : status === 'preparing'
+        ? 'Preparing the required Due Diligence backdrop before video is shared…'
+        : status === 'unavailable'
+        ? (snapshot.error || 'This device cannot safely apply the required backdrop, so video remains off.')
+        : status === 'destroyed'
+        ? 'The protected camera has been closed.'
+        : 'Your real background is never shared; the Due Diligence backdrop is applied before video starts.';
+    }
+    const unavailable = snapshot.supported === false || status === 'unavailable';
+    for (const id of ['sr-join-camera', 'sr-toggle-camera']) {
+      const button = byId(id);
+      if (!button) continue;
+      if (unavailable) {
+        button.disabled = true;
+        button.title = 'This browser cannot safely apply the required Due Diligence backdrop.';
+      } else if (status === 'preparing' || state.cameraOperationBusy) {
+        button.disabled = true;
+      } else {
+        button.disabled = false;
+        button.removeAttribute?.('title');
+      }
+    }
+  }
+
+  function ensureBackgroundController() {
+    if (state.backgroundController) return state.backgroundController;
+    const createController = global.DueDiligenceStudyRoomMandatoryBackground?.createController;
+    if (typeof createController !== 'function') {
+      const error = new Error('The required Due Diligence backdrop could not load, so video remains off.');
+      error.code = 'STUDY_ROOM_BACKGROUND_LIBRARY_UNAVAILABLE';
+      syncBrandedBackdropState({ status: 'unavailable', supported: false, error: error.message });
+      throw error;
+    }
+    state.backgroundController = createController({
+      liveKit: LiveKit,
+      getLocalParticipant: () => state.room?.localParticipant || null,
+      onStateChange: syncBrandedBackdropState,
+    });
+    const capabilities = state.backgroundController.capabilities();
+    syncBrandedBackdropState({
+      status: capabilities.supported ? 'disabled' : 'unavailable',
+      ...capabilities,
+      error: capabilities.supported
+        ? ''
+        : 'This browser cannot safely apply the required Due Diligence backdrop, so video remains off.',
+    });
+    return state.backgroundController;
+  }
+
+  async function destroyBackgroundController() {
+    const controller = state.backgroundController;
+    state.backgroundController = null;
+    if (!controller) {
+      await state.backgroundCleanup.catch(() => {});
+      return;
+    }
+    const capabilities = controller.capabilities?.() || { supported: false };
+    const cleanup = state.backgroundCleanup
+      .catch(() => {})
+      .then(() => controller.destroy?.())
+      .catch(() => {});
+    state.backgroundCleanup = cleanup;
+    await cleanup;
+    state.controllerProtectedCameraTracks.clear();
+    if (!state.backgroundController) {
+      syncBrandedBackdropState({
+        status: capabilities.supported ? 'idle' : 'unavailable',
+        ...capabilities,
+        error: capabilities.supported
+          ? ''
+          : 'This browser cannot safely apply the required Due Diligence backdrop, so video remains off.',
+      });
+    }
+  }
+
+  async function setProtectedCameraEnabled(enabled) {
+    await state.backgroundCleanup.catch(() => {});
+    const room = state.room;
+    if (!room?.localParticipant) throw new Error('The room is not connected.');
+    if (!installLocalCameraPublishGuard(room)) {
+      syncBrandedBackdropState({
+        status: 'unavailable',
+        supported: false,
+        error: 'This browser could not enforce protected camera publication, so video remains off.',
+      });
+      throw mandatoryCameraError();
+    }
+    const controller = ensureBackgroundController();
+    state.cameraOperationBusy = true;
+    try {
+      if (!enabled) {
+        await controller.disableCamera();
+        return;
+      }
+      const deviceId = selectedDeviceId('videoinput');
+      const result = await controller.enableCamera(captureOptions('camera', deviceId), {
+        source: LiveKit?.Track?.Source?.Camera || 'camera',
+      });
+      if (result?.publication?.track) state.controllerProtectedCameraTracks.add(result.publication.track);
+      assertMandatoryProcessedCameraTrack(result?.publication?.track);
+      if (!isLocalSourceEnabled(room.localParticipant, 'camera')) throw sourceStartError('camera');
+      await syncActualInputDevice('camera', deviceId);
+    } finally {
+      state.cameraOperationBusy = false;
+      syncBrandedBackdropState(controller.snapshot?.() || controller.capabilities?.() || {});
+    }
+  }
+
+  async function switchProtectedCameraDevice(deviceId) {
+    await state.backgroundCleanup.catch(() => {});
+    const room = state.room;
+    if (!room?.localParticipant || !installLocalCameraPublishGuard(room)) throw mandatoryCameraError();
+    const controller = ensureBackgroundController();
+    state.cameraOperationBusy = true;
+    try {
+      const result = await ensureBackgroundController().switchCamera(captureOptions('camera', deviceId));
+      if (result?.publication?.track) state.controllerProtectedCameraTracks.add(result.publication.track);
+      assertMandatoryProcessedCameraTrack(result?.publication?.track);
+      if (!isLocalSourceEnabled(room.localParticipant, 'camera')) throw sourceStartError('camera');
+      await syncActualInputDevice('camera', deviceId);
+      return result;
+    } finally {
+      state.cameraOperationBusy = false;
+      syncBrandedBackdropState(controller.snapshot?.() || controller.capabilities?.() || {});
+    }
   }
 
   function captureOptions(kind, deviceId = '') {
@@ -1059,13 +1732,25 @@
     return error;
   }
 
-  async function syncActualInputDevice(kind) {
+  async function actualInputDeviceId(kind) {
     const local = state.room?.localParticipant;
     const publication = localSourcePublication(local, kind);
     const deviceKind = kind === 'microphone' ? 'audioinput' : 'videoinput';
-    const actualId = publication?.track?.mediaStreamTrack?.getSettings?.().deviceId
+    let trackDeviceId = '';
+    try {
+      trackDeviceId = await publication?.track?.getDeviceId?.(false) || '';
+    } catch {
+      trackDeviceId = '';
+    }
+    return trackDeviceId
+      || publication?.track?.mediaStreamTrack?.getSettings?.().deviceId
       || state.room?.getActiveDevice?.(deviceKind)
       || '';
+  }
+
+  async function syncActualInputDevice(kind, expectedDeviceId = '') {
+    const deviceKind = kind === 'microphone' ? 'audioinput' : 'videoinput';
+    const actualId = await actualInputDeviceId(kind) || expectedDeviceId;
     if (!actualId || actualId === 'default') return;
     await refreshDeviceLists();
     rememberDeviceSelection(deviceKind, actualId);
@@ -1075,11 +1760,13 @@
     const local = state.room?.localParticipant;
     if (!local) throw new Error('The room is not connected.');
     const isMicrophone = kind === 'microphone';
-    const deviceKind = isMicrophone ? 'audioinput' : 'videoinput';
+    if (!isMicrophone) {
+      await setProtectedCameraEnabled(enabled);
+      return;
+    }
+    const deviceKind = 'audioinput';
     const deviceId = selectedDeviceId(deviceKind);
-    const setEnabled = isMicrophone
-      ? local.setMicrophoneEnabled.bind(local)
-      : local.setCameraEnabled.bind(local);
+    const setEnabled = local.setMicrophoneEnabled.bind(local);
     if (!enabled) {
       await setEnabled(false);
       return;
@@ -1119,18 +1806,20 @@
     const local = state.room.localParticipant;
     const devices = selectedDeviceOptions();
     const warnings = [];
-    if (state.joinWithCamera) {
-      try {
-        await setLocalSourceEnabled('camera', true);
-      } catch {
-        warnings.push('camera');
-      }
-    }
+    // Microphone startup is independent of the video processor and should not
+    // wait for segmentation assets or camera initialization.
     if (state.joinWithMicrophone) {
       try {
         await setLocalSourceEnabled('microphone', true);
       } catch {
         warnings.push('microphone');
+      }
+    }
+    if (state.joinWithCamera) {
+      try {
+        await setLocalSourceEnabled('camera', true);
+      } catch {
+        warnings.push('camera');
       }
     }
     if (devices.speakerId) {
@@ -1141,6 +1830,13 @@
 
   async function joinRoom() {
     if (state.joining || state.room) return;
+    const roomToJoin = selectedRoom();
+    if (!roomToJoin?.active) {
+      setStatus('sr-prejoin-status', 'Open or choose one of the four Study Rooms before joining.', 'error');
+      byId('sr-room-lobby')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    const roomKey = roomToJoin.roomKey;
     let nickname;
     try {
       nickname = currentNickname();
@@ -1174,16 +1870,28 @@
         },
       });
       state.room = room;
+      if (!installLocalCameraPublishGuard(room)) {
+        syncBrandedBackdropState({
+          status: 'unavailable',
+          supported: false,
+          error: 'This browser could not enforce protected camera publication, so video remains off.',
+        });
+      }
       const audioUnlock = startRoomAudioFromGesture(room);
-      const credential = await workerRequest('/admin/study-room/join', { nickname });
+      const credential = await workerRequest('/admin/study-room/join', { nickname, roomKey });
+      if (String(credential.room_key || '') !== roomKey) {
+        throw new Error('The secure service returned a different Study Room than the one selected.');
+      }
       bindRoomEvents(room);
       await room.connect(credential.server_url, credential.participant_token, {
         autoSubscribe: true,
         maxRetries: 5,
       });
       await audioUnlock;
+      state.currentRoomKey = roomKey;
       state.focusStartedAt = Date.parse(credential.focus_started_at || '') || Date.now();
       byId('sr-live-nickname').value = credential.participant_name || nickname;
+      byId('sr-active-room-name').textContent = roomPresentation(roomKey).name;
       await enableInitialMedia();
       byId('sr-prejoin').hidden = true;
       byId('sr-live-room').hidden = false;
@@ -1194,17 +1902,26 @@
       updateAudioPrompt();
       byId('sr-live-room').focus?.({ preventScroll: true });
     } catch (error) {
-      if (room) await room.disconnect().catch(() => {});
-      state.room = null;
+      const previousLeaving = state.leaving;
+      state.leaving = true;
+      try {
+        if (state.room === room) await destroyBackgroundController();
+        removeLocalCameraPublishGuard(room);
+        if (room) await room.disconnect().catch(() => {});
+        if (state.room === room) clearConnectedRoomState();
+      } finally {
+        state.leaving = previousLeaving;
+      }
       setStatus(
         'sr-prejoin-status',
         friendlyError(error, 'The Study Room could not connect. Your camera and microphone stayed off.'),
         'error',
       );
+      refreshRoomCatalog({ quiet: true }).catch(() => {});
     } finally {
       state.joining = false;
       button.disabled = false;
-      button.textContent = 'Join Study Room';
+      syncJoinButton();
     }
   }
 
@@ -1225,7 +1942,15 @@
       toast(deviceErrorMessage(kind, error));
       syncSelfMediaState();
     } finally {
-      button.disabled = false;
+      if (kind === 'camera') {
+        const controller = state.backgroundController;
+        syncBrandedBackdropState(controller?.snapshot?.() || controller?.capabilities?.() || {
+          status: 'unavailable',
+          supported: false,
+        });
+      } else {
+        button.disabled = false;
+      }
     }
   }
 
@@ -1246,6 +1971,7 @@
     try {
       const payload = await workerRequest('/admin/study-room/moderate', {
         operation: 'rename',
+        roomKey: state.currentRoomKey,
         participantIdentity: state.room.localParticipant.identity,
         nickname,
       });
@@ -1273,10 +1999,39 @@
       : '';
     const local = state.room.localParticipant;
     const publication = sourceKind ? localSourcePublication(local, sourceKind) : null;
-    const previousActualDeviceId = publication?.track?.mediaStreamTrack?.getSettings?.().deviceId
-      || state.room.getActiveDevice?.(kind)
-      || previousDeviceId;
+    const previousActualDeviceId = sourceKind
+      ? await actualInputDeviceId(sourceKind) || previousDeviceId
+      : state.room.getActiveDevice?.(kind) || previousDeviceId;
     const sourceWasLive = sourceKind ? isLocalSourceEnabled(local, sourceKind) : false;
+    if (kind === 'videoinput' && !sourceWasLive) {
+      rememberDeviceSelection(kind, deviceId);
+      toast('Camera selected. The Due Diligence backdrop will be applied before it starts.');
+      return;
+    }
+    if (kind === 'videoinput' && sourceWasLive) {
+      try {
+        await switchProtectedCameraDevice(deviceId);
+        rememberDeviceSelection(kind, deviceId);
+        toast('Camera updated with the Due Diligence backdrop protected.');
+      } catch (error) {
+        let rolledBack = false;
+        if (previousActualDeviceId && previousActualDeviceId !== deviceId) {
+          try {
+            await switchProtectedCameraDevice(previousActualDeviceId);
+            rolledBack = true;
+          } catch {
+            rolledBack = false;
+          }
+        }
+        await refreshDeviceLists();
+        rememberDeviceSelection(kind, rolledBack ? previousActualDeviceId : previousDeviceId);
+        syncSelfMediaState();
+        toast(rolledBack
+          ? 'That camera could not start. Your previous protected camera is still active.'
+          : deviceErrorMessage('camera', error));
+      }
+      return;
+    }
     try {
       const switched = await state.room.switchActiveDevice(kind, deviceId, true);
       if (!switched) throw new Error('Device switch was not confirmed.');
@@ -1307,19 +2062,76 @@
     }
   }
 
+  function clearConnectedRoomState() {
+    state.room = null;
+    state.currentRoomKey = '';
+    state.focusStartedAt = null;
+    state.blockedParticipants.clear();
+    state.localMutedParticipants.clear();
+    state.participantVolumes.clear();
+    state.activeSpeakers.clear();
+  }
+
+  async function disconnectConnectedRoom() {
+    const room = state.room;
+    global.clearInterval(state.focusTimer);
+    state.focusTimer = 0;
+    detachTracks();
+    await destroyBackgroundController();
+    removeLocalCameraPublishGuard(room);
+    try {
+      await room?.disconnect?.();
+    } catch {
+      // LiveKit stops any remaining local media during page shutdown or reconnect.
+    }
+    if (state.room === room) clearConnectedRoomState();
+  }
+
+  async function switchToRoom(roomKey) {
+    const target = activeRoom(roomKey);
+    const selector = byId('sr-room-selector');
+    const menu = byId('sr-room-selector-menu');
+    if (menu) menu.hidden = true;
+    if (selector) selector.setAttribute('aria-expanded', 'false');
+    if (!target) {
+      toast('That Study Room is no longer open.');
+      await refreshRoomCatalog({ quiet: true }).catch(() => {});
+      return;
+    }
+    if (!state.room) {
+      selectRoom(target.roomKey);
+      return;
+    }
+    if (target.roomKey === state.currentRoomKey || state.switchingRoom) return;
+
+    const local = state.room.localParticipant;
+    const resumeMicrophone = isLocalSourceEnabled(local, 'microphone');
+    const resumeCamera = isLocalSourceEnabled(local, 'camera');
+    state.switchingRoom = true;
+    state.leaving = true;
+    toast(`Moving to ${roomPresentation(target.roomKey).name}…`);
+    try {
+      await disconnectConnectedRoom();
+      state.selectedRoomKey = target.roomKey;
+      state.joinWithMicrophone = resumeMicrophone;
+      state.joinWithCamera = resumeCamera;
+      byId('sr-live-room').hidden = true;
+      byId('sr-prejoin').hidden = false;
+      renderRoomCatalog();
+    } finally {
+      state.leaving = false;
+      state.switchingRoom = false;
+    }
+    await joinRoom();
+  }
+
   async function leaveRoom() {
     if (state.leaving) return;
     state.leaving = true;
     byId('sr-leave').disabled = true;
-    global.clearInterval(state.focusTimer);
-    detachTracks();
-    try {
-      await state.room?.disconnect?.();
-    } catch {
-      // The local tracks are still stopped by LiveKit during page shutdown.
-    }
-    state.room = null;
+    await disconnectConnectedRoom();
     stopDeviceTest();
+    global.clearInterval(state.roomRefreshTimer);
     global.close();
     global.setTimeout(() => {
       if (!global.closed) global.location.replace('../#quorum');
@@ -1327,24 +2139,64 @@
   }
 
   function createLocalQualityPreview() {
-    const local = {
-      identity: 'sr_localqualitypreview0000',
-      name: defaultNickname(),
-      isLocal: true,
-      trackPublications: new Map(),
-      setCameraEnabled: async () => {},
-      setMicrophoneEnabled: async () => {},
-    };
+    const cameraSource = LiveKit?.Track?.Source?.Camera || 'camera';
+    const previewPeople = [
+      { identity: 'sr_localqualitypreview0000', name: 'Dimasalang', image: '../assets/study-room/dimasalang-library.webp', isLocal: true },
+      { identity: 'sr_previewparticipant00002', name: 'Participant 2', image: '../assets/study-room/participant-2-tropical.webp' },
+      { identity: 'sr_previewparticipant00003', name: 'Participant 3', image: '../assets/study-room/participant-3-bedroom.webp' },
+      { identity: 'sr_previewparticipant00004', name: 'Participant 4', image: '../assets/study-room/participant-4-condo.webp' },
+    ];
+    const participants = previewPeople.map((person) => {
+      const track = {
+        mediaStreamTrack: {
+          readyState: 'live',
+          enabled: true,
+          muted: false,
+          getSettings: () => ({ deviceId: 'quality-preview-camera' }),
+        },
+        attach() {
+          const image = document.createElement('img');
+          image.src = person.image;
+          image.alt = '';
+          image.setAttribute('aria-hidden', 'true');
+          return image;
+        },
+        detach(element) {
+          element?.remove?.();
+        },
+      };
+      const publication = {
+        source: cameraSource,
+        isMuted: false,
+        track,
+        __studyRoomStaticPreview: true,
+      };
+      const trackPublications = new Map([[cameraSource, publication]]);
+      return {
+        identity: person.identity,
+        name: person.name,
+        isLocal: person.isLocal === true,
+        trackPublications,
+        getTrackPublication: (source) => trackPublications.get(source) || null,
+        setMicrophoneEnabled: async () => {},
+        setVolume: () => {},
+      };
+    });
+    const [local, ...remote] = participants;
     state.room = {
       localParticipant: local,
-      remoteParticipants: new Map(),
+      remoteParticipants: new Map(remote.map((participant) => [participant.identity, participant])),
       connectionState: 'connected',
       canPlaybackAudio: true,
     };
+    state.selectedRoomKey = '1';
+    state.currentRoomKey = '1';
     state.focusStartedAt = Date.now() - 48 * 60 * 1000 - 32 * 1000;
     byId('sr-live-nickname').value = local.name;
+    byId('sr-active-room-name').textContent = roomPresentation('1').name;
     byId('sr-prejoin').hidden = true;
     byId('sr-live-room').hidden = false;
+    syncBrandedBackdropState({ status: 'enabled', supported: true });
     syncConnectionState(state.room.connectionState);
     renderParticipants();
     startFocusClock();
@@ -1366,12 +2218,21 @@
     byId('sr-open-devices').addEventListener('click', () => {
       const drawer = byId('sr-device-drawer');
       drawer.hidden = !drawer.hidden;
+      byId('sr-open-devices').setAttribute('aria-expanded', String(!drawer.hidden));
       byId('sr-open-devices').textContent = drawer.hidden ? 'Choose devices' : 'Hide device settings';
     });
     byId('sr-dock-devices').addEventListener('click', () => {
       byId('sr-device-drawer').hidden = false;
       byId('sr-open-devices').textContent = 'Hide device settings';
+      byId('sr-open-devices').setAttribute('aria-expanded', 'true');
+      byId('sr-dock-devices').setAttribute('aria-expanded', 'true');
       byId('sr-device-drawer').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+    byId('sr-room-selector').addEventListener('click', () => {
+      const menu = byId('sr-room-selector-menu');
+      menu.hidden = !menu.hidden;
+      byId('sr-room-selector').setAttribute('aria-expanded', String(!menu.hidden));
+      if (!menu.hidden) menu.querySelector?.('[aria-selected="true"]')?.focus?.();
     });
     byId('sr-nickname-form').addEventListener('submit', updateNickname);
     byId('sr-camera-select').addEventListener('change', (event) => {
@@ -1396,8 +2257,13 @@
       }
     });
     global.addEventListener('pagehide', () => {
+      state.leaving = true;
       stopDeviceTest();
-      state.room?.disconnect?.();
+      global.clearInterval(state.roomRefreshTimer);
+      const room = state.room;
+      destroyBackgroundController().catch(() => {});
+      removeLocalCameraPublishGuard(room);
+      room?.disconnect?.();
     });
   }
 
@@ -1441,14 +2307,33 @@
     byId('sr-access-actions').hidden = true;
     try {
       if (LOCAL_TEST_MODE) {
-        state.access = { allowed: true, role: 'admin', maxParticipants: 12 };
+        state.access = { allowed: true, role: 'admin', maxRooms: 4, maxParticipants: 12 };
+        state.rooms = localQualityRoomCatalog();
+        state.selectedRoomKey = state.rooms.find((room) => room.active)?.roomKey || '';
       } else {
         await createAuthClient();
         state.access = await workerRequest('/admin/study-room/access');
+        // Device discovery and the audio-only join path must not wait on a slow
+        // room-catalog endpoint. Render the four fixed slots immediately and
+        // refresh their active state in parallel.
+        state.rooms = normalizeRoomCatalog({ rooms: [] });
+        state.selectedRoomKey = '';
       }
       showExperience();
+      renderRoomCatalog();
+      if (!LOCAL_TEST_MODE) {
+        refreshRoomCatalog({ quiet: true }).catch((error) => {
+          setStatus('sr-prejoin-status', friendlyError(error, 'The Study Room list could not refresh.'), 'error');
+        });
+      }
+      try {
+        ensureBackgroundController();
+      } catch {
+        // Video fails closed, while room access and audio remain available.
+      }
       bindDeviceChangeDetection();
       await discoverDevices();
+      startRoomCatalogRefresh();
       if (LOCAL_TEST_MODE === 'live') createLocalQualityPreview();
     } catch (error) {
       showAccessError(error);

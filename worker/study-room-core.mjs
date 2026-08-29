@@ -8,11 +8,15 @@ import {
 export const DEFAULT_STUDY_ROOM_NAME = 'dd-study-room-admin-beta-v1';
 export const STUDY_ROOM_TOKEN_TTL_SECONDS = 600;
 export const STUDY_ROOM_MAX_PARTICIPANTS = 12;
+export const STUDY_ROOM_MAX_ROOMS = 4;
 
 const STUDY_ROOM_EMPTY_TIMEOUT_SECONDS = 10 * 60;
 const STUDY_ROOM_DEPARTURE_TIMEOUT_SECONDS = 2 * 60;
+const STUDY_ROOM_METADATA_SCHEMA = 'duediligence-study-room-slot-v1';
+const STUDY_ROOM_METADATA_MAX_BYTES = 512;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const ROOM_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{2,79}$/u;
+const ROOM_KEY_PATTERN = /^[1-4]$/u;
 const PARTICIPANT_ID_PATTERN = /^sr_[A-Za-z0-9_-]{24}$/u;
 const TRACK_SID_PATTERN = /^TR_[A-Za-z0-9_-]{4,128}$/u;
 const DISALLOWED_NICKNAME_CHARACTERS = /[\p{Cc}\p{Cf}<>]/u;
@@ -62,6 +66,46 @@ export function resolveStudyRoomName(env) {
   return roomName;
 }
 
+export function normalizeStudyRoomRoomKey(value, options = {}) {
+  const fallback = options.defaultToFirst === true && (value === undefined || value === null || value === '')
+    ? '1'
+    : '';
+  const roomKey = String(fallback || value || '').trim();
+  if (!ROOM_KEY_PATTERN.test(roomKey)) {
+    throw new StudyRoomError(
+      'STUDY_ROOM_ROOM_INVALID',
+      'Choose one of the four available Study Rooms.',
+      400,
+    );
+  }
+  return roomKey;
+}
+
+function configuredStudyRoomSlots(env) {
+  const firstRoomName = resolveStudyRoomName(env);
+  const slots = Array.from({ length: STUDY_ROOM_MAX_ROOMS }, (_unused, index) => {
+    const roomKey = String(index + 1);
+    const roomName = index === 0 ? firstRoomName : `${firstRoomName}-${roomKey}`;
+    if (!ROOM_NAME_PATTERN.test(roomName)) throw configurationError();
+    return Object.freeze({
+      roomKey,
+      roomName,
+      label: `Study Room ${roomKey}`,
+    });
+  });
+  if (new Set(slots.map((slot) => slot.roomName)).size !== STUDY_ROOM_MAX_ROOMS) {
+    throw configurationError();
+  }
+  return Object.freeze(slots);
+}
+
+export function resolveStudyRoomSlot(env, value, options = {}) {
+  const roomKey = normalizeStudyRoomRoomKey(value, options);
+  const slot = configuredStudyRoomSlots(env).find((candidate) => candidate.roomKey === roomKey);
+  if (!slot) throw configurationError();
+  return slot;
+}
+
 function safeLiveKitConfiguration(env) {
   if (String(env?.STUDY_ROOM_ENABLED || '').trim().toLowerCase() !== 'true') {
     throw new StudyRoomError(
@@ -102,6 +146,7 @@ function safeLiveKitConfiguration(env) {
     apiKey,
     apiSecret,
     roomName: resolveStudyRoomName(env),
+    roomSlots: configuredStudyRoomSlots(env),
     websocketUrl: websocketUrl.toString().replace(/\/$/u, ''),
     serviceUrl: serviceUrl.toString().replace(/\/$/u, ''),
   };
@@ -110,7 +155,10 @@ function safeLiveKitConfiguration(env) {
 export function studyRoomDescriptor(env) {
   const configuration = safeLiveKitConfiguration(env);
   return Object.freeze({
+    roomKey: '1',
     roomName: configuration.roomName,
+    label: 'Study Room 1',
+    maxRooms: STUDY_ROOM_MAX_ROOMS,
     maxParticipants: STUDY_ROOM_MAX_PARTICIPANTS,
     recording: false,
   });
@@ -243,28 +291,58 @@ function requireConfiguredRoomCapacity(room) {
   return room;
 }
 
-async function ensureStudyRoom(service, roomName) {
+function roomMetadataForSlot(slot, options = {}) {
+  const current = typeof options.now === 'function' ? options.now() : new Date();
+  const createdAt = current instanceof Date ? current : new Date(current);
+  if (!Number.isFinite(createdAt.getTime())) throw configurationError();
+  const metadata = JSON.stringify({
+    schema: STUDY_ROOM_METADATA_SCHEMA,
+    roomKey: slot.roomKey,
+    label: slot.label,
+    createdAt: createdAt.toISOString(),
+  });
+  if (new TextEncoder().encode(metadata).byteLength > STUDY_ROOM_METADATA_MAX_BYTES) {
+    throw configurationError();
+  }
+  return metadata;
+}
+
+function configuredRoomCreation(slot, options = {}) {
+  return {
+    name: slot.roomName,
+    emptyTimeout: STUDY_ROOM_EMPTY_TIMEOUT_SECONDS,
+    departureTimeout: STUDY_ROOM_DEPARTURE_TIMEOUT_SECONDS,
+    maxParticipants: STUDY_ROOM_MAX_PARTICIPANTS,
+    metadata: options.roomMetadata || roomMetadataForSlot(slot, options),
+  };
+}
+
+function listedRoomForSlot(rooms, slot) {
+  return Array.isArray(rooms)
+    ? rooms.find((room) => room?.name === slot.roomName) || null
+    : null;
+}
+
+async function ensureStudyRoom(service, slot, options = {}) {
   return liveKitCall('ensure_room', async () => {
-    const existingRooms = await service.listRooms([roomName]);
-    const existingRoom = Array.isArray(existingRooms)
-      ? existingRooms.find((room) => room?.name === roomName)
-      : null;
-    if (existingRoom) return requireConfiguredRoomCapacity(existingRoom);
+    const existingRooms = await service.listRooms([slot.roomName]);
+    const existingRoom = listedRoomForSlot(existingRooms, slot);
+    if (existingRoom) {
+      return { room: requireConfiguredRoomCapacity(existingRoom), created: false };
+    }
 
     try {
-      return requireConfiguredRoomCapacity(await service.createRoom({
-        name: roomName,
-        emptyTimeout: STUDY_ROOM_EMPTY_TIMEOUT_SECONDS,
-        departureTimeout: STUDY_ROOM_DEPARTURE_TIMEOUT_SECONDS,
-        maxParticipants: STUDY_ROOM_MAX_PARTICIPANTS,
-      }));
+      return {
+        room: requireConfiguredRoomCapacity(await service.createRoom(configuredRoomCreation(slot, options))),
+        created: true,
+      };
     } catch (creationError) {
-      // A concurrent first join may have created the fixed room after the list call.
-      const racedRooms = await service.listRooms([roomName]);
-      const racedRoom = Array.isArray(racedRooms)
-        ? racedRooms.find((room) => room?.name === roomName)
-        : null;
-      if (racedRoom) return requireConfiguredRoomCapacity(racedRoom);
+      // A concurrent creator may have occupied this trusted slot after the list call.
+      const racedRooms = await service.listRooms([slot.roomName]);
+      const racedRoom = listedRoomForSlot(racedRooms, slot);
+      if (racedRoom) {
+        return { room: requireConfiguredRoomCapacity(racedRoom), created: false };
+      }
       throw creationError;
     }
   });
@@ -282,13 +360,100 @@ function focusStartedAtForRoom(room) {
   return new Date().toISOString();
 }
 
-export async function createStudyRoomJoinCredential(env, user, nickname, options = {}) {
+function participantCountForRoom(room) {
+  const count = Number(room?.numParticipants ?? 0);
+  if (!Number.isSafeInteger(count) || count < 0 || count > STUDY_ROOM_MAX_PARTICIPANTS) {
+    throw new StudyRoomError(
+      'STUDY_ROOM_UNAVAILABLE',
+      'The Study Room media service is temporarily unavailable.',
+      503,
+      'Wait briefly, then try opening the Study Room again.',
+    );
+  }
+  return count;
+}
+
+function publicRoomDescriptor(slot, room = null) {
+  if (!room) {
+    return Object.freeze({
+      roomKey: slot.roomKey,
+      label: slot.label,
+      active: false,
+      participantCount: 0,
+      capacity: STUDY_ROOM_MAX_PARTICIPANTS,
+      focusStartedAt: null,
+    });
+  }
+  requireConfiguredRoomCapacity(room);
+  return Object.freeze({
+    roomKey: slot.roomKey,
+    label: slot.label,
+    active: true,
+    participantCount: participantCountForRoom(room),
+    capacity: STUDY_ROOM_MAX_PARTICIPANTS,
+    focusStartedAt: focusStartedAtForRoom(room),
+  });
+}
+
+async function listedConfiguredRooms(configuration, service) {
+  return liveKitCall('list_rooms', async () => {
+    const names = configuration.roomSlots.map((slot) => slot.roomName);
+    const rooms = await service.listRooms(names);
+    if (!Array.isArray(rooms)) throw new Error('Unexpected LiveKit room list response');
+    return configuration.roomSlots.map((slot) => ({
+      slot,
+      room: listedRoomForSlot(rooms, slot),
+    }));
+  });
+}
+
+export async function listStudyRooms(env, options = {}) {
   const configuration = safeLiveKitConfiguration(env);
+  const service = resolvedService(configuration, options);
+  const listed = await listedConfiguredRooms(configuration, service);
+  return Object.freeze({
+    maxRooms: STUDY_ROOM_MAX_ROOMS,
+    maxParticipants: STUDY_ROOM_MAX_PARTICIPANTS,
+    recording: false,
+    rooms: Object.freeze(listed.map(({ slot, room }) => publicRoomDescriptor(slot, room))),
+  });
+}
+
+export async function createStudyRoom(env, requestedRoomKey, options = {}) {
+  const configuration = safeLiveKitConfiguration(env);
+  const service = resolvedService(configuration, options);
+  let slot;
+  if (requestedRoomKey === undefined || requestedRoomKey === null || requestedRoomKey === '') {
+    const listed = await listedConfiguredRooms(configuration, service);
+    slot = listed.find(({ room }) => !room)?.slot || null;
+    if (!slot) {
+      throw new StudyRoomError(
+        'STUDY_ROOM_ROOM_LIMIT_REACHED',
+        'All four Study Rooms are already open.',
+        409,
+        'Join an open room or wait until one closes.',
+      );
+    }
+  } else {
+    slot = resolveStudyRoomSlot(env, requestedRoomKey);
+  }
+  const ensured = await ensureStudyRoom(service, slot, options);
+  return Object.freeze({
+    created: ensured.created,
+    room: publicRoomDescriptor(slot, ensured.room),
+  });
+}
+
+export async function createStudyRoomJoinCredential(env, user, roomKey, nickname, options = {}) {
+  const configuration = safeLiveKitConfiguration(env);
+  const slot = resolveStudyRoomSlot(env, roomKey);
   const normalizedNickname = normalizeStudyRoomNickname(nickname);
   const identity = await participantIdentity(user?.id, configuration.apiSecret);
   const service = resolvedService(configuration, options);
 
-  const room = await ensureStudyRoom(service, configuration.roomName);
+  const roomMetadata = roomMetadataForSlot(slot, options);
+  const ensured = await ensureStudyRoom(service, slot, { ...options, roomMetadata });
+  const room = ensured.room;
 
   const token = new AccessToken(configuration.apiKey, configuration.apiSecret, {
     identity,
@@ -296,7 +461,7 @@ export async function createStudyRoomJoinCredential(env, user, nickname, options
     ttl: STUDY_ROOM_TOKEN_TTL_SECONDS,
   });
   token.addGrant({
-    room: configuration.roomName,
+    room: slot.roomName,
     roomJoin: true,
     canPublish: true,
     canSubscribe: true,
@@ -306,33 +471,43 @@ export async function createStudyRoomJoinCredential(env, user, nickname, options
   // If the explicitly-created room expires before this short-lived token is
   // used, LiveKit applies the same cap while automatically recreating it.
   token.roomConfig = new RoomConfiguration({
-    name: configuration.roomName,
+    name: slot.roomName,
     emptyTimeout: STUDY_ROOM_EMPTY_TIMEOUT_SECONDS,
     departureTimeout: STUDY_ROOM_DEPARTURE_TIMEOUT_SECONDS,
     maxParticipants: STUDY_ROOM_MAX_PARTICIPANTS,
+    metadata: roomMetadata,
   });
   return {
     participantToken: await token.toJwt(),
     participantIdentity: identity,
     participantName: normalizedNickname,
-    roomName: configuration.roomName,
+    roomKey: slot.roomKey,
+    roomLabel: slot.label,
+    roomName: slot.roomName,
     serverUrl: configuration.websocketUrl,
     focusStartedAt: focusStartedAtForRoom(room),
     expiresInSeconds: STUDY_ROOM_TOKEN_TTL_SECONDS,
   };
 }
 
-export async function muteStudyRoomParticipant(env, identity, trackSid, options = {}) {
+export async function muteStudyRoomParticipant(env, roomKey, identity, trackSid, options = {}) {
   const configuration = safeLiveKitConfiguration(env);
+  const slot = resolveStudyRoomSlot(env, roomKey);
   const targetIdentity = validateStudyRoomParticipantIdentity(identity);
   const targetTrackSid = validateStudyRoomTrackSid(trackSid);
   await liveKitCall('mute_participant', () => resolvedService(configuration, options)
-    .mutePublishedTrack(configuration.roomName, targetIdentity, targetTrackSid, true));
-  return { action: 'muted', participantIdentity: targetIdentity, trackSid: targetTrackSid };
+    .mutePublishedTrack(slot.roomName, targetIdentity, targetTrackSid, true));
+  return {
+    action: 'muted',
+    roomKey: slot.roomKey,
+    participantIdentity: targetIdentity,
+    trackSid: targetTrackSid,
+  };
 }
 
-export async function renameStudyRoomParticipant(env, userId, identity, nickname, options = {}) {
+export async function renameStudyRoomParticipant(env, userId, roomKey, identity, nickname, options = {}) {
   const configuration = safeLiveKitConfiguration(env);
+  const slot = resolveStudyRoomSlot(env, roomKey);
   const targetIdentity = validateStudyRoomParticipantIdentity(identity);
   const ownIdentity = await participantIdentity(userId, configuration.apiSecret);
   if (targetIdentity !== ownIdentity) {
@@ -340,16 +515,22 @@ export async function renameStudyRoomParticipant(env, userId, identity, nickname
   }
   const participantName = normalizeStudyRoomNickname(nickname);
   await liveKitCall('rename_participant', () => resolvedService(configuration, options)
-    .updateParticipant(configuration.roomName, targetIdentity, { name: participantName }));
-  return { action: 'renamed', participantIdentity: targetIdentity, participantName };
+    .updateParticipant(slot.roomName, targetIdentity, { name: participantName }));
+  return {
+    action: 'renamed',
+    roomKey: slot.roomKey,
+    participantIdentity: targetIdentity,
+    participantName,
+  };
 }
 
-export async function removeStudyRoomParticipant(env, identity, options = {}) {
+export async function removeStudyRoomParticipant(env, roomKey, identity, options = {}) {
   const configuration = safeLiveKitConfiguration(env);
+  const slot = resolveStudyRoomSlot(env, roomKey);
   const targetIdentity = validateStudyRoomParticipantIdentity(identity);
   await liveKitCall('remove_participant', () => resolvedService(configuration, options)
     // On LiveKit Cloud, omitting revokeTokenTs applies the server's current
     // time with its documented one-minute buffer, including same-second tokens.
-    .removeParticipant(configuration.roomName, targetIdentity));
-  return { action: 'removed', participantIdentity: targetIdentity };
+    .removeParticipant(slot.roomName, targetIdentity));
+  return { action: 'removed', roomKey: slot.roomKey, participantIdentity: targetIdentity };
 }

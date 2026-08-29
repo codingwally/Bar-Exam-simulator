@@ -59,7 +59,7 @@ jobs:
           git cat-file -e "$EXPECTED_BASE_SHA^{commit}"
           git merge-base --is-ancestor "$EXPECTED_BASE_SHA" "$EXPECTED_SOURCE_SHA"
 
-          allowed='^(\.github/workflows/deploy-pages-only\.yml|assets/feature-loader\.js|assets/lex-forum\.css|assets/lex-forum\.js|assets/pedro-navigation\.js|assets/phase2-experience\.js|assets/private-beta-landing\.js|assets/study-room-preview\.(css|js)|assets/study-room/(dimasalang-library|participant-2-tropical|participant-3-bedroom|participant-4-condo)\.webp|assets/subscription-cta\.css|assets/subscription-cta\.js|index\.html|scripts/build-pages-artifact\.mjs|scripts/test-home-post-collapse\.mjs|scripts/test-lex-forum\.mjs|scripts/test-pages-artifact\.mjs|scripts/test-pedro-navigation\.mjs|scripts/test-public-home-responsive-css\.mjs|scripts/test-public-release1-reliability\.mjs|scripts/test-quorum\.mjs|scripts/test-study-room-preview\.mjs)$'
+          allowed='^(\.github/workflows/deploy-pages-only\.yml|assets/feature-loader\.js|assets/icons/navigation/mic\.svg|assets/lex-forum\.css|assets/lex-forum\.js|assets/pedro-navigation\.js|assets/phase2-experience\.js|assets/private-beta-landing\.js|assets/study-room-backgrounds\.js|assets/study-room-live\.(css|js)|assets/study-room-preview\.(css|js)|assets/study-room/(dimasalang-library|participant-2-tropical|participant-3-bedroom|participant-4-condo|virtual-background-due-diligence-branded)\.webp|assets/subscription-cta\.css|assets/subscription-cta\.js|assets/vendor/mediapipe/(LICENSE|PROVENANCE)\.txt|assets/vendor/mediapipe/selfie_segmenter-float16-2023-05-07\.tflite|index\.html|scripts/build-pages-artifact\.mjs|scripts/test-home-post-collapse\.mjs|scripts/test-lex-forum\.mjs|scripts/test-pages-artifact\.mjs|scripts/test-pedro-navigation\.mjs|scripts/test-public-home-responsive-css\.mjs|scripts/test-public-release1-reliability\.mjs|scripts/test-quorum\.mjs|scripts/test-study-room-(backgrounds|hotfix-behavior|live|preview)\.mjs|study-room/index\.html)$'
           unexpected="$(git diff --name-only "$EXPECTED_BASE_SHA..$EXPECTED_SOURCE_SHA" | grep -Ev "$allowed" || true)"
           if [[ -n "$unexpected" ]]; then
             echo "The frontend-only release contains files outside the approved isolation boundary:" >&2
@@ -72,11 +72,19 @@ jobs:
         with:
           node-version: 22
 
+      - name: Install reviewed Pages build dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
       - name: Verify the subscription CTA and unchanged community contracts
         run: |
           node --check assets/subscription-cta.js
+          node --check assets/study-room-backgrounds.js
+          node --check assets/study-room-live.js
           node --check assets/study-room-preview.js
           node --check assets/phase2-experience.js
+          node scripts/test-study-room-backgrounds.mjs
+          node scripts/test-study-room-live.mjs
+          node scripts/test-study-room-hotfix-behavior.mjs
           node scripts/test-study-room-preview.mjs
           node scripts/test-syllabus-review-reveal-contract.mjs
           node scripts/test-quorum.mjs
@@ -119,10 +127,27 @@ jobs:
             pricing_js="$(curl -fsS "$SITE_URL/assets/phase2-experience.js?release=$GITHUB_SHA" || true)"
             study_room_js="$(curl -fsS "$SITE_URL/assets/study-room-preview.js?release=$GITHUB_SHA" || true)"
             study_room_css="$(curl -fsS "$SITE_URL/assets/study-room-preview.css?release=$GITHUB_SHA" || true)"
+            study_room_page="$(curl -fsS "$SITE_URL/study-room/?release=$GITHUB_SHA" || true)"
+            study_room_live="$(curl -fsS "$SITE_URL/assets/study-room-live.js?release=$GITHUB_SHA" || true)"
+            study_room_backgrounds="$(curl -fsS "$SITE_URL/assets/study-room-backgrounds.js?release=$GITHUB_SHA" || true)"
+            study_room_processors="$(curl -fsS "$SITE_URL/assets/vendor/livekit-track-processors.iife.js?release=$GITHUB_SHA" || true)"
             study_room_images=true
             for image in dimasalang-library participant-2-tropical participant-3-bedroom participant-4-condo; do
               if ! curl -fsS -o /dev/null "$SITE_URL/assets/study-room/$image.webp?release=$GITHUB_SHA"; then
                 study_room_images=false
+              fi
+            done
+            study_room_runtime=true
+            for asset in \
+              assets/icons/navigation/mic.svg \
+              assets/study-room/virtual-background-due-diligence-branded.webp \
+              assets/vendor/mediapipe/selfie_segmenter-float16-2023-05-07.tflite \
+              assets/vendor/mediapipe/wasm/vision_wasm_internal.js \
+              assets/vendor/mediapipe/wasm/vision_wasm_internal.wasm \
+              assets/vendor/mediapipe/wasm/vision_wasm_nosimd_internal.js \
+              assets/vendor/mediapipe/wasm/vision_wasm_nosimd_internal.wasm; do
+              if ! curl -fsSI -o /dev/null "$SITE_URL/$asset?release=$GITHUB_SHA"; then
+                study_room_runtime=false
               fi
             done
             if grep -q 'home-subscription-cta-20260828-3' <<<"$index" \
@@ -147,7 +172,14 @@ jobs:
               && grep -q 'openMarketingPreview' <<<"$study_room_js" \
               && grep -q '\.dd-study-room-overlay' <<<"$study_room_css" \
               && grep -q 'dd-study-room-radiance' <<<"$study_room_css" \
-              && test "$study_room_images" = "true"; then
+              && grep -q 'study-room-four-rooms-20260829-1' <<<"$study_room_page" \
+              && grep -q 'study-room-mandatory-background-20260829-1' <<<"$study_room_page" \
+              && grep -q '/admin/study-room/rooms' <<<"$study_room_live" \
+              && grep -q 'DueDiligenceStudyRoomMandatoryBackground' <<<"$study_room_backgrounds" \
+              && grep -q 'virtual-background-due-diligence-branded.webp' <<<"$study_room_backgrounds" \
+              && grep -q 'due-diligence-mandatory-virtual-background-no-raw-first-frame' <<<"$study_room_processors" \
+              && test "$study_room_images" = "true" \
+              && test "$study_room_runtime" = "true"; then
               verified=true
               break
             fi

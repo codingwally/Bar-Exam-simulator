@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
 import {
   cp,
   mkdir,
@@ -13,6 +14,19 @@ import { fileURLToPath } from 'node:url';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outputRoot = path.join(repositoryRoot, '.pages-dist');
+const requireFromWorker = createRequire(path.join(repositoryRoot, 'worker/package.json'));
+
+const BACKGROUND_PROCESSOR_VERSION = '0.7.2';
+const MEDIAPIPE_TASKS_VISION_VERSION = '0.10.14';
+const MEDIAPIPE_LICENSE_SHA256 = '8707EEF0533987EFC5B155D64761EEB6E20793F50B9BD1A68DAD1CF4719D0ED8';
+const MEDIAPIPE_MODEL_FILE = 'selfie_segmenter-float16-2023-05-07.tflite';
+const MEDIAPIPE_MODEL_SHA256 = '191AC9529AE506EE0BEEFA6B2C945A172DAB9D07D1E802A290A4E4038226658B';
+const MEDIAPIPE_WASM_FILES = Object.freeze({
+  'vision_wasm_internal.js': '9440CF0CC0CEA21800E31581EC32AEEDCC5FBF9DF4509796BBC7D3F99E52AB9C',
+  'vision_wasm_internal.wasm': 'F82A8E6C05E08A44CC9F9E7EC5F845935BCBB1B1500EBE8C2F4812FB4E2917DC',
+  'vision_wasm_nosimd_internal.js': 'ABE9B6FBEAF86FCB53A5EDCE3926C82CCB0619E18FED4D9D9CE561EE7F55E054',
+  'vision_wasm_nosimd_internal.wasm': '38B61FEAB2FD7934E05CBE9F68BAA308978A5E3B7F85C1913BB8AE89B8EF8B97',
+});
 
 if (path.dirname(outputRoot) !== repositoryRoot || path.basename(outputRoot) !== '.pages-dist') {
   throw new Error('Refusing to build outside the repository .pages-dist directory.');
@@ -63,6 +77,7 @@ const navigationIconFiles = Object.freeze([
   'door-open.svg',
   'tag.svg',
   'headphones.svg',
+  'mic.svg',
   'LICENSE.txt',
 ].map((name) => `assets/icons/navigation/${name}`));
 
@@ -71,6 +86,8 @@ const studyRoomPreviewFiles = Object.freeze([
   'assets/study-room-preview.js',
   'assets/study-room-live.css',
   'assets/study-room-live.js',
+  'assets/study-room-backgrounds.js',
+  'assets/study-room/virtual-background-due-diligence-branded.webp',
   'assets/study-room/dimasalang-library.webp',
   'assets/study-room/participant-2-tropical.webp',
   'assets/study-room/participant-3-bedroom.webp',
@@ -176,6 +193,182 @@ async function copyPublicFile(relativePath) {
   await cp(source, destination, { force: true });
 }
 
+async function requirePackageVersion(packageName, expectedVersion) {
+  const packagePath = path.join(
+    repositoryRoot,
+    'worker/node_modules',
+    ...packageName.split('/'),
+    'package.json',
+  );
+  const packageManifest = JSON.parse(await readFile(packagePath, 'utf8'));
+  if (packageManifest.version !== expectedVersion) {
+    throw new Error(`${packageName} must be pinned to ${expectedVersion}; found ${packageManifest.version || 'unknown'}.`);
+  }
+}
+
+async function copyVerifiedFile(source, destination, expectedHash, label) {
+  const contents = await readFile(source);
+  const actualHash = sha256(contents);
+  if (actualHash !== expectedHash) {
+    throw new Error(`${label} failed its pinned SHA-256 verification.`);
+  }
+  await mkdir(path.dirname(destination), { recursive: true });
+  await writeFile(destination, contents);
+}
+
+async function buildStudyRoomBackgroundRuntime() {
+  await Promise.all([
+    requirePackageVersion('@livekit/track-processors', BACKGROUND_PROCESSOR_VERSION),
+    requirePackageVersion('@mediapipe/tasks-vision', MEDIAPIPE_TASKS_VISION_VERSION),
+  ]);
+  const { build } = requireFromWorker('esbuild');
+  const liveKitGlobalShim = {
+    name: 'due-diligence-livekit-global',
+    setup(context) {
+      context.onResolve({ filter: /^livekit-client$/ }, () => ({
+        path: 'livekit-client-global',
+        namespace: 'due-diligence-livekit-global',
+      }));
+      context.onLoad({
+        filter: /.*/,
+        namespace: 'due-diligence-livekit-global',
+      }, () => ({
+        loader: 'js',
+        contents: `
+          const fallbackLogger = {
+            debug: (...args) => globalThis.console?.debug?.(...args),
+            error: (...args) => globalThis.console?.error?.(...args),
+            getLevel: () => 2,
+            info: (...args) => globalThis.console?.info?.(...args),
+            log: (...args) => globalThis.console?.log?.(...args),
+            methodFactory: () => (...args) => globalThis.console?.log?.(...args),
+            setDefaultLevel: () => {},
+            setLevel: () => {},
+            trace: (...args) => globalThis.console?.debug?.(...args),
+            warn: (...args) => globalThis.console?.warn?.(...args),
+          };
+          export function getLogger(...args) {
+            return globalThis.LivekitClient?.getLogger?.(...args) || fallbackLogger;
+          }
+        `,
+      }));
+    },
+  };
+
+  await build({
+    stdin: {
+      contents: `
+        import {
+          BackgroundProcessor as LiveKitBackgroundProcessor,
+          supportsBackgroundProcessors,
+          supportsModernBackgroundProcessors,
+        } from '@livekit/track-processors';
+
+        const MANDATORY_IMAGE_PATH = '/assets/study-room/virtual-background-due-diligence-branded.webp';
+        const POLICY = 'due-diligence-mandatory-virtual-background-no-raw-first-frame';
+
+        function BackgroundProcessor(options = {}, name) {
+          const {
+            mode: _requestedMode,
+            imagePath: _requestedImagePath,
+            blurRadius: _requestedBlurRadius,
+            backgroundDisabled: _requestedDisabled,
+            ...processorOptions
+          } = options;
+          const processor = LiveKitBackgroundProcessor({
+            ...processorOptions,
+            mode: 'virtual-background',
+            imagePath: MANDATORY_IMAGE_PATH,
+          }, name);
+
+          // @livekit/track-processors 0.7.2 normally emits an unsegmented
+          // first-frame preview. It is useful for general UX but violates the
+          // Study Room's mandatory-background policy. Suppress that preview
+          // before LocalVideoTrack.setProcessor initializes the transformer.
+          const transformer = processor.transformer;
+          const transformFrame = transformer.transform.bind(transformer);
+          transformer.transform = (frame, controller) => {
+            transformer.isFirstFrame = false;
+            return transformFrame(frame, controller);
+          };
+          transformer.isFirstFrame = false;
+          return processor;
+        }
+
+        globalThis.LivekitTrackProcessors = Object.freeze({
+          VERSION: '${BACKGROUND_PROCESSOR_VERSION}',
+          POLICY,
+          MANDATORY_IMAGE_PATH,
+          BackgroundProcessor,
+          supportsBackgroundProcessors,
+          supportsModernBackgroundProcessors,
+        });
+      `,
+      resolveDir: path.join(repositoryRoot, 'worker'),
+      sourcefile: 'due-diligence-livekit-track-processors-entry.js',
+      loader: 'js',
+    },
+    outfile: path.join(outputRoot, 'assets/vendor/livekit-track-processors.iife.js'),
+    bundle: true,
+    format: 'iife',
+    platform: 'browser',
+    target: ['es2022'],
+    minify: true,
+    sourcemap: false,
+    legalComments: 'none',
+    plugins: [liveKitGlobalShim],
+    banner: {
+      js: `/* @livekit/track-processors ${BACKGROUND_PROCESSOR_VERSION}; @mediapipe/tasks-vision ${MEDIAPIPE_TASKS_VISION_VERSION}; Apache-2.0 */`,
+    },
+  });
+}
+
+async function copyStudyRoomBackgroundAssets() {
+  const outputVendorRoot = path.join(outputRoot, 'assets/vendor');
+  const outputMediaPipeRoot = path.join(outputVendorRoot, 'mediapipe');
+  const mediaPipeSourceRoot = path.join(
+    repositoryRoot,
+    'worker/node_modules/@mediapipe/tasks-vision',
+  );
+  const modelSource = path.join(
+    repositoryRoot,
+    'assets/vendor/mediapipe',
+    MEDIAPIPE_MODEL_FILE,
+  );
+
+  await mkdir(outputMediaPipeRoot, { recursive: true });
+  await Promise.all([
+    copyVerifiedFile(
+      modelSource,
+      path.join(outputMediaPipeRoot, MEDIAPIPE_MODEL_FILE),
+      MEDIAPIPE_MODEL_SHA256,
+      'MediaPipe Selfie Segmenter model',
+    ),
+    cp(
+      path.join(repositoryRoot, 'assets/vendor/mediapipe/PROVENANCE.txt'),
+      path.join(outputMediaPipeRoot, 'PROVENANCE.txt'),
+      { force: true },
+    ),
+    cp(
+      path.join(repositoryRoot, 'worker/node_modules/@livekit/track-processors/LICENSE'),
+      path.join(outputVendorRoot, 'livekit-track-processors.LICENSE.txt'),
+      { force: true },
+    ),
+    copyVerifiedFile(
+      path.join(repositoryRoot, 'assets/vendor/mediapipe/LICENSE.txt'),
+      path.join(outputMediaPipeRoot, 'LICENSE.txt'),
+      MEDIAPIPE_LICENSE_SHA256,
+      'MediaPipe Apache-2.0 license',
+    ),
+    ...Object.entries(MEDIAPIPE_WASM_FILES).map(([fileName, expectedHash]) => copyVerifiedFile(
+      path.join(mediaPipeSourceRoot, 'wasm', fileName),
+      path.join(outputMediaPipeRoot, 'wasm', fileName),
+      expectedHash,
+      `MediaPipe runtime ${fileName}`,
+    )),
+  ]);
+}
+
 async function listFiles(directory, prefix = '') {
   const entries = await readdir(directory, { withFileTypes: true });
   const files = [];
@@ -207,6 +400,8 @@ await Promise.all([
     path.join(outputRoot, 'assets/vendor/livekit-client.LICENSE.txt'),
     { force: true },
   ),
+  buildStudyRoomBackgroundRuntime(),
+  copyStudyRoomBackgroundAssets(),
 ]);
 await writeFile(path.join(outputRoot, '.nojekyll'), '', 'utf8');
 

@@ -5,10 +5,11 @@ import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const [page, css, client, previewClient, workerPackage] = await Promise.all([
+const [page, css, client, backgroundClient, previewClient, workerPackage] = await Promise.all([
   readFile(path.join(root, 'study-room/index.html'), 'utf8'),
   readFile(path.join(root, 'assets/study-room-live.css'), 'utf8'),
   readFile(path.join(root, 'assets/study-room-live.js'), 'utf8'),
+  readFile(path.join(root, 'assets/study-room-backgrounds.js'), 'utf8'),
   readFile(path.join(root, 'assets/study-room-preview.js'), 'utf8'),
   readFile(path.join(root, 'worker/package.json'), 'utf8').then(JSON.parse),
 ]);
@@ -45,14 +46,25 @@ assert.match(page, /The check stops immediately; joining starts muted with camer
 assert.match(page, /Off when you join/g);
 assert.match(page, /Use a nickname\. Real names are not required\./);
 assert.match(page, /value="Participant 1"/);
-assert.match(page, /Virtual backgrounds[\s\S]*Coming after the quality test/);
+assert.match(page, /id="sr-room-lobby"[\s\S]*data-max-rooms="4"/u);
+assert.match(page, /id="sr-room-lobby-count"/u);
+assert.match(page, /id="sr-room-card-grid"[\s\S]*id="sr-create-room"/u);
+assert.match(page, /id="sr-room-selector"[\s\S]*id="sr-room-selector-menu"/u);
+assert.match(page, /id="sr-branded-backdrop-status"[\s\S]*data-backdrop-enforcement="required"/u);
+assert.match(page, /id="sr-branded-backdrop-copy"/u);
+assert.match(page, /Branded backdrop enforced/u);
+assert.doesNotMatch(page, /Virtual backgrounds|Coming after the quality test/iu);
 assert.match(page, /assets\/vendor\/livekit-client\.umd\.js\?v=2\.22\.1/);
-assert.match(page, /study-room-live\.js\?v=study-room-audio-controls-20260829-1/);
+assert.match(page, /assets\/vendor\/livekit-track-processors\.iife\.js\?v=0\.7\.2/);
+assert.match(page, /study-room-backgrounds\.js\?v=study-room-mandatory-background-20260829-1/);
+assert.match(page, /study-room-live\.js\?v=study-room-four-rooms-20260829-1/);
 assert.doesNotMatch(page, /facebook|fb\.com|recording is on|Recording enabled/i);
 
-for (const endpoint of ['access', 'join', 'moderate']) {
+for (const endpoint of ['access', 'rooms', 'join', 'moderate']) {
   assert.match(client, new RegExp(`/admin/study-room/${endpoint}`));
 }
+assert.match(client, /const MAX_ROOMS = 4/);
+assert.match(client, /workerRequest\('\/admin\/study-room\/join', \{ nickname, roomKey \}\)/);
 assert.match(client, /Authorization: `Bearer \$\{token\}`/);
 assert.match(client, /cache: 'no-store'/);
 assert.match(client, /new LiveKit\.Room/);
@@ -77,7 +89,10 @@ assert.match(client, /ActiveSpeakersChanged[\s\S]*syncActiveSpeakerTiles\(\)/);
 assert.match(client, /ActiveDeviceChanged[\s\S]*rememberDeviceSelection\(deviceKind, deviceId\)/);
 assert.doesNotMatch(client, /ActiveSpeakersChanged[\s\S]{0,260}renderParticipants\(\)/);
 assert.match(client, /function recoverFromTerminalDisconnect\(room\)/);
-assert.match(client, /state\.room = null;[\s\S]*Rejoin Study Room[\s\S]*camera and microphone are off/);
+assert.match(
+  client,
+  /function recoverFromTerminalDisconnect\(room\)[\s\S]*destroyBackgroundController\(\)[\s\S]*clearConnectedRoomState\(\)[\s\S]*sr-prejoin[\s\S]*camera and microphone are off/,
+);
 assert.match(client, /event\.Disconnected[\s\S]*recoverFromTerminalDisconnect\(room\)/);
 assert.match(client, /state\.room\?\.startAudio/);
 assert.match(client, /mediaDevices\.getUserMedia\(constraints\)/);
@@ -105,12 +120,29 @@ assert.ok(discoverDevicesStart > stopTemporaryTracks);
 assert.ok(discoverAfterAccess > verifyAccessStart, 'authorized prejoin must discover devices automatically');
 assert.ok(client.indexOf('bindDeviceChangeDetection()', verifyAccessStart) > verifyAccessStart);
 assert.match(client, /const noDevicesEnumerated = devices\.length === 0/);
+assert.match(client, /return `System default \$\{copy\.noun\}`/);
+assert.match(client, /return `Alternate \$\{copy\.noun\} \$\{index \+ 1\}`/);
+assert.doesNotMatch(client, /`\$\{fallback\} \$\{index \+ 1\}`/);
 assert.match(client, /needsCameraLabel[\s\S]*needsMicrophoneLabel[\s\S]*if \(!needsCameraLabel && !needsMicrophoneLabel\)/);
 assert.match(client, /video: needsCameraLabel,[\s\S]*audio: needsMicrophoneLabel/);
 assert.match(client, /camera indicator may turn on briefly during this local check; nothing is shared/);
 assert.match(client, /canRetrySeparately[\s\S]*\{ video: true, audio: false \}[\s\S]*\{ video: false, audio: true \}/);
 assert.match(client, /partialAccess = successes > 0 && failures\.length > 0/);
 assert.match(client, /cameraLabelResolved[\s\S]*microphoneLabelResolved[\s\S]*available devices were detected/);
+assert.match(client, /DueDiligenceStudyRoomMandatoryBackground\?\.createController/);
+assert.match(client, /await controller\.enableCamera\(captureOptions\('camera', deviceId\)/);
+assert.match(client, /await ensureBackgroundController\(\)\.switchCamera\(captureOptions\('camera', deviceId\)\)/);
+assert.match(client, /Video fails closed, while room access and audio remain available/);
+
+assert.match(backgroundClient, /const REQUIRED_EFFECTS_POLICY = 'due-diligence-mandatory-virtual-background-no-raw-first-frame'/);
+assert.match(backgroundClient, /virtual-background-due-diligence-branded\.webp/);
+assert.match(backgroundClient, /await track\.setProcessor\(processor, true\)/);
+const processedBeforePublish = backgroundClient.indexOf('await track.setProcessor(processor, true)');
+const publishProtectedTrack = backgroundClient.indexOf('publication = await participant.publishTrack(track', processedBeforePublish);
+assert.ok(processedBeforePublish >= 0 && publishProtectedTrack > processedBeforePublish,
+  'The camera track must be processed before it can be published.');
+assert.match(backgroundClient, /assertProcessedTrack\(track, processor\);[\s\S]*participant\.publishTrack/);
+assert.match(backgroundClient, /global\.DueDiligenceStudyRoomMandatoryBackground = Object\.freeze/);
 
 const openRoom = previewClient.indexOf('popup = global.open(');
 const fallbackNavigation = previewClient.indexOf('global.location.assign(roomUrl.href)', openRoom);
@@ -122,12 +154,13 @@ assert.match(previewClient, /return openMarketingPreview\(trigger\)/);
 assert.match(css, /min-width:\s*320px/);
 assert.match(css, /prefers-reduced-motion/);
 assert.match(css, /\.sr-button[\s\S]*min-height:\s*44px/);
-assert.doesNotMatch(
-  css,
-  /\.sr-control-dock button span\s*\{[\s\S]{0,220}(?:clip-path|clip:)/u,
-  'Call-control labels must remain visible on narrow screens.',
-);
-assert.match(css, /\.sr-control-dock button[\s\S]*min-height:\s*58px/);
+assert.match(css, /\.sr-room-card-grid\s*\{[\s\S]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/u);
+assert.match(css, /\.sr-live-layout\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) minmax\(330px, 0\.34fr\)/u);
+assert.match(css, /\.sr-participant-grid\s*\{[\s\S]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/u);
+assert.match(css, /\.sr-control-dock button[\s\S]*min-height:\s*56px/u);
+assert.match(css, /\.sr-control-dock button img[\s\S]*border-radius:\s*50%/u);
+assert.match(css, /\.sr-backdrop-enforcement\s*\{/u);
+assert.match(css, /\.sr-device-drawer\[hidden\]\s*\{[\s\S]*display:\s*none/u);
 assert.match(css, /@media \(max-width:\s*480px\)/);
 assert.doesNotMatch(css, /overflow-x:\s*hidden/);
 

@@ -25,6 +25,14 @@ const APPROVED_STAGING_SUPABASE = "https://hlzqmreeoghbldnhlybr.supabase.co";
 const APPROVED_STAGING_WORKER =
   "https://duediligence-examinations-staging.wallyesteban1993.workers.dev";
 const APPROVED_STAGING_ROOM = "dd-study-room-admin-beta-staging-v1";
+const STUDY_ROOM_MAX_ROOMS = 4;
+const APPROVED_STAGING_ROOMS = Object.freeze(
+  Array.from({ length: STUDY_ROOM_MAX_ROOMS }, (_unused, index) =>
+    index === 0
+      ? APPROVED_STAGING_ROOM
+      : `${APPROVED_STAGING_ROOM}-${index + 1}`,
+  ),
+);
 const STUDY_ROOM_MAX_PARTICIPANTS = 12;
 const STUDY_ROOM_TOKEN_TTL_SECONDS = 600;
 const REQUEST_TIMEOUT_MS = 45_000;
@@ -43,6 +51,16 @@ function assertPlainObject(value, message) {
     message,
   );
   return value;
+}
+
+function approvedRoomKey(value) {
+  const roomKey = String(value || "").trim();
+  assert.match(roomKey, /^[1-4]$/u, "The smoke requested an invalid room slot.");
+  return roomKey;
+}
+
+function approvedRoomName(roomKey) {
+  return APPROVED_STAGING_ROOMS[Number(approvedRoomKey(roomKey)) - 1];
 }
 
 function decodeJwtSegment(value) {
@@ -129,7 +147,7 @@ export function validateStudyRoomJwt(token, expected) {
   );
   assert.equal(
     video.room,
-    APPROVED_STAGING_ROOM,
+    expected.roomName,
     "The token is bound to the wrong Study Room.",
   );
   assert.equal(
@@ -177,10 +195,33 @@ export function validateStudyRoomJwt(token, expected) {
     claims.roomConfig,
     "The Study Room token is missing its constrained room configuration.",
   );
-  assert.equal(roomConfig.name, APPROVED_STAGING_ROOM);
+  assert.equal(roomConfig.name, expected.roomName);
   assert.equal(roomConfig.maxParticipants, STUDY_ROOM_MAX_PARTICIPANTS);
   assert.equal(roomConfig.emptyTimeout, 600);
   assert.equal(roomConfig.departureTimeout, 120);
+  assert.ok(
+    typeof roomConfig.metadata === "string" &&
+      Buffer.byteLength(roomConfig.metadata, "utf8") <= 512,
+    "The Study Room configuration metadata is missing or unbounded.",
+  );
+  const roomMetadata = assertPlainObject(
+    JSON.parse(roomConfig.metadata),
+    "The Study Room configuration metadata is invalid.",
+  );
+  assert.deepEqual(
+    Object.keys(roomMetadata).sort(),
+    ["createdAt", "label", "roomKey", "schema"],
+    "The Study Room metadata must remain PII-free and server-owned.",
+  );
+  assert.equal(roomMetadata.schema, "duediligence-study-room-slot-v1");
+  assert.equal(roomMetadata.roomKey, expected.roomKey);
+  assert.equal(roomMetadata.label, `Study Room ${expected.roomKey}`);
+  assert.ok(
+    Number.isFinite(Date.parse(roomMetadata.createdAt)),
+    "The Study Room metadata is missing its creation time.",
+  );
+  assert.equal(roomConfig.metadata.includes(expected.identity), false);
+  assert.equal(roomConfig.metadata.includes(expected.nickname), false);
   assert.ok(
     !claims.metadata,
     "Participant tokens must not contain personal metadata.",
@@ -400,13 +441,138 @@ function validateAccessResponse(body, expectedRole) {
   assert.equal(body?.allowed, true);
   assert.equal(body?.role, expectedRole);
   assert.equal(body?.roomName, APPROVED_STAGING_ROOM);
+  assert.equal(body?.maxRooms, STUDY_ROOM_MAX_ROOMS);
   assert.equal(body?.maxParticipants, STUDY_ROOM_MAX_PARTICIPANTS);
   assert.equal(body?.recording, false);
 }
 
-function validateJoinResponse(body, expectedNickname, issuer) {
+function validatePublicRoomDescriptor(room, expectedRoomKey, expectedActive) {
+  const descriptor = assertPlainObject(
+    room,
+    `Study Room ${expectedRoomKey} is missing from the room catalog.`,
+  );
+  assert.deepEqual(
+    Object.keys(descriptor).sort(),
+    [
+      "active",
+      "capacity",
+      "focusStartedAt",
+      "label",
+      "participantCount",
+      "roomKey",
+    ],
+    "The public room descriptor exposed an unexpected field.",
+  );
+  assert.equal(descriptor.roomKey, expectedRoomKey);
+  assert.equal(descriptor.label, `Study Room ${expectedRoomKey}`);
+  assert.equal(typeof descriptor.active, "boolean");
+  if (typeof expectedActive === "boolean") {
+    assert.equal(descriptor.active, expectedActive);
+  }
+  assert.equal(descriptor.capacity, STUDY_ROOM_MAX_PARTICIPANTS);
+  assert.ok(
+    Number.isSafeInteger(descriptor.participantCount) &&
+      descriptor.participantCount >= 0 &&
+      descriptor.participantCount <= STUDY_ROOM_MAX_PARTICIPANTS,
+    "The public room participant count is outside the configured capacity.",
+  );
+  if (descriptor.active) {
+    assert.ok(
+      Number.isFinite(Date.parse(descriptor.focusStartedAt)),
+      "An active Study Room is missing its focus start time.",
+    );
+  } else {
+    assert.equal(descriptor.focusStartedAt, null);
+    assert.equal(descriptor.participantCount, 0);
+  }
+  return descriptor;
+}
+
+function validateRoomCatalog(body, expectedRole, expectedActiveKeys = null) {
   assert.equal(body?.ok, true);
-  assert.equal(body?.room_name, APPROVED_STAGING_ROOM);
+  assert.equal(body?.allowed, true);
+  assert.equal(body?.role, expectedRole);
+  assert.equal(body?.maxRooms, STUDY_ROOM_MAX_ROOMS);
+  assert.equal(body?.maxParticipants, STUDY_ROOM_MAX_PARTICIPANTS);
+  assert.equal(body?.recording, false);
+  assert.equal(body?.rooms?.length, STUDY_ROOM_MAX_ROOMS);
+  const activeKeys = Array.isArray(expectedActiveKeys)
+    ? new Set(expectedActiveKeys.map(approvedRoomKey))
+    : null;
+  const rooms = body.rooms.map((room, index) =>
+    validatePublicRoomDescriptor(
+      room,
+      String(index + 1),
+      activeKeys ? activeKeys.has(String(index + 1)) : undefined,
+    ),
+  );
+  const serialized = JSON.stringify(body);
+  for (const roomName of APPROVED_STAGING_ROOMS) {
+    assert.equal(
+      serialized.includes(roomName),
+      false,
+      "The room catalog must not expose internal LiveKit room names.",
+    );
+  }
+  return rooms;
+}
+
+function validateCreatedRoom(body, expectedRoomKey, expectedStatus) {
+  assert.equal(body?.ok, true);
+  assert.equal(body?.created, expectedStatus === 201);
+  validatePublicRoomDescriptor(body?.room, expectedRoomKey, true);
+  assert.equal(
+    JSON.stringify(body).includes(approvedRoomName(expectedRoomKey)),
+    false,
+    "Room creation must not expose the internal LiveKit room name.",
+  );
+}
+
+function validateRejectedRoomOperation(body, expectedCode) {
+  assert.equal(body?.ok, false);
+  assert.equal(body?.error?.code, expectedCode);
+  assert.equal(
+    JSON.stringify(body).includes(APPROVED_STAGING_ROOM),
+    false,
+    "A rejected room operation exposed the internal LiveKit room name.",
+  );
+}
+
+async function waitForRoomParticipantCounts(
+  configuration,
+  token,
+  expectedRole,
+  expectedMinimums,
+) {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const catalog = await workerPost(
+      configuration,
+      "/admin/study-room/rooms",
+      token,
+      { operation: "list" },
+    );
+    const rooms = validateRoomCatalog(
+      catalog.body,
+      expectedRole,
+      ["1", "2", "3", "4"],
+    );
+    const settled = Object.entries(expectedMinimums).every(
+      ([roomKey, minimum]) =>
+        rooms[Number(approvedRoomKey(roomKey)) - 1].participantCount >= minimum,
+    );
+    if (settled) return rooms;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error("The four-room participant catalog did not settle in time.");
+}
+
+function validateJoinResponse(body, expectedNickname, issuer, expectedRoomKey) {
+  const roomKey = approvedRoomKey(expectedRoomKey);
+  const roomName = approvedRoomName(roomKey);
+  assert.equal(body?.ok, true);
+  assert.equal(body?.room_key, roomKey);
+  assert.equal(body?.room_label, `Study Room ${roomKey}`);
+  assert.equal(body?.room_name, roomName);
   assert.equal(body?.participant_name, expectedNickname);
   assert.match(
     String(body?.participant_identity || ""),
@@ -435,8 +601,20 @@ function validateJoinResponse(body, expectedNickname, issuer) {
     identity: body.participant_identity,
     issuer,
     nickname: expectedNickname,
+    roomKey,
+    roomName,
   });
   return body;
+}
+
+function remoteParticipantIdentities(room) {
+  const participants = room?.remoteParticipants;
+  const values = typeof participants?.values === "function"
+    ? [...participants.values()]
+    : Object.values(participants || {});
+  return new Set(
+    values.map((participant) => participant?.identity).filter(Boolean),
+  );
 }
 
 function withTimeout(label, promise, timeoutMs = RTC_TIMEOUT_MS) {
@@ -766,6 +944,12 @@ async function runPositiveSmoke() {
       runId,
       createdUsers,
     );
+    const founderAdmin = await createSyntheticUser(
+      configuration,
+      "founder-admin",
+      runId,
+      createdUsers,
+    );
     await assignSyntheticRole(configuration, student.id, "student", null);
     await assignSyntheticRole(
       configuration,
@@ -777,6 +961,12 @@ async function runPositiveSmoke() {
       configuration,
       secondaryAdmin.id,
       "admin",
+      primaryAdmin.id,
+    );
+    await assignSyntheticRole(
+      configuration,
+      founderAdmin.id,
+      "founder_admin",
       primaryAdmin.id,
     );
 
@@ -795,6 +985,20 @@ async function runPositiveSmoke() {
       ),
       "The non-admin request did not return an explicit administrator boundary.",
     );
+    const deniedRooms = await workerPost(
+      configuration,
+      "/admin/study-room/rooms",
+      student.token,
+      { operation: "list" },
+      [403],
+    );
+    assert.equal(deniedRooms.body?.ok, false);
+    assert.ok(
+      ["ADMIN_FORBIDDEN", "STUDY_ROOM_ADMIN_REQUIRED"].includes(
+        deniedRooms.body?.error?.code,
+      ),
+      "The room catalog did not preserve the administrator boundary.",
+    );
     console.log("STUDY_ROOM_STAGING_POSITIVE: non_admin_denied=true");
 
     checkpoint = "admin_access";
@@ -810,25 +1014,102 @@ async function runPositiveSmoke() {
       secondaryAdmin.token,
       {},
     );
+    const founderAccess = await workerPost(
+      configuration,
+      "/admin/study-room/access",
+      founderAdmin.token,
+      {},
+    );
     validateAccessResponse(primaryAccess.body, "super_admin");
     validateAccessResponse(secondaryAccess.body, "admin");
-    console.log("STUDY_ROOM_STAGING_POSITIVE: authenticated_admin_access=true");
+    validateAccessResponse(founderAccess.body, "founder_admin");
+    console.log(
+      "STUDY_ROOM_STAGING_POSITIVE: authenticated_admin_access=true founder_admin_access=true",
+    );
+
+    checkpoint = "four_room_catalog_and_creation";
+    const initialCatalog = await workerPost(
+      configuration,
+      "/admin/study-room/rooms",
+      primaryAdmin.token,
+      { operation: "list" },
+    );
+    validateRoomCatalog(initialCatalog.body, "super_admin");
+
+    for (let index = 0; index < STUDY_ROOM_MAX_ROOMS; index += 1) {
+      const roomKey = String(index + 1);
+      const created = await workerPost(
+        configuration,
+        "/admin/study-room/rooms",
+        primaryAdmin.token,
+        { operation: "create", roomKey },
+        [200, 201],
+      );
+      validateCreatedRoom(created.body, roomKey, created.response.status);
+    }
+
+    const fullCatalog = await workerPost(
+      configuration,
+      "/admin/study-room/rooms",
+      secondaryAdmin.token,
+      { operation: "list" },
+    );
+    validateRoomCatalog(fullCatalog.body, "admin", ["1", "2", "3", "4"]);
+
+    const fifthRoom = await workerPost(
+      configuration,
+      "/admin/study-room/rooms",
+      primaryAdmin.token,
+      { operation: "create" },
+      [409],
+    );
+    validateRejectedRoomOperation(
+      fifthRoom.body,
+      "STUDY_ROOM_ROOM_LIMIT_REACHED",
+    );
+    const invalidRoom = await workerPost(
+      configuration,
+      "/admin/study-room/rooms",
+      primaryAdmin.token,
+      { operation: "create", roomKey: "5" },
+      [400],
+    );
+    validateRejectedRoomOperation(
+      invalidRoom.body,
+      "STUDY_ROOM_ROOM_INVALID",
+    );
+    const rawRoomName = await workerPost(
+      configuration,
+      "/admin/study-room/rooms",
+      primaryAdmin.token,
+      { operation: "create", roomKey: APPROVED_STAGING_ROOM },
+      [400],
+    );
+    validateRejectedRoomOperation(
+      rawRoomName.body,
+      "STUDY_ROOM_ROOM_INVALID",
+    );
+    console.log(
+      "STUDY_ROOM_STAGING_POSITIVE: four_room_limit=true raw_room_names_rejected=true",
+    );
 
     checkpoint = "admin_join_and_jwt";
     const primaryNickname = "Participant 101";
     const secondaryNickname = "Participant 202";
+    const founderNickname = "Participant 303";
     const primaryJoin = validateJoinResponse(
       (
         await workerPost(
           configuration,
           "/admin/study-room/join",
           primaryAdmin.token,
-          { nickname: primaryNickname },
+          { roomKey: "1", nickname: primaryNickname },
           [201],
         )
       ).body,
       primaryNickname,
       configuration.liveKitApiKey,
+      "1",
     );
     const secondaryJoin = validateJoinResponse(
       (
@@ -836,26 +1117,45 @@ async function runPositiveSmoke() {
           configuration,
           "/admin/study-room/join",
           secondaryAdmin.token,
-          { nickname: secondaryNickname },
+          { roomKey: "1", nickname: secondaryNickname },
           [201],
         )
       ).body,
       secondaryNickname,
       configuration.liveKitApiKey,
+      "1",
+    );
+    const founderJoin = validateJoinResponse(
+      (
+        await workerPost(
+          configuration,
+          "/admin/study-room/join",
+          founderAdmin.token,
+          { roomKey: "2", nickname: founderNickname },
+          [201],
+        )
+      ).body,
+      founderNickname,
+      configuration.liveKitApiKey,
+      "2",
     );
     assert.notEqual(
       primaryJoin.participant_identity,
       secondaryJoin.participant_identity,
     );
     assert.equal(primaryJoin.server_url, secondaryJoin.server_url);
+    assert.equal(primaryJoin.server_url, founderJoin.server_url);
     assert.equal(primaryJoin.focus_started_at, secondaryJoin.focus_started_at);
+    assert.notEqual(primaryJoin.room_name, founderJoin.room_name);
     console.log("STUDY_ROOM_STAGING_POSITIVE: jwt_claims=true");
 
     checkpoint = "livekit_connect";
     const primaryRoom = new Room();
     const secondaryRoom = new Room();
+    const isolatedRoom = new Room();
     resources.rooms.add(primaryRoom);
     resources.rooms.add(secondaryRoom);
+    resources.rooms.add(isolatedRoom);
     const seesSecondary = waitForRoomEvent(
       primaryRoom,
       RoomEvent.ParticipantConnected,
@@ -886,6 +1186,17 @@ async function runPositiveSmoke() {
       ),
     );
     await seesSecondary;
+    await withTimeout(
+      "isolated LiveKit connection",
+      isolatedRoom.connect(
+        founderJoin.server_url,
+        founderJoin.participant_token,
+        {
+          autoSubscribe: true,
+          dynacast: true,
+        },
+      ),
+    );
     assert.equal(
       primaryRoom.localParticipant?.identity,
       primaryJoin.participant_identity,
@@ -894,9 +1205,44 @@ async function runPositiveSmoke() {
       secondaryRoom.localParticipant?.identity,
       secondaryJoin.participant_identity,
     );
-    assert.equal(primaryRoom.name, APPROVED_STAGING_ROOM);
-    assert.equal(secondaryRoom.name, APPROVED_STAGING_ROOM);
+    assert.equal(
+      isolatedRoom.localParticipant?.identity,
+      founderJoin.participant_identity,
+    );
+    assert.equal(primaryRoom.name, approvedRoomName("1"));
+    assert.equal(secondaryRoom.name, approvedRoomName("1"));
+    assert.equal(isolatedRoom.name, approvedRoomName("2"));
+    assert.equal(
+      remoteParticipantIdentities(primaryRoom).has(
+        founderJoin.participant_identity,
+      ),
+      false,
+      "A participant in Study Room 2 leaked into Study Room 1.",
+    );
+    assert.equal(
+      remoteParticipantIdentities(isolatedRoom).has(
+        primaryJoin.participant_identity,
+      ),
+      false,
+      "A participant in Study Room 1 leaked into Study Room 2.",
+    );
+    assert.equal(
+      remoteParticipantIdentities(isolatedRoom).has(
+        secondaryJoin.participant_identity,
+      ),
+      false,
+      "A second participant in Study Room 1 leaked into Study Room 2.",
+    );
+    const connectedRooms = await waitForRoomParticipantCounts(
+      configuration,
+      founderAdmin.token,
+      "founder_admin",
+      { 1: 2, 2: 1 },
+    );
+    assert.ok(connectedRooms[0].participantCount >= 2);
+    assert.ok(connectedRooms[1].participantCount >= 1);
     console.log("STUDY_ROOM_STAGING_POSITIVE: livekit_participants=2");
+    console.log("STUDY_ROOM_STAGING_POSITIVE: room_isolation=true");
 
     checkpoint = "synthetic_media_subscription";
     const publications = await publishAndProveSyntheticMedia(
@@ -905,8 +1251,14 @@ async function runPositiveSmoke() {
       secondaryJoin.participant_identity,
       resources,
     );
+    await publishAndProveSyntheticMedia(
+      primaryRoom,
+      secondaryRoom,
+      primaryJoin.participant_identity,
+      resources,
+    );
     console.log(
-      "STUDY_ROOM_STAGING_POSITIVE: subscribed_microphone=true subscribed_camera=true",
+      "STUDY_ROOM_STAGING_POSITIVE: bidirectional_microphone=true bidirectional_camera=true",
     );
 
     checkpoint = "server_side_mute";
@@ -924,12 +1276,14 @@ async function runPositiveSmoke() {
       primaryAdmin.token,
       {
         operation: "mute",
+        roomKey: "1",
         participantIdentity: secondaryJoin.participant_identity,
         trackSid: publications.audioPublication.sid,
       },
     );
     assert.equal(moderation.body?.ok, true);
     assert.equal(moderation.body?.result?.action, "muted");
+    assert.equal(moderation.body?.result?.roomKey, "1");
     assert.equal(
       moderation.body?.result?.participantIdentity,
       secondaryJoin.participant_identity,
@@ -959,12 +1313,13 @@ async function runPositiveSmoke() {
           configuration,
           "/admin/study-room/join",
           secondaryAdmin.token,
-          { nickname: secondaryNickname },
+          { roomKey: "1", nickname: secondaryNickname },
           [201],
         )
       ).body,
       secondaryNickname,
       configuration.liveKitApiKey,
+      "1",
     );
     assert.equal(
       reconnectJoin.participant_identity,
@@ -1003,6 +1358,9 @@ async function runPositiveSmoke() {
     failure = error;
   } finally {
     checkpoint = "rtc_cleanup";
+    // The public Worker deliberately has no room-deletion operation. Releasing
+    // every synthetic RTC participant is the supported cleanup boundary; the
+    // four fixed empty rooms then expire under their reviewed LiveKit timeout.
     cleanupErrors.push(...(await safeReleaseRtcResources(resources)));
     checkpoint = "synthetic_user_cleanup";
     cleanupErrors.push(
@@ -1022,6 +1380,9 @@ async function runPositiveSmoke() {
   console.log(
     `STUDY_ROOM_STAGING_POSITIVE: synthetic_cleanup=true run_id=${runId}`,
   );
+  console.log(
+    "STUDY_ROOM_STAGING_POSITIVE: rtc_released=true fixed_room_expiry=true",
+  );
   if (failure) throw failure;
   console.log(
     "STUDY_ROOM_STAGING_POSITIVE_PASS secrets_not_logged=true pii_not_logged=true",
@@ -1038,6 +1399,14 @@ async function runPreflight() {
     "The reviewed Node realtime smoke-test SDK version must remain pinned.",
   );
   assert.equal(APPROVED_STAGING_ROOM, "dd-study-room-admin-beta-staging-v1");
+  assert.equal(APPROVED_STAGING_ROOMS.length, STUDY_ROOM_MAX_ROOMS);
+  assert.deepEqual(APPROVED_STAGING_ROOMS, [
+    "dd-study-room-admin-beta-staging-v1",
+    "dd-study-room-admin-beta-staging-v1-2",
+    "dd-study-room-admin-beta-staging-v1-3",
+    "dd-study-room-admin-beta-staging-v1-4",
+  ]);
+  assert.equal(new Set(APPROVED_STAGING_ROOMS).size, STUDY_ROOM_MAX_ROOMS);
   assert.equal(APPROVED_STAGING_WORKER.includes("-staging."), true);
   assert.equal(
     APPROVED_STAGING_SUPABASE.includes("hlzqmreeoghbldnhlybr"),
@@ -1057,14 +1426,14 @@ async function runSelfTest() {
   const identity = "sr_abcdefghijklmnopqrstuvwx";
   const issuer = "reviewed_api_key";
   const nickname = "Participant 101";
-  const claims = {
+  const claimsForRoom = (roomKey) => ({
     iss: issuer,
     sub: identity,
     name: nickname,
     nbf: now,
     exp: now + STUDY_ROOM_TOKEN_TTL_SECONDS,
     video: {
-      room: APPROVED_STAGING_ROOM,
+      room: approvedRoomName(roomKey),
       roomJoin: true,
       canPublish: true,
       canSubscribe: true,
@@ -1072,16 +1441,32 @@ async function runSelfTest() {
       canPublishSources: ["camera", "microphone"],
     },
     roomConfig: {
-      name: APPROVED_STAGING_ROOM,
+      name: approvedRoomName(roomKey),
       emptyTimeout: 600,
       departureTimeout: 120,
       maxParticipants: STUDY_ROOM_MAX_PARTICIPANTS,
+      metadata: JSON.stringify({
+        schema: "duediligence-study-room-slot-v1",
+        roomKey,
+        label: `Study Room ${roomKey}`,
+        createdAt: new Date(now * 1_000).toISOString(),
+      }),
     },
-  };
+  });
+  const claims = claimsForRoom("1");
   validateStudyRoomJwt(createSelfTestToken(claims), {
     identity,
     issuer,
     nickname,
+    roomKey: "1",
+    roomName: approvedRoomName("1"),
+  });
+  validateStudyRoomJwt(createSelfTestToken(claimsForRoom("4")), {
+    identity,
+    issuer,
+    nickname,
+    roomKey: "4",
+    roomName: approvedRoomName("4"),
   });
   assert.throws(
     () =>
@@ -1090,7 +1475,13 @@ async function runSelfTest() {
           ...claims,
           video: { ...claims.video, canPublishData: true },
         }),
-        { identity, issuer, nickname },
+        {
+          identity,
+          issuer,
+          nickname,
+          roomKey: "1",
+          roomName: approvedRoomName("1"),
+        },
       ),
     /canPublishData/u,
   );
@@ -1101,9 +1492,52 @@ async function runSelfTest() {
           ...claims,
           video: { ...claims.video, roomAdmin: true },
         }),
-        { identity, issuer, nickname },
+        {
+          identity,
+          issuer,
+          nickname,
+          roomKey: "1",
+          roomName: approvedRoomName("1"),
+        },
       ),
     /room-administrator/u,
+  );
+
+  const roomDescriptors = Array.from(
+    { length: STUDY_ROOM_MAX_ROOMS },
+    (_unused, index) => ({
+      roomKey: String(index + 1),
+      label: `Study Room ${index + 1}`,
+      active: true,
+      participantCount: index === 0 ? 2 : 0,
+      capacity: STUDY_ROOM_MAX_PARTICIPANTS,
+      focusStartedAt: new Date(now * 1_000).toISOString(),
+    }),
+  );
+  validateRoomCatalog(
+    {
+      ok: true,
+      allowed: true,
+      role: "admin",
+      maxRooms: STUDY_ROOM_MAX_ROOMS,
+      maxParticipants: STUDY_ROOM_MAX_PARTICIPANTS,
+      recording: false,
+      rooms: roomDescriptors,
+    },
+    "admin",
+    ["1", "2", "3", "4"],
+  );
+  validateCreatedRoom(
+    { ok: true, created: true, room: roomDescriptors[0] },
+    "1",
+    201,
+  );
+  validateRejectedRoomOperation(
+    {
+      ok: false,
+      error: { code: "STUDY_ROOM_ROOM_INVALID" },
+    },
+    "STUDY_ROOM_ROOM_INVALID",
   );
 
   assert.equal(TrackSource.SOURCE_CAMERA, 1);

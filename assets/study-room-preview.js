@@ -222,15 +222,6 @@
       });
     });
 
-    document.querySelectorAll('[data-study-room-background]').forEach((button) => {
-      button.addEventListener('click', () => {
-        document.querySelectorAll('[data-study-room-background]').forEach((choice) => {
-          choice.setAttribute('aria-pressed', String(choice === button));
-        });
-        setPreviewStatus(button.dataset.studyRoomBackground + ' background selected for this interface preview.');
-      });
-    });
-
     document.getElementById('dd-study-room-volume')?.addEventListener('input', (event) => {
       setPreviewStatus('Room volume preview set to ' + event.target.value + ' percent.');
     });

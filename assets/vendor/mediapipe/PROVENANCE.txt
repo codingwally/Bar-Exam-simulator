@@ -1,0 +1,19 @@
+Due Diligence Study Room background-processing assets
+
+MediaPipe Tasks Vision package
+- Package: @mediapipe/tasks-vision
+- Version: 0.10.14 (pinned transitively by @livekit/track-processors 0.7.2)
+- Registry: https://www.npmjs.com/package/@mediapipe/tasks-vision/v/0.10.14
+- License: Apache-2.0
+- License source: https://github.com/google-ai-edge/mediapipe/blob/v0.10.14/LICENSE
+- Release tag commit: 4cf89a70942ca3252e46ace7e4552f53be9bef2e
+
+Selfie Segmenter model
+- Local file: selfie_segmenter-float16-2023-05-07.tflite
+- Official source: https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite
+- Source last-modified date observed during vendoring: 2023-05-07
+- Bytes: 249537
+- SHA-256: 191AC9529AE506EE0BEEFA6B2C945A172DAB9D07D1E802A290A4E4038226658B
+
+The Pages build verifies the pinned model digest and copies the MediaPipe WASM
+runtime from the locked npm dependency. No runtime CDN request is required.

@@ -3,6 +3,11 @@
 
   const document = global.document;
   if (!document) return;
+  try {
+    global.opener = null;
+  } catch {
+    // Some embedded browsers expose a read-only opener; server-side access still protects the room.
+  }
 
   const config = global.DueDiligencePhase2Config;
   const LiveKit = global.LivekitClient;
@@ -38,6 +43,7 @@
     focusTimer: 0,
     clockTimer: 0,
     toastTimer: 0,
+    deviceChangeBound: false,
   };
 
   const byId = (id) => document.getElementById(id);
@@ -306,7 +312,7 @@
   }
 
   async function refreshDeviceLists() {
-    if (!global.navigator.mediaDevices?.enumerateDevices) return;
+    if (!global.navigator.mediaDevices?.enumerateDevices) return [];
     const devices = await global.navigator.mediaDevices.enumerateDevices().catch(() => []);
     const cameras = devices.filter((device) => device.kind === 'videoinput');
     const microphones = devices.filter((device) => device.kind === 'audioinput');
@@ -316,6 +322,93 @@
       fillSelect(byId(`${prefix}microphone-select`), microphones, 'Microphone');
       fillSelect(byId(`${prefix}speaker-select`), speakers, 'Speaker');
     }
+    return devices;
+  }
+
+  async function brieflyRequestDevicePermission(mediaDevices, constraints) {
+    const temporaryStream = await mediaDevices.getUserMedia(constraints);
+    temporaryStream?.getTracks?.().forEach((track) => track.stop());
+  }
+
+  async function discoverDevices() {
+    const mediaDevices = global.navigator.mediaDevices;
+    const devices = await refreshDeviceLists();
+    if (!mediaDevices?.getUserMedia) return;
+
+    const noDevicesEnumerated = devices.length === 0;
+    const needsCameraLabel = noDevicesEnumerated
+      || devices.some((device) => device.kind === 'videoinput' && !device.label);
+    const needsMicrophoneLabel = noDevicesEnumerated
+      || devices.some((device) => device.kind === 'audioinput' && !device.label);
+    if (!needsCameraLabel && !needsMicrophoneLabel) {
+      setStatus('sr-prejoin-status', 'Camera and microphone are off. Your available devices were detected.', 'ok');
+      return;
+    }
+
+    let permissionError = null;
+    let partialAccess = false;
+    let refreshedDevices = devices;
+    setStatus('sr-prejoin-status', 'Allow device access to identify your camera and microphone. Your camera indicator may turn on briefly during this local check; nothing is shared.');
+    try {
+      await brieflyRequestDevicePermission(mediaDevices, {
+        video: needsCameraLabel,
+        audio: needsMicrophoneLabel,
+      });
+    } catch (error) {
+      permissionError = error;
+      const canRetrySeparately = needsCameraLabel
+        && needsMicrophoneLabel
+        && ['NotFoundError', 'DevicesNotFoundError', 'NotReadableError', 'TrackStartError', 'OverconstrainedError', 'ConstraintNotSatisfiedError', 'AbortError'].includes(error?.name);
+      if (canRetrySeparately) {
+        let successes = 0;
+        const failures = [];
+        for (const constraints of [
+          { video: true, audio: false },
+          { video: false, audio: true },
+        ]) {
+          try {
+            await brieflyRequestDevicePermission(mediaDevices, constraints);
+            successes += 1;
+          } catch (individualError) {
+            failures.push(individualError);
+          }
+        }
+        partialAccess = successes > 0 && failures.length > 0;
+        permissionError = failures[0] || null;
+      }
+    } finally {
+      refreshedDevices = await refreshDeviceLists();
+    }
+
+    if (permissionError) {
+      const cameraLabelResolved = !needsCameraLabel
+        || refreshedDevices.some((device) => device.kind === 'videoinput' && device.label);
+      const microphoneLabelResolved = !needsMicrophoneLabel
+        || refreshedDevices.some((device) => device.kind === 'audioinput' && device.label);
+      if (cameraLabelResolved && microphoneLabelResolved) {
+        setStatus('sr-prejoin-status', 'Camera and microphone are off. Your available devices were detected.', 'ok');
+        return;
+      }
+      const denied = ['NotAllowedError', 'PermissionDeniedError'].includes(permissionError?.name);
+      setStatus(
+        'sr-prejoin-status',
+        partialAccess
+          ? 'Camera and microphone are off. Available devices were refreshed, but one device type could not be identified.'
+          : denied
+          ? 'Camera and microphone are off. Allow device permission when you are ready to test them.'
+          : 'Camera and microphone are off. Some device names could not be detected automatically.',
+        denied || partialAccess ? '' : 'error',
+      );
+      return;
+    }
+    setStatus('sr-prejoin-status', 'Camera and microphone are off. Your available devices were detected.', 'ok');
+  }
+
+  function bindDeviceChangeDetection() {
+    const mediaDevices = global.navigator.mediaDevices;
+    if (state.deviceChangeBound || !mediaDevices?.addEventListener) return;
+    mediaDevices.addEventListener('devicechange', refreshDeviceLists);
+    state.deviceChangeBound = true;
   }
 
   async function testDevices() {
@@ -992,7 +1085,8 @@
         state.access = await workerRequest('/admin/study-room/access');
       }
       showExperience();
-      await refreshDeviceLists();
+      bindDeviceChangeDetection();
+      await discoverDevices();
       if (LOCAL_TEST_MODE === 'live') createLocalQualityPreview();
     } catch (error) {
       showAccessError(error);

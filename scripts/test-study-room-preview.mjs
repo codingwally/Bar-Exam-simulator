@@ -30,6 +30,8 @@ assert.ok(
 );
 assert.match(html, /id="dd-study-room-trigger"[\s\S]*data-study-room-trigger[\s\S]*aria-haspopup="dialog"/);
 assert.match(html, /id="spa-study-room"[\s\S]*data-study-room-trigger[\s\S]*hidden/);
+assert.match(html, /id="dd-study-room-trigger"[\s\S]*aria-busy="true"[\s\S]*aria-disabled="true" disabled/);
+assert.match(html, /id="spa-study-room"[\s\S]*aria-busy="true"[\s\S]*aria-disabled="true" disabled hidden/);
 
 assert.match(html, /id="dd-study-room-dialog" role="dialog" aria-modal="true"/);
 assert.match(html, /aria-labelledby="dd-study-room-title" aria-describedby="dd-study-room-description"/);
@@ -67,14 +69,20 @@ assert.match(client, /DueDiligenceSubscriptionCta\?\.isAudienceEligible\?\.\(val
 assert.match(client, /const subscribed = known && !eligible/);
 assert.match(client, /subscribe\.disabled = !eligible/);
 assert.match(client, /subscribed \? 'Already subscribed' : 'Subscribe now'/);
-assert.match(client, /signedIn\(\) && isAdmin\(access\)[\s\S]*openAdminRoom\(trigger\)/);
+assert.match(client, /isAdmin\(access\)[\s\S]*accessResolutionFailed[\s\S]*return openAdminRoom\(\)/);
 assert.match(client, /new URL\('\/study-room\/', global\.location\.origin\)/);
+assert.match(client, /global\.open\([\s\S]*roomUrl\.href[\s\S]*popup=yes[\s\S]*toolbar=no[\s\S]*location=no/);
 assert.match(client, /popup\.opener = null/);
-assert.match(client, /popup\.location\.replace\(roomUrl\.href\)/);
-assert.match(client, /Allow pop-ups for Due Diligence/);
+assert.match(client, /popup\.focus\?\.\(\)/);
+assert.match(client, /adminRoomWindow && !adminRoomWindow\.closed[\s\S]*adminRoomWindow\.focus\?\.\(\)/);
+assert.match(client, /adminRoomWindow = popup/);
+assert.match(client, /if \(!popup\) \{[\s\S]*global\.location\.assign\(roomUrl\.href\)/);
+assert.match(client, /try \{[\s\S]*popup = global\.open\([\s\S]*\} catch \{[\s\S]*global\.location\.assign\(roomUrl\.href\)/);
+assert.doesNotMatch(client, /Allow pop-ups for Due Diligence/);
 assert.match(client, /return openMarketingPreview\(trigger\)/);
 assert.match(client, /target\?\.click\(\)/);
 assert.match(client, /study_room_preview_opened/);
+assert.match(html, /study-room-preview\.js\?v=study-room-admin-window-20260829-2/);
 
 function extractNamedFunction(source, name) {
   const start = source.indexOf(`function ${name}(`);
@@ -112,6 +120,26 @@ assert.equal(vm.runInContext("isSubscriptionEligible({ globalBeta: { active: tru
 assert.equal(vm.runInContext("isSubscriptionEligible({ basis: 'complimentary', unlimited: true })", accessContext), false);
 assert.equal(vm.runInContext("isSubscriptionEligible({ role: 'member', subscription: null })", accessContext), true);
 assert.equal(vm.runInContext("isSubscriptionEligible(null)", accessContext), false);
+
+const adminWindowFunction = extractNamedFunction(client, 'openAdminRoom');
+assert.doesNotMatch(adminWindowFunction, /openMarketingPreview/);
+assert.doesNotMatch(adminWindowFunction, /setPreviewStatus/);
+const openFunction = extractNamedFunction(client, 'open');
+assert.doesNotMatch(openFunction, /await|\.then\(/, 'Study Room click routing must stay synchronous for popup user activation.');
+assert.match(openFunction, /accessIsResolving\(\)[\s\S]*return false/);
+
+assert.match(client, /function accessIsResolving\(\)[\s\S]*!authSettled[\s\S]*signedIn\(\) && !access/);
+assert.match(client, /accessResolutionFailed[\s\S]*signedIn\(\) && headerShowsAdmin\(\)/);
+assert.match(client, /querySelectorAll\('\[data-study-room-trigger\]'\)[\s\S]*trigger\.disabled = busy/);
+assert.match(client, /setAttribute\('aria-busy', String\(busy\)\)/);
+assert.match(client, /setAttribute\('aria-disabled', String\(busy\)\)/);
+assert.match(client, /DueDiligencePhase2\?\.whenAuthReady\?\.\(\)/);
+assert.match(client, /DueDiligencePhase4\?\.refreshAccess\?\.\(\{[\s\S]*enforce: false,[\s\S]*force: true/);
+assert.match(client, /accessResolutionFailed = signedIn\(latestSession\) && !latestAccess/);
+assert.match(client, /detail\?\.authenticated === false[\s\S]*\? null/);
+assert.match(client, /access: !signedIn\(nextSession\) \|\| changedAccount \? null : access/);
+assert.match(client, /if \(!signedIn\(readySession\)\) \{[\s\S]*session: null, access: null/);
+assert.match(client, /if \(!current \|\| typeof current !== 'object'\) return null/);
 
 for (const forbidden of [
   /study-room-demo/,

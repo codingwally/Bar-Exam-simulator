@@ -99,7 +99,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          allowed='^(\.github/workflows/release-study-room-admin-beta\.yml|assets/study-room-live\.(css|js)|assets/study-room-preview\.js|index\.html|scripts/build-pages-artifact\.mjs|scripts/test-pages-artifact\.mjs|scripts/test-study-room-(deployment-smoke|live|preview|release-workflow)\.mjs|study-room/index\.html|worker/index\.mjs|worker/livekit-credentials-smoke(\.test)?\.mjs|worker/package(-lock)?\.json|worker/study-room-(core|routes|staging-positive-smoke)\.mjs|worker/study-room\.test\.mjs|worker/wrangler(\.staging)?\.toml)$'
+          allowed='^(\.github/workflows/release-study-room-admin-beta\.yml|assets/study-room-live\.(css|js)|assets/study-room-preview\.js|index\.html|scripts/build-pages-artifact\.mjs|scripts/test-pages-artifact\.mjs|scripts/test-study-room-(deployment-smoke|hotfix-behavior|live|preview|release-workflow)\.mjs|study-room/index\.html|worker/index\.mjs|worker/livekit-credentials-smoke(\.test)?\.mjs|worker/package(-lock)?\.json|worker/study-room-(core|routes|staging-positive-smoke)\.mjs|worker/study-room\.test\.mjs|worker/wrangler(\.staging)?\.toml)$'
           changed="$(git diff --name-only "$EXPECTED_CURRENT_PAGES_SHA" "$GITHUB_SHA")"
           test -n "$changed"
           unexpected="$(printf '%s\n' "$changed" | grep -Ev "$allowed" || true)"
@@ -134,6 +134,7 @@ jobs:
           node --check worker/study-room-staging-positive-smoke.mjs
           node scripts/test-study-room-preview.mjs
           node scripts/test-study-room-live.mjs
+          node scripts/test-study-room-hotfix-behavior.mjs
           node scripts/test-study-room-release-workflow.mjs
           node worker/study-room-staging-positive-smoke.mjs --preflight
           node worker/study-room-staging-positive-smoke.mjs --self-test
@@ -472,10 +473,17 @@ jobs:
             room="$(curl --fail --silent --show-error -H 'Cache-Control: no-cache' "https://duediligence.ph/study-room/?release=$GITHUB_SHA" || true)"
             live="$(curl --fail --silent --show-error -H 'Cache-Control: no-cache' "https://duediligence.ph/assets/study-room-live.js?release=$GITHUB_SHA" || true)"
             home="$(curl --fail --silent --show-error -H 'Cache-Control: no-cache' "https://duediligence.ph/?release=$GITHUB_SHA" || true)"
+            preview="$(curl --fail --silent --show-error -H 'Cache-Control: no-cache' "https://duediligence.ph/assets/study-room-preview.js?release=$GITHUB_SHA" || true)"
             if grep -Fq '<title>Study Room — Due Diligence</title>' <<<"$room" \
+              && grep -Fq 'study-room-admin-beta-20260829-2' <<<"$room" \
               && grep -Fq '/admin/study-room/join' <<<"$live" \
-              && grep -Fq 'study-room-admin-window-20260829-1' <<<"$home"; then
-              echo "The Study Room page and admin-only window handoff are live at the exact release SHA."
+              && grep -Fq 'async function discoverDevices()' <<<"$live" \
+              && grep -Fq 'bindDeviceChangeDetection();' <<<"$live" \
+              && grep -Fq 'study-room-admin-window-20260829-2' <<<"$home" \
+              && grep -Fq "new URL('/study-room/', global.location.origin)" <<<"$preview" \
+              && grep -Fq 'global.location.assign(roomUrl.href)' <<<"$preview" \
+              && grep -Fq 'accessResolutionFailed = signedIn(latestSession) && !latestAccess' <<<"$preview"; then
+              echo "The direct admin window handoff and automatic device discovery are live at the exact release SHA."
               exit 0
             fi
             sleep 5

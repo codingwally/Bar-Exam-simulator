@@ -10,6 +10,10 @@
   let session = null;
   let restoreFocusTo = null;
   let initialized = false;
+  let authSettled = false;
+  let accessResolutionFailed = false;
+  let accessResolution = 0;
+  let adminRoomWindow = null;
 
   function normalized(value) {
     return String(value || '').trim().toLowerCase().replace(/[\s_-]+/g, ' ');
@@ -27,6 +31,7 @@
   function runtimeSession() {
     return global.DueDiligencePhase4?.getSession?.()
       || global.DueDiligencePhase2?.getSession?.()
+      || global.DueDiligencePhase2?.currentSession?.()
       || null;
   }
 
@@ -34,20 +39,44 @@
     return global.DueDiligencePhase4?.getAccess?.() || null;
   }
 
-  function accessWithVerifiedRole() {
-    const current = runtimeAccess() || access;
+  function accessWithVerifiedRole(value = runtimeAccess() || access) {
+    const current = value;
+    if (!current || typeof current !== 'object') return null;
     const headerRole = normalized(document.getElementById('dd2-header-role-label')?.textContent);
     if (!ADMIN_ROLES.has(headerRole)) return current;
     return { ...(current || {}), role: headerRole };
   }
 
-  function signedIn() {
-    return Boolean(session?.access_token || session?.user);
+  function signedIn(value = session) {
+    return Boolean(value?.access_token || value?.user);
   }
 
-  function syncTriggerVisibility() {
-    session = runtimeSession() || session;
-    access = accessWithVerifiedRole() || access;
+  function accessIsResolving() {
+    return !authSettled || (signedIn() && !access && !accessResolutionFailed);
+  }
+
+  function headerShowsAdmin() {
+    const headerRole = normalized(document.getElementById('dd2-header-role-label')?.textContent);
+    return ADMIN_ROLES.has(headerRole);
+  }
+
+  function syncTriggerVisibility(overrides = {}) {
+    const hasSession = Object.prototype.hasOwnProperty.call(overrides, 'session');
+    const hasAccess = Object.prototype.hasOwnProperty.call(overrides, 'access');
+    session = hasSession ? overrides.session : (runtimeSession() || session);
+    if (!signedIn()) {
+      access = null;
+    } else {
+      const nextAccess = hasAccess ? overrides.access : (runtimeAccess() || access);
+      access = accessWithVerifiedRole(nextAccess) || null;
+    }
+
+    const busy = accessIsResolving();
+    document.querySelectorAll('[data-study-room-trigger]').forEach((trigger) => {
+      trigger.disabled = busy;
+      trigger.setAttribute('aria-busy', String(busy));
+      trigger.setAttribute('aria-disabled', String(busy));
+    });
     const mobileTrigger = document.getElementById('spa-study-room');
     if (mobileTrigger) mobileTrigger.hidden = !signedIn();
     syncSubscriptionState();
@@ -103,34 +132,44 @@
     return true;
   }
 
-  function openAdminRoom(trigger = null) {
+  function openAdminRoom() {
     const roomUrl = new URL('/study-room/', global.location.origin);
-    const popup = global.open(
-      'about:blank',
-      'DueDiligenceStudyRoom',
-      'popup=yes,width=1440,height=900,left=40,top=40,resizable=yes,scrollbars=yes',
-    );
-    if (!popup) {
-      openMarketingPreview(trigger);
-      setPreviewStatus('Allow pop-ups for Due Diligence, then choose Study Room again.');
-      return false;
+    if (adminRoomWindow && !adminRoomWindow.closed) {
+      adminRoomWindow.focus?.();
+      return true;
     }
+    let popup = null;
+    try {
+      popup = global.open(
+        roomUrl.href,
+        'DueDiligenceStudyRoom',
+        'popup=yes,width=1440,height=900,left=40,top=40,resizable=yes,scrollbars=yes,toolbar=no,location=no,menubar=no,status=no',
+      );
+    } catch {
+      global.location.assign(roomUrl.href);
+      return true;
+    }
+    if (!popup) {
+      global.location.assign(roomUrl.href);
+      return true;
+    }
+    adminRoomWindow = popup;
     try {
       popup.opener = null;
-      popup.location.replace(roomUrl.href);
-      global.DueDiligenceAnalytics?.track?.('study_room_admin_window_opened');
-      return true;
     } catch {
-      popup.close();
-      openMarketingPreview(trigger);
-      setPreviewStatus('The separate Study Room window could not open. Try again from this button.');
-      return false;
+      // The secure room still opened; some browsers make the WindowProxy read-only.
     }
+    popup.focus?.();
+    global.DueDiligenceAnalytics?.track?.('study_room_admin_window_opened');
+    return true;
   }
 
   function open(trigger = null) {
+    if (accessIsResolving()) return false;
     access = accessWithVerifiedRole() || access;
-    if (signedIn() && isAdmin(access)) return openAdminRoom(trigger);
+    if (isAdmin(access) || (accessResolutionFailed && signedIn() && headerShowsAdmin())) {
+      return openAdminRoom();
+    }
     return openMarketingPreview(trigger);
   }
 
@@ -248,22 +287,80 @@
   function initialize() {
     if (initialized) return;
     initialized = true;
-    session = runtimeSession();
-    access = accessWithVerifiedRole();
     bindDialog();
     bindPreviewControls();
-    syncTriggerVisibility();
+    syncTriggerVisibility({
+      session: runtimeSession(),
+      access: runtimeAccess(),
+    });
   }
 
   function accessEventHandler(event) {
-    access = event.detail?.access || event.detail || runtimeAccess();
-    syncTriggerVisibility();
+    const detail = event?.detail;
+    const hasNestedAccess = Boolean(detail && Object.prototype.hasOwnProperty.call(detail, 'access'));
+    const nextAccess = hasNestedAccess
+      ? detail.access
+      : (detail && typeof detail === 'object' ? detail : runtimeAccess());
+    authSettled = true;
+    accessResolutionFailed = false;
+    syncTriggerVisibility({ access: nextAccess || null });
   }
 
   function sessionEventHandler(event) {
-    session = event.detail?.session || runtimeSession()
-      || (event.detail?.authenticated === true ? { access_token: 'authenticated-session' } : null);
-    syncTriggerVisibility();
+    const detail = event?.detail;
+    const hasExplicitSession = Boolean(detail && Object.prototype.hasOwnProperty.call(detail, 'session'));
+    const nextSession = detail?.authenticated === false
+      ? null
+      : (hasExplicitSession
+        ? detail.session
+        : (runtimeSession() || (detail?.authenticated === true ? { access_token: 'authenticated-session' } : null)));
+    const previousUserId = String(session?.user?.id || '');
+    const nextUserId = String(nextSession?.user?.id || '');
+    const changedAccount = signedIn(nextSession)
+      && (!signedIn(session) || (previousUserId && nextUserId && previousUserId !== nextUserId));
+
+    accessResolution += 1;
+    authSettled = true;
+    accessResolutionFailed = false;
+    syncTriggerVisibility({
+      session: nextSession,
+      access: !signedIn(nextSession) || changedAccount ? null : access,
+    });
+    if (signedIn(nextSession) && !access) {
+      Promise.resolve().then(refreshWhenAuthReady).catch(() => {});
+    }
+  }
+
+  async function refreshWhenAuthReady() {
+    const resolution = ++accessResolution;
+    accessResolutionFailed = false;
+    await Promise.resolve(global.DueDiligencePhase2?.whenAuthReady?.());
+    if (resolution !== accessResolution) return;
+
+    authSettled = true;
+    const readySession = runtimeSession();
+    if (!signedIn(readySession)) {
+      syncTriggerVisibility({ session: null, access: null });
+      return;
+    }
+
+    const readyAccess = runtimeAccess();
+    syncTriggerVisibility({ session: readySession, access: readyAccess });
+    if (readyAccess) return;
+
+    const resolvedAccess = await global.DueDiligencePhase4?.refreshAccess?.({
+      enforce: false,
+      force: true,
+    }).catch(() => null);
+    if (resolution !== accessResolution) return;
+
+    const latestSession = runtimeSession();
+    const latestAccess = resolvedAccess || runtimeAccess();
+    accessResolutionFailed = signedIn(latestSession) && !latestAccess;
+    syncTriggerVisibility({
+      session: signedIn(latestSession) ? latestSession : null,
+      access: signedIn(latestSession) ? latestAccess : null,
+    });
   }
 
   global.addEventListener('duediligence:access', accessEventHandler);
@@ -279,4 +376,10 @@
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initialize, { once: true });
   else initialize();
+
+  Promise.resolve().then(refreshWhenAuthReady).catch(() => {
+    authSettled = true;
+    accessResolutionFailed = signedIn(runtimeSession() || session);
+    syncTriggerVisibility();
+  });
 })(window);

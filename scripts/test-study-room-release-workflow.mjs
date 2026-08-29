@@ -37,6 +37,7 @@ for (const expectedReleaseFile of [
   "scripts/build-pages-artifact.mjs",
   "scripts/test-pages-artifact.mjs",
   "scripts/test-study-room-deployment-smoke.mjs",
+  "scripts/test-study-room-hotfix-behavior.mjs",
   "scripts/test-study-room-live.mjs",
   "scripts/test-study-room-preview.mjs",
   "scripts/test-study-room-release-workflow.mjs",
@@ -61,6 +62,7 @@ for (const expectedReleaseFile of [
 }
 assert.match(workflow, /node --test worker\/\*\.test\.mjs/u);
 assert.match(workflow, /node scripts\/test-pages-artifact\.mjs/u);
+assert.match(workflow, /node scripts\/test-study-room-hotfix-behavior\.mjs/u);
 assert.match(
   workflow,
   /node worker\/study-room-staging-positive-smoke\.mjs --preflight/u,
@@ -232,6 +234,30 @@ assert.match(
 assert.match(
   workflow.slice(pagesVerificationJob),
   /exact_sha_is_latest[\s\S]*!= "true"/u,
+);
+assert.match(
+  workflow.slice(pagesVerificationJob),
+  /study-room-admin-window-20260829-2/u,
+);
+assert.match(
+  workflow.slice(pagesVerificationJob),
+  /study-room-admin-beta-20260829-2/u,
+);
+assert.match(
+  workflow.slice(pagesVerificationJob),
+  /async function discoverDevices\(\)/u,
+);
+assert.match(
+  workflow.slice(pagesVerificationJob),
+  /global\.location\.assign\(roomUrl\.href\)/u,
+);
+assert.match(
+  workflow.slice(pagesVerificationJob),
+  /bindDeviceChangeDetection\(\);/u,
+);
+assert.match(
+  workflow.slice(pagesVerificationJob),
+  /accessResolutionFailed = signedIn\(latestSession\) && !latestAccess/u,
 );
 
 console.log(

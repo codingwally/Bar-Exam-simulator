@@ -248,6 +248,7 @@ const supportRateWindows = new Map();
 const analyticsRateWindows = new Map();
 const adminRateWindows = new Map();
 const studyRoomAccessRateWindows = new Map();
+const studyRoomRoomsRateWindows = new Map();
 const studyRoomJoinRateWindows = new Map();
 const studyRoomModerationRateWindows = new Map();
 const guestStatusRateWindows = new Map();
@@ -9264,6 +9265,7 @@ async function resolveVerdictQuestion(questionId, env) {
 async function enforceStudyRoomRateLimit(request, env, scope) {
   const policies = {
     access: [studyRoomAccessRateWindows, 60],
+    rooms: [studyRoomRoomsRateWindows, 30],
     join: [studyRoomJoinRateWindows, 20],
     moderate: [studyRoomModerationRateWindows, 60],
   };
@@ -9718,6 +9720,9 @@ export default {
       }
       if (pathname === '/admin/study-room/access') {
         return await studyRoomHandlers.access(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/study-room/rooms') {
+        return await studyRoomHandlers.rooms(request, env, origin, allowedOrigin);
       }
       if (pathname === '/admin/study-room/join') {
         return await studyRoomHandlers.join(request, env, origin, allowedOrigin);

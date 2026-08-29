@@ -10,6 +10,7 @@ const imageNames = [
   'participant-2-tropical.webp',
   'participant-3-bedroom.webp',
   'participant-4-condo.webp',
+  'virtual-background-due-diligence-branded.webp',
 ];
 
 const [html, css, client, pricingClient, ...images] = await Promise.all([
@@ -49,6 +50,10 @@ assert.match(html, /Nickname privacy/);
 assert.match(html, /Separate-window study/);
 assert.match(html, /Admin beta currently in testing/);
 assert.match(html, /Interface preview only\. No camera or microphone is active\./);
+assert.match(html, /The branded backdrop is automatic and cannot be disabled\./);
+assert.match(html, /Always applied before video is shared/);
+assert.doesNotMatch(html, /data-study-room-background=|>None<|>Blur</);
+assert.doesNotMatch(client, /data-study-room-background|studyRoomBackground/);
 
 assert.match(css, /dd-study-room-trigger[\s\S]*order:\s*3/);
 assert.match(css, /dd2-header-pricing-button\s*\{\s*order:\s*4/);
@@ -82,7 +87,8 @@ assert.doesNotMatch(client, /Allow pop-ups for Due Diligence/);
 assert.match(client, /return openMarketingPreview\(trigger\)/);
 assert.match(client, /target\?\.click\(\)/);
 assert.match(client, /study_room_preview_opened/);
-assert.match(html, /study-room-preview\.js\?v=study-room-admin-window-20260829-2/);
+assert.match(html, /study-room-preview\.css\?v=study-room-mandatory-backdrop-20260829-1/);
+assert.match(html, /study-room-preview\.js\?v=study-room-mandatory-backdrop-20260829-1/);
 
 function extractNamedFunction(source, name) {
   const start = source.indexOf(`function ${name}(`);

@@ -8,7 +8,7 @@
   <meta name="robots" content="noindex,nofollow,noarchive">
   <title>Study Room — Due Diligence</title>
   <link rel="icon" href="../assets/brand/favicon.ico" sizes="any">
-  <link rel="stylesheet" href="../assets/study-room-live.css?v=study-room-audio-controls-20260829-1">
+  <link rel="stylesheet" href="../assets/study-room-live.css?v=study-room-four-rooms-20260829-1">
 </head>
 <body>
   <a class="sr-skip-link" href="#study-room-main">Skip to Study Room</a>
@@ -69,88 +69,149 @@
       </header>
 
       <section class="sr-prejoin" id="sr-prejoin" aria-labelledby="sr-prejoin-title">
-        <div class="sr-preview-card">
-          <div class="sr-preview-frame" id="sr-preview-frame">
-            <video id="sr-local-preview" autoplay muted playsinline hidden></video>
-            <div class="sr-camera-placeholder" id="sr-camera-placeholder">
-              <span class="sr-avatar" id="sr-preview-avatar">P</span>
-              <strong>Camera is off</strong>
-              <span>Nothing is shared until you choose to join.</span>
+        <section class="sr-room-lobby" id="sr-room-lobby" aria-labelledby="sr-room-lobby-title" data-max-rooms="4">
+          <div class="sr-room-lobby-heading">
+            <div>
+              <p class="sr-panel-eyebrow">Room lobby</p>
+              <h2 id="sr-room-lobby-title">Choose where to study</h2>
             </div>
-            <span class="sr-preview-name" id="sr-preview-name">Participant 1</span>
+            <span class="sr-room-capacity" id="sr-room-lobby-count">3 of 4 rooms</span>
           </div>
-          <div class="sr-prejoin-safety">
-            <strong>Your privacy comes first.</strong>
-            <span>Your browser may ask once for permission to identify available devices. Your camera indicator may turn on briefly during this local check, but nothing is shared. The check stops immediately; joining starts muted with camera off unless you change the options below.</span>
+
+          <div class="sr-room-card-grid" id="sr-room-card-grid" role="group" aria-label="Available Study Rooms">
+            <button class="sr-room-card is-selected" id="sr-room-card-library" type="button"
+              data-room-id="library" data-room-action="select" data-room-state="available" aria-pressed="true">
+              <img class="sr-room-card-cover" src="../assets/study-room/dimasalang-library.webp" alt="" aria-hidden="true">
+              <span class="sr-room-card-copy">
+                <strong>Library Room</strong>
+                <small><img src="../assets/icons/navigation/users.svg" width="15" height="15" alt="" aria-hidden="true"> 1 studying</small>
+              </span>
+            </button>
+            <button class="sr-room-card" id="sr-room-card-tropical" type="button"
+              data-room-id="tropical-house" data-room-action="select" data-room-state="available" aria-pressed="false">
+              <img class="sr-room-card-cover" src="../assets/study-room/participant-2-tropical.webp" alt="" aria-hidden="true">
+              <span class="sr-room-card-copy">
+                <strong>Tropical House</strong>
+                <small><img src="../assets/icons/navigation/users.svg" width="15" height="15" alt="" aria-hidden="true"> Ready</small>
+              </span>
+            </button>
+            <button class="sr-room-card" id="sr-room-card-bedroom" type="button"
+              data-room-id="quiet-bedroom" data-room-action="select" data-room-state="available" aria-pressed="false">
+              <img class="sr-room-card-cover" src="../assets/study-room/participant-3-bedroom.webp" alt="" aria-hidden="true">
+              <span class="sr-room-card-copy">
+                <strong>Quiet Bedroom</strong>
+                <small><img src="../assets/icons/navigation/users.svg" width="15" height="15" alt="" aria-hidden="true"> Ready</small>
+              </span>
+            </button>
+            <button class="sr-room-card sr-room-card-create" id="sr-create-room" type="button"
+              data-room-action="create" data-room-state="create" aria-describedby="sr-create-room-help">
+              <span class="sr-room-create-icon" aria-hidden="true">
+                <img src="../assets/icons/navigation/layout-grid.svg" width="24" height="24" alt="">
+              </span>
+              <span class="sr-room-card-copy">
+                <strong>Create a room</strong>
+                <small id="sr-create-room-help">One of four room slots remains</small>
+              </span>
+            </button>
           </div>
+        </section>
+
+        <div class="sr-prejoin-layout">
+          <div class="sr-preview-card">
+            <div class="sr-preview-frame" id="sr-preview-frame">
+              <video id="sr-local-preview" autoplay muted playsinline hidden></video>
+              <div class="sr-camera-placeholder" id="sr-camera-placeholder">
+                <span class="sr-avatar" id="sr-preview-avatar">P</span>
+                <strong>Camera is off</strong>
+                <span>Nothing is shared until you choose to join.</span>
+              </div>
+              <span class="sr-preview-name" id="sr-preview-name">Participant 1</span>
+            </div>
+            <div class="sr-prejoin-safety">
+              <strong>Your privacy comes first.</strong>
+              <span>Your browser may ask once for permission to identify available devices. Your camera indicator may turn on briefly during this local check, but nothing is shared. The check stops immediately; joining starts muted with camera off unless you change the options below.</span>
+            </div>
+          </div>
+
+          <aside class="sr-prejoin-panel">
+            <p class="sr-panel-eyebrow">Before you enter</p>
+            <h2 id="sr-prejoin-title">Set up your study desk</h2>
+
+            <label class="sr-field" for="sr-nickname">
+              <span>Screen name</span>
+              <input id="sr-nickname" name="nickname" type="text" value="Participant 1" minlength="2" maxlength="32"
+                autocomplete="nickname" spellcheck="false" aria-describedby="sr-nickname-help">
+            </label>
+            <p class="sr-field-help" id="sr-nickname-help">Use a nickname. Real names are not required.</p>
+
+            <div class="sr-device-selects" id="sr-device-selects">
+              <label class="sr-field" for="sr-camera-select">
+                <span>Camera</span>
+                <select id="sr-camera-select" disabled><option value="">Default camera</option></select>
+              </label>
+              <label class="sr-field" for="sr-microphone-select">
+                <span>Microphone</span>
+                <select id="sr-microphone-select" disabled><option value="">Default microphone</option></select>
+              </label>
+              <label class="sr-field" for="sr-speaker-select">
+                <span>Speaker</span>
+                <select id="sr-speaker-select" disabled><option value="">Default speaker</option></select>
+              </label>
+            </div>
+
+            <div class="sr-meter-row" aria-label="Microphone level">
+              <span>Microphone level</span>
+              <div class="sr-meter" id="sr-microphone-meter" aria-hidden="true">
+                <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+              </div>
+            </div>
+
+            <button class="sr-button sr-button-secondary sr-button-wide" id="sr-test-devices" type="button">
+              <img src="../assets/icons/community/camera.svg" width="18" height="18" alt="" aria-hidden="true">
+              <span>Test camera &amp; microphone</span>
+            </button>
+
+            <div class="sr-join-options" aria-label="Join options">
+              <button class="sr-option-toggle" id="sr-join-microphone" type="button" aria-pressed="false">
+                <span class="sr-option-icon"><img src="../assets/icons/navigation/mic.svg" width="19" height="19" alt="" aria-hidden="true"></span>
+                <span><strong>Microphone</strong><small>Off when you join</small></span>
+              </button>
+              <button class="sr-option-toggle" id="sr-join-camera" type="button" aria-pressed="false">
+                <span class="sr-option-icon"><img src="../assets/icons/community/camera.svg" width="19" height="19" alt="" aria-hidden="true"></span>
+                <span><strong>Camera</strong><small>Off when you join</small></span>
+              </button>
+            </div>
+
+            <button class="sr-button sr-button-primary sr-button-wide sr-join-button" id="sr-join" type="button">Join Study Room</button>
+            <p class="sr-status" id="sr-prejoin-status" role="status" aria-live="polite">Camera and microphone are off.</p>
+          </aside>
         </div>
-
-        <aside class="sr-prejoin-panel">
-          <p class="sr-panel-eyebrow">Before you enter</p>
-          <h2 id="sr-prejoin-title">Set up your study desk</h2>
-
-          <label class="sr-field" for="sr-nickname">
-            <span>Screen name</span>
-            <input id="sr-nickname" name="nickname" type="text" value="Participant 1" minlength="2" maxlength="32"
-              autocomplete="nickname" spellcheck="false" aria-describedby="sr-nickname-help">
-          </label>
-          <p class="sr-field-help" id="sr-nickname-help">Use a nickname. Real names are not required.</p>
-
-          <div class="sr-device-selects" id="sr-device-selects">
-            <label class="sr-field" for="sr-camera-select">
-              <span>Camera</span>
-              <select id="sr-camera-select" disabled><option value="">Default camera</option></select>
-            </label>
-            <label class="sr-field" for="sr-microphone-select">
-              <span>Microphone</span>
-              <select id="sr-microphone-select" disabled><option value="">Default microphone</option></select>
-            </label>
-            <label class="sr-field" for="sr-speaker-select">
-              <span>Speaker</span>
-              <select id="sr-speaker-select" disabled><option value="">Default speaker</option></select>
-            </label>
-          </div>
-
-          <div class="sr-meter-row" aria-label="Microphone level">
-            <span>Microphone level</span>
-            <div class="sr-meter" id="sr-microphone-meter" aria-hidden="true">
-              <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
-            </div>
-          </div>
-
-          <button class="sr-button sr-button-secondary sr-button-wide" id="sr-test-devices" type="button">
-            <img src="../assets/icons/community/camera.svg" width="18" height="18" alt="" aria-hidden="true">
-            <span>Test camera &amp; microphone</span>
-          </button>
-
-          <div class="sr-join-options" aria-label="Join options">
-            <button class="sr-option-toggle" id="sr-join-microphone" type="button" aria-pressed="false">
-              <span class="sr-option-icon"><img src="../assets/icons/navigation/headphones.svg" width="19" height="19" alt="" aria-hidden="true"></span>
-              <span><strong>Microphone</strong><small>Off when you join</small></span>
-            </button>
-            <button class="sr-option-toggle" id="sr-join-camera" type="button" aria-pressed="false">
-              <span class="sr-option-icon"><img src="../assets/icons/community/camera.svg" width="19" height="19" alt="" aria-hidden="true"></span>
-              <span><strong>Camera</strong><small>Off when you join</small></span>
-            </button>
-          </div>
-
-          <button class="sr-button sr-button-primary sr-button-wide sr-join-button" id="sr-join" type="button">Join Study Room</button>
-          <p class="sr-status" id="sr-prejoin-status" role="status" aria-live="polite">Camera and microphone are off.</p>
-        </aside>
       </section>
 
       <section class="sr-live-room" id="sr-live-room" hidden tabindex="-1" aria-label="Live Study Room">
         <div class="sr-live-layout">
           <section class="sr-stage-shell" aria-label="Live participants">
             <div class="sr-stage-header">
-              <div>
+              <div class="sr-stage-presence">
                 <span class="sr-live-indicator"><i></i> Live</span>
                 <strong id="sr-room-count">1 studying</strong>
               </div>
+              <button class="sr-room-selector-chip" id="sr-room-selector" type="button"
+                data-room-action="open-selector" aria-haspopup="listbox" aria-expanded="false"
+                aria-controls="sr-room-selector-menu">
+                <img src="../assets/icons/navigation/layout-grid.svg" width="18" height="18" alt="" aria-hidden="true">
+                <span><small>Room</small><strong id="sr-active-room-name">Library Room</strong></span>
+              </button>
               <div class="sr-focus-clock" aria-label="Shared focus clock">
                 <span>Shared focus</span>
                 <strong id="sr-focus-clock">00:00:00</strong>
               </div>
+            </div>
+            <div class="sr-room-selector-menu" id="sr-room-selector-menu" role="listbox"
+              aria-label="Move to another Study Room" hidden>
+              <button type="button" role="option" aria-selected="true" data-room-id="library">Library Room</button>
+              <button type="button" role="option" aria-selected="false" data-room-id="tropical-house">Tropical House</button>
+              <button type="button" role="option" aria-selected="false" data-room-id="quiet-bedroom">Quiet Bedroom</button>
             </div>
             <div class="sr-participant-grid" id="sr-participant-grid"></div>
             <div class="sr-audio-bin" id="sr-audio-bin" aria-hidden="true"></div>
@@ -179,12 +240,22 @@
               <p class="sr-live-media-status" id="sr-live-media-status" role="status" aria-live="polite">
                 Your microphone is muted. Press Unmute when you want others to hear you.
               </p>
-              <button class="sr-text-button" id="sr-open-devices" type="button">Choose devices</button>
+              <div class="sr-backdrop-enforcement" id="sr-branded-backdrop-status"
+                data-backdrop-enforcement="required" data-backdrop-state="preparing" role="status" aria-live="polite">
+                <span class="sr-backdrop-enforcement-icon" aria-hidden="true">
+                  <img src="../assets/icons/community/camera.svg" width="20" height="20" alt="">
+                </span>
+                <span>
+                  <strong>Branded backdrop enforced</strong>
+                  <small id="sr-branded-backdrop-copy">Camera stays off until the secure Due Diligence backdrop is ready.</small>
+                </span>
+              </div>
+              <button class="sr-text-button" id="sr-open-devices" type="button"
+                aria-controls="sr-device-drawer">Choose devices</button>
               <div class="sr-device-drawer" id="sr-device-drawer" hidden>
                 <label class="sr-field" for="sr-live-camera-select"><span>Camera</span><select id="sr-live-camera-select"></select></label>
                 <label class="sr-field" for="sr-live-microphone-select"><span>Microphone</span><select id="sr-live-microphone-select"></select></label>
                 <label class="sr-field" for="sr-live-speaker-select"><span>Speaker</span><select id="sr-live-speaker-select"></select></label>
-                <p class="sr-coming-soon"><strong>Virtual backgrounds</strong><span>Coming after the quality test so calls stay fast and reliable.</span></p>
               </div>
             </div>
 
@@ -199,19 +270,21 @@
         </div>
 
         <div class="sr-control-dock" aria-label="Call controls">
-          <button class="is-primary-control" id="sr-toggle-microphone" type="button" aria-pressed="false" aria-label="Unmute your microphone">
-            <img src="../assets/icons/navigation/headphones.svg" width="22" height="22" alt="" aria-hidden="true">
+          <button class="is-primary-control" id="sr-toggle-microphone" type="button" data-call-control="microphone"
+            aria-pressed="false" aria-label="Unmute your microphone">
+            <img src="../assets/icons/navigation/mic.svg" width="22" height="22" alt="" aria-hidden="true">
             <span>Unmute</span>
           </button>
-          <button id="sr-toggle-camera" type="button" aria-pressed="false" aria-label="Start your camera">
+          <button id="sr-toggle-camera" type="button" data-call-control="camera" aria-pressed="false" aria-label="Start your camera">
             <img src="../assets/icons/community/camera.svg" width="22" height="22" alt="" aria-hidden="true">
             <span>Start video</span>
           </button>
-          <button id="sr-dock-devices" type="button">
+          <button id="sr-dock-devices" type="button" data-call-control="devices"
+            aria-controls="sr-device-drawer">
             <img src="../assets/icons/navigation/headphones.svg" width="22" height="22" alt="" aria-hidden="true">
             <span>Device settings</span>
           </button>
-          <button class="is-leave" id="sr-leave" type="button">
+          <button class="is-leave" id="sr-leave" type="button" data-call-control="leave">
             <img src="../assets/icons/navigation/door-open.svg" width="22" height="22" alt="" aria-hidden="true">
             <span>Leave room</span>
           </button>
@@ -229,6 +302,8 @@
   <script src="../assets/phase2-config.js?v=provider-neutral-release2-20260827-1"></script>
   <script src="../assets/auth-session-storage.js?v=auth-persistence-20260812-1"></script>
   <script src="../assets/vendor/livekit-client.umd.js?v=2.22.1"></script>
-  <script src="../assets/study-room-live.js?v=study-room-audio-controls-20260829-1"></script>
+  <script src="../assets/vendor/livekit-track-processors.iife.js?v=0.7.2"></script>
+  <script src="../assets/study-room-backgrounds.js?v=study-room-mandatory-background-20260829-1"></script>
+  <script src="../assets/study-room-live.js?v=study-room-four-rooms-20260829-1"></script>
 </body>
 </html>

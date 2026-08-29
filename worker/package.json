@@ -9,6 +9,7 @@
     "build:font": "node ../scripts/build-worker-font-module.mjs"
   },
   "dependencies": {
+    "@livekit/track-processors": "0.7.2",
     "@pdf-lib/fontkit": "^1.1.1",
     "livekit-client": "2.22.1",
     "livekit-server-sdk": "2.18.0",
@@ -16,6 +17,7 @@
   },
   "devDependencies": {
     "@fontsource/noto-sans": "^5.2.8",
-    "@livekit/rtc-node": "0.13.34"
+    "@livekit/rtc-node": "0.13.34",
+    "esbuild": "0.28.2"
   }
 }

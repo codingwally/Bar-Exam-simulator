@@ -29,13 +29,22 @@ const allowlistSource = workflow.match(/allowed='([^']+)'/u)?.[1];
 assert.ok(allowlistSource, "The Study Room release allowlist must be present.");
 const releaseAllowlist = new RegExp(allowlistSource, "u");
 for (const expectedReleaseFile of [
+  ".github/workflows/deploy-pages-only.yml",
   ".github/workflows/release-study-room-admin-beta.yml",
+  "assets/icons/navigation/mic.svg",
+  "assets/study-room-backgrounds.js",
   "assets/study-room-live.css",
   "assets/study-room-live.js",
+  "assets/study-room-preview.css",
   "assets/study-room-preview.js",
+  "assets/study-room/virtual-background-due-diligence-branded.webp",
+  "assets/vendor/mediapipe/LICENSE.txt",
+  "assets/vendor/mediapipe/PROVENANCE.txt",
+  "assets/vendor/mediapipe/selfie_segmenter-float16-2023-05-07.tflite",
   "index.html",
   "scripts/build-pages-artifact.mjs",
   "scripts/test-pages-artifact.mjs",
+  "scripts/test-study-room-backgrounds.mjs",
   "scripts/test-study-room-deployment-smoke.mjs",
   "scripts/test-study-room-hotfix-behavior.mjs",
   "scripts/test-study-room-live.mjs",
@@ -60,9 +69,16 @@ for (const expectedReleaseFile of [
     `${expectedReleaseFile} must pass the workflow's Study Room-only allowlist.`,
   );
 }
+assert.doesNotMatch(
+  "assets/study-room/virtual-background-due-diligence-office.webp",
+  releaseAllowlist,
+  "The unused alternate background must stay outside the isolated release.",
+);
 assert.match(workflow, /node --test worker\/\*\.test\.mjs/u);
 assert.match(workflow, /node scripts\/test-pages-artifact\.mjs/u);
+assert.match(workflow, /node scripts\/test-study-room-backgrounds\.mjs/u);
 assert.match(workflow, /node scripts\/test-study-room-hotfix-behavior\.mjs/u);
+assert.match(workflow, /node --check assets\/study-room-backgrounds\.js/u);
 assert.match(
   workflow,
   /node worker\/study-room-staging-positive-smoke\.mjs --preflight/u,
@@ -75,6 +91,48 @@ assert.match(workflow, /npm audit --prefix worker --audit-level=high/u);
 assert.match(
   workflow,
   /npm audit --prefix worker --omit=dev --audit-level=high/u,
+);
+
+const pagesOnlyAllowlistSource = pagesOnlyWorkflow.match(/allowed='([^']+)'/u)?.[1];
+assert.ok(
+  pagesOnlyAllowlistSource,
+  "The Pages-only release allowlist must be present.",
+);
+const pagesOnlyAllowlist = new RegExp(pagesOnlyAllowlistSource, "u");
+for (const expectedPagesFile of [
+  ".github/workflows/deploy-pages-only.yml",
+  "assets/icons/navigation/mic.svg",
+  "assets/study-room-backgrounds.js",
+  "assets/study-room-live.css",
+  "assets/study-room-live.js",
+  "assets/study-room/virtual-background-due-diligence-branded.webp",
+  "assets/vendor/mediapipe/LICENSE.txt",
+  "assets/vendor/mediapipe/PROVENANCE.txt",
+  "assets/vendor/mediapipe/selfie_segmenter-float16-2023-05-07.tflite",
+  "scripts/build-pages-artifact.mjs",
+  "scripts/test-pages-artifact.mjs",
+  "scripts/test-study-room-backgrounds.mjs",
+  "scripts/test-study-room-live.mjs",
+  "study-room/index.html",
+]) {
+  assert.match(
+    expectedPagesFile,
+    pagesOnlyAllowlist,
+    `${expectedPagesFile} must pass the Pages-only allowlist.`,
+  );
+}
+assert.doesNotMatch(
+  "assets/study-room/virtual-background-due-diligence-office.webp",
+  pagesOnlyAllowlist,
+  "The unused alternate background must stay outside Pages-only releases.",
+);
+assert.match(
+  pagesOnlyWorkflow,
+  /npm ci --prefix worker --ignore-scripts --no-audit --no-fund/u,
+);
+assert.match(
+  pagesOnlyWorkflow,
+  /node scripts\/test-study-room-backgrounds\.mjs/u,
 );
 
 const stagingJob = workflow.indexOf("deploy_staging:");
@@ -106,6 +164,22 @@ assert.ok(
     stagingMarker < workerJob,
   "The exact-SHA marker must be recorded only after every staging smoke check.",
 );
+const stagingAssetChecks = workflow.slice(stagingSmoke, stagingPositiveSmoke);
+for (const requiredStagingMarker of [
+  "study-room-four-rooms-20260829-1",
+  "/admin/study-room/rooms",
+  "DueDiligenceStudyRoomMandatoryBackground",
+  "due-diligence-mandatory-virtual-background-no-raw-first-frame",
+  "assets/icons/navigation/mic.svg",
+  "assets/study-room/virtual-background-due-diligence-branded.webp",
+  "assets/vendor/mediapipe/selfie_segmenter-float16-2023-05-07.tflite",
+  "assets/vendor/mediapipe/wasm/vision_wasm_internal.wasm",
+]) {
+  assert.ok(
+    stagingAssetChecks.includes(requiredStagingMarker),
+    `Staging must verify ${requiredStagingMarker} before recording success.`,
+  );
+}
 assert.match(
   workflow.slice(stagingPublishableResolver, stagingPositiveSmoke),
   /STAGING_SUPABASE_PUBLISHABLE_KEY=\$staging_publishable_key["']? >> "\$GITHUB_ENV"/u,
@@ -241,7 +315,38 @@ assert.match(
 );
 assert.match(
   workflow.slice(pagesVerificationJob),
-  /study-room-audio-controls-20260829-1/u,
+  /study-room-four-rooms-20260829-1/u,
+);
+assert.match(
+  workflow.slice(pagesVerificationJob),
+  /study-room-mandatory-background-20260829-1/u,
+);
+for (const requiredProductionAsset of [
+  "/admin/study-room/rooms",
+  "assets/icons/navigation/mic.svg",
+  "assets/study-room/virtual-background-due-diligence-branded.webp",
+  "assets/vendor/livekit-track-processors.iife.js",
+  "assets/vendor/mediapipe/selfie_segmenter-float16-2023-05-07.tflite",
+  "assets/vendor/mediapipe/wasm/vision_wasm_internal.js",
+  "assets/vendor/mediapipe/wasm/vision_wasm_internal.wasm",
+  "assets/vendor/mediapipe/wasm/vision_wasm_nosimd_internal.js",
+  "assets/vendor/mediapipe/wasm/vision_wasm_nosimd_internal.wasm",
+  "DueDiligenceStudyRoomMandatoryBackground",
+  "due-diligence-mandatory-virtual-background-no-raw-first-frame",
+]) {
+  assert.ok(
+    workflow.slice(pagesVerificationJob).includes(requiredProductionAsset),
+    `Production Pages verification must check ${requiredProductionAsset}.`,
+  );
+  assert.ok(
+    pagesOnlyWorkflow.includes(requiredProductionAsset),
+    `Pages-only production verification must check ${requiredProductionAsset}.`,
+  );
+}
+assert.match(pagesOnlyWorkflow, /study-room-four-rooms-20260829-1/u);
+assert.match(
+  pagesOnlyWorkflow,
+  /study-room-mandatory-background-20260829-1/u,
 );
 assert.match(
   workflow.slice(pagesVerificationJob),

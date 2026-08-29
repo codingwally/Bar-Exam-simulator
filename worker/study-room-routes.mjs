@@ -1,6 +1,8 @@
 import {
   StudyRoomError,
+  createStudyRoom,
   createStudyRoomJoinCredential,
+  listStudyRooms,
   muteStudyRoomParticipant,
   removeStudyRoomParticipant,
   renameStudyRoomParticipant,
@@ -8,6 +10,7 @@ import {
 } from './study-room-core.mjs';
 
 const STUDY_ROOM_ADMIN_ROLES = new Set(['admin', 'founder_admin', 'super_admin']);
+const STUDY_ROOM_PRIVILEGED_MODERATOR_ROLES = new Set(['founder_admin', 'super_admin']);
 
 function normalizedAdministratorRole(value) {
   return String(value || '').trim().toLowerCase();
@@ -26,6 +29,23 @@ function requireAuthorizedAdmin(authorization) {
   return { ...authorization, role };
 }
 
+function requirePrivilegedModerator(authorization) {
+  if (!STUDY_ROOM_PRIVILEGED_MODERATOR_ROLES.has(authorization?.role)) {
+    throw new StudyRoomError(
+      'STUDY_ROOM_MODERATION_FORBIDDEN',
+      'Only a Founder or Super Admin can apply room-wide moderation.',
+      403,
+      'Use the local participant controls to mute or block someone only for yourself.',
+    );
+  }
+}
+
+function requestedRoomKey(body) {
+  return body && Object.prototype.hasOwnProperty.call(body, 'roomKey')
+    ? body.roomKey
+    : '1';
+}
+
 export function createStudyRoomHandlers(dependencies) {
   const {
     authenticate,
@@ -34,6 +54,8 @@ export function createStudyRoomHandlers(dependencies) {
     rateLimit,
     respond,
     describeRoom = studyRoomDescriptor,
+    listRooms = listStudyRooms,
+    createRoom = createStudyRoom,
     issueCredential = createStudyRoomJoinCredential,
     muteParticipant = muteStudyRoomParticipant,
     removeParticipant = removeStudyRoomParticipant,
@@ -64,19 +86,55 @@ export function createStudyRoomHandlers(dependencies) {
         allowed: true,
         role: authorization.role,
         roomName: room.roomName,
+        maxRooms: room.maxRooms,
         maxParticipants: room.maxParticipants,
-        recording: false,
+        recording: room.recording,
       }, 200, origin, allowedOrigin);
+    },
+
+    async rooms(request, env, origin, allowedOrigin) {
+      const { authorization } = await authorizedContext(request, env, 'rooms');
+      const body = await parseJson(request, 4_096);
+      const operation = String(body?.operation || 'list').trim().toLowerCase();
+      if (operation === 'list') {
+        const catalog = await listRooms(env);
+        return respond({
+          ok: true,
+          allowed: true,
+          role: authorization.role,
+          ...catalog,
+        }, 200, origin, allowedOrigin);
+      }
+      if (operation === 'create') {
+        const result = await createRoom(env, body?.roomKey);
+        return respond({
+          ok: true,
+          created: result.created,
+          room: result.room,
+        }, result.created ? 201 : 200, origin, allowedOrigin);
+      }
+      throw new StudyRoomError(
+        'STUDY_ROOM_OPERATION_UNSUPPORTED',
+        'That Study Room operation is not available.',
+        400,
+      );
     },
 
     async join(request, env, origin, allowedOrigin) {
       const { user } = await authorizedContext(request, env, 'join');
       const body = await parseJson(request, 4_096);
-      const credential = await issueCredential(env, user, body?.nickname);
+      const credential = await issueCredential(
+        env,
+        user,
+        requestedRoomKey(body),
+        body?.nickname,
+      );
       return respond({
         ok: true,
         server_url: credential.serverUrl,
         participant_token: credential.participantToken,
+        room_key: credential.roomKey,
+        room_label: credential.roomLabel,
         room_name: credential.roomName,
         participant_identity: credential.participantIdentity,
         participant_name: credential.participantName,
@@ -87,16 +145,25 @@ export function createStudyRoomHandlers(dependencies) {
     },
 
     async moderate(request, env, origin, allowedOrigin) {
-      const { user } = await authorizedContext(request, env, 'moderate');
+      const { user, authorization } = await authorizedContext(request, env, 'moderate');
       const body = await parseJson(request, 6_144);
       const operation = String(body?.operation || '').trim().toLowerCase();
+      const roomKey = requestedRoomKey(body);
       let result;
       if (operation === 'mute') {
-        result = await muteParticipant(env, body?.participantIdentity, body?.trackSid);
+        requirePrivilegedModerator(authorization);
+        result = await muteParticipant(env, roomKey, body?.participantIdentity, body?.trackSid);
       } else if (operation === 'rename') {
-        result = await renameParticipant(env, user.id, body?.participantIdentity, body?.nickname);
+        result = await renameParticipant(
+          env,
+          user.id,
+          roomKey,
+          body?.participantIdentity,
+          body?.nickname,
+        );
       } else if (operation === 'remove') {
-        result = await removeParticipant(env, body?.participantIdentity);
+        requirePrivilegedModerator(authorization);
+        result = await removeParticipant(env, roomKey, body?.participantIdentity);
       } else {
         throw new StudyRoomError(
           'STUDY_ROOM_OPERATION_UNSUPPORTED',

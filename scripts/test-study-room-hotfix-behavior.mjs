@@ -359,6 +359,147 @@ function response({ ok, status, payload }) {
   };
 }
 
+function roomCatalogResponse() {
+  return response({
+    ok: true,
+    status: 200,
+    payload: {
+      ok: true,
+      rooms: [
+        { roomKey: '1', active: true, participantCount: 1, capacity: 12, focusStartedAt: '2026-08-29T00:00:00.000Z' },
+        { roomKey: '2', active: true, participantCount: 2, capacity: 12, focusStartedAt: '2026-08-29T00:15:00.000Z' },
+        { roomKey: '3', active: true, participantCount: 0, capacity: 12, focusStartedAt: '2026-08-29T00:30:00.000Z' },
+        { roomKey: '4', active: false, participantCount: 0, capacity: 12, focusStartedAt: null },
+      ],
+    },
+  });
+}
+
+function createFakeMandatoryBackground(liveKit, calls) {
+  const cameraSource = liveKit.Track?.Source?.Camera || 'camera';
+  return Object.freeze({
+    VERSION: 'study-room-mandatory-background-test-double-1',
+    createController(options = {}) {
+      calls.push({ operation: 'createController' });
+      let status = 'disabled';
+      let publication = null;
+      let processedTrack = null;
+
+      const notify = (nextStatus, error = '') => {
+        status = nextStatus;
+        options.onStateChange?.({
+          status,
+          supported: true,
+          modern: true,
+          enabled: status === 'enabled',
+          error,
+        });
+      };
+      const selectedId = (captureOptions = {}) => {
+        const value = captureOptions?.deviceId;
+        return String((value && typeof value === 'object' ? value.exact : value) || 'default-camera');
+      };
+      const createProcessedTrack = (deviceId) => {
+        let activeDeviceId = deviceId;
+        const processor = Object.freeze({
+          mode: 'virtual-background',
+          imagePath: '/assets/study-room/virtual-background-due-diligence-branded.webp',
+        });
+        const track = {
+          isMuted: false,
+          mediaStreamTrack: {
+            kind: 'video',
+            readyState: 'live',
+            enabled: true,
+            muted: false,
+            getSettings: () => ({ deviceId: activeDeviceId }),
+          },
+          getProcessor: () => processor,
+          attach: () => new FakeHTMLElement('protected-camera-video', 'video'),
+          detach(element) {
+            element?.remove?.();
+          },
+          setDeviceId(deviceIdValue) {
+            activeDeviceId = deviceIdValue;
+          },
+        };
+        return track;
+      };
+      const ensurePublication = (captureOptions) => {
+        const participant = options.getLocalParticipant?.();
+        assert.ok(participant, 'The mandatory background may publish only after a local participant exists.');
+        if (!publication) {
+          processedTrack = createProcessedTrack(selectedId(captureOptions));
+          publication = {
+            source: cameraSource,
+            isMuted: false,
+            track: processedTrack,
+            async mute() {
+              this.isMuted = true;
+              this.track.isMuted = true;
+            },
+            async unmute() {
+              this.isMuted = false;
+              this.track.isMuted = false;
+              this.track.mediaStreamTrack.readyState = 'live';
+              this.track.mediaStreamTrack.enabled = true;
+            },
+          };
+          participant.trackPublications?.set?.(cameraSource, publication);
+        } else {
+          processedTrack.setDeviceId(selectedId(captureOptions));
+          publication.isMuted = false;
+          processedTrack.isMuted = false;
+          processedTrack.mediaStreamTrack.readyState = 'live';
+          processedTrack.mediaStreamTrack.enabled = true;
+        }
+        return publication;
+      };
+
+      return Object.freeze({
+        capabilities() {
+          calls.push({ operation: 'capabilities' });
+          return Object.freeze({ supported: true, modern: true });
+        },
+        snapshot() {
+          return Object.freeze({ status, supported: true, modern: true, enabled: status === 'enabled', error: '' });
+        },
+        async enableCamera(captureOptions = {}, publishOptions = {}) {
+          calls.push({ operation: 'enableCamera', captureOptions, publishOptions });
+          notify('preparing');
+          const activePublication = ensurePublication(captureOptions);
+          notify('enabled');
+          return Object.freeze({ enabled: true, publication: activePublication });
+        },
+        async disableCamera() {
+          calls.push({ operation: 'disableCamera' });
+          if (publication) await publication.mute();
+          notify('disabled');
+          return Object.freeze({ enabled: false, reason: 'user-disabled' });
+        },
+        async switchCamera(captureOptions = {}) {
+          calls.push({ operation: 'switchCamera', captureOptions });
+          notify('preparing');
+          const activePublication = ensurePublication(captureOptions);
+          notify('enabled');
+          return Object.freeze({ enabled: true, publication: activePublication });
+        },
+        async destroy() {
+          calls.push({ operation: 'destroy' });
+          if (publication) await publication.mute();
+          const participant = options.getLocalParticipant?.();
+          if (participant?.trackPublications?.get?.(cameraSource) === publication) {
+            participant.trackPublications.delete(cameraSource);
+          }
+          publication = null;
+          processedTrack = null;
+          notify('destroyed');
+        },
+      });
+    },
+  });
+}
+
 function createLiveHarness({
   fetch,
   enumerateDevices,
@@ -371,6 +512,20 @@ function createLiveHarness({
   const storage = new Map();
   const windowListeners = new Map();
   const deviceChangeHandlers = [];
+  const backgroundCalls = [];
+  const routedFetch = (url, options) => {
+    const requestPath = String(url || '');
+    let body = {};
+    try {
+      body = JSON.parse(String(options?.body || '{}'));
+    } catch {
+      body = {};
+    }
+    if (requestPath.includes('/admin/study-room/rooms') && body.operation === 'list') {
+      return Promise.resolve(roomCatalogResponse());
+    }
+    return fetch(url, options);
+  };
   const window = {
     document,
     location: {
@@ -412,7 +567,7 @@ function createLiveHarness({
         },
       }),
     },
-    fetch,
+    fetch: routedFetch,
     crypto: {
       getRandomValues(array) {
         array.fill(7);
@@ -425,6 +580,7 @@ function createLiveHarness({
     },
     sessionStorage: null,
     LivekitClient: liveKit,
+    DueDiligenceStudyRoomMandatoryBackground: createFakeMandatoryBackground(liveKit, backgroundCalls),
     AudioContext,
     MediaStream,
     addEventListener(type, handler) {
@@ -466,6 +622,7 @@ function createLiveHarness({
     window,
     document,
     deviceChangeHandlers,
+    backgroundCalls,
     hooks: window.__DueDiligenceStudyRoomTestHooks,
   };
 }
@@ -538,6 +695,14 @@ async function eventually(check, message) {
   assert.equal(harness.document.getElementById('sr-live-microphone-select').children[0].label, 'Laptop Array Microphone');
   assert.equal(harness.document.getElementById('sr-join-camera').getAttribute('aria-pressed'), 'false');
   assert.equal(harness.document.getElementById('sr-join-microphone').getAttribute('aria-pressed'), 'false');
+  assert.equal(harness.hooks.state.rooms.length, 4, 'The prejoin lobby must normalize exactly four room slots.');
+  assert.equal(harness.hooks.state.selectedRoomKey, '1', 'The first open room should be selected by default.');
+  const roomCards = harness.document.getElementById('sr-room-card-grid').children;
+  assert.equal(roomCards.length, 4);
+  assert.equal(harness.document.getElementById('sr-room-lobby-count').textContent, '3 of 4 rooms open');
+  assert.equal(roomCards.find(({ id }) => id === 'sr-create-room')?.dataset.roomKey, '4');
+  assert.equal(harness.document.getElementById('sr-branded-backdrop-status').dataset.backdropState, 'disabled');
+  assert.match(harness.document.getElementById('sr-branded-backdrop-copy').textContent, /real background is never shared/iu);
 }
 
 {
@@ -550,7 +715,11 @@ async function eventually(check, message) {
     }),
     enumerateDevices: async () => [
       { kind: 'videoinput', deviceId: 'camera-1', label: '' },
+      { kind: 'videoinput', deviceId: 'camera-2', label: '' },
       { kind: 'audioinput', deviceId: 'microphone-1', label: '' },
+      { kind: 'audioinput', deviceId: 'microphone-2', label: '' },
+      { kind: 'audiooutput', deviceId: 'default', label: 'Speaker 1' },
+      { kind: 'audiooutput', deviceId: 'speaker-usb', label: 'USB Study Headphones' },
     ],
     getUserMedia: async () => {
       permissionCalls += 1;
@@ -568,6 +737,49 @@ async function eventually(check, message) {
   assert.equal(harness.document.getElementById('sr-join-camera').getAttribute('aria-pressed'), 'false');
   assert.equal(harness.document.getElementById('sr-join-microphone').getAttribute('aria-pressed'), 'false');
   assert.equal(harness.document.getElementById('sr-prejoin').hidden, false);
+  assert.deepEqual(
+    harness.document.getElementById('sr-camera-select').children.map(({ label }) => label),
+    ['System default camera', 'Alternate camera 2'],
+  );
+  assert.deepEqual(
+    harness.document.getElementById('sr-microphone-select').children.map(({ label }) => label),
+    ['System default microphone', 'Alternate microphone 2'],
+  );
+  assert.deepEqual(
+    harness.document.getElementById('sr-speaker-select').children.map(({ label }) => label),
+    ['System default speaker', 'USB Study Headphones'],
+    'Meaningful browser/OS labels must remain unchanged.',
+  );
+  assert.equal(harness.document.getElementById('sr-live-camera-select').children[0].label, 'System default camera');
+  assert.equal(harness.document.getElementById('sr-live-microphone-select').children[0].label, 'System default microphone');
+}
+
+{
+  let permissionCalls = 0;
+  const harness = createLiveHarness({
+    fetch: async () => response({
+      ok: true,
+      status: 200,
+      payload: { ok: true, allowed: true, role: 'admin', maxParticipants: 12 },
+    }),
+    enumerateDevices: async () => [
+      { kind: 'videoinput', deviceId: 'camera-1', label: 'Camera 1' },
+      { kind: 'audioinput', deviceId: 'microphone-1', label: 'Microphone 1' },
+      { kind: 'audiooutput', deviceId: 'speaker-1', label: 'Speaker 1' },
+    ],
+    getUserMedia: async () => {
+      permissionCalls += 1;
+      return { getTracks: () => [] };
+    },
+  });
+  await eventually(
+    () => harness.document.getElementById('sr-prejoin-status').textContent.includes('available devices were detected'),
+    'Generic browser labels did not finish device discovery.',
+  );
+  assert.equal(permissionCalls, 0, 'Already-present browser labels must not trigger a second permission request.');
+  assert.equal(harness.document.getElementById('sr-camera-select').children[0].label, 'System default camera');
+  assert.equal(harness.document.getElementById('sr-microphone-select').children[0].label, 'System default microphone');
+  assert.equal(harness.document.getElementById('sr-speaker-select').children[0].label, 'System default speaker');
 }
 
 {
@@ -634,6 +846,10 @@ function descendantWithText(node, text) {
   return descendants(node).find((child) => child.textContent === text);
 }
 
+function descendantWithTitle(node, title) {
+  return descendants(node).find((child) => child.title === title);
+}
+
 function selectedDeviceId(options) {
   const value = options?.deviceId;
   return value && typeof value === 'object' ? value.exact : value;
@@ -652,7 +868,7 @@ function fakeLocalTrack(kind, deviceId) {
 
 {
   const microphoneCalls = [];
-  const cameraCalls = [];
+  const rawCameraCalls = [];
   const publications = new Map();
   const localParticipant = {
     identity: 'local-admin',
@@ -673,16 +889,7 @@ function fakeLocalTrack(kind, deviceId) {
       publications.set(liveKitSources.Microphone, publication);
     },
     async setCameraEnabled(enabled, options) {
-      cameraCalls.push({ enabled, options });
-      const publication = publications.get(liveKitSources.Camera) || {
-        source: liveKitSources.Camera,
-        isMuted: true,
-        track: fakeLocalTrack('video', 'camera-selected'),
-      };
-      publication.isMuted = !enabled;
-      publication.track.mediaStreamTrack.readyState = enabled ? 'live' : 'ended';
-      publication.track.mediaStreamTrack.enabled = enabled;
-      publications.set(liveKitSources.Camera, publication);
+      rawCameraCalls.push({ enabled, options });
     },
   };
   const harness = createLiveHarness({
@@ -724,12 +931,27 @@ function fakeLocalTrack(kind, deviceId) {
 
   const cameraButton = harness.document.getElementById('sr-toggle-camera');
   await cameraButton.emit('click');
-  assert.equal(cameraCalls.length, 1);
-  assert.equal(cameraCalls[0].enabled, true);
-  assert.equal(cameraCalls[0].options.deviceId.exact, 'camera-selected');
-  assert.equal(selectedDeviceId(cameraCalls[0].options), 'camera-selected');
+  const cameraEnableCalls = harness.backgroundCalls.filter(({ operation }) => operation === 'enableCamera');
+  assert.equal(cameraEnableCalls.length, 1, 'Camera start must use the mandatory-background controller.');
+  assert.equal(cameraEnableCalls[0].captureOptions.deviceId.exact, 'camera-selected');
+  assert.equal(cameraEnableCalls[0].publishOptions.source, liveKitSources.Camera);
+  assert.equal(rawCameraCalls.length, 0, 'The raw LiveKit camera shortcut must never bypass background processing.');
+  assert.equal(publications.get(liveKitSources.Camera).track.getProcessor().mode, 'virtual-background');
   assert.equal(cameraButton.getAttribute('aria-pressed'), 'true');
   assert.equal(harness.document.getElementById('sr-camera-state').textContent, 'On');
+  assert.equal(harness.document.getElementById('sr-branded-backdrop-status').dataset.backdropState, 'enabled');
+  assert.match(harness.document.getElementById('sr-branded-backdrop-copy').textContent, /backdrop is active/iu);
+
+  await cameraButton.emit('click');
+  assert.equal(
+    harness.backgroundCalls.filter(({ operation }) => operation === 'disableCamera').length,
+    1,
+    'Stopping video must remain inside the mandatory-background controller.',
+  );
+  assert.equal(rawCameraCalls.length, 0);
+  assert.equal(cameraButton.getAttribute('aria-pressed'), 'false');
+  assert.equal(harness.document.getElementById('sr-camera-state').textContent, 'Off');
+  assert.equal(harness.document.getElementById('sr-branded-backdrop-status').dataset.backdropState, 'disabled');
 }
 
 {
@@ -1237,7 +1459,7 @@ class FakeMediaStream {
   assert.equal(volumeCalls.at(-1), 0.42);
   assert.equal(harness.hooks.state.participantVolumes.get(remoteParticipant.identity), 42);
 
-  await descendantWithText(row, 'Mute for me').emit('click');
+  await descendantWithTitle(row, 'Mute for me').emit('click');
   assert.equal(volumeCalls.at(-1), 0);
   assert.equal(harness.hooks.state.localMutedParticipants.has(remoteParticipant.identity), true);
   assert.equal(remoteAudioTrack.attachedElements.length, 0, 'Mute for me must detach that participant’s audio.');
@@ -1245,18 +1467,18 @@ class FakeMediaStream {
   harness.hooks.renderParticipants();
   assert.equal(audioAttachCount, attachCountWhileMuted, 'A participant rerender must not reattach locally muted audio.');
   row = harness.hooks.createPersonRow(remoteParticipant);
-  await descendantWithText(row, 'Hear again').emit('click');
+  await descendantWithTitle(row, 'Hear again').emit('click');
   assert.equal(volumeCalls.at(-1), 0.42, 'Hear again must restore the participant’s prior local volume.');
   assert.equal(harness.hooks.state.localMutedParticipants.has(remoteParticipant.identity), false);
   assert.equal(remoteAudioTrack.attachedElements.length, 1);
   assert.equal(remoteAudioTrack.attachedElements[0].volume, 0.42);
 
   row = harness.hooks.createPersonRow(remoteParticipant);
-  await descendantWithText(row, 'Block locally').emit('click');
+  await descendantWithTitle(row, 'Block locally').emit('click');
   assert.equal(subscriptionCalls.at(-1), false);
   assert.equal(harness.hooks.state.blockedParticipants.has(remoteParticipant.identity), true);
   row = harness.hooks.createPersonRow(remoteParticipant);
-  await descendantWithText(row, 'Unblock').emit('click');
+  await descendantWithTitle(row, 'Unblock').emit('click');
   assert.equal(subscriptionCalls.at(-1), true);
   assert.equal(harness.hooks.state.blockedParticipants.has(remoteParticipant.identity), false);
 

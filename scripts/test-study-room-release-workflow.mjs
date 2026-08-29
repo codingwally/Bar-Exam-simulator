@@ -167,7 +167,7 @@ assert.ok(
 );
 const stagingAssetChecks = workflow.slice(stagingSmoke, stagingPositiveSmoke);
 for (const requiredStagingMarker of [
-  "study-room-four-rooms-20260829-1",
+  "study-room-media-hotfix-20260829-1",
   "/admin/study-room/rooms",
   "DueDiligenceStudyRoomMandatoryBackground",
   "due-diligence-mandatory-virtual-background-no-raw-first-frame",
@@ -321,7 +321,7 @@ assert.match(
 );
 assert.match(
   workflow.slice(pagesVerificationJob),
-  /study-room-four-rooms-20260829-1/u,
+  /study-room-media-hotfix-20260829-1/u,
 );
 assert.match(
   workflow.slice(pagesVerificationJob),
@@ -349,7 +349,7 @@ for (const requiredProductionAsset of [
     `Pages-only production verification must check ${requiredProductionAsset}.`,
   );
 }
-assert.match(pagesOnlyWorkflow, /study-room-four-rooms-20260829-1/u);
+assert.match(pagesOnlyWorkflow, /study-room-media-hotfix-20260829-1/u);
 assert.match(
   pagesOnlyWorkflow,
   /study-room-mandatory-background-20260829-1/u,

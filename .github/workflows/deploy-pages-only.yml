@@ -172,7 +172,7 @@ jobs:
               && grep -q 'openMarketingPreview' <<<"$study_room_js" \
               && grep -q '\.dd-study-room-overlay' <<<"$study_room_css" \
               && grep -q 'dd-study-room-radiance' <<<"$study_room_css" \
-              && grep -q 'study-room-four-rooms-20260829-1' <<<"$study_room_page" \
+              && grep -q 'study-room-media-hotfix-20260829-1' <<<"$study_room_page" \
               && grep -q 'study-room-mandatory-background-20260829-1' <<<"$study_room_page" \
               && grep -q '/admin/study-room/rooms' <<<"$study_room_live" \
               && grep -q 'DueDiligenceStudyRoomMandatoryBackground' <<<"$study_room_backgrounds" \

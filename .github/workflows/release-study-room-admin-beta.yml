@@ -239,7 +239,7 @@ jobs:
           live="$(curl --fail --silent --show-error "$STUDY_ROOM_WORKER_URL/assets/study-room-live.js?release=$GITHUB_SHA")"
           backgrounds="$(curl --fail --silent --show-error "$STUDY_ROOM_WORKER_URL/assets/study-room-backgrounds.js?release=$GITHUB_SHA")"
           processors="$(curl --fail --silent --show-error "$STUDY_ROOM_WORKER_URL/assets/vendor/livekit-track-processors.iife.js?release=$GITHUB_SHA")"
-          grep -Fq 'study-room-four-rooms-20260829-1' <<<"$room"
+          grep -Fq 'study-room-media-hotfix-20260829-1' <<<"$room"
           grep -Fq '/admin/study-room/rooms' <<<"$live"
           grep -Fq 'DueDiligenceStudyRoomMandatoryBackground' <<<"$backgrounds"
           grep -Fq 'due-diligence-mandatory-virtual-background-no-raw-first-frame' <<<"$processors"
@@ -505,7 +505,7 @@ jobs:
               fi
             done
             if grep -Fq '<title>Study Room — Due Diligence</title>' <<<"$room" \
-              && grep -Fq 'study-room-four-rooms-20260829-1' <<<"$room" \
+              && grep -Fq 'study-room-media-hotfix-20260829-1' <<<"$room" \
               && grep -Fq 'study-room-mandatory-background-20260829-1' <<<"$room" \
               && grep -Fq '/admin/study-room/rooms' <<<"$live" \
               && grep -Fq '/admin/study-room/join' <<<"$live" \

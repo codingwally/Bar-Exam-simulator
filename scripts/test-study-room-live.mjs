@@ -57,7 +57,7 @@ assert.doesNotMatch(page, /Virtual backgrounds|Coming after the quality test/iu)
 assert.match(page, /assets\/vendor\/livekit-client\.umd\.js\?v=2\.22\.1/);
 assert.match(page, /assets\/vendor\/livekit-track-processors\.iife\.js\?v=0\.7\.2/);
 assert.match(page, /study-room-backgrounds\.js\?v=study-room-mandatory-background-20260829-1/);
-assert.match(page, /study-room-live\.js\?v=study-room-four-rooms-20260829-1/);
+assert.match(page, /study-room-live\.js\?v=study-room-media-hotfix-20260829-1/);
 assert.doesNotMatch(page, /facebook|fb\.com|recording is on|Recording enabled/i);
 
 for (const endpoint of ['access', 'rooms', 'join', 'moderate']) {
@@ -69,8 +69,14 @@ assert.match(client, /Authorization: `Bearer \$\{token\}`/);
 assert.match(client, /cache: 'no-store'/);
 assert.match(client, /new LiveKit\.Room/);
 assert.match(client, /bindRoomEvents\(room\);[\s\S]*await room\.connect/);
-assert.match(client, /adaptiveStream: true/);
+assert.match(client, /const MEDIA_RELIABILITY_VERSION = 'study-room-media-hotfix-20260829-1'/);
+assert.match(client, /adaptiveStream:\s*\{[\s\S]*pixelDensity:\s*1[\s\S]*pauseVideoInBackground:\s*true/);
 assert.match(client, /dynacast: true/);
+assert.match(client, /width:\s*640,[\s\S]*height:\s*360,[\s\S]*frameRate:\s*15/);
+assert.match(client, /maxBitrate:\s*450_000,[\s\S]*maxFramerate:\s*15/);
+assert.match(client, /dtx:\s*false,[\s\S]*red:\s*true,[\s\S]*forceStereo:\s*false/);
+assert.match(client, /videoCodec:\s*'vp8'/);
+assert.match(client, /maxFps:\s*STUDY_VIDEO_CAPTURE\.frameRate/);
 assert.doesNotMatch(client, /operation:\s*['"]mute['"]/u);
 assert.match(client, /operation: 'rename'/);
 assert.doesNotMatch(client, /operation:\s*['"]unmute['"]/);
@@ -94,7 +100,13 @@ assert.match(
   /function recoverFromTerminalDisconnect\(room\)[\s\S]*destroyBackgroundController\(\)[\s\S]*clearConnectedRoomState\(\)[\s\S]*sr-prejoin[\s\S]*camera and microphone are off/,
 );
 assert.match(client, /event\.Disconnected[\s\S]*recoverFromTerminalDisconnect\(room\)/);
-assert.match(client, /state\.room\?\.startAudio/);
+assert.match(client, /room\?\.startAudio\?\.\(\)/);
+assert.match(client, /function startRoomAudioFromGesture[\s\S]*element\.play\?\.\(\)/);
+assert.match(client, /function microphoneTransportSample[\s\S]*getSenderStats/);
+assert.match(client, /function verifyMicrophoneTransport[\s\S]*bytesSent[\s\S]*packetsSent/);
+assert.match(client, /MICROPHONE_TRANSPORT_STALLED/);
+assert.match(client, /discardMicrophonePublication[\s\S]*switchActiveDevice\(deviceKind, 'default', false\)/);
+assert.match(client, /Your microphone is sending audio to the room\./);
 assert.match(client, /mediaDevices\.getUserMedia\(constraints\)/);
 assert.match(client, /joinWithMicrophone:\s*false/);
 assert.match(client, /joinWithCamera:\s*false/);
@@ -130,7 +142,10 @@ assert.match(client, /canRetrySeparately[\s\S]*\{ video: true, audio: false \}[\
 assert.match(client, /partialAccess = successes > 0 && failures\.length > 0/);
 assert.match(client, /cameraLabelResolved[\s\S]*microphoneLabelResolved[\s\S]*available devices were detected/);
 assert.match(client, /DueDiligenceStudyRoomMandatoryBackground\?\.createController/);
-assert.match(client, /await controller\.enableCamera\(captureOptions\('camera', deviceId\)/);
+assert.match(
+  client,
+  /await controller\.enableCamera\([\s\S]{0,120}captureOptions\('camera', deviceId\)[\s\S]{0,120}cameraPublishOptions\(\)/,
+);
 assert.match(client, /await ensureBackgroundController\(\)\.switchCamera\(captureOptions\('camera', deviceId\)\)/);
 assert.match(client, /Video fails closed, while room access and audio remain available/);
 

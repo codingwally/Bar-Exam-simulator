@@ -852,3 +852,57 @@ test('production Worker falls through an expected admin denial to paid-member St
     globalThis.fetch = originalFetch;
   }
 });
+
+test('legacy admin Study Room aliases remain administrator-only', async () => {
+  const originalFetch = globalThis.fetch;
+  const upstreamCalls = [];
+  globalThis.fetch = async (input, init = {}) => {
+    const url = new URL(String(input));
+    upstreamCalls.push([url.pathname, init.method || 'GET']);
+    if (url.pathname === '/auth/v1/user') {
+      return Response.json({
+        id: TEST_USER_ID,
+        email: 'member@example.com',
+        user_metadata: { full_name: 'Member Tester' },
+        app_metadata: { provider: 'email' },
+      });
+    }
+    if (url.pathname === '/rest/v1/rpc/admin_authorization_context') {
+      return Response.json(
+        { message: 'Administrator authorization required' },
+        { status: 403 },
+      );
+    }
+    throw new Error(`Unexpected upstream call: ${url.pathname}`);
+  };
+
+  try {
+    const response = await studyRoomWorker.fetch(new Request(
+      'https://worker.example/admin/study-room/access',
+      {
+        method: 'POST',
+        headers: {
+          Origin: 'https://duediligence.ph',
+          Authorization: 'Bearer opaque-member-session',
+          'CF-Connecting-IP': '203.0.113.10',
+        },
+      },
+    ), {
+      ...TEST_ENV,
+      ALLOWED_ORIGIN: 'https://duediligence.ph',
+      SUPABASE_URL: 'https://project.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'test_service_role',
+      GUEST_USAGE_HMAC_KEY: 'test_rate_limit_key',
+    });
+    const body = await response.json();
+    assert.equal(response.status, 403);
+    assert.equal(body.ok, false);
+    assert.equal(body.error.code, 'STUDY_ROOM_ADMIN_REQUIRED');
+    assert.deepEqual(upstreamCalls, [
+      ['/auth/v1/user', 'GET'],
+      ['/rest/v1/rpc/admin_authorization_context', 'POST'],
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

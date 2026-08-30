@@ -684,7 +684,7 @@ function isAuthoritativeRpcRejection(error) {
   return error?.authoritativeRpcRejection === true;
 }
 
-async function protectedSupabaseRpc(env, functionName, body) {
+async function protectedSupabaseRpc(env, functionName, body, options = {}) {
   const baseUrl = configuredSupabaseUrl(env);
   const response = await fetch(new URL(`/rest/v1/rpc/${functionName}`, baseUrl), {
     method: 'POST',
@@ -700,6 +700,7 @@ async function protectedSupabaseRpc(env, functionName, body) {
     const denied = response.status === 401
       || response.status === 403
       || /authorization|capability|required|not allowed/i.test(String(result?.message || ''));
+    if (denied && options.returnNullOnAuthorizationDenial === true) return null;
     console.error('Protected storage request failed', {
       operation: functionName,
       status: response.status,
@@ -5286,6 +5287,12 @@ function studyRoomMemberAccess(access) {
     && access?.paidSubscriptionExpired !== true
     && (activeSubscription || paidEquivalentBasis);
   return { ...access, allowed };
+}
+
+async function studyRoomAdministratorAccess(env, user) {
+  return protectedSupabaseRpc(env, 'admin_authorization_context', {
+    p_actor_user_id: user.id,
+  }, { returnNullOnAuthorizationDenial: true });
 }
 
 async function reserveGradeAccess(request, env, gradingRequest, verifiedUser = null) {
@@ -9883,9 +9890,7 @@ async function enforceStudyRoomRateLimit(request, env, scope) {
 
 const studyRoomHandlers = createStudyRoomHandlers({
   authenticate: verifiedAuthenticatedUser,
-  authorizeAdmin: (env, user) => protectedSupabaseRpc(env, 'admin_authorization_context', {
-    p_actor_user_id: user.id,
-  }),
+  authorizeAdmin: studyRoomAdministratorAccess,
   authorizeMember: async (env, user) => studyRoomMemberAccess(
     await phase4AccessForUser(env, user.id),
   ),

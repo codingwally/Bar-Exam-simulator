@@ -782,3 +782,73 @@ test('production Worker route re-verifies Supabase admin authorization and retur
     globalThis.fetch = originalFetch;
   }
 });
+
+test('production Worker falls through an expected admin denial to paid-member Study Room access', async () => {
+  const originalFetch = globalThis.fetch;
+  const upstreamCalls = [];
+  globalThis.fetch = async (input, init = {}) => {
+    const url = new URL(String(input));
+    upstreamCalls.push([url.pathname, init.method || 'GET']);
+    if (url.pathname === '/auth/v1/user') {
+      return Response.json({
+        id: TEST_USER_ID,
+        email: 'member@example.com',
+        user_metadata: { full_name: 'Member Tester' },
+        app_metadata: { provider: 'email' },
+      });
+    }
+    if (url.pathname === '/rest/v1/rpc/admin_authorization_context') {
+      return Response.json(
+        { message: 'Administrator authorization required' },
+        { status: 403 },
+      );
+    }
+    if (url.pathname === '/rest/v1/rpc/phase4_access_snapshot') {
+      return Response.json({
+        allowed: true,
+        basis: 'founding_beta',
+        commercialLaunchEnabled: true,
+        termsRequired: false,
+        reauthenticationRequired: false,
+        paidSubscriptionExpired: false,
+        role: 'student',
+      });
+    }
+    throw new Error(`Unexpected upstream call: ${url.pathname}`);
+  };
+
+  try {
+    const response = await studyRoomWorker.fetch(new Request(
+      'https://worker.example/study-room/access',
+      {
+        method: 'POST',
+        headers: {
+          Origin: 'https://duediligence.ph',
+          Authorization: 'Bearer opaque-member-session',
+          'CF-Connecting-IP': '203.0.113.9',
+        },
+      },
+    ), {
+      ...TEST_ENV,
+      ALLOWED_ORIGIN: 'https://duediligence.ph',
+      SUPABASE_URL: 'https://project.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'test_service_role',
+      GUEST_USAGE_HMAC_KEY: 'test_rate_limit_key',
+    });
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('Cache-Control'), 'no-store');
+    assert.equal(body.allowed, true);
+    assert.equal(body.role, 'member');
+    assert.equal(body.administrator, false);
+    assert.equal(body.canCreateRooms, false);
+    assert.equal(body.maxRooms, STUDY_ROOM_MAX_ROOMS);
+    assert.deepEqual(upstreamCalls, [
+      ['/auth/v1/user', 'GET'],
+      ['/rest/v1/rpc/admin_authorization_context', 'POST'],
+      ['/rest/v1/rpc/phase4_access_snapshot', 'POST'],
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

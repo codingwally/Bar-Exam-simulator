@@ -28,6 +28,10 @@ SUPPORT_NOTIFICATION_EMAIL_MODE = "suppressed"
 SUPPORT_NOTIFICATION_EMAIL_FROM = "Due Diligence Support <support@duediligence.ph>"
 SIGN_IN_NOTIFICATION_EMAIL_MODE = "suppressed"
 SIGN_IN_NOTIFICATION_EMAIL_FROM = "Due Diligence Sign-in Notice <support@duediligence.ph>"
+ADMIN_PULSE_ENABLED = "true"
+ADMIN_PULSE_WEB_PUSH_ENABLED = "true"
+ADMIN_PULSE_VAPID_PUBLIC_KEY = "BMm9cPIA2Su28Y9s0EPFFy4dQasWbAWl1GsisYa9_48zeejnzPGYdF-YfkqqNlurue1WRrQczw-w6C1lH51pF7A"
+ADMIN_PULSE_VAPID_SUBJECT = "mailto:support@duediligence.ph"
 PAYMENT_NOTIFICATION_EMAIL_MODE = "enabled"
 PAYMENT_NOTIFICATION_EMAIL_FROM = "Due Diligence Payments <support@duediligence.ph>"
 PRIVATE_BETA_GATE_ENABLED = "false"
@@ -79,6 +83,10 @@ crons = ["*/2 * * * *"]
 # ADMIN_DIRECTORY_RECIPIENTS_JSON must remain a Cloudflare secret containing
 # only the approved founder recipient-key to personal-email mapping.
 # SUPABASE_URL must be configured as a Worker environment variable.
+# ADMIN_PULSE_VAPID_PUBLIC_KEY may be configured as a non-secret Worker variable.
+# ADMIN_PULSE_VAPID_PRIVATE_KEY must remain a Cloudflare secret. Both Admin Pulse
+# feature switches are enabled for the reviewed pilot, while the independent
+# database capture and delivery switches remain the immediate kill switches.
 # LIVEKIT_URL, LIVEKIT_API_KEY, and LIVEKIT_API_SECRET must remain Cloudflare
 # secrets. They are injected atomically by the Study Room release workflow and
 # are never exposed in Pages, logs, or committed configuration.

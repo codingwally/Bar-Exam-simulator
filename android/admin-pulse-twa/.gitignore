@@ -1,0 +1,17 @@
+node_modules/
+.gradle/
+app/build/
+build/
+*.apk
+*.aab
+*.apks
+*.idsig
+*.jks
+*.keystore
+*.p12
+.env
+.env.*
+!.env.signing.example
+local.properties
+assetlinks.generated.json
+hs_err_pid*.log

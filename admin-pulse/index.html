@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en-PH">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="theme-color" content="#050b12">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="DD Pulse">
+  <meta name="description" content="A private, read-only website activity monitor for authorized Due Diligence administrators.">
+  <title>Due Diligence Pulse</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="../assets/brand/favicon.ico" sizes="any">
+  <link rel="icon" href="../assets/brand/favicon-32.png" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="../assets/brand/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Playfair+Display:wght@600;700&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="pulse.css?v=admin-pulse-pilot-20260830-1">
+</head>
+<body>
+  <a class="skip-link" href="#pulse-main">Skip to Website Pulse</a>
+
+  <div class="pulse-page">
+    <header class="brand-bar" aria-label="Due Diligence Pulse">
+      <a class="brand-lockup" href="../" aria-label="Due Diligence home">
+        <img src="../assets/brand/icon-192.png" width="42" height="42" alt="">
+        <span>
+          <strong>Due Diligence</strong>
+          <small>Pulse</small>
+        </span>
+      </a>
+      <div class="environment-pill" title="This is a restricted administrator pilot">
+        <span aria-hidden="true"></span>
+        Admin pilot
+      </div>
+    </header>
+
+    <main id="pulse-main">
+      <section class="access-card glass-card" id="access-card" aria-labelledby="access-title">
+        <div class="access-mark" aria-hidden="true">
+          <img src="../assets/brand/icon-192.png" width="72" height="72" alt="">
+        </div>
+        <p class="eyebrow">Important website updates</p>
+        <h1 id="access-title">Website Pulse</h1>
+        <p class="access-copy" id="access-copy">
+          See new subscribers, Home Wall posts, support requests, live users, and new sign-ins in one calm view.
+        </p>
+        <aside class="ios-install-guide" id="ios-install-guide" aria-labelledby="ios-install-title" hidden>
+          <p class="eyebrow">On iPhone</p>
+          <strong id="ios-install-title">Add Pulse before signing in</strong>
+          <p>On iOS 16.4 or later, tap <b>Share</b>, choose <b>Add to Home Screen</b>, then open <b>Pulse</b>. Select your Google email and tap <b>Enable important notifications</b>.</p>
+        </aside>
+        <div class="access-status" id="access-status" role="status" aria-live="polite" hidden></div>
+        <div class="google-signin-slot" id="google-signin-container" aria-label="Continue with Google" hidden></div>
+        <button class="google-button" id="google-signin-fallback" type="button" hidden>
+          <span class="google-mark" aria-hidden="true">G</span>
+          <span id="google-button-label">Continue with Google in browser</span>
+        </button>
+        <button class="text-button" id="access-signout" type="button" hidden>Use another Google account</button>
+        <p class="access-note">Use the email already assigned an administrator role in Due Diligence. No separate registration is needed.</p>
+      </section>
+
+      <section class="pulse-shell" id="pulse-shell" aria-labelledby="pulse-title" hidden>
+        <header class="pulse-header">
+          <div>
+            <p class="eyebrow">Administrator monitoring</p>
+            <h1 id="pulse-title">Website Pulse</h1>
+            <p class="header-copy">Only the five updates that matter right now.</p>
+          </div>
+          <div class="account-cluster">
+            <div class="connection-pill" id="connection-pill" data-state="checking" role="status" aria-live="polite">
+              <span aria-hidden="true"></span>
+              <b id="connection-label">Connecting</b>
+            </div>
+            <div class="account-copy">
+              <strong id="account-name">Administrator</strong>
+              <small id="account-role">Authorized account</small>
+            </div>
+            <button class="icon-button" id="refresh-pulse" type="button" aria-label="Refresh Website Pulse" title="Refresh Website Pulse">
+              <img src="../assets/icons/community/arrows-clockwise.svg" width="20" height="20" alt="">
+            </button>
+            <button class="text-button account-signout" id="account-signout" type="button">Sign out</button>
+          </div>
+        </header>
+
+        <div class="pilot-banner" id="pilot-banner" role="status" aria-live="polite" hidden></div>
+
+        <section class="overview-grid" aria-label="Current website activity">
+          <article class="live-card glass-card" aria-labelledby="live-title">
+            <div class="live-card-head">
+              <span class="signal-icon signal-live" aria-hidden="true">
+                <img src="../assets/icons/navigation/users.svg" width="24" height="24" alt="">
+              </span>
+              <div>
+                <p class="eyebrow">Live now</p>
+                <h2 id="live-title">Currently using Due Diligence</h2>
+              </div>
+              <span class="live-wave" aria-hidden="true"><i></i><i></i><i></i></span>
+            </div>
+            <div class="live-value-row">
+              <strong class="live-value" id="active-user-count">—</strong>
+              <span id="active-user-label">Checking active users</span>
+            </div>
+            <div class="live-details">
+              <span><b>Live</b> authenticated website activity</span>
+              <span>Recent activity window</span>
+              <span id="snapshot-time">Waiting for website data</span>
+            </div>
+          </article>
+
+          <article class="notification-card glass-card" aria-labelledby="notification-title">
+            <div class="notification-heading">
+              <span class="signal-icon signal-notification" aria-hidden="true">
+                <img src="../assets/icons/navigation/bell.svg" width="24" height="24" alt="">
+              </span>
+              <div>
+                <p class="eyebrow">Important notifications</p>
+                <h2 id="notification-title">Keep this phone updated</h2>
+              </div>
+            </div>
+            <p id="notification-copy">Enable the five important updates after your administrator session is confirmed.</p>
+            <button class="primary-button" id="enable-notifications" type="button" disabled>
+              Enable important notifications
+            </button>
+            <small id="notification-status" role="status" aria-live="polite">Checking this device…</small>
+          </article>
+        </section>
+
+        <section class="signal-section" aria-labelledby="signals-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Five important signals</p>
+              <h2 id="signals-title">What Pulse is watching</h2>
+            </div>
+            <button class="filter-reset" id="show-all-events" type="button" aria-pressed="true">Show all updates</button>
+          </div>
+          <div class="signal-grid" id="signal-grid">
+            <button class="signal-card glass-card" type="button" data-event-filter="new_subscriber" aria-pressed="false">
+              <span class="signal-icon signal-subscriber" aria-hidden="true">
+                <img src="../assets/icons/navigation/circle-user-round.svg" width="22" height="22" alt="">
+              </span>
+              <span><strong>New subscriber</strong><small>Activated subscriptions</small></span>
+              <b data-signal-count="new_subscriber">0</b>
+            </button>
+            <button class="signal-card glass-card" type="button" data-event-filter="home_wall_post" aria-pressed="false">
+              <span class="signal-icon signal-post" aria-hidden="true">
+                <img src="../assets/icons/navigation/pen-line.svg" width="22" height="22" alt="">
+              </span>
+              <span><strong>Home Wall post</strong><small>Newly published posts</small></span>
+              <b data-signal-count="home_wall_post">0</b>
+            </button>
+            <button class="signal-card glass-card" type="button" data-event-filter="support_request" aria-pressed="false">
+              <span class="signal-icon signal-support" aria-hidden="true">
+                <img src="../assets/icons/navigation/headphones.svg" width="22" height="22" alt="">
+              </span>
+              <span><strong>Support request</strong><small>New requests for help</small></span>
+              <b data-signal-count="support_request">0</b>
+            </button>
+            <button class="signal-card glass-card" type="button" data-event-filter="user_active" aria-pressed="false">
+              <span class="signal-icon signal-live" aria-hidden="true">
+                <img src="../assets/icons/navigation/users.svg" width="22" height="22" alt="">
+              </span>
+              <span><strong>Live user</strong><small>Currently using the website</small></span>
+              <b data-signal-count="user_active">0</b>
+            </button>
+            <button class="signal-card glass-card" type="button" data-event-filter="new_sign_in" aria-pressed="false">
+              <span class="signal-icon signal-signin" aria-hidden="true">
+                <img src="../assets/icons/navigation/door-open.svg" width="22" height="22" alt="">
+              </span>
+              <span><strong>New sign-in</strong><small>New authenticated sessions</small></span>
+              <b data-signal-count="new_sign_in">0</b>
+            </button>
+          </div>
+          <p class="signal-count-note">Counts reflect the activity currently loaded in this feed.</p>
+        </section>
+
+        <section class="feed-section glass-card" aria-labelledby="feed-title">
+          <div class="section-heading feed-heading">
+            <div>
+              <p class="eyebrow">Chronological feed</p>
+              <h2 id="feed-title">Important updates</h2>
+            </div>
+            <span class="last-updated" id="last-updated">Not updated yet</span>
+          </div>
+          <div class="feed-state" id="feed-state" role="status" aria-live="polite">Connecting to Website Pulse…</div>
+          <ol class="activity-feed" id="activity-feed" aria-label="Important website updates"></ol>
+          <button class="secondary-button load-earlier" id="load-earlier" type="button" hidden>Load earlier updates</button>
+        </section>
+      </section>
+    </main>
+
+    <footer>
+      <span>Due Diligence Pulse</span>
+      <span>Read-only administrator pilot</span>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.min.js" crossorigin="anonymous"></script>
+  <script src="../assets/phase2-config.js?v=provider-neutral-release2-20260827-1"></script>
+  <script src="../assets/auth-session-storage.js?v=auth-persistence-20260812-1"></script>
+  <script src="../assets/private-beta-session.js?v=beta-all-access-20260802-1"></script>
+  <script src="google-identity.js?v=admin-pulse-google-id-token-20260830-1"></script>
+  <script id="google-gis-client" src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="pulse.js?v=admin-pulse-pilot-20260830-1"></script>
+</body>
+</html>

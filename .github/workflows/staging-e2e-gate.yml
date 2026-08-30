@@ -47,7 +47,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: staging-e2e-${{ github.ref }}
+  group: duediligence-staging-worker
   cancel-in-progress: false
 
 jobs:

@@ -14,7 +14,7 @@ begin
        from supabase_migrations.schema_migrations migration_row
        where migration_row.version = '20260830054727'
          and migration_row.name = 'admin_pricing_revisions'
-         and 'sha256:efea920365df3d647053a4b33c806efc520b84ca7778c7b5cf0f6d165a6dfbaf'
+         and 'sha256:10306849831a9d7fbdaae21d2c4517bc37e30360f3b4ef4bd515c9b255e81e58'
            = any(coalesce(migration_row.statements, array[]::text[]))
      ) then
     raise exception 'ADMIN_PRICING_PROBE_MIGRATION_LEDGER_MISMATCH';

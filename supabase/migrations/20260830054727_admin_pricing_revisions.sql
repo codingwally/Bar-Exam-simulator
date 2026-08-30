@@ -2662,8 +2662,11 @@ as $$
     'proofObjectPath', p.proof_object_path, 'proofOriginalName', p.proof_original_name,
     'proofMimeType', p.proof_mime_type, 'proofSizeBytes', p.proof_size_bytes,
     'proofSha256', p.proof_sha256,
-    'receiptStatus', p.subscriber_receipt_status,
-    'receiptAttempts', p.subscriber_receipt_attempts,
+    -- Receipt delivery was released separately and is not present in every
+    -- database yet. Reading through the row JSON keeps this pricing migration
+    -- compatible while still returning the receipt fields wherever they exist.
+    'receiptStatus', to_jsonb(p)->>'subscriber_receipt_status',
+    'receiptAttempts', nullif(to_jsonb(p)->>'subscriber_receipt_attempts', '')::integer,
     'user', jsonb_build_object(
       'id', u.id, 'email', u.email,
       'displayName', coalesce(pr.display_name, u.email)

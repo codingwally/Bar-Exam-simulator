@@ -38,6 +38,9 @@ assert.match(migration, /price_centavos = 14900/u);
 assert.match(migration, /price_centavos = 19900/u);
 assert.match(migration, /duration_days = 30/u);
 assert.match(migration, /New 199-peso plan must fail closed until a compatible QR is published/u);
+assert.match(migration, /'receiptStatus', to_jsonb\(p\)->>'subscriber_receipt_status'/u);
+assert.match(migration, /'receiptAttempts', nullif\(to_jsonb\(p\)->>'subscriber_receipt_attempts', ''\)::integer/u);
+assert.doesNotMatch(migration, /p\.subscriber_receipt_(?:status|attempts)/u);
 
 assert.equal((probe.match(/^\s*begin;\s*$/gimu) || []).length, 1);
 assert.equal((probe.match(/^\s*rollback;\s*$/gimu) || []).length, 1);

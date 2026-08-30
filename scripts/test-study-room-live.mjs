@@ -241,5 +241,8 @@ vm.runInContext(extractNamedFunction(client, 'connectionLabel'), connectionConte
 assert.equal(vm.runInContext("connectionLabel('connected')", connectionContext), 'Excellent');
 assert.equal(vm.runInContext("connectionLabel('reconnecting')", connectionContext), 'Reconnecting');
 assert.equal(vm.runInContext("connectionLabel('disconnected')", connectionContext), 'Offline');
+assert.match(client, /syncConnectionState\(room\.state\)/);
+assert.match(client, /syncConnectionState\(state\.room\.state\)/);
+assert.doesNotMatch(client, /room\.connectionState/);
 
 console.log('Study Room live-client privacy, access, media-consent, and interface contracts passed.');

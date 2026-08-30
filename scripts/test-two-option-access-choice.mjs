@@ -13,8 +13,14 @@ const migration = readFileSync(
 
 assert.match(phase2, /one lifetime allowance of five practice tokens/i);
 assert.match(phase2, /Early Access/);
-assert.match(phase2, /₱149/);
-assert.match(phase2, /₱199/);
+assert.match(phase2, /publicWorkerRequest\('\/plans'\)/);
+assert.match(phase2, /normalizedCommercialPricing/);
+assert.match(phase2, /DueDiligencePricingRenderer/);
+assert.doesNotMatch(
+  phase2,
+  /₱(?:149|199)/,
+  'Customer-facing plan prices must come from the Founder-published pricing snapshot.',
+);
 assert.match(phase4, /five one-time practice tokens/i);
 assert.match(phase4, /ensureProtectedAccess/);
 assert.match(phase4, /subject-matter/);

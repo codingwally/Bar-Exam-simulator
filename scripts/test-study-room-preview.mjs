@@ -166,7 +166,7 @@ assert.doesNotMatch(css, /study-room-demo|home-current/);
 assert.doesNotMatch(html, /study-room-demo|home-current|assets\/study-room\/[^"'\s>]+\.png/);
 assert.match(pricingClient, /id="dd2-pricing-retry"/);
 assert.match(pricingClient, /Plans &amp; Pricing could not load just now\./);
-assert.match(html, /phase2-experience\.js[^"\n]*pricing=study-room-recovery-20260829-1/);
+assert.match(html, /phase2-experience\.js[^"\n]*pricing=admin-builder-20260830-1/);
 assert.doesNotMatch(
   pricingClient,
   /host\.innerHTML\s*=\s*`<div class="dd2-status is-error">\$\{escapeHtml\(error\.message/,

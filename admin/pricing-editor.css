@@ -1,0 +1,356 @@
+.observatory .pricing-editor {
+  --pricing-surface: #0b151f;
+  --pricing-surface-strong: #101d29;
+  --pricing-line: #263946;
+  --pricing-muted: #8fa2af;
+  --pricing-text: #f3f6f7;
+  --pricing-gold: #d2aa55;
+  --pricing-gold-bright: #f0cd78;
+  display: grid;
+  gap: 14px;
+  color: var(--pricing-text);
+}
+
+.observatory .pricing-editor [hidden] { display: none !important; }
+
+.observatory .pricing-editor button,
+.observatory .pricing-editor input,
+.observatory .pricing-editor select,
+.observatory .pricing-editor textarea {
+  min-height: 44px;
+}
+
+.observatory .pricing-editor button {
+  padding: 9px 13px;
+  color: var(--pricing-text);
+  background: #0c1823;
+  border: 1px solid var(--pricing-line);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.observatory .pricing-editor button:hover:not(:disabled) {
+  color: var(--pricing-gold-bright);
+  border-color: rgba(210, 170, 85, 0.65);
+}
+
+.observatory .pricing-editor button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.observatory .pricing-editor .pricing-primary {
+  color: #08131d;
+  background: var(--pricing-gold);
+  border-color: var(--pricing-gold);
+}
+
+.observatory .pricing-editor .pricing-primary:hover:not(:disabled) {
+  color: #050b12;
+  background: var(--pricing-gold-bright);
+}
+
+.observatory .pricing-editor-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  padding: 10px 14px;
+  color: var(--pricing-muted);
+  background: rgba(11, 21, 31, 0.94);
+  border: 1px solid var(--pricing-line);
+  border-left: 3px solid var(--pricing-muted);
+  border-radius: 8px;
+}
+
+.observatory .pricing-editor-status[data-tone="success"] {
+  color: #b9f3dd;
+  border-left-color: var(--obs-green);
+}
+
+.observatory .pricing-editor-status[data-tone="error"] {
+  color: #ffd0d3;
+  border-left-color: var(--obs-red);
+}
+
+.observatory .pricing-editor-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 8px;
+  background: rgba(11, 21, 31, 0.82);
+  border: 1px solid var(--pricing-line);
+  border-radius: 9px;
+}
+
+.observatory .pricing-editor-toolbar nav,
+.observatory .pricing-publish-actions,
+.observatory .pricing-item-actions,
+.observatory .pricing-preview-toggle,
+.observatory .pricing-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.observatory .pricing-editor-toolbar [aria-current="page"],
+.observatory .pricing-preview-toggle [aria-pressed="true"] {
+  color: var(--pricing-gold-bright);
+  background: rgba(210, 170, 85, 0.12);
+  border-color: rgba(210, 170, 85, 0.48);
+}
+
+.observatory .pricing-editor-toolbar > p {
+  margin: 0 8px;
+  color: var(--pricing-muted);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.observatory .pricing-editor-toolbar > p span { color: var(--pricing-gold); }
+
+.observatory .pricing-editor-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(360px, 0.85fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.observatory .pricing-editor-workspace,
+.observatory .pricing-workspace-panel,
+.observatory .pricing-item-list {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.observatory .pricing-workspace-panel {
+  padding: clamp(15px, 2.2vw, 24px);
+  background: rgba(11, 21, 31, 0.94);
+  border: 1px solid var(--pricing-line);
+  border-radius: 10px;
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.16);
+}
+
+.observatory .pricing-panel-heading,
+.observatory .pricing-edit-card > header,
+.observatory .pricing-preview-panel > header,
+.observatory .pricing-operation-dialog header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.observatory .pricing-panel-heading.compact { margin-top: 8px; }
+.observatory .pricing-panel-heading h2,
+.observatory .pricing-panel-heading h3,
+.observatory .pricing-edit-card h3,
+.observatory .pricing-preview-panel h2,
+.observatory .pricing-operation-dialog h2 {
+  margin: 0;
+  color: var(--pricing-text);
+  font-family: "Playfair Display", serif;
+}
+.observatory .pricing-panel-heading h2,
+.observatory .pricing-preview-panel h2 { font-size: 1.25rem; }
+.observatory .pricing-panel-heading h3,
+.observatory .pricing-edit-card h3 { font-size: 1rem; }
+.observatory .pricing-panel-heading p,
+.observatory .pricing-edit-card header p,
+.observatory .pricing-preview-note {
+  margin: 4px 0 0;
+  color: var(--pricing-muted);
+  font-size: 0.76rem;
+  line-height: 1.55;
+}
+
+.observatory .pricing-kicker {
+  margin: 0 0 4px !important;
+  color: var(--pricing-gold) !important;
+  font-size: 0.63rem !important;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.observatory .pricing-cutoff-note {
+  padding: 14px 16px;
+  color: #eadfc6;
+  background: rgba(210, 170, 85, 0.08);
+  border: 1px solid rgba(210, 170, 85, 0.35);
+  border-left: 3px solid var(--pricing-gold);
+  border-radius: 7px;
+}
+.observatory .pricing-cutoff-note strong { color: var(--pricing-gold-bright); }
+.observatory .pricing-cutoff-note p { margin: 5px 0 0; font-size: 0.78rem; line-height: 1.6; }
+
+.observatory .pricing-status-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+  border: 1px solid var(--pricing-line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.observatory .pricing-status-grid > div { min-width: 0; padding: 13px; background: #08131d; border-right: 1px solid var(--pricing-line); }
+.observatory .pricing-status-grid > div:last-child { border-right: 0; }
+.observatory .pricing-status-grid dt { color: var(--pricing-muted); font-size: 0.64rem; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase; }
+.observatory .pricing-status-grid dd { margin: 6px 0 3px; color: var(--pricing-text); font-weight: 700; overflow-wrap: anywhere; }
+.observatory .pricing-status-grid small { color: var(--pricing-muted); font-size: 0.67rem; }
+
+.observatory .pricing-history { display: grid; gap: 10px; border-top: 1px solid var(--pricing-line); padding-top: 10px; }
+.observatory .pricing-history-list { display: grid; gap: 8px; }
+.observatory .pricing-history-row {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.6fr) minmax(160px, 1fr) auto;
+  gap: 8px 12px;
+  align-items: center;
+  padding: 11px 12px;
+  background: #08131d;
+  border: 1px solid var(--pricing-line);
+  border-radius: 7px;
+}
+.observatory .pricing-history-row > div { display: grid; gap: 3px; }
+.observatory .pricing-history-row span { color: var(--pricing-gold); font-size: 0.66rem; text-transform: capitalize; }
+.observatory .pricing-history-row p { margin: 0; color: var(--pricing-muted); font-size: 0.72rem; }
+.observatory .pricing-history-row .pricing-history-reason { grid-column: 1 / -1; }
+
+.observatory .pricing-edit-card {
+  min-width: 0;
+  padding: 15px;
+  background: #08131d;
+  border: 1px solid var(--pricing-line);
+  border-radius: 9px;
+}
+.observatory .pricing-edit-card > header { padding-bottom: 12px; margin-bottom: 14px; border-bottom: 1px solid var(--pricing-line); }
+.observatory .pricing-edit-card header p { margin: 0; color: var(--pricing-gold); font-size: 0.65rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; }
+.observatory .pricing-item-actions { justify-content: flex-end; }
+.observatory .pricing-item-actions button { min-width: 44px; padding-inline: 10px; }
+.observatory .pricing-item-actions .pricing-remove { color: #ffd0d3; }
+
+.observatory .pricing-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+}
+.observatory .pricing-form-grid.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.observatory .pricing-field { display: grid; align-content: start; gap: 6px; min-width: 0; color: var(--pricing-muted-bright, #bbc7cd); font-size: 0.72rem; font-weight: 700; }
+.observatory .pricing-field:has(textarea) { grid-column: 1 / -1; }
+.observatory .pricing-field input,
+.observatory .pricing-field select,
+.observatory .pricing-field textarea { width: 100%; min-width: 0; padding: 10px 11px; color: var(--pricing-text); background: #0d1a25; border: 1px solid var(--pricing-line); border-radius: 7px; }
+.observatory .pricing-field input[readonly] { color: var(--pricing-muted); background: #09121a; }
+.observatory .pricing-field textarea { line-height: 1.5; resize: vertical; }
+.observatory .pricing-field small { color: var(--pricing-muted); font-size: 0.65rem; font-weight: 500; line-height: 1.45; }
+
+.observatory .pricing-checkout-rules { display: grid; gap: 12px; margin: 15px 0 0; padding: 14px; border: 1px solid var(--pricing-line); border-radius: 8px; }
+.observatory .pricing-checkout-rules legend { padding: 0 7px; color: var(--pricing-gold); font-size: 0.7rem; font-weight: 800; }
+.observatory .pricing-check { display: flex; align-items: center; gap: 9px; min-height: 44px; color: var(--pricing-muted-bright, #bbc7cd); font-size: 0.75rem; }
+.observatory .pricing-check input { width: 18px; min-height: 18px; height: 18px; margin: 0; accent-color: var(--pricing-gold); }
+
+.observatory .pricing-payment-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(210px, 0.42fr); gap: 16px; }
+.observatory .pricing-qr-box { display: grid; align-content: start; gap: 9px; min-width: 0; }
+.observatory .pricing-qr-preview { display: grid; place-items: center; gap: 7px; min-height: 220px; padding: 12px; color: var(--pricing-muted); background: #050b12; border: 1px dashed #425664; border-radius: 8px; text-align: center; }
+.observatory .pricing-qr-preview img { width: min(100%, 260px); max-height: 300px; object-fit: contain; border-radius: 6px; background: white; }
+.observatory .pricing-qr-preview span { font-size: 0.68rem; }
+.observatory .pricing-file-control { display: grid; gap: 6px; color: var(--pricing-muted-bright, #bbc7cd); font-size: 0.7rem; font-weight: 700; }
+.observatory .pricing-file-control input { width: 100%; min-width: 0; padding: 7px; }
+.observatory .pricing-qr-box small { color: var(--pricing-muted); font-size: 0.65rem; line-height: 1.45; overflow-wrap: anywhere; }
+
+.observatory .pricing-faq-heading { margin-top: 8px; padding-top: 16px; border-top: 1px solid var(--pricing-line); }
+.observatory .pricing-empty-state { margin: 0; padding: 18px; color: var(--pricing-muted); background: #08131d; border: 1px dashed var(--pricing-line); border-radius: 8px; text-align: center; }
+
+.observatory .pricing-preview-panel {
+  position: sticky;
+  top: 108px;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  background: rgba(11, 21, 31, 0.94);
+  border: 1px solid var(--pricing-line);
+  border-radius: 10px;
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.16);
+}
+.observatory .pricing-preview-toggle { justify-content: flex-end; }
+.observatory .pricing-preview-frame {
+  width: 100%;
+  margin-inline: auto;
+  overflow: auto;
+  color: #202733;
+  background: #f8f4eb;
+  border: 1px solid rgba(213, 181, 111, 0.72);
+  border-top: 3px solid #b8934f;
+  border-radius: 8px;
+  transition: max-width 160ms ease;
+}
+.observatory .pricing-preview-frame[data-preview-size="mobile"] { max-width: 390px; }
+.observatory .pricing-preview-frame > [data-pricing-preview] { min-height: 520px; padding: clamp(26px, 4vw, 48px) clamp(20px, 4vw, 48px) 0; }
+.observatory .pricing-payment-preview { display: grid; gap: 8px; padding: 24px clamp(20px, 4vw, 48px) 34px; color: #202733; background: #f8f4eb; }
+.observatory .pricing-payment-preview h3 { margin: 0 0 4px; color: #07182f; font-size: 0.9rem; }
+.observatory .pricing-payment-preview article { display: grid; gap: 3px; padding: 10px 0; border-top: 1px solid rgba(15, 39, 68, 0.16); }
+.observatory .pricing-payment-preview strong { color: #07182f; }
+.observatory .pricing-payment-preview span,
+.observatory .pricing-payment-preview p,
+.observatory .pricing-payment-preview small { margin: 0; color: #637083; font-size: 0.7rem; line-height: 1.45; }
+
+.observatory .pricing-operation-dialog { width: min(580px, calc(100% - 24px)); color: var(--pricing-text); background: var(--pricing-surface); border: 1px solid var(--pricing-line); border-radius: 10px; }
+.observatory .pricing-operation-dialog::backdrop { background: rgba(0, 0, 0, 0.72); backdrop-filter: blur(3px); }
+.observatory .pricing-operation-dialog form { display: grid; gap: 15px; }
+.observatory .pricing-operation-dialog header { padding-bottom: 12px; border-bottom: 1px solid var(--pricing-line); }
+.observatory .pricing-operation-dialog header button { min-width: 44px; font-size: 1.2rem; }
+.observatory .pricing-operation-dialog > form > p { margin: 0; color: var(--pricing-muted-bright, #bbc7cd); font-size: 0.78rem; line-height: 1.55; }
+.observatory .pricing-operation-dialog .pricing-operation-error { padding: 10px 12px; color: #ffd0d3; background: rgba(163, 45, 54, 0.16); border: 1px solid rgba(255, 137, 145, 0.42); border-radius: 7px; }
+.observatory .pricing-operation-confirm { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; color: var(--pricing-muted-bright, #bbc7cd); font-size: 0.74rem; line-height: 1.5; }
+.observatory .pricing-operation-confirm input { width: 18px; min-height: 18px; height: 18px; margin-top: 2px; accent-color: var(--pricing-gold); }
+.observatory .pricing-dialog-actions { justify-content: flex-end; padding-top: 4px; }
+
+@media (max-width: 1280px) {
+  .observatory .pricing-editor-layout { grid-template-columns: minmax(0, 1fr); }
+  .observatory .pricing-preview-panel { position: static; }
+  .observatory .pricing-preview-frame[data-preview-size="desktop"] { max-width: 920px; }
+}
+
+@media (max-width: 820px) {
+  .observatory .pricing-editor-toolbar,
+  .observatory .pricing-panel-heading,
+  .observatory .pricing-edit-card > header,
+  .observatory .pricing-preview-panel > header { align-items: stretch; flex-direction: column; }
+  .observatory .pricing-editor-toolbar > p { margin: 0 4px 4px; }
+  .observatory .pricing-status-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .observatory .pricing-status-grid > div:nth-child(2) { border-right: 0; }
+  .observatory .pricing-status-grid > div:nth-child(-n + 2) { border-bottom: 1px solid var(--pricing-line); }
+  .observatory .pricing-history-row { grid-template-columns: 1fr auto; }
+  .observatory .pricing-history-row > p { grid-column: 1; }
+  .observatory .pricing-payment-layout { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 560px) {
+  .observatory .pricing-editor-toolbar nav,
+  .observatory .pricing-publish-actions,
+  .observatory .pricing-dialog-actions { display: grid; grid-template-columns: minmax(0, 1fr); width: 100%; }
+  .observatory .pricing-editor-toolbar nav button,
+  .observatory .pricing-publish-actions button,
+  .observatory .pricing-dialog-actions button { width: 100%; }
+  .observatory .pricing-form-grid,
+  .observatory .pricing-form-grid.four { grid-template-columns: minmax(0, 1fr); }
+  .observatory .pricing-field:has(textarea) { grid-column: auto; }
+  .observatory .pricing-status-grid { grid-template-columns: minmax(0, 1fr); }
+  .observatory .pricing-status-grid > div { border-right: 0; border-bottom: 1px solid var(--pricing-line); }
+  .observatory .pricing-status-grid > div:last-child { border-bottom: 0; }
+  .observatory .pricing-item-actions { display: grid; grid-template-columns: 44px 44px minmax(0, 1fr); width: 100%; }
+  .observatory .pricing-history-row { grid-template-columns: minmax(0, 1fr); }
+  .observatory .pricing-history-row > p,
+  .observatory .pricing-history-row .pricing-history-reason { grid-column: 1; }
+  .observatory .pricing-preview-toggle { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .observatory .pricing-preview-frame { transition: none; }
+}

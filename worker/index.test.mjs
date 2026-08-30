@@ -1814,25 +1814,25 @@ test('correction endpoint fails generically when storage configuration is absent
   }
 });
 
-test('payment field validation accepts the approved ₱149 GoTyme InstaPay checkout', () => {
+test('payment field validation accepts published plan and payment-channel versions', () => {
   const value = normalizePaymentFields({
-    planCode: 'early_access_beta',
-    amountPhp: '149.00',
-    paymentMethod: 'gotyme_instapay',
+    planVersionId: '22222222-2222-4222-8222-222222222222',
+    paymentChannelVersionId: '33333333-3333-4333-8333-333333333333',
     paymentDate: '2026-08-18',
-    transactionReference: 'GOTYME-2026-0001',
-    note: 'Paid through the displayed GoTyme InstaPay QR.',
+    paymentReference: 'GOTYME-2026-0001',
+    amountPhp: '0.01',
   });
-  assert.equal(value.planCode, 'early_access_beta');
-  assert.equal(value.paymentMethod, 'gotyme_instapay');
-  assert.equal(value.amountPhp, 149);
+  assert.equal(value.planVersionId, '22222222-2222-4222-8222-222222222222');
+  assert.equal(value.paymentChannelVersionId, '33333333-3333-4333-8333-333333333333');
+  assert.equal(value.paymentReference, 'GOTYME-2026-0001');
+  assert.equal('amountPhp' in value, false);
 });
 
-test('payment validation rejects retired plans, unapproved channels, and malformed references', () => {
+test('payment validation rejects malformed version IDs and references', () => {
   for (const input of [
-    { planCode: 'premium', amountPhp: 499, paymentMethod: 'gotyme_instapay', paymentDate: '2026-08-18', transactionReference: 'REF-1' },
-    { planCode: 'early_access_beta', amountPhp: 149, paymentMethod: 'gcash', paymentDate: '2026-08-18', transactionReference: 'REF-1' },
-    { planCode: 'early_access_beta', amountPhp: 149, paymentMethod: 'gotyme_instapay', paymentDate: '2026-08-18', transactionReference: '<script>' },
+    { planVersionId: 'premium', paymentChannelVersionId: '33333333-3333-4333-8333-333333333333', paymentDate: '2026-08-18', paymentReference: 'REF-1' },
+    { planVersionId: '22222222-2222-4222-8222-222222222222', paymentChannelVersionId: 'gcash', paymentDate: '2026-08-18', paymentReference: 'REF-1' },
+    { planVersionId: '22222222-2222-4222-8222-222222222222', paymentChannelVersionId: '33333333-3333-4333-8333-333333333333', paymentDate: '2026-08-18', paymentReference: '<script>' },
   ]) {
     assert.throws(() => normalizePaymentFields(input), PaymentValidationError);
   }
@@ -1889,13 +1889,27 @@ test('refund and partnership validation require strong identifiers, contact, mes
   }), PaymentValidationError);
 });
 
-test('plans endpoint exposes only the approved Early Access offer', async () => {
+test('plans endpoint exposes the authoritative published snapshot', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url) => {
-    if (String(url).endsWith('/rest/v1/rpc/phase4_plan_catalog')) {
-      return Response.json([
-        { planCode: 'early_access_beta', pricePhp: 149, checkoutEnabled: true },
-      ]);
+    if (String(url).endsWith('/rest/v1/rpc/phase4_pricing_snapshot')) {
+      return Response.json({
+        revisionId: '11111111-1111-4111-8111-111111111111',
+        serverNow: '2026-09-02T00:00:00Z',
+        page: {},
+        plans: [{
+          versionId: '22222222-2222-4222-8222-222222222222',
+          planCode: 'bar_review_30_day',
+          name: '30-Day Access',
+          priceCentavos: 19900,
+          durationDays: 30,
+          visible: true,
+          checkoutEnabled: true,
+          checkoutOpen: true,
+        }],
+        paymentMethods: [],
+        faqs: [],
+      });
     }
     throw new Error(`Unexpected plans fetch: ${url}`);
   };
@@ -1911,22 +1925,28 @@ test('plans endpoint exposes only the approved Early Access offer', async () => 
     });
     const payload = await response.json();
     assert.equal(response.status, 200);
-    assert.deepEqual(payload.plans.map((plan) => plan.planCode), ['early_access_beta']);
-    assert.equal(payload.plans[0].pricePhp, 149);
+    assert.deepEqual(payload.plans.map((plan) => plan.planCode), ['bar_review_30_day']);
+    assert.equal(payload.plans[0].priceCentavos, 19900);
+    assert.deepEqual(payload.pricing.plans, payload.plans);
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
-test('plans endpoint defensively removes retired Standard and Premium rows', async () => {
+test('plans endpoint preserves every sanitized plan returned by the published revision', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url) => {
-    if (String(url).endsWith('/rest/v1/rpc/phase4_plan_catalog')) {
-      return Response.json([
-        { planCode: 'early_access_beta', pricePhp: 149, checkoutEnabled: true },
-        { planCode: 'standard', pricePhp: 249, checkoutEnabled: true },
-        { planCode: 'premium', pricePhp: 499, checkoutEnabled: true, status: 'active' },
-      ]);
+    if (String(url).endsWith('/rest/v1/rpc/phase4_pricing_snapshot')) {
+      return Response.json({
+        revisionId: '11111111-1111-4111-8111-111111111111',
+        page: {},
+        plans: [
+          { versionId: '22222222-2222-4222-8222-222222222222', planCode: 'early_access_beta', name: 'Legacy Early Access', priceCentavos: 14900, durationDays: null, visible: false },
+          { versionId: '33333333-3333-4333-8333-333333333333', planCode: 'bar_review_30_day', name: '30-Day Access', priceCentavos: 19900, durationDays: 30, visible: true },
+        ],
+        paymentMethods: [],
+        faqs: [],
+      });
     }
     throw new Error(`Unexpected plans fetch: ${url}`);
   };
@@ -1942,7 +1962,10 @@ test('plans endpoint defensively removes retired Standard and Premium rows', asy
     });
     const payload = await response.json();
     assert.equal(response.status, 200);
-    assert.deepEqual(payload.plans.map((plan) => plan.planCode), ['early_access_beta']);
+    assert.deepEqual(payload.plans.map((plan) => plan.planCode), [
+      'early_access_beta',
+      'bar_review_30_day',
+    ]);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -1962,19 +1985,26 @@ test('payment endpoint authenticates, verifies file bytes, uploads privately, an
       assert.equal(init.headers['Content-Type'], 'image/png');
       return Response.json({ Key: 'private-object' });
     }
-    if (target.endsWith('/rest/v1/rpc/phase4_create_payment_request')) {
+    if (target.endsWith('/rest/v1/rpc/phase4_create_payment_request_v2')) {
       const body = JSON.parse(init.body);
       assert.equal(body.p_user_id, '11111111-1111-4111-8111-111111111111');
-      assert.equal(body.p_plan_code, 'early_access_beta');
-      assert.equal(body.p_payment_method, 'gotyme_instapay');
-      assert.equal(body.p_amount_php, 149);
-      assert.match(body.p_proof_object_path, /^11111111-1111-4111-8111-111111111111\/[0-9a-f-]+\.png$/);
+      assert.equal(body.p_plan_version_id, '33333333-3333-4333-8333-333333333333');
+      assert.equal(body.p_payment_channel_version_id, '44444444-4444-4444-8444-444444444444');
+      assert.equal('p_amount_php' in body, false);
+      assert.match(body.p_proof_path, /^11111111-1111-4111-8111-111111111111\/[0-9a-f-]+\.png$/);
       assert.match(body.p_proof_sha256, /^[0-9a-f]{64}$/);
       return Response.json({
         id: '22222222-2222-4222-8222-222222222222',
         status: 'pending',
-        planCode: 'early_access_beta',
-        amountPhp: 149,
+        planCode: 'bar_review_30_day',
+        planVersionId: '33333333-3333-4333-8333-333333333333',
+        paymentChannelVersionId: '44444444-4444-4444-8444-444444444444',
+        pricingRevisionId: '55555555-5555-4555-8555-555555555555',
+        planName: '30-Day Access',
+        amountCentavos: 19900,
+        currency: 'PHP',
+        durationDays: 30,
+        entitlementMode: 'rolling_days',
         replayed: false,
       });
     }
@@ -1982,12 +2012,11 @@ test('payment endpoint authenticates, verifies file bytes, uploads privately, an
   };
   try {
     const form = new FormData();
-    form.set('planCode', 'early_access_beta');
-    form.set('amountPhp', '149');
-    form.set('paymentMethod', 'gotyme_instapay');
+    form.set('planVersionId', '33333333-3333-4333-8333-333333333333');
+    form.set('paymentChannelVersionId', '44444444-4444-4444-8444-444444444444');
+    form.set('amountPhp', '0.01');
     form.set('paymentDate', '2026-08-18');
-    form.set('transactionReference', 'GOTYME-TEST-001');
-    form.set('note', 'Synthetic Worker test');
+    form.set('paymentReference', 'GOTYME-TEST-001');
     form.set(
       'proof',
       new File(
@@ -2033,11 +2062,10 @@ test('unsafe payment proof fails before any private upload or database call', as
   };
   try {
     const form = new FormData();
-    form.set('planCode', 'early_access_beta');
-    form.set('amountPhp', '149');
-    form.set('paymentMethod', 'gotyme_instapay');
+    form.set('planVersionId', '33333333-3333-4333-8333-333333333333');
+    form.set('paymentChannelVersionId', '44444444-4444-4444-8444-444444444444');
     form.set('paymentDate', '2026-08-18');
-    form.set('transactionReference', 'GOTYME-TEST-UNSAFE-001');
+    form.set('paymentReference', 'GOTYME-TEST-UNSAFE-001');
     form.set('proof', new File(['<html>unsafe</html>'], 'proof.png', { type: 'image/png' }));
     const response = await worker.fetch(new Request('https://worker.example/payments/submit', {
       method: 'POST',

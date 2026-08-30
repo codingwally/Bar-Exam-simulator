@@ -150,12 +150,13 @@ function encodedStoragePath(value) {
 async function canonicalPaymentProof(env, context) {
   const supabaseUrl = configuredSupabaseUrl(env);
   const serviceRoleKey = String(env?.SUPABASE_SERVICE_ROLE_KEY || '').trim();
-  const objectPath = cleanSingleLine(context?.proofObjectPath, 500);
-  if (!supabaseUrl || !serviceRoleKey || !objectPath) {
+  const objectPath = cleanSingleLine(context?.proofObjectPath || context?.proofPath, 500);
+  const bucketId = cleanSingleLine(context?.proofBucket, 80) || 'payment-proofs';
+  if (!supabaseUrl || !serviceRoleKey || !objectPath || bucketId !== 'payment-proofs') {
     throw new Error('Canonical payment proof is unavailable.');
   }
   const response = await fetch(new URL(
-    `/storage/v1/object/payment-proofs/${encodedStoragePath(objectPath)}`,
+    `/storage/v1/object/${bucketId}/${encodedStoragePath(objectPath)}`,
     supabaseUrl,
   ), {
     headers: {
@@ -176,7 +177,7 @@ async function canonicalPaymentProof(env, context) {
     throw new Error('Canonical payment proof integrity verification failed.');
   }
   return {
-    name: cleanSingleLine(context?.proofOriginalName, 180) || 'payment-proof',
+    name: cleanSingleLine(context?.proofOriginalName || context?.proofName, 180) || 'payment-proof',
     type: cleanSingleLine(context?.proofMimeType, 100) || 'application/octet-stream',
     size: bytes.length,
     bytes,
@@ -195,15 +196,66 @@ function philippineDateTime(value) {
 }
 
 function paymentChannelLabel(value) {
-  return String(value || '').trim().toLowerCase() === 'gotyme_instapay'
-    ? 'GoTyme InstaPay'
-    : 'BPI InstaPay';
+  const original = cleanSingleLine(value, 120);
+  const method = original.toLowerCase();
+  if (method === 'gotyme_instapay') return 'GoTyme InstaPay';
+  if (method === 'bpi_instapay') return 'BPI InstaPay';
+  return original || 'Not provided';
 }
 
-function paymentEmailText({ payment, fields, user, proof, proofHash }) {
+function trustedPaymentEmailDetails(payment = {}, fields = {}) {
+  const planCode = cleanSingleLine(payment.planCode, 64).toLowerCase();
+  const historicalEarlyAccess = !payment.planVersionId
+    && (!planCode || planCode === 'early_access_beta');
+  const planName = cleanSingleLine(payment.planName, 120)
+    || (historicalEarlyAccess ? 'Early Access' : planCode || 'Published plan');
+  const centavos = Number(payment.amountCentavos);
+  const hasCentavos = payment.amountCentavos != null && payment.amountCentavos !== ''
+    && Number.isSafeInteger(centavos) && centavos >= 0;
+  const legacyAmount = payment.amountPhp == null || payment.amountPhp === ''
+    ? Number.NaN
+    : Number(payment.amountPhp);
+  const amountPhp = hasCentavos
+    ? centavos / 100
+    : Number.isFinite(legacyAmount) && legacyAmount >= 0
+      ? legacyAmount
+      : historicalEarlyAccess ? 149 : null;
+  const amountLabel = amountPhp == null
+    ? 'Not available'
+    : new Intl.NumberFormat('en-PH', {
+      style: 'currency',
+      currency: cleanSingleLine(payment.currency, 3).toUpperCase() || 'PHP',
+    }).format(amountPhp);
+  const durationDays = Number(payment.durationDays);
+  const fixedEndsAt = payment.fixedEntitlementEndsAt
+    || payment.fixedEndsAt
+    || payment.purchasedEndsAt
+    || payment.subscription?.expiresAt;
+  const termLabel = Number.isInteger(durationDays) && durationDays > 0
+    ? `${durationDays} days from approval`
+    : fixedEndsAt
+      ? `Through ${philippineDateTime(fixedEndsAt)}`
+      : historicalEarlyAccess ? 'Legacy Early Access terms' : 'As captured by the approved plan';
+  const channel = paymentChannelLabel(
+    payment.paymentChannelLabel
+      || payment.channelLabel
+      || payment.paymentChannelName
+      || payment.paymentMethod
+      || fields.paymentMethod,
+  );
+  return { planCode, planName, amountLabel, termLabel, channel, historicalEarlyAccess };
+}
+
+export function paymentEmailText({ payment, fields = {}, user, proof, proofHash }) {
   const submittedAt = payment?.submittedAt || new Date().toISOString();
+  const trusted = trustedPaymentEmailDetails(payment, fields);
+  const paymentDate = payment?.paymentDate || fields.paymentDate;
+  const paymentReference = payment?.paymentReference
+    || payment?.transactionReference
+    || fields.paymentReference
+    || fields.transactionReference;
   return [
-    'A Due Diligence user submitted proof for the ₱149 Early Access subscription.',
+    `A Due Diligence user submitted proof for the ${trusted.planName} plan (${trusted.amountLabel}).`,
     '',
     'SUBSCRIBER',
     `Name: ${user?.displayName || 'Not provided'}`,
@@ -211,14 +263,15 @@ function paymentEmailText({ payment, fields, user, proof, proofHash }) {
     `User ID: ${user?.id || 'Not available'}`,
     '',
     'PAYMENT INFORMATION',
-    'Plan: Early Access',
-    'Amount to verify: ₱149.00',
-    `Payment channel: ${paymentChannelLabel(fields.paymentMethod)}`,
-    `Payment date declared by subscriber: ${cleanSingleLine(fields.paymentDate, 10) || 'Not provided'}`,
+    `Plan: ${trusted.planName}${trusted.planCode ? ` (${trusted.planCode})` : ''}`,
+    `Amount to verify: ${trusted.amountLabel}`,
+    `Access term: ${trusted.termLabel}`,
+    `Payment channel: ${trusted.channel}`,
+    `Payment date declared by subscriber: ${cleanSingleLine(paymentDate, 10) || 'Not provided'}`,
     `Proof submitted in the Philippines: ${philippineDateTime(submittedAt)}`,
     `Proof submitted in UTC: ${new Date(submittedAt).toISOString()}`,
-    `Transaction reference: ${cleanSingleLine(fields.transactionReference, 100) || 'Not provided'}`,
-    `Subscriber note: ${cleanSingleLine(fields.note, 2000) || 'None'}`,
+    `Transaction reference: ${cleanSingleLine(paymentReference, 100) || 'Not provided'}`,
+    `Subscriber note: ${cleanSingleLine(payment?.note || fields.note, 2000) || 'None'}`,
     '',
     'VERIFICATION RECORD',
     `Payment request ID: ${cleanSingleLine(payment?.id, 80) || 'Not available'}`,
@@ -273,11 +326,12 @@ export async function sendPaymentVerificationEmail(env, context) {
     : new Uint8Array(await context.proof.arrayBuffer());
   const proofHash = context.proof?.hash || await sha256Hex(proofBytes);
   const subjectName = context.user?.displayName || context.user?.email || 'subscriber';
+  const trusted = trustedPaymentEmailDetails(context.payment, context.fields);
   const message = {
     from,
     to: [recipients[0]],
     bcc: recipients.slice(1),
-    subject: `Due Diligence ₱149 payment proof — ${cleanSingleLine(subjectName, 120)}`,
+    subject: `Due Diligence ${trusted.amountLabel} ${trusted.planName} proof — ${cleanSingleLine(subjectName, 120)}`,
     text: paymentEmailText({
       payment: context.payment,
       fields: context.fields,
@@ -349,6 +403,7 @@ export async function dispatchQueuedPaymentNotification(env, paymentRequestId = 
       fields: {
         paymentMethod: payment.paymentMethod,
         paymentDate: payment.paymentDate,
+        paymentReference: payment.paymentReference,
         transactionReference: payment.transactionReference,
         note: payment.note,
       },

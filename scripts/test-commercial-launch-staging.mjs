@@ -23,6 +23,7 @@ const createdUsers = [];
 const createdInviteHashes = [];
 const createdNotificationIds = [];
 let currentLegalPolicy = null;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const serviceHeaders = {
   apikey: SERVICE_ROLE_KEY,
@@ -71,6 +72,92 @@ async function serviceRpc(name, payload, expected = [200, 204]) {
     headers: serviceHeaders,
     body: JSON.stringify(payload),
   }, expected)).body;
+}
+
+async function serviceRpcFailure(name, payload) {
+  return (await jsonRequest(`${SUPABASE_URL}/rest/v1/rpc/${name}`, {
+    method: 'POST',
+    headers: serviceHeaders,
+    body: JSON.stringify(payload),
+  }, [400])).body;
+}
+
+function philippineDate(instant = new Date()) {
+  const values = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Manila',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(instant).map(({ type, value }) => [type, value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function compatiblePaymentMethods(pricing, plan) {
+  return pricing.paymentMethods.filter((method) => (
+    method.enabled === true
+      && method.visible === true
+      && typeof method.qrUrl === 'string'
+      && method.qrUrl.trim().length > 0
+      && (!method.planCode || method.planCode === plan.planCode)
+      && (
+        method.qrAmountMode === 'generic'
+        || method.qrAmountCentavos === plan.priceCentavos
+      )
+  ));
+}
+
+function validatePublicPricingResponse(payload) {
+  assert.equal(payload.ok, true);
+  assert.ok(payload.pricing && typeof payload.pricing === 'object');
+  const pricing = payload.pricing;
+  assert.match(pricing.revisionId, UUID_PATTERN);
+  assert.equal(payload.revisionId, pricing.revisionId);
+  assert.ok(Number.isFinite(Date.parse(pricing.serverNow)));
+  assert.equal(payload.serverNow, pricing.serverNow);
+  assert.ok(Array.isArray(pricing.plans));
+  assert.ok(Array.isArray(pricing.paymentMethods));
+  assert.deepEqual(payload.plans, pricing.plans);
+  for (const plan of pricing.plans) {
+    assert.match(plan.versionId, UUID_PATTERN);
+    assert.ok(typeof plan.planCode === 'string' && plan.planCode.length > 0);
+    assert.ok(typeof plan.name === 'string' && plan.name.length > 0);
+    assert.ok(Number.isInteger(plan.priceCentavos) && plan.priceCentavos >= 0);
+    if (plan.checkoutEnabled === true) assert.ok(plan.priceCentavos > 0);
+    assert.equal(plan.currency, 'PHP');
+    assert.ok(['fixed_end', 'rolling_days'].includes(plan.entitlementMode));
+    const compatibleMethods = compatiblePaymentMethods(pricing, plan);
+    if (plan.checkoutOpen === true) {
+      assert.ok(
+        compatibleMethods.length > 0,
+        `Checkout-open plan ${plan.planCode} must expose a compatible QR-backed payment method.`,
+      );
+    }
+    if (plan.status === 'payment_channel_required') {
+      assert.equal(plan.checkoutOpen, false);
+      assert.equal(compatibleMethods.length, 0);
+    }
+  }
+  if (pricing.plans.length === 0) {
+    assert.equal(
+      pricing.paymentMethods.length,
+      0,
+      'An intentionally empty public catalog must not expose an orphan payment QR.',
+    );
+  }
+  return pricing;
+}
+
+function accessEvidence(access) {
+  return {
+    accessMode: access.accessMode,
+    accountLabel: access.accountLabel,
+    unlimited: access.unlimited,
+    tokenLimit: access.tokenLimit,
+    tokensUsed: access.tokensUsed,
+    tokensReserved: access.tokensReserved,
+    tokensRemaining: access.tokensRemaining,
+    entitlementEndsAt: access.entitlementEndsAt,
+  };
 }
 
 async function createUser(label) {
@@ -156,7 +243,7 @@ async function reserve(userId, key, question, track = 'bar_practice') {
 
 async function verifySoftLaunchStaging() {
   const rows = await serviceGet(
-    'platform_access_settings?singleton=eq.true&select=soft_launch_enabled,commercial_launch_enabled,public_pricing_enabled,global_beta_all_access_enabled,current_terms_version,current_privacy_version,introductory_token_limit,introductory_token_disclosure_version,early_access_regular_price_centavos,early_access_manual_renewal_at',
+    'platform_access_settings?singleton=eq.true&select=soft_launch_enabled,commercial_launch_enabled,public_pricing_enabled,global_beta_all_access_enabled,current_terms_version,current_privacy_version,introductory_token_limit,introductory_token_disclosure_version,early_access_manual_renewal_at',
   );
   assert.equal(rows.length, 1);
   assert.equal(rows[0].soft_launch_enabled, true);
@@ -166,7 +253,6 @@ async function verifySoftLaunchStaging() {
   assert.equal(rows[0].current_terms_version, 'terms-soft-launch-v1-2026-08-21');
   assert.equal(rows[0].current_privacy_version, 'privacy-soft-launch-v1-2026-08-21');
   assert.equal(rows[0].introductory_token_limit, 5);
-  assert.equal(rows[0].early_access_regular_price_centavos, 19900);
   assert.ok(rows[0].introductory_token_disclosure_version);
   assert.ok(rows[0].early_access_manual_renewal_at);
 }
@@ -206,16 +292,9 @@ try {
     completeMandatoryCommercialProfile(commercialProfile(provisionalUser, 'Provisional')),
   ]);
 
-  console.log('STAGING_GATE: validating the single Early Access public catalog');
+  console.log('STAGING_GATE: validating the Founder-published pricing catalog');
   const plans = await workerPost('/plans', {});
-  assert.equal(plans.ok, true);
-  assert.deepEqual(plans.plans.map((plan) => plan.planCode), ['early_access_beta']);
-  assert.equal(plans.plans[0].priceCentavos, 14900);
-  assert.equal(plans.plans[0].regularPriceCentavos, 19900);
-  assert.equal(plans.plans[0].billing, 'manual_renewal');
-  assert.equal(plans.plans[0].manualRenewal, true);
-  assert.equal(plans.plans[0].automaticRenewal, false);
-  assert.equal(plans.plans[0].checkoutEnabled, true);
+  const publicPricing = validatePublicPricingResponse(plans);
 
   const freeInitial = await accessSnapshot(freeUser.id);
   assert.equal(freeInitial.accessMode, 'introductory');
@@ -272,76 +351,190 @@ try {
     .update(foundingUser.email.trim().toLowerCase())
     .digest('hex');
   createdInviteHashes.push(foundingHash);
+  const foundingExpiresAt = new Date(
+    Date.parse(publicPricing.serverNow) + (24 * 60 * 60 * 1000),
+  ).toISOString();
   await serviceWrite('founding_beta_invites', 'POST', {
     email_hash: foundingHash,
-    access_ends_at: '2026-09-01T23:59:59+08:00',
+    access_ends_at: foundingExpiresAt,
   });
   const founding = await accessSnapshot(foundingUser.id);
   assert.equal(founding.accessMode, 'founding_beta');
   assert.equal(founding.accountLabel, 'Founding Beta');
   assert.equal(founding.unlimited, true);
-  assert.equal(founding.entitlementEndsAt, '2026-09-01T15:59:59+00:00');
+  assert.equal(Date.parse(founding.entitlementEndsAt), Date.parse(foundingExpiresAt));
 
-  console.log('STAGING_GATE: proving one nonrenewable provisional payment window');
-  const paymentKey = requestKey('commercial_payment');
-  const payment = await serviceRpc('phase4_create_payment_request', {
-    p_user_id: provisionalUser.id,
-    p_plan_code: 'early_access_beta',
-    p_amount_php: 149,
-    p_payment_method: 'gotyme_instapay',
-    p_payment_date: new Date().toISOString().slice(0, 10),
-    p_transaction_reference: `SYNTH-${runId}`,
-    p_student_note: `Synthetic staging payment verification ${runId}`,
-    p_proof_object_path: `${provisionalUser.id}/${randomUUID()}.png`,
-    p_proof_original_name: 'synthetic-proof.png',
-    p_proof_mime_type: 'image/png',
-    p_proof_size_bytes: 1024,
-    p_proof_sha256: 'a'.repeat(64),
-    p_request_key: paymentKey,
-  });
-  assert.equal(payment.status, 'pending');
-  assert.equal(payment.amountCentavos, 14900);
-  assert.ok(Number.isFinite(Date.parse(payment.provisionalAccessExpiresAt)));
-  const notifications = await serviceGet(
-    `outbound_notifications?related_resource_id=eq.${payment.id}&select=id`,
-  );
-  createdNotificationIds.push(...notifications.map((item) => item.id));
-  const provisional = await accessSnapshot(provisionalUser.id);
-  assert.equal(provisional.accessMode, 'provisional');
-  assert.equal(provisional.accountLabel, 'Early Access — pending');
-  assert.equal(provisional.unlimited, true);
-  const repeatedPayment = await serviceRpc('phase4_create_payment_request', {
-    p_user_id: provisionalUser.id,
-    p_plan_code: 'early_access_beta',
-    p_amount_php: 149,
-    p_payment_method: 'gotyme_instapay',
-    p_payment_date: new Date().toISOString().slice(0, 10),
-    p_transaction_reference: `SYNTH-REPEAT-${runId}`,
-    p_student_note: `Synthetic replay verification ${runId}`,
-    p_proof_object_path: `${provisionalUser.id}/${randomUUID()}.png`,
-    p_proof_original_name: 'synthetic-repeat.png',
-    p_proof_mime_type: 'image/png',
-    p_proof_size_bytes: 1024,
-    p_proof_sha256: 'b'.repeat(64),
-    p_request_key: requestKey('commercial_payment_replay'),
-  });
-  assert.equal(repeatedPayment.id, payment.id);
-  assert.equal(repeatedPayment.provisionalGrantReused, true);
-  assert.equal(repeatedPayment.provisionalAccessExpiresAt, payment.provisionalAccessExpiresAt);
+  // Refresh immediately before exercising checkout so an Admin publication
+  // during the longer quota/founding checks cannot leave us using stale IDs.
+  const paymentPricing = validatePublicPricingResponse(await workerPost('/plans', {}));
+  const checkoutPlan = paymentPricing.plans.find((plan) => (
+    plan.checkoutOpen === true && compatiblePaymentMethods(paymentPricing, plan).length > 0
+  ));
+  let paymentOutcome;
+  if (checkoutPlan) {
+    console.log('STAGING_GATE: proving versioned payment capture and exact retry');
+    const paymentMethod = compatiblePaymentMethods(paymentPricing, checkoutPlan)[0];
+    assert.match(paymentMethod.versionId, UUID_PATTERN);
+    const paymentPayload = {
+      p_user_id: provisionalUser.id,
+      p_plan_version_id: checkoutPlan.versionId,
+      p_payment_channel_version_id: paymentMethod.versionId,
+      p_payment_date: philippineDate(new Date(Date.parse(paymentPricing.serverNow))),
+      p_payment_reference: `SYNTH-${runId}`,
+      p_proof_bucket: 'payment-proofs',
+      p_proof_path: `${provisionalUser.id}/${randomUUID()}.png`,
+      p_proof_mime_type: 'image/png',
+      p_proof_size_bytes: 1024,
+      p_proof_sha256: createHash('sha256').update(`payment-${runId}`).digest('hex'),
+    };
+    const payment = await serviceRpc('phase4_create_payment_request_v2', paymentPayload);
+    const paymentId = payment.id;
+    assert.equal(payment.status, 'pending');
+    assert.equal(payment.pricingRevisionId, paymentPricing.revisionId);
+    assert.equal(payment.planVersionId, checkoutPlan.versionId);
+    assert.equal(payment.paymentChannelVersionId, paymentMethod.versionId);
+    assert.equal(payment.planCode, checkoutPlan.planCode);
+    assert.equal(payment.planName, checkoutPlan.name);
+    assert.equal(payment.amountCentavos, checkoutPlan.priceCentavos);
+    assert.equal(payment.currency, checkoutPlan.currency);
+    assert.equal(payment.durationDays, checkoutPlan.durationDays ?? null);
+    assert.equal(payment.entitlementMode, checkoutPlan.entitlementMode);
+    if (checkoutPlan.fixedEntitlementEndsAt) {
+      assert.equal(
+        Date.parse(payment.fixedEndsAt),
+        Date.parse(checkoutPlan.fixedEntitlementEndsAt),
+      );
+    } else {
+      assert.equal(payment.fixedEndsAt, null);
+    }
+    assert.equal(payment.provisionalGrantReused, false);
+    assert.equal(payment.replayed, false);
+    assert.ok(Number.isFinite(Date.parse(payment.provisionalAccessExpiresAt)));
+    const notifications = await serviceGet(
+      `outbound_notifications?related_resource_id=eq.${payment.id}&select=id`,
+    );
+    assert.equal(notifications.length, 1);
+    createdNotificationIds.push(...notifications.map((item) => item.id));
+    const provisional = await accessSnapshot(provisionalUser.id);
+    assert.equal(provisional.accessMode, 'provisional');
+    assert.equal(provisional.accountLabel, `${checkoutPlan.name} — pending`);
+    assert.equal(provisional.unlimited, true);
+    const repeatedPayment = await serviceRpc('phase4_create_payment_request_v2', paymentPayload);
+    assert.equal(repeatedPayment.id, payment.id);
+    assert.equal(repeatedPayment.replayed, true);
+    assert.equal(repeatedPayment.provisionalGrantReused, false);
+    assert.equal(repeatedPayment.provisionalAccessExpiresAt, payment.provisionalAccessExpiresAt);
+    const distinctPaymentFailure = await serviceRpcFailure('phase4_create_payment_request_v2', {
+      ...paymentPayload,
+      p_payment_reference: `SYNTH-DISTINCT-${runId}`,
+      p_proof_path: `${provisionalUser.id}/${randomUUID()}.png`,
+      p_proof_sha256: createHash('sha256').update(`distinct-${runId}`).digest('hex'),
+    });
+    assert.match(
+      String(distinctPaymentFailure?.message || ''),
+      /payment request is already awaiting review/i,
+    );
+    const [paymentRows, historyRows, notificationRows] = await Promise.all([
+      serviceGet(`payment_requests?user_id=eq.${provisionalUser.id}&select=id,provisional_access_expires_at`),
+      serviceGet(`payment_request_history?payment_request_id=eq.${paymentId}&action=eq.submitted&select=id`),
+      serviceGet(`outbound_notifications?related_resource_id=eq.${paymentId}&select=id`),
+    ]);
+    assert.equal(paymentRows.length, 1);
+    assert.equal(paymentRows[0].id, paymentId);
+    assert.equal(
+      Date.parse(paymentRows[0].provisional_access_expires_at),
+      Date.parse(payment.provisionalAccessExpiresAt),
+    );
+    assert.equal(historyRows.length, 1);
+    assert.equal(notificationRows.length, 1);
+    const provisionalAfterRetries = await accessSnapshot(provisionalUser.id);
+    assert.equal(
+      Date.parse(provisionalAfterRetries.entitlementEndsAt),
+      Date.parse(payment.provisionalAccessExpiresAt),
+    );
+    paymentOutcome = {
+      checkoutState: 'verified',
+      planCode: checkoutPlan.planCode,
+      amountCentavos: checkoutPlan.priceCentavos,
+      durationDays: checkoutPlan.durationDays ?? null,
+      exactRetry: true,
+    };
+  } else {
+    console.log('STAGING_GATE: proving unpublished or incompatible checkout fails closed');
+    assert.ok(paymentPricing.plans.every((plan) => plan.checkoutOpen !== true));
+    const failClosedPlan = paymentPricing.plans.find(
+      (plan) => plan.status === 'payment_channel_required',
+    ) || paymentPricing.plans.find(
+      (plan) => ['upcoming', 'unavailable', 'closed', 'legacy'].includes(plan.status),
+    ) || paymentPricing.plans[0] || null;
+    if (failClosedPlan) {
+      const before = accessEvidence(await accessSnapshot(provisionalUser.id));
+      const paymentFailure = await serviceRpcFailure('phase4_create_payment_request_v2', {
+        p_user_id: provisionalUser.id,
+        p_plan_version_id: failClosedPlan.versionId,
+        p_payment_channel_version_id: randomUUID(),
+        p_payment_date: philippineDate(new Date(Date.parse(paymentPricing.serverNow))),
+        p_payment_reference: `SYNTH-CLOSED-${runId}`,
+        p_proof_bucket: 'payment-proofs',
+        p_proof_path: `${provisionalUser.id}/${randomUUID()}.png`,
+        p_proof_mime_type: 'image/png',
+        p_proof_size_bytes: 1024,
+        p_proof_sha256: createHash('sha256').update(`closed-${runId}`).digest('hex'),
+      });
+      assert.match(
+        String(paymentFailure?.message || ''),
+        failClosedPlan.status === 'payment_channel_required'
+          ? /Payment method is not compatible/
+          : /Selected pricing plan is not open/,
+      );
+      const paymentRows = await serviceGet(
+        `payment_requests?user_id=eq.${provisionalUser.id}&select=id`,
+      );
+      assert.equal(paymentRows.length, 0);
+      const after = accessEvidence(await accessSnapshot(provisionalUser.id));
+      assert.deepEqual(after, before);
+    }
+    paymentOutcome = {
+      checkoutState: 'fail_closed',
+      displayedPlans: paymentPricing.plans.length,
+      paymentCreated: false,
+    };
+  }
 
   outcome = {
     ok: true,
     runId,
-    publicCatalog: ['early_access_beta'],
+    pricingRevisionId: paymentPricing.revisionId,
+    publicCatalog: paymentPricing.plans.map((plan) => plan.planCode),
     introductoryTokens: { limit: 5, concurrentAccepted: 5, concurrentDenied: 1 },
     failedGradeReleased: true,
     foundingBeta: { claimedByHash: true, unlimited: true },
-    provisionalPayment: { oneTimeWindow: true, amountCentavos: 14900 },
+    provisionalPayment: paymentOutcome,
   };
 } finally {
   console.log('STAGING_GATE: cleaning exact synthetic commercial records');
   const cleanupErrors = [];
-  for (const notificationId of createdNotificationIds.reverse()) {
+  // Notifications intentionally do not cascade from payment requests. Discover
+  // them again before user deletion so even an assertion immediately after a
+  // successful payment cannot leave synthetic Admin inbox residue.
+  for (const userId of createdUsers) {
+    const paymentRows = await serviceGet(
+      `payment_requests?user_id=eq.${encodeURIComponent(userId)}&select=id`,
+    ).catch((error) => {
+      cleanupErrors.push(error);
+      return [];
+    });
+    for (const paymentRow of paymentRows) {
+      const notificationRows = await serviceGet(
+        `outbound_notifications?related_resource_id=eq.${encodeURIComponent(paymentRow.id)}&select=id`,
+      ).catch((error) => {
+        cleanupErrors.push(error);
+        return [];
+      });
+      createdNotificationIds.push(...notificationRows.map((item) => item.id));
+    }
+  }
+  for (const notificationId of [...new Set(createdNotificationIds)].reverse()) {
     await serviceWrite(
       `outbound_notifications?id=eq.${encodeURIComponent(notificationId)}`,
       'DELETE',

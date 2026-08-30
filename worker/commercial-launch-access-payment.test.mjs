@@ -173,56 +173,53 @@ test('legal acceptance remains a higher-priority denial than introductory exhaus
 
 function validPayment(overrides = {}) {
   return {
-    planCode: 'early_access_beta',
-    amountPhp: 149,
-    paymentMethod: 'gotyme_instapay',
+    planVersionId: '22222222-2222-4222-8222-222222222222',
+    paymentChannelVersionId: '33333333-3333-4333-8333-333333333333',
     paymentDate: '2026-08-18',
-    transactionReference: 'COMMERCIAL-REF-0001',
-    note: 'One-time Early Access payment proof.',
+    paymentReference: 'COMMERCIAL-REF-0001',
     ...overrides,
   };
 }
 
-test('accepts only the approved ₱149 one-time Early Access payment', () => {
+test('accepts a published plan-version and payment-channel selection', () => {
   const normalized = normalizePaymentFields(validPayment());
   assert.deepEqual(normalized, {
-    planCode: 'early_access_beta',
-    amountPhp: 149,
-    paymentMethod: 'gotyme_instapay',
+    planVersionId: '22222222-2222-4222-8222-222222222222',
+    paymentChannelVersionId: '33333333-3333-4333-8333-333333333333',
     paymentDate: '2026-08-18',
-    transactionReference: 'COMMERCIAL-REF-0001',
-    note: 'One-time Early Access payment proof.',
+    paymentReference: 'COMMERCIAL-REF-0001',
   });
-  assert.equal('pricePhp' in normalized, false);
-  assert.equal('subscriptionDays' in normalized, false);
+  assert.equal('amountPhp' in normalized, false);
+  assert.equal('planCode' in normalized, false);
+  assert.equal('paymentMethod' in normalized, false);
 });
 
-test('rejects an unapproved payment channel', () => {
+test('rejects a malformed payment-channel version', () => {
   assert.throws(
-    () => normalizePaymentFields(validPayment({ paymentMethod: 'cash' })),
+    () => normalizePaymentFields(validPayment({ paymentChannelVersionId: 'cash' })),
     (error) => error instanceof PaymentValidationError
-      && error.code === 'INVALID_PAYMENT_METHOD',
+      && ['INVALID_PAYMENT', 'INVALID_PAYMENT_METHOD'].includes(error.code),
   );
 });
 
-for (const retiredPlan of ['standard', 'premium']) {
-  test(`rejects retired ${retiredPlan} checkout submissions`, () => {
-    assert.throws(
-      () => normalizePaymentFields(validPayment({ planCode: retiredPlan })),
-      (error) => error instanceof PaymentValidationError
-        && error.code === 'PLAN_UNAVAILABLE',
-    );
-  });
-}
+test('rejects a malformed plan version and leaves plan availability to the database', () => {
+  assert.throws(
+    () => normalizePaymentFields(validPayment({ planVersionId: 'premium' })),
+    (error) => error instanceof PaymentValidationError
+      && ['INVALID_PAYMENT', 'PLAN_UNAVAILABLE'].includes(error.code),
+  );
+});
 
-test('rejects a client-supplied amount other than exactly ₱149', () => {
-  for (const amountPhp of [0, 148.99, 149.01, 249, Number.NaN]) {
-    assert.throws(
-      () => normalizePaymentFields(validPayment({ amountPhp })),
-      (error) => error instanceof PaymentValidationError
-        && error.code === 'INVALID_PAYMENT_AMOUNT',
-      `amount ${String(amountPhp)} must be rejected`,
-    );
+test('ignores every client-supplied price and plan label', () => {
+  for (const amountPhp of [0, 148.99, 149.01, 199, 249, Number.NaN]) {
+    const normalized = normalizePaymentFields(validPayment({
+      amountPhp,
+      planCode: 'early_access_beta',
+      paymentMethod: 'cash',
+    }));
+    assert.equal('amountPhp' in normalized, false);
+    assert.equal('planCode' in normalized, false);
+    assert.equal('paymentMethod' in normalized, false);
   }
 });
 

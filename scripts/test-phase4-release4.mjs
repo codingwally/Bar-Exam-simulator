@@ -49,9 +49,11 @@ for (const rpc of [
   'phase4_payment_proof_context',
 ]) {
   assert.match(migration, new RegExp(`function public\\.${rpc}\\b`));
-  const workerRpc = rpc === 'phase4_admin_operational_data'
-    ? 'phase4_admin_operational_data_scoped_v1'
-    : rpc;
+  const workerRpc = ({
+    phase4_plan_catalog: 'phase4_pricing_snapshot',
+    phase4_create_payment_request: 'phase4_create_payment_request_v2',
+    phase4_admin_operational_data: 'phase4_admin_operational_data_scoped_v1',
+  })[rpc] || rpc;
   assert.ok(worker.includes(`'${workerRpc}'`), `${workerRpc} must be called by the Worker`);
 }
 
@@ -87,17 +89,17 @@ assert.match(paymentCore, /image\/jpeg/);
 assert.match(paymentCore, /application\/pdf/);
 assert.match(paymentCore, /6 \* 1024 \* 1024/);
 assert.match(paymentCore, /PLAN_UNAVAILABLE/);
-assert.match(paymentCore, /planCode !== 'early_access_beta'/);
-assert.match(paymentCore, /\['gotyme_instapay', 'bpi_instapay'\]\.includes\(paymentMethod\)/);
-assert.match(paymentCore, /Math\.round\(amountPhp \* 100\) !== 14900/);
+assert.match(paymentCore, /PAYMENT_UUID_PATTERN/);
+assert.match(paymentCore, /planVersionId/);
+assert.match(paymentCore, /paymentChannelVersionId/);
+assert.doesNotMatch(paymentCore, /Math\.round\(amountPhp \* 100\) !== 14900/);
 assert.doesNotMatch(frontend, /assets\/payments\/gcash\.png|assets\/payments\/maribank\.png/);
-assert.match(frontend, /assets\/payments\/bpi-instapay-149\.png/);
-assert.doesNotMatch(frontend, /assets\/payments\/gotyme-instapay-149\.png/);
+assert.doesNotMatch(frontend, /assets\/payments\/(?:bpi|gotyme)-instapay-149\.png/);
 assert.match(frontend, /id="dd2-payment-form"/);
 assert.match(frontend, /async function submitCommercialPayment\(event\)/);
-assert.match(frontend, /Introductory tokens and Early Access/);
+assert.match(frontend, /Introductory tokens and paid access/);
 assert.match(frontend, /no automatic charge or automatic renewal/i);
-assert.match(frontend, /regular manual-renewal price is ₱199/i);
+assert.match(frontend, /plan, price, duration, and payment details shown at proof submission are stored/i);
 assert.doesNotMatch(frontend, /Beta access active/);
 assert.match(
   frontend,

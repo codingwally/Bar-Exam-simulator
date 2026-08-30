@@ -46,9 +46,13 @@ for (const required of [
   'robots.txt',
   'sitemap.xml',
   'admin/index.html',
+  'admin/pricing-editor.css',
+  'admin/pricing-editor.js',
   'admin/examination-room-admin.css',
   'admin/examination-room-admin.js',
   'assets/private-beta-session.js',
+  'assets/pricing-renderer.css',
+  'assets/pricing-renderer.js',
   'assets/private-beta-landing.css',
   'assets/due-diligence-controls.css',
   'assets/private-beta-landing.js',
@@ -183,7 +187,7 @@ assert.match(index, /id="site-header"[\s\S]*id="site-menu-toggle"[\s\S]*>Home<[\
 assert.match(index, /id="dd2-header-role-button"[\s\S]*id="dd2-header-exam-button"[\s\S]*>Examination Room<[\s\S]*id="dd-study-room-trigger"[\s\S]*>Study Room<[\s\S]*id="dd2-header-pricing-button"[\s\S]*>Plans &amp; Pricing</);
 assert.match(index, /id="dd-study-room-dialog" role="dialog" aria-modal="true"/);
 assert.match(index, /You won&rsquo;t have to study alone\./);
-assert.match(index, /phase2-experience\.js[^"\n]*pricing=study-room-recovery-20260829-1/);
+assert.match(index, /pricing-renderer\.js\?v=admin-pricing-builder-20260830-1[\s\S]*phase2-experience\.js[^"\n]*pricing=admin-builder-20260830-1/);
 assert.doesNotMatch(index, /href=["']\/study-room\//i);
 assert.match(studyRoomPage, /<title>Study Room — Due Diligence<\/title>/);
 assert.match(studyRoomPage, /Admin test room/);

@@ -20,6 +20,9 @@ export class PaymentValidationError extends Error {
   }
 }
 
+const PAYMENT_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+const STABLE_PLAN_CODE_PATTERN = /^[a-z][a-z0-9_]{2,63}$/u;
+
 function text(value, maximum, label, minimum = 1) {
   const normalized = String(value ?? '').trim();
   if (normalized.length < minimum || normalized.length > maximum) {
@@ -32,27 +35,72 @@ function text(value, maximum, label, minimum = 1) {
 }
 
 export function normalizePaymentFields(fields) {
+  const planVersionId = String(fields?.planVersionId || '').trim().toLowerCase();
+  if (!PAYMENT_UUID_PATTERN.test(planVersionId)) {
+    throw new PaymentValidationError(
+      'PLAN_UNAVAILABLE',
+      'Select a plan from the current published pricing page.',
+    );
+  }
+  const paymentChannelVersionId = String(fields?.paymentChannelVersionId || '').trim().toLowerCase();
+  if (!PAYMENT_UUID_PATTERN.test(paymentChannelVersionId)) {
+    throw new PaymentValidationError(
+      'INVALID_PAYMENT_METHOD',
+      'Select the payment channel shown for the current published plan.',
+    );
+  }
+  const paymentDate = text(fields?.paymentDate, 10, 'Payment date', 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(paymentDate)
+      || Number.isNaN(Date.parse(`${paymentDate}T00:00:00Z`))) {
+    throw new PaymentValidationError('INVALID_PAYMENT_DATE', 'Enter a valid payment date.');
+  }
+  const paymentReference = text(
+    fields?.paymentReference ?? fields?.transactionReference,
+    PAYMENT_LIMITS.maxReferenceLength,
+    'Transaction reference',
+    4,
+  );
+  if (!/^[\p{L}\p{N}][\p{L}\p{N} ._:/#-]{3,99}$/u.test(paymentReference)) {
+    throw new PaymentValidationError(
+      'INVALID_PAYMENT_REFERENCE',
+      'Enter the reference exactly as shown by the payment channel.',
+    );
+  }
+  return {
+    planVersionId,
+    paymentChannelVersionId,
+    paymentDate,
+    paymentReference,
+  };
+}
+
+// Kept only for the short zero-downtime cutover window. The database closes
+// this legacy contract at the authoritative September 1 Manila cutoff, while
+// the new browser contract uses immutable plan/channel version identifiers.
+export function normalizeLegacyPaymentFields(fields) {
   const planCode = text(fields?.planCode, 64, 'Plan', 3).toLowerCase();
   if (planCode !== 'early_access_beta') {
     throw new PaymentValidationError(
       'PLAN_UNAVAILABLE',
-      'Only the Early Access plan is available for new checkout.',
+      'Only the legacy Early Access offer can use this checkout form.',
     );
   }
-  const paymentMethod = text(fields?.paymentMethod, 24, 'Payment method', 3).toLowerCase();
-  if (!['gotyme_instapay', 'bpi_instapay'].includes(paymentMethod)) {
+  const paymentMethod = text(fields?.paymentMethod, 64, 'Payment method', 3).toLowerCase();
+  if (!STABLE_PLAN_CODE_PATTERN.test(paymentMethod)) {
     throw new PaymentValidationError(
       'INVALID_PAYMENT_METHOD',
-      'Select the InstaPay payment channel shown at checkout.',
+      'Select the payment channel shown on Plans & Pricing.',
     );
   }
   const amountPhp = Number(fields?.amountPhp);
+  const amountCentavos = Math.round(amountPhp * 100);
   if (!Number.isFinite(amountPhp)
-      || Math.round(amountPhp * 100) !== 14900
-      || Math.round(amountPhp * 100) !== amountPhp * 100) {
+      || amountCentavos <= 0
+      || amountCentavos > 100_000_000
+      || amountCentavos !== amountPhp * 100) {
     throw new PaymentValidationError(
       'INVALID_PAYMENT_AMOUNT',
-      'Early Access requires the exact one-time payment of ₱149.00.',
+      'Enter the peso amount shown on the legacy checkout.',
     );
   }
   const paymentDate = text(fields?.paymentDate, 10, 'Payment date', 10);
@@ -61,7 +109,7 @@ export function normalizePaymentFields(fields) {
     throw new PaymentValidationError('INVALID_PAYMENT_DATE', 'Enter a valid payment date.');
   }
   const transactionReference = text(
-    fields?.transactionReference,
+    fields?.transactionReference ?? fields?.paymentReference,
     PAYMENT_LIMITS.maxReferenceLength,
     'Transaction reference',
     4,
@@ -301,10 +349,10 @@ export function normalizePhase4AdminAction(payload) {
     let planCode = null;
     if (['activate', 'complimentary', 'replace_plan'].includes(operation)) {
       planCode = String(rawActionPayload.planCode || '').trim().toLowerCase();
-      if (!['early_access_beta', 'standard', 'premium'].includes(planCode)) {
+      if (!STABLE_PLAN_CODE_PATTERN.test(planCode)) {
         throw new PaymentValidationError(
           'PLAN_UNAVAILABLE',
-          'Select an active Early Access Beta, Standard, or Premium plan.',
+          'Select an active published plan with a valid stable code.',
         );
       }
     }

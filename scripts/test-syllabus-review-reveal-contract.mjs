@@ -442,7 +442,7 @@ for (const closeReason of ['close-button', 'back-button', 'backdrop', 'escape', 
 assert.match(phase2, /nativeViewMode\s*===\s*'action'/);
 assert.match(phase2, /dueDiligenceActionOverlayHandled/);
 assert.match(phase2, /Back to my answer/);
-assert.match(phase2, /Early Access is ₱149/);
+assert.match(phase2, /An active paid plan includes protected Syllabus-Based Review material/);
 assert.match(
   phase2,
   /Provisional access lets you continue practicing while payment is reviewed; Reveal Answer unlocks only after payment is verified\./,

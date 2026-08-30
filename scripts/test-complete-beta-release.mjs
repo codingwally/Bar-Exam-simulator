@@ -151,10 +151,10 @@ for (const featureId of ['spa-mock', 'spa-subject-matter', 'spa-progress', 'spa-
 assert.doesNotMatch(html, /Co-Counsel|Joint Venture/);
 assert.doesNotMatch(experience, /Co-Counsel|Joint Venture/);
 assert.match(experience, /one lifetime allowance of five practice tokens/i);
-assert.match(experience, /Early Access is available at the current promotional price of ₱149/);
+assert.match(experience, /plan, price, duration, and payment details shown at proof submission are stored/i);
 assert.doesNotMatch(experience, /planCode: 'free'|name: 'Free'/);
-assert.match(experience, /assets\/payments\/bpi-instapay-149\.png/);
-assert.doesNotMatch(experience, /assets\/payments\/gotyme-instapay-149\.png/);
+assert.doesNotMatch(experience, /assets\/payments\/(?:bpi|gotyme)-instapay-149\.png/);
+assert.match(experience, /paymentChannelVersionId/);
 assert.doesNotMatch(experience, /Pricing will be announced after beta testing\.|Beta access active\./);
 
 assert.match(examinations, /operation: 'subject_catalog'/);
@@ -169,8 +169,8 @@ assert.match(forum, /affirm_roster/);
 assert.match(worker, /\/admin\/content\/sync/);
 assert.match(worker, /release_stage_subject_matter_v2/);
 assert.match(worker, /release_finalize_all_content_v2/);
-assert.match(worker, /phase4_plan_catalog/);
-assert.match(worker, /planCode \|\| ''\) === 'early_access_beta'/);
+assert.match(worker, /phase4_pricing_snapshot/);
+assert.doesNotMatch(worker, /planCode \|\| ''\) === 'early_access_beta'/);
 assert.match(migration, /alter table public\.forum_posts force row level security;/);
 assert.match(
   migration,

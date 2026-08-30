@@ -1,0 +1,241 @@
+.dd-pricing {
+  --pricing-navy: var(--dd2-navy, #07182f);
+  --pricing-paper: var(--dd2-paper, #fffdf8);
+  --pricing-gold: var(--dd2-gold, #b8934f);
+  --pricing-muted: var(--dd2-muted, #637083);
+  --pricing-line: var(--dd2-line, rgba(15, 39, 68, .16));
+  color: var(--pricing-navy);
+}
+
+.dd-pricing-hero {
+  max-width: 760px;
+  margin: 0 auto 26px;
+  text-align: center;
+}
+
+.dd-pricing-eyebrow {
+  margin: 0 0 8px;
+  color: #7b5a1d;
+  font: 700 11px/1.4 var(--mono, "IBM Plex Mono", monospace);
+  letter-spacing: .11em;
+  text-transform: uppercase;
+}
+
+.dd-pricing-hero h1 {
+  margin: 0;
+  color: var(--pricing-navy);
+  font: 700 clamp(29px, 5vw, 42px)/1.12 var(--serif, Georgia, serif);
+}
+
+.dd-pricing-intro {
+  margin: 14px auto 0;
+  color: #465267;
+  font: 500 15px/1.7 var(--sans, Inter, sans-serif);
+}
+
+.dd-pricing-notice {
+  margin: 18px auto 0;
+  padding: 12px 15px;
+  color: #5f4518;
+  background: #fbf4e3;
+  border: 1px solid rgba(184, 147, 79, .35);
+  border-radius: 5px;
+  font: 650 12px/1.55 var(--sans, Inter, sans-serif);
+}
+
+.dd-pricing-plans {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr));
+  gap: 16px;
+  max-width: 920px;
+  margin: 0 auto;
+}
+
+.dd-pricing-plan {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: clamp(20px, 3vw, 28px);
+  background: linear-gradient(145deg, var(--pricing-paper), #f8f0dc);
+  border: 1px solid rgba(184, 147, 79, .48);
+  border-top: 3px solid var(--pricing-gold);
+  border-radius: 6px;
+  box-shadow: 0 14px 34px rgba(7, 24, 47, .09);
+}
+
+.dd-pricing-plan[data-checkout-state="disabled"],
+.dd-pricing-plan[data-checkout-state="closed"],
+.dd-pricing-plan[data-checkout-state="upcoming"] {
+  background: #f3f0e9;
+  border-color: var(--pricing-line);
+  box-shadow: none;
+}
+
+.dd-pricing-plan-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.dd-pricing-plan h2 {
+  margin: 0;
+  color: var(--pricing-navy);
+  font: 700 21px/1.25 var(--serif, Georgia, serif);
+}
+
+.dd-pricing-plan-badge {
+  display: inline-flex;
+  margin: 0 0 8px;
+  padding: 5px 8px;
+  color: #735217;
+  background: rgba(184, 147, 79, .12);
+  border: 1px solid rgba(184, 147, 79, .3);
+  border-radius: 999px;
+  font: 750 9px/1 var(--mono, "IBM Plex Mono", monospace);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.dd-pricing-price {
+  flex: 0 0 auto;
+  margin: 0;
+  text-align: right;
+}
+
+.dd-pricing-price strong {
+  display: block;
+  color: var(--pricing-navy);
+  font: 800 25px/1 var(--sans, Inter, sans-serif);
+}
+
+.dd-pricing-price span {
+  display: block;
+  margin-top: 6px;
+  color: var(--pricing-muted);
+  font: 650 10px/1.3 var(--sans, Inter, sans-serif);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.dd-pricing-description,
+.dd-pricing-renewal {
+  color: #465267;
+  font: 500 13px/1.65 var(--sans, Inter, sans-serif);
+}
+
+.dd-pricing-plan-features {
+  flex: 1;
+  margin: 15px 0 20px;
+  padding-left: 19px;
+  color: #39475b;
+  font: 500 13px/1.65 var(--sans, Inter, sans-serif);
+}
+
+.dd-pricing-renewal {
+  margin-top: auto;
+  color: var(--pricing-muted);
+  font-size: 11px;
+}
+
+.dd-pricing-cta {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 18px;
+  padding: 10px 16px;
+  color: #fff;
+  background: var(--pricing-navy);
+  border: 1px solid var(--pricing-navy);
+  border-radius: 4px;
+  font: 750 13px/1.3 var(--sans, Inter, sans-serif);
+  cursor: pointer;
+}
+
+.dd-pricing-cta:hover:not(:disabled),
+.dd-pricing-cta:focus-visible:not(:disabled) {
+  color: var(--pricing-navy);
+  background: #f0dba6;
+  border-color: var(--pricing-gold);
+}
+
+.dd-pricing-cta:focus-visible {
+  outline: 3px solid rgba(184, 147, 79, .42);
+  outline-offset: 2px;
+}
+
+.dd-pricing-cta:disabled {
+  color: #697486;
+  background: #e8e5de;
+  border-color: #d2cec4;
+  cursor: not-allowed;
+}
+
+.dd-pricing-empty {
+  grid-column: 1 / -1;
+  padding: 28px;
+  color: var(--pricing-muted);
+  background: rgba(255, 255, 255, .62);
+  border: 1px solid var(--pricing-line, rgba(15, 39, 68, .16));
+  text-align: center;
+}
+
+.dd-pricing-faqs {
+  max-width: 760px;
+  margin: 34px auto 0;
+}
+
+.dd-pricing-faqs > h2 {
+  margin: 0 0 12px;
+  font: 700 22px/1.3 var(--serif, Georgia, serif);
+}
+
+.dd-pricing-faqs details {
+  padding: 13px 0;
+  border-top: 1px solid var(--pricing-line);
+}
+
+.dd-pricing-faqs summary {
+  color: var(--pricing-navy);
+  font: 700 13px/1.5 var(--sans, Inter, sans-serif);
+  cursor: pointer;
+}
+
+.dd-pricing-faqs details p,
+.dd-pricing-fine-print {
+  color: var(--pricing-muted);
+  font: 500 12px/1.65 var(--sans, Inter, sans-serif);
+}
+
+.dd-pricing-fine-print {
+  max-width: 760px;
+  margin: 28px auto 0;
+  padding-top: 18px;
+  border-top: 1px solid var(--pricing-line);
+  text-align: center;
+}
+
+.dd2-payment-account {
+  display: grid;
+  gap: 3px;
+  margin: -4px 0 14px;
+  padding: 12px 14px;
+  color: #39475b;
+  background: #f6f2e9;
+  border: 1px solid var(--pricing-line, rgba(15, 39, 68, .16));
+  font: 600 12px/1.5 var(--sans, Inter, sans-serif);
+  white-space: pre-line;
+}
+
+.dd2-payment-account strong { color: var(--pricing-navy, #07182f); }
+.dd2-payment-method-choice { margin-top: 20px; }
+
+@media (max-width: 560px) {
+  .dd-pricing-hero { text-align: left; }
+  .dd-pricing-plan-heading { display: block; }
+  .dd-pricing-price { margin-top: 14px; text-align: left; }
+  .dd-pricing-price span { display: inline; margin-left: 5px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dd-pricing-cta { transition: none; }
+}

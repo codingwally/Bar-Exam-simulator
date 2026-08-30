@@ -239,7 +239,7 @@ jobs:
           live="$(curl --fail --silent --show-error "$STUDY_ROOM_WORKER_URL/assets/study-room-live.js?release=$GITHUB_SHA")"
           backgrounds="$(curl --fail --silent --show-error "$STUDY_ROOM_WORKER_URL/assets/study-room-backgrounds.js?release=$GITHUB_SHA")"
           processors="$(curl --fail --silent --show-error "$STUDY_ROOM_WORKER_URL/assets/vendor/livekit-track-processors.iife.js?release=$GITHUB_SHA")"
-          grep -Fq 'study-room-launch-20260830-1' <<<"$room"
+          grep -Fq 'study-room-meet-layout-20260831-5' <<<"$room"
           grep -Fq "workerRequest('/study-room/rooms'" <<<"$live"
           grep -Fq "workerRequest('/study-room/join'" <<<"$live"
           grep -Fq 'registerTextStreamHandler' <<<"$live"
@@ -518,7 +518,7 @@ jobs:
               fi
             done
             if grep -Fq '<title>Study Room — Due Diligence</title>' <<<"$room" \
-              && grep -Fq 'study-room-launch-20260830-1' <<<"$room" \
+              && grep -Fq 'study-room-meet-layout-20260831-5' <<<"$room" \
               && grep -Fq 'study-room-optional-background-20260829-1' <<<"$room" \
               && grep -Fq "workerRequest('/study-room/rooms'" <<<"$live" \
               && grep -Fq "workerRequest('/study-room/join'" <<<"$live" \

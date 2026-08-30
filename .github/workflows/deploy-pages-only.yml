@@ -177,7 +177,7 @@ jobs:
               && grep -q 'openMarketingPreview' <<<"$study_room_js" \
               && grep -q '\.dd-study-room-overlay' <<<"$study_room_css" \
               && grep -q 'dd-study-room-radiance' <<<"$study_room_css" \
-              && grep -q 'study-room-launch-20260830-1' <<<"$study_room_page" \
+              && grep -q 'study-room-meet-layout-20260831-5' <<<"$study_room_page" \
               && grep -q 'study-room-optional-background-20260829-1' <<<"$study_room_page" \
               && grep -q "workerRequest('/study-room/rooms'" <<<"$study_room_live" \
               && grep -q "workerRequest('/study-room/join'" <<<"$study_room_live" \

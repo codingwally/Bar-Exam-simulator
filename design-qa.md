@@ -736,3 +736,32 @@ Admin dashboard only. The production simulator, grading, payments, authenticatio
 **PASS — structure, navigation, responsive CSS, Worker route, least-privilege database contract, and regression suites.** Authenticated production visual and interaction verification remains the final ordered release gate.
 
 ---
+
+# Study Room design QA
+
+Status: Passed
+
+Reference: `C:\Users\wally\AppData\Local\Temp\codex-clipboard-c30434d3-bd3d-458d-aa59-7c0d9f8eaa3c.png`
+
+Rendered implementation: right-hand frame of the combined comparison below.
+
+Compared together at 1280 x 720 in `C:\Users\wally\AppData\Local\Temp\study-room-design-qa-side-by-side.png`.
+
+## Verified
+
+- Due Diligence navy, gold, restrained borders, compact icon dock, and serif-free in-room hierarchy remain consistent with the approved product direction.
+- The shared screen is the dominant surface and preserves its full aspect ratio.
+- Exactly two 1:1 camera companions remain visible beside an active presentation, including the local self-view.
+- The meeting canvas uses the full popup viewport; the lobby heading and duplicate site navigation disappear during a call.
+- Room, layout, focus-clock, media, messaging, participant, background, settings, and leave controls remain visible without covering the primary study content.
+- At 1280 x 720, the presentation stage and companion rail have no overlap or clipped labels.
+- Narrow-window rules move the side panel into an overlay and the camera companions into a bottom rail so the media stage keeps priority.
+- Compact mode keeps the four essential camera, microphone, restore, and leave controls in a resizable Due Diligence mini-window; supported browsers use native Picture-in-Picture for the preferred video.
+
+## Corrections made during QA
+
+- Replaced the fixed two-column conference grid with measured square tiling.
+- Made the live stage flex to the full remaining height instead of leaving an unused grid row.
+- Removed the unintended grid scrollbar by accounting for stage padding and hiding overflow after geometry is calculated.
+- Scoped local mirroring to camera video only so a shared screen is never reversed.
+- Made Spotlight honor the pinned camera even during a presentation, and kept presentation sizing adjustable in portrait layouts.

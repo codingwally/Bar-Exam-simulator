@@ -866,6 +866,7 @@ async function publishAndProveSyntheticMedia(
   subscriberRoom,
   publisherIdentity,
   resources,
+  keepCameraAlive = false,
 ) {
   const microphoneSubscribed = waitForSubscribedTrack(
     subscriberRoom,
@@ -945,8 +946,10 @@ async function publishAndProveSyntheticMedia(
       await audioSource.captureFrame(syntheticAudioFrame(sequence));
     }
   })();
+  let stopVideoProducer = false;
   const videoProducer = (async () => {
-    for (let sequence = 0; sequence < 60; sequence += 1) {
+    const frameLimit = keepCameraAlive ? 1_200 : 60;
+    for (let sequence = 0; sequence < frameLimit && !stopVideoProducer; sequence += 1) {
       videoSource.captureFrame(syntheticVideoFrame(sequence));
       await new Promise((resolve) => setTimeout(resolve, 34));
     }
@@ -963,9 +966,18 @@ async function publishAndProveSyntheticMedia(
   assert.equal(videoEvent.value?.frame?.width, 320);
   assert.equal(videoEvent.value?.frame?.height, 180);
   assert.ok(videoEvent.value?.frame?.data?.length > 0);
-  await Promise.all([audioProducer, videoProducer]);
+  await audioProducer;
+  if (!keepCameraAlive) await videoProducer;
 
-  return { audioPublication, videoPublication };
+  return {
+    audioPublication,
+    videoPublication,
+    remoteVideoTrack: remoteVideo.track,
+    async stopCameraProducer() {
+      stopVideoProducer = true;
+      await videoProducer;
+    },
+  };
 }
 
 async function publishAndProveScreenShare(
@@ -973,6 +985,7 @@ async function publishAndProveScreenShare(
   subscriberRoom,
   publisherIdentity,
   resources,
+  simultaneousCamera = null,
 ) {
   const subscribed = waitForSubscribedTrack(
     subscriberRoom,
@@ -1013,10 +1026,16 @@ async function publishAndProveScreenShare(
     assert.equal(remote.publication.kind, TrackKind.KIND_VIDEO);
     const reader = new VideoStream(remote.track).getReader();
     resources.readers.add(reader);
-    const event = await withTimeout(
-      "screen-share frame delivery",
-      reader.read(),
-    );
+    const cameraReader = simultaneousCamera?.remoteVideoTrack
+      ? new VideoStream(simultaneousCamera.remoteVideoTrack).getReader()
+      : null;
+    if (cameraReader) resources.readers.add(cameraReader);
+    const [event, cameraEvent] = await Promise.all([
+      withTimeout("screen-share frame delivery", reader.read()),
+      cameraReader
+        ? withTimeout("simultaneous camera frame delivery", cameraReader.read())
+        : Promise.resolve(null),
+    ]);
     assert.equal(event.done, false);
     const deliveredWidth = Number(event.value?.frame?.width || 0);
     const deliveredHeight = Number(event.value?.frame?.height || 0);
@@ -1027,12 +1046,22 @@ async function publishAndProveScreenShare(
     assert.ok(Number.isSafeInteger(deliveredWidth) && deliveredWidth > 0);
     assert.ok(Number.isSafeInteger(deliveredHeight) && deliveredHeight > 0);
     assert.ok(Number.isSafeInteger(deliveredBytes) && deliveredBytes > 0);
+    if (cameraEvent) {
+      assert.equal(cameraEvent.done, false);
+      assert.ok(Number(cameraEvent.value?.frame?.width || 0) > 0);
+      assert.ok(Number(cameraEvent.value?.frame?.height || 0) > 0);
+      assert.ok(Number(cameraEvent.value?.frame?.data?.length || 0) > 0);
+      console.log(
+        "STUDY_ROOM_STAGING_POSITIVE: simultaneous_camera_screen_share=true",
+      );
+    }
     console.log(
       `STUDY_ROOM_STAGING_POSITIVE: screen_share_frame=true width=${deliveredWidth} height=${deliveredHeight}`,
     );
   } finally {
     stopProducer = true;
     await producer;
+    await simultaneousCamera?.stopCameraProducer?.();
   }
 }
 
@@ -1691,11 +1720,12 @@ async function runPositiveSmoke() {
       secondaryJoin.participant_identity,
       resources,
     );
-    await publishAndProveSyntheticMedia(
+    const primaryPublications = await publishAndProveSyntheticMedia(
       primaryRoom,
       secondaryRoom,
       primaryJoin.participant_identity,
       resources,
+      true,
     );
     console.log(
       "STUDY_ROOM_STAGING_POSITIVE: bidirectional_microphone=true bidirectional_camera=true",
@@ -1707,6 +1737,7 @@ async function runPositiveSmoke() {
       secondaryRoom,
       primaryJoin.participant_identity,
       resources,
+      primaryPublications,
     );
     console.log("STUDY_ROOM_STAGING_POSITIVE: screen_share=true");
 

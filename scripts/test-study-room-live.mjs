@@ -50,6 +50,9 @@ assert.match(page, /id="sr-room-lobby"[\s\S]*data-max-rooms="5"/u);
 assert.match(page, /id="sr-room-lobby-count"/u);
 assert.match(page, /id="sr-room-card-grid"[^>]*><\/div>/u);
 assert.match(page, /id="sr-room-selector"[\s\S]*id="sr-room-selector-menu"/u);
+assert.match(page, /id="sr-layout-button"[\s\S]*id="sr-layout-menu"/u);
+assert.match(page, /data-layout-mode="auto"[\s\S]*data-layout-mode="tiled"[\s\S]*data-layout-mode="spotlight"/u);
+assert.match(page, /id="sr-presentation-size"[^>]*min="65"[^>]*max="90"/u);
 assert.match(page, /id="sr-branded-backdrop-status"[\s\S]*data-backdrop-enforcement="optional"/u);
 assert.match(page, /id="sr-branded-backdrop-copy"/u);
 assert.match(page, /id="sr-toggle-backdrop"[\s\S]*aria-pressed="false"/u);
@@ -61,7 +64,8 @@ assert.doesNotMatch(page, /Virtual backgrounds|Coming after the quality test/iu)
 assert.match(page, /assets\/vendor\/livekit-client\.umd\.js\?v=2\.22\.1/);
 assert.match(page, /assets\/vendor\/livekit-track-processors\.iife\.js\?v=0\.7\.2/);
 assert.match(page, /study-room-backgrounds\.js\?v=study-room-optional-background-20260829-1/);
-assert.match(page, /study-room-live\.js\?v=study-room-launch-20260830-1/);
+assert.match(page, /study-room-live\.js\?v=study-room-meet-layout-20260831-5/);
+assert.match(page, /study-room-live\.css\?v=study-room-meet-layout-20260831-5/);
 assert.doesNotMatch(page, /facebook|fb\.com|recording is on|Recording enabled/i);
 
 for (const endpoint of ['access', 'rooms', 'join', 'moderate']) {
@@ -74,7 +78,7 @@ assert.match(client, /Authorization: `Bearer \$\{token\}`/);
 assert.match(client, /cache: 'no-store'/);
 assert.match(client, /new LiveKit\.Room/);
 assert.match(client, /bindRoomEvents\(room\);[\s\S]*await room\.connect/);
-assert.match(client, /const MEDIA_RELIABILITY_VERSION = 'study-room-launch-20260830-1'/);
+assert.match(client, /const MEDIA_RELIABILITY_VERSION = 'study-room-meet-layout-20260831-5'/);
 assert.match(client, /adaptiveStream:\s*\{[\s\S]*pixelDensity:\s*1[\s\S]*pauseVideoInBackground:\s*true/);
 assert.match(client, /dynacast: true/);
 assert.match(client, /width:\s*640,[\s\S]*height:\s*360,[\s\S]*frameRate:\s*15/);
@@ -106,9 +110,9 @@ assert.match(client, /event\.Reconnecting[\s\S]*event\.Reconnected/);
 assert.match(client, /microphone_allowed !== false/);
 assert.match(client, /mediaStreamTrack\.readyState === 'live'/);
 assert.match(client, /deviceId: \{ exact: deviceId \}/);
-assert.match(client, /ActiveSpeakersChanged[\s\S]*syncActiveSpeakerTiles\(\)/);
+assert.match(client, /ActiveSpeakersChanged[\s\S]*renderParticipants\(\)/);
 assert.match(client, /ActiveDeviceChanged[\s\S]*rememberDeviceSelection\(deviceKind, deviceId\)/);
-assert.doesNotMatch(client, /ActiveSpeakersChanged[\s\S]{0,260}renderParticipants\(\)/);
+assert.match(client, /Stable-key reconciliation preserves media elements while the preferred companion changes/);
 assert.match(client, /function recoverFromTerminalDisconnect\(room\)/);
 assert.match(
   client,
@@ -170,7 +174,20 @@ assert.match(client, /await ensureBackgroundController\(\)\.switchCamera\(captur
 assert.match(client, /function toggleBackdrop\(\)[\s\S]*state\.backdropEnabled = false/);
 assert.match(client, /function setRawCameraEnabled\([\s\S]*rawCameraPublishAuthorized = true/);
 assert.match(client, /userApprovedRawCameraTracks/);
+assert.match(client, /isUserApprovedRawCameraTrack\(view\.track\)/);
 assert.match(client, /backdropEnabled:\s*false/);
+assert.match(client, /function buildMediaViews\(participants\)/);
+assert.match(client, /mediaViewKey\(participant, cameraSource\)/);
+assert.match(client, /mediaViewKey\(participant, screenSource\)/);
+assert.match(client, /function reconcileTile\(view\)/);
+assert.match(client, /state\.tileViews\.get\(view\.key\)/);
+assert.match(client, /function calculateSquareGrid\(count, width, height/);
+assert.match(client, /function toggleCompactView\(\)/);
+assert.match(client, /document\.pictureInPictureEnabled/);
+assert.match(client, /video\?\.requestPictureInPicture/);
+assert.match(client, /height \* \(\(100 - state\.presentationSize\) \/ 100\)/);
+assert.match(client, /new global\.ResizeObserver\(scheduleStudyRoomLayout\)/);
+assert.match(client, /document\.body\.classList\.add\('sr-in-call'\)/);
 
 assert.match(backgroundClient, /const REQUIRED_EFFECTS_POLICY = 'due-diligence-mandatory-virtual-background-no-raw-first-frame'/);
 assert.match(backgroundClient, /virtual-background-due-diligence-branded\.webp/);
@@ -193,8 +210,13 @@ assert.match(css, /min-width:\s*320px/);
 assert.match(css, /prefers-reduced-motion/);
 assert.match(css, /\.sr-button[\s\S]*min-height:\s*44px/);
 assert.match(css, /\.sr-room-card-grid\s*\{[\s\S]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/u);
-assert.match(css, /\.sr-live-layout\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) minmax\(330px, 0\.34fr\)/u);
-assert.match(css, /\.sr-participant-grid\s*\{[\s\S]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/u);
+assert.match(css, /body\.sr-in-call \.sr-live-room:not\(\[hidden\]\)[\s\S]*height:\s*100dvh/u);
+assert.match(css, /\.sr-participant-tile\.is-camera\s*\{[\s\S]*aspect-ratio:\s*1 \/ 1/u);
+assert.match(css, /data-presenting="true"[\s\S]*\.sr-participant-tile\.is-presentation/u);
+assert.match(css, /--sr-companion-size/u);
+assert.match(css, /\.sr-participant-tile\.is-self\.is-screen-share video\s*\{[\s\S]*transform:\s*none/u);
+assert.match(css, /body\.sr-in-call \.sr-room-panel:not\(\[hidden\]\)[\s\S]*position:\s*absolute/u);
+assert.match(css, /body\.sr-in-call\.sr-compact-mode \.sr-live-room:not\(\[hidden\]\)[\s\S]*resize:\s*both/u);
 assert.match(css, /\.sr-control-dock button[\s\S]*min-height:\s*48px/u);
 assert.match(css, /\.sr-control-dock button img[\s\S]*width:\s*21px/u);
 assert.match(css, /\.sr-control-label\s*\{[\s\S]*clip:\s*rect\(0 0 0 0\)/u);
@@ -244,5 +266,29 @@ assert.equal(vm.runInContext("connectionLabel('disconnected')", connectionContex
 assert.match(client, /syncConnectionState\(room\.state\)/);
 assert.match(client, /syncConnectionState\(state\.room\.state\)/);
 assert.doesNotMatch(client, /room\.connectionState/);
+
+const renderParticipantsSource = extractNamedFunction(client, 'renderParticipants');
+assert.doesNotMatch(
+  renderParticipantsSource,
+  /detachTracks\(\)/u,
+  'Participant metadata updates must not tear down every attached audio/video element.',
+);
+
+const squareGridContext = vm.createContext({ Math, Number });
+vm.runInContext(extractNamedFunction(client, 'calculateSquareGrid'), squareGridContext);
+for (const scenario of [
+  { count: 4, width: 1440, height: 760 },
+  { count: 4, width: 900, height: 760 },
+  { count: 4, width: 640, height: 520 },
+  { count: 4, width: 390, height: 620 },
+  { count: 4, width: 320, height: 460 },
+]) {
+  const layout = vm.runInContext(
+    `calculateSquareGrid(${scenario.count}, ${scenario.width}, ${scenario.height}, 10)`,
+    squareGridContext,
+  );
+  assert.ok(layout.size >= 88, `Square tiles are too small for ${scenario.width}x${scenario.height}.`);
+  assert.ok(layout.columns * layout.rows >= scenario.count);
+}
 
 console.log('Study Room live-client privacy, access, media-consent, and interface contracts passed.');

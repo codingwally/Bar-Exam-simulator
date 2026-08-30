@@ -50,6 +50,14 @@ function requestedRoomKey(body) {
     : '1';
 }
 
+function administratorOnlyRequest(request) {
+  try {
+    return /^\/admin\/study-room(?:\/|$)/u.test(new URL(request.url).pathname);
+  } catch {
+    return false;
+  }
+}
+
 export function createStudyRoomHandlers(dependencies) {
   const {
     authenticate,
@@ -87,6 +95,14 @@ export function createStudyRoomHandlers(dependencies) {
         role: authorization.role,
         isAdministrator: true,
       };
+    }
+    if (administratorOnlyRequest(request)) {
+      throw new StudyRoomError(
+        'STUDY_ROOM_ADMIN_REQUIRED',
+        'Only a Due Diligence administrator can use this Study Room endpoint.',
+        403,
+        'Open the Study Room from the signed-in website instead.',
+      );
     }
     const memberAccess = await authorizeMember(env, user);
     if (memberAccess?.allowed !== true) {

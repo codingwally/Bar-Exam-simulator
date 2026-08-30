@@ -2,9 +2,10 @@
   'use strict';
 
   const MANILA_TIME_ZONE = 'Asia/Manila';
-  const MAX_PLANS = 24;
+  const MAX_PLANS = 20;
+  const MAX_PAYMENT_METHODS = 40;
   const MAX_FEATURES = 30;
-  const MAX_FAQS = 60;
+  const MAX_FAQS = 40;
 
   function text(value, maximum = 4_000) {
     return String(value ?? '').trim().slice(0, maximum);
@@ -46,8 +47,8 @@
     return Object.freeze({
       versionId: text(source.versionId || source.version_id, 100) || null,
       planCode,
-      name: text(source.name, 120) || 'Access plan',
-      badge: text(source.badge, 60),
+      name: text(source.name, 100) || 'Access plan',
+      badge: text(source.badge, 80),
       priceCentavos: integer(
         source.priceCentavos ?? source.priceInCentavos ?? source.price_cents
           ?? (Number.isFinite(Number(source.pricePhp)) ? Number(source.pricePhp) * 100 : 0),
@@ -55,14 +56,14 @@
         0,
         100_000_000,
       ),
-      durationDays: integer(source.durationDays ?? source.duration_days, 30, 1, 3_650),
-      description: text(source.description, 800),
+      durationDays: integer(source.durationDays ?? source.duration_days, 30, 1, 366),
+      description: text(source.description, 4_000),
       features: Object.freeze(rawFeatures
         .map((feature) => text(feature, 240))
         .filter(Boolean)
         .slice(0, MAX_FEATURES)),
-      ctaLabel: text(source.ctaLabel || source.buttonLabel || source.cta, 100) || 'Choose plan',
-      renewalNote: text(source.renewalNote || source.renewal_note, 300),
+      ctaLabel: text(source.ctaLabel || source.buttonLabel || source.cta, 80) || 'Choose plan',
+      renewalNote: text(source.renewalNote || source.renewal_note, 1_000),
       visible: boolean(source.visible, true),
       checkoutEnabled: boolean(source.checkoutEnabled ?? source.checkout_enabled, false),
       checkoutStartsAt: normalizeDate(source.checkoutStartsAt ?? source.checkout_starts_at),
@@ -94,10 +95,10 @@
       versionId: text(source.versionId || source.version_id, 100) || null,
       channelCode: text(source.channelCode || source.code || source.id, 64).toLowerCase(),
       planCode: text(source.planCode, 64).toLowerCase() || null,
-      label: text(source.label, 120) || 'Payment method',
-      accountName: text(source.accountName, 160),
+      label: text(source.label, 100) || 'Payment method',
+      accountName: text(source.accountName, 200),
       accountDetails: text(source.accountDetails, 500),
-      instructions: text(source.instructions, 1_000),
+      instructions: text(source.instructions, 4_000),
       qrAsset: assetId ? Object.freeze({
         assetId,
         sha256: text(rawAsset.sha256 || source.qrAssetSha256, 128),
@@ -120,7 +121,7 @@
     return Object.freeze({
       id: text(source.id, 100) || `faq-${index + 1}`,
       question: text(source.question, 300),
-      answer: text(source.answer, 2_000),
+      answer: text(source.answer, 3_000),
       visible: boolean(source.visible, true),
       sortOrder: integer(source.sortOrder ?? source.sort_order, (index + 1) * 10, -10_000, 10_000),
     });
@@ -134,7 +135,7 @@
       .map(normalizePlan)
       .sort((left, right) => left.sortOrder - right.sortOrder || left.planCode.localeCompare(right.planCode));
     const paymentMethods = (Array.isArray(source.paymentMethods) ? source.paymentMethods : [])
-      .slice(0, MAX_PLANS)
+      .slice(0, MAX_PAYMENT_METHODS)
       .map(normalizePaymentMethod)
       .sort((left, right) => left.sortOrder - right.sortOrder || left.channelCode.localeCompare(right.channelCode));
     const faqs = (Array.isArray(source.faqs) ? source.faqs : [])
@@ -145,9 +146,9 @@
     return Object.freeze({
       page: Object.freeze({
         eyebrow: text(pageSource.eyebrow, 120),
-        title: text(pageSource.title, 180) || 'Plans & Pricing',
-        intro: text(pageSource.intro, 1_200),
-        notice: text(pageSource.notice, 1_000),
+        title: text(pageSource.title, 240) || 'Plans & Pricing',
+        intro: text(pageSource.intro, 2_000),
+        notice: text(pageSource.notice, 2_000),
         finePrint: text(pageSource.finePrint, 2_000),
       }),
       plans: Object.freeze(plans),
@@ -268,7 +269,9 @@
       ...(options.serverNow ? { serverNow: options.serverNow } : {}),
     };
     const useRuntimeState = mode === 'public';
-    const plans = normalized.plans.filter((plan) => planIsDisplayed(plan, access, useRuntimeState));
+    const plans = normalized.plans.filter((plan) => (
+      mode === 'preview' ? plan.visible : planIsDisplayed(plan, access, useRuntimeState)
+    ));
     const faqs = normalized.faqs.filter((faq) => faq.visible && faq.question && faq.answer);
     const availabilityByPlan = new Map(plans.map((plan) => [
       plan.planCode,

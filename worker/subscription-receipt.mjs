@@ -112,7 +112,11 @@ export function subscriptionReceiptContent(context = {}) {
   const paymentDate = cleanLine(payment.paymentDate, 40) || 'Not provided';
   const approvedAt = manilaDateTime(payment.reviewedAt || payment.approvedAt);
   const durationDays = Number(payment.durationDays);
-  const capturedAccessEnd = subscription.expiresAt || payment.fixedEndsAt;
+  const capturedAccessStart = payment.purchasedStartsAt || subscription.startsAt;
+  const capturedAccessEnd = payment.purchasedEndsAt
+    || subscription.expiresAt
+    || payment.fixedEntitlementEndsAt
+    || payment.fixedEndsAt;
   const accessEndsAt = capturedAccessEnd
     ? manilaDateTime(capturedAccessEnd)
     : 'No expiration returned by the approved access record';
@@ -151,6 +155,7 @@ export function subscriptionReceiptContent(context = {}) {
     `Transaction reference: ${reference}`,
     `Payment date provided: ${paymentDate}`,
     `Approved: ${approvedAt}`,
+    ...(capturedAccessStart ? [`Access begins: ${manilaDateTime(capturedAccessStart)}`] : []),
     `Access through: ${accessEndsAt}`,
     `Due Diligence receipt reference: ${internalReference}`,
     '',
@@ -185,6 +190,7 @@ export function subscriptionReceiptContent(context = {}) {
             ${detailRow('Transaction reference', reference)}
             ${detailRow('Payment date provided', paymentDate)}
             ${detailRow('Approved', approvedAt)}
+            ${capturedAccessStart ? detailRow('Access begins', manilaDateTime(capturedAccessStart)) : ''}
             ${detailRow('Access through', accessEndsAt)}
             ${detailRow('Receipt reference', internalReference)}
           </table>

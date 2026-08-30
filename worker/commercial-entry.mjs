@@ -227,7 +227,10 @@ function trustedPaymentEmailDetails(payment = {}, fields = {}) {
       currency: cleanSingleLine(payment.currency, 3).toUpperCase() || 'PHP',
     }).format(amountPhp);
   const durationDays = Number(payment.durationDays);
-  const fixedEndsAt = payment.fixedEndsAt || payment.subscription?.expiresAt;
+  const fixedEndsAt = payment.fixedEntitlementEndsAt
+    || payment.fixedEndsAt
+    || payment.purchasedEndsAt
+    || payment.subscription?.expiresAt;
   const termLabel = Number.isInteger(durationDays) && durationDays > 0
     ? `${durationDays} days from approval`
     : fixedEndsAt

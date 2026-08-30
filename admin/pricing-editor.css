@@ -279,15 +279,26 @@
   box-shadow: 0 18px 38px rgba(0, 0, 0, 0.16);
 }
 .observatory .pricing-preview-toggle { justify-content: flex-end; }
-.observatory .pricing-preview-frame { width: 100%; margin-inline: auto; overflow: auto; background: #050b12; border: 1px solid #394d5a; border-radius: 8px; transition: max-width 160ms ease; }
+.observatory .pricing-preview-frame {
+  width: 100%;
+  margin-inline: auto;
+  overflow: auto;
+  color: #202733;
+  background: #f8f4eb;
+  border: 1px solid rgba(213, 181, 111, 0.72);
+  border-top: 3px solid #b8934f;
+  border-radius: 8px;
+  transition: max-width 160ms ease;
+}
 .observatory .pricing-preview-frame[data-preview-size="mobile"] { max-width: 390px; }
-.observatory .pricing-preview-frame > [data-pricing-preview] { min-height: 520px; }
-.observatory .pricing-payment-preview { display: grid; gap: 8px; padding: 0 20px 24px; color: #e4ebee; }
-.observatory .pricing-payment-preview h3 { margin: 0 0 4px; font-size: 0.9rem; }
-.observatory .pricing-payment-preview article { display: grid; gap: 3px; padding: 10px 0; border-top: 1px solid rgba(143, 162, 175, 0.25); }
+.observatory .pricing-preview-frame > [data-pricing-preview] { min-height: 520px; padding: clamp(26px, 4vw, 48px) clamp(20px, 4vw, 48px) 0; }
+.observatory .pricing-payment-preview { display: grid; gap: 8px; padding: 24px clamp(20px, 4vw, 48px) 34px; color: #202733; background: #f8f4eb; }
+.observatory .pricing-payment-preview h3 { margin: 0 0 4px; color: #07182f; font-size: 0.9rem; }
+.observatory .pricing-payment-preview article { display: grid; gap: 3px; padding: 10px 0; border-top: 1px solid rgba(15, 39, 68, 0.16); }
+.observatory .pricing-payment-preview strong { color: #07182f; }
 .observatory .pricing-payment-preview span,
 .observatory .pricing-payment-preview p,
-.observatory .pricing-payment-preview small { margin: 0; color: #aebcc4; font-size: 0.7rem; line-height: 1.45; }
+.observatory .pricing-payment-preview small { margin: 0; color: #637083; font-size: 0.7rem; line-height: 1.45; }
 
 .observatory .pricing-operation-dialog { width: min(580px, calc(100% - 24px)); color: var(--pricing-text); background: var(--pricing-surface); border: 1px solid var(--pricing-line); border-radius: 10px; }
 .observatory .pricing-operation-dialog::backdrop { background: rgba(0, 0, 0, 0.72); backdrop-filter: blur(3px); }
@@ -295,6 +306,7 @@
 .observatory .pricing-operation-dialog header { padding-bottom: 12px; border-bottom: 1px solid var(--pricing-line); }
 .observatory .pricing-operation-dialog header button { min-width: 44px; font-size: 1.2rem; }
 .observatory .pricing-operation-dialog > form > p { margin: 0; color: var(--pricing-muted-bright, #bbc7cd); font-size: 0.78rem; line-height: 1.55; }
+.observatory .pricing-operation-dialog .pricing-operation-error { padding: 10px 12px; color: #ffd0d3; background: rgba(163, 45, 54, 0.16); border: 1px solid rgba(255, 137, 145, 0.42); border-radius: 7px; }
 .observatory .pricing-operation-confirm { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; color: var(--pricing-muted-bright, #bbc7cd); font-size: 0.74rem; line-height: 1.5; }
 .observatory .pricing-operation-confirm input { width: 18px; min-height: 18px; height: 18px; margin-top: 2px; accent-color: var(--pricing-gold); }
 .observatory .pricing-dialog-actions { justify-content: flex-end; padding-top: 4px; }

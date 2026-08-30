@@ -2,7 +2,7 @@ export const PRICING_ASSET_BUCKET = 'pricing-assets';
 
 export const PRICING_ASSET_LIMITS = Object.freeze({
   maxBytes: 5 * 1024 * 1024,
-  minDimension: 64,
+  minDimension: 100,
   maxDimension: 4096,
   maxPixels: 16_777_216,
 });
@@ -83,7 +83,7 @@ export function pricingStableCode(value, label = 'code', { nullable = false } = 
 
 export function normalizePricingRequestKey(value) {
   const normalized = safeText(value, 128);
-  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{15,127}$/u.test(normalized)) {
+  if (!/^[A-Za-z0-9_-]{16,128}$/u.test(normalized)) {
     throw new PricingValidationError(
       'INVALID_PRICING_REQUEST_KEY',
       'A valid retry-safe request key is required.',
@@ -134,10 +134,15 @@ export function normalizePricingAdminAction(payload) {
     }
   }
 
-  const draftRevisionId = input.draftRevisionId
-    ? pricingUuid(input.draftRevisionId, 'draft revision')
+  const rawDraftRevisionId = operation === 'rollback'
+    ? input.expectedLiveRevisionId
+    : input.draftRevisionId;
+  const draftRevisionId = rawDraftRevisionId
+    ? pricingUuid(rawDraftRevisionId, operation === 'rollback' ? 'expected live revision' : 'draft revision')
     : null;
-  const rawSourceRevisionId = input.sourceRevisionId ?? input.expectedLiveRevisionId;
+  const rawSourceRevisionId = operation === 'rollback'
+    ? input.sourceRevisionId
+    : input.sourceRevisionId ?? input.expectedLiveRevisionId;
   const sourceRevisionId = rawSourceRevisionId
     ? pricingUuid(rawSourceRevisionId, 'source revision')
     : null;
@@ -172,6 +177,12 @@ export function normalizePricingAdminAction(payload) {
     throw new PricingValidationError(
       'INVALID_PRICING_REVISION',
       'Choose the pricing revision for this action.',
+    );
+  }
+  if (operation === 'rollback' && !draftRevisionId) {
+    throw new PricingValidationError(
+      'INVALID_PRICING_REVISION',
+      'Refresh the editor before rolling back so the current live revision can be verified.',
     );
   }
   if (['schedule', 'publish', 'cancel_schedule', 'rollback'].includes(operation)) {
@@ -287,7 +298,7 @@ export function validatePricingAsset(bytes, declaredMimeType, originalName = '')
   ) {
     throw new PricingValidationError(
       'UNSAFE_PRICING_ASSET_DIMENSIONS',
-      'Use a QR image between 64 and 4096 pixels on each side.',
+      'Use a QR image between 100 and 4096 pixels on each side.',
       415,
     );
   }

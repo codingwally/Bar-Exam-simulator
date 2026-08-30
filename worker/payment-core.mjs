@@ -35,19 +35,14 @@ function text(value, maximum, label, minimum = 1) {
 }
 
 export function normalizePaymentFields(fields) {
-  const planVersionId = text(fields?.planVersionId, 36, 'Plan version', 36).toLowerCase();
+  const planVersionId = String(fields?.planVersionId || '').trim().toLowerCase();
   if (!PAYMENT_UUID_PATTERN.test(planVersionId)) {
     throw new PaymentValidationError(
       'PLAN_UNAVAILABLE',
       'Select a plan from the current published pricing page.',
     );
   }
-  const paymentChannelVersionId = text(
-    fields?.paymentChannelVersionId,
-    36,
-    'Payment channel version',
-    36,
-  ).toLowerCase();
+  const paymentChannelVersionId = String(fields?.paymentChannelVersionId || '').trim().toLowerCase();
   if (!PAYMENT_UUID_PATTERN.test(paymentChannelVersionId)) {
     throw new PaymentValidationError(
       'INVALID_PAYMENT_METHOD',

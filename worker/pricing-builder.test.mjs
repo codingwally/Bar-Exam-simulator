@@ -4,6 +4,7 @@ import test from 'node:test';
 import coreWorker from './index.mjs';
 import { paymentEmailText } from './commercial-entry.mjs';
 import {
+  normalizePricingAdminAction,
   PricingValidationError,
   sanitizePublicPricingSnapshot,
   validatePricingAsset,
@@ -207,6 +208,33 @@ test('/plans returns the authoritative full snapshot with compatibility fields',
   }
 });
 
+test('/plans preserves the September 1 transition gap without reviving legacy checkout', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (String(url).endsWith('/rest/v1/rpc/phase4_pricing_snapshot')) {
+      return Response.json({
+        revisionId: REVISION_ID,
+        serverNow: '2026-09-01T04:00:00.000Z',
+        page: publishedSnapshot().page,
+        plans: [],
+        paymentMethods: [],
+        faqs: [],
+      });
+    }
+    throw new Error(`Unexpected fetch: ${url}`);
+  };
+  try {
+    const response = await coreWorker.fetch(request('/plans', { method: 'POST' }), env, {});
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.deepEqual(payload.plans, []);
+    assert.deepEqual(payload.pricing.paymentMethods, []);
+    assert.equal(payload.serverNow, '2026-09-01T04:00:00.000Z');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('payment field normalization ignores browser price and plan labels', () => {
   const normalized = normalizePaymentFields({
     planVersionId: PLAN_199_ID,
@@ -367,6 +395,33 @@ test('founder pricing action forwards optimistic-lock and config fields to the g
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test('rollback binds its target and expected live revision to separate RPC slots', () => {
+  const rollbackTargetId = '99999999-9999-4999-8999-999999999999';
+  const action = normalizePricingAdminAction({
+    operation: 'rollback',
+    requestKey: 'pricing-rollback-0001',
+    sourceRevisionId: rollbackTargetId,
+    expectedLiveRevisionId: REVISION_ID,
+    reason: 'Restore the previously approved pricing revision.',
+    confirmed: true,
+  });
+
+  assert.equal(action.sourceRevisionId, rollbackTargetId);
+  assert.equal(action.draftRevisionId, REVISION_ID);
+  assert.throws(
+    () => normalizePricingAdminAction({
+      operation: 'rollback',
+      requestKey: 'pricing-rollback-0002',
+      sourceRevisionId: rollbackTargetId,
+      reason: 'Restore the previously approved pricing revision.',
+      confirmed: true,
+    }),
+    (error) => error instanceof PricingValidationError
+      && error.code === 'INVALID_PRICING_REVISION'
+      && /current live revision/u.test(error.message),
+  );
 });
 
 test('QR validation accepts real PNG structure and rejects SVG or unreasonable dimensions', () => {
@@ -574,6 +629,8 @@ test('receipt uses dynamic captured context and retains historical Early Access 
       paymentReference: 'BPI-REF-199',
       paymentDate: '2026-09-02',
       approvedAt: '2026-09-02T02:00:00Z',
+      purchasedStartsAt: '2026-09-02T02:00:00Z',
+      purchasedEndsAt: '2026-10-02T02:00:00Z',
     },
     user: { displayName: 'Student' },
     subscription: { expiresAt: '2026-10-02T02:00:00Z' },
@@ -581,6 +638,8 @@ test('receipt uses dynamic captured context and retains historical Early Access 
   assert.match(current.subject, /30-Day Access/);
   assert.match(current.text, /₱199\.00/);
   assert.match(current.text, /Term: 30 days from approval/);
+  assert.match(current.text, /Access begins:/);
+  assert.match(current.text, /Access through:/);
   assert.match(current.internalReference, /^DD-PAY-/);
   assert.doesNotMatch(current.text, /Plan: Early Access/);
 

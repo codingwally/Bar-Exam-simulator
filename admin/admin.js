@@ -402,7 +402,7 @@
       return response.blob();
     }
     const payload = await response.json().catch(() => null);
-    if (!response.ok || payload?.ok === false) {
+    if (!response.ok || !payload || payload.ok === false) {
       const error = new Error(payload?.error?.message || 'Administrator request failed.');
       error.code = payload?.error?.code;
       throw error;
@@ -5198,6 +5198,8 @@
   $('#sidebar-scrim')?.addEventListener('click', () => setSidebarOpen(false));
   global.matchMedia?.('(max-width: 820px)')?.addEventListener?.('change', () => setSidebarOpen(false));
   $('#admin-signout')?.addEventListener('click', async () => {
+    if (state.section === 'pricing'
+        && global.DueDiligencePricingEditor?.confirmLeave?.() === false) return;
     await state.client?.auth.signOut();
     global.DueDiligencePrivateBeta?.clear?.();
     location.replace('../');

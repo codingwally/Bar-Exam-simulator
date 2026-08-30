@@ -3,7 +3,11 @@
 
   const MANILA_TIME_ZONE = 'Asia/Manila';
   const QR_MAX_BYTES = 5 * 1024 * 1024;
+  const QR_MIN_EDGE = 100;
   const QR_MAX_EDGE = 4_096;
+  const MAX_PLANS = 20;
+  const MAX_PAYMENT_METHODS = 40;
+  const MAX_FAQS = 40;
   const CODE_PATTERN = /^[a-z][a-z0-9_]{2,63}$/;
   const OPERATION_COPY = Object.freeze({
     publish: {
@@ -190,7 +194,18 @@
   }
 
   function serializeConfig(controller) {
-    return clone(renderer().normalizeConfig(controller.config));
+    const normalized = clone(renderer().normalizeConfig(controller.config));
+    const priceByPlan = new Map(normalized.plans.map((plan) => [
+      plan.planCode,
+      plan.priceCentavos,
+    ]));
+    normalized.paymentMethods = normalized.paymentMethods.map((method) => ({
+      ...method,
+      qrAmountCentavos: method.qrAmountMode === 'generic'
+        ? null
+        : priceByPlan.get(method.planCode) ?? method.qrAmountCentavos,
+    }));
+    return normalized;
   }
 
   function stableConfig(controller) {
@@ -212,7 +227,9 @@
   }
 
   function toManilaInput(value) {
-    const parsed = new Date(value || 0);
+    const supplied = String(value ?? '').trim();
+    if (!supplied) return '';
+    const parsed = new Date(supplied);
     if (!Number.isFinite(parsed.getTime())) return '';
     return new Date(parsed.getTime() + (8 * 60 * 60 * 1_000)).toISOString().slice(0, 16);
   }
@@ -296,6 +313,12 @@
     if (!controller.snapshot.history.length) {
       return '<p class="pricing-empty-state">No earlier pricing revisions are available yet.</p>';
     }
+    const rollbackBlocked = Boolean(controller.snapshot.draft || controller.snapshot.scheduled);
+    const rollbackTitle = controller.snapshot.draft
+      ? 'Publish the current draft before rollback.'
+      : controller.snapshot.scheduled
+        ? 'Cancel the scheduled publication before rollback.'
+        : 'Restore this revision';
     return `<div class="pricing-history-list">${controller.snapshot.history.map((item) => {
       const identifier = item.revisionId || '';
       const date = item.publishedAt || item.scheduledAt || item.createdAt;
@@ -303,7 +326,7 @@
         <div><strong>${escapeHtml(item.version ? `Revision ${item.version}` : identifier.slice(0, 8) || 'Revision')}</strong><span>${escapeHtml(item.status || 'saved')}</span></div>
         <p>${escapeHtml(formatDateTime(date))}${item.actorName ? ` · ${escapeHtml(item.actorName)}` : ''}</p>
         ${item.reason ? `<p class="pricing-history-reason">${escapeHtml(item.reason)}</p>` : ''}
-        <button type="button" data-editor-action="open-operation" data-operation="rollback" data-source-revision-id="${escapeHtml(identifier)}"${identifier && !controller.snapshot.draft ? '' : ' disabled'} title="${controller.snapshot.draft ? 'Publish the current draft before rollback.' : 'Restore this revision'}">Rollback</button>
+        <button type="button" data-editor-action="open-operation" data-operation="rollback" data-source-revision-id="${escapeHtml(identifier)}"${identifier && !rollbackBlocked ? '' : ' disabled'} title="${escapeHtml(rollbackTitle)}">Rollback</button>
       </article>`;
     }).join('')}</div>`;
   }
@@ -327,14 +350,14 @@
       <header><div><p>Plan ${index + 1}</p><h3>${escapeHtml(plan.name || 'Untitled plan')}</h3></div>${itemActionButtons('plan', key, index, controller.config.plans.length)}</header>
       <div class="pricing-form-grid">
         ${field('Stable plan code', textInput(plan.planCode, `data-plan-field="planCode" data-key="${escapeHtml(key)}" maxlength="64" pattern="[a-z][a-z0-9_]{2,63}" ${persisted ? 'readonly' : ''}`), persisted ? 'Saved codes cannot be renamed.' : 'Start with a letter; use lowercase letters, numbers, and underscores.')}
-        ${field('Plan name', textInput(plan.name, `data-plan-field="name" data-key="${escapeHtml(key)}" maxlength="120"`))}
-        ${field('Badge', textInput(plan.badge, `data-plan-field="badge" data-key="${escapeHtml(key)}" maxlength="60"`), 'Optional, for example New or Legacy.')}
+        ${field('Plan name', textInput(plan.name, `data-plan-field="name" data-key="${escapeHtml(key)}" maxlength="100"`))}
+        ${field('Badge', textInput(plan.badge, `data-plan-field="badge" data-key="${escapeHtml(key)}" maxlength="80"`), 'Optional, for example New or Legacy.')}
         ${field('Price in pesos', `<input type="number" value="${escapeHtml(pesos)}" min="0" max="1000000" step="0.01" inputmode="decimal" data-plan-field="pricePesos" data-key="${escapeHtml(key)}">`, 'Stored as whole centavos.')}
-        ${field('Duration in days', `<input type="number" value="${escapeHtml(plan.durationDays)}" min="1" max="3650" step="1" data-plan-field="durationDays" data-key="${escapeHtml(key)}">`)}
-        ${field('Button label', textInput(plan.ctaLabel, `data-plan-field="ctaLabel" data-key="${escapeHtml(key)}" maxlength="100"`))}
-        ${field('Description', textarea(plan.description, `data-plan-field="description" data-key="${escapeHtml(key)}" maxlength="800" rows="3"`))}
+        ${field('Duration in days', `<input type="number" value="${escapeHtml(plan.durationDays)}" min="1" max="366" step="1" data-plan-field="durationDays" data-key="${escapeHtml(key)}">`)}
+        ${field('Button label', textInput(plan.ctaLabel, `data-plan-field="ctaLabel" data-key="${escapeHtml(key)}" maxlength="80"`))}
+        ${field('Description', textarea(plan.description, `data-plan-field="description" data-key="${escapeHtml(key)}" maxlength="4000" rows="3"`))}
         ${field('Features', textarea((plan.features || []).join('\n'), `data-plan-field="features" data-key="${escapeHtml(key)}" maxlength="3000" rows="5"`), 'One feature per line.')}
-        ${field('Renewal note', textarea(plan.renewalNote, `data-plan-field="renewalNote" data-key="${escapeHtml(key)}" maxlength="300" rows="3"`), 'Explain whether access renews or requires another payment.')}
+        ${field('Renewal note', textarea(plan.renewalNote, `data-plan-field="renewalNote" data-key="${escapeHtml(key)}" maxlength="1000" rows="3"`), 'Explain whether access renews or requires another payment.')}
       </div>
       <fieldset class="pricing-checkout-rules">
         <legend>Visibility and checkout</legend>
@@ -377,10 +400,10 @@
         <div class="pricing-form-grid">
           ${field('Stable channel code', textInput(method.channelCode, `data-payment-field="channelCode" data-key="${escapeHtml(key)}" maxlength="64" pattern="[a-z][a-z0-9_]{2,63}" ${method._persisted ? 'readonly' : ''}`), method._persisted ? 'Saved codes cannot be renamed.' : 'For example bpi_instapay.')}
           ${field('Assign this QR to plan', `<select data-payment-field="planCode" data-key="${escapeHtml(key)}">${planOptions(controller, method.planCode)}</select>`, 'Choose 30-Day Access for its exact ₱199 QR, or All plans for a generic QR.')}
-          ${field('Label', textInput(method.label, `data-payment-field="label" data-key="${escapeHtml(key)}" maxlength="120"`))}
-          ${field('Account name', textInput(method.accountName, `data-payment-field="accountName" data-key="${escapeHtml(key)}" maxlength="160"`))}
+          ${field('Label', textInput(method.label, `data-payment-field="label" data-key="${escapeHtml(key)}" maxlength="100"`))}
+          ${field('Account name', textInput(method.accountName, `data-payment-field="accountName" data-key="${escapeHtml(key)}" maxlength="200"`))}
           ${field('Account details', textarea(method.accountDetails, `data-payment-field="accountDetails" data-key="${escapeHtml(key)}" maxlength="500" rows="3"`))}
-          ${field('Instructions', textarea(method.instructions, `data-payment-field="instructions" data-key="${escapeHtml(key)}" maxlength="1000" rows="4"`))}
+          ${field('Instructions', textarea(method.instructions, `data-payment-field="instructions" data-key="${escapeHtml(key)}" maxlength="4000" rows="4"`))}
           ${field('QR amount', `<select data-payment-field="qrAmountMode" data-key="${escapeHtml(key)}"><option value="exact"${method.qrAmountMode === 'exact' ? ' selected' : ''}>Exact plan amount</option><option value="generic"${method.qrAmountMode === 'generic' ? ' selected' : ''}>Generic QR</option></select>`, 'Exact QR should be assigned to one plan.')}
           <label class="pricing-check"><input type="checkbox" data-payment-field="enabled" data-key="${escapeHtml(key)}"${method.enabled ? ' checked' : ''}><span>Enable this payment method</span></label>
         </div>
@@ -402,9 +425,9 @@
       <div class="pricing-edit-card pricing-page-card">
         <div class="pricing-form-grid">
           ${field('Eyebrow', textInput(page.eyebrow, 'data-page-field="eyebrow" maxlength="120"'))}
-          ${field('Page title', textInput(page.title, 'data-page-field="title" maxlength="180"'))}
-          ${field('Introduction', textarea(page.intro, 'data-page-field="intro" maxlength="1200" rows="4"'))}
-          ${field('Notice', textarea(page.notice, 'data-page-field="notice" maxlength="1000" rows="4"'), 'Use this for a short timing or eligibility notice.')}
+          ${field('Page title', textInput(page.title, 'data-page-field="title" maxlength="240"'))}
+          ${field('Introduction', textarea(page.intro, 'data-page-field="intro" maxlength="2000" rows="4"'))}
+          ${field('Notice', textarea(page.notice, 'data-page-field="notice" maxlength="2000" rows="4"'), 'Use this for a short timing or eligibility notice.')}
           ${field('Fine print', textarea(page.finePrint, 'data-page-field="finePrint" maxlength="2000" rows="5"'))}
         </div>
       </div>
@@ -422,7 +445,7 @@
       <header><div><p>Question ${index + 1}</p><h3>${escapeHtml(faq.question || 'Untitled question')}</h3></div>${itemActionButtons('faq', key, index, controller.config.faqs.length)}</header>
       <div class="pricing-form-grid">
         ${field('Question', textInput(faq.question, `data-faq-field="question" data-key="${escapeHtml(key)}" maxlength="300"`))}
-        ${field('Answer', textarea(faq.answer, `data-faq-field="answer" data-key="${escapeHtml(key)}" maxlength="2000" rows="4"`))}
+        ${field('Answer', textarea(faq.answer, `data-faq-field="answer" data-key="${escapeHtml(key)}" maxlength="3000" rows="4"`))}
         <label class="pricing-check"><input type="checkbox" data-faq-field="visible" data-key="${escapeHtml(key)}"${faq.visible ? ' checked' : ''}><span>Show this question</span></label>
       </div>
     </article>`;
@@ -438,6 +461,7 @@
         ${operation?.type === 'schedule' ? field('Publish at (Asia/Manila)', `<input type="datetime-local" data-operation-publish-at required>`) : ''}
         ${operation?.type === 'rollback' ? `<p class="pricing-rollback-source">Source revision: <strong>${escapeHtml(operation.sourceRevisionId?.slice(0, 12) || 'Not selected')}</strong></p>` : ''}
         ${field('Reason', textarea('', 'data-operation-reason minlength="5" maxlength="1000" rows="4" required'), 'At least 5 characters. This is recorded in history.')}
+        <p class="pricing-operation-error" data-operation-error role="alert" hidden></p>
         <label class="pricing-operation-confirm"><input type="checkbox" data-operation-confirm required><span>I reviewed the draft, timing, price, subscription term, and QR details. I understand this change is recorded.</span></label>
         <div class="pricing-dialog-actions"><button type="button" data-editor-action="close-operation">Back</button><button class="pricing-primary" type="submit">${escapeHtml(copy?.button || 'Confirm')}</button></div>
       </form>
@@ -530,7 +554,9 @@
     controller.root.querySelectorAll('button, input, select, textarea').forEach((control) => {
       if (control.matches('[data-editor-action="close-operation"]')) return;
       if (controller.busy) {
-        control.dataset.pricingWasDisabled = String(control.disabled);
+        if (!Object.prototype.hasOwnProperty.call(control.dataset, 'pricingWasDisabled')) {
+          control.dataset.pricingWasDisabled = String(control.disabled);
+        }
         control.disabled = true;
       } else if (Object.prototype.hasOwnProperty.call(control.dataset, 'pricingWasDisabled')) {
         control.disabled = control.dataset.pricingWasDisabled === 'true';
@@ -560,8 +586,19 @@
     controller.options.notify?.(controller.message.text);
   }
 
+  function setOperationError(controller, form, message) {
+    const textValue = String(message || 'Review the required fields and try again.');
+    const node = form?.querySelector('[data-operation-error]');
+    if (node) {
+      node.textContent = textValue;
+      node.hidden = false;
+    }
+    setMessage(controller, 'error', textValue);
+  }
+
   function updateDirty(controller) {
-    controller.dirty = stableConfig(controller) !== controller.baseline;
+    controller.dirty = controller.pendingFiles.size > 0
+      || stableConfig(controller) !== controller.baseline;
     controller.options.onDirtyChange?.(controller.dirty);
     if (!controller.message || controller.message.tone === 'neutral') {
       controller.message = {
@@ -659,7 +696,11 @@
     } else if (['checkoutStartsAt', 'checkoutEndsAt', 'displayStartsAt', 'displayEndsAt'].includes(fieldName)) {
       plan[fieldName] = fromManilaInput(target.value);
     } else if (fieldName === 'planCode') {
+      const previousCode = plan.planCode;
       plan.planCode = String(target.value || '').trim().toLowerCase();
+      controller.config.paymentMethods.forEach((method) => {
+        if (method.planCode === previousCode) method.planCode = plan.planCode;
+      });
     } else if (fieldName) {
       plan[fieldName] = String(target.value || '');
     }
@@ -729,6 +770,10 @@
   }
 
   function addPlan(controller) {
+    if (controller.config.plans.length >= MAX_PLANS) {
+      setMessage(controller, 'error', `A pricing revision can contain up to ${MAX_PLANS} plans.`);
+      return;
+    }
     const number = controller.config.plans.length + 1;
     controller.config.plans.push({
       versionId: consumeGeneratedId(controller, 'plan', 'plan-version'),
@@ -758,6 +803,10 @@
   }
 
   function addPaymentMethod(controller) {
+    if (controller.config.paymentMethods.length >= MAX_PAYMENT_METHODS) {
+      setMessage(controller, 'error', `A pricing revision can contain up to ${MAX_PAYMENT_METHODS} payment methods.`);
+      return;
+    }
     const number = controller.config.paymentMethods.length + 1;
     controller.config.paymentMethods.push({
       versionId: consumeGeneratedId(controller, 'paymentMethod', 'payment-version'),
@@ -782,6 +831,10 @@
   }
 
   function addFaq(controller) {
+    if (controller.config.faqs.length >= MAX_FAQS) {
+      setMessage(controller, 'error', `A pricing revision can contain up to ${MAX_FAQS} questions.`);
+      return;
+    }
     const number = controller.config.faqs.length + 1;
     controller.config.faqs.push({
       id: consumeGeneratedId(controller, 'faq', 'faq'),
@@ -820,9 +873,9 @@
     const url = URL.createObjectURL(file);
     try {
       const dimensions = await imageDimensions(url);
-      if (!dimensions.width || !dimensions.height
+      if (dimensions.width < QR_MIN_EDGE || dimensions.height < QR_MIN_EDGE
           || dimensions.width > QR_MAX_EDGE || dimensions.height > QR_MAX_EDGE) {
-        throw new Error('The QR image must be no larger than 4096 × 4096 pixels.');
+        throw new Error(`The QR image must be between ${QR_MIN_EDGE} and ${QR_MAX_EDGE} pixels on each side.`);
       }
       return { file, url, mimeType, ...dimensions };
     } catch (error) {
@@ -846,6 +899,7 @@
       if (previous) revokeUrl(controller, previous.url);
       controller.pendingFiles.set(method._editorKey, validated);
       controller.objectUrls.add(validated.url);
+      updateDirty(controller);
       setMessage(controller, 'success', 'QR image selected. Review the preview, then click Upload image.');
       renderEditor(controller, { openDialog: false });
     } catch (error) {
@@ -937,23 +991,34 @@
       throw new Error('Upload each selected QR image before saving or publishing.');
     }
     const config = serializeConfig(controller);
+    if (!config.plans.length || config.plans.length > MAX_PLANS) {
+      throw new Error(`Add at least one plan and keep the revision to ${MAX_PLANS} plans or fewer.`);
+    }
+    if (config.paymentMethods.length > MAX_PAYMENT_METHODS) {
+      throw new Error(`Keep the revision to ${MAX_PAYMENT_METHODS} payment methods or fewer.`);
+    }
+    if (config.faqs.length > MAX_FAQS) {
+      throw new Error(`Keep the revision to ${MAX_FAQS} questions or fewer.`);
+    }
     if (!config.page.title) throw new Error('Add a page title.');
     Object.entries(config.page).forEach(([key, value]) => validatePlainText(value, `Page ${key}`));
 
-    if (!config.plans.length) throw new Error('Add at least one pricing plan before saving.');
     const codes = new Set();
     config.plans.forEach((plan, index) => {
       if (!CODE_PATTERN.test(plan.planCode)) {
-        throw new Error(`Plan ${index + 1} needs a stable lowercase code with at least 2 characters.`);
+        throw new Error(`Plan ${index + 1} needs a stable code of at least 3 characters, starting with a lowercase letter.`);
       }
       if (codes.has(plan.planCode)) throw new Error(`Plan code “${plan.planCode}” is used more than once.`);
       codes.add(plan.planCode);
-      if (!plan.name) throw new Error(`Plan ${index + 1} needs a name.`);
+      if (plan.name.length < 2 || plan.name.length > 100) {
+        throw new Error(`Plan ${index + 1} needs a name between 2 and 100 characters.`);
+      }
       if (!Number.isInteger(plan.priceCentavos) || plan.priceCentavos < 0) {
         throw new Error(`${plan.name} needs a valid peso price.`);
       }
-      if (!Number.isInteger(plan.durationDays) || plan.durationDays < 1) {
-        throw new Error(`${plan.name} needs a subscription duration of at least one day.`);
+      if (plan.entitlementMode !== 'fixed_end'
+          && (!Number.isInteger(plan.durationDays) || plan.durationDays < 1 || plan.durationDays > 366)) {
+        throw new Error(`${plan.name} needs a subscription duration between 1 and 366 days.`);
       }
       validateWindow(plan.displayStartsAt, plan.displayEndsAt, `${plan.name} display`);
       validateWindow(plan.checkoutStartsAt, plan.checkoutEndsAt, `${plan.name} checkout`);
@@ -969,6 +1034,9 @@
       if (!CODE_PATTERN.test(method.channelCode)) {
         throw new Error(`Payment method ${index + 1} needs a stable lowercase channel code.`);
       }
+      if (method.label.length < 2 || method.label.length > 100) {
+        throw new Error(`Payment method ${index + 1} needs a label between 2 and 100 characters.`);
+      }
       const channelKey = `${method.channelCode}:${method.planCode || 'all'}`;
       if (channels.has(channelKey)) {
         throw new Error(`${method.channelCode} is already assigned to ${method.planCode || 'all plans'}.`);
@@ -980,8 +1048,8 @@
       if (method.qrAmountMode === 'exact' && !method.planCode) {
         throw new Error(`${method.label} uses an exact QR amount, so assign it to one plan.`);
       }
-      if (method.enabled && !method.qrAsset?.assetId && !legacyQrUrlFor(method)) {
-        throw new Error(`${method.label} is enabled but has no uploaded QR image.`);
+      if (!method.qrAsset?.assetId && !legacyQrUrlFor(method)) {
+        throw new Error(`${method.label} needs an uploaded QR image before this draft can be saved.`);
       }
       [method.label, method.accountName, method.accountDetails, method.instructions]
         .forEach((value) => validatePlainText(value, method.label || `Payment method ${index + 1}`));
@@ -990,8 +1058,8 @@
     config.faqs.forEach((faq, index) => {
       validatePlainText(faq.question, `Question ${index + 1}`);
       validatePlainText(faq.answer, `Answer ${index + 1}`);
-      if (faq.visible && (!faq.question || !faq.answer)) {
-        throw new Error(`Visible question ${index + 1} needs both a question and an answer.`);
+      if (faq.question.length < 2 || faq.answer.length < 2) {
+        throw new Error(`Question ${index + 1} needs both a question and an answer of at least 2 characters.`);
       }
     });
     return config;
@@ -1160,18 +1228,18 @@
     const reason = String(form.querySelector('[data-operation-reason]')?.value || '').trim();
     const confirmed = form.querySelector('[data-operation-confirm]')?.checked === true;
     if (reason.length < 5) {
-      setMessage(controller, 'error', 'Provide a reason of at least 5 characters.');
+      setOperationError(controller, form, 'Provide a reason of at least 5 characters.');
       return;
     }
     if (!confirmed) {
-      setMessage(controller, 'error', 'Confirm that you reviewed the price, timing, term, and QR details.');
+      setOperationError(controller, form, 'Confirm that you reviewed the price, timing, term, and QR details.');
       return;
     }
     let publishAt = null;
     if (operation.type === 'schedule') {
       publishAt = fromManilaInput(form.querySelector('[data-operation-publish-at]')?.value);
       if (!publishAt || new Date(publishAt).getTime() <= new Date(controller.snapshot.serverNow).getTime()) {
-        setMessage(controller, 'error', 'Choose a future publication time in Asia/Manila.');
+        setOperationError(controller, form, 'Choose a future publication time in Asia/Manila.');
         return;
       }
     }
@@ -1210,13 +1278,7 @@
     const tab = event.target.closest('[data-editor-tab]');
     if (tab) {
       controller.panel = tab.dataset.editorTab;
-      controller.root.querySelectorAll('[data-editor-panel]').forEach((panel) => {
-        panel.hidden = panel.dataset.editorPanel !== controller.panel;
-      });
-      controller.root.querySelectorAll('[data-editor-tab]').forEach((button) => {
-        button.setAttribute('aria-current', button === tab ? 'page' : 'false');
-      });
-      if (controller.panel === 'payments') hydrateQrPreviews(controller);
+      renderEditor(controller, { openDialog: false });
       return;
     }
     const previewButton = event.target.closest('[data-preview-mode]');

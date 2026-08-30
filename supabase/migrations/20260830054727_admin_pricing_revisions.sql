@@ -46,6 +46,8 @@ create table if not exists public.pricing_revisions (
 
 create unique index if not exists pricing_revisions_one_draft_uidx
   on public.pricing_revisions ((true)) where state = 'draft';
+create unique index if not exists pricing_revisions_one_scheduled_uidx
+  on public.pricing_revisions ((true)) where state = 'scheduled';
 create index if not exists pricing_revisions_effective_idx
   on public.pricing_revisions (effective_at desc, revision_number desc)
   where state in ('published', 'scheduled');
@@ -375,6 +377,15 @@ begin
      ]) then
     return new;
   end if;
+  if old.state = 'scheduled' and new.state = 'published'
+     and old.effective_at <= clock_timestamp()
+     and (to_jsonb(new) - array[
+       'state','published_at','published_by','updated_at','updated_by','lock_version'
+     ]) = (to_jsonb(old) - array[
+       'state','published_at','published_by','updated_at','updated_by','lock_version'
+     ]) then
+    return new;
+  end if;
   raise exception 'Published or scheduled pricing revisions are immutable';
 end;
 $$;
@@ -389,13 +400,21 @@ language plpgsql
 set search_path = ''
 as $$
 declare
-  v_revision_id uuid := case when tg_op = 'DELETE' then old.revision_id else new.revision_id end;
-  v_state text;
+  v_old_state text;
+  v_new_state text;
 begin
-  select r.state into v_state
-  from public.pricing_revisions r
-  where r.id = v_revision_id;
-  if v_state <> 'draft' then
+  if tg_op in ('UPDATE', 'DELETE') then
+    select r.state into v_old_state
+    from public.pricing_revisions r
+    where r.id = old.revision_id;
+  end if;
+  if tg_op in ('INSERT', 'UPDATE') then
+    select r.state into v_new_state
+    from public.pricing_revisions r
+    where r.id = new.revision_id;
+  end if;
+  if (tg_op in ('UPDATE', 'DELETE') and v_old_state is distinct from 'draft')
+     or (tg_op in ('INSERT', 'UPDATE') and v_new_state is distinct from 'draft') then
     raise exception 'Published or scheduled pricing content is immutable';
   end if;
   return case when tg_op = 'DELETE' then old else new end;
@@ -425,6 +444,31 @@ for each row execute function public.phase4_guard_pricing_append_only();
 create trigger phase4_guard_pricing_publication_events_trigger
 before update or delete on public.pricing_publication_events
 for each row execute function public.phase4_guard_pricing_append_only();
+
+-- A due scheduled revision is already effective for public reads. Promote its
+-- lifecycle state when a Founder next opens or changes the builder so the
+-- one-scheduled-revision invariant remains reusable without a cron job.
+create or replace function public.phase4_promote_due_pricing_schedule(
+  p_actor_user_id uuid
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  perform public.phase4_require_founder(p_actor_user_id);
+  update public.pricing_revisions r
+  set state = 'published',
+      published_at = r.effective_at,
+      published_by = coalesce(r.updated_by, r.created_by, p_actor_user_id),
+      lock_version = r.lock_version + 1,
+      updated_at = clock_timestamp(),
+      updated_by = coalesce(r.updated_by, p_actor_user_id)
+  where r.state = 'scheduled'
+    and r.effective_at <= clock_timestamp();
+end;
+$$;
 
 -- ---------------------------------------------------------------------------
 -- Canonical snapshots (the public shape never exposes a private object path)
@@ -702,6 +746,8 @@ declare
   v_assets jsonb;
 begin
   perform public.phase4_require_founder(p_actor_user_id);
+  perform public.phase4_promote_due_pricing_schedule(p_actor_user_id);
+  v_now := clock_timestamp();
 
   select r.id into v_live_id
   from public.pricing_revisions r
@@ -1047,6 +1093,7 @@ declare
   v_result jsonb;
   v_event_type text;
   v_metadata jsonb := '{}'::jsonb;
+  v_target_resource_id text;
 begin
   perform public.phase4_require_founder(p_actor_user_id);
   if v_operation not in (
@@ -1069,19 +1116,24 @@ begin
      and not coalesce(p_confirmed, false) then
     raise exception 'Explicit confirmation is required';
   end if;
+  v_target_resource_id := case when v_operation = 'rollback'
+    then p_source_revision_id::text
+    else coalesce(p_draft_revision_id, p_source_revision_id)::text
+  end;
 
   insert into public.admin_action_requests (
     request_key, actor_user_id, action, target_resource_id
   ) values (
     p_request_key, p_actor_user_id, 'pricing_' || v_operation,
-    coalesce(p_draft_revision_id, p_source_revision_id)::text
+    v_target_resource_id
   ) on conflict (request_key) do nothing;
   get diagnostics v_inserted = row_count;
   if v_inserted = 0 then
     select * into v_existing
     from public.admin_action_requests r where r.request_key = p_request_key;
     if v_existing.actor_user_id <> p_actor_user_id
-       or v_existing.action <> 'pricing_' || v_operation then
+       or v_existing.action <> 'pricing_' || v_operation
+       or v_existing.target_resource_id is distinct from v_target_resource_id then
       raise exception 'Request key conflict';
     end if;
     if v_existing.result is null then raise exception 'Action is already in progress'; end if;
@@ -1091,6 +1143,8 @@ begin
   perform pg_catalog.pg_advisory_xact_lock(
     pg_catalog.hashtextextended('pricing-publication', 0)
   );
+  perform public.phase4_promote_due_pricing_schedule(p_actor_user_id);
+  v_now := clock_timestamp();
   select r.id into v_live_id
   from public.pricing_revisions r
   where r.state in ('published', 'scheduled') and r.effective_at <= v_now
@@ -1148,6 +1202,9 @@ begin
     if p_draft_revision_id is null or p_expected_lock_version is null then
       raise exception 'Draft revision and expected version are required';
     end if;
+    if p_source_revision_id is null then
+      raise exception 'Expected live pricing revision is required';
+    end if;
     select r.* into v_revision
     from public.pricing_revisions r
     where r.id = p_draft_revision_id and r.state = 'draft'
@@ -1156,8 +1213,15 @@ begin
     if v_revision.lock_version <> p_expected_lock_version then
       raise exception 'Pricing draft changed; refresh before publishing';
     end if;
-    if p_source_revision_id is not null and p_source_revision_id <> v_live_id then
+    if p_source_revision_id <> v_live_id then
       raise exception 'Published pricing changed; refresh before publishing';
+    end if;
+    if exists (
+      select 1 from public.pricing_revisions scheduled_revision
+      where scheduled_revision.state = 'scheduled'
+        and scheduled_revision.effective_at > v_now
+    ) then
+      raise exception 'Cancel the existing scheduled pricing revision before publishing or scheduling another';
     end if;
     if p_config is not null then
       perform public.phase4_apply_pricing_config(v_revision.id, p_config, p_actor_user_id);
@@ -1190,14 +1254,16 @@ begin
     end if;
 
   elsif v_operation = 'cancel_schedule' then
-    if p_source_revision_id is null then raise exception 'Scheduled revision is required'; end if;
+    if p_source_revision_id is null or p_expected_lock_version is null then
+      raise exception 'Scheduled revision and expected version are required';
+    end if;
     select r.* into v_revision
     from public.pricing_revisions r
     where r.id = p_source_revision_id and r.state = 'scheduled'
       and r.effective_at > v_now
     for update;
     if v_revision.id is null then raise exception 'Scheduled pricing revision not found'; end if;
-    if p_expected_lock_version is not null and v_revision.lock_version <> p_expected_lock_version then
+    if v_revision.lock_version <> p_expected_lock_version then
       raise exception 'Scheduled pricing revision changed; refresh before cancelling';
     end if;
     update public.pricing_revisions
@@ -1210,8 +1276,24 @@ begin
 
   else
     if p_source_revision_id is null then raise exception 'Rollback source revision is required'; end if;
+    -- Rollback has no editable draft. Its otherwise-unused draft-id slot carries
+    -- the live revision the Founder previewed, preserving the fixed RPC shape
+    -- while preventing a stale tab from overwriting a newer publication.
+    if p_draft_revision_id is null then
+      raise exception 'Expected live pricing revision is required for rollback';
+    end if;
+    if p_draft_revision_id <> v_live_id then
+      raise exception 'Published pricing changed; refresh before rollback';
+    end if;
     if exists (select 1 from public.pricing_revisions r where r.state = 'draft') then
       raise exception 'Publish or discard the existing draft before rollback';
+    end if;
+    if exists (
+      select 1 from public.pricing_revisions scheduled_revision
+      where scheduled_revision.state = 'scheduled'
+        and scheduled_revision.effective_at > v_now
+    ) then
+      raise exception 'Cancel the scheduled pricing revision before rollback';
     end if;
     select r.* into v_source
     from public.pricing_revisions r
@@ -1444,6 +1526,16 @@ begin
           where live.state in ('published', 'scheduled')
             and live.effective_at <= v_now
           order by live.effective_at desc, live.revision_number desc limit 1
+        )
+        and exists (
+          select 1
+          from public.pricing_plan_versions p
+          where p.revision_id = r.id
+            and p.visible
+            and (p.display_starts_at is null or v_now >= p.display_starts_at)
+            and (p.display_ends_at is null or v_now < p.display_ends_at)
+            and (c.plan_version_id is null or c.plan_version_id = p.id)
+            and (c.amount_centavos is null or c.amount_centavos = p.price_centavos)
         )
     );
   if v_asset.id is null then return null; end if;
@@ -2277,10 +2369,14 @@ as $$
         'fixedEntitlementEndsAt', coalesce(p.trusted_fixed_ends_at,
           case when p.plan_code = 'early_access_beta'
             then '2026-10-01 23:59:59+08'::timestamptz else null end),
+        'fixedEndsAt', coalesce(p.trusted_fixed_ends_at,
+          case when p.plan_code = 'early_access_beta'
+            then '2026-10-01 23:59:59+08'::timestamptz else null end),
         'paymentChannelLabel', coalesce(p.trusted_payment_channel_label, p.payment_method),
         'method', p.payment_method,
         'paymentDate', p.payment_date,
         'reference', p.transaction_reference,
+        'paymentReference', p.transaction_reference,
         'status', p.status,
         'submittedAt', p.submitted_at,
         'reviewedAt', p.reviewed_at,
@@ -2331,9 +2427,13 @@ as $$
     'fixedEntitlementEndsAt', coalesce(p.trusted_fixed_ends_at,
       case when p.plan_code = 'early_access_beta'
         then '2026-10-01 23:59:59+08'::timestamptz else null end),
+    'fixedEndsAt', coalesce(p.trusted_fixed_ends_at,
+      case when p.plan_code = 'early_access_beta'
+        then '2026-10-01 23:59:59+08'::timestamptz else null end),
     'paymentMethod', p.payment_method,
     'paymentChannelLabel', coalesce(p.trusted_payment_channel_label, p.payment_method),
     'paymentDate', p.payment_date, 'transactionReference', p.transaction_reference,
+    'paymentReference', p.transaction_reference,
     'note', p.student_note, 'proofBucket', coalesce(p.proof_bucket, 'payment-proofs'),
     'proofObjectPath', p.proof_object_path, 'proofOriginalName', p.proof_original_name,
     'proofMimeType', p.proof_mime_type, 'proofSizeBytes', p.proof_size_bytes,
@@ -2343,8 +2443,7 @@ as $$
     'notificationAttempts', p.verification_email_attempts,
     'user', jsonb_build_object(
       'id', u.id, 'email', u.email,
-      'displayName', coalesce(pr.display_name,
-        u.raw_user_meta_data->>'full_name', u.raw_user_meta_data->>'name')
+      'displayName', coalesce(pr.display_name, u.email)
     )
   )
   from public.payment_requests p
@@ -2365,6 +2464,7 @@ as $$
     'reviewedAt', p.reviewed_at,
     'pricingRevisionId', p.pricing_revision_id,
     'planVersionId', p.pricing_plan_version_id,
+    'paymentChannelVersionId', p.pricing_payment_channel_version_id,
     'planCode', p.plan_code,
     'planName', coalesce(p.trusted_plan_name,
       case when p.plan_code = 'early_access_beta' then 'Early Access' else p.plan_code end),
@@ -2377,11 +2477,15 @@ as $$
     'fixedEntitlementEndsAt', coalesce(p.trusted_fixed_ends_at,
       case when p.plan_code = 'early_access_beta'
         then '2026-10-01 23:59:59+08'::timestamptz else null end),
+    'fixedEndsAt', coalesce(p.trusted_fixed_ends_at,
+      case when p.plan_code = 'early_access_beta'
+        then '2026-10-01 23:59:59+08'::timestamptz else null end),
     'purchasedStartsAt', p.approved_entitlement_starts_at,
     'purchasedEndsAt', p.approved_entitlement_ends_at,
     'paymentMethod', p.payment_method,
     'paymentChannelLabel', coalesce(p.trusted_payment_channel_label, p.payment_method),
     'paymentDate', p.payment_date, 'transactionReference', p.transaction_reference,
+    'paymentReference', p.transaction_reference,
     'proofBucket', coalesce(p.proof_bucket, 'payment-proofs'),
     'proofObjectPath', p.proof_object_path, 'proofOriginalName', p.proof_original_name,
     'proofMimeType', p.proof_mime_type, 'proofSizeBytes', p.proof_size_bytes,
@@ -2390,8 +2494,7 @@ as $$
     'receiptAttempts', p.subscriber_receipt_attempts,
     'user', jsonb_build_object(
       'id', u.id, 'email', u.email,
-      'displayName', coalesce(pr.display_name,
-        u.raw_user_meta_data->>'full_name', u.raw_user_meta_data->>'name')
+      'displayName', coalesce(pr.display_name, u.email)
     ),
     'subscription', case when s.id is null then null else jsonb_build_object(
       'id', s.id, 'planCode', s.plan_code,
@@ -2547,18 +2650,23 @@ revoke all on public.pricing_payment_channel_versions from public, anon, authent
 revoke all on public.pricing_assets from public, anon, authenticated;
 revoke all on public.pricing_publication_events from public, anon, authenticated;
 
-grant select, insert, update, delete on public.pricing_revisions to service_role;
-grant select, insert, update, delete on public.pricing_plan_versions to service_role;
-grant select, insert, update, delete on public.pricing_payment_channel_versions to service_role;
-grant select, insert, update, delete on public.pricing_assets to service_role;
-grant select, insert, update, delete on public.pricing_publication_events to service_role;
-grant usage, select on sequence public.pricing_revisions_revision_number_seq to service_role;
+-- The Worker reaches these tables only through the narrow SECURITY DEFINER
+-- RPCs below. Direct service-role DML would bypass both RLS and Founder checks.
+revoke all on public.pricing_revisions from service_role;
+revoke all on public.pricing_plan_versions from service_role;
+revoke all on public.pricing_payment_channel_versions from service_role;
+revoke all on public.pricing_assets from service_role;
+revoke all on public.pricing_publication_events from service_role;
+revoke all on sequence public.pricing_revisions_revision_number_seq
+  from public, anon, authenticated, service_role;
 
 revoke all on function public.phase4_guard_pricing_revision_mutation()
   from public, anon, authenticated;
 revoke all on function public.phase4_guard_pricing_child_mutation()
   from public, anon, authenticated;
 revoke all on function public.phase4_guard_pricing_append_only()
+  from public, anon, authenticated;
+revoke all on function public.phase4_promote_due_pricing_schedule(uuid)
   from public, anon, authenticated;
 revoke all on function public.phase4_pricing_revision_snapshot(uuid,boolean,timestamptz)
   from public, anon, authenticated;

@@ -106,6 +106,47 @@ function compatiblePaymentMethods(pricing, plan) {
   ));
 }
 
+function validatePublicPricingResponse(payload) {
+  assert.equal(payload.ok, true);
+  assert.ok(payload.pricing && typeof payload.pricing === 'object');
+  const pricing = payload.pricing;
+  assert.match(pricing.revisionId, UUID_PATTERN);
+  assert.equal(payload.revisionId, pricing.revisionId);
+  assert.ok(Number.isFinite(Date.parse(pricing.serverNow)));
+  assert.equal(payload.serverNow, pricing.serverNow);
+  assert.ok(Array.isArray(pricing.plans));
+  assert.ok(Array.isArray(pricing.paymentMethods));
+  assert.deepEqual(payload.plans, pricing.plans);
+  for (const plan of pricing.plans) {
+    assert.match(plan.versionId, UUID_PATTERN);
+    assert.ok(typeof plan.planCode === 'string' && plan.planCode.length > 0);
+    assert.ok(typeof plan.name === 'string' && plan.name.length > 0);
+    assert.ok(Number.isInteger(plan.priceCentavos) && plan.priceCentavos >= 0);
+    if (plan.checkoutEnabled === true) assert.ok(plan.priceCentavos > 0);
+    assert.equal(plan.currency, 'PHP');
+    assert.ok(['fixed_end', 'rolling_days'].includes(plan.entitlementMode));
+    const compatibleMethods = compatiblePaymentMethods(pricing, plan);
+    if (plan.checkoutOpen === true) {
+      assert.ok(
+        compatibleMethods.length > 0,
+        `Checkout-open plan ${plan.planCode} must expose a compatible QR-backed payment method.`,
+      );
+    }
+    if (plan.status === 'payment_channel_required') {
+      assert.equal(plan.checkoutOpen, false);
+      assert.equal(compatibleMethods.length, 0);
+    }
+  }
+  if (pricing.plans.length === 0) {
+    assert.equal(
+      pricing.paymentMethods.length,
+      0,
+      'An intentionally empty public catalog must not expose an orphan payment QR.',
+    );
+  }
+  return pricing;
+}
+
 function accessEvidence(access) {
   return {
     accessMode: access.accessMode,
@@ -253,35 +294,7 @@ try {
 
   console.log('STAGING_GATE: validating the Founder-published pricing catalog');
   const plans = await workerPost('/plans', {});
-  assert.equal(plans.ok, true);
-  assert.ok(plans.pricing && typeof plans.pricing === 'object');
-  const publicPricing = plans.pricing;
-  assert.match(publicPricing.revisionId, UUID_PATTERN);
-  assert.equal(plans.revisionId, publicPricing.revisionId);
-  assert.ok(Number.isFinite(Date.parse(publicPricing.serverNow)));
-  assert.equal(plans.serverNow, publicPricing.serverNow);
-  assert.ok(Array.isArray(publicPricing.plans));
-  assert.ok(Array.isArray(publicPricing.paymentMethods));
-  assert.deepEqual(plans.plans, publicPricing.plans);
-  for (const plan of publicPricing.plans) {
-    assert.match(plan.versionId, UUID_PATTERN);
-    assert.ok(typeof plan.planCode === 'string' && plan.planCode.length > 0);
-    assert.ok(typeof plan.name === 'string' && plan.name.length > 0);
-    assert.ok(Number.isInteger(plan.priceCentavos) && plan.priceCentavos > 0);
-    assert.equal(plan.currency, 'PHP');
-    assert.ok(['fixed_end', 'rolling_days'].includes(plan.entitlementMode));
-    const compatibleMethods = compatiblePaymentMethods(publicPricing, plan);
-    if (plan.checkoutOpen === true) {
-      assert.ok(
-        compatibleMethods.length > 0,
-        `Checkout-open plan ${plan.planCode} must expose a compatible QR-backed payment method.`,
-      );
-    }
-    if (plan.status === 'payment_channel_required') {
-      assert.equal(plan.checkoutOpen, false);
-      assert.equal(compatibleMethods.length, 0);
-    }
-  }
+  const publicPricing = validatePublicPricingResponse(plans);
 
   const freeInitial = await accessSnapshot(freeUser.id);
   assert.equal(freeInitial.accessMode, 'introductory');
@@ -351,19 +364,22 @@ try {
   assert.equal(founding.unlimited, true);
   assert.equal(Date.parse(founding.entitlementEndsAt), Date.parse(foundingExpiresAt));
 
-  const checkoutPlan = publicPricing.plans.find((plan) => (
-    plan.checkoutOpen === true && compatiblePaymentMethods(publicPricing, plan).length > 0
+  // Refresh immediately before exercising checkout so an Admin publication
+  // during the longer quota/founding checks cannot leave us using stale IDs.
+  const paymentPricing = validatePublicPricingResponse(await workerPost('/plans', {}));
+  const checkoutPlan = paymentPricing.plans.find((plan) => (
+    plan.checkoutOpen === true && compatiblePaymentMethods(paymentPricing, plan).length > 0
   ));
   let paymentOutcome;
   if (checkoutPlan) {
     console.log('STAGING_GATE: proving versioned payment capture and exact retry');
-    const paymentMethod = compatiblePaymentMethods(publicPricing, checkoutPlan)[0];
+    const paymentMethod = compatiblePaymentMethods(paymentPricing, checkoutPlan)[0];
     assert.match(paymentMethod.versionId, UUID_PATTERN);
     const paymentPayload = {
       p_user_id: provisionalUser.id,
       p_plan_version_id: checkoutPlan.versionId,
       p_payment_channel_version_id: paymentMethod.versionId,
-      p_payment_date: philippineDate(),
+      p_payment_date: philippineDate(new Date(Date.parse(paymentPricing.serverNow))),
       p_payment_reference: `SYNTH-${runId}`,
       p_proof_bucket: 'payment-proofs',
       p_proof_path: `${provisionalUser.id}/${randomUUID()}.png`,
@@ -372,8 +388,9 @@ try {
       p_proof_sha256: createHash('sha256').update(`payment-${runId}`).digest('hex'),
     };
     const payment = await serviceRpc('phase4_create_payment_request_v2', paymentPayload);
+    const paymentId = payment.id;
     assert.equal(payment.status, 'pending');
-    assert.equal(payment.pricingRevisionId, publicPricing.revisionId);
+    assert.equal(payment.pricingRevisionId, paymentPricing.revisionId);
     assert.equal(payment.planVersionId, checkoutPlan.versionId);
     assert.equal(payment.paymentChannelVersionId, paymentMethod.versionId);
     assert.equal(payment.planCode, checkoutPlan.planCode);
@@ -407,6 +424,34 @@ try {
     assert.equal(repeatedPayment.replayed, true);
     assert.equal(repeatedPayment.provisionalGrantReused, false);
     assert.equal(repeatedPayment.provisionalAccessExpiresAt, payment.provisionalAccessExpiresAt);
+    const distinctPaymentFailure = await serviceRpcFailure('phase4_create_payment_request_v2', {
+      ...paymentPayload,
+      p_payment_reference: `SYNTH-DISTINCT-${runId}`,
+      p_proof_path: `${provisionalUser.id}/${randomUUID()}.png`,
+      p_proof_sha256: createHash('sha256').update(`distinct-${runId}`).digest('hex'),
+    });
+    assert.match(
+      String(distinctPaymentFailure?.message || ''),
+      /payment request is already awaiting review/i,
+    );
+    const [paymentRows, historyRows, notificationRows] = await Promise.all([
+      serviceGet(`payment_requests?user_id=eq.${provisionalUser.id}&select=id,provisional_access_expires_at`),
+      serviceGet(`payment_request_history?payment_request_id=eq.${paymentId}&action=eq.submitted&select=id`),
+      serviceGet(`outbound_notifications?related_resource_id=eq.${paymentId}&select=id`),
+    ]);
+    assert.equal(paymentRows.length, 1);
+    assert.equal(paymentRows[0].id, paymentId);
+    assert.equal(
+      Date.parse(paymentRows[0].provisional_access_expires_at),
+      Date.parse(payment.provisionalAccessExpiresAt),
+    );
+    assert.equal(historyRows.length, 1);
+    assert.equal(notificationRows.length, 1);
+    const provisionalAfterRetries = await accessSnapshot(provisionalUser.id);
+    assert.equal(
+      Date.parse(provisionalAfterRetries.entitlementEndsAt),
+      Date.parse(payment.provisionalAccessExpiresAt),
+    );
     paymentOutcome = {
       checkoutState: 'verified',
       planCode: checkoutPlan.planCode,
@@ -416,15 +461,19 @@ try {
     };
   } else {
     console.log('STAGING_GATE: proving unpublished or incompatible checkout fails closed');
-    assert.ok(publicPricing.plans.every((plan) => plan.checkoutOpen !== true));
-    const failClosedPlan = publicPricing.plans[0] || null;
+    assert.ok(paymentPricing.plans.every((plan) => plan.checkoutOpen !== true));
+    const failClosedPlan = paymentPricing.plans.find(
+      (plan) => plan.status === 'payment_channel_required',
+    ) || paymentPricing.plans.find(
+      (plan) => ['upcoming', 'unavailable', 'closed', 'legacy'].includes(plan.status),
+    ) || paymentPricing.plans[0] || null;
     if (failClosedPlan) {
       const before = accessEvidence(await accessSnapshot(provisionalUser.id));
       const paymentFailure = await serviceRpcFailure('phase4_create_payment_request_v2', {
         p_user_id: provisionalUser.id,
         p_plan_version_id: failClosedPlan.versionId,
         p_payment_channel_version_id: randomUUID(),
-        p_payment_date: philippineDate(),
+        p_payment_date: philippineDate(new Date(Date.parse(paymentPricing.serverNow))),
         p_payment_reference: `SYNTH-CLOSED-${runId}`,
         p_proof_bucket: 'payment-proofs',
         p_proof_path: `${provisionalUser.id}/${randomUUID()}.png`,
@@ -434,7 +483,9 @@ try {
       });
       assert.match(
         String(paymentFailure?.message || ''),
-        /Selected pricing plan is not open|Payment method is not compatible/,
+        failClosedPlan.status === 'payment_channel_required'
+          ? /Payment method is not compatible/
+          : /Selected pricing plan is not open/,
       );
       const paymentRows = await serviceGet(
         `payment_requests?user_id=eq.${provisionalUser.id}&select=id`,
@@ -445,7 +496,7 @@ try {
     }
     paymentOutcome = {
       checkoutState: 'fail_closed',
-      displayedPlans: publicPricing.plans.length,
+      displayedPlans: paymentPricing.plans.length,
       paymentCreated: false,
     };
   }
@@ -453,8 +504,8 @@ try {
   outcome = {
     ok: true,
     runId,
-    pricingRevisionId: publicPricing.revisionId,
-    publicCatalog: publicPricing.plans.map((plan) => plan.planCode),
+    pricingRevisionId: paymentPricing.revisionId,
+    publicCatalog: paymentPricing.plans.map((plan) => plan.planCode),
     introductoryTokens: { limit: 5, concurrentAccepted: 5, concurrentDenied: 1 },
     failedGradeReleased: true,
     foundingBeta: { claimedByHash: true, unlimited: true },
@@ -463,7 +514,27 @@ try {
 } finally {
   console.log('STAGING_GATE: cleaning exact synthetic commercial records');
   const cleanupErrors = [];
-  for (const notificationId of createdNotificationIds.reverse()) {
+  // Notifications intentionally do not cascade from payment requests. Discover
+  // them again before user deletion so even an assertion immediately after a
+  // successful payment cannot leave synthetic Admin inbox residue.
+  for (const userId of createdUsers) {
+    const paymentRows = await serviceGet(
+      `payment_requests?user_id=eq.${encodeURIComponent(userId)}&select=id`,
+    ).catch((error) => {
+      cleanupErrors.push(error);
+      return [];
+    });
+    for (const paymentRow of paymentRows) {
+      const notificationRows = await serviceGet(
+        `outbound_notifications?related_resource_id=eq.${encodeURIComponent(paymentRow.id)}&select=id`,
+      ).catch((error) => {
+        cleanupErrors.push(error);
+        return [];
+      });
+      createdNotificationIds.push(...notificationRows.map((item) => item.id));
+    }
+  }
+  for (const notificationId of [...new Set(createdNotificationIds)].reverse()) {
     await serviceWrite(
       `outbound_notifications?id=eq.${encodeURIComponent(notificationId)}`,
       'DELETE',

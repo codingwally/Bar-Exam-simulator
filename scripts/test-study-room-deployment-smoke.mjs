@@ -5,7 +5,7 @@ const allowedOrigin = String(process.env.STUDY_ROOM_ALLOWED_ORIGIN || '').trim()
 assert.match(workerUrl, /^https:\/\/[A-Za-z0-9.-]+$/u, 'A secure Study Room Worker URL is required.');
 assert.match(allowedOrigin, /^https:\/\/[A-Za-z0-9.-]+$/u, 'A secure allowed origin is required.');
 
-const endpoint = `${workerUrl}/admin/study-room/access`;
+const endpoint = `${workerUrl}/study-room/access`;
 
 const preflight = await fetch(endpoint, {
   method: 'OPTIONS',
@@ -37,6 +37,20 @@ assert.equal(unauthenticatedPayload?.error?.code, 'STUDY_ROOM_SIGN_IN_REQUIRED')
 assert.match(unauthenticated.headers.get('cache-control') || '', /no-store/iu);
 assert.equal(unauthenticated.headers.get('access-control-allow-origin'), allowedOrigin);
 assert.doesNotMatch(JSON.stringify(unauthenticatedPayload), /participant_token|LIVEKIT_API_SECRET/iu);
+
+for (const path of ['/study-room/rooms', '/study-room/join', '/study-room/moderate']) {
+  const response = await fetch(`${workerUrl}${path}`, {
+    method: 'POST',
+    headers: { Origin: allowedOrigin, 'Content-Type': 'application/json' },
+    body: '{}',
+    cache: 'no-store',
+  });
+  const payload = await response.json();
+  assert.equal(response.status, 401, `${path} must reject signed-out users.`);
+  assert.equal(payload?.error?.code, 'STUDY_ROOM_SIGN_IN_REQUIRED');
+  assert.match(response.headers.get('cache-control') || '', /no-store/iu);
+  assert.equal(response.headers.get('access-control-allow-origin'), allowedOrigin);
+}
 
 const wrongOrigin = await fetch(endpoint, {
   method: 'POST',

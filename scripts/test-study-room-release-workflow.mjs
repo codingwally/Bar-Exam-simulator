@@ -33,7 +33,11 @@ for (const expectedReleaseFile of [
   ".github/workflows/deploy-pages-only.yml",
   ".github/workflows/release-study-room-admin-beta.yml",
   "assets/icons/community/image.svg",
+  "assets/icons/navigation/hand.svg",
   "assets/icons/navigation/mic.svg",
+  "assets/icons/navigation/monitor-up.svg",
+  "assets/icons/navigation/pin.svg",
+  "assets/icons/navigation/settings.svg",
   "assets/study-room-backgrounds.js",
   "assets/study-room-live.css",
   "assets/study-room-live.js",
@@ -104,7 +108,11 @@ const pagesOnlyAllowlist = new RegExp(pagesOnlyAllowlistSource, "u");
 for (const expectedPagesFile of [
   ".github/workflows/deploy-pages-only.yml",
   "assets/icons/community/image.svg",
+  "assets/icons/navigation/hand.svg",
   "assets/icons/navigation/mic.svg",
+  "assets/icons/navigation/monitor-up.svg",
+  "assets/icons/navigation/pin.svg",
+  "assets/icons/navigation/settings.svg",
   "assets/study-room-backgrounds.js",
   "assets/study-room-live.css",
   "assets/study-room-live.js",
@@ -151,7 +159,7 @@ const stagingPublishableResolver = workflow.indexOf(
   stagingJob,
 );
 const stagingPositiveSmoke = workflow.indexOf(
-  "Verify authenticated admins and two-participant media on staging",
+  "Verify subscriber, admin, chat, and two-participant media on staging",
   stagingJob,
 );
 const stagingMarker = workflow.indexOf(
@@ -169,11 +177,18 @@ assert.ok(
 );
 const stagingAssetChecks = workflow.slice(stagingSmoke, stagingPositiveSmoke);
 for (const requiredStagingMarker of [
-  "study-room-performance-controls-20260829-1",
-  "/admin/study-room/rooms",
+  "study-room-launch-20260830-1",
+  "workerRequest('/study-room/rooms'",
+  "workerRequest('/study-room/join'",
+  "registerTextStreamHandler",
+  "setScreenShareEnabled",
   "DueDiligenceStudyRoomMandatoryBackground",
   "due-diligence-mandatory-virtual-background-no-raw-first-frame",
+  "assets/icons/navigation/hand.svg",
   "assets/icons/navigation/mic.svg",
+  "assets/icons/navigation/monitor-up.svg",
+  "assets/icons/navigation/pin.svg",
+  "assets/icons/navigation/settings.svg",
   "assets/study-room/virtual-background-due-diligence-branded.webp",
   "assets/vendor/mediapipe/selfie_segmenter-float16-2023-05-07.tflite",
   "assets/vendor/mediapipe/wasm/vision_wasm_internal.wasm",
@@ -273,7 +288,7 @@ assert.match(
 );
 assert.match(
   pagesOnlyWorkflow,
-  /concurrency:\s*\n\s+group: ["']?github-pages["']?\s*\n\s+cancel-in-progress: false/u,
+  /concurrency:\s*\n\s+group: ["']?examination-room-production-cutover["']?\s*\n\s+cancel-in-progress: false/u,
 );
 const pagesBaselineRecheck = workflow.indexOf(
   "Recheck the live Pages baseline inside the Pages lock",
@@ -314,25 +329,32 @@ assert.match(
 );
 assert.match(
   workflow.slice(pagesVerificationJob),
-  /study-room-performance-controls-20260829-1/u,
+  /study-room-launch-20260830-1/u,
 );
 assert.match(
   home,
-  /study-room-performance-controls-20260829-1/u,
+  /study-room-launch-20260830-1/u,
   "Production verification must use a marker that exists in the shipped Home document.",
 );
 assert.match(
   workflow.slice(pagesVerificationJob),
-  /study-room-performance-controls-20260829-1/u,
+  /study-room-launch-20260830-1/u,
 );
 assert.match(
   workflow.slice(pagesVerificationJob),
   /study-room-optional-background-20260829-1/u,
 );
 for (const requiredProductionAsset of [
-  "/admin/study-room/rooms",
+  "workerRequest('/study-room/rooms'",
+  "workerRequest('/study-room/join'",
+  "registerTextStreamHandler",
+  "setScreenShareEnabled",
   "assets/icons/community/image.svg",
+  "assets/icons/navigation/hand.svg",
   "assets/icons/navigation/mic.svg",
+  "assets/icons/navigation/monitor-up.svg",
+  "assets/icons/navigation/pin.svg",
+  "assets/icons/navigation/settings.svg",
   "assets/study-room/virtual-background-due-diligence-branded.webp",
   "assets/vendor/livekit-track-processors.iife.js",
   "assets/vendor/mediapipe/selfie_segmenter-float16-2023-05-07.tflite",
@@ -352,7 +374,7 @@ for (const requiredProductionAsset of [
     `Pages-only production verification must check ${requiredProductionAsset}.`,
   );
 }
-assert.match(pagesOnlyWorkflow, /study-room-performance-controls-20260829-1/u);
+assert.match(pagesOnlyWorkflow, /study-room-launch-20260830-1/u);
 assert.match(
   pagesOnlyWorkflow,
   /study-room-optional-background-20260829-1/u,

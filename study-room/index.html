@@ -8,7 +8,7 @@
   <meta name="robots" content="noindex,nofollow,noarchive">
   <title>Study Room — Due Diligence</title>
   <link rel="icon" href="../assets/brand/favicon.ico" sizes="any">
-  <link rel="stylesheet" href="../assets/study-room-live.css?v=study-room-performance-controls-20260829-1">
+  <link rel="stylesheet" href="../assets/study-room-live.css?v=study-room-launch-20260830-1">
 </head>
 <body>
   <a class="sr-skip-link" href="#study-room-main">Skip to Study Room</a>
@@ -22,7 +22,7 @@
       <div class="sr-header-actions">
         <span class="sr-secure-label">
           <img src="../assets/icons/navigation/users.svg" width="17" height="17" alt="" aria-hidden="true">
-          Admin test room
+          Secure Study Room
         </span>
         <a class="sr-return-link" href="../#quorum">Return to simulator</a>
       </div>
@@ -37,7 +37,7 @@
         </div>
         <p class="sr-kicker">Live video conferencing</p>
         <h1 id="sr-access-title">Opening the Study Room</h1>
-        <p id="sr-access-copy">Confirming your approved tester access. Your camera and microphone remain off.</p>
+        <p id="sr-access-copy">Confirming your Study Room access. Your camera and microphone remain off.</p>
         <div class="sr-loading-bars" id="sr-access-loading" aria-label="Loading">
           <span></span><span></span><span></span>
         </div>
@@ -54,11 +54,11 @@
           <p class="sr-kicker">Live video conferencing</p>
           <div class="sr-title-line">
             <h1>Study Room</h1>
-            <span class="sr-beta-badge">Limited test access</span>
+            <span class="sr-beta-badge">Live beta</span>
           </div>
           <p class="sr-room-note">
             <span class="sr-lock-dot" aria-hidden="true"></span>
-            Available to approved administrators while we evaluate video and sound quality.
+            Subscribers can join open rooms. Due Diligence administrators can create and manage them.
           </p>
         </div>
         <div class="sr-date-block" aria-label="Current date and time in the Philippines">
@@ -69,51 +69,16 @@
       </header>
 
       <section class="sr-prejoin" id="sr-prejoin" aria-labelledby="sr-prejoin-title">
-        <section class="sr-room-lobby" id="sr-room-lobby" aria-labelledby="sr-room-lobby-title" data-max-rooms="4">
+        <section class="sr-room-lobby" id="sr-room-lobby" aria-labelledby="sr-room-lobby-title" data-max-rooms="5">
           <div class="sr-room-lobby-heading">
             <div>
               <p class="sr-panel-eyebrow">Room lobby</p>
               <h2 id="sr-room-lobby-title">Choose where to study</h2>
             </div>
-            <span class="sr-room-capacity" id="sr-room-lobby-count">3 of 4 rooms</span>
+            <span class="sr-room-capacity" id="sr-room-lobby-count">Checking rooms…</span>
           </div>
 
-          <div class="sr-room-card-grid" id="sr-room-card-grid" role="group" aria-label="Available Study Rooms">
-            <button class="sr-room-card is-selected" id="sr-room-card-library" type="button"
-              data-room-id="library" data-room-action="select" data-room-state="available" aria-pressed="true">
-              <img class="sr-room-card-cover" src="../assets/study-room/dimasalang-library.webp" alt="" aria-hidden="true">
-              <span class="sr-room-card-copy">
-                <strong>Library Room</strong>
-                <small><img src="../assets/icons/navigation/users.svg" width="15" height="15" alt="" aria-hidden="true"> 1 studying</small>
-              </span>
-            </button>
-            <button class="sr-room-card" id="sr-room-card-tropical" type="button"
-              data-room-id="tropical-house" data-room-action="select" data-room-state="available" aria-pressed="false">
-              <img class="sr-room-card-cover" src="../assets/study-room/participant-2-tropical.webp" alt="" aria-hidden="true">
-              <span class="sr-room-card-copy">
-                <strong>Tropical House</strong>
-                <small><img src="../assets/icons/navigation/users.svg" width="15" height="15" alt="" aria-hidden="true"> Ready</small>
-              </span>
-            </button>
-            <button class="sr-room-card" id="sr-room-card-bedroom" type="button"
-              data-room-id="quiet-bedroom" data-room-action="select" data-room-state="available" aria-pressed="false">
-              <img class="sr-room-card-cover" src="../assets/study-room/participant-3-bedroom.webp" alt="" aria-hidden="true">
-              <span class="sr-room-card-copy">
-                <strong>Quiet Bedroom</strong>
-                <small><img src="../assets/icons/navigation/users.svg" width="15" height="15" alt="" aria-hidden="true"> Ready</small>
-              </span>
-            </button>
-            <button class="sr-room-card sr-room-card-create" id="sr-create-room" type="button"
-              data-room-action="create" data-room-state="create" aria-describedby="sr-create-room-help">
-              <span class="sr-room-create-icon" aria-hidden="true">
-                <img src="../assets/icons/navigation/layout-grid.svg" width="24" height="24" alt="">
-              </span>
-              <span class="sr-room-card-copy">
-                <strong>Create a room</strong>
-                <small id="sr-create-room-help">One of four room slots remains</small>
-              </span>
-            </button>
-          </div>
+          <div class="sr-room-card-grid" id="sr-room-card-grid" role="group" aria-label="Available Study Rooms"></div>
         </section>
 
         <div class="sr-prejoin-layout">
@@ -125,7 +90,7 @@
                 <strong>Camera is off</strong>
                 <span>Nothing is shared until you choose to join.</span>
               </div>
-              <span class="sr-preview-name" id="sr-preview-name">Participant 1</span>
+              <span class="sr-preview-name" id="sr-preview-name">Participant #</span>
             </div>
             <div class="sr-prejoin-safety">
               <strong>Your privacy comes first.</strong>
@@ -139,7 +104,7 @@
 
             <label class="sr-field" for="sr-nickname">
               <span>Screen name</span>
-              <input id="sr-nickname" name="nickname" type="text" value="Participant 1" minlength="2" maxlength="32"
+              <input id="sr-nickname" name="nickname" type="text" value="Participant #" minlength="2" maxlength="32"
                 autocomplete="nickname" spellcheck="false" aria-describedby="sr-nickname-help">
             </label>
             <p class="sr-field-help" id="sr-nickname-help">Use a nickname. Real names are not required.</p>
@@ -200,7 +165,7 @@
                 data-room-action="open-selector" aria-haspopup="listbox" aria-expanded="false"
                 aria-controls="sr-room-selector-menu">
                 <img src="../assets/icons/navigation/layout-grid.svg" width="18" height="18" alt="" aria-hidden="true">
-                <span><small>Room</small><strong id="sr-active-room-name">Library Room</strong></span>
+                <span><small>Room</small><strong id="sr-active-room-name">Library</strong></span>
               </button>
               <div class="sr-focus-clock" aria-label="Shared focus clock">
                 <span>Shared focus</span>
@@ -208,64 +173,100 @@
               </div>
             </div>
             <div class="sr-room-selector-menu" id="sr-room-selector-menu" role="listbox"
-              aria-label="Move to another Study Room" hidden>
-              <button type="button" role="option" aria-selected="true" data-room-id="library">Library Room</button>
-              <button type="button" role="option" aria-selected="false" data-room-id="tropical-house">Tropical House</button>
-              <button type="button" role="option" aria-selected="false" data-room-id="quiet-bedroom">Quiet Bedroom</button>
+              aria-label="Move to another Study Room" hidden></div>
+            <div class="sr-connection-banner" id="sr-connection-banner" role="status" aria-live="polite" hidden>
+              Reconnecting to the Study Room…
             </div>
             <div class="sr-participant-grid" id="sr-participant-grid"></div>
             <div class="sr-audio-bin" id="sr-audio-bin" aria-hidden="true"></div>
           </section>
 
-          <aside class="sr-room-panel" aria-labelledby="sr-room-panel-title">
-            <div class="sr-panel-section">
-              <p class="sr-panel-eyebrow">Room controls</p>
-              <h2 id="sr-room-panel-title">Your study setup</h2>
-              <form class="sr-nickname-form" id="sr-nickname-form">
-                <label class="sr-field" for="sr-live-nickname"><span>Your nickname</span></label>
-                <div>
-                  <input id="sr-live-nickname" type="text" minlength="2" maxlength="32" autocomplete="nickname" spellcheck="false">
-                  <button class="sr-button sr-button-compact" type="submit">Update</button>
-                </div>
-              </form>
-            </div>
-
-            <div class="sr-panel-section">
-              <h3>Sound &amp; video</h3>
-              <dl class="sr-health-list">
-                <div><dt>Microphone</dt><dd id="sr-microphone-state">Off</dd></div>
-                <div><dt>Camera</dt><dd id="sr-camera-state">Off</dd></div>
-                <div><dt>Connection</dt><dd id="sr-connection-state">Connecting</dd></div>
-              </dl>
-              <p class="sr-live-media-status" id="sr-live-media-status" role="status" aria-live="polite">
-                Your microphone is muted. Press Unmute when you want others to hear you.
-              </p>
-              <div class="sr-backdrop-enforcement" id="sr-branded-backdrop-status"
-                data-backdrop-enforcement="optional" data-backdrop-state="preparing" role="status" aria-live="polite">
-                <span class="sr-backdrop-enforcement-icon" aria-hidden="true">
-                  <img src="../assets/icons/community/camera.svg" width="20" height="20" alt="">
-                </span>
-                <span>
-                  <strong id="sr-branded-backdrop-title">Due Diligence backdrop</strong>
-                  <small id="sr-branded-backdrop-copy">On by default. You can turn it off at any time to improve video performance.</small>
-                </span>
+          <aside class="sr-room-panel" id="sr-room-panel" aria-labelledby="sr-room-panel-title" data-open-panel="people">
+            <header class="sr-panel-header">
+              <div>
+                <p class="sr-panel-eyebrow">Study Room</p>
+                <h2 id="sr-room-panel-title">People</h2>
               </div>
-              <button class="sr-text-button" id="sr-open-devices" type="button"
-                aria-controls="sr-device-drawer">Choose devices</button>
-              <div class="sr-device-drawer" id="sr-device-drawer" hidden>
-                <label class="sr-field" for="sr-live-camera-select"><span>Camera</span><select id="sr-live-camera-select"></select></label>
-                <label class="sr-field" for="sr-live-microphone-select"><span>Microphone</span><select id="sr-live-microphone-select"></select></label>
-                <label class="sr-field" for="sr-live-speaker-select"><span>Speaker</span><select id="sr-live-speaker-select"></select></label>
-              </div>
-            </div>
+              <button class="sr-icon-button sr-panel-close" id="sr-close-panel" type="button" aria-label="Close side panel" title="Close">
+                <img src="../assets/icons/community/x.svg" width="20" height="20" alt="" aria-hidden="true">
+              </button>
+            </header>
+            <nav class="sr-panel-tabs" aria-label="Study Room panel">
+              <button id="sr-panel-tab-people" type="button" data-panel-target="people" aria-selected="true">
+                <img src="../assets/icons/navigation/users.svg" width="18" height="18" alt="" aria-hidden="true"><span>People</span>
+              </button>
+              <button id="sr-panel-tab-chat" type="button" data-panel-target="chat" aria-selected="false">
+                <img src="../assets/icons/community/chat-circle.svg" width="18" height="18" alt="" aria-hidden="true"><span>Chat</span>
+                <span class="sr-unread-badge" id="sr-chat-tab-badge" hidden>0</span>
+              </button>
+              <button id="sr-panel-tab-settings" type="button" data-panel-target="settings" aria-selected="false">
+                <img src="../assets/icons/navigation/settings.svg" width="18" height="18" alt="" aria-hidden="true"><span>Settings</span>
+              </button>
+            </nav>
 
-            <div class="sr-panel-section sr-people-section">
+            <section class="sr-panel-view sr-people-section" id="sr-panel-people" data-panel-view="people">
               <div class="sr-section-title-row">
                 <h3>People in room</h3>
                 <span id="sr-people-count">1</span>
               </div>
               <div class="sr-people-list" id="sr-people-list"></div>
-            </div>
+            </section>
+
+            <section class="sr-panel-view sr-chat-panel" id="sr-panel-chat" data-panel-view="chat" hidden>
+              <div class="sr-chat-intro">
+                <strong>Room messages</strong>
+                <span>Messages are visible only to people currently in this room and are not saved.</span>
+              </div>
+              <div class="sr-chat-list" id="sr-chat-list" role="log" aria-live="polite" aria-relevant="additions"></div>
+              <form class="sr-chat-form" id="sr-chat-form">
+                <label class="sr-visually-hidden" for="sr-chat-input">Message everyone</label>
+                <textarea id="sr-chat-input" rows="2" maxlength="500" placeholder="Message everyone" enterkeyhint="send"></textarea>
+                <button class="sr-icon-button" id="sr-chat-send" type="submit" aria-label="Send message" title="Send">
+                  <img src="../assets/icons/community/paper-plane-tilt.svg" width="20" height="20" alt="" aria-hidden="true">
+                </button>
+              </form>
+            </section>
+
+            <section class="sr-panel-view sr-settings-panel" id="sr-panel-settings" data-panel-view="settings" hidden>
+              <div class="sr-panel-section">
+                <h3>Your study setup</h3>
+                <form class="sr-nickname-form" id="sr-nickname-form">
+                  <label class="sr-field" for="sr-live-nickname"><span>Your nickname</span></label>
+                  <div>
+                    <input id="sr-live-nickname" type="text" minlength="2" maxlength="32" autocomplete="nickname" spellcheck="false">
+                    <button class="sr-button sr-button-compact" type="submit">Update</button>
+                  </div>
+                </form>
+              </div>
+              <div class="sr-panel-section">
+                <h3>Sound, video &amp; connection</h3>
+                <dl class="sr-health-list">
+                  <div><dt>Microphone</dt><dd id="sr-microphone-state">Off</dd></div>
+                  <div><dt>Camera</dt><dd id="sr-camera-state">Off</dd></div>
+                  <div><dt>Connection</dt><dd id="sr-connection-state">Connecting</dd></div>
+                </dl>
+                <p class="sr-live-media-status" id="sr-live-media-status" role="status" aria-live="polite">
+                  Your microphone is muted. Press Unmute when you want others to hear you.
+                </p>
+                <div class="sr-backdrop-enforcement" id="sr-branded-backdrop-status"
+                  data-backdrop-enforcement="optional" data-backdrop-state="off" role="status" aria-live="polite">
+                  <span class="sr-backdrop-enforcement-icon" aria-hidden="true">
+                    <img src="../assets/icons/community/camera.svg" width="20" height="20" alt="">
+                  </span>
+                  <span>
+                    <strong id="sr-branded-backdrop-title">Backdrop off</strong>
+                    <small id="sr-branded-backdrop-copy">Off by default for smoother video. Apply the Due Diligence backdrop whenever you want it.</small>
+                  </span>
+                </div>
+                <button class="sr-text-button" id="sr-open-devices" type="button"
+                  aria-controls="sr-device-drawer" aria-expanded="false">Choose devices</button>
+                <div class="sr-device-drawer" id="sr-device-drawer" hidden>
+                  <label class="sr-field" for="sr-live-camera-select"><span>Camera</span><select id="sr-live-camera-select"></select></label>
+                  <label class="sr-field" for="sr-live-microphone-select"><span>Microphone</span><select id="sr-live-microphone-select"></select></label>
+                  <label class="sr-field" for="sr-live-speaker-select"><span>Speaker</span><select id="sr-live-speaker-select"></select></label>
+                </div>
+              </div>
+            </section>
           </aside>
         </div>
 
@@ -280,16 +281,36 @@
             <img src="../assets/icons/community/camera.svg" width="22" height="22" alt="" aria-hidden="true">
             <span class="sr-control-label">Start video</span>
           </button>
-          <button id="sr-toggle-backdrop" type="button" data-call-control="backdrop" aria-pressed="true"
-            aria-label="Remove the Due Diligence backdrop" title="Remove backdrop">
-            <img src="../assets/icons/community/image.svg" width="22" height="22" alt="" aria-hidden="true">
-            <span class="sr-control-label">Remove backdrop</span>
+          <button id="sr-toggle-screen-share" type="button" data-call-control="screen-share" aria-pressed="false"
+            aria-label="Share your screen" title="Present now">
+            <img src="../assets/icons/navigation/monitor-up.svg" width="22" height="22" alt="" aria-hidden="true">
+            <span class="sr-control-label">Present</span>
           </button>
-          <button id="sr-dock-devices" type="button" data-call-control="devices"
-            aria-controls="sr-device-drawer" aria-expanded="false" aria-label="Choose camera, microphone, and speaker"
-            title="Device settings">
-            <img src="../assets/icons/navigation/headphones.svg" width="22" height="22" alt="" aria-hidden="true">
-            <span class="sr-control-label">Device settings</span>
+          <button id="sr-toggle-hand" type="button" data-call-control="raise-hand" aria-pressed="false"
+            aria-label="Raise your hand" title="Raise hand">
+            <img src="../assets/icons/navigation/hand.svg" width="22" height="22" alt="" aria-hidden="true">
+            <span class="sr-control-label">Raise hand</span>
+          </button>
+          <button id="sr-dock-chat" type="button" data-call-control="chat" aria-pressed="false"
+            aria-controls="sr-room-panel" aria-label="Open room messages" title="Chat">
+            <img src="../assets/icons/community/chat-circle.svg" width="22" height="22" alt="" aria-hidden="true">
+            <span class="sr-control-label">Chat</span>
+            <span class="sr-unread-badge" id="sr-chat-dock-badge" hidden>0</span>
+          </button>
+          <button id="sr-dock-people" type="button" data-call-control="people" aria-pressed="true"
+            aria-controls="sr-room-panel" aria-label="Open people panel" title="People">
+            <img src="../assets/icons/navigation/users.svg" width="22" height="22" alt="" aria-hidden="true">
+            <span class="sr-control-label">People</span>
+          </button>
+          <button id="sr-toggle-backdrop" type="button" data-call-control="backdrop" aria-pressed="false"
+            aria-label="Apply the Due Diligence backdrop" title="Apply backdrop">
+            <img src="../assets/icons/community/image.svg" width="22" height="22" alt="" aria-hidden="true">
+            <span class="sr-control-label">Backdrop</span>
+          </button>
+          <button id="sr-dock-devices" type="button" data-call-control="devices" aria-pressed="false"
+            aria-controls="sr-room-panel" aria-expanded="false" aria-label="Open Study Room settings" title="Settings">
+            <img src="../assets/icons/navigation/settings.svg" width="22" height="22" alt="" aria-hidden="true">
+            <span class="sr-control-label">Settings</span>
           </button>
           <button class="is-leave" id="sr-leave" type="button" data-call-control="leave"
             aria-label="Leave Study Room" title="Leave room">
@@ -312,6 +333,6 @@
   <script src="../assets/vendor/livekit-client.umd.js?v=2.22.1"></script>
   <script src="../assets/vendor/livekit-track-processors.iife.js?v=0.7.2"></script>
   <script src="../assets/study-room-backgrounds.js?v=study-room-optional-background-20260829-1"></script>
-  <script src="../assets/study-room-live.js?v=study-room-performance-controls-20260829-1"></script>
+  <script src="../assets/study-room-live.js?v=study-room-launch-20260830-1"></script>
 </body>
 </html>

@@ -1,22 +1,29 @@
 import {
   AccessToken,
-  RoomConfiguration,
   RoomServiceClient,
   TrackSource,
 } from 'livekit-server-sdk';
 
-export const DEFAULT_STUDY_ROOM_NAME = 'dd-study-room-admin-beta-v1';
+export const DEFAULT_STUDY_ROOM_NAME = 'dd-study-room-v2';
 export const STUDY_ROOM_TOKEN_TTL_SECONDS = 600;
 export const STUDY_ROOM_MAX_PARTICIPANTS = 12;
-export const STUDY_ROOM_MAX_ROOMS = 4;
+export const STUDY_ROOM_MAX_ROOMS = 5;
+
+export const STUDY_ROOM_SLOTS = Object.freeze([
+  Object.freeze({ roomKey: '1', label: 'Library', kind: 'library', microphoneAllowed: false, adminOnly: false }),
+  Object.freeze({ roomKey: '2', label: 'Room 1', kind: 'general', microphoneAllowed: true, adminOnly: false }),
+  Object.freeze({ roomKey: '3', label: 'Room 2', kind: 'general', microphoneAllowed: true, adminOnly: false }),
+  Object.freeze({ roomKey: '4', label: 'Room 3', kind: 'general', microphoneAllowed: true, adminOnly: false }),
+  Object.freeze({ roomKey: '5', label: 'Inner Chamber', kind: 'inner-chamber', microphoneAllowed: true, adminOnly: true }),
+]);
 
 const STUDY_ROOM_EMPTY_TIMEOUT_SECONDS = 10 * 60;
 const STUDY_ROOM_DEPARTURE_TIMEOUT_SECONDS = 2 * 60;
-const STUDY_ROOM_METADATA_SCHEMA = 'duediligence-study-room-slot-v1';
+const STUDY_ROOM_METADATA_SCHEMA = 'duediligence-study-room-slot-v2';
 const STUDY_ROOM_METADATA_MAX_BYTES = 512;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const ROOM_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{2,79}$/u;
-const ROOM_KEY_PATTERN = /^[1-4]$/u;
+const ROOM_KEY_PATTERN = /^[1-5]$/u;
 const PARTICIPANT_ID_PATTERN = /^sr_[A-Za-z0-9_-]{24}$/u;
 const TRACK_SID_PATTERN = /^TR_[A-Za-z0-9_-]{4,128}$/u;
 const DISALLOWED_NICKNAME_CHARACTERS = /[\p{Cc}\p{Cf}<>]/u;
@@ -74,7 +81,7 @@ export function normalizeStudyRoomRoomKey(value, options = {}) {
   if (!ROOM_KEY_PATTERN.test(roomKey)) {
     throw new StudyRoomError(
       'STUDY_ROOM_ROOM_INVALID',
-      'Choose one of the four available Study Rooms.',
+      'Choose one of the five available Study Rooms.',
       400,
     );
   }
@@ -83,14 +90,12 @@ export function normalizeStudyRoomRoomKey(value, options = {}) {
 
 function configuredStudyRoomSlots(env) {
   const firstRoomName = resolveStudyRoomName(env);
-  const slots = Array.from({ length: STUDY_ROOM_MAX_ROOMS }, (_unused, index) => {
-    const roomKey = String(index + 1);
-    const roomName = index === 0 ? firstRoomName : `${firstRoomName}-${roomKey}`;
+  const slots = STUDY_ROOM_SLOTS.map((definition, index) => {
+    const roomName = index === 0 ? firstRoomName : `${firstRoomName}-${definition.roomKey}`;
     if (!ROOM_NAME_PATTERN.test(roomName)) throw configurationError();
     return Object.freeze({
-      roomKey,
+      ...definition,
       roomName,
-      label: `Study Room ${roomKey}`,
     });
   });
   if (new Set(slots.map((slot) => slot.roomName)).size !== STUDY_ROOM_MAX_ROOMS) {
@@ -110,7 +115,7 @@ function safeLiveKitConfiguration(env) {
   if (String(env?.STUDY_ROOM_ENABLED || '').trim().toLowerCase() !== 'true') {
     throw new StudyRoomError(
       'STUDY_ROOM_DISABLED',
-      'The Study Room admin beta is temporarily closed.',
+      'The Study Room is temporarily closed.',
       503,
       'Return to Due Diligence and try again after the test room reopens.',
     );
@@ -157,7 +162,7 @@ export function studyRoomDescriptor(env) {
   return Object.freeze({
     roomKey: '1',
     roomName: configuration.roomName,
-    label: 'Study Room 1',
+    label: STUDY_ROOM_SLOTS[0].label,
     maxRooms: STUDY_ROOM_MAX_ROOMS,
     maxParticipants: STUDY_ROOM_MAX_PARTICIPANTS,
     recording: false,
@@ -299,6 +304,9 @@ function roomMetadataForSlot(slot, options = {}) {
     schema: STUDY_ROOM_METADATA_SCHEMA,
     roomKey: slot.roomKey,
     label: slot.label,
+    kind: slot.kind,
+    microphoneAllowed: slot.microphoneAllowed,
+    adminOnly: slot.adminOnly,
     createdAt: createdAt.toISOString(),
   });
   if (new TextEncoder().encode(metadata).byteLength > STUDY_ROOM_METADATA_MAX_BYTES) {
@@ -373,11 +381,20 @@ function participantCountForRoom(room) {
   return count;
 }
 
-function publicRoomDescriptor(slot, room = null) {
+function publicRoomDescriptor(slot, room = null, options = {}) {
+  const isAdministrator = options.isAdministrator === true;
+  const access = Object.freeze({
+    kind: slot.kind,
+    microphoneAllowed: slot.microphoneAllowed,
+    adminOnly: slot.adminOnly,
+    canCreate: isAdministrator,
+    canJoin: !slot.adminOnly || isAdministrator,
+  });
   if (!room) {
     return Object.freeze({
       roomKey: slot.roomKey,
       label: slot.label,
+      ...access,
       active: false,
       participantCount: 0,
       capacity: STUDY_ROOM_MAX_PARTICIPANTS,
@@ -388,6 +405,7 @@ function publicRoomDescriptor(slot, room = null) {
   return Object.freeze({
     roomKey: slot.roomKey,
     label: slot.label,
+    ...access,
     active: true,
     participantCount: participantCountForRoom(room),
     capacity: STUDY_ROOM_MAX_PARTICIPANTS,
@@ -415,11 +433,19 @@ export async function listStudyRooms(env, options = {}) {
     maxRooms: STUDY_ROOM_MAX_ROOMS,
     maxParticipants: STUDY_ROOM_MAX_PARTICIPANTS,
     recording: false,
-    rooms: Object.freeze(listed.map(({ slot, room }) => publicRoomDescriptor(slot, room))),
+    rooms: Object.freeze(listed.map(({ slot, room }) => publicRoomDescriptor(slot, room, options))),
   });
 }
 
 export async function createStudyRoom(env, requestedRoomKey, options = {}) {
+  if (options.isAdministrator !== true) {
+    throw new StudyRoomError(
+      'STUDY_ROOM_CREATE_FORBIDDEN',
+      'Only a Due Diligence administrator can open a Study Room.',
+      403,
+      'Join a room after an administrator opens it.',
+    );
+  }
   const configuration = safeLiveKitConfiguration(env);
   const service = resolvedService(configuration, options);
   let slot;
@@ -429,7 +455,7 @@ export async function createStudyRoom(env, requestedRoomKey, options = {}) {
     if (!slot) {
       throw new StudyRoomError(
         'STUDY_ROOM_ROOM_LIMIT_REACHED',
-        'All four Study Rooms are already open.',
+        'All five Study Rooms are already open.',
         409,
         'Join an open room or wait until one closes.',
       );
@@ -440,7 +466,7 @@ export async function createStudyRoom(env, requestedRoomKey, options = {}) {
   const ensured = await ensureStudyRoom(service, slot, options);
   return Object.freeze({
     created: ensured.created,
-    room: publicRoomDescriptor(slot, ensured.room),
+    room: publicRoomDescriptor(slot, ensured.room, options),
   });
 }
 
@@ -450,10 +476,28 @@ export async function createStudyRoomJoinCredential(env, user, roomKey, nickname
   const normalizedNickname = normalizeStudyRoomNickname(nickname);
   const identity = await participantIdentity(user?.id, configuration.apiSecret);
   const service = resolvedService(configuration, options);
-
-  const roomMetadata = roomMetadataForSlot(slot, options);
-  const ensured = await ensureStudyRoom(service, slot, { ...options, roomMetadata });
-  const room = ensured.room;
+  const isAdministrator = options.isAdministrator === true;
+  if (slot.adminOnly && !isAdministrator) {
+    throw new StudyRoomError(
+      'STUDY_ROOM_ADMIN_ROOM_REQUIRED',
+      'The Inner Chamber is available only to Due Diligence administrators.',
+      403,
+      'Choose Library, Room 1, Room 2, or Room 3.',
+    );
+  }
+  const activeRooms = await liveKitCall('join_room_lookup', () => service.listRooms([slot.roomName]));
+  const room = listedRoomForSlot(activeRooms, slot);
+  if (!room) {
+    throw new StudyRoomError(
+      'STUDY_ROOM_ROOM_NOT_OPEN',
+      `${slot.label} is not open yet.`,
+      409,
+      isAdministrator
+        ? `Create ${slot.label}, then join it.`
+        : 'Wait for an administrator to open the room, then refresh the lobby.',
+    );
+  }
+  requireConfiguredRoomCapacity(room);
 
   const token = new AccessToken(configuration.apiKey, configuration.apiSecret, {
     identity,
@@ -465,17 +509,16 @@ export async function createStudyRoomJoinCredential(env, user, roomKey, nickname
     roomJoin: true,
     canPublish: true,
     canSubscribe: true,
-    canPublishData: false,
-    canPublishSources: [TrackSource.CAMERA, TrackSource.MICROPHONE],
-  });
-  // If the explicitly-created room expires before this short-lived token is
-  // used, LiveKit applies the same cap while automatically recreating it.
-  token.roomConfig = new RoomConfiguration({
-    name: slot.roomName,
-    emptyTimeout: STUDY_ROOM_EMPTY_TIMEOUT_SECONDS,
-    departureTimeout: STUDY_ROOM_DEPARTURE_TIMEOUT_SECONDS,
-    maxParticipants: STUDY_ROOM_MAX_PARTICIPANTS,
-    metadata: roomMetadata,
+    canPublishData: true,
+    canUpdateOwnMetadata: true,
+    canPublishSources: slot.microphoneAllowed
+      ? [
+        TrackSource.CAMERA,
+        TrackSource.MICROPHONE,
+        TrackSource.SCREEN_SHARE,
+        TrackSource.SCREEN_SHARE_AUDIO,
+      ]
+      : [TrackSource.CAMERA, TrackSource.SCREEN_SHARE],
   });
   return {
     participantToken: await token.toJwt(),
@@ -484,6 +527,9 @@ export async function createStudyRoomJoinCredential(env, user, roomKey, nickname
     roomKey: slot.roomKey,
     roomLabel: slot.label,
     roomName: slot.roomName,
+    roomKind: slot.kind,
+    microphoneAllowed: slot.microphoneAllowed,
+    administrator: isAdministrator,
     serverUrl: configuration.websocketUrl,
     focusStartedAt: focusStartedAtForRoom(room),
     expiresInSeconds: STUDY_ROOM_TOKEN_TTL_SECONDS,

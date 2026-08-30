@@ -74,21 +74,21 @@ assert.match(client, /DueDiligenceSubscriptionCta\?\.isAudienceEligible\?\.\(val
 assert.match(client, /const subscribed = known && !eligible/);
 assert.match(client, /subscribe\.disabled = !eligible/);
 assert.match(client, /subscribed \? 'Already subscribed' : 'Subscribe now'/);
-assert.match(client, /isAdmin\(access\)[\s\S]*accessResolutionFailed[\s\S]*return openAdminRoom\(\)/);
+assert.match(client, /hasLiveRoomAccess\(access\)[\s\S]*accessResolutionFailed[\s\S]*return openLiveRoom\(\)/);
 assert.match(client, /new URL\('\/study-room\/', global\.location\.origin\)/);
 assert.match(client, /global\.open\([\s\S]*roomUrl\.href[\s\S]*popup=yes[\s\S]*toolbar=no[\s\S]*location=no/);
 assert.match(client, /popup\.opener = null/);
 assert.match(client, /popup\.focus\?\.\(\)/);
-assert.match(client, /adminRoomWindow && !adminRoomWindow\.closed[\s\S]*adminRoomWindow\.focus\?\.\(\)/);
-assert.match(client, /adminRoomWindow = popup/);
+assert.match(client, /studyRoomWindow && !studyRoomWindow\.closed[\s\S]*studyRoomWindow\.focus\?\.\(\)/);
+assert.match(client, /studyRoomWindow = popup/);
 assert.match(client, /if \(!popup\) \{[\s\S]*global\.location\.assign\(roomUrl\.href\)/);
 assert.match(client, /try \{[\s\S]*popup = global\.open\([\s\S]*\} catch \{[\s\S]*global\.location\.assign\(roomUrl\.href\)/);
 assert.doesNotMatch(client, /Allow pop-ups for Due Diligence/);
 assert.match(client, /return openMarketingPreview\(trigger\)/);
 assert.match(client, /target\?\.click\(\)/);
 assert.match(client, /study_room_preview_opened/);
-assert.match(html, /study-room-preview\.css\?v=study-room-performance-controls-20260829-1/);
-assert.match(html, /study-room-preview\.js\?v=study-room-performance-controls-20260829-1/);
+assert.match(html, /study-room-preview\.css\?v=study-room-launch-20260830-1/);
+assert.match(html, /study-room-preview\.js\?v=study-room-launch-20260830-1/);
 
 function extractNamedFunction(source, name) {
   const start = source.indexOf(`function ${name}(`);
@@ -112,7 +112,7 @@ const accessContext = vm.createContext({
   ADMIN_ROLES: new Set(['admin', 'administrator', 'super admin', 'founder admin']),
   global: subscriptionContext,
 });
-for (const name of ['normalized', 'isAdmin', 'isSubscriptionEligible']) {
+for (const name of ['normalized', 'isAdmin', 'isSubscriptionEligible', 'hasLiveRoomAccess']) {
   vm.runInContext(extractNamedFunction(client, name), accessContext);
 }
 assert.equal(vm.runInContext("isAdmin({ role: 'founder_admin' })", accessContext), true);
@@ -126,10 +126,13 @@ assert.equal(vm.runInContext("isSubscriptionEligible({ globalBeta: { active: tru
 assert.equal(vm.runInContext("isSubscriptionEligible({ basis: 'complimentary', unlimited: true })", accessContext), false);
 assert.equal(vm.runInContext("isSubscriptionEligible({ role: 'member', subscription: null })", accessContext), true);
 assert.equal(vm.runInContext("isSubscriptionEligible(null)", accessContext), false);
+assert.equal(vm.runInContext("hasLiveRoomAccess({ role: 'admin' })", accessContext), true);
+assert.equal(vm.runInContext("hasLiveRoomAccess({ allowed: true, subscription: { status: 'active', planCode: 'early_access_beta' } })", accessContext), true);
+assert.equal(vm.runInContext("hasLiveRoomAccess({ allowed: true, basis: 'introductory', introductoryTokensEligible: true })", accessContext), false);
 
-const adminWindowFunction = extractNamedFunction(client, 'openAdminRoom');
-assert.doesNotMatch(adminWindowFunction, /openMarketingPreview/);
-assert.doesNotMatch(adminWindowFunction, /setPreviewStatus/);
+const liveWindowFunction = extractNamedFunction(client, 'openLiveRoom');
+assert.doesNotMatch(liveWindowFunction, /openMarketingPreview/);
+assert.doesNotMatch(liveWindowFunction, /setPreviewStatus/);
 const openFunction = extractNamedFunction(client, 'open');
 assert.doesNotMatch(openFunction, /await|\.then\(/, 'Study Room click routing must stay synchronous for popup user activation.');
 assert.match(openFunction, /accessIsResolving\(\)[\s\S]*return false/);

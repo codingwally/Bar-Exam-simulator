@@ -13,7 +13,7 @@
   let authSettled = false;
   let accessResolutionFailed = false;
   let accessResolution = 0;
-  let adminRoomWindow = null;
+  let studyRoomWindow = null;
 
   function normalized(value) {
     return String(value || '').trim().toLowerCase().replace(/[\s_-]+/g, ' ');
@@ -26,6 +26,13 @@
   function isSubscriptionEligible(value = access) {
     if (!value || typeof value !== 'object' || isAdmin(value)) return false;
     return global.DueDiligenceSubscriptionCta?.isAudienceEligible?.(value) === true;
+  }
+
+  function hasLiveRoomAccess(value = access) {
+    return Boolean(value && typeof value === 'object' && (
+      isAdmin(value)
+      || (value.allowed === true && !isSubscriptionEligible(value))
+    ));
   }
 
   function runtimeSession() {
@@ -132,10 +139,10 @@
     return true;
   }
 
-  function openAdminRoom() {
+  function openLiveRoom() {
     const roomUrl = new URL('/study-room/', global.location.origin);
-    if (adminRoomWindow && !adminRoomWindow.closed) {
-      adminRoomWindow.focus?.();
+    if (studyRoomWindow && !studyRoomWindow.closed) {
+      studyRoomWindow.focus?.();
       return true;
     }
     let popup = null;
@@ -153,22 +160,25 @@
       global.location.assign(roomUrl.href);
       return true;
     }
-    adminRoomWindow = popup;
+    studyRoomWindow = popup;
     try {
       popup.opener = null;
     } catch {
       // The secure room still opened; some browsers make the WindowProxy read-only.
     }
     popup.focus?.();
-    global.DueDiligenceAnalytics?.track?.('study_room_admin_window_opened');
+    global.DueDiligenceAnalytics?.track?.('study_room_window_opened', {
+      audience: isAdmin(access) ? 'admin' : 'subscriber',
+    });
     return true;
   }
 
   function open(trigger = null) {
     if (accessIsResolving()) return false;
     access = accessWithVerifiedRole() || access;
-    if (isAdmin(access) || (accessResolutionFailed && signedIn() && headerShowsAdmin())) {
-      return openAdminRoom();
+    if (hasLiveRoomAccess(access)
+        || (accessResolutionFailed && signedIn() && headerShowsAdmin())) {
+      return openLiveRoom();
     }
     return openMarketingPreview(trigger);
   }

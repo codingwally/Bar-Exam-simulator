@@ -41,6 +41,44 @@ final result: passed
 
 ---
 
+# Study Room Launch Design QA — 2026-08-30
+
+## Controlling target and evidence
+
+- User-approved promise mock: `C:\Users\wally\AppData\Local\Temp\codex-clipboard-c30434d3-bd3d-458d-aa59-7c0d9f8eaa3c.png`.
+- Final desktop implementation capture: `C:\Users\wally\AppData\Local\Temp\study-room-final-desktop-qa.png`.
+- Same-input comparison frame: `C:\Users\wally\AppData\Local\Temp\study-room-final-side-by-side.png`.
+- The promise mock and working room were reviewed together at the same 16:9 frame. The implementation intentionally renders as a separate Study Room window instead of repeating the marketing modal around it.
+
+## Visual fidelity
+
+- Due Diligence navy, cream, brass-gold, Fraunces, and Inter language: passed.
+- Four-person panoramic wall, shared focus clock, minimal icon dock, and dedicated right panel: passed.
+- People, Chat, and Settings tabs follow the promised hierarchy while using real product controls: passed.
+- Real participant photographs retain their intended crops without revealing real names: passed.
+- Muted, active-camera, selected-tab, raised-hand, pinned-tile, connection, and backdrop states are visibly distinct: passed.
+- No handwritten SVG, emoji, CSS-art icon, placeholder tile, or invented external identity is visible: passed.
+
+## Responsive and interaction verification
+
+- Desktop `1280 × 720`: four tiles, people panel, shared timer, and control dock remain visible without horizontal overflow.
+- Mobile `390 × 844`: the room lobby stacks in reading order; the live wall becomes a readable two-column grid; the side panel follows the wall; the control dock remains reachable.
+- Five-room lobby and live room switcher expose Library, Room 1, Room 2, Room 3, and Inner Chamber.
+- Library keeps its microphone control disabled and visibly explains that it is a silent video-only room.
+- Room 1 restores the user's microphone control; mute and unmute states were exercised.
+- Chat send/render, participant pin/unpin, raise/lower hand, screen-share start/stop state, local mute/block/volume, optional branded backdrop, device chooser, nickname update, and panel navigation were exercised.
+- Default screen name is `Participant #<number>`; the local quality-room fixture now uses the same default instead of substituting a named identity.
+- Final browser console inspection found no current errors or warnings.
+- Live production Plans & Pricing loaded its authoritative plan snapshot without the failure state.
+
+## Findings
+
+- P0: none.
+- P1: none.
+- P2: none.
+
+final result: passed
+
 # Auxiliary Writing Diagnostics Design QA — 2026-08-27
 
 ## Scope and comparison evidence

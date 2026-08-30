@@ -1938,3 +1938,492 @@ a {
     padding: 8px 10px;
   }
 }
+
+/* Study Room launch: Meet-familiar interaction model in the Due Diligence system. */
+.sr-room-card-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.sr-room-card-closed {
+  grid-template-columns: 56px minmax(0, 1fr);
+  border-style: dashed;
+  background: rgba(4, 25, 44, 0.56);
+}
+
+.sr-room-card.is-restricted {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.sr-field.is-room-muted {
+  opacity: 0.72;
+}
+
+.sr-live-layout:has(.sr-room-panel[hidden]) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.sr-room-panel[hidden],
+.sr-panel-view[hidden] {
+  display: none !important;
+}
+
+.sr-room-panel {
+  display: flex;
+  width: min(360px, 34vw);
+  padding: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sr-panel-header {
+  display: flex;
+  min-height: 72px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid rgba(195, 210, 224, 0.14);
+}
+
+.sr-panel-header h2,
+.sr-room-panel .sr-panel-header h2 {
+  margin: 2px 0 0;
+  font-size: 1.35rem;
+}
+
+.sr-icon-button {
+  position: relative;
+  display: inline-grid;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  place-items: center;
+  padding: 0;
+  color: #f4f7fb;
+  border: 1px solid rgba(197, 212, 226, 0.26);
+  border-radius: 10px;
+  background: rgba(4, 25, 44, 0.78);
+  cursor: pointer;
+}
+
+.sr-icon-button:hover,
+.sr-icon-button:focus-visible {
+  border-color: var(--sr-gold-bright);
+  background: rgba(14, 50, 80, 0.92);
+}
+
+.sr-icon-button img {
+  filter: brightness(0) invert(1);
+}
+
+.sr-panel-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(195, 210, 224, 0.14);
+  background: rgba(2, 17, 32, 0.54);
+}
+
+.sr-panel-tabs button {
+  position: relative;
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 6px;
+  color: var(--sr-muted);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 0.72rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.sr-panel-tabs button img {
+  filter: brightness(0) invert(1);
+  opacity: 0.76;
+}
+
+.sr-panel-tabs button[aria-selected="true"] {
+  color: var(--sr-gold-bright);
+  border-color: rgba(217, 170, 69, 0.35);
+  background: rgba(217, 170, 69, 0.09);
+}
+
+.sr-panel-view {
+  min-height: 0;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.sr-people-section,
+.sr-settings-panel {
+  flex: 1 1 auto;
+}
+
+.sr-chat-panel {
+  display: grid;
+  min-height: 0;
+  flex: 1 1 auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.sr-chat-intro {
+  display: grid;
+  gap: 4px;
+  padding: 10px 11px;
+  color: #eaf0f6;
+  border: 1px solid rgba(217, 170, 69, 0.22);
+  border-radius: 8px;
+  background: rgba(217, 170, 69, 0.06);
+  font-size: 0.78rem;
+}
+
+.sr-chat-intro span {
+  color: var(--sr-muted);
+  font-size: 0.69rem;
+  line-height: 1.4;
+}
+
+.sr-chat-list {
+  display: grid;
+  min-height: 180px;
+  align-content: end;
+  gap: 10px;
+  overflow-y: auto;
+}
+
+.sr-chat-message {
+  display: grid;
+  gap: 5px;
+  padding: 10px 11px;
+  border: 1px solid rgba(194, 210, 225, 0.18);
+  border-radius: 10px 10px 10px 3px;
+  background: rgba(8, 34, 57, 0.84);
+}
+
+.sr-chat-message.is-local {
+  border-color: rgba(217, 170, 69, 0.32);
+  border-radius: 10px 10px 3px 10px;
+  background: rgba(80, 57, 14, 0.35);
+}
+
+.sr-chat-message header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.sr-chat-message strong {
+  color: var(--sr-gold-bright);
+  font-size: 0.72rem;
+}
+
+.sr-chat-message time {
+  color: var(--sr-muted);
+  font-size: 0.63rem;
+}
+
+.sr-chat-message p {
+  margin: 0;
+  color: #edf3f9;
+  font-size: 0.79rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.sr-chat-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  align-items: end;
+  gap: 8px;
+}
+
+.sr-chat-form textarea {
+  width: 100%;
+  min-height: 52px;
+  max-height: 128px;
+  padding: 10px 11px;
+  resize: vertical;
+  color: #f7f9fc;
+  border: 1px solid rgba(194, 210, 225, 0.28);
+  border-radius: 9px;
+  background: rgba(2, 17, 32, 0.88);
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.sr-settings-panel .sr-panel-section + .sr-panel-section {
+  margin-top: 18px;
+  padding-top: 18px;
+}
+
+.sr-unread-badge {
+  display: grid;
+  min-width: 18px;
+  height: 18px;
+  place-items: center;
+  padding: 0 5px;
+  color: #1d1302;
+  border: 1px solid #ffe1a0;
+  border-radius: 999px;
+  background: var(--sr-gold-bright);
+  font-size: 0.61rem;
+  font-weight: 900;
+}
+
+.sr-control-dock .sr-unread-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+}
+
+.sr-unread-badge[hidden] {
+  display: none;
+}
+
+.sr-connection-banner {
+  margin: 8px 8px 0;
+  padding: 9px 12px;
+  color: #fff1c7;
+  border: 1px solid rgba(217, 170, 69, 0.5);
+  border-radius: 8px;
+  background: rgba(84, 57, 10, 0.76);
+  font-size: 0.77rem;
+  text-align: center;
+}
+
+.sr-connection-banner[hidden] {
+  display: none;
+}
+
+.sr-participant-tile.is-pinned {
+  border-color: var(--sr-gold-bright);
+  box-shadow: inset 0 0 0 1px rgba(255, 229, 159, 0.3), 0 0 24px rgba(217, 170, 69, 0.13);
+}
+
+.sr-participant-grid[data-pinned="true"] .sr-participant-tile:first-child {
+  grid-column: 1 / -1;
+}
+
+.sr-participant-tile.is-screen-share > video {
+  object-fit: contain;
+  background: #010912;
+}
+
+.sr-tile-pin,
+.sr-raised-hand {
+  position: absolute;
+  z-index: 3;
+  top: 10px;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  color: #fff;
+  border: 1px solid rgba(206, 220, 233, 0.24);
+  border-radius: 9px;
+  background: rgba(1, 13, 25, 0.78);
+  backdrop-filter: blur(8px);
+}
+
+.sr-tile-pin {
+  right: 10px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease, border-color 120ms ease;
+}
+
+.sr-participant-tile:hover .sr-tile-pin,
+.sr-tile-pin:focus-visible,
+.sr-tile-pin[aria-pressed="true"] {
+  opacity: 1;
+}
+
+.sr-tile-pin[aria-pressed="true"] {
+  color: #211603;
+  border-color: #f5d477;
+  background: #e3b951;
+}
+
+.sr-raised-hand {
+  left: 10px;
+  color: #241805;
+  border-color: #f5d477;
+  background: #e3b951;
+}
+
+.sr-tile-pin img,
+.sr-raised-hand img,
+.sr-person-hand {
+  filter: brightness(0) invert(1);
+}
+
+.sr-tile-pin[aria-pressed="true"] img,
+.sr-raised-hand img {
+  filter: brightness(0) saturate(100%);
+}
+
+.sr-person-name:has(.sr-person-hand) {
+  grid-template-columns: 10px minmax(0, 1fr) 18px;
+}
+
+.sr-control-dock #sr-toggle-screen-share[aria-pressed="true"],
+.sr-control-dock #sr-toggle-hand[aria-pressed="true"],
+.sr-control-dock #sr-dock-chat[aria-pressed="true"],
+.sr-control-dock #sr-dock-people[aria-pressed="true"],
+.sr-control-dock #sr-dock-devices[aria-pressed="true"] {
+  color: #211603;
+  border-color: #efc968;
+  background: linear-gradient(180deg, #f6d77e, #d7a43d);
+}
+
+.sr-control-dock #sr-toggle-screen-share[aria-pressed="true"] img,
+.sr-control-dock #sr-toggle-hand[aria-pressed="true"] img,
+.sr-control-dock #sr-dock-chat[aria-pressed="true"] img,
+.sr-control-dock #sr-dock-people[aria-pressed="true"] img,
+.sr-control-dock #sr-dock-devices[aria-pressed="true"] img {
+  filter: brightness(0) saturate(100%);
+}
+
+.sr-control-dock #sr-toggle-microphone[aria-disabled="true"] {
+  cursor: not-allowed;
+  border-color: rgba(174, 188, 202, 0.22);
+  background: rgba(45, 55, 65, 0.72);
+}
+
+@media (min-width: 1081px) and (min-height: 620px) {
+  .sr-stage-shell {
+    grid-template-rows: auto auto minmax(0, 1fr);
+  }
+
+  .sr-room-panel {
+    max-height: 100%;
+  }
+}
+
+@media (max-width: 1080px) {
+  .sr-room-panel {
+    display: flex;
+    width: 100%;
+    max-height: 620px;
+  }
+
+  .sr-panel-view {
+    min-height: 260px;
+  }
+}
+
+@media (max-width: 760px) {
+  .sr-room-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sr-room-card,
+  .sr-room-card-closed {
+    grid-template-columns: 90px minmax(0, 1fr);
+  }
+
+  .sr-control-dock {
+    justify-content: flex-start;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .sr-control-dock::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sr-control-dock button {
+    flex: 0 0 44px;
+  }
+}
+
+@media (max-width: 480px) {
+  .sr-room-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sr-room-card,
+  .sr-room-card-closed {
+    grid-template-columns: 110px minmax(0, 1fr);
+  }
+
+  .sr-panel-tabs button span:not(.sr-unread-badge) {
+    display: none;
+  }
+
+  .sr-participant-grid[data-pinned="true"] .sr-participant-tile:first-child {
+    grid-column: auto;
+  }
+}
+
+/* Meet-familiar responsive tiling: preserve readable 16:9 video instead of
+   shrinking every participant into the original two-column proof-of-concept. */
+.sr-participant-grid:is(
+  [data-count="5"],
+  [data-count="6"],
+  [data-count="7"],
+  [data-count="8"],
+  [data-count="9"],
+  [data-count="10"],
+  [data-count="11"],
+  [data-count="12"]
+) {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (min-width: 1081px) and (min-height: 620px) {
+  .sr-participant-grid {
+    grid-template-rows: none;
+    grid-auto-rows: minmax(150px, 1fr);
+    overflow: auto;
+  }
+
+  .sr-participant-grid[data-count="1"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sr-participant-grid:is([data-count="2"], [data-count="3"], [data-count="4"]) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .sr-participant-grid:is(
+    [data-count="5"],
+    [data-count="6"],
+    [data-count="7"],
+    [data-count="8"],
+    [data-count="9"],
+    [data-count="10"],
+    [data-count="11"],
+    [data-count="12"]
+  ) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 390px) {
+  .sr-participant-grid:is(
+    [data-count="5"],
+    [data-count="6"],
+    [data-count="7"],
+    [data-count="8"],
+    [data-count="9"],
+    [data-count="10"],
+    [data-count="11"],
+    [data-count="12"]
+  ) {
+    grid-template-columns: 1fr;
+  }
+}

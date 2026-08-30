@@ -78,7 +78,11 @@ const navigationIconFiles = Object.freeze([
   'door-open.svg',
   'tag.svg',
   'headphones.svg',
+  'hand.svg',
   'mic.svg',
+  'monitor-up.svg',
+  'pin.svg',
+  'settings.svg',
   'LICENSE.txt',
 ].map((name) => `assets/icons/navigation/${name}`));
 

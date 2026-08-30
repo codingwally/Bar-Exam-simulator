@@ -46,6 +46,9 @@
     nativeViewSequence: 0,
     nativeViewClosing: false,
     overlayFocusOrigins: new Map(),
+    pricingSnapshot: null,
+    selectedPricingPlan: null,
+    selectedPaymentMethod: null,
   };
 
   let resolveAuthReady;
@@ -1715,10 +1718,10 @@
         <p>AI-assisted systems assess and explain answers using curated platform context. Output may be incomplete or inaccurate. Use the correction workflow when material appears wrong.</p>
         <h3>AI, grading, and authority limitations</h3>
         <p>AI-generated grading and suggested answers may be incomplete or inaccurate. They are not official Supreme Court or Bar Examiner grades. A “Human Verified” label appears only after a genuine editorial review record exists. Provider capacity may temporarily interrupt grading; no grade or authority will be fabricated.</p>
-        <h3>Introductory tokens and Early Access</h3>
-        <p>Each eligible first-time account receives one lifetime allowance of five practice tokens. A token is consumed only after a successful graded submission. Failed grading and duplicate retries do not consume a token, and used tokens do not reset by date, browser, device, sign-out, account update, or the end of a paid subscription. Early Access is available at the current promotional price of ₱149; the regular manual-renewal price is ₱199.</p>
+        <h3>Introductory tokens and paid access</h3>
+        <p>Each eligible first-time account receives one lifetime allowance of five practice tokens. A token is consumed only after a successful graded submission. Failed grading and duplicate retries do not consume a token, and used tokens do not reset by date, browser, device, sign-out, account update, or the end of a paid subscription. The plan, price, duration, and payment details shown at proof submission are stored with that request and do not change while it is reviewed.</p>
         <h3>Payments, cancellation, and refunds</h3>
-        <p>Early Access has no automatic charge or automatic renewal. The next manual renewal date is October 1, 2026. A valid payment-proof submission creates one non-renewable 24-hour provisional entitlement while it is reviewed. Eligible refund requests must be filed within seven calendar days of the first provisional or paid access start and are reviewed using the published unused-time formula, without limiting statutory consumer rights.</p>
+        <p>Paid access uses manual payment and has no automatic charge or automatic renewal. The first valid payment-proof submission may create one non-renewable 24-hour provisional entitlement while it is reviewed. Approved rolling plans begin on approval or extend an existing paid period without shortening it. Eligible refund requests must be filed within seven calendar days of the applicable access start and are reviewed using the published unused-time formula, without limiting statutory consumer rights.</p>
         <h3>Your submissions</h3>
         <p>You remain responsible for submitted content. Do not submit confidential, privileged, unlawful, or third-party personal information. Service processing of an answer is necessary to provide grading. Separate optional consent governs retention of de-identified answer content for internal quality improvement.</p>
         <h3>Acceptable use</h3>
@@ -1763,11 +1766,10 @@
         ${subjectReviewAction ? `<aside class="dd2-access-summary" id="dd2-native-description">
           <strong>Review material remains locked</strong>
           <span>Your answer is saved and remains editable. The review timer continues while these access options are open.</span>
-          <span>Early Access is ₱149 and includes protected Syllabus-Based Review material.</span>
+          <span>An active paid plan includes protected Syllabus-Based Review material.</span>
           <span>Provisional access lets you continue practicing while payment is reviewed; Reveal Answer unlocks only after payment is verified.</span>
         </aside>` : ''}
-        <p class="dd2-pricing-intro"><strong>Continue without practice limits.</strong> Eligible first-time accounts receive one lifetime allowance of five practice tokens. Early Access removes that limit during the active paid period; an expired paid period does not create a new token allowance.</p>
-        <div class="dd2-plan-grid" id="dd2-pricing-plans" aria-live="polite">
+        <div id="dd2-pricing-page" aria-live="polite">
           <div class="dd2-loading-line">Loading current access options…</div>
         </div>
         <div id="dd2-payment-host"></div>
@@ -2060,13 +2062,13 @@
       ? 'Syllabus-Based Review'
       : definition[0];
     document.getElementById('dd2-native-title').textContent = subjectReviewAction
-      ? 'Early Access for protected review material'
+      ? 'Paid access for protected review material'
       : definition[1];
     document.getElementById('dd2-native-body').innerHTML = definition[2]();
     const closeButton = document.getElementById('dd2-native-close');
     const backButton = document.getElementById('dd2-native-back');
     if (closeButton) closeButton.setAttribute('aria-label', subjectReviewAction
-      ? 'Close Early Access options and return to your answer'
+      ? 'Close paid access options and return to your answer'
       : 'Close');
     if (backButton) backButton.textContent = subjectReviewAction ? 'Back to my answer' : 'Back';
     setOverlay(true, 'dd2-native-view', { focusOrigin: options.focusOrigin });
@@ -2362,91 +2364,194 @@
     return `${byType.year}-${byType.month}-${byType.day}`;
   }
 
-  function normalizedCommercialPlans(plans) {
-    return (Array.isArray(plans) ? plans : [])
-      .filter((plan) => plan?.planCode === 'early_access_beta')
-      .sort((a, b) => Number(a.displayOrder || 0) - Number(b.displayOrder || 0));
+  function pricingSource(payload) {
+    if (!payload || typeof payload !== 'object') return null;
+    const source = payload.pricing || payload.snapshot || payload;
+    return source && typeof source === 'object' ? source : null;
   }
 
-  function renderCommercialPlanCards(plans, access = null) {
-    const host = document.getElementById('dd2-pricing-plans');
-    if (!host) return;
-    const safePlans = normalizedCommercialPlans(plans);
-    const early = safePlans.find((plan) => plan.planCode === 'early_access_beta') || {
-      planCode: 'early_access_beta',
-      name: 'Early Access',
-      pricePhp: 149,
-      description: 'Unlimited eligible practice submissions during the promotional access period.',
-      features: [
-        'Unlimited eligible practice submissions',
-        'All Due Diligence study tracks',
-        'Saved progress and source-based coaching',
-        '24-hour provisional access while proof is reviewed',
-      ],
+  function normalizedCommercialPricing(payload) {
+    const source = pricingSource(payload);
+    const renderer = global.DueDiligencePricingRenderer;
+    if (!source || typeof renderer?.normalizeConfig !== 'function') {
+      throw new Error('The published pricing format is unavailable.');
+    }
+    const editable = source.config && typeof source.config === 'object' ? source.config : source;
+    const normalized = renderer.normalizeConfig(editable);
+    const rawPlans = Array.isArray(source.plans) ? source.plans : Array.isArray(editable.plans) ? editable.plans : [];
+    const rawMethods = Array.isArray(source.paymentMethods)
+      ? source.paymentMethods
+      : Array.isArray(editable.paymentMethods) ? editable.paymentMethods : [];
+    const plans = (Array.isArray(normalized.plans) ? normalized.plans : []).map((plan) => {
+      const raw = rawPlans.find((item) => String(item?.planCode || item?.id || '') === plan.planCode) || {};
+      return {
+        ...plan,
+        versionId: String(raw.versionId || raw.planVersionId || plan.versionId || ''),
+        checkoutOpen: typeof raw.checkoutOpen === 'boolean' ? raw.checkoutOpen : plan.checkoutOpen,
+        displayOpen: typeof raw.displayOpen === 'boolean' ? raw.displayOpen : plan.displayOpen,
+        entitlementMode: String(raw.entitlementMode || plan.entitlementMode || 'rolling_days'),
+        fixedEntitlementEndsAt: String(raw.fixedEntitlementEndsAt || raw.entitlementEndsAt || plan.fixedEntitlementEndsAt || ''),
+      };
+    });
+    const paymentMethods = (Array.isArray(normalized.paymentMethods) ? normalized.paymentMethods : []).map((method) => {
+      const raw = rawMethods.find((item) => String(item?.channelCode || item?.id || '') === method.channelCode
+        && String(item?.planCode || '') === String(method.planCode || '')) || {};
+      return {
+        ...method,
+        versionId: String(raw.versionId || raw.paymentChannelVersionId || method.versionId || ''),
+        qrUrl: String(raw.qrUrl || method.qrUrl || ''),
+        qrAmountCentavos: Number(raw.qrAmountCentavos ?? method.qrAmountCentavos) || null,
+        qrAsset: raw.qrAsset || method.qrAsset || null,
+      };
+    });
+    return {
+      revisionId: String(source.revisionId || ''),
+      revisionNumber: Number(source.revisionNumber) || null,
+      serverNow: String(source.serverNow || payload.serverNow || ''),
+      timezone: String(source.timezone || 'Asia/Manila'),
+      config: { ...normalized, plans, paymentMethods },
     };
-    const earlyFeatures = Array.isArray(early?.features) ? early.features : [];
-    const earlyOpen = access?.checkoutOpen === true && early?.checkoutEnabled !== false;
+  }
+
+  function normalizedCommercialPlans(pricing) {
+    return (Array.isArray(pricing?.config?.plans) ? pricing.config.plans : [])
+      .filter((plan) => plan?.visible !== false && plan?.displayOpen !== false)
+      .sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
+  }
+
+  function paymentMethodSupportsPlan(method, plan) {
+    if (!method || method.enabled === false || !plan) return false;
+    if (method.planCode && method.planCode !== plan.planCode) return false;
+    const amount = Number(method.qrAmountCentavos);
+    return method.qrAmountMode === 'generic'
+      || (Number.isSafeInteger(amount) && amount > 0 && amount === Number(plan.priceCentavos));
+  }
+
+  function commercialPaymentMethods(plan) {
+    return (Array.isArray(state.pricingSnapshot?.config?.paymentMethods)
+      ? state.pricingSnapshot.config.paymentMethods : [])
+      .filter((method) => paymentMethodSupportsPlan(method, plan))
+      .sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
+  }
+
+  function commercialQrUrl(method) {
+    const raw = String(method?.qrUrl || '').trim();
+    const assetId = String(method?.qrAsset?.assetId || '').trim();
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (uuid.test(assetId)) return `${String(config.workerUrl || '').replace(/\/+$/, '')}/pricing/assets/${assetId}`;
+    if (/^\/?assets\/payments\/[a-z0-9._-]+\.(?:png|jpe?g)$/i.test(raw)) {
+      return raw.startsWith('/') ? raw : `/${raw}`;
+    }
+    const workerBase = String(config.workerUrl || '').replace(/\/+$/, '');
+    if (raw.startsWith(`${workerBase}/pricing/assets/`)
+        && uuid.test(raw.slice(`${workerBase}/pricing/assets/`.length))) return raw;
+    return '';
+  }
+
+  function formatPhp(centavos, options = {}) {
+    const amount = Math.max(0, Number(centavos) || 0) / 100;
+    const hasFraction = amount % 1 !== 0 || options.alwaysDecimals === true;
+    return new Intl.NumberFormat('en-PH', {
+      style: 'currency',
+      currency: 'PHP',
+      minimumFractionDigits: hasFraction ? 2 : 0,
+      maximumFractionDigits: 2,
+    }).format(amount).replace('PHP', '₱');
+  }
+
+  function renderCommercialPlanCards(payload, access = null) {
+    const host = document.getElementById('dd2-pricing-page');
+    if (!host) return;
+    const pricing = normalizedCommercialPricing(payload);
+    const safePlans = normalizedCommercialPlans(pricing);
+    if (!safePlans.length) throw new Error('No published plan is currently visible.');
     const subjectReviewAction = state.nativeViewMode === 'action'
       && state.nativeViewContext?.reason === 'subject_reveal_review';
     const alreadyUnlimited = subjectReviewAction
       ? global.DueDiligencePhase4?.canRevealSubjectReview?.(access) === true
       : access?.unlimited === true;
-    const paidExpired = access?.paidSubscriptionExpired === true
-      || String(access?.basis || '').toLowerCase() === 'paid_subscription_expired';
-    const paidAction = alreadyUnlimited
-      ? '<button class="dd2-button dd2-button-secondary" type="button" disabled>Unlimited access active</button>'
-      : earlyOpen
-        ? `<button class="dd2-button dd2-button-primary" id="dd2-open-payment" type="button">${state.user
-    ? paidExpired ? 'Renew Early Access — ₱149' : subjectReviewAction ? 'Get Early Access — ₱149' : 'Get Early Access'
-    : 'Sign in to get Early Access'}</button>`
-        : '<button class="dd2-button dd2-button-secondary" type="button" disabled>Early Access offer closed</button>';
-    const regularPrice = Math.max(14900, Number(access?.regularPriceCentavos) || 19900) / 100;
-    host.innerHTML = `
-      <article class="dd2-plan dd2-plan-featured dd2-plan-single${earlyOpen ? '' : ' is-disabled'}">
-        <div class="dd2-plan-head"><div><h3>Early Access</h3><span class="dd2-badge">Promotional access</span></div><div class="dd2-price"><del>₱${escapeHtml(regularPrice.toFixed(0))}</del> ₱149<small>current promotional price</small></div></div>
-        <p>${escapeHtml(early?.description || 'Unlimited eligible practice submissions during the promotional access period.')}</p>
-        <ul>${earlyFeatures.map((feature) => `<li>${escapeHtml(feature)}</li>`).join('')}</ul>
-        ${early?.entitlementEndsAt ? `<p class="dd2-plan-date"><strong>Access through:</strong> ${escapeHtml(manilaDate(early.entitlementEndsAt, { includeTime: true }))}</p>` : ''}
-        ${access?.renewalAt ? `<p class="dd2-plan-date"><strong>Next manual renewal date:</strong> ${escapeHtml(manilaDate(access.renewalAt))}</p>` : ''}
-        <p class="dd2-plan-note">Manual payment only. No automatic charge or automatic renewal.</p>
-        ${paidAction}
-      </article>`;
-    document.getElementById('dd2-open-payment')?.addEventListener('click', () => {
-      if (!state.session?.access_token) {
-        hideNativeView({ reason: 'authentication-required' });
-        showEntry({
-          allowDismiss: true,
-          routeBound: true,
-          returnHash: subjectReviewAction ? '#subject-matter' : '#pricing',
-        });
-        return;
-      }
-      renderPaymentForm();
+    state.pricingSnapshot = pricing;
+    state.selectedPricingPlan = null;
+    state.selectedPaymentMethod = null;
+    const renderer = global.DueDiligencePricingRenderer;
+    renderer.render(host, { ...pricing.config, plans: safePlans }, {
+      mode: 'public',
+      access,
+      alreadyUnlimited,
+      serverNow: pricing.serverNow,
+      assetUrl: commercialQrUrl,
+      onSelectPlan(selected) {
+        const plan = safePlans.find((candidate) => (
+          candidate.versionId && candidate.versionId === selected?.versionId
+        )) || safePlans.find((candidate) => candidate.planCode === selected?.planCode);
+        if (!plan || plan.checkoutOpen !== true || plan.checkoutEnabled === false) return;
+        if (!state.session?.access_token) {
+          hideNativeView({ reason: 'authentication-required' });
+          showEntry({
+            allowDismiss: true,
+            routeBound: true,
+            returnHash: subjectReviewAction ? '#subject-matter' : '#pricing',
+          });
+          return;
+        }
+        renderPaymentForm(plan);
+      },
     });
   }
 
-  function renderPaymentForm() {
+  function renderPaymentForm(selectedPlan, preferredMethodId = '') {
     const host = document.getElementById('dd2-payment-host');
     if (!host) return;
+    const plan = normalizedCommercialPlans(state.pricingSnapshot)
+      .find((candidate) => candidate.versionId === selectedPlan?.versionId)
+      || normalizedCommercialPlans(state.pricingSnapshot)
+        .find((candidate) => candidate.planCode === selectedPlan?.planCode);
+    if (!plan || plan.checkoutOpen !== true || plan.checkoutEnabled === false) {
+      host.innerHTML = '<div class="dd2-status is-error" role="alert">This plan is not open for payment. Reload Plans &amp; Pricing for the current offer.</div>';
+      return;
+    }
+    const methods = commercialPaymentMethods(plan);
+    const method = methods.find((item) => item.versionId === preferredMethodId) || methods[0];
+    const qrUrl = commercialQrUrl(method);
+    if (!method || !method.versionId || !qrUrl) {
+      host.innerHTML = '<div class="dd2-status is-error" role="alert">Payment is not open yet because this plan has no published matching QR. No payment was requested.</div>';
+      return;
+    }
+    state.selectedPricingPlan = plan;
+    state.selectedPaymentMethod = method;
     const today = manilaTodayInput();
     const subjectReviewAction = state.nativeViewMode === 'action'
       && state.nativeViewContext?.reason === 'subject_reveal_review';
+    const planAmount = formatPhp(plan.priceCentavos, { alwaysDecimals: true });
+    const rollingTerm = plan.entitlementMode === 'rolling_days';
+    const termCopy = rollingTerm
+      ? `Approval provides ${Math.max(1, Number(plan.durationDays) || 30)} days. If paid access is still active, the new period is added after the current expiry.`
+      : plan.fixedEntitlementEndsAt
+        ? `Approval keeps this legacy plan active through ${manilaDate(plan.fixedEntitlementEndsAt, { includeTime: true })} Philippine time.`
+        : 'The captured legacy entitlement dates are kept with this payment request.';
+    const methodOptions = methods.map((item) => `<option value="${escapeHtml(item.versionId)}"${item.versionId === method.versionId ? ' selected' : ''}>${escapeHtml(item.label)}</option>`).join('');
     host.innerHTML = `
       <section class="dd2-payment-panel" aria-labelledby="dd2-payment-title">
         <div class="dd2-view-kicker">Secure manual verification</div>
-        <h3 id="dd2-payment-title">Submit ₱149 Early Access proof</h3>
-        <p>Your one non-renewable 24-hour provisional access begins when this proof is accepted by the server. Verification fixes access through October 1, 2026.</p>
+        <h3 id="dd2-payment-title">Submit ${escapeHtml(planAmount)} ${escapeHtml(plan.name)} proof</h3>
+        <p>${escapeHtml(termCopy)} Manual payment only; there is no automatic charge or renewal.</p>
         ${subjectReviewAction ? '<p class="dd2-plan-note">Provisional access lets you continue practicing while payment is reviewed; Reveal Answer unlocks only after payment is verified.</p>' : ''}
+        ${methods.length > 1 ? `<label class="dd2-label dd2-payment-method-choice">Payment method
+          <select class="dd2-field" id="dd2-payment-method-choice">${methodOptions}</select>
+        </label>` : ''}
         <div class="dd2-payment-channel" aria-label="Approved payment channel">
-          <span>BPI InstaPay</span>
-          <strong>Exact amount: ₱149.00</strong>
+          <span>${escapeHtml(method.label)}</span>
+          <strong>Exact amount: ${escapeHtml(planAmount)}</strong>
         </div>
+        ${(method.accountName || method.accountDetails) ? `<div class="dd2-payment-account">
+          ${method.accountName ? `<strong>${escapeHtml(method.accountName)}</strong>` : ''}
+          ${method.accountDetails ? `<span>${escapeHtml(method.accountDetails)}</span>` : ''}
+        </div>` : ''}
         <figure class="dd2-qr-frame">
-          <picture><img id="dd2-payment-qr" src="assets/payments/bpi-instapay-149.png" alt="BPI InstaPay QR code for the ₱149 Due Diligence Early Access payment" width="570" height="735"></picture>
-          <figcaption>Scan with an InstaPay-compatible banking or e-wallet app. Pay exactly ₱149.00, then upload the resulting receipt below.</figcaption>
+          <picture><img id="dd2-payment-qr" src="${escapeHtml(qrUrl)}" alt="${escapeHtml(method.label)} QR code for the ${planAmount} ${plan.name} payment" width="${Math.max(1, Number(method.qrAsset?.width) || 570)}" height="${Math.max(1, Number(method.qrAsset?.height) || 735)}"></picture>
+          <figcaption>${escapeHtml(method.instructions || `Scan with a compatible banking or e-wallet app. Pay exactly ${planAmount}, then upload the receipt below.`)}</figcaption>
         </figure>
         <form class="dd2-form" id="dd2-payment-form">
-          <input type="hidden" id="dd2-payment-method" value="bpi_instapay">
           <label class="dd2-label">Payment date
             <input class="dd2-field" id="dd2-payment-date" type="date" value="${today}" max="${today}" required>
           </label>
@@ -2467,8 +2572,16 @@
         </form>
       </section>`;
     host.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+    document.getElementById('dd2-payment-method-choice')?.addEventListener('change', (event) => {
+      renderPaymentForm(plan, event.currentTarget.value);
+    });
     document.getElementById('dd2-payment-form')?.addEventListener('submit', submitCommercialPayment);
     document.getElementById('dd2-payment-proof')?.addEventListener('change', previewCommercialPaymentProof);
+    document.getElementById('dd2-payment-qr')?.addEventListener('error', () => {
+      const submit = document.getElementById('dd2-payment-submit');
+      if (submit) submit.disabled = true;
+      setStatus('dd2-payment-status', 'This QR could not be loaded, so payment submission is paused. Reload the page or contact Support.', 'error');
+    }, { once: true });
   }
 
   function validCommercialProof(file) {
@@ -2524,6 +2637,12 @@
     const subjectReviewAction = state.nativeViewMode === 'action'
       && state.nativeViewContext?.reason === 'subject_reveal_review';
     const submit = document.getElementById('dd2-payment-submit');
+    const plan = state.selectedPricingPlan;
+    const paymentMethod = state.selectedPaymentMethod;
+    if (!plan?.versionId || !paymentMethod?.versionId || plan.checkoutOpen !== true) {
+      setStatus('dd2-payment-status', 'This offer is no longer current. Reload Plans & Pricing before submitting.', 'error');
+      return;
+    }
     const proof = document.getElementById('dd2-payment-proof')?.files?.[0];
     const proofValidation = validCommercialProof(proof);
     if (proofValidation) {
@@ -2531,9 +2650,10 @@
       return;
     }
     const form = new FormData();
-    form.set('planCode', 'early_access_beta');
-    form.set('amountPhp', '149');
-    form.set('paymentMethod', document.getElementById('dd2-payment-method').value);
+    form.set('planVersionId', plan.versionId);
+    form.set('paymentChannelVersionId', paymentMethod.versionId);
+    form.set('planCode', plan.planCode);
+    form.set('paymentMethod', paymentMethod.channelCode);
     form.set('paymentDate', document.getElementById('dd2-payment-date').value);
     form.set('transactionReference', document.getElementById('dd2-payment-reference').value.trim());
     form.set('note', document.getElementById('dd2-payment-note').value.trim());
@@ -2547,11 +2667,11 @@
       const result = await nativeWorkerRequest('/payments/submit', {
         body: form,
         submissionView: 'payment',
-        submissionDraft: { planCode: 'early_access_beta' },
+        submissionDraft: { planCode: plan.planCode },
       });
       const access = await global.DueDiligencePhase4?.refreshAccess?.({ force: true, enforce: false }).catch(() => null);
       if (state.nativeViewSequence !== viewSequence || state.nativeView !== 'pricing') {
-        global.toast?.('Early Access proof received securely.', 'ok');
+        global.toast?.(`${plan.name} proof received securely.`, 'ok');
         return;
       }
       const host = document.getElementById('dd2-payment-host');
@@ -2560,7 +2680,7 @@
           <div class="dd2-view-kicker">Proof received</div>
           <h3>Verification is pending.</h3>
           <p>${escapeHtml(subjectReviewAction
-    ? 'Your proof was received securely. Protected review material remains locked until Early Access is approved.'
+    ? `Your proof was received securely. Protected review material remains locked until ${plan.name} is approved.`
     : result.message || 'Your proof was stored securely. Provisional access is active while the payment is reviewed.')}</p>
           ${subjectReviewAction ? '<p>Provisional access lets you continue practicing while payment is reviewed; Reveal Answer unlocks only after payment is verified.</p>' : ''}
           ${access?.entitlementEndsAt && !subjectReviewAction ? `<p><strong>Provisional access through:</strong> ${escapeHtml(manilaDate(access.entitlementEndsAt, { includeTime: true }))} Philippine time</p>` : ''}
@@ -2576,8 +2696,15 @@
         history.replaceState({}, '', `${location.pathname}${location.search}#quorum`);
         global.DueDiligencePublicHome?.show?.();
       });
-      global.toast?.('Early Access proof received securely.', 'ok');
+      global.toast?.(`${plan.name} proof received securely.`, 'ok');
     } catch (error) {
+      if (['PRICING_OFFER_STALE', 'PLAN_NOT_AVAILABLE', 'CHECKOUT_CLOSED', 'PAYMENT_CHANNEL_NOT_AVAILABLE']
+        .includes(String(error?.code || ''))) {
+        const paymentHost = document.getElementById('dd2-payment-host');
+        if (paymentHost) paymentHost.innerHTML = '<div class="dd2-status is-error" role="alert">Pricing changed before submission. Nothing was charged or accepted. The current published plan is shown above.</div>';
+        await loadCommercialPricing(viewSequence);
+        return;
+      }
       setStatus('dd2-payment-status', error.message || 'The proof could not be submitted. No access change was made.', 'error');
       submit.disabled = false;
       submit.textContent = 'Submit proof securely';
@@ -2586,7 +2713,7 @@
   }
 
   async function loadCommercialPricing(viewSequence = state.nativeViewSequence) {
-    const host = document.getElementById('dd2-pricing-plans');
+    const host = document.getElementById('dd2-pricing-page');
     if (!host) return;
     try {
       const [plansPayload, accessPayload] = await Promise.all([
@@ -2606,7 +2733,7 @@
         closeNativeView('access-active');
         return;
       }
-      renderCommercialPlanCards(plansPayload.plans, access);
+      renderCommercialPlanCards(plansPayload, access);
     } catch (error) {
       if (state.nativeViewSequence !== viewSequence || state.nativeView !== 'pricing') return;
       host.innerHTML = `
@@ -2633,9 +2760,9 @@
           ${endedAt ? `<span>Your paid access ended ${escapeHtml(manilaDate(endedAt, { includeTime: true }))} Philippine time.</span>` : ''}
           <span>${access?.checkoutOpen === false
     ? 'Online renewal is currently closed. Support can record your renewal-assistance request.'
-    : 'Renew Early Access to continue using the Bar Exam Simulator.'}</span>
+    : 'Choose the current paid plan to continue practicing.'}</span>
           <span>Home and Examination Room remain available. Your original five-token allowance does not reset.</span>
-          <button class="dd2-button dd2-button-primary" type="button" data-dd2-view="${access?.checkoutOpen === false ? 'support' : 'pricing'}">${access?.checkoutOpen === false ? 'Open Support for renewal assistance' : 'Renew Early Access'}</button>
+          <button class="dd2-button dd2-button-primary" type="button" data-dd2-view="${access?.checkoutOpen === false ? 'support' : 'pricing'}">${access?.checkoutOpen === false ? 'Open Support for renewal assistance' : 'View current plan'}</button>
         </div>`;
     }
     const label = access?.accountLabel || 'Introductory access';
@@ -2664,7 +2791,7 @@
       <h3>Payments and refunds</h3>
       <div class="dd2-record-list">${payments.map((payment) => `
         <article class="dd2-record">
-          <strong>Early Access · ₱${escapeHtml(Number(payment.amountPhp || 149).toFixed(2))}</strong>
+          <strong>${escapeHtml(payment.planName || (payment.planCode === 'early_access_beta' ? 'Legacy Early Access' : 'Paid access'))} · ${escapeHtml(formatPhp(Number(payment.amountCentavos) || Math.round(Number(payment.amountPhp || 0) * 100) || (payment.planCode === 'early_access_beta' ? 14900 : 0), { alwaysDecimals: true }))}</strong>
           <span class="dd2-record-status">${escapeHtml(String(payment.status || 'pending').replaceAll('_', ' '))}</span>
           <small>Submitted ${escapeHtml(manilaDate(payment.submittedAt, { includeTime: true }))} · ${escapeHtml(payment.method || '')}</small>
           ${payment.reviewReason ? `<p>${escapeHtml(payment.reviewReason)}</p>` : ''}

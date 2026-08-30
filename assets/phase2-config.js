@@ -40,20 +40,9 @@
       examinationRoomRecordedProctoring: false,
     }),
     plans: Object.freeze({
-      catalogVersion: 'soft-launch-early-access-2026-08-21',
-      notice: 'Five one-time practice tokens are included automatically. Early Access removes the practice limit.',
-      items: Object.freeze([
-        Object.freeze({
-          id: 'early_access_beta',
-          name: 'Early Access',
-          pricingHidden: false,
-          previewStatus: 'active',
-          featurePlaceholders: Object.freeze([
-            'Unlimited access through October 1, 2026',
-            'One-time payment with no automatic renewal',
-          ]),
-        }),
-      ]),
+      catalogVersion: 'server-published-pricing-v1',
+      notice: 'Plans, prices, payment details, and QR codes load from the current published Admin revision.',
+      items: Object.freeze([]),
     }),
   });
 })(window);

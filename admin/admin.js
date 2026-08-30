@@ -13,6 +13,7 @@
     learning: 'Subject Performance',
     subjects: 'Question Bank',
     reliability: 'Grading Health',
+    pricing: 'Plans & Pricing',
     subscriptions: 'Subscriptions',
     paid_subscribers: 'Paid Subscribers',
     payments: 'Payments',
@@ -39,6 +40,7 @@
     marketing: 'Recorded channels and sign-in acquisition.',
     learning: 'Subject-level performance from completed assessments.',
     reliability: 'Grading availability and response health.',
+    pricing: 'Draft, preview, schedule, and publish customer pricing.',
     subscriptions: 'Commercial access and introductory allowances.',
     paid_subscribers: 'Paid access, verification state, and entitlement expiry.',
     payments: 'Private payment-proof review and verification history.',
@@ -252,7 +254,7 @@
 
   function sectionAllowed(section) {
     if (!titles[section]) return false;
-    const founderOnly = ['forum', 'examinations', 'answer_exports', 'examination_room_v1'].includes(section);
+    const founderOnly = ['pricing', 'forum', 'examinations', 'answer_exports', 'examination_room_v1'].includes(section);
     const founderAuthorized = ['founder_admin', 'super_admin'].includes(
       state.authorization?.role,
     );
@@ -378,19 +380,29 @@
   async function api(path, body = {}, options = {}) {
     const token = state.session?.access_token;
     if (!token) throw new Error('Administrator sign-in is required.');
+    const isMultipart = body instanceof FormData;
     const response = await fetch(`${config.workerUrl}${path}`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        ...(isMultipart ? {} : { 'Content-Type': 'application/json' }),
         Authorization: `Bearer ${token}`,
         'X-Request-ID': uuidKey(),
         ...(global.DueDiligencePrivateBeta?.accessHeaders?.() || {}),
       },
-      body: JSON.stringify(body),
+      body: isMultipart ? body : JSON.stringify(body),
       signal: options.signal,
     });
+    if (options.responseType === 'blob') {
+      if (!response.ok) {
+        const problem = await response.json().catch(() => null);
+        const error = new Error(problem?.error?.message || 'Administrator request failed.');
+        error.code = problem?.error?.code;
+        throw error;
+      }
+      return response.blob();
+    }
     const payload = await response.json().catch(() => null);
-    if (!response.ok || !payload?.ok) {
+    if (!response.ok || payload?.ok === false) {
       const error = new Error(payload?.error?.message || 'Administrator request failed.');
       error.code = payload?.error?.code;
       throw error;
@@ -3225,12 +3237,27 @@
     });
   }
 
+  async function renderPricingEditor(context) {
+    if (!global.DueDiligencePricingEditor?.shell
+        || !global.DueDiligencePricingRenderer?.render) {
+      throw new Error('The Plans & Pricing editor could not be loaded. Nothing was changed.');
+    }
+    const snapshot = await readApi('/admin/pricing/query', {
+      operation: 'editor_snapshot',
+    }, context);
+    assertRenderActive(context);
+    context.pricingSnapshot = snapshot;
+    context.loadedAt = snapshot?.data?.serverNow || snapshot?.serverNow || new Date().toISOString();
+    return global.DueDiligencePricingEditor.shell();
+  }
+
   async function renderSection(section) {
     if (!sectionAllowed(section)) {
       toast('Your administrator role does not have access to that section.');
       return false;
     }
     state.renderController?.abort();
+    if (state.section === 'pricing') global.DueDiligencePricingEditor?.destroy?.();
     const controller = new AbortController();
     const epoch = state.renderEpoch + 1;
     state.renderEpoch = epoch;
@@ -3249,12 +3276,13 @@
       $('#section-subtitle').textContent = sectionSubtitles[section] || 'Protected Due Diligence administration.';
     }
     const isExaminationRoom = section === 'examination_room_v1';
+    const isPricingEditor = section === 'pricing';
     const rangeControl = $('#reporting-range');
     const dataScopeControl = $('#reporting-data-scope');
     if (dataScopeControl) dataScopeControl.hidden = !dataScopedSections.has(section);
     const rangeApplies = ['executive', 'recent_users', 'acquisition', 'marketing', 'learning', 'subjects', 'reliability', 'forum', 'business_projections', 'business_comparisons'].includes(section);
     if (rangeControl) {
-      rangeControl.hidden = isExaminationRoom || section === 'realtime';
+      rangeControl.hidden = isExaminationRoom || isPricingEditor || section === 'realtime';
       const rangeLabel = rangeControl.querySelector('.reporting-range-label');
       if (rangeLabel) rangeLabel.textContent = rangeApplies ? 'Date range' : 'Scope';
       const rangeSelect = $('#date-range');
@@ -3276,9 +3304,9 @@
     const exportButton = $('#download-current-section');
     const refreshButton = $('#refresh-dashboard');
     const systemBanner = $('#system-banner');
-    if (exportButton) exportButton.hidden = isExaminationRoom;
+    if (exportButton) exportButton.hidden = isExaminationRoom || isPricingEditor;
     if (refreshButton) refreshButton.hidden = isExaminationRoom;
-    if (systemBanner) systemBanner.hidden = isExaminationRoom;
+    if (systemBanner) systemBanner.hidden = isExaminationRoom || isPricingEditor;
     view.setAttribute('aria-busy', 'true');
     view.innerHTML = `<div class="dashboard-loading" role="status" aria-label="Loading administrator data"><p>Loading ${escapeHtml(title)}…</p><div class="skeleton skeleton-kpis"></div><div class="skeleton skeleton-panels"></div></div>`;
     $('#freshness b').textContent = `Loading ${title}…`;
@@ -3309,6 +3337,7 @@
       else if (section === 'learning') html = await renderLearning(report, context);
       else if (section === 'subjects') html = renderSubjects(report);
       else if (section === 'reliability') html = renderReliability(report);
+      else if (section === 'pricing') html = await renderPricingEditor(context);
       else if (section === 'subscriptions') html = await renderSubscriptions(report, context);
       else if (section === 'paid_subscribers') html = await renderPaidSubscribers(context);
       else if (section === 'payments') html = await renderPayments(context);
@@ -3329,6 +3358,24 @@
       applyRenderCommits(context);
       view.innerHTML = html || empty('No verified records are available for this page.');
       bindDynamic();
+      if (section === 'pricing') {
+        const pricingRequest = async (path, body, options = {}) => {
+          assertRenderActive(context);
+          const payload = await api(path, body, { ...options, signal: context.signal });
+          assertRenderActive(context);
+          return payload;
+        };
+        global.DueDiligencePricingEditor.mount({
+          root: view,
+          snapshot: context.pricingSnapshot,
+          query: () => readApi('/admin/pricing/query', { operation: 'editor_snapshot' }, context),
+          action: (body) => pricingRequest('/admin/pricing/action', body),
+          uploadAsset: (formData) => pricingRequest('/admin/pricing/assets/upload', formData),
+          loadAsset: (assetId) => pricingRequest('/admin/pricing/asset', { assetId }, { responseType: 'blob' }),
+          isActive: () => isRenderActive(context.epoch, context.section, context.signal),
+          notify: toast,
+        });
+      }
       const renderedSurface = view.firstElementChild;
       mountObservatoryCharts(section, report, context, renderedSurface);
       if (section === 'examinations') bindExaminationAdmin();
@@ -3383,6 +3430,10 @@
   function navigateSection(section, historyMode = 'push') {
     if (!sectionAllowed(section)) {
       toast('Your administrator role does not have access to that section.');
+      return Promise.resolve(false);
+    }
+    if (state.section === 'pricing'
+        && global.DueDiligencePricingEditor?.confirmLeave?.() === false) {
       return Promise.resolve(false);
     }
     const nextUrl = `${global.location.pathname}${global.location.search}#${section}`;
@@ -5120,6 +5171,8 @@
     await renderSection(state.section);
   });
   $('#refresh-dashboard')?.addEventListener('click', async () => {
+    if (state.section === 'pricing'
+        && global.DueDiligencePricingEditor?.confirmLeave?.() === false) return;
     state.report = null;
     state.reportWindowKey = null;
     state.operational.clear();
@@ -5174,7 +5227,14 @@
       cancelActionDialog({ consumeHistory: false });
       return;
     }
-    renderSection(sectionFromLocation());
+    const destination = sectionFromLocation();
+    if (state.section === 'pricing'
+        && destination !== 'pricing'
+        && global.DueDiligencePricingEditor?.confirmLeave?.() === false) {
+      global.history.pushState(null, '', `${global.location.pathname}${global.location.search}#pricing`);
+      return;
+    }
+    renderSection(destination);
   });
 
   initialize().catch(() => deny('The Admin dashboard could not open. Nothing was changed.'));

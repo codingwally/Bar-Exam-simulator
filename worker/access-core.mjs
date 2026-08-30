@@ -358,7 +358,7 @@ export function accessDeniedError(access) {
     return new AccessValidationError(
       'PAID_SUBSCRIPTION_EXPIRED',
       access?.checkoutOpen === true
-        ? 'Your paid Bar Exam Simulator access has expired. Renew Early Access to continue. Home and Examination Room remain available.'
+        ? 'Your paid Bar Exam Simulator access has expired. Choose the current published plan to continue. Home and Examination Room remain available.'
         : 'Your paid Bar Exam Simulator access has expired. Open Support for renewal assistance. Home and Examination Room remain available.',
       403,
     );

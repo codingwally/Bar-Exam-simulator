@@ -38,10 +38,11 @@ function manilaDateTime(value) {
 }
 
 function paymentMethod(value) {
-  const method = cleanLine(value, 80).toLowerCase();
+  const original = cleanLine(value, 120);
+  const method = original.toLowerCase();
   if (method === 'gotyme_instapay') return 'GoTyme InstaPay';
   if (method === 'bpi_instapay') return 'BPI InstaPay';
-  return cleanLine(value, 80) || 'Not provided';
+  return original || 'Not provided';
 }
 
 function attachmentName(value) {
@@ -61,10 +62,14 @@ function bytesToBase64(value) {
   return btoa(binary);
 }
 
-function receiptReference(paymentId, sample = false) {
+function receiptReference(paymentId, planCode, historicalEarlyAccess, sample = false) {
   if (sample) return 'SAMPLE-NOT-A-PAYMENT';
   const suffix = cleanLine(paymentId, 80).replace(/[^A-Za-z0-9]/g, '').slice(0, 12);
-  return suffix ? `DD-EA-${suffix.toUpperCase()}` : 'Not available';
+  const stablePlanCode = cleanLine(planCode, 64).toLowerCase();
+  const prefix = historicalEarlyAccess || stablePlanCode === 'early_access_beta'
+    ? 'DD-EA'
+    : 'DD-PAY';
+  return suffix ? `${prefix}-${suffix.toUpperCase()}` : 'Not available';
 }
 
 function detailRow(label, value) {
@@ -77,18 +82,54 @@ export function subscriptionReceiptContent(context = {}) {
   const user = context.user || {};
   const subscription = context.subscription || {};
   const recipientName = cleanLine(user.displayName, 120) || 'Due Diligence member';
-  const amount = money(payment.amountPhp);
-  const method = paymentMethod(payment.paymentMethod);
-  const reference = cleanLine(payment.transactionReference, 120) || 'Not provided';
+  const planCode = cleanLine(payment.planCode, 64).toLowerCase();
+  const historicalEarlyAccess = !payment.planVersionId
+    && (!planCode || planCode === 'early_access_beta');
+  const planName = cleanLine(payment.planName, 120)
+    || (historicalEarlyAccess ? 'Early Access' : planCode || 'Published plan');
+  const amountCentavos = Number(payment.amountCentavos);
+  const hasAmountCentavos = payment.amountCentavos != null && payment.amountCentavos !== ''
+    && Number.isSafeInteger(amountCentavos) && amountCentavos >= 0;
+  const legacyAmountPhp = payment.amountPhp == null || payment.amountPhp === ''
+    ? Number.NaN
+    : Number(payment.amountPhp);
+  const amountPhp = hasAmountCentavos
+    ? amountCentavos / 100
+    : Number.isFinite(legacyAmountPhp)
+      ? legacyAmountPhp
+      : historicalEarlyAccess ? 149 : Number.NaN;
+  const amount = money(amountPhp);
+  const method = paymentMethod(
+    payment.paymentChannelLabel
+      || payment.channelLabel
+      || payment.paymentChannelName
+      || payment.paymentMethod,
+  );
+  const reference = cleanLine(
+    payment.paymentReference || payment.transactionReference,
+    120,
+  ) || 'Not provided';
   const paymentDate = cleanLine(payment.paymentDate, 40) || 'Not provided';
   const approvedAt = manilaDateTime(payment.reviewedAt || payment.approvedAt);
-  const accessEndsAt = subscription.expiresAt
-    ? manilaDateTime(subscription.expiresAt)
+  const durationDays = Number(payment.durationDays);
+  const capturedAccessEnd = subscription.expiresAt || payment.fixedEndsAt;
+  const accessEndsAt = capturedAccessEnd
+    ? manilaDateTime(capturedAccessEnd)
     : 'No expiration returned by the approved access record';
-  const internalReference = receiptReference(payment.id, sample);
+  const term = Number.isInteger(durationDays) && durationDays > 0
+    ? `${durationDays} days from approval`
+    : capturedAccessEnd
+      ? `Access through ${accessEndsAt}`
+      : historicalEarlyAccess ? 'Legacy Early Access terms' : 'As captured by the approved plan';
+  const internalReference = receiptReference(
+    payment.id,
+    planCode,
+    historicalEarlyAccess,
+    sample,
+  );
   const subject = sample
     ? '[SAMPLE] Due Diligence electronic receipt'
-    : 'Due Diligence — Early Access payment receipt';
+    : `Due Diligence — ${planName} payment receipt`;
   const sampleNotice = sample
     ? 'SAMPLE ONLY — This message does not record or acknowledge a real payment.'
     : '';
@@ -101,10 +142,11 @@ export function subscriptionReceiptContent(context = {}) {
     `Thank you, ${recipientName}.`,
     sample
       ? 'This is the pre-publication design preview requested by the owner.'
-      : 'Your Early Access payment was verified and your access record was updated.',
+      : `Your ${planName} payment was verified and your access record was updated.`,
     '',
     `Amount: ${amount}`,
-    'Plan: Early Access',
+    `Plan: ${planName}${planCode ? ` (${planCode})` : ''}`,
+    `Term: ${term}`,
     `Payment method: ${method}`,
     `Transaction reference: ${reference}`,
     `Payment date provided: ${paymentDate}`,
@@ -132,12 +174,13 @@ export function subscriptionReceiptContent(context = {}) {
         ${sample ? `<div style="margin-bottom:22px;padding:12px 14px;background:#fff4d8;border-left:4px solid #d9b24c;color:#624b14;font-size:13px;font-weight:800;">${escapeHtml(sampleNotice)}</div>` : ''}
         <div style="color:#9a6b10;font-size:12px;font-weight:800;letter-spacing:1.7px;text-transform:uppercase;">${sample ? 'Receipt preview' : 'Payment approved'}</div>
         <h1 style="margin:10px 0 12px;font-family:Georgia,serif;color:#081f3d;font-size:34px;line-height:1.1;">Thank you, ${escapeHtml(recipientName)}.</h1>
-        <p style="margin:0 0 26px;color:#4b5d73;font-size:15px;line-height:1.65;">${sample ? 'This is the pre-publication design preview requested by the owner.' : 'Your Early Access payment was verified and your access record was updated.'}</p>
+        <p style="margin:0 0 26px;color:#4b5d73;font-size:15px;line-height:1.65;">${sample ? 'This is the pre-publication design preview requested by the owner.' : `Your ${escapeHtml(planName)} payment was verified and your access record was updated.`}</p>
         <div style="padding:22px;background:#fff;border:1px solid #d8dee8;border-radius:10px;">
           <div style="color:#64748b;font-size:11px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;">Amount acknowledged</div>
           <div style="margin:6px 0 18px;font-family:Georgia,serif;color:#081f3d;font-size:38px;font-weight:700;">${escapeHtml(amount)}</div>
           <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;border-top:1px solid #e2e8f0;">
-            ${detailRow('Plan', 'Early Access')}
+            ${detailRow('Plan', planName)}
+            ${detailRow('Term', term)}
             ${detailRow('Payment method', method)}
             ${detailRow('Transaction reference', reference)}
             ${detailRow('Payment date provided', paymentDate)}

@@ -24,13 +24,11 @@ assert.equal(config.guest.enabled, false);
 assert.equal(config.legal.termsVersion, 'terms-soft-launch-v1-2026-08-21');
 assert.equal(config.legal.privacyVersion, 'privacy-soft-launch-v1-2026-08-21');
 assert.equal('marketingConsentVersion' in config.legal, false);
-assert.deepEqual(Array.from(config.plans.items, (plan) => [
-  plan.id,
-  plan.pricingHidden,
-]), [['early_access_beta', false]]);
+assert.deepEqual(Array.from(config.plans.items), []);
+assert.equal(config.plans.catalogVersion, 'server-published-pricing-v1');
 assert.equal(
   config.plans.notice,
-  'Five one-time practice tokens are included automatically. Early Access removes the practice limit.',
+  'Plans, prices, payment details, and QR codes load from the current published Admin revision.',
 );
 assert.equal(config.features.payments, true);
 assert.equal(config.features.subscriptionEnforcement, true);
@@ -45,7 +43,7 @@ for (const expected of [
   'Syllabus-Based Review',
   '/beta/access/accept-terms',
   'complete_commercial_profile_onboarding_v2',
-  'Introductory tokens and Early Access',
+  'Introductory tokens and paid access',
   'one lifetime allowance of five practice tokens',
   "publicWorkerRequest('/beta/access/policy')",
   'await refreshLegalPolicy();',

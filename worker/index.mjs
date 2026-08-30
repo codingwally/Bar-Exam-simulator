@@ -102,6 +102,19 @@ import {
   validateProofSignature,
 } from './payment-core.mjs';
 import {
+  PRICING_ASSET_BUCKET,
+  PRICING_ASSET_LIMITS,
+  PricingValidationError,
+  normalizePricingAdminAction,
+  normalizePricingAdminQuery,
+  normalizePricingAssetMetadata,
+  normalizePricingRequestKey,
+  pricingUuid,
+  sanitizePublicPricingSnapshot,
+  sanitizeTrustedPayment,
+  validatePricingAsset,
+} from './pricing-core.mjs';
+import {
   FORUM_LIMITS,
   QUORUM_LIMITS,
   ForumValidationError,
@@ -275,7 +288,7 @@ let websiteBankCache = null;
 function corsHeaders(origin, allowedOrigin) {
   return {
     'Access-Control-Allow-Origin': origin === allowedOrigin ? origin : allowedOrigin,
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': [
       'Content-Type',
       'Authorization',
@@ -3795,6 +3808,118 @@ async function deletePrivateProof(env, objectPath) {
   } catch {
     console.error('Private payment proof cleanup requires operator review');
   }
+}
+
+function pricingAssetObjectUrl(env, bucketId, objectPath) {
+  const baseUrl = configuredSupabaseUrl(env);
+  return new URL(
+    `/storage/v1/object/${encodeURIComponent(bucketId)}/${encodedStoragePath(objectPath)}`,
+    baseUrl,
+  );
+}
+
+async function uploadPrivatePricingAsset(env, objectPath, bytes, mimeType) {
+  const response = await fetch(
+    pricingAssetObjectUrl(env, PRICING_ASSET_BUCKET, objectPath),
+    {
+      method: 'POST',
+      headers: {
+        apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        'Content-Type': mimeType,
+        'Cache-Control': 'public, max-age=31536000, immutable',
+        'x-upsert': 'false',
+      },
+      body: bytes,
+    },
+  );
+  if (!response.ok) {
+    console.error('Private pricing asset upload failed', { status: response.status });
+    throw new PricingValidationError(
+      'PRICING_ASSET_UNAVAILABLE',
+      'The QR image could not be stored securely. Please try again.',
+      503,
+    );
+  }
+}
+
+async function deletePrivatePricingAsset(env, objectPath) {
+  try {
+    const response = await fetch(
+      pricingAssetObjectUrl(env, PRICING_ASSET_BUCKET, objectPath),
+      {
+        method: 'DELETE',
+        headers: {
+          apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+      },
+    );
+    if (!response.ok && response.status !== 404) {
+      console.error('Private pricing asset cleanup requires operator review', {
+        status: response.status,
+      });
+    }
+  } catch {
+    console.error('Private pricing asset cleanup requires operator review');
+  }
+}
+
+async function streamPrivatePricingAsset(
+  request,
+  env,
+  metadata,
+  origin,
+  allowedOrigin,
+  { publicAsset = false } = {},
+) {
+  const etag = `"${metadata.sha256}"`;
+  if (publicAsset && request.headers.get('If-None-Match')?.split(',').map((item) => item.trim()).includes(etag)) {
+    return new Response(null, {
+      status: 304,
+      headers: {
+        ...corsHeaders(origin, allowedOrigin),
+        ETag: etag,
+        'Cache-Control': 'public, max-age=31536000, immutable',
+        'X-Content-Type-Options': 'nosniff',
+        'Cross-Origin-Resource-Policy': 'cross-origin',
+      },
+    });
+  }
+  const storageResponse = await fetch(
+    pricingAssetObjectUrl(env, metadata.bucketId, metadata.objectPath),
+    {
+      headers: {
+        apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      },
+    },
+  );
+  if (!storageResponse.ok || !storageResponse.body) {
+    console.error('Private pricing asset read failed', {
+      status: storageResponse.status,
+      assetId: metadata.assetId,
+    });
+    throw new PricingValidationError(
+      'PRICING_ASSET_UNAVAILABLE',
+      'The QR image is temporarily unavailable.',
+      503,
+    );
+  }
+  return new Response(storageResponse.body, {
+    status: 200,
+    headers: {
+      ...corsHeaders(origin, allowedOrigin),
+      'Content-Type': metadata.mimeType,
+      'Content-Length': String(metadata.sizeBytes),
+      'X-Content-Type-Options': 'nosniff',
+      ETag: etag,
+      'Cache-Control': publicAsset
+        ? 'public, max-age=31536000, immutable'
+        : 'private, no-store',
+      'Cross-Origin-Resource-Policy': publicAsset ? 'cross-origin' : 'same-site',
+    },
+  });
 }
 
 async function signedPrivateProofUrl(env, objectPath) {
@@ -8241,6 +8366,26 @@ async function requireAdministrator(request, env) {
   return user;
 }
 
+const PRICING_ADMIN_ROLES = new Set(['founder_admin', 'super_admin']);
+
+async function requirePricingAdministrator(request, env) {
+  const user = await requireAdministrator(request, env);
+  const authorization = await protectedSupabaseRpc(env, 'admin_authorization_context', {
+    p_actor_user_id: user.id,
+  });
+  if (
+    authorization?.authorized !== true
+    || !PRICING_ADMIN_ROLES.has(String(authorization?.role || '').trim().toLowerCase())
+  ) {
+    throw new PricingValidationError(
+      'PRICING_ADMIN_FORBIDDEN',
+      'Only a Founder or Super Admin can edit or publish pricing.',
+      403,
+    );
+  }
+  return { user, authorization };
+}
+
 async function handleAnalytics(request, env, origin, allowedOrigin) {
   await enforceAnalyticsRateLimit(request, env);
   const payload = await parseBoundedJson(request, 12_000);
@@ -8950,11 +9095,166 @@ async function handleAdminUserResponsesExport(request, env, origin, allowedOrigi
 }
 
 async function handlePlans(request, env, origin, allowedOrigin) {
-  const plans = await phase4Rpc(env, 'phase4_plan_catalog', {});
-  const publicPlans = Array.isArray(plans)
-    ? plans.filter((plan) => String(plan?.planCode || '') === 'early_access_beta')
-    : [];
-  return jsonResponse({ ok: true, plans: publicPlans }, 200, origin, allowedOrigin);
+  const result = await phase4Rpc(env, 'phase4_pricing_snapshot', {});
+  const pricing = sanitizePublicPricingSnapshot(result);
+  return jsonResponse({
+    ok: true,
+    pricing,
+    plans: pricing.plans,
+    serverNow: pricing.serverNow,
+    revisionId: pricing.revisionId,
+  }, 200, origin, allowedOrigin);
+}
+
+async function handlePublicPricingAsset(
+  request,
+  env,
+  assetId,
+  origin,
+  allowedOrigin,
+) {
+  const normalizedAssetId = pricingUuid(assetId, 'pricing asset');
+  const result = await phase4Rpc(env, 'phase4_pricing_public_asset', {
+    p_asset_id: normalizedAssetId,
+  });
+  if (!result) {
+    throw new PricingValidationError(
+      'PRICING_ASSET_NOT_FOUND',
+      'The QR image is not available.',
+      404,
+    );
+  }
+  const metadata = normalizePricingAssetMetadata(result);
+  return streamPrivatePricingAsset(
+    request,
+    env,
+    metadata,
+    origin,
+    allowedOrigin,
+    { publicAsset: true },
+  );
+}
+
+async function handleAdminPricingQuery(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const { user } = await requirePricingAdministrator(request, env);
+  normalizePricingAdminQuery(await parseBoundedJson(request, 8_000));
+  const snapshot = await protectedSupabaseRpc(env, 'phase4_admin_pricing_snapshot', {
+    p_actor_user_id: user.id,
+  });
+  return jsonResponse({ ok: true, pricing: snapshot, snapshot, data: snapshot }, 200, origin, allowedOrigin);
+}
+
+async function handleAdminPricingAction(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const { user } = await requirePricingAdministrator(request, env);
+  const action = normalizePricingAdminAction(await parseBoundedJson(request, 300_000));
+  const result = await protectedSupabaseRpc(env, 'phase4_admin_pricing_action', {
+    p_actor_user_id: user.id,
+    p_operation: action.operation,
+    p_request_key: action.requestKey,
+    p_expected_lock_version: action.expectedLockVersion,
+    p_draft_revision_id: action.draftRevisionId,
+    p_source_revision_id: action.sourceRevisionId,
+    p_publish_at: action.publishAt,
+    p_config: action.config,
+    p_reason: action.reason,
+    p_confirmed: action.confirmed,
+  });
+  return jsonResponse({ ok: true, action: result, data: result }, 200, origin, allowedOrigin);
+}
+
+async function handleAdminPricingAssetUpload(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const { user } = await requirePricingAdministrator(request, env);
+  const contentLength = Number(request.headers.get('Content-Length') || 0);
+  if (contentLength > PRICING_ASSET_LIMITS.maxBytes + 120_000) {
+    throw new PricingValidationError(
+      'PRICING_ASSET_TOO_LARGE',
+      'The QR image exceeds the 5 MiB limit.',
+      413,
+    );
+  }
+  let form;
+  try {
+    form = await request.formData();
+  } catch {
+    throw new PricingValidationError(
+      'INVALID_PRICING_ASSET',
+      'Choose one PNG or JPEG QR image to upload.',
+    );
+  }
+  const file = form.get('file') || form.get('asset') || form.get('image') || form.get('qr');
+  if (!file || typeof file.arrayBuffer !== 'function') {
+    throw new PricingValidationError(
+      'INVALID_PRICING_ASSET',
+      'Choose one PNG or JPEG QR image to upload.',
+    );
+  }
+  const requestKey = normalizePricingRequestKey(
+    form.get('requestKey') || request.headers.get('X-Request-ID'),
+  );
+  const image = validatePricingAsset(
+    new Uint8Array(await file.arrayBuffer()),
+    file.type,
+    file.name,
+  );
+  const sha256 = await sha256Hex(image.bytes);
+  const objectPath = [
+    'assets',
+    sha256.slice(0, 2),
+    `${crypto.randomUUID()}-${sha256}.${image.extension}`,
+  ].join('/');
+  await uploadPrivatePricingAsset(env, objectPath, image.bytes, image.mimeType);
+
+  let registered;
+  try {
+    registered = await protectedSupabaseRpc(env, 'phase4_admin_register_pricing_asset', {
+      p_actor_user_id: user.id,
+      p_request_key: requestKey,
+      p_bucket_id: PRICING_ASSET_BUCKET,
+      p_object_path: objectPath,
+      p_mime_type: image.mimeType,
+      p_size_bytes: image.bytes.byteLength,
+      p_width: image.width,
+      p_height: image.height,
+      p_sha256: sha256,
+    });
+  } catch (error) {
+    await deletePrivatePricingAsset(env, objectPath);
+    throw error;
+  }
+
+  const asset = normalizePricingAssetMetadata(registered);
+  if (asset.objectPath !== objectPath) {
+    await deletePrivatePricingAsset(env, objectPath);
+  }
+  return jsonResponse({
+    ok: true,
+    asset,
+    data: asset,
+    previewEndpoint: '/admin/pricing/asset',
+  }, 201, origin, allowedOrigin);
+}
+
+async function handleAdminPricingAsset(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const { user } = await requirePricingAdministrator(request, env);
+  const payload = await parseBoundedJson(request, 4_000);
+  const assetId = pricingUuid(payload?.assetId, 'pricing asset');
+  const result = await protectedSupabaseRpc(env, 'phase4_admin_pricing_asset', {
+    p_actor_user_id: user.id,
+    p_asset_id: assetId,
+  });
+  const metadata = normalizePricingAssetMetadata(result);
+  return streamPrivatePricingAsset(
+    request,
+    env,
+    metadata,
+    origin,
+    allowedOrigin,
+    { publicAsset: false },
+  );
 }
 
 async function reserveCommercialSubmission(
@@ -9036,14 +9336,11 @@ async function handlePaymentSubmit(request, env, origin, allowedOrigin) {
     );
   }
   const fields = normalizePaymentFields({
-    planCode: form.get('planCode'),
-    amountPhp: form.get('amountPhp'),
-    paymentMethod: form.get('paymentMethod'),
+    planVersionId: form.get('planVersionId'),
+    paymentChannelVersionId: form.get('paymentChannelVersionId'),
     paymentDate: form.get('paymentDate'),
-    transactionReference: form.get('transactionReference'),
-    note: form.get('note'),
+    paymentReference: form.get('paymentReference') ?? form.get('transactionReference'),
   });
-  const requestKey = normalizeRequestKey(request.headers.get('X-Request-ID'));
   const proof = form.get('proof');
   if (!proof || typeof proof.arrayBuffer !== 'function') {
     throw new PaymentValidationError('PAYMENT_PROOF_REQUIRED', 'Upload a PNG, JPEG, or PDF payment proof.');
@@ -9059,32 +9356,28 @@ async function handlePaymentSubmit(request, env, origin, allowedOrigin) {
   await uploadPrivateProof(env, objectPath, bytes, mimeType);
   let result;
   try {
-    result = await commerceRpc(env, 'phase4_create_payment_request', {
+    result = await commerceRpc(env, 'phase4_create_payment_request_v2', {
       p_user_id: user.id,
-      p_plan_code: fields.planCode,
-      p_amount_php: fields.amountPhp,
-      p_payment_method: fields.paymentMethod,
+      p_plan_version_id: fields.planVersionId,
+      p_payment_channel_version_id: fields.paymentChannelVersionId,
       p_payment_date: fields.paymentDate,
-      p_transaction_reference: fields.transactionReference,
-      p_student_note: fields.note,
-      p_proof_object_path: objectPath,
-      p_proof_original_name: originalName.slice(0, 180),
+      p_payment_reference: fields.paymentReference,
+      p_proof_bucket: 'payment-proofs',
+      p_proof_path: objectPath,
       p_proof_mime_type: mimeType,
       p_proof_size_bytes: bytes.byteLength,
       p_proof_sha256: proofSha256,
-      p_request_key: requestKey,
     });
   } catch (error) {
     await deletePrivateProof(env, objectPath);
     throw error;
   }
   if (result?.replayed) await deletePrivateProof(env, objectPath);
+  const payment = sanitizeTrustedPayment(result);
   return jsonResponse({
     ok: true,
-    payment: result,
-    message: result?.provisionalAccessExpiresAt
-      ? 'Payment proof submitted. Your one-time 24-hour provisional Early Access is active while verification is pending.'
-      : 'Payment proof submitted for verification. A prior provisional grant cannot be extended or renewed.',
+    payment,
+    message: 'Payment proof submitted for secure verification under the published plan.',
   }, 201, origin, allowedOrigin);
 }
 
@@ -9487,6 +9780,19 @@ export default {
     const requestOrigin = request.headers.get('Origin') || '';
     try {
       const pathname = new URL(request.url).pathname.replace(/\/+$/, '') || '/';
+      const publicPricingAssetMatch = pathname.match(
+        /^\/pricing\/assets\/([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/iu,
+      );
+      if (request.method === 'GET' && publicPricingAssetMatch) {
+        const assetOrigin = requestOrigin ? assertOrigin(request, allowedOrigin) : allowedOrigin;
+        return await handlePublicPricingAsset(
+          request,
+          env,
+          publicPricingAssetMatch[1],
+          assetOrigin,
+          allowedOrigin,
+        );
+      }
       const origin = assertOrigin(request, allowedOrigin);
       if (request.method === 'OPTIONS') {
         return new Response(null, { status: 204, headers: corsHeaders(origin, allowedOrigin) });
@@ -9739,6 +10045,18 @@ export default {
       if (pathname === '/admin/dashboard') {
         return await handleAdminDashboard(request, env, origin, allowedOrigin);
       }
+      if (pathname === '/admin/pricing/query') {
+        return await handleAdminPricingQuery(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/pricing/action') {
+        return await handleAdminPricingAction(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/pricing/assets/upload') {
+        return await handleAdminPricingAssetUpload(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/pricing/asset') {
+        return await handleAdminPricingAsset(request, env, origin, allowedOrigin);
+      }
       if (pathname === '/admin/global-beta'
           || pathname === '/admin/global-beta/status') {
         return await handleAdminGlobalBetaStatus(request, env, origin, allowedOrigin);
@@ -9813,6 +10131,7 @@ export default {
         || error instanceof AccessValidationError
         || error instanceof PrivateBetaError
         || error instanceof PaymentValidationError
+        || error instanceof PricingValidationError
         || error instanceof ForumValidationError
         || error instanceof ExaminationValidationError
         || error instanceof ReleaseContentError

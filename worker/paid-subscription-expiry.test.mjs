@@ -114,7 +114,7 @@ test('Worker normalizes paid expiry without reviving or advertising trial tokens
   assert.ok(error instanceof AccessValidationError);
   assert.equal(error.code, 'PAID_SUBSCRIPTION_EXPIRED');
   assert.equal(error.status, 403);
-  assert.match(error.message, /renew Early Access/i);
+  assert.match(error.message, /current published plan/i);
   assert.match(error.message, /Home and Examination Room remain available/i);
   assert.doesNotMatch(error.message, /five|trial token/i);
 });
@@ -167,7 +167,7 @@ test('protected Bar question route trusts the backend expiry denial and makes no
 
     assert.equal(response.status, 403);
     assert.equal(payload.error.code, 'PAID_SUBSCRIPTION_EXPIRED');
-    assert.match(payload.error.message, /renew Early Access/i);
+    assert.match(payload.error.message, /current published plan/i);
     assert.equal(upstreamCalls.length, 2);
   } finally {
     globalThis.fetch = originalFetch;
@@ -241,7 +241,7 @@ test('browser expiry recovery is explicit while Home and Examination Room stay o
   assert.match(accountFrontend, /Paid Bar access expired/);
   assert.match(accountFrontend, /Home and Examination Room remain available/);
   assert.match(accountFrontend, /original five-token allowance does not reset/);
-  assert.match(accountFrontend, /Renew Early Access — ₱149/);
+  assert.match(accountFrontend, /View current plan/);
   assert.doesNotMatch(
     accountFrontend.slice(
       accountFrontend.indexOf('if (paidExpired) {', accountFrontend.indexOf('function accessSummaryMarkup')),

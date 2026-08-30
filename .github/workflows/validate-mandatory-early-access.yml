@@ -10,6 +10,8 @@ on:
       - 'assets/phase2-config.js'
       - 'assets/phase2-experience.js'
       - 'assets/phase2.css'
+      - 'assets/pricing-renderer.js'
+      - 'assets/pricing-renderer.css'
       - 'assets/profile-photo.js'
       - 'assets/pedro-navigation.js'
       - 'assets/pedro.js'
@@ -28,6 +30,8 @@ on:
       - 'assets/examinations.js'
       - 'assets/examinations.css'
       - 'admin/admin.js'
+      - 'admin/pricing-editor.js'
+      - 'admin/pricing-editor.css'
       - 'admin/index.html'
       - 'admin/admin-observatory.css'
       - 'admin/examination-room-admin.css'
@@ -54,6 +58,7 @@ on:
       - 'worker/examiner-core.test.mjs'
       - 'worker/examinations-routes.test.mjs'
       - 'worker/payment-core.mjs'
+      - 'worker/pricing-*.mjs'
       - 'worker/maintenance-entry.mjs'
       - 'worker/commercial-access-gate.test.mjs'
       - 'worker/access-choice-flow.test.mjs'
@@ -132,6 +137,7 @@ on:
       - 'scripts/test-auth-route-overlay.mjs'
       - 'scripts/test-design-correction-release.mjs'
       - 'scripts/test-phase2-contract.mjs'
+      - 'scripts/test-pricing-*.mjs'
       - 'scripts/test-phase4-release4.mjs'
       - 'scripts/test-private-beta-landing.mjs'
       - 'scripts/test-commercial-launch-staging.mjs'
@@ -165,6 +171,8 @@ on:
       - 'supabase/tests/database/**'
       - 'supabase/migrations/20260821120000_soft_launch_five_token_trial.sql'
       - 'supabase/migrations/20260827003000_paid_subscription_expiry_access.sql'
+      - 'supabase/migrations/20260830054727_admin_pricing_revisions.sql'
+      - 'supabase/tests/*pricing*revision*.sql'
       - 'supabase/migrations/20260818123000_require_early_access.sql'
       - 'supabase/migrations/20260818123100_private_payment_verifiers.sql'
       - 'supabase/migrations/20260818133000_restore_two_option_access_choice.sql'
@@ -196,11 +204,13 @@ jobs:
         run: |
           node --check assets/phase2-config.js
           node --check assets/phase2-experience.js
+          node --check assets/pricing-renderer.js
           node --check assets/maintenance-gate.js
           node --check assets/phase4-experience.js
           node --check assets/feature-loader.js
           node --check assets/examinations.js
           node --check admin/admin.js
+          node --check admin/pricing-editor.js
           node --check worker/access-core.mjs
           node --check worker/commercial-entry.mjs
           node --check worker/duediligence-2026-routes.mjs
@@ -252,6 +262,7 @@ jobs:
           node scripts/test-private-beta-landing.mjs
           node scripts/test-auth-session-persistence.mjs
           node scripts/test-phase2-contract.mjs
+          node scripts/test-pricing-public-contract.mjs
           node scripts/test-auth-route-overlay.mjs
           node scripts/test-onboarding-flow.mjs
           node scripts/test-lifetime-grade-ui.mjs

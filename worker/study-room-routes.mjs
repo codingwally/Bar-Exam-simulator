@@ -16,17 +16,21 @@ function normalizedAdministratorRole(value) {
   return String(value || '').trim().toLowerCase();
 }
 
-function requireAuthorizedAdmin(authorization) {
+function authorizedAdministrator(authorization) {
   const role = normalizedAdministratorRole(authorization?.role);
-  if (authorization?.authorized !== true || !STUDY_ROOM_ADMIN_ROLES.has(role)) {
-    throw new StudyRoomError(
-      'STUDY_ROOM_ADMIN_REQUIRED',
-      'The live Study Room is currently limited to authorized administrators.',
-      403,
-      'The preview remains available from the Due Diligence home page.',
-    );
-  }
-  return { ...authorization, role };
+  return authorization?.authorized === true && STUDY_ROOM_ADMIN_ROLES.has(role)
+    ? { ...authorization, role }
+    : null;
+}
+
+function requireAdministrator(context) {
+  if (context?.isAdministrator === true) return context.authorization;
+  throw new StudyRoomError(
+    'STUDY_ROOM_ADMIN_REQUIRED',
+    'Only a Due Diligence administrator can open a Study Room.',
+    403,
+    'Join a room after an administrator opens it.',
+  );
 }
 
 function requirePrivilegedModerator(authorization) {
@@ -50,6 +54,7 @@ export function createStudyRoomHandlers(dependencies) {
   const {
     authenticate,
     authorizeAdmin,
+    authorizeMember,
     parseJson,
     rateLimit,
     respond,
@@ -73,19 +78,44 @@ export function createStudyRoomHandlers(dependencies) {
         'Return to Due Diligence, sign in, then open the Study Room again.',
       );
     }
-    const authorization = requireAuthorizedAdmin(await authorizeAdmin(env, user));
-    return { user, authorization };
+    const authorization = authorizedAdministrator(await authorizeAdmin(env, user));
+    if (authorization) {
+      return {
+        user,
+        authorization,
+        memberAccess: null,
+        role: authorization.role,
+        isAdministrator: true,
+      };
+    }
+    const memberAccess = await authorizeMember(env, user);
+    if (memberAccess?.allowed !== true) {
+      throw new StudyRoomError(
+        'STUDY_ROOM_SUBSCRIPTION_REQUIRED',
+        'The Study Room is available with an active Due Diligence subscription.',
+        403,
+        'Open Plans & Pricing to subscribe, then try again.',
+      );
+    }
+    return {
+      user,
+      authorization: null,
+      memberAccess,
+      role: 'member',
+      isAdministrator: false,
+    };
   }
 
   return Object.freeze({
     async access(request, env, origin, allowedOrigin) {
-      const { authorization } = await authorizedContext(request, env, 'access');
+      const context = await authorizedContext(request, env, 'access');
       const room = describeRoom(env);
       return respond({
         ok: true,
         allowed: true,
-        role: authorization.role,
-        roomName: room.roomName,
+        role: context.role,
+        administrator: context.isAdministrator,
+        canCreateRooms: context.isAdministrator,
         maxRooms: room.maxRooms,
         maxParticipants: room.maxParticipants,
         recording: room.recording,
@@ -93,20 +123,23 @@ export function createStudyRoomHandlers(dependencies) {
     },
 
     async rooms(request, env, origin, allowedOrigin) {
-      const { authorization } = await authorizedContext(request, env, 'rooms');
+      const context = await authorizedContext(request, env, 'rooms');
       const body = await parseJson(request, 4_096);
       const operation = String(body?.operation || 'list').trim().toLowerCase();
       if (operation === 'list') {
-        const catalog = await listRooms(env);
+        const catalog = await listRooms(env, { isAdministrator: context.isAdministrator });
         return respond({
           ok: true,
           allowed: true,
-          role: authorization.role,
+          role: context.role,
+          administrator: context.isAdministrator,
+          canCreateRooms: context.isAdministrator,
           ...catalog,
         }, 200, origin, allowedOrigin);
       }
       if (operation === 'create') {
-        const result = await createRoom(env, body?.roomKey);
+        requireAdministrator(context);
+        const result = await createRoom(env, body?.roomKey, { isAdministrator: true });
         return respond({
           ok: true,
           created: result.created,
@@ -121,13 +154,14 @@ export function createStudyRoomHandlers(dependencies) {
     },
 
     async join(request, env, origin, allowedOrigin) {
-      const { user } = await authorizedContext(request, env, 'join');
+      const context = await authorizedContext(request, env, 'join');
       const body = await parseJson(request, 4_096);
       const credential = await issueCredential(
         env,
-        user,
+        context.user,
         requestedRoomKey(body),
         body?.nickname,
+        { isAdministrator: context.isAdministrator },
       );
       return respond({
         ok: true,
@@ -136,6 +170,9 @@ export function createStudyRoomHandlers(dependencies) {
         room_key: credential.roomKey,
         room_label: credential.roomLabel,
         room_name: credential.roomName,
+        room_kind: credential.roomKind,
+        microphone_allowed: credential.microphoneAllowed,
+        administrator: credential.administrator,
         participant_identity: credential.participantIdentity,
         participant_name: credential.participantName,
         focus_started_at: credential.focusStartedAt,
@@ -145,24 +182,24 @@ export function createStudyRoomHandlers(dependencies) {
     },
 
     async moderate(request, env, origin, allowedOrigin) {
-      const { user, authorization } = await authorizedContext(request, env, 'moderate');
+      const context = await authorizedContext(request, env, 'moderate');
       const body = await parseJson(request, 6_144);
       const operation = String(body?.operation || '').trim().toLowerCase();
       const roomKey = requestedRoomKey(body);
       let result;
       if (operation === 'mute') {
-        requirePrivilegedModerator(authorization);
+        requirePrivilegedModerator(context.authorization);
         result = await muteParticipant(env, roomKey, body?.participantIdentity, body?.trackSid);
       } else if (operation === 'rename') {
         result = await renameParticipant(
           env,
-          user.id,
+          context.user.id,
           roomKey,
           body?.participantIdentity,
           body?.nickname,
         );
       } else if (operation === 'remove') {
-        requirePrivilegedModerator(authorization);
+        requirePrivilegedModerator(context.authorization);
         result = await removeParticipant(env, roomKey, body?.participantIdentity);
       } else {
         throw new StudyRoomError(

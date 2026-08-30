@@ -25,7 +25,14 @@ const APPROVED_STAGING_SUPABASE = "https://hlzqmreeoghbldnhlybr.supabase.co";
 const APPROVED_STAGING_WORKER =
   "https://duediligence-examinations-staging.wallyesteban1993.workers.dev";
 const APPROVED_STAGING_ROOM = "dd-study-room-admin-beta-staging-v1";
-const STUDY_ROOM_MAX_ROOMS = 4;
+const STUDY_ROOM_MAX_ROOMS = 5;
+const STUDY_ROOM_SLOTS = Object.freeze([
+  Object.freeze({ roomKey: "1", label: "Library", kind: "library", microphoneAllowed: false, adminOnly: false }),
+  Object.freeze({ roomKey: "2", label: "Room 1", kind: "general", microphoneAllowed: true, adminOnly: false }),
+  Object.freeze({ roomKey: "3", label: "Room 2", kind: "general", microphoneAllowed: true, adminOnly: false }),
+  Object.freeze({ roomKey: "4", label: "Room 3", kind: "general", microphoneAllowed: true, adminOnly: false }),
+  Object.freeze({ roomKey: "5", label: "Inner Chamber", kind: "inner-chamber", microphoneAllowed: true, adminOnly: true }),
+]);
 const APPROVED_STAGING_ROOMS = Object.freeze(
   Array.from({ length: STUDY_ROOM_MAX_ROOMS }, (_unused, index) =>
     index === 0
@@ -55,7 +62,7 @@ function assertPlainObject(value, message) {
 
 function approvedRoomKey(value) {
   const roomKey = String(value || "").trim();
-  assert.match(roomKey, /^[1-4]$/u, "The smoke requested an invalid room slot.");
+  assert.match(roomKey, /^[1-5]$/u, "The smoke requested an invalid room slot.");
   return roomKey;
 }
 
@@ -165,15 +172,16 @@ export function validateStudyRoomJwt(token, expected) {
     true,
     "The token is missing its canSubscribe grant.",
   );
-  assert.equal(
-    video.canPublishData,
-    false,
-    "The token canPublishData grant must remain disabled.",
-  );
+  assert.equal(video.canPublishData, true, "Room chat requires LiveKit data publication.");
+  const expectedSources = expected.microphoneAllowed === false
+    ? ["camera", "screen_share"]
+    : ["camera", "microphone", "screen_share", "screen_share_audio"];
   assert.deepEqual(
     [...(video.canPublishSources || [])].sort(),
-    ["camera", "microphone"],
-    "The Study Room token may publish only camera and microphone tracks.",
+    [...expectedSources].sort(),
+    expected.microphoneAllowed === false
+      ? "Library must deny microphone and screen-share audio at the token layer."
+      : "Standard Study Rooms must allow camera, microphone, and presentation sources.",
   );
   assert.notEqual(
     video.roomAdmin,
@@ -185,43 +193,12 @@ export function validateStudyRoomJwt(token, expected) {
     true,
     "Participant tokens must not contain room-creation grants.",
   );
-  assert.notEqual(
-    video.canUpdateOwnMetadata,
-    true,
-    "Participant tokens must not contain metadata-update grants.",
-  );
-
-  const roomConfig = assertPlainObject(
+  assert.equal(video.canUpdateOwnMetadata, true, "Raise hand requires participant attributes.");
+  assert.equal(
     claims.roomConfig,
-    "The Study Room token is missing its constrained room configuration.",
+    undefined,
+    "A join token must never auto-create or silently repair a room.",
   );
-  assert.equal(roomConfig.name, expected.roomName);
-  assert.equal(roomConfig.maxParticipants, STUDY_ROOM_MAX_PARTICIPANTS);
-  assert.equal(roomConfig.emptyTimeout, 600);
-  assert.equal(roomConfig.departureTimeout, 120);
-  assert.ok(
-    typeof roomConfig.metadata === "string" &&
-      Buffer.byteLength(roomConfig.metadata, "utf8") <= 512,
-    "The Study Room configuration metadata is missing or unbounded.",
-  );
-  const roomMetadata = assertPlainObject(
-    JSON.parse(roomConfig.metadata),
-    "The Study Room configuration metadata is invalid.",
-  );
-  assert.deepEqual(
-    Object.keys(roomMetadata).sort(),
-    ["createdAt", "label", "roomKey", "schema"],
-    "The Study Room metadata must remain PII-free and server-owned.",
-  );
-  assert.equal(roomMetadata.schema, "duediligence-study-room-slot-v1");
-  assert.equal(roomMetadata.roomKey, expected.roomKey);
-  assert.equal(roomMetadata.label, `Study Room ${expected.roomKey}`);
-  assert.ok(
-    Number.isFinite(Date.parse(roomMetadata.createdAt)),
-    "The Study Room metadata is missing its creation time.",
-  );
-  assert.equal(roomConfig.metadata.includes(expected.identity), false);
-  assert.equal(roomConfig.metadata.includes(expected.nickname), false);
   assert.ok(
     !claims.metadata,
     "Participant tokens must not contain personal metadata.",
@@ -402,6 +379,33 @@ async function assignSyntheticRole(configuration, userId, role, assignedBy) {
   assert.equal(body[0]?.role, role);
 }
 
+async function grantSyntheticFoundingAccess(configuration, actorUserId, member) {
+  const expiresAt = new Date(Date.now() + 3_600_000).toISOString();
+  const { body } = await requestJson(
+    `${configuration.supabaseUrl}/rest/v1/free_beta_access?on_conflict=user_id`,
+    {
+      method: "POST",
+      headers: {
+        ...serviceHeaders(configuration, true),
+        Prefer: "resolution=merge-duplicates,return=representation",
+      },
+      body: JSON.stringify({
+        user_id: member.id,
+        enabled: true,
+        expires_at: expiresAt,
+        reason: "Study Room subscriber staging verification",
+        created_by: actorUserId,
+        updated_by: actorUserId,
+        access_program: "founding_beta_2026",
+      }),
+    },
+    [200, 201],
+  );
+  assert.equal(Array.isArray(body) ? body.length : 0, 1);
+  assert.equal(body[0]?.enabled, true);
+  assert.equal(body[0]?.access_program, "founding_beta_2026");
+}
+
 async function workerPost(
   configuration,
   path,
@@ -436,17 +440,19 @@ async function workerPost(
   return { body, response };
 }
 
-function validateAccessResponse(body, expectedRole) {
+function validateAccessResponse(body, expectedRole, expectedAdministrator = true) {
   assert.equal(body?.ok, true);
   assert.equal(body?.allowed, true);
   assert.equal(body?.role, expectedRole);
-  assert.equal(body?.roomName, APPROVED_STAGING_ROOM);
+  assert.equal(body?.administrator, expectedAdministrator);
+  assert.equal(body?.canCreateRooms, expectedAdministrator);
   assert.equal(body?.maxRooms, STUDY_ROOM_MAX_ROOMS);
   assert.equal(body?.maxParticipants, STUDY_ROOM_MAX_PARTICIPANTS);
   assert.equal(body?.recording, false);
 }
 
 function validatePublicRoomDescriptor(room, expectedRoomKey, expectedActive) {
+  const slot = STUDY_ROOM_SLOTS[Number(approvedRoomKey(expectedRoomKey)) - 1];
   const descriptor = assertPlainObject(
     room,
     `Study Room ${expectedRoomKey} is missing from the room catalog.`,
@@ -455,16 +461,26 @@ function validatePublicRoomDescriptor(room, expectedRoomKey, expectedActive) {
     Object.keys(descriptor).sort(),
     [
       "active",
+      "adminOnly",
+      "canCreate",
+      "canJoin",
       "capacity",
       "focusStartedAt",
+      "kind",
       "label",
+      "microphoneAllowed",
       "participantCount",
       "roomKey",
     ],
     "The public room descriptor exposed an unexpected field.",
   );
   assert.equal(descriptor.roomKey, expectedRoomKey);
-  assert.equal(descriptor.label, `Study Room ${expectedRoomKey}`);
+  assert.equal(descriptor.label, slot.label);
+  assert.equal(descriptor.kind, slot.kind);
+  assert.equal(descriptor.microphoneAllowed, slot.microphoneAllowed);
+  assert.equal(descriptor.adminOnly, slot.adminOnly);
+  assert.equal(typeof descriptor.canCreate, "boolean");
+  assert.equal(typeof descriptor.canJoin, "boolean");
   assert.equal(typeof descriptor.active, "boolean");
   if (typeof expectedActive === "boolean") {
     assert.equal(descriptor.active, expectedActive);
@@ -488,10 +504,12 @@ function validatePublicRoomDescriptor(room, expectedRoomKey, expectedActive) {
   return descriptor;
 }
 
-function validateRoomCatalog(body, expectedRole, expectedActiveKeys = null) {
+function validateRoomCatalog(body, expectedRole, expectedActiveKeys = null, expectedAdministrator = true) {
   assert.equal(body?.ok, true);
   assert.equal(body?.allowed, true);
   assert.equal(body?.role, expectedRole);
+  assert.equal(body?.administrator, expectedAdministrator);
+  assert.equal(body?.canCreateRooms, expectedAdministrator);
   assert.equal(body?.maxRooms, STUDY_ROOM_MAX_ROOMS);
   assert.equal(body?.maxParticipants, STUDY_ROOM_MAX_PARTICIPANTS);
   assert.equal(body?.recording, false);
@@ -506,6 +524,10 @@ function validateRoomCatalog(body, expectedRole, expectedActiveKeys = null) {
       activeKeys ? activeKeys.has(String(index + 1)) : undefined,
     ),
   );
+  for (const room of rooms) {
+    assert.equal(room.canCreate, expectedAdministrator);
+    assert.equal(room.canJoin, room.adminOnly ? expectedAdministrator : true);
+  }
   const serialized = JSON.stringify(body);
   for (const roomName of APPROVED_STAGING_ROOMS) {
     assert.equal(
@@ -547,14 +569,14 @@ async function waitForRoomParticipantCounts(
   for (let attempt = 0; attempt < 10; attempt += 1) {
     const catalog = await workerPost(
       configuration,
-      "/admin/study-room/rooms",
+      "/study-room/rooms",
       token,
       { operation: "list" },
     );
     const rooms = validateRoomCatalog(
       catalog.body,
       expectedRole,
-      ["1", "2", "3", "4"],
+      ["1", "2", "3", "4", "5"],
     );
     const settled = Object.entries(expectedMinimums).every(
       ([roomKey, minimum]) =>
@@ -563,7 +585,7 @@ async function waitForRoomParticipantCounts(
     if (settled) return rooms;
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
-  throw new Error("The four-room participant catalog did not settle in time.");
+  throw new Error("The five-room participant catalog did not settle in time.");
 }
 
 function validateJoinResponse(body, expectedNickname, issuer, expectedRoomKey) {
@@ -571,8 +593,11 @@ function validateJoinResponse(body, expectedNickname, issuer, expectedRoomKey) {
   const roomName = approvedRoomName(roomKey);
   assert.equal(body?.ok, true);
   assert.equal(body?.room_key, roomKey);
-  assert.equal(body?.room_label, `Study Room ${roomKey}`);
+  const slot = STUDY_ROOM_SLOTS[Number(roomKey) - 1];
+  assert.equal(body?.room_label, slot.label);
   assert.equal(body?.room_name, roomName);
+  assert.equal(body?.room_kind, slot.kind);
+  assert.equal(body?.microphone_allowed, slot.microphoneAllowed);
   assert.equal(body?.participant_name, expectedNickname);
   assert.match(
     String(body?.participant_identity || ""),
@@ -603,6 +628,7 @@ function validateJoinResponse(body, expectedNickname, issuer, expectedRoomKey) {
     nickname: expectedNickname,
     roomKey,
     roomName,
+    microphoneAllowed: slot.microphoneAllowed,
   });
   return body;
 }
@@ -657,6 +683,32 @@ function waitForSubscribedTrack(room, participantIdentity, source, label) {
     publication,
     track,
   }));
+}
+
+async function sendAndProveRoomMessage(sendingRoom, receivingRoom, senderIdentity) {
+  const topic = "duediligence.study-room.chat.v1";
+  const text = "Staging study partner check";
+  const received = withTimeout(
+    "room chat delivery",
+    new Promise((resolve, reject) => {
+      try {
+        receivingRoom.registerTextStreamHandler(topic, async (reader, participant) => {
+          try {
+            assert.equal(participant?.identity, senderIdentity);
+            resolve(await reader.readAll());
+          } catch (error) {
+            reject(error);
+          }
+        });
+      } catch (error) {
+        reject(error);
+      }
+    }),
+  );
+  const info = await sendingRoom.localParticipant.sendText(text, { topic });
+  assert.equal(info.topic, topic);
+  assert.ok(info.streamId);
+  assert.equal(await received, text);
 }
 
 function syntheticAudioFrame(sequence) {
@@ -814,6 +866,40 @@ async function publishAndProveSyntheticMedia(
   return { audioPublication, videoPublication };
 }
 
+async function publishAndProveScreenShare(
+  publisherRoom,
+  subscriberRoom,
+  publisherIdentity,
+  resources,
+) {
+  const subscribed = waitForSubscribedTrack(
+    subscriberRoom,
+    publisherIdentity,
+    TrackSource.SOURCE_SCREENSHARE,
+    "screen-share subscription",
+  );
+  const source = new VideoSource(640, 360);
+  const track = LocalVideoTrack.createVideoTrack("synthetic-screen-share", source);
+  resources.tracks.add(track);
+  const options = new TrackPublishOptions();
+  options.source = TrackSource.SOURCE_SCREENSHARE;
+  const localPublication = await withTimeout(
+    "screen-share publication",
+    publisherRoom.localParticipant.publishTrack(track, options),
+  );
+  const remote = await subscribed;
+  assert.equal(remote.publication.sid, localPublication.sid);
+  assert.equal(remote.publication.kind, TrackKind.KIND_VIDEO);
+  const reader = new VideoStream(remote.track).getReader();
+  resources.readers.add(reader);
+  const visible = withTimeout("screen-share frame delivery", reader.read());
+  source.captureFrame(syntheticVideoFrame(1, 640, 360));
+  const event = await visible;
+  assert.equal(event.done, false);
+  assert.equal(event.value?.frame?.width, 640);
+  assert.equal(event.value?.frame?.height, 360);
+}
+
 async function publishAndProveReconnectAudio(
   publisherRoom,
   subscriberRoom,
@@ -900,17 +986,19 @@ async function deleteSyntheticUsers(configuration, createdUsers) {
     const filter = createdUsers
       .map((user) => encodeURIComponent(user.id))
       .join(",");
-    const { body } = await requestJson(
-      `${configuration.supabaseUrl}/rest/v1/user_roles?user_id=in.(${filter})&select=user_id`,
-      { headers: serviceHeaders(configuration) },
-    ).catch((error) => {
-      errors.push(error);
-      return { body: null };
-    });
-    if (body !== null && (!Array.isArray(body) || body.length !== 0)) {
-      errors.push(
-        new Error("Synthetic Supabase role rows remained after user deletion."),
-      );
+    for (const table of ["user_roles", "free_beta_access"]) {
+      const { body } = await requestJson(
+        `${configuration.supabaseUrl}/rest/v1/${table}?user_id=in.(${filter})&select=user_id`,
+        { headers: serviceHeaders(configuration) },
+      ).catch((error) => {
+        errors.push(error);
+        return { body: null };
+      });
+      if (body !== null && (!Array.isArray(body) || body.length !== 0)) {
+        errors.push(
+          new Error(`Synthetic Supabase ${table} rows remained after user deletion.`),
+        );
+      }
     }
   }
   return errors;
@@ -1001,6 +1089,32 @@ async function runPositiveSmoke() {
     );
     console.log("STUDY_ROOM_STAGING_POSITIVE: non_admin_denied=true");
 
+    checkpoint = "subscriber_access";
+    await grantSyntheticFoundingAccess(configuration, primaryAdmin.id, student);
+    const memberAccess = await workerPost(
+      configuration,
+      "/study-room/access",
+      student.token,
+      {},
+    );
+    validateAccessResponse(memberAccess.body, "member", false);
+    const memberInitialCatalog = await workerPost(
+      configuration,
+      "/study-room/rooms",
+      student.token,
+      { operation: "list" },
+    );
+    validateRoomCatalog(memberInitialCatalog.body, "member", null, false);
+    const memberCreateDenied = await workerPost(
+      configuration,
+      "/study-room/rooms",
+      student.token,
+      { operation: "create", roomKey: "2" },
+      [403],
+    );
+    assert.equal(memberCreateDenied.body?.error?.code, "STUDY_ROOM_ADMIN_REQUIRED");
+    console.log("STUDY_ROOM_STAGING_POSITIVE: subscriber_access=true subscriber_create_denied=true");
+
     checkpoint = "admin_access";
     const primaryAccess = await workerPost(
       configuration,
@@ -1027,7 +1141,7 @@ async function runPositiveSmoke() {
       "STUDY_ROOM_STAGING_POSITIVE: authenticated_admin_access=true founder_admin_access=true",
     );
 
-    checkpoint = "four_room_catalog_and_creation";
+    checkpoint = "five_room_catalog_and_creation";
     const initialCatalog = await workerPost(
       configuration,
       "/admin/study-room/rooms",
@@ -1054,9 +1168,9 @@ async function runPositiveSmoke() {
       secondaryAdmin.token,
       { operation: "list" },
     );
-    validateRoomCatalog(fullCatalog.body, "admin", ["1", "2", "3", "4"]);
+    validateRoomCatalog(fullCatalog.body, "admin", ["1", "2", "3", "4", "5"]);
 
-    const fifthRoom = await workerPost(
+    const sixthRoom = await workerPost(
       configuration,
       "/admin/study-room/rooms",
       primaryAdmin.token,
@@ -1064,14 +1178,14 @@ async function runPositiveSmoke() {
       [409],
     );
     validateRejectedRoomOperation(
-      fifthRoom.body,
+      sixthRoom.body,
       "STUDY_ROOM_ROOM_LIMIT_REACHED",
     );
     const invalidRoom = await workerPost(
       configuration,
       "/admin/study-room/rooms",
       primaryAdmin.token,
-      { operation: "create", roomKey: "5" },
+      { operation: "create", roomKey: "6" },
       [400],
     );
     validateRejectedRoomOperation(
@@ -1090,55 +1204,94 @@ async function runPositiveSmoke() {
       "STUDY_ROOM_ROOM_INVALID",
     );
     console.log(
-      "STUDY_ROOM_STAGING_POSITIVE: four_room_limit=true raw_room_names_rejected=true",
+      "STUDY_ROOM_STAGING_POSITIVE: five_room_limit=true raw_room_names_rejected=true",
     );
 
-    checkpoint = "admin_join_and_jwt";
-    const primaryNickname = "Participant 101";
-    const secondaryNickname = "Participant 202";
-    const founderNickname = "Participant 303";
+    checkpoint = "member_admin_join_and_jwt";
+    const memberNickname = "Participant #404";
+    const primaryNickname = "Participant #101";
+    const secondaryNickname = "Participant #202";
+    const founderNickname = "Participant #303";
+    const memberLibraryJoin = validateJoinResponse(
+      (
+        await workerPost(
+          configuration,
+          "/study-room/join",
+          student.token,
+          { roomKey: "1", nickname: memberNickname },
+          [201],
+        )
+      ).body,
+      memberNickname,
+      configuration.liveKitApiKey,
+      "1",
+    );
+    assert.equal(memberLibraryJoin.microphone_allowed, false);
+    const memberInnerDenied = await workerPost(
+      configuration,
+      "/study-room/join",
+      student.token,
+      { roomKey: "5", nickname: memberNickname },
+      [403],
+    );
+    assert.equal(memberInnerDenied.body?.error?.code, "STUDY_ROOM_ADMIN_ROOM_REQUIRED");
     const primaryJoin = validateJoinResponse(
       (
         await workerPost(
           configuration,
-          "/admin/study-room/join",
+          "/study-room/join",
           primaryAdmin.token,
-          { roomKey: "1", nickname: primaryNickname },
+          { roomKey: "2", nickname: primaryNickname },
           [201],
         )
       ).body,
       primaryNickname,
       configuration.liveKitApiKey,
-      "1",
+      "2",
     );
     const secondaryJoin = validateJoinResponse(
       (
         await workerPost(
           configuration,
-          "/admin/study-room/join",
+          "/study-room/join",
           secondaryAdmin.token,
-          { roomKey: "1", nickname: secondaryNickname },
+          { roomKey: "2", nickname: secondaryNickname },
           [201],
         )
       ).body,
       secondaryNickname,
       configuration.liveKitApiKey,
-      "1",
+      "2",
     );
     const founderJoin = validateJoinResponse(
       (
         await workerPost(
           configuration,
-          "/admin/study-room/join",
+          "/study-room/join",
           founderAdmin.token,
-          { roomKey: "2", nickname: founderNickname },
+          { roomKey: "3", nickname: founderNickname },
           [201],
         )
       ).body,
       founderNickname,
       configuration.liveKitApiKey,
-      "2",
+      "3",
     );
+    const innerJoin = validateJoinResponse(
+      (
+        await workerPost(
+          configuration,
+          "/study-room/join",
+          founderAdmin.token,
+          { roomKey: "5", nickname: founderNickname },
+          [201],
+        )
+      ).body,
+      founderNickname,
+      configuration.liveKitApiKey,
+      "5",
+    );
+    assert.equal(innerJoin.administrator, true);
     assert.notEqual(
       primaryJoin.participant_identity,
       secondaryJoin.participant_identity,
@@ -1147,7 +1300,7 @@ async function runPositiveSmoke() {
     assert.equal(primaryJoin.server_url, founderJoin.server_url);
     assert.equal(primaryJoin.focus_started_at, secondaryJoin.focus_started_at);
     assert.notEqual(primaryJoin.room_name, founderJoin.room_name);
-    console.log("STUDY_ROOM_STAGING_POSITIVE: jwt_claims=true");
+    console.log("STUDY_ROOM_STAGING_POSITIVE: jwt_claims=true library_silent=true inner_chamber_admin_only=true");
 
     checkpoint = "livekit_connect";
     const primaryRoom = new Room();
@@ -1209,40 +1362,63 @@ async function runPositiveSmoke() {
       isolatedRoom.localParticipant?.identity,
       founderJoin.participant_identity,
     );
-    assert.equal(primaryRoom.name, approvedRoomName("1"));
-    assert.equal(secondaryRoom.name, approvedRoomName("1"));
-    assert.equal(isolatedRoom.name, approvedRoomName("2"));
+    assert.equal(primaryRoom.name, approvedRoomName("2"));
+    assert.equal(secondaryRoom.name, approvedRoomName("2"));
+    assert.equal(isolatedRoom.name, approvedRoomName("3"));
     assert.equal(
       remoteParticipantIdentities(primaryRoom).has(
         founderJoin.participant_identity,
       ),
       false,
-      "A participant in Study Room 2 leaked into Study Room 1.",
+      "A participant in Room 2 leaked into Room 1.",
     );
     assert.equal(
       remoteParticipantIdentities(isolatedRoom).has(
         primaryJoin.participant_identity,
       ),
       false,
-      "A participant in Study Room 1 leaked into Study Room 2.",
+      "A participant in Room 1 leaked into Room 2.",
     );
     assert.equal(
       remoteParticipantIdentities(isolatedRoom).has(
         secondaryJoin.participant_identity,
       ),
       false,
-      "A second participant in Study Room 1 leaked into Study Room 2.",
+      "A second participant in Room 1 leaked into Room 2.",
     );
     const connectedRooms = await waitForRoomParticipantCounts(
       configuration,
       founderAdmin.token,
       "founder_admin",
-      { 1: 2, 2: 1 },
+      { 2: 2, 3: 1 },
     );
-    assert.ok(connectedRooms[0].participantCount >= 2);
-    assert.ok(connectedRooms[1].participantCount >= 1);
+    assert.ok(connectedRooms[1].participantCount >= 2);
+    assert.ok(connectedRooms[2].participantCount >= 1);
     console.log("STUDY_ROOM_STAGING_POSITIVE: livekit_participants=2");
     console.log("STUDY_ROOM_STAGING_POSITIVE: room_isolation=true");
+
+    checkpoint = "room_chat";
+    await sendAndProveRoomMessage(
+      secondaryRoom,
+      primaryRoom,
+      secondaryJoin.participant_identity,
+    );
+    console.log("STUDY_ROOM_STAGING_POSITIVE: room_chat=true");
+
+    checkpoint = "raise_hand_attributes";
+    const handRaised = waitForRoomEvent(
+      primaryRoom,
+      RoomEvent.ParticipantAttributesChanged,
+      "raise-hand attribute propagation",
+      (changedAttributes, participant) =>
+        participant?.identity === secondaryJoin.participant_identity &&
+        changedAttributes?.["dd.studyRoom.handRaised"] === "true",
+    );
+    await secondaryRoom.localParticipant.setAttributes({
+      "dd.studyRoom.handRaised": "true",
+    });
+    await handRaised;
+    console.log("STUDY_ROOM_STAGING_POSITIVE: raise_hand=true");
 
     checkpoint = "synthetic_media_subscription";
     const publications = await publishAndProveSyntheticMedia(
@@ -1261,6 +1437,15 @@ async function runPositiveSmoke() {
       "STUDY_ROOM_STAGING_POSITIVE: bidirectional_microphone=true bidirectional_camera=true",
     );
 
+    checkpoint = "screen_share";
+    await publishAndProveScreenShare(
+      primaryRoom,
+      secondaryRoom,
+      primaryJoin.participant_identity,
+      resources,
+    );
+    console.log("STUDY_ROOM_STAGING_POSITIVE: screen_share=true");
+
     checkpoint = "server_side_mute";
     const muted = waitForRoomEvent(
       primaryRoom,
@@ -1272,18 +1457,18 @@ async function runPositiveSmoke() {
     );
     const moderation = await workerPost(
       configuration,
-      "/admin/study-room/moderate",
+      "/study-room/moderate",
       primaryAdmin.token,
       {
         operation: "mute",
-        roomKey: "1",
+        roomKey: "2",
         participantIdentity: secondaryJoin.participant_identity,
         trackSid: publications.audioPublication.sid,
       },
     );
     assert.equal(moderation.body?.ok, true);
     assert.equal(moderation.body?.result?.action, "muted");
-    assert.equal(moderation.body?.result?.roomKey, "1");
+    assert.equal(moderation.body?.result?.roomKey, "2");
     assert.equal(
       moderation.body?.result?.participantIdentity,
       secondaryJoin.participant_identity,
@@ -1311,15 +1496,15 @@ async function runPositiveSmoke() {
       (
         await workerPost(
           configuration,
-          "/admin/study-room/join",
+          "/study-room/join",
           secondaryAdmin.token,
-          { roomKey: "1", nickname: secondaryNickname },
+          { roomKey: "2", nickname: secondaryNickname },
           [201],
         )
       ).body,
       secondaryNickname,
       configuration.liveKitApiKey,
-      "1",
+      "2",
     );
     assert.equal(
       reconnectJoin.participant_identity,
@@ -1360,7 +1545,7 @@ async function runPositiveSmoke() {
     checkpoint = "rtc_cleanup";
     // The public Worker deliberately has no room-deletion operation. Releasing
     // every synthetic RTC participant is the supported cleanup boundary; the
-    // four fixed empty rooms then expire under their reviewed LiveKit timeout.
+    // five fixed empty rooms then expire under their reviewed LiveKit timeout.
     cleanupErrors.push(...(await safeReleaseRtcResources(resources)));
     checkpoint = "synthetic_user_cleanup";
     cleanupErrors.push(
@@ -1405,6 +1590,7 @@ async function runPreflight() {
     "dd-study-room-admin-beta-staging-v1-2",
     "dd-study-room-admin-beta-staging-v1-3",
     "dd-study-room-admin-beta-staging-v1-4",
+    "dd-study-room-admin-beta-staging-v1-5",
   ]);
   assert.equal(new Set(APPROVED_STAGING_ROOMS).size, STUDY_ROOM_MAX_ROOMS);
   assert.equal(APPROVED_STAGING_WORKER.includes("-staging."), true);
@@ -1425,8 +1611,10 @@ async function runSelfTest() {
   const now = Math.floor(Date.now() / 1_000);
   const identity = "sr_abcdefghijklmnopqrstuvwx";
   const issuer = "reviewed_api_key";
-  const nickname = "Participant 101";
-  const claimsForRoom = (roomKey) => ({
+  const nickname = "Participant #101";
+  const claimsForRoom = (roomKey) => {
+    const slot = STUDY_ROOM_SLOTS[Number(approvedRoomKey(roomKey)) - 1];
+    return ({
     iss: issuer,
     sub: identity,
     name: nickname,
@@ -1437,22 +1625,14 @@ async function runSelfTest() {
       roomJoin: true,
       canPublish: true,
       canSubscribe: true,
-      canPublishData: false,
-      canPublishSources: ["camera", "microphone"],
+      canPublishData: true,
+      canUpdateOwnMetadata: true,
+      canPublishSources: slot.microphoneAllowed
+        ? ["camera", "microphone", "screen_share", "screen_share_audio"]
+        : ["camera", "screen_share"],
     },
-    roomConfig: {
-      name: approvedRoomName(roomKey),
-      emptyTimeout: 600,
-      departureTimeout: 120,
-      maxParticipants: STUDY_ROOM_MAX_PARTICIPANTS,
-      metadata: JSON.stringify({
-        schema: "duediligence-study-room-slot-v1",
-        roomKey,
-        label: `Study Room ${roomKey}`,
-        createdAt: new Date(now * 1_000).toISOString(),
-      }),
-    },
-  });
+    });
+  };
   const claims = claimsForRoom("1");
   validateStudyRoomJwt(createSelfTestToken(claims), {
     identity,
@@ -1460,20 +1640,22 @@ async function runSelfTest() {
     nickname,
     roomKey: "1",
     roomName: approvedRoomName("1"),
+    microphoneAllowed: false,
   });
-  validateStudyRoomJwt(createSelfTestToken(claimsForRoom("4")), {
+  validateStudyRoomJwt(createSelfTestToken(claimsForRoom("5")), {
     identity,
     issuer,
     nickname,
-    roomKey: "4",
-    roomName: approvedRoomName("4"),
+    roomKey: "5",
+    roomName: approvedRoomName("5"),
+    microphoneAllowed: true,
   });
   assert.throws(
     () =>
       validateStudyRoomJwt(
         createSelfTestToken({
           ...claims,
-          video: { ...claims.video, canPublishData: true },
+          video: { ...claims.video, canPublishData: false },
         }),
         {
           identity,
@@ -1481,9 +1663,10 @@ async function runSelfTest() {
           nickname,
           roomKey: "1",
           roomName: approvedRoomName("1"),
+          microphoneAllowed: false,
         },
       ),
-    /canPublishData/u,
+    /Room chat/u,
   );
   assert.throws(
     () =>
@@ -1498,6 +1681,7 @@ async function runSelfTest() {
           nickname,
           roomKey: "1",
           roomName: approvedRoomName("1"),
+          microphoneAllowed: false,
         },
       ),
     /room-administrator/u,
@@ -1506,8 +1690,13 @@ async function runSelfTest() {
   const roomDescriptors = Array.from(
     { length: STUDY_ROOM_MAX_ROOMS },
     (_unused, index) => ({
-      roomKey: String(index + 1),
-      label: `Study Room ${index + 1}`,
+      roomKey: STUDY_ROOM_SLOTS[index].roomKey,
+      label: STUDY_ROOM_SLOTS[index].label,
+      kind: STUDY_ROOM_SLOTS[index].kind,
+      microphoneAllowed: STUDY_ROOM_SLOTS[index].microphoneAllowed,
+      adminOnly: STUDY_ROOM_SLOTS[index].adminOnly,
+      canCreate: true,
+      canJoin: true,
       active: true,
       participantCount: index === 0 ? 2 : 0,
       capacity: STUDY_ROOM_MAX_PARTICIPANTS,
@@ -1519,13 +1708,15 @@ async function runSelfTest() {
       ok: true,
       allowed: true,
       role: "admin",
+      administrator: true,
+      canCreateRooms: true,
       maxRooms: STUDY_ROOM_MAX_ROOMS,
       maxParticipants: STUDY_ROOM_MAX_PARTICIPANTS,
       recording: false,
       rooms: roomDescriptors,
     },
     "admin",
-    ["1", "2", "3", "4"],
+    ["1", "2", "3", "4", "5"],
   );
   validateCreatedRoom(
     { ok: true, created: true, room: roomDescriptors[0] },
@@ -1542,6 +1733,7 @@ async function runSelfTest() {
 
   assert.equal(TrackSource.SOURCE_CAMERA, 1);
   assert.equal(TrackSource.SOURCE_MICROPHONE, 2);
+  assert.equal(TrackSource.SOURCE_SCREENSHARE, 3);
   assert.equal(TrackKind.KIND_AUDIO, 1);
   assert.equal(TrackKind.KIND_VIDEO, 2);
   assert.equal(typeof AudioStream, "function");

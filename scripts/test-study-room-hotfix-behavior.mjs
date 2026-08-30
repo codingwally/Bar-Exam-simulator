@@ -17,6 +17,7 @@ const instrumentedLiveClient = liveClient.replace(
     state,
     createPersonRow,
     renderParticipants,
+    syncJoinButton,
     setParticipantBlocked,
     setParticipantVolume,
     syncSelfMediaState,
@@ -29,6 +30,10 @@ const instrumentedLiveClient = liveClient.replace(
     studyRoomMediaOptions,
     cameraPublishOptions,
     toggleBackdrop,
+    openPanel,
+    sendChatMessage,
+    toggleRaiseHand,
+    toggleScreenShare,
   };
   ${liveClientTestHooksMarker}`,
 );
@@ -216,14 +221,15 @@ function fireStudyRoomClick(document) {
   assert.ok(closestCalls >= 1, 'The delegated Study Room trigger must be evaluated.');
 }
 
-function createPreviewHarness({ role, open, settleAccess = true }) {
+function createPreviewHarness({ role, open, settleAccess = true, access: accessOverride = null }) {
   const { document } = createDocument();
   document.getElementById('dd-study-room-overlay').hidden = true;
   document.getElementById('dd2-header-role-label').textContent = role;
   const openCalls = [];
   const assigned = [];
   const analytics = [];
-  let currentAccess = settleAccess ? { role } : null;
+  const resolvedAccess = { role, ...(accessOverride || {}) };
+  let currentAccess = settleAccess ? resolvedAccess : null;
   const window = {
     document,
     HTMLElement: FakeHTMLElement,
@@ -252,6 +258,11 @@ function createPreviewHarness({ role, open, settleAccess = true }) {
         analytics.push({ name, detail });
       },
     },
+    DueDiligenceSubscriptionCta: {
+      isAudienceEligible(value) {
+        return value?.subscription_status !== 'active';
+      },
+    },
   };
   vm.runInNewContext(previewClient, {
     window,
@@ -263,8 +274,8 @@ function createPreviewHarness({ role, open, settleAccess = true }) {
     Boolean,
   });
   const resolveAccess = () => {
-    currentAccess = { role };
-    document.emit('duediligence:access', { detail: { access: { role } } });
+    currentAccess = resolvedAccess;
+    document.emit('duediligence:access', { detail: { access: resolvedAccess } });
   };
   if (settleAccess) resolveAccess();
   return { window, document, openCalls, assigned, analytics, resolveAccess };
@@ -289,7 +300,7 @@ function createPreviewHarness({ role, open, settleAccess = true }) {
   assert.equal(harness.document.getElementById('dd-study-room-overlay').hidden, true);
   assert.equal(popup.opener, null);
   assert.equal(popup.focusCalls, 2);
-  assert.deepEqual(harness.analytics.map(({ name }) => name), ['study_room_admin_window_opened']);
+  assert.deepEqual(harness.analytics.map(({ name }) => name), ['study_room_window_opened']);
 }
 
 {
@@ -356,6 +367,20 @@ for (const popupFailure of [
   assert.equal(harness.analytics.some(({ name }) => name === 'study_room_preview_opened'), true);
 }
 
+{
+  const popup = { closed: false, opener: {}, focus() {} };
+  const harness = createPreviewHarness({
+    role: 'member',
+    open: () => popup,
+    access: { allowed: true, subscription_status: 'active' },
+  });
+  fireStudyRoomClick(harness.document);
+  assert.equal(harness.openCalls.length, 1, 'A paid member must open the live Study Room.');
+  assert.equal(harness.document.getElementById('dd-study-room-overlay').hidden, true);
+  assert.deepEqual(harness.analytics.map(({ name }) => name), ['study_room_window_opened']);
+  assert.equal(harness.analytics[0].detail.audience, 'subscriber');
+}
+
 function response({ ok, status, payload }) {
   return {
     ok,
@@ -373,10 +398,11 @@ function roomCatalogResponse() {
     payload: {
       ok: true,
       rooms: [
-        { roomKey: '1', active: true, participantCount: 1, capacity: 12, focusStartedAt: '2026-08-29T00:00:00.000Z' },
-        { roomKey: '2', active: true, participantCount: 2, capacity: 12, focusStartedAt: '2026-08-29T00:15:00.000Z' },
-        { roomKey: '3', active: true, participantCount: 0, capacity: 12, focusStartedAt: '2026-08-29T00:30:00.000Z' },
-        { roomKey: '4', active: false, participantCount: 0, capacity: 12, focusStartedAt: null },
+        { roomKey: '1', name: 'Library', kind: 'library', microphoneAllowed: false, adminOnly: false, canJoin: true, canCreate: true, active: true, participantCount: 1, capacity: 12, focusStartedAt: '2026-08-29T00:00:00.000Z' },
+        { roomKey: '2', name: 'Room 1', kind: 'standard', microphoneAllowed: true, adminOnly: false, canJoin: true, canCreate: true, active: true, participantCount: 2, capacity: 12, focusStartedAt: '2026-08-29T00:15:00.000Z' },
+        { roomKey: '3', name: 'Room 2', kind: 'standard', microphoneAllowed: true, adminOnly: false, canJoin: true, canCreate: true, active: true, participantCount: 0, capacity: 12, focusStartedAt: '2026-08-29T00:30:00.000Z' },
+        { roomKey: '4', name: 'Room 3', kind: 'standard', microphoneAllowed: true, adminOnly: false, canJoin: true, canCreate: true, active: false, participantCount: 0, capacity: 12, focusStartedAt: null },
+        { roomKey: '5', name: 'Inner Chamber', kind: 'inner_chamber', microphoneAllowed: true, adminOnly: true, canJoin: true, canCreate: true, active: false, participantCount: 0, capacity: 12, focusStartedAt: null },
       ],
     },
   });
@@ -529,7 +555,7 @@ function createLiveHarness({
     } catch {
       body = {};
     }
-    if (requestPath.includes('/admin/study-room/rooms') && body.operation === 'list') {
+    if (requestPath.includes('/study-room/rooms') && body.operation === 'list') {
       return Promise.resolve(roomCatalogResponse());
     }
     return fetch(url, options);
@@ -685,7 +711,7 @@ async function eventually(check, message) {
   resolveAccess(response({
     ok: true,
     status: 200,
-    payload: { ok: true, allowed: true, role: 'admin', maxParticipants: 12 },
+    payload: { ok: true, allowed: true, role: 'admin', administrator: true, canCreateRooms: true, maxParticipants: 12, maxRooms: 5 },
   }));
   await eventually(
     () => harness.document.getElementById('sr-prejoin-status').textContent.includes('available devices were detected'),
@@ -703,14 +729,14 @@ async function eventually(check, message) {
   assert.equal(harness.document.getElementById('sr-live-microphone-select').children[0].label, 'Laptop Array Microphone');
   assert.equal(harness.document.getElementById('sr-join-camera').getAttribute('aria-pressed'), 'false');
   assert.equal(harness.document.getElementById('sr-join-microphone').getAttribute('aria-pressed'), 'false');
-  assert.equal(harness.hooks.state.rooms.length, 4, 'The prejoin lobby must normalize exactly four room slots.');
+  assert.equal(harness.hooks.state.rooms.length, 5, 'The prejoin lobby must normalize exactly five room slots.');
   assert.equal(harness.hooks.state.selectedRoomKey, '1', 'The first open room should be selected by default.');
   const roomCards = harness.document.getElementById('sr-room-card-grid').children;
-  assert.equal(roomCards.length, 4);
-  assert.equal(harness.document.getElementById('sr-room-lobby-count').textContent, '3 of 4 rooms open');
+  assert.equal(roomCards.length, 5);
+  assert.equal(harness.document.getElementById('sr-room-lobby-count').textContent, '3 of 5 rooms open');
   assert.equal(roomCards.find(({ id }) => id === 'sr-create-room')?.dataset.roomKey, '4');
-  assert.equal(harness.document.getElementById('sr-branded-backdrop-status').dataset.backdropState, 'disabled');
-  assert.match(harness.document.getElementById('sr-branded-backdrop-copy').textContent, /lighter video mode/iu);
+  assert.equal(harness.document.getElementById('sr-branded-backdrop-status').dataset.backdropState, 'off');
+  assert.match(harness.document.getElementById('sr-branded-backdrop-copy').textContent, /real background/iu);
 }
 
 {
@@ -719,7 +745,7 @@ async function eventually(check, message) {
     fetch: async () => response({
       ok: true,
       status: 200,
-      payload: { ok: true, allowed: true, role: 'admin', maxParticipants: 12 },
+      payload: { ok: true, allowed: true, role: 'admin', administrator: true, canCreateRooms: true, maxParticipants: 12, maxRooms: 5 },
     }),
     enumerateDevices: async () => [
       { kind: 'videoinput', deviceId: 'camera-1', label: '' },
@@ -768,7 +794,7 @@ async function eventually(check, message) {
     fetch: async () => response({
       ok: true,
       status: 200,
-      payload: { ok: true, allowed: true, role: 'admin', maxParticipants: 12 },
+      payload: { ok: true, allowed: true, role: 'admin', administrator: true, canCreateRooms: true, maxParticipants: 12, maxRooms: 5 },
     }),
     enumerateDevices: async () => [
       { kind: 'videoinput', deviceId: 'camera-1', label: 'Camera 1' },
@@ -835,7 +861,7 @@ function authorizedResponse() {
   return response({
     ok: true,
     status: 200,
-    payload: { ok: true, allowed: true, role: 'admin', maxParticipants: 12 },
+    payload: { ok: true, allowed: true, role: 'admin', administrator: true, canCreateRooms: true, maxParticipants: 12, maxRooms: 5 },
   });
 }
 
@@ -893,24 +919,23 @@ function fakeLocalTrack(kind, deviceId) {
   const options = harness.hooks.studyRoomMediaOptions();
   assert.equal(options.adaptiveStream.pixelDensity, 1);
   assert.equal(options.adaptiveStream.pauseVideoInBackground, true);
-  assert.equal(options.dynacast, false);
+  assert.equal(options.dynacast, true);
   assert.equal(options.audioCaptureDefaults.voiceIsolation, true);
-  assert.equal(options.videoCaptureDefaults.resolution.width, 320);
-  assert.equal(options.videoCaptureDefaults.resolution.height, 180);
-  assert.equal(options.videoCaptureDefaults.resolution.frameRate, 12);
+  assert.equal(options.videoCaptureDefaults.resolution.width, 640);
+  assert.equal(options.videoCaptureDefaults.resolution.height, 360);
+  assert.equal(options.videoCaptureDefaults.resolution.frameRate, 15);
   assert.equal(options.publishDefaults.audioPreset, speechPreset);
   assert.equal(options.publishDefaults.dtx, false, 'Study microphones must keep sending RTP during quiet focus periods.');
   assert.equal(options.publishDefaults.red, true, 'Study microphones must retain redundant-audio resilience.');
   assert.equal(options.publishDefaults.videoCodec, 'vp8');
-  assert.equal(options.publishDefaults.videoEncoding.maxBitrate, 200_000);
-  assert.equal(options.publishDefaults.videoEncoding.maxFramerate, 12);
-  assert.equal(options.publishDefaults.simulcast, false);
-  assert.equal('videoSimulcastLayers' in options.publishDefaults, false);
+  assert.equal(options.publishDefaults.videoEncoding.maxBitrate, 450_000);
+  assert.equal(options.publishDefaults.videoEncoding.maxFramerate, 15);
+  assert.equal(options.publishDefaults.simulcast, true);
 
   const cameraOptions = harness.hooks.cameraPublishOptions();
   assert.equal(cameraOptions.source, liveKitSources.Camera);
-  assert.equal(cameraOptions.simulcast, false);
-  assert.equal(cameraOptions.videoEncoding.maxBitrate, 200_000);
+  assert.equal(cameraOptions.simulcast, true);
+  assert.equal(cameraOptions.videoEncoding.maxBitrate, 450_000);
 }
 
 {
@@ -1041,49 +1066,50 @@ function fakeLocalTrack(kind, deviceId) {
 
   const cameraButton = harness.document.getElementById('sr-toggle-camera');
   await cameraButton.emit('click');
-  const cameraEnableCalls = harness.backgroundCalls.filter(({ operation }) => operation === 'enableCamera');
-  assert.equal(cameraEnableCalls.length, 1, 'Camera start must use the mandatory-background controller.');
-  assert.equal(cameraEnableCalls[0].captureOptions.deviceId.exact, 'camera-selected');
-  assert.equal(cameraEnableCalls[0].publishOptions.source, liveKitSources.Camera);
-  assert.equal(rawCameraCalls.length, 0, 'The raw LiveKit camera shortcut must never bypass background processing.');
-  assert.equal(publications.get(liveKitSources.Camera).track.getProcessor().mode, 'virtual-background');
+  assert.equal(rawCameraCalls.length, 1, 'Camera start must use the low-cost raw track while the optional backdrop is off.');
+  assert.equal(rawCameraCalls[0].options.deviceId.exact, 'camera-selected');
+  assert.equal(rawCameraCalls[0].publishOptions.source, liveKitSources.Camera);
+  assert.equal(publications.get(liveKitSources.Camera).track.getProcessor, undefined);
   assert.equal(cameraButton.getAttribute('aria-pressed'), 'true');
   assert.equal(harness.document.getElementById('sr-camera-state').textContent, 'On');
-  assert.equal(harness.document.getElementById('sr-branded-backdrop-status').dataset.backdropState, 'enabled');
-  assert.match(harness.document.getElementById('sr-branded-backdrop-copy').textContent, /backdrop is active/iu);
+  assert.equal(harness.document.getElementById('sr-branded-backdrop-status').dataset.backdropState, 'off');
+  assert.match(harness.document.getElementById('sr-branded-backdrop-copy').textContent, /real background/iu);
 
   const backdropButton = harness.document.getElementById('sr-toggle-backdrop');
   await backdropButton.emit('click');
-  assert.equal(backdropButton.getAttribute('aria-pressed'), 'false');
-  assert.equal(rawCameraCalls.length, 1, 'Removing the backdrop must replace the processed track with one low-cost raw track.');
-  assert.equal(rawCameraCalls[0].enabled, true);
-  assert.equal(rawCameraCalls[0].options.resolution.width, 320);
-  assert.equal(rawCameraCalls[0].options.resolution.height, 180);
-  assert.equal(publications.get(liveKitSources.Camera).track.getProcessor, undefined);
+  const cameraEnableCalls = harness.backgroundCalls.filter(({ operation }) => operation === 'enableCamera');
+  assert.equal(backdropButton.getAttribute('aria-pressed'), 'true');
+  assert.equal(cameraEnableCalls.length, 1, 'Applying the optional backdrop must replace the raw track with the processor.');
+  assert.equal(cameraEnableCalls[0].captureOptions.deviceId.exact, 'camera-selected');
+  assert.equal(cameraEnableCalls[0].publishOptions.source, liveKitSources.Camera);
+  assert.equal(publications.get(liveKitSources.Camera).track.getProcessor().mode, 'virtual-background');
   assert.equal(cameraButton.getAttribute('aria-pressed'), 'true');
-  assert.equal(harness.document.getElementById('sr-branded-backdrop-status').dataset.backdropState, 'off');
-  assert.match(harness.document.getElementById('sr-branded-backdrop-copy').textContent, /real background is visible/iu);
+  assert.equal(harness.document.getElementById('sr-branded-backdrop-status').dataset.backdropState, 'enabled');
+  assert.match(harness.document.getElementById('sr-branded-backdrop-copy').textContent, /backdrop is active/iu);
 
   await backdropButton.emit('click');
-  assert.equal(backdropButton.getAttribute('aria-pressed'), 'true');
+  assert.equal(backdropButton.getAttribute('aria-pressed'), 'false');
   assert.equal(
     harness.backgroundCalls.filter(({ operation }) => operation === 'enableCamera').length,
-    2,
-    'Reapplying the backdrop while video is on must replace the raw track with a processed track.',
+    1,
+    'Removing the backdrop must not run a second processor.',
   );
-  assert.equal(publications.get(liveKitSources.Camera).track.getProcessor().mode, 'virtual-background');
+  assert.equal(rawCameraCalls.length, 2, 'Removing the backdrop must replace the processed track with one low-cost raw track.');
+  assert.equal(rawCameraCalls[1].options.resolution.width, 640);
+  assert.equal(rawCameraCalls[1].options.resolution.height, 360);
+  assert.equal(publications.get(liveKitSources.Camera).track.getProcessor, undefined);
   assert.equal(cameraButton.getAttribute('aria-pressed'), 'true');
 
   await cameraButton.emit('click');
   assert.equal(
-    harness.backgroundCalls.filter(({ operation }) => operation === 'disableCamera').length,
+    harness.backgroundCalls.filter(({ operation }) => operation === 'destroy').length,
     1,
-    'Stopping video must remain inside the mandatory-background controller.',
+    'Removing the optional backdrop must fully destroy the processor.',
   );
-  assert.equal(rawCameraCalls.length, 1);
+  assert.equal(rawCameraCalls.length, 2);
   assert.equal(cameraButton.getAttribute('aria-pressed'), 'false');
   assert.equal(harness.document.getElementById('sr-camera-state').textContent, 'Off');
-  assert.equal(harness.document.getElementById('sr-branded-backdrop-status').dataset.backdropState, 'disabled');
+  assert.equal(harness.document.getElementById('sr-branded-backdrop-status').dataset.backdropState, 'off');
 }
 
 {
@@ -1711,7 +1737,7 @@ class FakeMediaStream {
   assert.equal(remoteAudioTrack.attachedElements[0].volume, 0);
 
   assert.equal(
-    requests.some((url) => String(url).includes('/admin/study-room/moderate')),
+    requests.some((url) => String(url).includes('/study-room/moderate')),
     false,
     'Mute-for-me, volume, and block controls must remain local and reversible.',
   );

@@ -96,7 +96,11 @@ for (const required of [
   'assets/private-workspace.js',
   'assets/icons/navigation/door-open.svg',
   'assets/icons/community/image.svg',
+  'assets/icons/navigation/hand.svg',
   'assets/icons/navigation/mic.svg',
+  'assets/icons/navigation/monitor-up.svg',
+  'assets/icons/navigation/pin.svg',
+  'assets/icons/navigation/settings.svg',
   'examination-room/index.html',
   'examination-room/professor.css',
   'examination-room/professor.js',
@@ -212,23 +216,28 @@ assert.match(index, /You won&rsquo;t have to study alone\./);
 assert.match(index, /pricing-renderer\.js\?v=admin-pricing-builder-20260830-1[\s\S]*phase2-experience\.js[^"\n]*pricing=admin-builder-20260830-1/);
 assert.doesNotMatch(index, /href=["']\/study-room\//i);
 assert.match(studyRoomPage, /<title>Study Room — Due Diligence<\/title>/);
-assert.match(studyRoomPage, /Admin test room/);
+assert.match(studyRoomPage, /Subscribers can join open rooms/);
 assert.match(studyRoomPage, /camera and microphone remain off/i);
 assert.match(studyRoomPage, /assets\/vendor\/livekit-client\.umd\.js\?v=2\.22\.1/);
 assert.match(studyRoomPage, /study-room-backgrounds\.js\?v=study-room-optional-background-20260829-1/);
-assert.match(studyRoomPage, /study-room-live\.js\?v=study-room-performance-controls-20260829-1/);
-assert.match(studyRoomPage, /id="sr-toggle-backdrop"[\s\S]*aria-pressed="true"/u);
-assert.match(studyRoomLive, /\/admin\/study-room\/access/);
+assert.match(studyRoomPage, /study-room-live\.js\?v=study-room-launch-20260830-1/);
+assert.match(studyRoomPage, /id="sr-toggle-backdrop"[\s\S]*aria-pressed="false"/u);
+assert.match(studyRoomLive, /\/study-room\/access/);
+assert.match(studyRoomLive, /\/study-room\/rooms/);
+assert.match(studyRoomLive, /\/study-room\/join/);
+assert.match(studyRoomLive, /\/study-room\/moderate/);
 assert.match(studyRoomLive, /\/admin\/study-room\/rooms/);
-assert.match(studyRoomLive, /\/admin\/study-room\/join/);
-assert.match(studyRoomLive, /\/admin\/study-room\/moderate/);
 assert.doesNotMatch(studyRoomLive, /operation:\s*['"]mute['"]/);
 assert.match(studyRoomLive, /operation:\s*'rename'/);
 assert.doesNotMatch(studyRoomLive, /Mute for room/i);
 assert.match(studyRoomLive, /Mute for me/);
 assert.match(studyRoomLive, /Block locally/);
-assert.match(studyRoomLive, /width:\s*320,[\s\S]*height:\s*180,[\s\S]*frameRate:\s*12/u);
-assert.match(studyRoomLive, /maxBitrate:\s*200_000,[\s\S]*simulcast:\s*false/u);
+assert.match(studyRoomLive, /width:\s*640,[\s\S]*height:\s*360,[\s\S]*frameRate:\s*15/u);
+assert.match(studyRoomLive, /maxBitrate:\s*450_000,[\s\S]*simulcast:\s*true/u);
+assert.match(studyRoomLive, /dynacast:\s*true/u);
+assert.match(studyRoomLive, /registerTextStreamHandler/u);
+assert.match(studyRoomLive, /setScreenShareEnabled/u);
+assert.match(studyRoomLive, /dd\.studyRoom\.handRaised/u);
 assert.match(studyRoomLive, /function toggleBackdrop\(/u);
 assert.match(studyRoomBackgrounds, /DueDiligenceStudyRoomMandatoryBackground/);
 assert.match(studyRoomBackgrounds, /virtual-background-due-diligence-branded\.webp/);

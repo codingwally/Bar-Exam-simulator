@@ -16,21 +16,21 @@
     ? new URLSearchParams(global.location.search).get('study-room-qa')
     : '';
   const STORAGE_KEY = 'duediligence.study-room.nickname.v2';
-  const FALLBACK_NICKNAME = 'Participant 1';
+  const FALLBACK_NICKNAME = 'Participant #';
   const MAX_NICKNAME_LENGTH = 32;
-  const MAX_ROOMS = 4;
+  const MAX_ROOMS = 5;
   const ROOM_REFRESH_INTERVAL_MS = 15_000;
-  const MEDIA_RELIABILITY_VERSION = 'study-room-performance-controls-20260829-1';
+  const MEDIA_RELIABILITY_VERSION = 'study-room-launch-20260830-1';
   const MICROPHONE_STATS_INTERVAL_MS = 400;
   const MICROPHONE_STATS_ATTEMPTS = 10;
   const STUDY_VIDEO_CAPTURE = Object.freeze({
-    width: 320,
-    height: 180,
-    frameRate: 12,
+    width: 640,
+    height: 360,
+    frameRate: 15,
   });
   const STUDY_VIDEO_ENCODING = Object.freeze({
-    maxBitrate: 200_000,
-    maxFramerate: 12,
+    maxBitrate: 450_000,
+    maxFramerate: 15,
   });
   const BACKDROP_PROCESSOR_MAX_FPS = 8;
   const MANDATORY_BACKGROUND_POLICY = 'due-diligence-mandatory-virtual-background-no-raw-first-frame';
@@ -38,20 +38,24 @@
   const RESERVED_NICKNAME = /\b(?:admin|administrator|founder|moderator|staff|support)\b|\bdue\s+diligence\b/iu;
   const ROOM_PRESENTATION = Object.freeze({
     '1': Object.freeze({
-      name: 'Library Study Room',
+      name: 'Library',
       cover: '../assets/study-room/dimasalang-library.webp',
     }),
     '2': Object.freeze({
-      name: 'Tropical Study Room',
+      name: 'Room 1',
       cover: '../assets/study-room/participant-2-tropical.webp',
     }),
     '3': Object.freeze({
-      name: 'Quiet Study Room',
+      name: 'Room 2',
       cover: '../assets/study-room/participant-3-bedroom.webp',
     }),
     '4': Object.freeze({
-      name: 'Condo Study Room',
+      name: 'Room 3',
       cover: '../assets/study-room/participant-4-condo.webp',
+    }),
+    '5': Object.freeze({
+      name: 'Inner Chamber',
+      cover: '../assets/study-room/virtual-background-due-diligence-branded.webp',
     }),
   });
 
@@ -59,6 +63,7 @@
     client: null,
     session: null,
     access: null,
+    isAdministrator: false,
     rooms: [],
     selectedRoomKey: '',
     currentRoomKey: '',
@@ -76,7 +81,7 @@
     controllerProtectedCameraTracks: new Set(),
     userApprovedRawCameraTracks: new Set(),
     rawCameraPublishAuthorized: false,
-    backdropEnabled: true,
+    backdropEnabled: false,
     recovering: false,
     previewStream: null,
     audioContext: null,
@@ -89,6 +94,16 @@
     localMutedParticipants: new Set(),
     participantVolumes: new Map(),
     activeSpeakers: new Set(),
+    connectionQualities: new Map(),
+    pinnedParticipantIdentity: '',
+    handRaised: false,
+    panelView: 'people',
+    panelOpen: true,
+    chatMessages: [],
+    unreadMessages: 0,
+    lastChatSentAt: 0,
+    screenSharing: false,
+    currentRoomMicrophoneAllowed: true,
     joinWithMicrophone: false,
     joinWithCamera: false,
     selectedDevices: {
@@ -133,7 +148,7 @@
     if (saved) return saved;
     const bytes = global.crypto?.getRandomValues?.(new Uint8Array(2));
     const value = bytes ? ((bytes[0] << 8) | bytes[1]) : 0;
-    const nickname = `Participant ${(value % 900) + 100}`;
+    const nickname = `Participant #${(value % 900) + 100}`;
     safeStorageWrite(nickname);
     return nickname;
   }
@@ -344,11 +359,17 @@
     const byRoomKey = new Map();
     listed.forEach((candidate) => {
       const roomKey = String(candidate?.roomKey || '').trim();
-      if (!/^[1-4]$/u.test(roomKey) || byRoomKey.has(roomKey)) return;
+      if (!/^[1-5]$/u.test(roomKey) || byRoomKey.has(roomKey)) return;
       const participantCount = Number(candidate?.participantCount);
       const capacity = Number(candidate?.capacity);
       byRoomKey.set(roomKey, Object.freeze({
         roomKey,
+        label: String(candidate?.label || roomPresentation(roomKey).name),
+        kind: String(candidate?.kind || (roomKey === '1' ? 'library' : 'general')),
+        microphoneAllowed: candidate?.microphoneAllowed !== false,
+        adminOnly: candidate?.adminOnly === true,
+        canCreate: candidate?.canCreate === true,
+        canJoin: candidate?.canJoin !== false,
         active: candidate?.active === true,
         participantCount: Number.isSafeInteger(participantCount) && participantCount >= 0
           ? Math.min(participantCount, 12)
@@ -363,6 +384,12 @@
       const roomKey = String(index + 1);
       return byRoomKey.get(roomKey) || Object.freeze({
         roomKey,
+        label: roomPresentation(roomKey).name,
+        kind: roomKey === '1' ? 'library' : roomKey === '5' ? 'inner-chamber' : 'general',
+        microphoneAllowed: roomKey !== '1',
+        adminOnly: roomKey === '5',
+        canCreate: state.isAdministrator,
+        canJoin: roomKey !== '5' || state.isAdministrator,
         active: false,
         participantCount: 0,
         capacity: 12,
@@ -383,22 +410,38 @@
     const button = byId('sr-join');
     if (!button || state.joining) return;
     const room = selectedRoom();
-    button.disabled = !room?.active;
-    button.textContent = room?.active
+    const restricted = room?.canJoin === false;
+    const canCreateAndJoin = Boolean(room && !room.active && state.isAdministrator && room.canCreate !== false);
+    button.disabled = !room || restricted || (!room.active && !canCreateAndJoin);
+    button.textContent = restricted
+      ? 'Inner Chamber · Admin only'
+      : room?.active
       ? `Join ${roomPresentation(room.roomKey).name}`
-      : 'Open a room to join';
+      : canCreateAndJoin
+      ? `Create and join ${roomPresentation(room.roomKey).name}`
+      : room
+      ? `Waiting for ${roomPresentation(room.roomKey).name} to open`
+      : 'Choose a room';
   }
 
   function selectRoom(roomKey) {
-    const room = activeRoom(roomKey);
-    if (!room) return false;
+    const room = state.rooms.find((candidate) => candidate.roomKey === String(roomKey));
+    if (!room || room.canJoin === false) return false;
     state.selectedRoomKey = room.roomKey;
+    if (room.microphoneAllowed === false) setJoinOption('microphone', false);
     renderRoomCatalog();
+    syncSelectedRoomPolicy();
     return true;
   }
 
   function roomCountCopy(room) {
-    if (!room.active) return 'Open this room';
+    if (room.canJoin === false) return 'Administrators only';
+    if (!room.active) return state.isAdministrator ? 'Ready to create' : 'Waiting for an administrator';
+    if (room.microphoneAllowed === false) {
+      return room.participantCount === 0
+        ? 'Silent video room · Ready'
+        : `${room.participantCount} studying silently`;
+    }
     if (room.participantCount === 0) return 'Ready for the first study partner';
     return `${room.participantCount} ${room.participantCount === 1 ? 'person' : 'people'} studying`;
   }
@@ -407,19 +450,20 @@
     const presentation = roomPresentation(room.roomKey);
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = `sr-room-card${room.active ? '' : ' sr-room-card-create'}${state.selectedRoomKey === room.roomKey ? ' is-selected' : ''}`;
+    button.className = `sr-room-card${room.active ? '' : ' sr-room-card-closed'}${room.canJoin === false ? ' is-restricted' : ''}${state.selectedRoomKey === room.roomKey ? ' is-selected' : ''}`;
     button.id = room.active ? `sr-room-card-${room.roomKey}` : (room.roomKey === firstInactiveRoomKey ? 'sr-create-room' : `sr-create-room-${room.roomKey}`);
     button.dataset.roomKey = room.roomKey;
-    button.dataset.roomAction = room.active ? 'select' : 'create';
-    button.dataset.roomState = room.active ? 'available' : 'create';
+    button.dataset.roomAction = 'select';
+    button.dataset.roomState = room.active ? 'available' : room.canJoin === false ? 'restricted' : 'closed';
     button.disabled = state.roomCatalogBusy
       || state.roomMutationBusy
       || state.joining
-      || state.switchingRoom;
+      || state.switchingRoom
+      || room.canJoin === false;
     button.setAttribute('aria-label', room.active
       ? `${presentation.name}, ${roomCountCopy(room)}`
-      : `Open ${presentation.name}`);
-    if (room.active) button.setAttribute('aria-pressed', String(state.selectedRoomKey === room.roomKey));
+      : room.canJoin === false ? `${presentation.name}, administrators only` : `${presentation.name}, ${roomCountCopy(room)}`);
+    button.setAttribute('aria-pressed', String(state.selectedRoomKey === room.roomKey));
 
     if (room.active) {
       const cover = document.createElement('img');
@@ -462,7 +506,7 @@
     button.append(copy);
     button.addEventListener('click', () => {
       if (room.active) selectRoom(room.roomKey);
-      else createRoomSlot(room.roomKey);
+      else selectRoom(room.roomKey);
     });
     return button;
   }
@@ -470,7 +514,7 @@
   function renderRoomSelector() {
     const menu = byId('sr-room-selector-menu');
     if (!menu) return;
-    const activeRooms = state.rooms.filter((room) => room.active);
+    const activeRooms = state.rooms.filter((room) => room.active && room.canJoin !== false);
     menu.replaceChildren(...activeRooms.map((room) => {
       const option = document.createElement('button');
       option.type = 'button';
@@ -488,7 +532,7 @@
 
   function renderRoomCatalog() {
     const grid = byId('sr-room-card-grid');
-    const firstInactiveRoomKey = state.rooms.find((room) => !room.active)?.roomKey || '';
+    const firstInactiveRoomKey = state.rooms.find((room) => !room.active && room.canJoin !== false)?.roomKey || '';
     if (grid) grid.replaceChildren(...state.rooms.map((room) => createRoomCard(room, firstInactiveRoomKey)));
     const activeCount = state.rooms.filter((room) => room.active).length;
     const count = byId('sr-room-lobby-count');
@@ -498,15 +542,22 @@
     if (activeName) activeName.textContent = roomPresentation(state.currentRoomKey || selected?.roomKey || '1').name;
     renderRoomSelector();
     syncJoinButton();
+    syncSelectedRoomPolicy();
   }
 
   function localQualityRoomCatalog() {
-    const activeCount = LOCAL_TEST_MODE === 'live' ? 4 : 3;
+    const activeCount = LOCAL_TEST_MODE === 'live' ? 5 : 3;
     return normalizeRoomCatalog({
       rooms: Array.from({ length: MAX_ROOMS }, (_unused, index) => ({
         roomKey: String(index + 1),
         active: index < activeCount,
         participantCount: index === 0 ? 4 : index < activeCount ? index : 0,
+        label: roomPresentation(String(index + 1)).name,
+        kind: index === 0 ? 'library' : index === 4 ? 'inner-chamber' : 'general',
+        microphoneAllowed: index !== 0,
+        adminOnly: index === 4,
+        canCreate: true,
+        canJoin: true,
         capacity: 12,
         focusStartedAt: new Date(Date.now() - ((index + 1) * 900_000)).toISOString(),
       })),
@@ -521,10 +572,13 @@
       try {
         const payload = LOCAL_TEST_MODE
           ? { rooms: state.rooms.length ? state.rooms : localQualityRoomCatalog() }
-          : await workerRequest('/admin/study-room/rooms', { operation: 'list' });
+          : await workerRequest('/study-room/rooms', { operation: 'list' });
         state.rooms = normalizeRoomCatalog(payload);
-        if (!activeRoom(state.selectedRoomKey)) {
-          state.selectedRoomKey = state.rooms.find((room) => room.active)?.roomKey || '';
+        const selected = selectedRoom();
+        if (!selected || selected.canJoin === false) {
+          state.selectedRoomKey = state.rooms.find((room) => room.active && room.canJoin !== false)?.roomKey
+            || (state.isAdministrator ? state.rooms.find((room) => room.canJoin !== false)?.roomKey : '')
+            || '';
         }
         renderRoomCatalog();
         return state.rooms;
@@ -546,19 +600,19 @@
   }
 
   async function createRoomSlot(roomKey) {
-    if (state.roomCatalogBusy || state.roomMutationBusy || state.joining || state.switchingRoom) return;
+    if (state.roomCatalogBusy || state.roomMutationBusy || state.joining || state.switchingRoom) return false;
     const requestedKey = String(roomKey || '');
-    if (!/^[1-4]$/u.test(requestedKey)) return;
+    if (!/^[1-5]$/u.test(requestedKey) || !state.isAdministrator) return false;
     const requestedRoom = state.rooms.find((room) => room.roomKey === requestedKey);
-    if (!requestedRoom) return;
+    if (!requestedRoom) return false;
     if (requestedRoom.active) {
       selectRoom(requestedKey);
-      return;
+      return true;
     }
     if (state.rooms.filter((room) => room.active).length >= MAX_ROOMS) {
-      setStatus('sr-prejoin-status', 'All four Study Rooms are already open. Choose one to join.', 'error');
+      setStatus('sr-prejoin-status', 'All five Study Rooms are already open. Choose one to join.', 'error');
       await refreshRoomCatalog({ quiet: true }).catch(() => {});
-      return;
+      return false;
     }
     state.roomMutationBusy = true;
     renderRoomCatalog();
@@ -578,9 +632,11 @@
       state.selectedRoomKey = requestedKey;
       renderRoomCatalog();
       setStatus('sr-prejoin-status', `${roomPresentation(requestedKey).name} is open. Camera and microphone are still off.`, 'ok');
+      return true;
     } catch (error) {
       setStatus('sr-prejoin-status', friendlyError(error, 'That Study Room could not open just now.'), 'error');
       await refreshRoomCatalog({ quiet: true }).catch(() => {});
+      return false;
     } finally {
       state.roomMutationBusy = false;
       renderRoomCatalog();
@@ -624,9 +680,26 @@
     byId('sr-preview-avatar').textContent = initials(raw);
   }
 
+  function syncSelectedRoomPolicy() {
+    const room = selectedRoom();
+    const silent = room?.microphoneAllowed === false;
+    const button = byId('sr-join-microphone');
+    if (button) {
+      button.disabled = silent;
+      button.setAttribute('aria-disabled', String(silent));
+      button.title = silent ? 'Library is a silent video-only room.' : '';
+      const copy = button.querySelector('small');
+      if (copy) copy.textContent = silent ? 'Unavailable in Library' : `${state.joinWithMicrophone ? 'On' : 'Off'} when you join`;
+    }
+    if (silent) state.joinWithMicrophone = false;
+    const microphoneField = byId('sr-microphone-select')?.closest?.('.sr-field');
+    microphoneField?.classList?.toggle('is-room-muted', silent);
+  }
+
   function setJoinOption(kind, enabled) {
     const isMicrophone = kind === 'microphone';
-    if (!isMicrophone && enabled) {
+    if (isMicrophone && selectedRoom()?.microphoneAllowed === false) enabled = false;
+    if (!isMicrophone && enabled && state.backdropEnabled) {
       try {
         if (ensureBackgroundController().capabilities().supported !== true) enabled = false;
       } catch (error) {
@@ -639,6 +712,7 @@
     const button = byId(isMicrophone ? 'sr-join-microphone' : 'sr-join-camera');
     button.setAttribute('aria-pressed', String(enabled));
     button.querySelector('small').textContent = `${enabled ? 'On' : 'Off'} when you join`;
+    syncSelectedRoomPolicy();
   }
 
   function stopMeter() {
@@ -1055,17 +1129,26 @@
     tile.className = `sr-participant-tile${participant.isLocal ? ' is-self' : ''}`;
     tile.dataset.participantIdentity = participant.identity || '';
     tile.classList.toggle('is-speaking', state.activeSpeakers.has(participant.identity));
+    tile.classList.toggle('is-pinned', state.pinnedParticipantIdentity === participant.identity);
 
-    const videoPublication = publicationFor(participant, LiveKit?.Track?.Source?.Camera || 'camera');
+    const screenPublication = publicationFor(participant, LiveKit?.Track?.Source?.ScreenShare || 'screen_share');
+    const cameraPublication = publicationFor(participant, LiveKit?.Track?.Source?.Camera || 'camera');
+    const videoPublication = screenPublication?.track && !screenPublication.isMuted
+      ? screenPublication
+      : cameraPublication;
     const videoTrack = videoPublication?.track;
-    const localCameraProtected = !participant.isLocal
+    const isScreenShare = videoPublication === screenPublication;
+    tile.classList.toggle('is-screen-share', isScreenShare);
+    const localCameraProtected = isScreenShare
+      || !participant.isLocal
       || isStaticQualityCameraPublication(videoPublication)
       || isMandatoryProcessedCameraTrack(videoTrack);
     const cameraVisible = Boolean(videoTrack && !videoPublication?.isMuted && localCameraProtected);
     if (participant.isLocal && videoTrack && !videoPublication?.isMuted && !localCameraProtected) {
       scheduleLocalCameraGuard(state.room);
     }
-    if (cameraVisible) {
+    const streamPaused = String(videoPublication?.streamState || '').toLowerCase().includes('paused');
+    if (cameraVisible && !streamPaused) {
       attachTrack(videoTrack, tile, 'video', participant.isLocal);
     } else {
       const placeholder = document.createElement('div');
@@ -1074,7 +1157,7 @@
       avatar.className = 'sr-avatar';
       avatar.textContent = initials(displayName(participant));
       const copy = document.createElement('span');
-      copy.textContent = 'Camera off';
+      copy.textContent = streamPaused ? 'Video paused to save bandwidth' : 'Camera off';
       placeholder.append(avatar, copy);
       tile.append(placeholder);
     }
@@ -1100,6 +1183,40 @@
     mediaState.append(microphoneIcon);
     meta.append(name, mediaState);
     tile.append(meta);
+
+    if (participant.attributes?.['dd.studyRoom.handRaised'] === 'true') {
+      const hand = document.createElement('span');
+      hand.className = 'sr-raised-hand';
+      hand.title = `${displayName(participant)} raised a hand`;
+      const handIcon = document.createElement('img');
+      handIcon.src = '../assets/icons/navigation/hand.svg';
+      handIcon.width = 18;
+      handIcon.height = 18;
+      handIcon.alt = '';
+      handIcon.setAttribute('aria-hidden', 'true');
+      hand.append(handIcon);
+      tile.append(hand);
+    }
+
+    const pin = document.createElement('button');
+    const pinned = state.pinnedParticipantIdentity === participant.identity;
+    pin.type = 'button';
+    pin.className = 'sr-tile-pin';
+    pin.setAttribute('aria-pressed', String(pinned));
+    pin.setAttribute('aria-label', `${pinned ? 'Unpin' : 'Pin'} ${displayName(participant)}`);
+    pin.title = pinned ? 'Unpin tile' : 'Pin tile';
+    const pinIcon = document.createElement('img');
+    pinIcon.src = '../assets/icons/navigation/pin.svg';
+    pinIcon.width = 17;
+    pinIcon.height = 17;
+    pinIcon.alt = '';
+    pinIcon.setAttribute('aria-hidden', 'true');
+    pin.append(pinIcon);
+    pin.addEventListener('click', () => {
+      state.pinnedParticipantIdentity = pinned ? '' : participant.identity;
+      renderParticipants();
+    });
+    tile.append(pin);
     return tile;
   }
 
@@ -1135,6 +1252,15 @@
     const label = document.createElement('span');
     label.textContent = participant.isLocal ? `${displayName(participant)} (You)` : displayName(participant);
     name.append(presence, label);
+    if (participant.attributes?.['dd.studyRoom.handRaised'] === 'true') {
+      const hand = document.createElement('img');
+      hand.className = 'sr-person-hand';
+      hand.src = '../assets/icons/navigation/hand.svg';
+      hand.width = 16;
+      hand.height = 16;
+      hand.alt = 'Hand raised';
+      name.append(hand);
+    }
     row.append(name);
 
     if (!participant.isLocal) {
@@ -1246,9 +1372,18 @@
     const participants = participantCollection();
     const visibleParticipants = participants.filter((participant) => (
       participant.isLocal || !state.blockedParticipants.has(participant.identity)
-    ));
+    )).sort((left, right) => {
+      const leftPinned = left.identity === state.pinnedParticipantIdentity ? 1 : 0;
+      const rightPinned = right.identity === state.pinnedParticipantIdentity ? 1 : 0;
+      if (leftPinned !== rightPinned) return rightPinned - leftPinned;
+      const screenSource = LiveKit?.Track?.Source?.ScreenShare || 'screen_share';
+      const leftSharing = publicationFor(left, screenSource)?.track ? 1 : 0;
+      const rightSharing = publicationFor(right, screenSource)?.track ? 1 : 0;
+      return rightSharing - leftSharing;
+    });
     const grid = byId('sr-participant-grid');
     grid.dataset.count = String(visibleParticipants.length);
+    grid.dataset.pinned = state.pinnedParticipantIdentity ? 'true' : 'false';
     grid.replaceChildren(...visibleParticipants.map(createTile));
     attachRemoteAudio(participants);
     renderPeople(participants);
@@ -1308,7 +1443,15 @@
   }
 
   function syncConnectionState(value = state.room?.connectionState) {
-    byId('sr-connection-state').textContent = connectionLabel(value);
+    let label = connectionLabel(value);
+    if (label === 'Excellent') {
+      const quality = String(state.connectionQualities.get(state.room?.localParticipant?.identity) || '').toLowerCase();
+      if (quality.includes('poor') || quality === '2') label = 'Poor';
+      else if (quality.includes('lost') || quality === '1') label = 'Offline';
+      else if (quality.includes('good') || quality === '3') label = 'Good';
+    }
+    byId('sr-connection-state').textContent = label;
+    byId('sr-connection-state').dataset.quality = label.toLowerCase();
   }
 
   function syncSelfMediaState() {
@@ -1320,17 +1463,24 @@
     byId('sr-camera-state').textContent = cameraOn ? 'On' : 'Off';
     const micButton = byId('sr-toggle-microphone');
     const cameraButton = byId('sr-toggle-camera');
+    const microphoneAllowed = state.currentRoomMicrophoneAllowed !== false;
+    micButton.disabled = !microphoneAllowed;
+    micButton.setAttribute('aria-disabled', String(!microphoneAllowed));
     micButton.setAttribute('aria-pressed', String(micOn));
     cameraButton.setAttribute('aria-pressed', String(cameraOn));
-    micButton.setAttribute('aria-label', micOn ? 'Mute your microphone' : 'Unmute your microphone');
+    micButton.setAttribute('aria-label', !microphoneAllowed
+      ? 'Microphone unavailable in Library'
+      : micOn ? 'Mute your microphone' : 'Unmute your microphone');
     cameraButton.setAttribute('aria-label', cameraOn ? 'Stop your camera' : 'Start your camera');
-    micButton.title = micOn ? 'Mute microphone' : 'Unmute microphone';
+    micButton.title = !microphoneAllowed ? 'Library is a silent video-only room' : micOn ? 'Mute microphone' : 'Unmute microphone';
     cameraButton.title = cameraOn ? 'Stop camera' : 'Start camera';
-    micButton.querySelector('span').textContent = micOn ? 'Mute' : 'Unmute';
+    micButton.querySelector('span').textContent = !microphoneAllowed ? 'Silent room' : micOn ? 'Mute' : 'Unmute';
     cameraButton.querySelector('span').textContent = cameraOn ? 'Stop video' : 'Start video';
     const mediaStatus = byId('sr-live-media-status');
     if (mediaStatus) {
-      mediaStatus.textContent = micOn
+      mediaStatus.textContent = !microphoneAllowed
+        ? 'Library is a silent video-only room. Microphone publishing is disabled for everyone.'
+        : micOn
         ? state.microphoneTransport === 'sending'
           ? 'Your microphone is sending audio to the room.'
           : state.microphoneTransport === 'checking'
@@ -1364,8 +1514,220 @@
     }
   }
 
+  function participantByIdentity(identity) {
+    if (!state.room || !identity) return null;
+    if (state.room.localParticipant?.identity === identity) return state.room.localParticipant;
+    return state.room.remoteParticipants?.get?.(identity) || null;
+  }
+
+  function updateUnreadBadges() {
+    for (const id of ['sr-chat-tab-badge', 'sr-chat-dock-badge']) {
+      const badge = byId(id);
+      if (!badge) continue;
+      badge.hidden = state.unreadMessages < 1;
+      badge.textContent = String(Math.min(state.unreadMessages, 99));
+    }
+  }
+
+  function renderChatMessages() {
+    const list = byId('sr-chat-list');
+    if (!list) return;
+    const nodes = state.chatMessages.map((message) => {
+      const article = document.createElement('article');
+      article.className = `sr-chat-message${message.local ? ' is-local' : ''}`;
+      const header = document.createElement('header');
+      const sender = document.createElement('strong');
+      sender.textContent = message.local ? 'You' : message.senderName;
+      const time = document.createElement('time');
+      time.dateTime = new Date(message.sentAt).toISOString();
+      time.textContent = new Intl.DateTimeFormat('en-PH', {
+        hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Manila',
+      }).format(message.sentAt);
+      const copy = document.createElement('p');
+      copy.textContent = message.text;
+      header.append(sender, time);
+      article.append(header, copy);
+      return article;
+    });
+    list.replaceChildren(...nodes);
+    list.scrollTop = list.scrollHeight;
+  }
+
+  function appendChatMessage({ senderIdentity, senderName, text, local = false, sentAt = Date.now() }) {
+    const normalizedText = String(text || '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/gu, '').trim().slice(0, 500);
+    if (!normalizedText || (!local && state.blockedParticipants.has(senderIdentity))) return;
+    state.chatMessages.push({
+      id: randomId(16),
+      senderIdentity: String(senderIdentity || ''),
+      senderName: String(senderName || 'Study partner').slice(0, MAX_NICKNAME_LENGTH),
+      text: normalizedText,
+      local,
+      sentAt: Number(sentAt) || Date.now(),
+    });
+    if (state.chatMessages.length > 200) state.chatMessages.splice(0, state.chatMessages.length - 200);
+    if (!local && (!state.panelOpen || state.panelView !== 'chat')) {
+      state.unreadMessages += 1;
+      updateUnreadBadges();
+    }
+    renderChatMessages();
+  }
+
+  function registerRoomChat(room) {
+    if (typeof room?.registerTextStreamHandler !== 'function') return;
+    room.registerTextStreamHandler('duediligence.study-room.chat.v1', async (reader, participantInfo) => {
+      try {
+        const text = await reader.readAll();
+        if (state.room !== room) return;
+        const participant = participantByIdentity(participantInfo?.identity);
+        appendChatMessage({
+          senderIdentity: participantInfo?.identity,
+          senderName: displayName(participant),
+          text,
+        });
+      } catch {
+        // A failed or interrupted data stream is discarded without affecting media.
+      }
+    });
+  }
+
+  function openPanel(view = 'people') {
+    const allowedViews = new Set(['people', 'chat', 'settings']);
+    state.panelView = allowedViews.has(view) ? view : 'people';
+    state.panelOpen = true;
+    const panel = byId('sr-room-panel');
+    panel.hidden = false;
+    panel.dataset.openPanel = state.panelView;
+    byId('sr-room-panel-title').textContent = state.panelView === 'chat'
+      ? 'Room messages'
+      : state.panelView === 'settings' ? 'Settings' : 'People';
+    document.querySelectorAll('[data-panel-view]').forEach((node) => {
+      node.hidden = node.dataset.panelView !== state.panelView;
+    });
+    document.querySelectorAll('[data-panel-target]').forEach((button) => {
+      button.setAttribute('aria-selected', String(button.dataset.panelTarget === state.panelView));
+    });
+    for (const [id, target] of [['sr-dock-chat', 'chat'], ['sr-dock-people', 'people'], ['sr-dock-devices', 'settings']]) {
+      const active = state.panelView === target;
+      byId(id)?.setAttribute('aria-pressed', String(active));
+      byId(id)?.setAttribute('aria-expanded', String(active));
+    }
+    if (state.panelView === 'chat') {
+      state.unreadMessages = 0;
+      updateUnreadBadges();
+      global.requestAnimationFrame(() => byId('sr-chat-input')?.focus?.({ preventScroll: true }));
+    }
+  }
+
+  function closePanel() {
+    state.panelOpen = false;
+    byId('sr-room-panel').hidden = true;
+    for (const id of ['sr-dock-chat', 'sr-dock-people', 'sr-dock-devices']) {
+      byId(id)?.setAttribute('aria-pressed', 'false');
+      byId(id)?.setAttribute('aria-expanded', 'false');
+    }
+  }
+
+  async function sendChatMessage(event) {
+    event.preventDefault();
+    const input = byId('sr-chat-input');
+    const text = String(input?.value || '').trim().slice(0, 500);
+    if (!text || !state.room?.localParticipant) return;
+    const now = Date.now();
+    if (now - state.lastChatSentAt < 900) {
+      toast('Please wait a moment before sending another message.');
+      return;
+    }
+    const button = byId('sr-chat-send');
+    button.disabled = true;
+    try {
+      if (typeof state.room.localParticipant.sendText !== 'function') {
+        throw new Error('Room messaging is unavailable in this browser.');
+      }
+      await state.room.localParticipant.sendText(text, {
+        topic: 'duediligence.study-room.chat.v1',
+      });
+      state.lastChatSentAt = now;
+      appendChatMessage({
+        senderIdentity: state.room.localParticipant.identity,
+        senderName: displayName(state.room.localParticipant),
+        text,
+        local: true,
+        sentAt: now,
+      });
+      input.value = '';
+      input.focus();
+    } catch (error) {
+      toast(friendlyError(error, 'Your message could not be sent.'));
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  function localScreenShareEnabled() {
+    const source = LiveKit?.Track?.Source?.ScreenShare || 'screen_share';
+    const publication = publicationFor(state.room?.localParticipant, source);
+    return Boolean(publication?.track && !publication.isMuted);
+  }
+
+  function syncInteractiveControls() {
+    const screenSharing = localScreenShareEnabled();
+    state.screenSharing = screenSharing;
+    const screenButton = byId('sr-toggle-screen-share');
+    screenButton?.setAttribute('aria-pressed', String(screenSharing));
+    screenButton?.setAttribute('aria-label', screenSharing ? 'Stop sharing your screen' : 'Share your screen');
+    if (screenButton) screenButton.title = screenSharing ? 'Stop presenting' : 'Present now';
+    const handButton = byId('sr-toggle-hand');
+    handButton?.setAttribute('aria-pressed', String(state.handRaised));
+    handButton?.setAttribute('aria-label', state.handRaised ? 'Lower your hand' : 'Raise your hand');
+    if (handButton) handButton.title = state.handRaised ? 'Lower hand' : 'Raise hand';
+  }
+
+  async function toggleScreenShare() {
+    const local = state.room?.localParticipant;
+    if (!local || typeof local.setScreenShareEnabled !== 'function') return;
+    const enabled = !localScreenShareEnabled();
+    const button = byId('sr-toggle-screen-share');
+    button.disabled = true;
+    try {
+      await local.setScreenShareEnabled(enabled, {
+        audio: state.currentRoomMicrophoneAllowed !== false,
+      }, {
+        videoCodec: 'vp8',
+        simulcast: true,
+        degradationPreference: 'balanced',
+      });
+      toast(enabled ? 'You are presenting to the room.' : 'Screen sharing stopped.');
+      renderParticipants();
+    } catch (error) {
+      toast(friendlyError(error, 'Screen sharing could not start. Check the browser sharing permission.'));
+    } finally {
+      button.disabled = false;
+      syncInteractiveControls();
+    }
+  }
+
+  async function toggleRaiseHand() {
+    const local = state.room?.localParticipant;
+    if (!local || typeof local.setAttributes !== 'function') return;
+    const next = !state.handRaised;
+    const button = byId('sr-toggle-hand');
+    button.disabled = true;
+    try {
+      await local.setAttributes({ 'dd.studyRoom.handRaised': next ? 'true' : 'false' });
+      state.handRaised = next;
+      renderParticipants();
+      toast(next ? 'Your hand is raised.' : 'Your hand is lowered.');
+    } catch {
+      toast('Your hand status could not be updated.');
+    } finally {
+      button.disabled = false;
+      syncInteractiveControls();
+    }
+  }
+
   function bindRoomEvents(room) {
     const event = LiveKit.RoomEvent;
+    registerRoomChat(room);
     [event.LocalTrackPublished, event.TrackUnmuted].filter(Boolean).forEach((eventName) => {
       room.on(eventName, () => scheduleLocalCameraGuard(room));
     });
@@ -1379,6 +1741,8 @@
       event.LocalTrackPublished,
       event.LocalTrackUnpublished,
       event.ParticipantNameChanged,
+      event.ParticipantAttributesChanged,
+      event.TrackStreamStateChanged,
     ].filter(Boolean);
     rerenderEvents.forEach((eventName) => room.on(eventName, renderParticipants));
     room.on(event.ActiveSpeakersChanged, (speakers) => {
@@ -1398,6 +1762,31 @@
       if (String(connectionState || '').toLowerCase() === 'connected') {
         scheduleLocalCameraGuard(room);
       }
+    });
+    if (event.ConnectionQualityChanged) {
+      room.on(event.ConnectionQualityChanged, (quality, participant) => {
+        if (participant?.identity) state.connectionQualities.set(participant.identity, String(quality || ''));
+        syncConnectionState(room.connectionState);
+      });
+    }
+    const connectionBanner = byId('sr-connection-banner');
+    if (event.Reconnecting) {
+      room.on(event.Reconnecting, () => {
+        connectionBanner.hidden = false;
+        connectionBanner.textContent = 'Reconnecting to the Study Room… Camera and microphone state will be restored automatically.';
+        syncConnectionState('reconnecting');
+      });
+    }
+    if (event.Reconnected) {
+      room.on(event.Reconnected, () => {
+        connectionBanner.hidden = true;
+        syncConnectionState('connected');
+        toast('Connection restored.');
+        renderParticipants();
+      });
+    }
+    [event.LocalTrackPublished, event.LocalTrackUnpublished].filter(Boolean).forEach((eventName) => {
+      room.on(eventName, syncInteractiveControls);
     });
     room.on(event.AudioPlaybackStatusChanged, (canPlayAudio) => {
       state.audioPlaybackBlocked = canPlayAudio === false || room.canPlaybackAudio === false;
@@ -1475,8 +1864,8 @@
     return publicationFor(
       local,
       isMicrophone
-        ? (LiveKit.Track?.Source?.Microphone || 'microphone')
-        : (LiveKit.Track?.Source?.Camera || 'camera'),
+        ? (LiveKit?.Track?.Source?.Microphone || 'microphone')
+        : (LiveKit?.Track?.Source?.Camera || 'camera'),
     );
   }
 
@@ -1498,7 +1887,7 @@
 
   function microphonePublishOptions() {
     return {
-      ...(LiveKit.AudioPresets?.speech ? { audioPreset: LiveKit.AudioPresets.speech } : {}),
+      ...(LiveKit?.AudioPresets?.speech ? { audioPreset: LiveKit.AudioPresets.speech } : {}),
       dtx: false,
       red: true,
       forceStereo: false,
@@ -1507,10 +1896,10 @@
 
   function cameraPublishOptions() {
     return {
-      source: LiveKit.Track?.Source?.Camera || 'camera',
-      simulcast: false,
+      source: LiveKit?.Track?.Source?.Camera || 'camera',
+      simulcast: true,
       videoCodec: 'vp8',
-      degradationPreference: 'maintain-framerate',
+      degradationPreference: 'balanced',
       videoEncoding: { ...STUDY_VIDEO_ENCODING },
     };
   }
@@ -1521,7 +1910,7 @@
         pixelDensity: 1,
         pauseVideoInBackground: true,
       },
-      dynacast: false,
+      dynacast: true,
       disconnectOnPageLeave: true,
       stopLocalTrackOnUnpublish: true,
       audioCaptureDefaults: {
@@ -1535,9 +1924,9 @@
       },
       publishDefaults: {
         ...microphonePublishOptions(),
-        simulcast: false,
+        simulcast: true,
         videoCodec: 'vp8',
-        degradationPreference: 'maintain-framerate',
+        degradationPreference: 'balanced',
         videoEncoding: { ...STUDY_VIDEO_ENCODING },
       },
     };
@@ -1843,7 +2232,7 @@
         ? (snapshot.error || 'This device cannot apply the backdrop. Remove it to use your camera without processing.')
         : status === 'destroyed'
           ? 'The protected camera has been closed.'
-        : 'On by default. Remove it at any time if your device needs a lighter video mode.';
+        : 'Off by default for smoother video. Apply it whenever you want the Due Diligence backdrop.';
     }
     const unavailable = snapshot.supported === false || status === 'unavailable';
     for (const id of ['sr-join-camera', 'sr-toggle-camera']) {
@@ -2120,6 +2509,13 @@
     const local = state.room?.localParticipant;
     if (!local) throw new Error('The room is not connected.');
     const isMicrophone = kind === 'microphone';
+    if (LOCAL_TEST_MODE === 'live') {
+      const setEnabled = isMicrophone ? local.setMicrophoneEnabled : local.setCameraEnabled;
+      if (typeof setEnabled !== 'function') throw sourceStartError(kind);
+      await setEnabled.call(local, enabled);
+      if (isMicrophone) state.microphoneTransport = enabled ? 'sending' : 'off';
+      return;
+    }
     if (!isMicrophone) {
       state.cameraOperationBusy = true;
       syncBrandedBackdropState(state.backgroundController?.snapshot?.() || { status: 'idle', supported: true });
@@ -2196,7 +2592,7 @@
     const warnings = [];
     // Microphone startup is independent of the video processor and should not
     // wait for segmentation assets or camera initialization.
-    if (state.joinWithMicrophone) {
+    if (state.joinWithMicrophone && state.currentRoomMicrophoneAllowed !== false) {
       try {
         await setLocalSourceEnabled('microphone', true);
       } catch {
@@ -2218,9 +2614,14 @@
 
   async function joinRoom() {
     if (state.joining || state.room) return;
-    const roomToJoin = selectedRoom();
+    let roomToJoin = selectedRoom();
+    if (roomToJoin && !roomToJoin.active && state.isAdministrator && roomToJoin.canCreate !== false) {
+      const created = await createRoomSlot(roomToJoin.roomKey);
+      roomToJoin = selectedRoom();
+      if (!created || !roomToJoin?.active) return;
+    }
     if (!roomToJoin?.active) {
-      setStatus('sr-prejoin-status', 'Open or choose one of the four Study Rooms before joining.', 'error');
+      setStatus('sr-prejoin-status', 'Choose an open Study Room. Only administrators can create a room.', 'error');
       byId('sr-room-lobby')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
       return;
     }
@@ -2256,7 +2657,7 @@
         });
       }
       const audioUnlock = startRoomAudioFromGesture(room);
-      const credential = await workerRequest('/admin/study-room/join', { nickname, roomKey });
+      const credential = await workerRequest('/study-room/join', { nickname, roomKey });
       if (String(credential.room_key || '') !== roomKey) {
         throw new Error('The secure service returned a different Study Room than the one selected.');
       }
@@ -2267,6 +2668,8 @@
       });
       await audioUnlock;
       state.currentRoomKey = roomKey;
+      state.currentRoomMicrophoneAllowed = credential.microphone_allowed !== false;
+      if (!state.currentRoomMicrophoneAllowed) state.joinWithMicrophone = false;
       state.focusStartedAt = Date.parse(credential.focus_started_at || '') || Date.now();
       byId('sr-live-nickname').value = credential.participant_name || nickname;
       byId('sr-active-room-name').textContent = roomPresentation(roomKey).name;
@@ -2275,6 +2678,9 @@
       byId('sr-live-room').hidden = false;
       syncConnectionState(room.connectionState);
       renderParticipants();
+      openPanel('people');
+      syncInteractiveControls();
+      syncBrandedBackdropState({ status: state.backdropEnabled ? 'idle' : 'off', supported: true });
       startFocusClock();
       await refreshDeviceLists();
       updateAudioPrompt();
@@ -2306,6 +2712,10 @@
   async function toggleLocalTrack(kind) {
     const local = state.room?.localParticipant;
     if (!local) return;
+    if (kind === 'microphone' && state.currentRoomMicrophoneAllowed === false) {
+      toast('Library is a silent video-only room. Microphones are disabled for everyone.');
+      return;
+    }
     const button = byId(kind === 'microphone' ? 'sr-toggle-microphone' : 'sr-toggle-camera');
     button.disabled = true;
     startRoomAudioFromGesture();
@@ -2351,7 +2761,7 @@
     const submit = event.submitter || event.currentTarget.querySelector('button[type="submit"]');
     submit.disabled = true;
     try {
-      const payload = await workerRequest('/admin/study-room/moderate', {
+      const payload = await workerRequest('/study-room/moderate', {
         operation: 'rename',
         roomKey: state.currentRoomKey,
         participantIdentity: state.room.localParticipant.identity,
@@ -2482,6 +2892,16 @@
     state.localMutedParticipants.clear();
     state.participantVolumes.clear();
     state.activeSpeakers.clear();
+    state.connectionQualities.clear();
+    state.pinnedParticipantIdentity = '';
+    state.handRaised = false;
+    state.screenSharing = false;
+    state.currentRoomMicrophoneAllowed = true;
+    state.chatMessages = [];
+    state.unreadMessages = 0;
+    updateUnreadBadges();
+    const banner = byId('sr-connection-banner');
+    if (banner) banner.hidden = true;
   }
 
   async function disconnectConnectedRoom() {
@@ -2519,13 +2939,31 @@
     const local = state.room.localParticipant;
     const resumeMicrophone = isLocalSourceEnabled(local, 'microphone');
     const resumeCamera = isLocalSourceEnabled(local, 'camera');
+    if (LOCAL_TEST_MODE === 'live') {
+      state.switchingRoom = true;
+      state.leaving = true;
+      toast(`Moving to ${roomPresentation(target.roomKey).name}…`);
+      try {
+        await disconnectConnectedRoom();
+        state.selectedRoomKey = target.roomKey;
+      } finally {
+        state.leaving = false;
+        state.switchingRoom = false;
+      }
+      createLocalQualityPreview(target.roomKey, {
+        microphoneEnabled: target.microphoneAllowed !== false && resumeMicrophone,
+        cameraEnabled: resumeCamera,
+      });
+      toast(`You are now studying in ${roomPresentation(target.roomKey).name}.`);
+      return;
+    }
     state.switchingRoom = true;
     state.leaving = true;
     toast(`Moving to ${roomPresentation(target.roomKey).name}…`);
     try {
       await disconnectConnectedRoom();
       state.selectedRoomKey = target.roomKey;
-      state.joinWithMicrophone = resumeMicrophone;
+      state.joinWithMicrophone = target.microphoneAllowed !== false && resumeMicrophone;
       state.joinWithCamera = resumeCamera;
       byId('sr-live-room').hidden = true;
       byId('sr-prejoin').hidden = false;
@@ -2550,15 +2988,20 @@
     }, 150);
   }
 
-  function createLocalQualityPreview() {
+  function createLocalQualityPreview(roomKey = state.selectedRoomKey || '1', media = {}) {
     const cameraSource = LiveKit?.Track?.Source?.Camera || 'camera';
+    const microphoneSource = LiveKit?.Track?.Source?.Microphone || 'microphone';
+    const screenShareSource = LiveKit?.Track?.Source?.ScreenShare || 'screen_share';
+    const activeRoomKey = ROOM_PRESENTATION[String(roomKey)] ? String(roomKey) : '1';
+    const localNickname = String(byId('sr-nickname')?.value || defaultNickname()).trim() || defaultNickname();
     const previewPeople = [
-      { identity: 'sr_localqualitypreview0000', name: 'Dimasalang', image: '../assets/study-room/dimasalang-library.webp', isLocal: true },
-      { identity: 'sr_previewparticipant00002', name: 'Participant 2', image: '../assets/study-room/participant-2-tropical.webp' },
-      { identity: 'sr_previewparticipant00003', name: 'Participant 3', image: '../assets/study-room/participant-3-bedroom.webp' },
-      { identity: 'sr_previewparticipant00004', name: 'Participant 4', image: '../assets/study-room/participant-4-condo.webp' },
+      { identity: 'sr_localqualitypreview0000', name: localNickname, image: '../assets/study-room/dimasalang-library.webp', isLocal: true },
+      { identity: 'sr_previewparticipant00002', name: 'Participant #2', image: '../assets/study-room/participant-2-tropical.webp' },
+      { identity: 'sr_previewparticipant00003', name: 'Participant #3', image: '../assets/study-room/participant-3-bedroom.webp' },
+      { identity: 'sr_previewparticipant00004', name: 'Participant #4', image: '../assets/study-room/participant-4-condo.webp' },
     ];
     const participants = previewPeople.map((person) => {
+      const attributes = {};
       const track = {
         mediaStreamTrack: {
           readyState: 'live',
@@ -2579,20 +3022,58 @@
       };
       const publication = {
         source: cameraSource,
-        isMuted: false,
+        isMuted: person.isLocal && media.cameraEnabled === false,
         track,
         __studyRoomStaticPreview: true,
       };
       const trackPublications = new Map([[cameraSource, publication]]);
-      return {
+      const screenSharePublication = person.isLocal ? {
+        source: screenShareSource,
+        isMuted: true,
+        track,
+        __studyRoomStaticPreview: true,
+      } : null;
+      if (screenSharePublication) trackPublications.set(screenShareSource, screenSharePublication);
+      const microphonePublication = person.isLocal ? {
+        source: microphoneSource,
+        isMuted: media.microphoneEnabled !== true,
+        track: {
+          isMuted: false,
+          mediaStreamTrack: {
+            readyState: 'live',
+            enabled: true,
+            muted: false,
+            getSettings: () => ({ deviceId: 'quality-preview-microphone' }),
+          },
+        },
+      } : null;
+      if (microphonePublication) trackPublications.set(microphoneSource, microphonePublication);
+      const participant = {
         identity: person.identity,
         name: person.name,
         isLocal: person.isLocal === true,
+        attributes,
         trackPublications,
         getTrackPublication: (source) => trackPublications.get(source) || null,
-        setMicrophoneEnabled: async () => {},
+        setMicrophoneEnabled: async (enabled) => {
+          if (microphonePublication) microphonePublication.isMuted = !enabled;
+          return microphonePublication;
+        },
+        setCameraEnabled: async (enabled) => {
+          publication.isMuted = !enabled;
+          return publication;
+        },
+        setScreenShareEnabled: async (enabled) => {
+          if (screenSharePublication) screenSharePublication.isMuted = !enabled;
+          return screenSharePublication;
+        },
+        setAttributes: async (nextAttributes) => {
+          Object.assign(attributes, nextAttributes || {});
+        },
+        sendText: async () => ({}),
         setVolume: () => {},
       };
+      return participant;
     });
     const [local, ...remote] = participants;
     state.room = {
@@ -2601,16 +3082,19 @@
       connectionState: 'connected',
       canPlaybackAudio: true,
     };
-    state.selectedRoomKey = '1';
-    state.currentRoomKey = '1';
+    state.selectedRoomKey = activeRoomKey;
+    state.currentRoomKey = activeRoomKey;
+    state.currentRoomMicrophoneAllowed = activeRoom(activeRoomKey)?.microphoneAllowed !== false;
     state.focusStartedAt = Date.now() - 48 * 60 * 1000 - 32 * 1000;
     byId('sr-live-nickname').value = local.name;
-    byId('sr-active-room-name').textContent = roomPresentation('1').name;
+    byId('sr-active-room-name').textContent = roomPresentation(activeRoomKey).name;
     byId('sr-prejoin').hidden = true;
     byId('sr-live-room').hidden = false;
-    syncBrandedBackdropState({ status: 'enabled', supported: true });
+    syncBrandedBackdropState({ status: 'off', supported: true });
     syncConnectionState(state.room.connectionState);
     renderParticipants();
+    openPanel('people');
+    syncInteractiveControls();
     startFocusClock();
   }
 
@@ -2627,7 +3111,28 @@
     byId('sr-join').addEventListener('click', joinRoom);
     byId('sr-toggle-microphone').addEventListener('click', () => toggleLocalTrack('microphone'));
     byId('sr-toggle-camera').addEventListener('click', () => toggleLocalTrack('camera'));
+    byId('sr-toggle-screen-share').addEventListener('click', toggleScreenShare);
+    byId('sr-toggle-hand').addEventListener('click', toggleRaiseHand);
     byId('sr-toggle-backdrop').addEventListener('click', toggleBackdrop);
+    byId('sr-dock-chat').addEventListener('click', () => {
+      if (state.panelOpen && state.panelView === 'chat') closePanel();
+      else openPanel('chat');
+    });
+    byId('sr-dock-people').addEventListener('click', () => {
+      if (state.panelOpen && state.panelView === 'people') closePanel();
+      else openPanel('people');
+    });
+    byId('sr-close-panel').addEventListener('click', closePanel);
+    document.querySelectorAll('[data-panel-target]').forEach((button) => {
+      button.addEventListener('click', () => openPanel(button.dataset.panelTarget));
+    });
+    byId('sr-chat-form').addEventListener('submit', sendChatMessage);
+    byId('sr-chat-input').addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        byId('sr-chat-form').requestSubmit();
+      }
+    });
     byId('sr-open-devices').addEventListener('click', () => {
       const drawer = byId('sr-device-drawer');
       drawer.hidden = !drawer.hidden;
@@ -2636,11 +3141,8 @@
       byId('sr-dock-devices').setAttribute('aria-expanded', String(!drawer.hidden));
     });
     byId('sr-dock-devices').addEventListener('click', () => {
-      byId('sr-device-drawer').hidden = false;
-      byId('sr-open-devices').textContent = 'Hide device settings';
-      byId('sr-open-devices').setAttribute('aria-expanded', 'true');
-      byId('sr-dock-devices').setAttribute('aria-expanded', 'true');
-      byId('sr-device-drawer').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      if (state.panelOpen && state.panelView === 'settings') closePanel();
+      else openPanel('settings');
     });
     byId('sr-room-selector').addEventListener('click', () => {
       const menu = byId('sr-room-selector-menu');
@@ -2714,19 +3216,21 @@
 
   async function verifyAccess() {
     byId('sr-access-title').textContent = 'Opening the Study Room';
-    byId('sr-access-copy').textContent = 'Confirming your approved tester access. Your camera and microphone remain off.';
+    byId('sr-access-copy').textContent = 'Confirming your Study Room access. Your camera and microphone remain off.';
     byId('sr-access-loading').hidden = false;
     byId('sr-access-actions').hidden = true;
     try {
       if (LOCAL_TEST_MODE) {
-        state.access = { allowed: true, role: 'admin', maxRooms: 4, maxParticipants: 12 };
+        state.access = { allowed: true, role: 'admin', administrator: true, canCreateRooms: true, maxRooms: 5, maxParticipants: 12 };
+        state.isAdministrator = true;
         state.rooms = localQualityRoomCatalog();
         state.selectedRoomKey = state.rooms.find((room) => room.active)?.roomKey || '';
       } else {
         await createAuthClient();
-        state.access = await workerRequest('/admin/study-room/access');
+        state.access = await workerRequest('/study-room/access');
+        state.isAdministrator = state.access?.administrator === true;
         // Device discovery and the audio-only join path must not wait on a slow
-        // room-catalog endpoint. Render the four fixed slots immediately and
+        // room-catalog endpoint. Render the five fixed slots immediately and
         // refresh their active state in parallel.
         state.rooms = normalizeRoomCatalog({ rooms: [] });
         state.selectedRoomKey = '';
@@ -2738,11 +3242,7 @@
           setStatus('sr-prejoin-status', friendlyError(error, 'The Study Room list could not refresh.'), 'error');
         });
       }
-      try {
-        ensureBackgroundController();
-      } catch {
-        // Video fails closed, while room access and audio remain available.
-      }
+      syncBrandedBackdropState({ status: 'off', supported: true });
       bindDeviceChangeDetection();
       await discoverDevices();
       startRoomCatalogRefresh();

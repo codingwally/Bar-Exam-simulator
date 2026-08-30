@@ -5208,6 +5208,11 @@ async function privateBetaCapabilityExempt(request, pathname) {
   if (pathname === '/pedro/message' || pathname === '/pedro/query') {
     return true;
   }
+  // Study Room routes re-authenticate the user and enforce either a verified
+  // administrator role or a current paid-equivalent entitlement.
+  if (pathname === '/study-room' || pathname.startsWith('/study-room/')) {
+    return true;
+  }
   // Administrator authorization is enforced again by every /admin handler.
   // Keep the protected Admin console reachable even when a Founder disables
   // the learner-wide beta policy; otherwise the console could be unable to
@@ -5264,6 +5269,23 @@ async function phase4AccessForUser(env, userId, options = {}) {
     p_request_key: options.requestKey || null,
   });
   return normalizeAccessSnapshot(result);
+}
+
+function studyRoomMemberAccess(access) {
+  const basis = String(access?.basis || '').trim().toLowerCase();
+  const subscriptionStatus = String(access?.subscription?.status || '').trim().toLowerCase();
+  const activeSubscription = new Set(['active', 'trialing']).has(subscriptionStatus);
+  const paidEquivalentBasis = new Set([
+    'paid_subscription',
+    'early_access',
+    'founding_beta',
+  ]).has(basis);
+  const allowed = access?.allowed === true
+    && access?.termsRequired !== true
+    && access?.reauthenticationRequired !== true
+    && access?.paidSubscriptionExpired !== true
+    && (activeSubscription || paidEquivalentBasis);
+  return { ...access, allowed };
 }
 
 async function reserveGradeAccess(request, env, gradingRequest, verifiedUser = null) {
@@ -9864,6 +9886,9 @@ const studyRoomHandlers = createStudyRoomHandlers({
   authorizeAdmin: (env, user) => protectedSupabaseRpc(env, 'admin_authorization_context', {
     p_actor_user_id: user.id,
   }),
+  authorizeMember: async (env, user) => studyRoomMemberAccess(
+    await phase4AccessForUser(env, user.id),
+  ),
   parseJson: parseBoundedJson,
   rateLimit: enforceStudyRoomRateLimit,
   respond: jsonResponse,
@@ -10321,6 +10346,18 @@ export default {
         return await studyRoomHandlers.join(request, env, origin, allowedOrigin);
       }
       if (pathname === '/admin/study-room/moderate') {
+        return await studyRoomHandlers.moderate(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/study-room/access') {
+        return await studyRoomHandlers.access(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/study-room/rooms') {
+        return await studyRoomHandlers.rooms(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/study-room/join') {
+        return await studyRoomHandlers.join(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/study-room/moderate') {
         return await studyRoomHandlers.moderate(request, env, origin, allowedOrigin);
       }
       if (pathname === '/admin/forum/queue') {

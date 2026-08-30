@@ -1031,24 +1031,49 @@ function isSyntheticStudyRoomUser(user) {
   );
 }
 
-async function listStaleSyntheticUsers(configuration) {
+async function listStaleSyntheticAdministrators(configuration) {
+  // The hosted Supabase Auth collection endpoint can currently return a
+  // platform-side 500. Enumerate only administrator IDs from the staging
+  // authorization table, then resolve each candidate through the bounded
+  // get-by-id path and re-check both the synthetic email namespace and the
+  // exact synthetic metadata marker before deletion.
+  const candidateLimit = 200;
+  const candidateUrl = new URL(
+    `${configuration.supabaseUrl}/rest/v1/user_roles`,
+  );
+  candidateUrl.searchParams.set(
+    "role",
+    "in.(admin,founder_admin,super_admin)",
+  );
+  candidateUrl.searchParams.set("select", "user_id");
+  candidateUrl.searchParams.set("limit", String(candidateLimit));
+  const { body: rows } = await requestJson(candidateUrl, {
+    headers: serviceHeaders(configuration),
+  });
+  assert.ok(
+    Array.isArray(rows) && rows.length < candidateLimit,
+    "The staging administrator candidate set exceeded its reviewed cleanup boundary.",
+  );
+  const candidateIds = [
+    ...new Set(
+      rows
+        .map((row) => String(row?.user_id || ""))
+        .filter((userId) => UUID_PATTERN.test(userId)),
+    ),
+  ];
   const users = [];
-  const pageSize = 200;
-  for (let page = 1; page <= 10; page += 1) {
+  for (const userId of candidateIds) {
     const { body } = await requestSupabaseAdminJson(
       configuration,
-      `/auth/v1/admin/users?page=${page}&per_page=${pageSize}`,
+      `/auth/v1/admin/users/${encodeURIComponent(userId)}`,
       { headers: serviceHeaders(configuration) },
     );
-    const pageUsers = Array.isArray(body?.users)
-      ? body.users
-      : Array.isArray(body)
-        ? body
-        : [];
-    users.push(...pageUsers.filter(isSyntheticStudyRoomUser));
-    if (pageUsers.length < pageSize) break;
+    const user = body?.user || body;
+    if (isSyntheticStudyRoomUser(user)) {
+      users.push({ id: userId, token: null });
+    }
   }
-  return users.map((user) => ({ id: user.id, token: null }));
+  return users;
 }
 
 async function deleteSyntheticUsers(configuration, createdUsers) {
@@ -1128,7 +1153,7 @@ async function runPositiveSmoke() {
 
   try {
     checkpoint = "stale_synthetic_cleanup";
-    const staleUsers = await listStaleSyntheticUsers(configuration);
+    const staleUsers = await listStaleSyntheticAdministrators(configuration);
     const staleCleanupErrors = await deleteSyntheticUsers(
       configuration,
       staleUsers,

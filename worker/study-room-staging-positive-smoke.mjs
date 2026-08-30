@@ -957,8 +957,60 @@ async function safeReleaseRtcResources(resources) {
   return errors;
 }
 
+function isSyntheticStudyRoomUser(user) {
+  const email = String(user?.email || "").toLowerCase();
+  const fullName = String(
+    user?.user_metadata?.full_name || user?.raw_user_meta_data?.full_name || "",
+  );
+  return /^dd-study-room-(?:student|primary-admin|secondary-admin|founder-admin)-[a-z0-9-]+@example\.com$/u.test(
+    email,
+  ) && /^Synthetic Study Room (?:student|primary-admin|secondary-admin|founder-admin)$/u.test(
+    fullName,
+  );
+}
+
+async function listStaleSyntheticUsers(configuration) {
+  const users = [];
+  const pageSize = 200;
+  for (let page = 1; page <= 10; page += 1) {
+    const { body } = await requestJson(
+      `${configuration.supabaseUrl}/auth/v1/admin/users?page=${page}&per_page=${pageSize}`,
+      { headers: serviceHeaders(configuration) },
+    );
+    const pageUsers = Array.isArray(body?.users)
+      ? body.users
+      : Array.isArray(body)
+        ? body
+        : [];
+    users.push(...pageUsers.filter(isSyntheticStudyRoomUser));
+    if (pageUsers.length < pageSize) break;
+  }
+  return users.map((user) => ({ id: user.id, token: null }));
+}
+
 async function deleteSyntheticUsers(configuration, createdUsers) {
   const errors = [];
+  const filter = createdUsers
+    .map((user) => encodeURIComponent(user.id))
+    .join(",");
+  if (filter) {
+    // Remove the exact synthetic authorization rows first. Some of them retain
+    // the synthetic administrator as their actor, so deleting auth users first
+    // can create a foreign-key cycle after a partially completed smoke run.
+    for (const table of ["free_beta_access", "user_roles"]) {
+      await requestJson(
+        `${configuration.supabaseUrl}/rest/v1/${table}?user_id=in.(${filter})`,
+        {
+          method: "DELETE",
+          headers: {
+            ...serviceHeaders(configuration),
+            Prefer: "return=minimal",
+          },
+        },
+        [200, 204],
+      ).catch((error) => errors.push(error));
+    }
+  }
   for (const user of [...createdUsers].reverse()) {
     if (user.token) {
       await requestJson(
@@ -982,10 +1034,7 @@ async function deleteSyntheticUsers(configuration, createdUsers) {
       [200, 204],
     ).catch((error) => errors.push(error));
   }
-  if (!errors.length && createdUsers.length) {
-    const filter = createdUsers
-      .map((user) => encodeURIComponent(user.id))
-      .join(",");
+  if (createdUsers.length) {
     for (const table of ["user_roles", "free_beta_access"]) {
       const { body } = await requestJson(
         `${configuration.supabaseUrl}/rest/v1/${table}?user_id=in.(${filter})&select=user_id`,
@@ -1013,6 +1062,22 @@ async function runPositiveSmoke() {
   let cleanupErrors = [];
 
   try {
+    checkpoint = "stale_synthetic_cleanup";
+    const staleUsers = await listStaleSyntheticUsers(configuration);
+    const staleCleanupErrors = await deleteSyntheticUsers(
+      configuration,
+      staleUsers,
+    );
+    if (staleCleanupErrors.length) {
+      throw new AggregateError(
+        staleCleanupErrors,
+        "A stale synthetic Study Room user could not be removed safely.",
+      );
+    }
+    console.log(
+      `STUDY_ROOM_STAGING_POSITIVE: stale_synthetic_cleanup=${staleUsers.length}`,
+    );
+
     checkpoint = "synthetic_user_provisioning";
     const student = await createSyntheticUser(
       configuration,
@@ -1612,6 +1677,20 @@ async function runSelfTest() {
   const identity = "sr_abcdefghijklmnopqrstuvwx";
   const issuer = "reviewed_api_key";
   const nickname = "Participant #101";
+  assert.equal(
+    isSyntheticStudyRoomUser({
+      email: "dd-study-room-founder-admin-mtfxnwff-136fbe0c@example.com",
+      user_metadata: { full_name: "Synthetic Study Room founder-admin" },
+    }),
+    true,
+  );
+  assert.equal(
+    isSyntheticStudyRoomUser({
+      email: "administrator@example.com",
+      user_metadata: { full_name: "Synthetic Study Room founder-admin" },
+    }),
+    false,
+  );
   const claimsForRoom = (roomKey) => {
     const slot = STUDY_ROOM_SLOTS[Number(approvedRoomKey(roomKey)) - 1];
     return ({

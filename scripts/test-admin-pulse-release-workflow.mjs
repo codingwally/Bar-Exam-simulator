@@ -50,6 +50,16 @@ assert.match(workflow, /createECDH\('prime256v1'\)/);
 assert.match(workflow, /VAPID key pair does not match/);
 assert.match(workflow, /test "\$current" = "\$EXPECTED_CURRENT_STAGING_VERSION"/);
 assert.match(workflow, /needs: deploy_production_worker[\s\S]*uses: actions\/deploy-pages@v4/);
+assert.equal(
+  [...workflow.matchAll(/candidate_sha" == "\$GITHUB_SHA" && "\$candidate_state" != "success"/g)].length,
+  3,
+  'every pre-Pages baseline gate must ignore only this release attempt\'s unsuccessful deployment records',
+);
+assert.equal(
+  [...workflow.matchAll(/candidate_state" == "inactive"/g)].length,
+  3,
+  'every pre-Pages baseline gate must ignore explicitly inactive deployment records',
+);
 assert.match(workflow, /name: Sign and publish the Android APK/);
 assert.match(workflow, /ADMIN_PULSE_ANDROID_KEYSTORE_BASE64/);
 assert.match(workflow, /apksigner" verify --verbose --print-certs/);

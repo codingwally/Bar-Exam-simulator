@@ -1034,9 +1034,9 @@ function isSyntheticStudyRoomUser(user) {
 async function listStaleSyntheticAdministrators(configuration) {
   // The hosted Supabase Auth collection endpoint can currently return a
   // platform-side 500. Enumerate only administrator IDs from the staging
-  // authorization table, then resolve each candidate through the bounded
-  // get-by-id path and re-check both the synthetic email namespace and the
-  // exact synthetic metadata marker before deletion.
+  // authorization table, then use the existing audited administrator
+  // directory to re-check both the synthetic email namespace and the exact
+  // synthetic profile marker before deletion.
   const candidateLimit = 200;
   const candidateUrl = new URL(
     `${configuration.supabaseUrl}/rest/v1/user_roles`,
@@ -1045,7 +1045,7 @@ async function listStaleSyntheticAdministrators(configuration) {
     "role",
     "in.(admin,founder_admin,super_admin)",
   );
-  candidateUrl.searchParams.set("select", "user_id");
+  candidateUrl.searchParams.set("select", "user_id,role");
   candidateUrl.searchParams.set("limit", String(candidateLimit));
   const { body: rows } = await requestJson(candidateUrl, {
     headers: serviceHeaders(configuration),
@@ -1054,26 +1054,60 @@ async function listStaleSyntheticAdministrators(configuration) {
     Array.isArray(rows) && rows.length < candidateLimit,
     "The staging administrator candidate set exceeded its reviewed cleanup boundary.",
   );
-  const candidateIds = [
-    ...new Set(
-      rows
-        .map((row) => String(row?.user_id || ""))
-        .filter((userId) => UUID_PATTERN.test(userId)),
-    ),
-  ];
-  const users = [];
-  for (const userId of candidateIds) {
-    const { body } = await requestSupabaseAdminJson(
-      configuration,
-      `/auth/v1/admin/users/${encodeURIComponent(userId)}`,
-      { headers: serviceHeaders(configuration) },
-    );
-    const user = body?.user || body;
-    if (isSyntheticStudyRoomUser(user)) {
-      users.push({ id: userId, token: null });
+  const rolePriority = Object.freeze({ super_admin: 0, founder_admin: 1, admin: 2 });
+  const candidates = rows
+    .map((row) => ({
+      id: String(row?.user_id || ""),
+      role: String(row?.role || ""),
+    }))
+    .filter(
+      (candidate) =>
+        UUID_PATTERN.test(candidate.id) &&
+        Object.hasOwn(rolePriority, candidate.role),
+    )
+    .sort((left, right) => rolePriority[left.role] - rolePriority[right.role]);
+  const candidateIds = new Set(candidates.map((candidate) => candidate.id));
+  let directoryItems = null;
+  for (const candidate of candidates) {
+    try {
+      const { body } = await requestJson(
+        `${configuration.supabaseUrl}/rest/v1/rpc/admin_user_directory`,
+        {
+          method: "POST",
+          headers: serviceHeaders(configuration, true),
+          body: JSON.stringify({
+            p_actor_user_id: candidate.id,
+            p_search: "dd-study-room-",
+            p_limit: 100,
+            p_offset: 0,
+            p_request_key: `study-room-cleanup-${randomBytes(12).toString("hex")}`,
+            p_access_purpose: "dashboard",
+          }),
+        },
+      );
+      if (Array.isArray(body?.items)) {
+        directoryItems = body.items;
+        break;
+      }
+    } catch (error) {
+      if (![400, 401, 403].includes(Number(error?.remoteStatus || 0))) {
+        throw error;
+      }
     }
   }
-  return users;
+  assert.ok(
+    Array.isArray(directoryItems),
+    "No authorized staging administrator could verify stale synthetic users.",
+  );
+  return directoryItems
+    .filter((entry) => candidateIds.has(String(entry?.id || "")))
+    .filter((entry) =>
+      isSyntheticStudyRoomUser({
+        email: entry?.email,
+        user_metadata: { full_name: entry?.display_name },
+      }),
+    )
+    .map((entry) => ({ id: String(entry.id), token: null }));
 }
 
 async function deleteSyntheticUsers(configuration, createdUsers) {

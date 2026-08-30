@@ -1927,11 +1927,20 @@ class FakeMediaStream {
     [pinnedRemote.identity, pinnedRemote],
     [activeRemote.identity, activeRemote],
   ]);
+  harness.hooks.state.pinnedParticipantIdentity = '';
   harness.hooks.state.activeSpeakers = new Set([activeRemote.identity]);
   harness.hooks.renderParticipants();
+  let activeCompanion = harness.document.getElementById('sr-participant-grid').children.find((tile) => (
+    String(tile.className).includes('is-companion') && !String(tile.className).includes('is-self')
+  ));
+  assert.equal(activeCompanion?.dataset.participantIdentity, activeRemote.identity);
   const cameraAttachmentsBeforeSpeakerChange = cameraAttachCount;
   harness.hooks.state.activeSpeakers = new Set([pinnedRemote.identity]);
   harness.hooks.renderParticipants();
+  activeCompanion = harness.document.getElementById('sr-participant-grid').children.find((tile) => (
+    String(tile.className).includes('is-companion') && !String(tile.className).includes('is-self')
+  ));
+  assert.equal(activeCompanion?.dataset.participantIdentity, pinnedRemote.identity, 'The unpinned active-speaker companion must switch without waiting for another event.');
   assert.equal(
     cameraAttachCount,
     cameraAttachmentsBeforeSpeakerChange,

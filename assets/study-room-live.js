@@ -1442,7 +1442,7 @@
     return 'Checking';
   }
 
-  function syncConnectionState(value = state.room?.connectionState) {
+  function syncConnectionState(value = state.room?.state) {
     let label = connectionLabel(value);
     if (label === 'Excellent') {
       const quality = String(state.connectionQualities.get(state.room?.localParticipant?.identity) || '').toLowerCase();
@@ -1766,7 +1766,7 @@
     if (event.ConnectionQualityChanged) {
       room.on(event.ConnectionQualityChanged, (quality, participant) => {
         if (participant?.identity) state.connectionQualities.set(participant.identity, String(quality || ''));
-        syncConnectionState(room.connectionState);
+        syncConnectionState(room.state);
       });
     }
     const connectionBanner = byId('sr-connection-banner');
@@ -2676,7 +2676,7 @@
       await enableInitialMedia();
       byId('sr-prejoin').hidden = true;
       byId('sr-live-room').hidden = false;
-      syncConnectionState(room.connectionState);
+      syncConnectionState(room.state);
       renderParticipants();
       openPanel('people');
       syncInteractiveControls();
@@ -3079,7 +3079,7 @@
     state.room = {
       localParticipant: local,
       remoteParticipants: new Map(remote.map((participant) => [participant.identity, participant])),
-      connectionState: 'connected',
+      state: 'connected',
       canPlaybackAudio: true,
     };
     state.selectedRoomKey = activeRoomKey;
@@ -3091,7 +3091,7 @@
     byId('sr-prejoin').hidden = true;
     byId('sr-live-room').hidden = false;
     syncBrandedBackdropState({ status: 'off', supported: true });
-    syncConnectionState(state.room.connectionState);
+    syncConnectionState(state.room.state);
     renderParticipants();
     openPanel('people');
     syncInteractiveControls();

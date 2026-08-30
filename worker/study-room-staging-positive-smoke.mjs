@@ -44,6 +44,8 @@ const STUDY_ROOM_MAX_PARTICIPANTS = 12;
 const STUDY_ROOM_TOKEN_TTL_SECONDS = 600;
 const REQUEST_TIMEOUT_MS = 45_000;
 const RTC_TIMEOUT_MS = 30_000;
+const SUPABASE_ADMIN_MAX_ATTEMPTS = 4;
+const SUPABASE_ADMIN_RETRY_BASE_MS = 350;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const PARTICIPANT_ID_PATTERN = /^sr_[A-Za-z0-9_-]{24}$/u;
@@ -280,9 +282,18 @@ async function responseBody(response) {
 
 function safeRemoteCode(body) {
   const value = String(
-    body?.error?.code || body?.code || "REMOTE_CONTRACT_ERROR",
-  );
-  return /^[A-Z0-9_]{2,80}$/u.test(value) ? value : "REMOTE_CONTRACT_ERROR";
+    body?.error?.code ||
+      body?.error_code ||
+      body?.code ||
+      "REMOTE_CONTRACT_ERROR",
+  )
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9_]+/gu, "_")
+    .slice(0, 80);
+  return /^[A-Z0-9_]{2,80}$/u.test(value)
+    ? value
+    : "REMOTE_CONTRACT_ERROR";
 }
 
 async function requestJson(url, options = {}, expectedStatuses = [200]) {
@@ -293,11 +304,61 @@ async function requestJson(url, options = {}, expectedStatuses = [200]) {
   });
   const body = await responseBody(response);
   if (!expectedStatuses.includes(response.status)) {
-    throw new Error(
-      `${options.method || "GET"} ${new URL(url).pathname} returned ${response.status} ${safeRemoteCode(body)}`,
+    const remoteCode = safeRemoteCode(body);
+    const error = new Error(
+      `${options.method || "GET"} ${new URL(url).pathname} returned ${response.status} ${remoteCode}`,
     );
+    error.name = "RemoteRequestError";
+    error.remoteStatus = response.status;
+    error.remoteCode = remoteCode;
+    throw error;
   }
   return { body, response };
+}
+
+function isRetryableSupabaseAdminFailure(error) {
+  const status = Number(error?.remoteStatus || 0);
+  const code = String(error?.remoteCode || "");
+  return (
+    [429, 500, 502, 503, 504].includes(status) ||
+    (status === 403 && ["BAD_JWT", "UNRECOGNIZED_JWT_KID"].includes(code))
+  );
+}
+
+async function requestSupabaseAdminJson(
+  configuration,
+  path,
+  options = {},
+  expectedStatuses = [200],
+) {
+  assert.match(
+    path,
+    /^\/auth\/v1\/admin\/users(?:\/|\?|$)/u,
+    "The staging smoke attempted an unapproved Supabase Admin route.",
+  );
+  for (let attempt = 1; attempt <= SUPABASE_ADMIN_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      return await requestJson(
+        `${configuration.supabaseUrl}${path}`,
+        options,
+        expectedStatuses,
+      );
+    } catch (error) {
+      if (
+        attempt >= SUPABASE_ADMIN_MAX_ATTEMPTS ||
+        !isRetryableSupabaseAdminFailure(error)
+      ) {
+        throw error;
+      }
+      console.warn(
+        `STUDY_ROOM_STAGING_POSITIVE: admin_api_retry=${attempt} status=${error.remoteStatus} code=${error.remoteCode}`,
+      );
+      await new Promise((resolve) =>
+        setTimeout(resolve, SUPABASE_ADMIN_RETRY_BASE_MS * 2 ** (attempt - 1)),
+      );
+    }
+  }
+  throw new Error("The Supabase Admin retry boundary was exhausted.");
 }
 
 function serviceHeaders(configuration, contentType = false) {
@@ -310,8 +371,9 @@ function serviceHeaders(configuration, contentType = false) {
 async function createSyntheticUser(configuration, label, runId, createdUsers) {
   const email = `dd-study-room-${label}-${runId}@example.com`;
   const password = `Dd!${randomBytes(30).toString("base64url")}9z`;
-  const { body: createdBody } = await requestJson(
-    `${configuration.supabaseUrl}/auth/v1/admin/users`,
+  const { body: createdBody } = await requestSupabaseAdminJson(
+    configuration,
+    "/auth/v1/admin/users",
     {
       method: "POST",
       headers: serviceHeaders(configuration, true),
@@ -973,8 +1035,9 @@ async function listStaleSyntheticUsers(configuration) {
   const users = [];
   const pageSize = 200;
   for (let page = 1; page <= 10; page += 1) {
-    const { body } = await requestJson(
-      `${configuration.supabaseUrl}/auth/v1/admin/users?page=${page}&per_page=${pageSize}`,
+    const { body } = await requestSupabaseAdminJson(
+      configuration,
+      `/auth/v1/admin/users?page=${page}&per_page=${pageSize}`,
       { headers: serviceHeaders(configuration) },
     );
     const pageUsers = Array.isArray(body?.users)
@@ -1025,8 +1088,9 @@ async function deleteSyntheticUsers(configuration, createdUsers) {
         [204],
       ).catch((error) => errors.push(error));
     }
-    await requestJson(
-      `${configuration.supabaseUrl}/auth/v1/admin/users/${encodeURIComponent(user.id)}`,
+    await requestSupabaseAdminJson(
+      configuration,
+      `/auth/v1/admin/users/${encodeURIComponent(user.id)}`,
       {
         method: "DELETE",
         headers: serviceHeaders(configuration),
@@ -1059,6 +1123,7 @@ async function runPositiveSmoke() {
   const createdUsers = [];
   const resources = { readers: new Set(), rooms: new Set(), tracks: new Set() };
   let failure = null;
+  let failureCheckpoint = "";
   let cleanupErrors = [];
 
   try {
@@ -1606,6 +1671,7 @@ async function runPositiveSmoke() {
     console.log("STUDY_ROOM_STAGING_POSITIVE: reconnect=true");
   } catch (error) {
     failure = error;
+    failureCheckpoint = checkpoint;
   } finally {
     checkpoint = "rtc_cleanup";
     // The public Worker deliberately has no room-deletion operation. Releasing
@@ -1619,13 +1685,20 @@ async function runPositiveSmoke() {
   }
 
   if (cleanupErrors.length) {
+    checkpoint = failure
+      ? `${failureCheckpoint || "unknown"}_and_cleanup`
+      : "synthetic_user_cleanup";
     console.error(
       `STUDY_ROOM_STAGING_POSITIVE: synthetic_cleanup=false run_id=${runId}`,
     );
-    throw new AggregateError(
+    const aggregate = new AggregateError(
       failure ? [failure, ...cleanupErrors] : cleanupErrors,
       "The Study Room staging smoke did not complete exact cleanup.",
     );
+    const diagnosticError = failure || cleanupErrors[0];
+    aggregate.remoteStatus = diagnosticError?.remoteStatus;
+    aggregate.remoteCode = diagnosticError?.remoteCode;
+    throw aggregate;
   }
   console.log(
     `STUDY_ROOM_STAGING_POSITIVE: synthetic_cleanup=true run_id=${runId}`,
@@ -1633,7 +1706,10 @@ async function runPositiveSmoke() {
   console.log(
     "STUDY_ROOM_STAGING_POSITIVE: rtc_released=true fixed_room_expiry=true",
   );
-  if (failure) throw failure;
+  if (failure) {
+    checkpoint = failureCheckpoint || checkpoint;
+    throw failure;
+  }
   console.log(
     "STUDY_ROOM_STAGING_POSITIVE_PASS secrets_not_logged=true pii_not_logged=true",
   );
@@ -1688,6 +1764,21 @@ async function runSelfTest() {
     isSyntheticStudyRoomUser({
       email: "administrator@example.com",
       user_metadata: { full_name: "Synthetic Study Room founder-admin" },
+    }),
+    false,
+  );
+  assert.equal(safeRemoteCode({ error_code: "bad_jwt" }), "BAD_JWT");
+  assert.equal(
+    isRetryableSupabaseAdminFailure({
+      remoteStatus: 403,
+      remoteCode: "BAD_JWT",
+    }),
+    true,
+  );
+  assert.equal(
+    isRetryableSupabaseAdminFailure({
+      remoteStatus: 403,
+      remoteCode: "ADMIN_FORBIDDEN",
     }),
     false,
   );
@@ -1861,8 +1952,16 @@ if (invokedDirectly) {
     const errorKind = String(error?.name || "Error")
       .replace(/[^A-Za-z0-9_-]/gu, "")
       .slice(0, 40);
+    const remoteStatus = Number.isSafeInteger(error?.remoteStatus)
+      ? String(error.remoteStatus)
+      : "none";
+    const remoteCode = /^[A-Z0-9_]{2,80}$/u.test(
+      String(error?.remoteCode || ""),
+    )
+      ? String(error.remoteCode)
+      : "none";
     console.error(
-      `STUDY_ROOM_STAGING_POSITIVE: FAIL checkpoint=${checkpoint} kind=${errorKind || "Error"}`,
+      `STUDY_ROOM_STAGING_POSITIVE: FAIL checkpoint=${checkpoint} kind=${errorKind || "Error"} status=${remoteStatus} code=${remoteCode}`,
     );
     process.exitCode = 1;
   }

@@ -138,6 +138,8 @@ on:
       - 'scripts/test-design-correction-release.mjs'
       - 'scripts/test-phase2-contract.mjs'
       - 'scripts/test-pricing-*.mjs'
+      - 'scripts/test-admin-pricing-*.mjs'
+      - 'scripts/probe-admin-pricing-release.sql'
       - 'scripts/test-phase4-release4.mjs'
       - 'scripts/test-private-beta-landing.mjs'
       - 'scripts/test-commercial-launch-staging.mjs'
@@ -262,7 +264,9 @@ jobs:
           node scripts/test-private-beta-landing.mjs
           node scripts/test-auth-session-persistence.mjs
           node scripts/test-phase2-contract.mjs
+          node scripts/test-admin-pricing-editor.mjs
           node scripts/test-pricing-public-contract.mjs
+          node scripts/test-admin-pricing-release.mjs
           node scripts/test-auth-route-overlay.mjs
           node scripts/test-onboarding-flow.mjs
           node scripts/test-lifetime-grade-ui.mjs

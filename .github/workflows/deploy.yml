@@ -28,6 +28,11 @@ on:
         required: true
         default: false
         type: boolean
+      pricing_database_preapplied:
+        description: "Exact 20260830054727 Admin pricing migration and rollback-only live probe are complete"
+        required: true
+        default: false
+        type: boolean
       approval_reference:
         description: "Approval/change reference recorded in the release log"
         required: true
@@ -112,6 +117,9 @@ jobs:
           node scripts/test-examination-room-release-workflows.mjs
           node scripts/test-admin-analytics-release-bundle.mjs
           node scripts/test-support-results-release-bundle.mjs
+          node scripts/test-admin-pricing-editor.mjs
+          node scripts/test-pricing-public-contract.mjs
+          node scripts/test-admin-pricing-release.mjs
           node scripts/test-approved-renovation-shell.mjs
           node scripts/test-design-correction-release.mjs
           node scripts/test-subject-matter-consolidation.mjs
@@ -243,6 +251,32 @@ jobs:
             exit 1
           fi
 
+      - name: Require the exact live-probed Admin pricing database contract
+        env:
+          PRICING_DATABASE_URL: ${{ secrets.EXAMINATION_ROOM_PRODUCTION_DATABASE_URL }}
+          PRICING_DATABASE_PREAPPLIED: ${{ inputs.pricing_database_preapplied }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          pricing_migration="supabase/migrations/20260830054727_admin_pricing_revisions.sql"
+          pricing_probe="scripts/probe-admin-pricing-release.sql"
+          test -f "$pricing_migration"
+          test -f "$pricing_probe"
+          if [[ "$PRICING_DATABASE_PREAPPLIED" != "true" ]]; then
+            echo "The exact Admin pricing migration and rollback-only live probe must complete before production Worker deployment." >&2
+            exit 1
+          fi
+          if [[ -n "$PRICING_DATABASE_URL" ]]; then
+            if ! command -v psql >/dev/null 2>&1; then
+              sudo apt-get update
+              sudo apt-get install --yes postgresql-client
+            fi
+            psql --version
+            psql "$PRICING_DATABASE_URL" -X --set=ON_ERROR_STOP=1 --file "$pricing_probe"
+          else
+            echo "The explicit pricing_database_preapplied confirmation attests that exact migration 20260830054727 and its rollback-only probe passed on production."
+          fi
+
       - name: Verify production Examination Room Worker secrets exist
         working-directory: worker
         env:
@@ -286,6 +320,45 @@ jobs:
           workingDirectory: worker
           wranglerVersion: "4.114.0"
           command: deploy --config wrangler.public-api.toml
+
+      - name: Verify public pricing and reject unauthenticated Admin pricing access before Pages
+        env:
+          PRICING_WORKER_URL: https://duediligence-api.wallyesteban1993.workers.dev
+          PRICING_ALLOWED_ORIGIN: https://duediligence.ph
+        shell: bash
+        run: |
+          set -euo pipefail
+          pricing_response="$RUNNER_TEMP/production-pricing.json"
+          pricing_status="$(curl --fail-with-body --silent --show-error \
+            --output "$pricing_response" --write-out '%{http_code}' \
+            --request POST \
+            --header "Origin: $PRICING_ALLOWED_ORIGIN" \
+            --header 'Content-Type: application/json' \
+            --data '{}' \
+            "$PRICING_WORKER_URL/plans")"
+          test "$pricing_status" = "200"
+          PRICING_RESPONSE="$pricing_response" node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFile } from 'node:fs/promises';
+          const payload = JSON.parse(await readFile(process.env.PRICING_RESPONSE, 'utf8'));
+          assert.equal(payload.ok, true);
+          assert.match(String(payload.revisionId || ''), /^[0-9a-f-]{36}$/i);
+          assert.ok(Date.parse(String(payload.serverNow || '')) > 0);
+          assert.equal(typeof payload.pricing, 'object');
+          assert.ok(Array.isArray(payload.plans));
+          NODE
+          for endpoint in /admin/pricing/query /admin/pricing/action /admin/pricing/assets/upload; do
+            denied_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+              --request POST \
+              --header "Origin: $PRICING_ALLOWED_ORIGIN" \
+              --header 'Content-Type: application/json' \
+              --data '{}' \
+              "$PRICING_WORKER_URL$endpoint")"
+            case "$denied_status" in
+              401|403) ;;
+              *) echo "Unauthenticated $endpoint returned $denied_status instead of 401/403." >&2; exit 1 ;;
+            esac
+          done
 
   deploy_pages:
     needs: deploy_worker

@@ -33,6 +33,11 @@ on:
         required: true
         default: false
         type: boolean
+      pricing_database_preapplied:
+        description: "Exact 20260830054727 Admin pricing migration and rollback-only live probe are complete"
+        required: true
+        default: false
+        type: boolean
       approval_reference:
         description: "Required approval/change reference when deploy_greenfield is selected"
         required: false
@@ -71,7 +76,7 @@ jobs:
           test "$REPOSITORY_NAME" = "codingwally/Bar-Exam-simulator"
           test "$RELEASE_ACTOR" != "dependabot[bot]"
           case "$RELEASE_REF" in
-            refs/heads/main|refs/heads/fix/admin-marketing-live-20260828|refs/heads/agent/master-experience-release-20260813|refs/heads/agent/header-subject-review-correction-20260814|refs/heads/agent/subject-matter-split-review-20260814|refs/heads/agent/high-value-subject-review-20260815|refs/heads/agent/homepage-feature-ledger-20260815|refs/heads/agent/commercial-launch-20260818|refs/heads/agent/commercial-terms-acceptance-hotfix-20260818|refs/heads/agent/commercial-terms-worker-persistence-20260818|refs/heads/agent/renovation-commercial-cutover-20260820|refs/heads/agent/soft-launch-five-token-20260821|refs/heads/codex/examination-room-greenfield-20260826|refs/heads/codex/examination-room-owner-command-center-20260826) ;;
+            refs/heads/main|refs/heads/feature/admin-pricing-builder-20260830|refs/heads/fix/admin-marketing-live-20260828|refs/heads/agent/master-experience-release-20260813|refs/heads/agent/header-subject-review-correction-20260814|refs/heads/agent/subject-matter-split-review-20260814|refs/heads/agent/high-value-subject-review-20260815|refs/heads/agent/homepage-feature-ledger-20260815|refs/heads/agent/commercial-launch-20260818|refs/heads/agent/commercial-terms-acceptance-hotfix-20260818|refs/heads/agent/commercial-terms-worker-persistence-20260818|refs/heads/agent/renovation-commercial-cutover-20260820|refs/heads/agent/soft-launch-five-token-20260821|refs/heads/codex/examination-room-greenfield-20260826|refs/heads/codex/examination-room-owner-command-center-20260826) ;;
             *)
               echo "The staging gate may run only from an explicitly trusted release branch." >&2
               exit 1
@@ -114,6 +119,9 @@ jobs:
           node scripts/test-examination-room-release-workflows.mjs
           node scripts/test-admin-analytics-release-bundle.mjs
           node scripts/test-support-results-release-bundle.mjs
+          node scripts/test-admin-pricing-editor.mjs
+          node scripts/test-pricing-public-contract.mjs
+          node scripts/test-admin-pricing-release.mjs
           node scripts/test-feature-decommission-boundary.mjs
           node --test scripts/test-profile-photo-release2.mjs
           node scripts/test-profile-avatar-cleanup-migration.mjs
@@ -225,6 +233,33 @@ jobs:
             exit 1
           fi
 
+      - name: Require the exact live-probed Admin pricing database contract
+        if: inputs.deploy_greenfield == true
+        env:
+          PRICING_DATABASE_URL: ${{ secrets.EXAMINATION_ROOM_STAGING_DATABASE_URL }}
+          PRICING_DATABASE_PREAPPLIED: ${{ inputs.pricing_database_preapplied }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          pricing_migration="supabase/migrations/20260830054727_admin_pricing_revisions.sql"
+          pricing_probe="scripts/probe-admin-pricing-release.sql"
+          test -f "$pricing_migration"
+          test -f "$pricing_probe"
+          if [[ "$PRICING_DATABASE_PREAPPLIED" != "true" ]]; then
+            echo "The exact Admin pricing migration and rollback-only live probe must complete before staging Worker deployment." >&2
+            exit 1
+          fi
+          if [[ -n "$PRICING_DATABASE_URL" ]]; then
+            if ! command -v psql >/dev/null 2>&1; then
+              sudo apt-get update
+              sudo apt-get install --yes postgresql-client
+            fi
+            psql --version
+            psql "$PRICING_DATABASE_URL" -X --set=ON_ERROR_STOP=1 --file "$pricing_probe"
+          else
+            echo "The explicit pricing_database_preapplied confirmation attests that exact migration 20260830054727 and its rollback-only probe passed on staging."
+          fi
+
       - name: Verify staging secrets and private Supabase Storage recovery configuration
         if: inputs.deploy_greenfield == true
         working-directory: worker
@@ -282,6 +317,46 @@ jobs:
           workingDirectory: worker
           wranglerVersion: "4.114.0"
           command: deploy --config wrangler.staging.toml
+
+      - name: Verify public pricing and reject unauthenticated Admin pricing access
+        if: inputs.deploy_greenfield == true
+        env:
+          PRICING_WORKER_URL: https://duediligence-examinations-staging.wallyesteban1993.workers.dev
+          PRICING_ALLOWED_ORIGIN: https://duediligence-examinations-staging.wallyesteban1993.workers.dev
+        shell: bash
+        run: |
+          set -euo pipefail
+          pricing_response="$RUNNER_TEMP/staging-pricing.json"
+          pricing_status="$(curl --fail-with-body --silent --show-error \
+            --output "$pricing_response" --write-out '%{http_code}' \
+            --request POST \
+            --header "Origin: $PRICING_ALLOWED_ORIGIN" \
+            --header 'Content-Type: application/json' \
+            --data '{}' \
+            "$PRICING_WORKER_URL/plans")"
+          test "$pricing_status" = "200"
+          PRICING_RESPONSE="$pricing_response" node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFile } from 'node:fs/promises';
+          const payload = JSON.parse(await readFile(process.env.PRICING_RESPONSE, 'utf8'));
+          assert.equal(payload.ok, true);
+          assert.match(String(payload.revisionId || ''), /^[0-9a-f-]{36}$/i);
+          assert.ok(Date.parse(String(payload.serverNow || '')) > 0);
+          assert.equal(typeof payload.pricing, 'object');
+          assert.ok(Array.isArray(payload.plans));
+          NODE
+          for endpoint in /admin/pricing/query /admin/pricing/action /admin/pricing/assets/upload; do
+            denied_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+              --request POST \
+              --header "Origin: $PRICING_ALLOWED_ORIGIN" \
+              --header 'Content-Type: application/json' \
+              --data '{}' \
+              "$PRICING_WORKER_URL$endpoint")"
+            case "$denied_status" in
+              401|403) ;;
+              *) echo "Unauthenticated $endpoint returned $denied_status instead of 401/403." >&2; exit 1 ;;
+            esac
+          done
 
       - name: Verify greenfield static routes and public error contracts
         if: inputs.deploy_greenfield == true || inputs.smoke_greenfield == true

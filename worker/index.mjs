@@ -93,6 +93,7 @@ import {
 import {
   PAYMENT_LIMITS,
   PaymentValidationError,
+  normalizeLegacyPaymentFields,
   normalizePartnershipRequest,
   normalizePaymentFields,
   normalizePhase4AdminAction,
@@ -652,6 +653,24 @@ async function supabaseGuestRows(env, tableName, query) {
   return result;
 }
 
+function isAuthoritativeRpcRejectionStatus(status) {
+  const normalized = Number(status);
+  return Number.isInteger(normalized)
+    && normalized >= 400
+    && normalized < 500
+    && ![408, 425, 429, 499].includes(normalized);
+}
+
+function markRpcOutcome(error, status) {
+  error.authoritativeRpcRejection = isAuthoritativeRpcRejectionStatus(status);
+  error.rpcStatus = Number(status) || null;
+  return error;
+}
+
+function isAuthoritativeRpcRejection(error) {
+  return error?.authoritativeRpcRejection === true;
+}
+
 async function protectedSupabaseRpc(env, functionName, body) {
   const baseUrl = configuredSupabaseUrl(env);
   const response = await fetch(new URL(`/rest/v1/rpc/${functionName}`, baseUrl), {
@@ -673,13 +692,13 @@ async function protectedSupabaseRpc(env, functionName, body) {
       status: response.status,
       denied,
     });
-    throw new ExaminerError(
+    throw markRpcOutcome(new ExaminerError(
       denied ? 'ADMIN_FORBIDDEN' : 'ADMIN_DATA_UNAVAILABLE',
       denied
         ? 'You are not authorized for this administrator operation.'
         : 'Administrator data is temporarily unavailable.',
       denied ? 403 : 503,
-    );
+    ), response.status);
   }
   return result;
 }
@@ -3738,36 +3757,85 @@ async function commerceRpc(env, functionName, body) {
   const result = await response.json().catch(() => null);
   if (response.ok) return result;
   const databaseMessage = String(result?.message || '');
+  const authoritativeRejection = isAuthoritativeRpcRejectionStatus(response.status);
   console.error('Commerce storage request failed', {
     operation: functionName,
     status: response.status,
   });
-  if (/already been submitted|already exists|request key already used/i.test(databaseMessage)) {
-    throw new PaymentValidationError(
+  if (
+    authoritativeRejection
+    && functionName === 'phase4_create_payment_request_v2'
+    && /selected pricing plan is not open|payment method is not compatible/i.test(databaseMessage)
+  ) {
+    throw markRpcOutcome(new PaymentValidationError(
+      'PRICING_OFFER_STALE',
+      'Pricing changed before submission. Nothing was charged or accepted. Reload Plans & Pricing.',
+      409,
+    ), response.status);
+  }
+  if (
+    authoritativeRejection
+    && functionName === 'phase4_create_payment_request'
+    && /early access checkout is closed/i.test(databaseMessage)
+  ) {
+    throw markRpcOutcome(new PaymentValidationError(
+      'CHECKOUT_CLOSED',
+      'Early Access checkout has closed. Reload Plans & Pricing for the current offer.',
+      409,
+    ), response.status);
+  }
+  if (
+    authoritativeRejection
+    && functionName === 'phase4_create_payment_request'
+    && /only the legacy 149-peso|legacy payment method is unavailable/i.test(databaseMessage)
+  ) {
+    throw markRpcOutcome(new PaymentValidationError(
+      'PRICING_OFFER_STALE',
+      'The legacy payment details no longer match the published offer. Nothing was accepted. Reload Plans & Pricing.',
+      409,
+    ), response.status);
+  }
+  if (authoritativeRejection
+      && /already been submitted|already exists|request key already used/i.test(databaseMessage)) {
+    throw markRpcOutcome(new PaymentValidationError(
       'DUPLICATE_PAYMENT',
       'This payment or refund request has already been submitted.',
       409,
-    );
+    ), response.status);
   }
-  if (/not available|must match|unsupported|outside the accepted|reason must|valid request/i.test(databaseMessage)) {
-    throw new PaymentValidationError(
+  if (authoritativeRejection
+      && /not available|must match|unsupported|outside the accepted|reason must|valid request/i.test(databaseMessage)) {
+    throw markRpcOutcome(new PaymentValidationError(
       'INVALID_COMMERCE_REQUEST',
       'The request did not pass secure validation. Review the details and try again.',
       400,
-    );
+    ), response.status);
   }
-  throw new PaymentValidationError(
+  throw markRpcOutcome(new PaymentValidationError(
     'COMMERCE_UNAVAILABLE',
     'Secure payment services are temporarily unavailable. No access change was made.',
     503,
-  );
+  ), response.status);
 }
 
 function encodedStoragePath(path) {
   return String(path || '').split('/').map((part) => encodeURIComponent(part)).join('/');
 }
 
-async function uploadPrivateProof(env, objectPath, bytes, mimeType) {
+async function storageObjectAlreadyExists(response) {
+  if (response.status === 409) return true;
+  if (response.status !== 400) return false;
+  const body = await response.clone().text().catch(() => '');
+  return /asset already exists|already_exists|resourcealreadyexists|keyalreadyexists/i.test(body);
+}
+
+async function uploadPrivateProof(
+  env,
+  objectPath,
+  bytes,
+  mimeType,
+  { allowExisting = false } = {},
+) {
   const baseUrl = configuredSupabaseUrl(env);
   const response = await fetch(
     new URL(`/storage/v1/object/payment-proofs/${encodedStoragePath(objectPath)}`, baseUrl),
@@ -3782,7 +3850,10 @@ async function uploadPrivateProof(env, objectPath, bytes, mimeType) {
       body: bytes,
     },
   );
-  if (!response.ok) {
+  const alreadyExists = !response.ok
+    && allowExisting
+    && await storageObjectAlreadyExists(response);
+  if (!response.ok && !alreadyExists) {
     console.error('Private payment proof upload failed', { status: response.status });
     throw new PaymentValidationError(
       'PAYMENT_PROOF_UNAVAILABLE',
@@ -3790,6 +3861,7 @@ async function uploadPrivateProof(env, objectPath, bytes, mimeType) {
       503,
     );
   }
+  return { created: response.ok, alreadyExists };
 }
 
 async function deletePrivateProof(env, objectPath) {
@@ -3818,7 +3890,7 @@ function pricingAssetObjectUrl(env, bucketId, objectPath) {
   );
 }
 
-async function uploadPrivatePricingAsset(env, objectPath, bytes, mimeType) {
+async function uploadPrivatePricingAsset(env, objectPath, bytes, mimeType, { allowExisting = false } = {}) {
   const response = await fetch(
     pricingAssetObjectUrl(env, PRICING_ASSET_BUCKET, objectPath),
     {
@@ -3833,7 +3905,10 @@ async function uploadPrivatePricingAsset(env, objectPath, bytes, mimeType) {
       body: bytes,
     },
   );
-  if (!response.ok) {
+  const alreadyExists = !response.ok
+    && allowExisting
+    && await storageObjectAlreadyExists(response);
+  if (!response.ok && !alreadyExists) {
     console.error('Private pricing asset upload failed', { status: response.status });
     throw new PricingValidationError(
       'PRICING_ASSET_UNAVAILABLE',
@@ -3841,6 +3916,7 @@ async function uploadPrivatePricingAsset(env, objectPath, bytes, mimeType) {
       503,
     );
   }
+  return { created: response.ok, alreadyExists };
 }
 
 async function deletePrivatePricingAsset(env, objectPath) {
@@ -9200,12 +9276,22 @@ async function handleAdminPricingAssetUpload(request, env, origin, allowedOrigin
     file.name,
   );
   const sha256 = await sha256Hex(image.bytes);
+  const requestFingerprint = await sha256Hex(new TextEncoder().encode(requestKey));
+  // A deterministic immutable path makes a lost-response retry safe. Storage
+  // may report 409 on the retry; the Founder-only registration RPC then
+  // verifies that the request key, path, hash, dimensions, and MIME all match.
   const objectPath = [
     'assets',
-    sha256.slice(0, 2),
-    `${crypto.randomUUID()}-${sha256}.${image.extension}`,
+    user.id,
+    `${requestFingerprint}-${sha256}.${image.extension}`,
   ].join('/');
-  await uploadPrivatePricingAsset(env, objectPath, image.bytes, image.mimeType);
+  const upload = await uploadPrivatePricingAsset(
+    env,
+    objectPath,
+    image.bytes,
+    image.mimeType,
+    { allowExisting: true },
+  );
 
   let registered;
   try {
@@ -9221,12 +9307,17 @@ async function handleAdminPricingAssetUpload(request, env, origin, allowedOrigin
       p_sha256: sha256,
     });
   } catch (error) {
-    await deletePrivatePricingAsset(env, objectPath);
+    // A network/timeout/5xx can arrive after Postgres committed the asset row.
+    // Preserve the deterministic private object so a retry can reconcile it;
+    // delete only when the RPC authoritatively rejected the registration.
+    if (upload.created && isAuthoritativeRpcRejection(error)) {
+      await deletePrivatePricingAsset(env, objectPath);
+    }
     throw error;
   }
 
   const asset = normalizePricingAssetMetadata(registered);
-  if (asset.objectPath !== objectPath) {
+  if (asset.objectPath !== objectPath && upload.created) {
     await deletePrivatePricingAsset(env, objectPath);
   }
   return jsonResponse({
@@ -9335,12 +9426,27 @@ async function handlePaymentSubmit(request, env, origin, allowedOrigin) {
       'Submit payment details and one payment-proof file.',
     );
   }
-  const fields = normalizePaymentFields({
-    planVersionId: form.get('planVersionId'),
-    paymentChannelVersionId: form.get('paymentChannelVersionId'),
-    paymentDate: form.get('paymentDate'),
-    paymentReference: form.get('paymentReference') ?? form.get('transactionReference'),
-  });
+  const hasVersionedSelection = Boolean(
+    form.get('planVersionId') || form.get('paymentChannelVersionId'),
+  );
+  const fields = hasVersionedSelection
+    ? normalizePaymentFields({
+      planVersionId: form.get('planVersionId'),
+      paymentChannelVersionId: form.get('paymentChannelVersionId'),
+      paymentDate: form.get('paymentDate'),
+      paymentReference: form.get('paymentReference') ?? form.get('transactionReference'),
+    })
+    : normalizeLegacyPaymentFields({
+      planCode: form.get('planCode'),
+      amountPhp: form.get('amountPhp'),
+      paymentMethod: form.get('paymentMethod'),
+      paymentDate: form.get('paymentDate'),
+      transactionReference: form.get('transactionReference') ?? form.get('paymentReference'),
+      note: form.get('note'),
+    });
+  const legacyRequestKey = hasVersionedSelection
+    ? null
+    : normalizeRequestKey(request.headers.get('X-Request-ID'));
   const proof = form.get('proof');
   if (!proof || typeof proof.arrayBuffer !== 'function') {
     throw new PaymentValidationError('PAYMENT_PROOF_REQUIRED', 'Upload a PNG, JPEG, or PDF payment proof.');
@@ -9351,28 +9457,76 @@ async function handlePaymentSubmit(request, env, origin, allowedOrigin) {
   const arrayBuffer = await proof.arrayBuffer();
   const bytes = validateProofSignature(new Uint8Array(arrayBuffer), mimeType);
   const proofSha256 = await sha256Hex(bytes);
-  const objectId = crypto.randomUUID();
+  const proofStorageKey = hasVersionedSelection
+    ? [
+      'pricing-v2', user.id, fields.planVersionId, fields.paymentChannelVersionId,
+      fields.paymentReference.toLowerCase(), proofSha256,
+    ].join('|')
+    : [
+      'pricing-legacy', user.id, legacyRequestKey,
+      fields.transactionReference.toLowerCase(), proofSha256,
+    ].join('|');
+  const objectHash = await sha256Hex(new TextEncoder().encode(proofStorageKey));
+  const objectId = [
+    objectHash.slice(0, 8),
+    objectHash.slice(8, 12),
+    objectHash.slice(12, 16),
+    objectHash.slice(16, 20),
+    objectHash.slice(20, 32),
+  ].join('-');
   const objectPath = `${user.id}/${objectId}.${extension}`;
-  await uploadPrivateProof(env, objectPath, bytes, mimeType);
+  const proofUpload = await uploadPrivateProof(
+    env,
+    objectPath,
+    bytes,
+    mimeType,
+    { allowExisting: true },
+  );
   let result;
   try {
-    result = await commerceRpc(env, 'phase4_create_payment_request_v2', {
-      p_user_id: user.id,
-      p_plan_version_id: fields.planVersionId,
-      p_payment_channel_version_id: fields.paymentChannelVersionId,
-      p_payment_date: fields.paymentDate,
-      p_payment_reference: fields.paymentReference,
-      p_proof_bucket: 'payment-proofs',
-      p_proof_path: objectPath,
-      p_proof_mime_type: mimeType,
-      p_proof_size_bytes: bytes.byteLength,
-      p_proof_sha256: proofSha256,
-    });
+    result = hasVersionedSelection
+      ? await commerceRpc(env, 'phase4_create_payment_request_v2', {
+        p_user_id: user.id,
+        p_plan_version_id: fields.planVersionId,
+        p_payment_channel_version_id: fields.paymentChannelVersionId,
+        p_payment_date: fields.paymentDate,
+        p_payment_reference: fields.paymentReference,
+        p_proof_bucket: 'payment-proofs',
+        p_proof_path: objectPath,
+        p_proof_mime_type: mimeType,
+        p_proof_size_bytes: bytes.byteLength,
+        p_proof_sha256: proofSha256,
+      })
+      : await commerceRpc(env, 'phase4_create_payment_request', {
+        p_user_id: user.id,
+        p_plan_code: fields.planCode,
+        p_amount_php: fields.amountPhp,
+        p_payment_method: fields.paymentMethod,
+        p_payment_date: fields.paymentDate,
+        p_transaction_reference: fields.transactionReference,
+        p_student_note: fields.note,
+        p_proof_object_path: objectPath,
+        p_proof_original_name: originalName.slice(0, 180),
+        p_proof_mime_type: mimeType,
+        p_proof_size_bytes: bytes.byteLength,
+        p_proof_sha256: proofSha256,
+        p_request_key: legacyRequestKey,
+      });
   } catch (error) {
-    await deletePrivateProof(env, objectPath);
+    // A lost RPC response can hide an already committed payment. Preserve the
+    // deterministic proof on ambiguous failures and reconcile it on retry.
+    if (proofUpload.created && isAuthoritativeRpcRejection(error)) {
+      await deletePrivateProof(env, objectPath);
+    }
     throw error;
   }
-  if (result?.replayed) await deletePrivateProof(env, objectPath);
+  if (
+    result?.replayed
+    && proofUpload.created
+    && String(result?.proofObjectPath || '') !== objectPath
+  ) {
+    await deletePrivateProof(env, objectPath);
+  }
   const payment = sanitizeTrustedPayment(result);
   return jsonResponse({
     ok: true,

@@ -63,8 +63,65 @@ assert.match(editorSource, /QR_MAX_BYTES = 5 \* 1024 \* 1024/);
 assert.match(editorSource, /QR_MIN_EDGE = 100/);
 assert.match(editorSource, /dimensions\.width < QR_MIN_EDGE \|\| dimensions\.height < QR_MIN_EDGE/);
 assert.match(editorSource, /plain text without HTML, scripts, or data URLs/);
+assert.match(
+  editorSource,
+  /method\.qrAsset = assetFromPayload\(payload\);[\s\S]{0,160}reconfirmExactQrAmount\(controller, method\)/,
+  'Uploading a replacement exact QR must capture the plan price currently being reviewed.',
+);
 assert.doesNotMatch(editorSource, /contenteditable/i);
 assert.doesNotMatch(editorSource, /dragstart|draggable/i);
+
+const setBusySource = editorSource.slice(
+  editorSource.indexOf('function setBusy('),
+  editorSource.indexOf('function setMessage('),
+);
+assert.ok(setBusySource.startsWith('function setBusy('), 'Busy-state helper must be present.');
+const busyStatus = { textContent: '' };
+const busySandbox = {
+  controller: {
+    root: {
+      toggleAttribute() {},
+      querySelectorAll() { return []; },
+      querySelector() { return busyStatus; },
+    },
+    message: { text: 'Draft saved. Nothing was published.' },
+    dirty: false,
+  },
+  busyStatus,
+};
+runInNewContext(`${setBusySource}; setBusy(controller, true, 'Saving draft…');`, busySandbox);
+assert.equal(busyStatus.textContent, 'Saving draft…');
+runInNewContext(`${setBusySource}; setBusy(controller, false);`, busySandbox);
+assert.equal(
+  busyStatus.textContent,
+  'Draft saved. Nothing was published.',
+  'Completing an async action must restore its success or error message instead of leaving “Working…”.',
+);
+
+const restoreFocusSource = editorSource.slice(
+  editorSource.indexOf('function restoreOperationFocus('),
+  editorSource.indexOf('function closeOperation('),
+);
+assert.ok(restoreFocusSource.startsWith('function restoreOperationFocus('), 'Dialog focus-restoration helper must be present.');
+let restoredFocusCount = 0;
+const restoreFocusSandbox = {
+  controller: {
+    root: {
+      querySelectorAll() {
+        return [{
+          dataset: { operation: 'rollback', sourceRevisionId: 'revision-one' },
+          focus() { restoredFocusCount += 1; },
+        }, {
+          dataset: { operation: 'rollback', sourceRevisionId: 'revision-two' },
+          focus() { restoredFocusCount += 10; },
+        }];
+      },
+    },
+  },
+  operation: { type: 'rollback', sourceRevisionId: 'revision-one' },
+};
+runInNewContext(`${restoreFocusSource}; restoreOperationFocus(controller, operation);`, restoreFocusSandbox);
+assert.equal(restoredFocusCount, 1, 'Closing a dialog must restore focus to the exact publication action that opened it.');
 
 const toManilaInputSource = editorSource.match(
   /function toManilaInput\(value\) \{[\s\S]*?\n  \}/,
@@ -156,6 +213,7 @@ const normalized = renderer.normalizeConfig({
     qrUrl: '/pricing/assets/11111111-1111-4111-8111-111111111111',
     qrAmountCentavos: 19_900,
     qrAmountMode: 'exact',
+    visible: false,
   }],
 });
 assert.equal(normalized.plans[0].priceCentavos, 19_900);
@@ -165,8 +223,20 @@ assert.equal(normalized.plans[0].displayOpen, true);
 assert.equal(normalized.plans[0].entitlementMode, 'rolling_days');
 assert.equal(normalized.paymentMethods[0].qrUrl, '/pricing/assets/11111111-1111-4111-8111-111111111111');
 assert.equal(normalized.paymentMethods[0].qrAmountCentavos, 19_900);
+assert.equal(normalized.paymentMethods[0].visible, false);
 assert.equal('unknown' in normalized.plans[0], false);
 assert.equal('unknown' in normalized.page, false);
+
+const compatibleGenericMethod = {
+  channelCode: 'generic_instapay',
+  planCode: null,
+  label: 'Generic InstaPay',
+  qrUrl: '/assets/payments/bpi-instapay-149.png',
+  qrAmountMode: 'generic',
+  qrAmountCentavos: null,
+  enabled: true,
+  visible: true,
+};
 
 const previewHost = new FakeElement();
 renderer.render(previewHost, normalized, {
@@ -199,6 +269,7 @@ renderer.render(openEndedHost, {
     visible: true,
     checkoutEnabled: true,
   }],
+  paymentMethods: [compatibleGenericMethod],
 }, { mode: 'preview', serverNow: '2026-09-10T00:00:00+08:00' });
 assert.match(openEndedHost.innerHTML, />Choose plan<\/button>/, 'Missing end dates must not close a plan.');
 assert.doesNotMatch(openEndedHost.innerHTML, /Enrollment closed/);
@@ -215,9 +286,61 @@ renderer.render(fixedHost, {
     visible: true,
     checkoutEnabled: true,
   }],
+  paymentMethods: [compatibleGenericMethod],
 }, { mode: 'preview', serverNow: '2026-08-30T00:00:00+08:00' });
 assert.match(fixedHost.innerHTML, /through Oct 1, 2026/);
 assert.doesNotMatch(fixedHost.innerHTML, /for 30 days/);
+
+const checkoutPlan = {
+  planCode: 'checkout_plan',
+  name: 'Checkout Plan',
+  priceCentavos: 19_900,
+  durationDays: 30,
+  visible: true,
+  checkoutEnabled: true,
+};
+const matchingExactMethod = {
+  channelCode: 'checkout_qr',
+  planCode: 'checkout_plan',
+  label: 'Checkout QR',
+  qrUrl: '/assets/payments/bpi-instapay-149.png',
+  qrAmountMode: 'exact',
+  qrAmountCentavos: 19_900,
+  enabled: true,
+  visible: true,
+};
+const renderCheckoutPreview = (paymentMethods) => {
+  const host = new FakeElement();
+  renderer.render(host, { plans: [checkoutPlan], paymentMethods }, {
+    mode: 'preview',
+    serverNow: '2026-09-10T00:00:00+08:00',
+  });
+  return host.innerHTML;
+};
+assert.match(renderCheckoutPreview([matchingExactMethod]), /data-checkout-state="available"/);
+assert.match(renderCheckoutPreview([matchingExactMethod]), />Choose plan<\/button>/);
+for (const [label, paymentMethods] of [
+  ['missing QR method', []],
+  ['QR-less method', [{ ...matchingExactMethod, qrUrl: null }]],
+  ['disabled method', [{ ...matchingExactMethod, enabled: false }]],
+  ['hidden method', [{ ...matchingExactMethod, visible: false }]],
+]) {
+  const html = renderCheckoutPreview(paymentMethods);
+  assert.match(html, /data-checkout-state="payment_channel_required"/, `${label} must fail closed.`);
+  assert.match(html, /disabled>Payment QR required<\/button>/, `${label} must explain why checkout is unavailable.`);
+}
+const mismatchedAmountPreview = renderCheckoutPreview([{
+  ...matchingExactMethod,
+  qrAmountCentavos: 14_900,
+}]);
+assert.match(mismatchedAmountPreview, /data-checkout-state="payment_channel_required"/);
+assert.match(mismatchedAmountPreview, /disabled>Update payment QR for this price<\/button>/);
+const missingExactAmountPreview = renderCheckoutPreview([{
+  ...matchingExactMethod,
+  qrAmountCentavos: null,
+}]);
+assert.match(missingExactAmountPreview, /data-checkout-state="payment_channel_required"/);
+assert.match(missingExactAmountPreview, /disabled>Update payment QR for this price<\/button>/);
 
 const editorSandbox = {
   window: {
@@ -226,7 +349,12 @@ const editorSandbox = {
     DueDiligencePricingRenderer: renderer,
   },
 };
-runInNewContext(editorSource, editorSandbox);
+const testableEditorSource = editorSource.replace(
+  '  global.DueDiligencePricingEditor = Object.freeze({',
+  '  global.__DueDiligencePricingEditorTest = Object.freeze({ validateConfig, serializeConfig, reconfirmExactQrAmount });\n'
+    + '  global.DueDiligencePricingEditor = Object.freeze({',
+);
+runInNewContext(testableEditorSource, editorSandbox);
 const snapshot = editorSandbox.window.DueDiligencePricingEditor.normalizeSnapshot({
   ok: true,
   data: {
@@ -241,5 +369,141 @@ const snapshot = editorSandbox.window.DueDiligencePricingEditor.normalizeSnapsho
 assert.equal(snapshot.expectedDraftVersion, 7);
 assert.equal(snapshot.timezone, 'Asia/Manila');
 assert.equal(snapshot.draft.revisionId, 'draft-id');
+
+const staleExactQrConfig = {
+  page: { title: 'Plans & Pricing' },
+  plans: [{
+    planCode: 'bar_access_30d',
+    name: '30-Day Access',
+    priceCentavos: 21_950,
+    durationDays: 30,
+    entitlementMode: 'rolling_days',
+    visible: true,
+    checkoutEnabled: true,
+  }],
+  paymentMethods: [{
+    channelCode: 'bpi_exact_199',
+    planCode: 'bar_access_30d',
+    label: 'BPI exact 199 QR',
+    qrUrl: '/assets/payments/bpi-instapay-149.png',
+    qrAmountMode: 'exact',
+    qrAmountCentavos: 19_900,
+    enabled: true,
+    visible: true,
+  }],
+  faqs: [],
+};
+const staleExactQrController = { config: staleExactQrConfig };
+const serializedStaleQr = editorSandbox.window.__DueDiligencePricingEditorTest.serializeConfig(
+  staleExactQrController,
+);
+assert.equal(
+  serializedStaleQr.paymentMethods[0].qrAmountCentavos,
+  19_900,
+  'Editing a plan price must not silently relabel an existing exact-amount QR.',
+);
+const staleExactQrPreview = new FakeElement();
+renderer.render(staleExactQrPreview, serializedStaleQr, {
+  mode: 'preview',
+  serverNow: '2026-09-10T00:00:00+08:00',
+});
+assert.match(staleExactQrPreview.innerHTML, /data-checkout-state="payment_channel_required"/);
+assert.match(staleExactQrPreview.innerHTML, /disabled>Update payment QR for this price<\/button>/);
+editorSandbox.window.__DueDiligencePricingEditorTest.reconfirmExactQrAmount(
+  staleExactQrController,
+  staleExactQrConfig.paymentMethods[0],
+);
+assert.equal(
+  staleExactQrConfig.paymentMethods[0].qrAmountCentavos,
+  21_950,
+  'Replacing or explicitly reconfirming an exact QR must capture the current plan price.',
+);
+const reconfirmedExactQrPreview = new FakeElement();
+renderer.render(reconfirmedExactQrPreview, staleExactQrConfig, {
+  mode: 'preview',
+  serverNow: '2026-09-10T00:00:00+08:00',
+});
+assert.match(reconfirmedExactQrPreview.innerHTML, /data-checkout-state="available"/);
+
+const disabledQrDraft = {
+  page: { title: 'Plans & Pricing' },
+  plans: [{
+    planCode: 'bar_access_30d',
+    name: '30-Day Access',
+    priceCentavos: 19_900,
+    durationDays: 30,
+    entitlementMode: 'rolling_days',
+    visible: true,
+    checkoutEnabled: true,
+  }],
+  paymentMethods: [{
+    channelCode: 'future_bpi_qr',
+    planCode: 'bar_access_30d',
+    label: 'Future BPI QR',
+    qrAmountMode: 'exact',
+    qrAmountCentavos: 19_900,
+    qrAsset: null,
+    qrUrl: null,
+    enabled: false,
+  }],
+  faqs: [],
+};
+const validationController = {
+  config: disabledQrDraft,
+  pendingFiles: { size: 0 },
+};
+assert.doesNotThrow(
+  () => editorSandbox.window.__DueDiligencePricingEditorTest.validateConfig(
+    validationController,
+    'save_draft',
+  ),
+  'A disabled future payment method must be saveable as a draft before its QR is ready.',
+);
+disabledQrDraft.paymentMethods[0].enabled = true;
+assert.throws(
+  () => editorSandbox.window.__DueDiligencePricingEditorTest.validateConfig(
+    validationController,
+    'save_draft',
+  ),
+  /Disable Future BPI QR or upload its QR image/,
+  'An enabled payment method must fail closed until its QR is uploaded.',
+);
+const missingExactAmountDraft = {
+  ...disabledQrDraft,
+  plans: disabledQrDraft.plans.map((plan) => ({ ...plan })),
+  paymentMethods: [{
+    ...disabledQrDraft.paymentMethods[0],
+    qrUrl: '/assets/payments/bpi-instapay-149.png',
+    qrAmountMode: 'exact',
+    qrAmountCentavos: null,
+    enabled: true,
+  }],
+};
+assert.throws(
+  () => editorSandbox.window.__DueDiligencePricingEditorTest.validateConfig(
+    { config: missingExactAmountDraft, pendingFiles: { size: 0 } },
+    'save_draft',
+  ),
+  /needs a captured exact amount/,
+  'An enabled exact QR must not pass without a captured amount.',
+);
+disabledQrDraft.paymentMethods[0].enabled = false;
+disabledQrDraft.plans[0].priceCentavos = 0;
+assert.throws(
+  () => editorSandbox.window.__DueDiligencePricingEditorTest.validateConfig(
+    validationController,
+    'save_draft',
+  ),
+  /needs a price above ₱0 before checkout can be enabled/,
+  'A checkout-enabled plan must reject a zero price before it reaches payment submission.',
+);
+disabledQrDraft.plans[0].checkoutEnabled = false;
+assert.doesNotThrow(
+  () => editorSandbox.window.__DueDiligencePricingEditorTest.validateConfig(
+    validationController,
+    'save_draft',
+  ),
+  'A zero-price display-only plan must remain saveable while checkout is disabled.',
+);
 
 console.log('Admin Plans & Pricing editor, authorization, safe preview, QR, and publication contracts passed.');

@@ -112,6 +112,7 @@
         : integer(source.qrAmountCentavos, 0, 0, 100_000_000),
       qrUrl,
       enabled: boolean(source.enabled, true),
+      visible: boolean(source.visible, true),
       sortOrder: integer(source.sortOrder ?? source.sort_order, (index + 1) * 10, -10_000, 10_000),
     });
   }
@@ -193,7 +194,29 @@
     return supplied && typeof supplied === 'object' ? supplied : null;
   }
 
-  function planAvailability(plan, access = {}, useRuntimeState = true) {
+  function paymentCompatibility(plan, paymentMethods) {
+    const publishable = paymentMethods.filter((method) => (
+      method.enabled
+      && method.visible
+      && Boolean(method.qrUrl || method.qrAsset?.assetId)
+      && (!method.planCode || method.planCode === plan.planCode)
+    ));
+    if (publishable.some((method) => (
+      method.qrAmountMode === 'generic'
+      || (method.qrAmountMode === 'exact'
+        && method.qrAmountCentavos === plan.priceCentavos)
+    ))) {
+      return { available: true, label: '' };
+    }
+    return {
+      available: false,
+      label: publishable.length
+        ? 'Update payment QR for this price'
+        : 'Payment QR required',
+    };
+  }
+
+  function planAvailability(plan, paymentMethods, access = {}, useRuntimeState = true) {
     const nowValue = access.serverNow || access.now || Date.now();
     const now = new Date(nowValue).getTime();
     const start = plan.checkoutStartsAt ? new Date(plan.checkoutStartsAt).getTime() : Number.NaN;
@@ -221,6 +244,14 @@
         disabled: true,
         label: text(access.checkoutMessage, 160) || 'Checkout is unavailable for this account',
         state: 'ineligible',
+      };
+    }
+    const payment = paymentCompatibility(plan, paymentMethods);
+    if (!payment.available) {
+      return {
+        disabled: true,
+        label: payment.label,
+        state: 'payment_channel_required',
       };
     }
     return { disabled: false, label: '', state: 'available' };
@@ -275,7 +306,7 @@
     const faqs = normalized.faqs.filter((faq) => faq.visible && faq.question && faq.answer);
     const availabilityByPlan = new Map(plans.map((plan) => [
       plan.planCode,
-      planAvailability(plan, access, useRuntimeState),
+      planAvailability(plan, normalized.paymentMethods, access, useRuntimeState),
     ]));
 
     host.innerHTML = `<section class="dd-pricing" data-pricing-mode="${mode}">

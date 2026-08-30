@@ -104,6 +104,7 @@ create table if not exists public.pricing_plan_versions (
   unique (revision_id, plan_code),
   check (display_ends_at is null or display_starts_at is null or display_ends_at > display_starts_at),
   check (checkout_ends_at is null or checkout_starts_at is null or checkout_ends_at > checkout_starts_at),
+  check (not checkout_enabled or price_centavos > 0),
   check (
     (entitlement_mode = 'fixed_end' and fixed_ends_at is not null)
     or (entitlement_mode = 'rolling_days' and duration_days is not null and fixed_ends_at is null)
@@ -135,7 +136,7 @@ create table if not exists public.pricing_payment_channel_versions (
   sort_order integer not null default 0 check (sort_order between -10000 and 10000),
   created_at timestamptz not null default clock_timestamp(),
   unique (revision_id, channel_code, plan_version_id),
-  check (qr_asset_id is not null or qr_public_path is not null)
+  check (not enabled or qr_asset_id is not null or qr_public_path is not null)
 );
 
 create index if not exists pricing_payment_channels_revision_order_idx
@@ -179,6 +180,7 @@ alter table public.payment_requests
   add column if not exists approved_entitlement_starts_at timestamptz,
   add column if not exists approved_entitlement_ends_at timestamptz,
   add column if not exists approved_prior_expires_at timestamptz,
+  add column if not exists approved_prior_subscription_state jsonb,
   add column if not exists approved_entitlement_changed boolean;
 
 alter table public.payment_requests
@@ -195,6 +197,17 @@ alter table public.payment_requests
   ) not valid;
 alter table public.payment_requests
   validate constraint payment_requests_pricing_snapshot_check;
+
+alter table public.payment_requests
+  add constraint payment_requests_prior_subscription_state_check check (
+    approved_prior_subscription_state is null or (
+      jsonb_typeof(approved_prior_subscription_state) = 'object'
+      and coalesce(approved_prior_subscription_state->>'snapshotVersion', '') = '1'
+      and octet_length(approved_prior_subscription_state::text) <= 8192
+    )
+  ) not valid;
+alter table public.payment_requests
+  validate constraint payment_requests_prior_subscription_state_check;
 
 alter table public.subscriptions
   add column if not exists pricing_revision_id uuid references public.pricing_revisions(id),
@@ -533,6 +546,7 @@ begin
         not p_public
         or (
           c.enabled and c.visible
+          and (c.qr_asset_id is not null or c.qr_public_path is not null)
           and exists (
             select 1
             from public.pricing_plan_versions display_plan
@@ -590,6 +604,8 @@ begin
             where compatible_channel.revision_id = plan_row.revision_id
               and compatible_channel.enabled
               and compatible_channel.visible
+              and (compatible_channel.qr_asset_id is not null
+                or compatible_channel.qr_public_path is not null)
               and (compatible_channel.plan_version_id is null or compatible_channel.plan_version_id = plan_row.id)
               and (compatible_channel.amount_centavos is null or compatible_channel.amount_centavos = plan_row.price_centavos)
           ),
@@ -609,6 +625,8 @@ begin
             where compatible_channel.revision_id = plan_row.revision_id
               and compatible_channel.enabled
               and compatible_channel.visible
+              and (compatible_channel.qr_asset_id is not null
+                or compatible_channel.qr_public_path is not null)
               and (compatible_channel.plan_version_id is null or compatible_channel.plan_version_id = plan_row.id)
               and (compatible_channel.amount_centavos is null or compatible_channel.amount_centavos = plan_row.price_centavos)
           ) then 'payment_channel_required'
@@ -653,7 +671,11 @@ begin
             where compatible_channel.revision_id = plan_row.revision_id
               and (compatible_channel.plan_version_id is null or compatible_channel.plan_version_id = plan_row.id)
               and (compatible_channel.amount_centavos is null or compatible_channel.amount_centavos = plan_row.price_centavos)
-              and (not p_public or (compatible_channel.enabled and compatible_channel.visible))
+              and (not p_public or (
+                compatible_channel.enabled and compatible_channel.visible
+                and (compatible_channel.qr_asset_id is not null
+                  or compatible_channel.qr_public_path is not null)
+              ))
           ) compatible_methods
         ), '[]'::jsonb)
       ) as plan_value
@@ -910,6 +932,10 @@ begin
        or (v_mode = 'rolling_days' and (v_duration is null or v_duration not between 1 and 366)) then
       raise exception 'A pricing plan entitlement is invalid';
     end if;
+    if coalesce((v_plan->>'checkoutEnabled')::boolean, false)
+       and coalesce(nullif(v_plan->>'priceCentavos', '')::integer, 0) <= 0 then
+      raise exception 'A checkout-enabled pricing plan requires a positive price';
+    end if;
 
     insert into public.plan_catalog (
       plan_code, display_name, price_php, status, description, features,
@@ -981,7 +1007,8 @@ begin
       end if;
       v_qr_url := null;
     end if;
-    if v_asset_id is null and v_qr_url is null then
+    if v_asset_id is null and v_qr_url is null
+       and coalesce((v_method->>'enabled')::boolean, true) then
       raise exception 'Payment method QR is required';
     end if;
 
@@ -989,10 +1016,6 @@ begin
       v_amount := null;
     elsif coalesce(v_method->>'qrAmountMode', 'exact') = 'exact' then
       v_amount := nullif(v_method->>'qrAmountCentavos', '')::integer;
-      if v_amount is null and v_plan_version_id is not null then
-        select p.price_centavos into v_amount
-        from public.pricing_plan_versions p where p.id = v_plan_version_id;
-      end if;
       if v_amount is null then raise exception 'Exact QR amount is required'; end if;
     else
       raise exception 'Payment method QR amount mode is invalid';
@@ -1587,50 +1610,9 @@ begin
     raise exception 'Plan and payment method are required';
   end if;
 
-  select r.* into v_revision
-  from public.pricing_revisions r
-  where r.state in ('published', 'scheduled')
-    and r.effective_at <= v_now
-  order by r.effective_at desc, r.revision_number desc limit 1;
-  select p.* into v_plan
-  from public.pricing_plan_versions p
-  where p.id = p_plan_version_id and p.revision_id = v_revision.id;
-  if v_plan.id is null
-     or not v_plan.visible
-     or (v_plan.display_starts_at is not null and v_now < v_plan.display_starts_at)
-     or (v_plan.display_ends_at is not null and v_now >= v_plan.display_ends_at)
-     or not v_plan.checkout_enabled
-     or (v_plan.checkout_starts_at is not null and v_now < v_plan.checkout_starts_at)
-     or (v_plan.checkout_ends_at is not null and v_now >= v_plan.checkout_ends_at) then
-    raise exception 'Selected pricing plan is not open for checkout';
-  end if;
-  select c.* into v_channel
-  from public.pricing_payment_channel_versions c
-  where c.id = p_payment_channel_version_id
-    and c.revision_id = v_revision.id
-    and c.enabled and c.visible
-    and (c.plan_version_id is null or c.plan_version_id = v_plan.id)
-    and (c.amount_centavos is null or c.amount_centavos = v_plan.price_centavos);
-  if v_channel.id is null then
-    raise exception 'Payment method is not compatible with the selected plan amount';
-  end if;
-
-  if p_payment_date is null
-     or p_payment_date < v_ph_date - 31
-     or p_payment_date > v_ph_date + 1 then
-    raise exception 'Payment date is outside the accepted range';
-  end if;
-  if char_length(btrim(coalesce(p_payment_reference, ''))) not between 4 and 100 then
-    raise exception 'Payment reference is invalid';
-  end if;
-  if p_proof_bucket <> 'payment-proofs'
-     or p_proof_path !~ '^[0-9a-f-]{36}/[0-9a-f-]{36}\.(png|jpg|pdf)$'
-     or p_proof_mime_type not in ('image/png', 'image/jpeg', 'application/pdf')
-     or p_proof_size_bytes not between 1 and 6291456
-     or lower(coalesce(p_proof_sha256, '')) !~ '^[0-9a-f]{64}$' then
-    raise exception 'Payment proof metadata is invalid';
-  end if;
-
+  -- Resolve an already accepted retry before consulting today's live revision.
+  -- Otherwise a response lost just before a pricing publication would become
+  -- unrecoverable as soon as the submitted plan version turns stale.
   v_request_key := 'pricingv2_' || substr(encode(extensions.digest(
     p_user_id::text || '|' || p_plan_version_id::text || '|'
       || p_payment_channel_version_id::text || '|'
@@ -1659,15 +1641,91 @@ begin
       'entitlementMode', v_request.trusted_entitlement_mode,
       'fixedEndsAt', v_request.trusted_fixed_ends_at,
       'submittedAt', v_request.submitted_at,
+      'proofObjectPath', v_request.proof_object_path,
       'provisionalAccessExpiresAt', v_request.provisional_access_expires_at,
       'provisionalGrantReused', v_request.provisional_access_started_at is null,
       'replayed', true
     );
   end if;
 
+  select r.* into v_revision
+  from public.pricing_revisions r
+  where r.state in ('published', 'scheduled')
+    and r.effective_at <= v_now
+  order by r.effective_at desc, r.revision_number desc limit 1;
+  select p.* into v_plan
+  from public.pricing_plan_versions p
+  where p.id = p_plan_version_id and p.revision_id = v_revision.id;
+  if v_plan.id is null
+     or not v_plan.visible
+     or (v_plan.display_starts_at is not null and v_now < v_plan.display_starts_at)
+     or (v_plan.display_ends_at is not null and v_now >= v_plan.display_ends_at)
+     or not v_plan.checkout_enabled
+     or (v_plan.checkout_starts_at is not null and v_now < v_plan.checkout_starts_at)
+     or (v_plan.checkout_ends_at is not null and v_now >= v_plan.checkout_ends_at) then
+    raise exception 'Selected pricing plan is not open for checkout';
+  end if;
+  select c.* into v_channel
+  from public.pricing_payment_channel_versions c
+  where c.id = p_payment_channel_version_id
+    and c.revision_id = v_revision.id
+    and c.enabled and c.visible
+    and (c.qr_asset_id is not null or c.qr_public_path is not null)
+    and (c.plan_version_id is null or c.plan_version_id = v_plan.id)
+    and (c.amount_centavos is null or c.amount_centavos = v_plan.price_centavos);
+  if v_channel.id is null then
+    raise exception 'Payment method is not compatible with the selected plan amount';
+  end if;
+
+  if p_payment_date is null
+     or p_payment_date < v_ph_date - 31
+     or p_payment_date > v_ph_date + 1 then
+    raise exception 'Payment date is outside the accepted range';
+  end if;
+  if char_length(btrim(coalesce(p_payment_reference, ''))) not between 4 and 100 then
+    raise exception 'Payment reference is invalid';
+  end if;
+  if p_proof_bucket <> 'payment-proofs'
+     or p_proof_path !~ '^[0-9a-f-]{36}/[0-9a-f-]{36}\.(png|jpg|pdf)$'
+     or p_proof_mime_type not in ('image/png', 'image/jpeg', 'application/pdf')
+     or p_proof_size_bytes not between 1 and 6291456
+     or lower(coalesce(p_proof_sha256, '')) !~ '^[0-9a-f]{64}$' then
+    raise exception 'Payment proof metadata is invalid';
+  end if;
+
   perform pg_catalog.pg_advisory_xact_lock(
     pg_catalog.hashtextextended('payment:' || p_user_id::text, 0)
   );
+  -- A concurrent retry can pass the optimistic lookup before the first
+  -- transaction commits. Recheck under the per-user lock so it receives the
+  -- same authoritative payment instead of a spurious "awaiting review" error.
+  select r.* into v_request
+  from public.payment_requests r where r.request_key = v_request_key;
+  if v_request.id is not null then
+    if v_request.user_id <> p_user_id
+       or v_request.pricing_plan_version_id <> p_plan_version_id
+       or v_request.pricing_payment_channel_version_id <> p_payment_channel_version_id then
+      raise exception 'Payment request key conflict';
+    end if;
+    return jsonb_build_object(
+      'id', v_request.id, 'status', v_request.status,
+      'pricingRevisionId', v_request.pricing_revision_id,
+      'planVersionId', v_request.pricing_plan_version_id,
+      'paymentChannelVersionId', v_request.pricing_payment_channel_version_id,
+      'planCode', v_request.plan_code, 'planName', v_request.trusted_plan_name,
+      'amountPhp', v_request.trusted_amount_php,
+      'amountCentavos', v_request.trusted_amount_centavos,
+      'currency', v_request.trusted_currency,
+      'durationDays', v_request.trusted_duration_days,
+      'entitlementMode', v_request.trusted_entitlement_mode,
+      'fixedEndsAt', v_request.trusted_fixed_ends_at,
+      'submittedAt', v_request.submitted_at,
+      'proofObjectPath', v_request.proof_object_path,
+      'provisionalAccessExpiresAt', v_request.provisional_access_expires_at,
+      'provisionalGrantReused', v_request.provisional_access_started_at is null,
+      'replayed', true
+    );
+  end if;
   if exists (
     select 1 from public.payment_requests r
     where r.user_id = p_user_id and r.status in ('pending', 'needs_information')
@@ -1743,6 +1801,7 @@ begin
     'entitlementMode', v_plan.entitlement_mode,
     'fixedEndsAt', v_plan.fixed_ends_at,
     'submittedAt', v_request.submitted_at,
+    'proofObjectPath', v_request.proof_object_path,
     'provisionalAccessExpiresAt', v_request.provisional_access_expires_at,
     'provisionalGrantReused', v_prior_provisional,
     'replayed', false
@@ -1788,9 +1847,6 @@ declare
   v_channel_id uuid;
   v_result jsonb;
 begin
-  if v_now >= '2026-09-01 00:00:00+08'::timestamptz then
-    raise exception 'Early Access checkout is closed; refresh Plans & Pricing';
-  end if;
   if p_request_key is null or p_request_key !~ '^[A-Za-z0-9_-]{16,128}$' then
     raise exception 'Valid request key required';
   end if;
@@ -1798,17 +1854,43 @@ begin
      or round(coalesce(p_amount_php, 0), 2) <> 149.00 then
     raise exception 'Only the legacy 149-peso Early Access offer is available through this checkout';
   end if;
+  -- Recover a response lost at the cutoff before refusing genuinely new legacy
+  -- submissions. The compatibility wrapper stores a v2-derived request key,
+  -- so bind the retry to the complete immutable proof/reference identity.
   select r.* into v_existing
-  from public.payment_requests r where r.request_key = p_request_key;
+  from public.payment_requests r
+  where r.user_id = p_user_id
+    and r.pricing_plan_version_id is not null
+    and r.plan_code = 'early_access_beta'
+    and r.trusted_amount_centavos = 14900
+    and r.payment_method = lower(btrim(coalesce(p_payment_method, '')))
+    and r.reference_normalized = lower(btrim(coalesce(p_transaction_reference, '')))
+    and r.proof_sha256 = lower(coalesce(p_proof_sha256, ''))
+    and r.submitted_at < '2026-09-01 00:00:00+08'::timestamptz
+  order by r.submitted_at desc
+  limit 1;
   if v_existing.id is not null then
-    if v_existing.user_id <> p_user_id then raise exception 'Request key already used'; end if;
     return jsonb_build_object(
       'id', v_existing.id, 'status', v_existing.status,
-      'planCode', v_existing.plan_code, 'amountPhp', v_existing.trusted_amount_php,
-      'amountCentavos', coalesce(v_existing.trusted_amount_centavos, 14900),
+      'pricingRevisionId', v_existing.pricing_revision_id,
+      'planVersionId', v_existing.pricing_plan_version_id,
+      'paymentChannelVersionId', v_existing.pricing_payment_channel_version_id,
+      'planCode', v_existing.plan_code, 'planName', v_existing.trusted_plan_name,
+      'amountPhp', v_existing.trusted_amount_php,
+      'amountCentavos', v_existing.trusted_amount_centavos,
+      'currency', v_existing.trusted_currency,
+      'durationDays', v_existing.trusted_duration_days,
+      'entitlementMode', v_existing.trusted_entitlement_mode,
+      'fixedEndsAt', v_existing.trusted_fixed_ends_at,
+      'submittedAt', v_existing.submitted_at,
+      'proofObjectPath', v_existing.proof_object_path,
       'provisionalAccessExpiresAt', v_existing.provisional_access_expires_at,
+      'provisionalGrantReused', v_existing.provisional_access_started_at is null,
       'replayed', true
     );
+  end if;
+  if v_now >= '2026-09-01 00:00:00+08'::timestamptz then
+    raise exception 'Early Access checkout is closed; refresh Plans & Pricing';
   end if;
 
   select p.id, c.id into v_plan_id, v_channel_id
@@ -1830,6 +1912,7 @@ begin
     and (p.checkout_ends_at is null or v_now < p.checkout_ends_at)
     and c.channel_code = lower(btrim(coalesce(p_payment_method, '')))
     and c.enabled and c.visible
+    and (c.qr_asset_id is not null or c.qr_public_path is not null)
     and (c.amount_centavos is null or c.amount_centavos = 14900)
   order by c.sort_order limit 1;
   if v_plan_id is null or v_channel_id is null then
@@ -1922,6 +2005,7 @@ declare
   v_entitlement_changed boolean := false;
   v_previous_payment jsonb;
   v_previous_subscription jsonb := '{}'::jsonb;
+  v_prior_subscription_snapshot jsonb;
   v_history_action text := 'activate';
   v_result jsonb;
 begin
@@ -2009,6 +2093,24 @@ begin
     order by s.expires_at desc nulls first, s.updated_at desc
     limit 1 for update;
 
+    if v_subscription.id is not null then
+      -- Server-created allowlist only: bounded evidence sufficient to restore
+      -- the exact prior entitlement without persisting the whole table row.
+      v_prior_subscription_snapshot := jsonb_build_object(
+        'snapshotVersion', 1,
+        'subscriptionId', v_subscription.id,
+        'planCode', v_subscription.plan_code,
+        'status', v_subscription.status,
+        'startsAt', v_subscription.starts_at,
+        'expiresAt', v_subscription.expires_at,
+        'source', v_subscription.source,
+        'pricingRevisionId', v_subscription.pricing_revision_id,
+        'pricingPlanVersionId', v_subscription.pricing_plan_version_id,
+        'termDurationDays', v_subscription.term_duration_days,
+        'entitlementMode', v_subscription.entitlement_mode
+      );
+    end if;
+
     if v_mode = 'rolling_days' and v_subscription.id is not null
        and v_subscription.expires_at is null then
       -- A paid approval may link to a stronger non-expiring entitlement, but
@@ -2017,7 +2119,10 @@ begin
       v_entitlement_changed := false;
 
     elsif v_mode = 'rolling_days' and v_subscription.id is not null
-       and v_subscription.source in ('manual_payment', 'admin_adjustment', 'migration') then
+       and v_subscription.expires_at is not null then
+      -- Paid days begin after any later finite live entitlement, including a
+      -- complimentary grant. The prior expiry and complete previous row are
+      -- retained below for audit and exact-segment refund reversal.
       v_previous_subscription := to_jsonb(v_subscription);
       v_prior_expiry := v_subscription.expires_at;
       v_base := greatest(v_now, coalesce(v_subscription.expires_at, v_now));
@@ -2109,6 +2214,8 @@ begin
       approved_entitlement_starts_at = case when v_status = 'approved' then v_purchased_start else approved_entitlement_starts_at end,
       approved_entitlement_ends_at = case when v_status = 'approved' then v_purchased_end else approved_entitlement_ends_at end,
       approved_prior_expires_at = case when v_status = 'approved' then v_prior_expiry else approved_prior_expires_at end,
+      approved_prior_subscription_state = case when v_status = 'approved'
+        then v_prior_subscription_snapshot else approved_prior_subscription_state end,
       approved_entitlement_changed = case when v_status = 'approved' then v_entitlement_changed else approved_entitlement_changed end,
       provisional_access_revoked_at = case when v_status = 'rejected'
         then coalesce(provisional_access_revoked_at, v_now) else provisional_access_revoked_at end,
@@ -2177,7 +2284,9 @@ declare
   v_now timestamptz := clock_timestamp();
   v_payment public.payment_requests%rowtype;
   v_subscription public.subscriptions%rowtype;
+  v_prior_subscription public.subscriptions%rowtype;
   v_refund public.refund_requests%rowtype;
+  v_prior_snapshot jsonb;
   v_start timestamptz;
   v_end timestamptz;
   v_paid numeric(10,2);
@@ -2223,14 +2332,21 @@ begin
   if v_payment.id is null then raise exception 'Eligible approved payment not found'; end if;
   select s.* into v_subscription
   from public.subscriptions s where s.id = v_payment.subscription_id for update;
+  v_prior_snapshot := v_payment.approved_prior_subscription_state;
 
-  v_start := coalesce(
-    v_payment.approved_entitlement_starts_at,
-    v_payment.provisional_access_started_at,
-    v_subscription.starts_at,
-    v_payment.reviewed_at,
-    v_payment.submitted_at
-  );
+  if v_payment.approved_entitlement_changed is false then
+    -- Stronger unchanged access predates this purchase and must not make a new
+    -- payment immediately ineligible for its own seven-day refund window.
+    v_start := coalesce(v_payment.reviewed_at, v_payment.submitted_at);
+  else
+    v_start := coalesce(
+      v_payment.approved_entitlement_starts_at,
+      v_payment.provisional_access_started_at,
+      v_subscription.starts_at,
+      v_payment.reviewed_at,
+      v_payment.submitted_at
+    );
+  end if;
   v_end := coalesce(
     v_payment.approved_entitlement_ends_at,
     v_payment.trusted_fixed_ends_at,
@@ -2258,10 +2374,64 @@ begin
   -- unrelated stronger entitlement make automatic shortening unsafe.
   if coalesce(v_payment.approved_entitlement_changed, false)
      and v_subscription.id is not null
+     and v_subscription.user_id = p_user_id
+     and v_subscription.status in ('trialing', 'pending_payment', 'active', 'paused')
+     and not exists (
+       select 1
+       from public.subscriptions live_subscription
+       where live_subscription.user_id = p_user_id
+         and live_subscription.status in ('trialing', 'pending_payment', 'active', 'paused')
+         and live_subscription.id <> v_subscription.id
+     )
      and v_subscription.expires_at is not distinct from v_payment.approved_entitlement_ends_at then
-    if v_payment.trusted_entitlement_mode = 'rolling_days' then
-      v_can_reverse := true;
-      if v_payment.approved_prior_expires_at is not null
+    if v_payment.trusted_entitlement_mode in ('rolling_days', 'fixed_end') then
+      -- Prefer exact restoration from the bounded server-created approval
+      -- snapshot. This reverses both in-place rolling extensions and fixed-end
+      -- replacements without leaving prior entitlement provenance overwritten.
+      if v_prior_snapshot is not null
+         and v_prior_snapshot->>'snapshotVersion' = '1'
+         and v_prior_snapshot->>'subscriptionId' ~ '^[0-9a-f-]{36}$'
+         and v_prior_snapshot->>'planCode' ~ '^[a-z][a-z0-9_]{2,63}$'
+         and v_prior_snapshot->>'status' in ('trialing', 'pending_payment', 'active', 'paused')
+         and v_prior_snapshot->>'source' in ('manual_payment', 'complimentary', 'admin_adjustment', 'migration')
+         and coalesce(v_prior_snapshot->>'pricingRevisionId', '') ~ '^([0-9a-f-]{36})?$'
+         and coalesce(v_prior_snapshot->>'pricingPlanVersionId', '') ~ '^([0-9a-f-]{36})?$'
+         and coalesce(v_prior_snapshot->>'termDurationDays', '') ~ '^([0-9]{1,3})?$'
+         and coalesce(v_prior_snapshot->>'entitlementMode', '') ~ '^(fixed_end|rolling_days)?$' then
+        select s.* into v_prior_subscription
+        from public.subscriptions s
+        where s.id::text = v_prior_snapshot->>'subscriptionId'
+          and s.user_id = p_user_id
+        for update;
+      end if;
+
+      if v_prior_subscription.id is not null then
+        if v_prior_subscription.id <> v_subscription.id then
+          update public.subscriptions
+          set status = 'cancelled', updated_at = v_now, updated_by = p_user_id,
+              reason = 'Versioned payment refund requested; purchased segment cancelled.',
+              version = version + 1
+          where id = v_subscription.id;
+        end if;
+        update public.subscriptions
+        set plan_code = v_prior_snapshot->>'planCode',
+            status = v_prior_snapshot->>'status',
+            starts_at = nullif(v_prior_snapshot->>'startsAt', '')::timestamptz,
+            expires_at = nullif(v_prior_snapshot->>'expiresAt', '')::timestamptz,
+            source = v_prior_snapshot->>'source',
+            pricing_revision_id = nullif(v_prior_snapshot->>'pricingRevisionId', '')::uuid,
+            pricing_plan_version_id = nullif(v_prior_snapshot->>'pricingPlanVersionId', '')::uuid,
+            term_duration_days = nullif(v_prior_snapshot->>'termDurationDays', '')::integer,
+            entitlement_mode = nullif(v_prior_snapshot->>'entitlementMode', ''),
+            updated_at = v_now,
+            updated_by = p_user_id,
+            reason = 'Versioned payment refund requested; exact prior entitlement restored.',
+            version = version + 1
+        where id = v_prior_subscription.id;
+        v_can_reverse := true;
+        v_access_note := 'The exact purchased segment was removed and the prior entitlement provenance was restored.';
+      elsif v_payment.trusted_entitlement_mode = 'rolling_days'
+         and v_payment.approved_prior_expires_at is not null
          and v_payment.approved_prior_expires_at > v_now then
         update public.subscriptions
         set expires_at = v_payment.approved_prior_expires_at,
@@ -2269,6 +2439,7 @@ begin
             reason = 'Versioned renewal refund requested; preserved the prior paid expiry.',
             version = version + 1
         where id = v_subscription.id;
+        v_can_reverse := true;
         v_access_note := 'The exact renewal segment was removed and the prior paid expiry was preserved.';
       else
         update public.subscriptions
@@ -2276,6 +2447,7 @@ begin
             reason = 'Versioned payment refund requested; access cancellation recorded.',
             version = version + 1
         where id = v_subscription.id;
+        v_can_reverse := true;
         v_access_note := 'The exact purchased segment was cancelled pending Founder refund review.';
       end if;
     elsif v_payment.plan_code = 'early_access_beta' then

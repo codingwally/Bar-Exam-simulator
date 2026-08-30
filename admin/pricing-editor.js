@@ -195,17 +195,19 @@
 
   function serializeConfig(controller) {
     const normalized = clone(renderer().normalizeConfig(controller.config));
-    const priceByPlan = new Map(normalized.plans.map((plan) => [
-      plan.planCode,
-      plan.priceCentavos,
-    ]));
     normalized.paymentMethods = normalized.paymentMethods.map((method) => ({
       ...method,
       qrAmountCentavos: method.qrAmountMode === 'generic'
         ? null
-        : priceByPlan.get(method.planCode) ?? method.qrAmountCentavos,
+        : method.qrAmountCentavos,
     }));
     return normalized;
+  }
+
+  function reconfirmExactQrAmount(controller, method) {
+    if (!method || method.qrAmountMode !== 'exact' || !method.planCode) return;
+    const plan = controller.config.plans.find((candidate) => candidate.planCode === method.planCode);
+    if (plan) method.qrAmountCentavos = plan.priceCentavos;
   }
 
   function stableConfig(controller) {
@@ -564,7 +566,12 @@
       }
     });
     const status = controller.root.querySelector('[data-editor-status] span');
-    if (busy && status) status.textContent = label || 'Working…';
+    if (busy && status) {
+      status.textContent = label || 'Working…';
+    } else if (status) {
+      status.textContent = controller.message?.text
+        || (controller.dirty ? 'Unsaved draft changes' : 'Draft matches the last server version');
+    }
   }
 
   function setMessage(controller, tone, textValue, conflict = false) {
@@ -713,6 +720,13 @@
     if (fieldName === 'enabled') method.enabled = target.checked;
     else if (fieldName === 'planCode') method.planCode = String(target.value || '').trim() || null;
     else if (fieldName === 'channelCode') method.channelCode = String(target.value || '').trim().toLowerCase();
+    else if (fieldName === 'qrAmountMode') {
+      const previousMode = method.qrAmountMode;
+      method.qrAmountMode = String(target.value || '');
+      if (previousMode !== 'exact' && method.qrAmountMode === 'exact') {
+        reconfirmExactQrAmount(controller, method);
+      }
+    }
     else if (fieldName) method[fieldName] = String(target.value || '');
   }
 
@@ -817,9 +831,10 @@
       accountDetails: '',
       instructions: '',
       qrAsset: null,
-      qrAmountMode: 'exact',
+      qrAmountMode: 'generic',
       qrAmountCentavos: null,
       enabled: false,
+      visible: true,
       sortOrder: number * 10,
       _editorKey: randomId('payment'),
       _persisted: false,
@@ -947,6 +962,7 @@
       if (!controllerIsActive(controller)) return;
       method.qrAsset = assetFromPayload(payload);
       method.qrUrl = null;
+      reconfirmExactQrAmount(controller, method);
       revokeUrl(controller, pending.url);
       controller.pendingFiles.delete(key);
       controller.message = null;
@@ -1016,6 +1032,9 @@
       if (!Number.isInteger(plan.priceCentavos) || plan.priceCentavos < 0) {
         throw new Error(`${plan.name} needs a valid peso price.`);
       }
+      if (plan.checkoutEnabled && plan.priceCentavos === 0) {
+        throw new Error(`${plan.name} needs a price above ₱0 before checkout can be enabled.`);
+      }
       if (plan.entitlementMode !== 'fixed_end'
           && (!Number.isInteger(plan.durationDays) || plan.durationDays < 1 || plan.durationDays > 366)) {
         throw new Error(`${plan.name} needs a subscription duration between 1 and 366 days.`);
@@ -1048,8 +1067,11 @@
       if (method.qrAmountMode === 'exact' && !method.planCode) {
         throw new Error(`${method.label} uses an exact QR amount, so assign it to one plan.`);
       }
-      if (!method.qrAsset?.assetId && !legacyQrUrlFor(method)) {
-        throw new Error(`${method.label} needs an uploaded QR image before this draft can be saved.`);
+      if (method.qrAmountMode === 'exact' && !Number.isInteger(method.qrAmountCentavos)) {
+        throw new Error(`${method.label} needs a captured exact amount. Choose Generic QR until the exact amount is reconfirmed.`);
+      }
+      if (method.enabled && !method.qrAsset?.assetId && !legacyQrUrlFor(method)) {
+        throw new Error(`Disable ${method.label} or upload its QR image before saving this draft.`);
       }
       [method.label, method.accountName, method.accountDetails, method.instructions]
         .forEach((value) => validatePlainText(value, method.label || `Payment method ${index + 1}`));
@@ -1216,10 +1238,20 @@
     renderEditor(controller);
   }
 
+  function restoreOperationFocus(controller, operation) {
+    if (!operation) return;
+    const target = Array.from(controller.root.querySelectorAll('[data-editor-action="open-operation"]'))
+      .find((button) => button.dataset.operation === operation.type
+        && String(button.dataset.sourceRevisionId || '') === String(operation.sourceRevisionId || ''));
+    target?.focus?.();
+  }
+
   function closeOperation(controller) {
+    const operation = controller.operation;
     controller.operation = null;
     controller.root.querySelector('[data-pricing-operation-dialog]')?.close?.();
     renderEditor(controller, { openDialog: false });
+    restoreOperationFocus(controller, operation);
   }
 
   async function submitOperation(controller, form) {

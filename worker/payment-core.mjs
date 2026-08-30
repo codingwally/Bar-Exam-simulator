@@ -74,6 +74,66 @@ export function normalizePaymentFields(fields) {
   };
 }
 
+// Kept only for the short zero-downtime cutover window. The database closes
+// this legacy contract at the authoritative September 1 Manila cutoff, while
+// the new browser contract uses immutable plan/channel version identifiers.
+export function normalizeLegacyPaymentFields(fields) {
+  const planCode = text(fields?.planCode, 64, 'Plan', 3).toLowerCase();
+  if (planCode !== 'early_access_beta') {
+    throw new PaymentValidationError(
+      'PLAN_UNAVAILABLE',
+      'Only the legacy Early Access offer can use this checkout form.',
+    );
+  }
+  const paymentMethod = text(fields?.paymentMethod, 64, 'Payment method', 3).toLowerCase();
+  if (!STABLE_PLAN_CODE_PATTERN.test(paymentMethod)) {
+    throw new PaymentValidationError(
+      'INVALID_PAYMENT_METHOD',
+      'Select the payment channel shown on Plans & Pricing.',
+    );
+  }
+  const amountPhp = Number(fields?.amountPhp);
+  const amountCentavos = Math.round(amountPhp * 100);
+  if (!Number.isFinite(amountPhp)
+      || amountCentavos <= 0
+      || amountCentavos > 100_000_000
+      || amountCentavos !== amountPhp * 100) {
+    throw new PaymentValidationError(
+      'INVALID_PAYMENT_AMOUNT',
+      'Enter the peso amount shown on the legacy checkout.',
+    );
+  }
+  const paymentDate = text(fields?.paymentDate, 10, 'Payment date', 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(paymentDate)
+      || Number.isNaN(Date.parse(`${paymentDate}T00:00:00Z`))) {
+    throw new PaymentValidationError('INVALID_PAYMENT_DATE', 'Enter a valid payment date.');
+  }
+  const transactionReference = text(
+    fields?.transactionReference ?? fields?.paymentReference,
+    PAYMENT_LIMITS.maxReferenceLength,
+    'Transaction reference',
+    4,
+  );
+  if (!/^[\p{L}\p{N}][\p{L}\p{N} ._:/#-]{3,99}$/u.test(transactionReference)) {
+    throw new PaymentValidationError(
+      'INVALID_PAYMENT_REFERENCE',
+      'Enter the reference exactly as shown by the payment channel.',
+    );
+  }
+  const noteRaw = String(fields?.note ?? '').trim();
+  if (noteRaw.length > PAYMENT_LIMITS.maxNoteLength) {
+    throw new PaymentValidationError('INVALID_PAYMENT_NOTE', 'The optional note is too long.');
+  }
+  return {
+    planCode,
+    amountPhp,
+    paymentMethod,
+    paymentDate,
+    transactionReference,
+    note: noteRaw || null,
+  };
+}
+
 export function proofExtension(name, mimeType) {
   const expected = PAYMENT_MIME_EXTENSIONS[mimeType];
   if (!expected) {

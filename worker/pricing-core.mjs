@@ -455,6 +455,7 @@ function sanitizedPaymentMethod(value) {
     qrAmountMode,
     qrAmountCentavos,
     enabled: safeBoolean(value.enabled),
+    visible: safeBoolean(value.visible),
     sortOrder: safeInteger(value.sortOrder, -10_000, 10_000, 0),
   };
 }
@@ -500,7 +501,7 @@ export function sanitizePublicPricingSnapshot(value) {
     .filter(Boolean);
   const paymentMethods = (Array.isArray(source.paymentMethods) ? source.paymentMethods : [])
     .map(sanitizedPaymentMethod)
-    .filter(Boolean);
+    .filter((method) => method?.enabled === true && method.visible === true && Boolean(method.qrUrl));
   const faqs = (Array.isArray(source.faqs) ? source.faqs : [])
     .map(sanitizedFaq)
     .filter(Boolean);

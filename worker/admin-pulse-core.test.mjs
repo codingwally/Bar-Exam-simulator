@@ -266,6 +266,11 @@ test('migration defines an append-only deduplicated five-event outbox and curren
   assert.match(sql, /active_material_check check \(/i);
   assert.match(sql, /v_data_scope = 'regular'/i);
   assert.match(sql, /event\.data_scope = 'regular'/i);
+  assert.match(
+    sql,
+    /event\.data_scope = 'regular'[\s\S]*not exists \([\s\S]*private\.internal_test_accounts classified[\s\S]*classified\.user_id = event\.actor_user_id/i,
+  );
+  assert.match(sql, /last_error_code = 'internal_test_account'/i);
   assert.match(sql, /revoke all on public\.admin_pulse_events[\s\S]*service_role/i);
   for (const fragment of [
     'new_subscriber:user:',

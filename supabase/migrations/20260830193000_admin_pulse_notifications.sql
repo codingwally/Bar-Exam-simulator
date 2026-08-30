@@ -583,6 +583,11 @@ begin
     left join public.profiles profile on profile.id = event.actor_user_id
     left join auth.users account on account.id = event.actor_user_id
     where event.data_scope = 'regular'
+      and not exists (
+        select 1
+        from private.internal_test_accounts classified
+        where classified.user_id = event.actor_user_id
+      )
       and (
         event.event_type <> 'home_wall_post'
         or exists (
@@ -812,6 +817,7 @@ declare
   v_released integer := 0;
   v_terminal integer := 0;
   v_source_unavailable integer := 0;
+  v_reclassified_internal integer := 0;
 begin
   update public.admin_pulse_push_subscriptions subscription
   set status = 'stale',
@@ -892,7 +898,24 @@ begin
         and post.moderation_status = 'visible'
     );
   get diagnostics v_source_unavailable = row_count;
-  v_terminal := v_terminal + v_source_unavailable;
+
+  update public.admin_pulse_deliveries delivery
+  set status = 'dead',
+      claim_token = null,
+      claimed_at = null,
+      last_error_code = 'internal_test_account',
+      updated_at = now()
+  from public.admin_pulse_events event
+  where delivery.event_id = event.id
+    and delivery.status in ('pending', 'retry', 'processing')
+    and event.actor_user_id is not null
+    and exists (
+      select 1
+      from private.internal_test_accounts classified
+      where classified.user_id = event.actor_user_id
+    );
+  get diagnostics v_reclassified_internal = row_count;
+  v_terminal := v_terminal + v_source_unavailable + v_reclassified_internal;
 
   return jsonb_build_object(
     'expiredSubscriptions', v_expired,
@@ -946,6 +969,11 @@ begin
       and delivery.next_attempt_at <= now()
       and delivery.attempt_count < 8
       and event.data_scope = 'regular'
+      and not exists (
+        select 1
+        from private.internal_test_accounts classified
+        where classified.user_id = event.actor_user_id
+      )
       and subscription.status = 'active'
       and (
         subscription.expiration_time is null

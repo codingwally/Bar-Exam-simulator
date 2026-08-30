@@ -33,8 +33,8 @@ on:
         required: true
         default: false
         type: boolean
-      authenticated_pulse_smoke_preapplied:
-        description: "Admin allowed, non-admin denied, and regular/internal event isolation were live-probed"
+      event_isolation_smoke_preapplied:
+        description: "Regular/internal event isolation was live-probed in the target database"
         required: true
         default: false
         type: boolean
@@ -71,7 +71,7 @@ jobs:
           EXPECTED_CURRENT_PAGES_SHA: ${{ inputs.expected_current_pages_sha }}
           EXPECTED_CURRENT_STAGING_VERSION: ${{ inputs.expected_current_staging_version }}
           DATABASE_MIGRATION_PREAPPLIED: ${{ inputs.database_migration_preapplied }}
-          AUTHENTICATED_PULSE_SMOKE_PREAPPLIED: ${{ inputs.authenticated_pulse_smoke_preapplied }}
+          EVENT_ISOLATION_SMOKE_PREAPPLIED: ${{ inputs.event_isolation_smoke_preapplied }}
           APPROVAL_REFERENCE: ${{ inputs.approval_reference }}
           STAGING_MARKER_ENVIRONMENT: admin-pulse-pilot-staging-approved
           STAGING_MARKER_TASK: admin-pulse-pilot-staging-gate
@@ -83,7 +83,7 @@ jobs:
           test "$GITHUB_ACTOR" != "dependabot[bot]"
           test "$CONFIRM_RELEASE" = "true"
           test "$DATABASE_MIGRATION_PREAPPLIED" = "true"
-          test "$AUTHENTICATED_PULSE_SMOKE_PREAPPLIED" = "true"
+          test "$EVENT_ISOLATION_SMOKE_PREAPPLIED" = "true"
           test -n "${APPROVAL_REFERENCE//[[:space:]]/}"
           [[ "$EXPECTED_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$EXPECTED_CURRENT_PAGES_SHA" =~ ^[0-9a-f]{40}$ ]]
@@ -94,15 +94,12 @@ jobs:
             [[ "$EXPECTED_CURRENT_STAGING_VERSION" =~ ^[0-9a-f-]{36}$ ]]
           fi
 
-          deployed_sha=""
-          while IFS=$'\t' read -r deployment_id deployment_sha; do
-            deployment_state="$(gh api "repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses?per_page=1" --jq '.[0].state')"
-            if [[ "$deployment_state" == "success" ]]; then
-              deployed_sha="$deployment_sha"
-              break
-            fi
-          done < <(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=100" --jq '.[] | [.id, .sha] | @tsv')
-          test -n "$deployed_sha"
+          latest="$(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=1")"
+          deployment_id="$(jq -r '.[0].id // empty' <<<"$latest")"
+          deployed_sha="$(jq -r '.[0].sha // empty' <<<"$latest")"
+          test -n "$deployment_id"
+          deployment_state="$(gh api "repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses?per_page=1" --jq '.[0].state // empty')"
+          test "$deployment_state" = "success"
           if [[ "$deployed_sha" != "$EXPECTED_CURRENT_PAGES_SHA" ]]; then
             echo "The live Pages SHA changed. Stop and review the newer release." >&2
             exit 1
@@ -126,7 +123,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          allowed='^(\.github/workflows/(release-admin-pulse-pilot|staging-e2e-gate)\.yml|\.well-known/assetlinks\.json|admin-pulse/[^/]+|android/admin-pulse-twa/.+|docs/operations/admin-pulse-pilot\.md|robots\.txt|scripts/(build-pages-artifact|test-admin-pulse-release-workflow|test-pages-artifact)\.mjs|service-worker\.js|supabase/migrations/20260830193000_admin_pulse_notifications\.sql|worker/(admin-pulse-core(\.test)?|index)\.mjs|worker/package(-lock)?\.json|worker/wrangler(\.staging)?\.toml)$'
+          allowed='^(\.github/workflows/(deploy-pages-only|release-admin-pulse-pilot|staging-e2e-gate)\.yml|\.well-known/assetlinks\.json|admin-pulse/[^/]+|android/admin-pulse-twa/.+|docs/operations/admin-pulse-pilot\.md|robots\.txt|scripts/(build-pages-artifact|test-admin-pulse-release-workflow|test-pages-artifact)\.mjs|service-worker\.js|supabase/migrations/20260830193000_admin_pulse_notifications\.sql|worker/(admin-pulse-core(\.test)?|admin-pulse-staging-positive-smoke|index)\.mjs|worker/package(-lock)?\.json|worker/wrangler(\.staging)?\.toml)$'
           changed="$(git diff --name-only "$EXPECTED_CURRENT_PAGES_SHA" "$GITHUB_SHA")"
           test -n "$changed"
           unexpected="$(printf '%s\n' "$changed" | grep -Ev "$allowed" || true)"
@@ -227,10 +224,16 @@ jobs:
           umask 077
           secret_file="$RUNNER_TEMP/admin-pulse-staging-secrets.json"
           ADMIN_PULSE_SECRET_FILE="$secret_file" node --input-type=module <<'NODE'
+          import { createECDH } from 'node:crypto';
           import { writeFile } from 'node:fs/promises';
           const names = ['ADMIN_PULSE_VAPID_PRIVATE_KEY', 'LIVEKIT_URL', 'LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET'];
           const values = Object.fromEntries(names.map((name) => [name, String(process.env[name] || '').trim()]));
           if (Object.values(values).some((value) => !value)) throw new Error('The staging release secrets are incomplete.');
+          const ecdh = createECDH('prime256v1');
+          ecdh.setPrivateKey(Buffer.from(values.ADMIN_PULSE_VAPID_PRIVATE_KEY, 'base64url'));
+          if (ecdh.getPublicKey().toString('base64url') !== String(process.env.ADMIN_PULSE_VAPID_PUBLIC_KEY || '').trim()) {
+            throw new Error('The staging VAPID key pair does not match.');
+          }
           await writeFile(process.env.ADMIN_PULSE_SECRET_FILE, JSON.stringify(values), { mode: 0o600 });
           NODE
           echo "ADMIN_PULSE_SECRET_FILE=$secret_file" >> "$GITHUB_ENV"
@@ -265,6 +268,16 @@ jobs:
           status="$(curl -sS -o "$RUNNER_TEMP/pulse-unauthorized.json" -w '%{http_code}' -X POST -H "Origin: $SITE_URL" -H 'Content-Type: application/json' --data '{}' "$SITE_URL/admin/pulse/snapshot")"
           test "$status" = "401"
           grep -Fq 'ADMIN_SIGN_IN_REQUIRED' "$RUNNER_TEMP/pulse-unauthorized.json"
+
+      - name: Verify named roles, snapshot, and push registration on staging
+        env:
+          STAGING_SUPABASE_URL: https://hlzqmreeoghbldnhlybr.supabase.co
+          STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+          STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ env.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+          STAGING_ADMIN_PULSE_WORKER_URL: https://duediligence-examinations-staging.wallyesteban1993.workers.dev
+          STAGING_ADMIN_PULSE_ORIGIN: https://duediligence-examinations-staging.wallyesteban1993.workers.dev
+          ADMIN_PULSE_VAPID_PUBLIC_KEY: ${{ vars.ADMIN_PULSE_VAPID_PUBLIC_KEY }}
+        run: node worker/admin-pulse-staging-positive-smoke.mjs
 
       - name: Record the successful exact-SHA staging marker
         env:
@@ -309,10 +322,16 @@ jobs:
           umask 077
           secret_file="$RUNNER_TEMP/admin-pulse-production-secrets.json"
           ADMIN_PULSE_SECRET_FILE="$secret_file" node --input-type=module <<'NODE'
+          import { createECDH } from 'node:crypto';
           import { writeFile } from 'node:fs/promises';
           const names = ['ADMIN_PULSE_VAPID_PRIVATE_KEY', 'LIVEKIT_URL', 'LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET'];
           const values = Object.fromEntries(names.map((name) => [name, String(process.env[name] || '').trim()]));
           if (Object.values(values).some((value) => !value)) throw new Error('The production release secrets are incomplete.');
+          const ecdh = createECDH('prime256v1');
+          ecdh.setPrivateKey(Buffer.from(values.ADMIN_PULSE_VAPID_PRIVATE_KEY, 'base64url'));
+          if (ecdh.getPublicKey().toString('base64url') !== String(process.env.ADMIN_PULSE_VAPID_PUBLIC_KEY || '').trim()) {
+            throw new Error('The production VAPID key pair does not match.');
+          }
           await writeFile(process.env.ADMIN_PULSE_SECRET_FILE, JSON.stringify(values), { mode: 0o600 });
           NODE
           echo "ADMIN_PULSE_SECRET_FILE=$secret_file" >> "$GITHUB_ENV"
@@ -331,12 +350,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          deployed_sha=""
-          while IFS=$'\t' read -r deployment_id deployment_sha; do
-            state="$(gh api "repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses?per_page=1" --jq '.[0].state')"
-            [[ "$state" == "success" ]] && break
-            deployed_sha=""
-          done < <(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=100" --jq '.[] | [.id, .sha] | @tsv')
+          latest="$(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=1")"
+          deployment_id="$(jq -r '.[0].id // empty' <<<"$latest")"
+          deployed_sha="$(jq -r '.[0].sha // empty' <<<"$latest")"
+          test -n "$deployment_id"
+          state="$(gh api "repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses?per_page=1" --jq '.[0].state // empty')"
+          test "$state" = "success"
           test "$deployed_sha" = "$EXPECTED_CURRENT_PAGES_SHA"
 
       - name: Deploy the production Worker and public API alias
@@ -399,12 +418,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          deployed_sha=""
-          while IFS=$'\t' read -r deployment_id deployment_sha; do
-            state="$(gh api "repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses?per_page=1" --jq '.[0].state')"
-            [[ "$state" == "success" ]] && break
-            deployed_sha=""
-          done < <(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=100" --jq '.[] | [.id, .sha] | @tsv')
+          latest="$(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=1")"
+          deployment_id="$(jq -r '.[0].id // empty' <<<"$latest")"
+          deployed_sha="$(jq -r '.[0].sha // empty' <<<"$latest")"
+          test -n "$deployment_id"
+          state="$(gh api "repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses?per_page=1" --jq '.[0].state // empty')"
+          test "$state" = "success"
           test "$deployed_sha" = "$EXPECTED_CURRENT_PAGES_SHA"
 
       - name: Deploy Pages after the Worker gate
@@ -430,13 +449,14 @@ jobs:
           set -euo pipefail
           exact=false
           for attempt in {1..18}; do
-            deployed_sha=""
-            while IFS=$'\t' read -r deployment_id deployment_sha; do
-              state="$(gh api "repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses?per_page=1" --jq '.[0].state')"
-              [[ "$state" == "success" ]] && break
-              deployed_sha=""
-            done < <(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=100" --jq '.[] | [.id, .sha] | @tsv')
-            [[ "$deployed_sha" == "$GITHUB_SHA" ]] && exact=true && break
+            latest="$(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=1")"
+            deployment_id="$(jq -r '.[0].id // empty' <<<"$latest")"
+            deployed_sha="$(jq -r '.[0].sha // empty' <<<"$latest")"
+            state=""
+            if [[ -n "$deployment_id" ]]; then
+              state="$(gh api "repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses?per_page=1" --jq '.[0].state // empty')"
+            fi
+            [[ "$state" == "success" && "$deployed_sha" == "$GITHUB_SHA" ]] && exact=true && break
             sleep 5
           done
           test "$exact" = "true"
@@ -456,3 +476,129 @@ jobs:
           done
           echo "The exact production install surfaces did not become visible in time." >&2
           exit 1
+
+  publish_android:
+    name: Sign and publish the Android APK
+    if: inputs.target == 'production'
+    needs: verify_production
+    permissions:
+      contents: write
+    environment: production-worker
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java and Android SDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - name: Install the pinned Android platform and build tools
+        shell: bash
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Restore the permanent signing identity
+        env:
+          ADMIN_PULSE_ANDROID_KEYSTORE_BASE64: ${{ secrets.ADMIN_PULSE_ANDROID_KEYSTORE_BASE64 }}
+          ADMIN_PULSE_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ADMIN_PULSE_ANDROID_KEYSTORE_PASSWORD }}
+          ADMIN_PULSE_ANDROID_KEY_ALIAS: ${{ secrets.ADMIN_PULSE_ANDROID_KEY_ALIAS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$ADMIN_PULSE_ANDROID_KEYSTORE_BASE64"
+          test -n "$ADMIN_PULSE_ANDROID_KEYSTORE_PASSWORD"
+          test "$ADMIN_PULSE_ANDROID_KEY_ALIAS" = "duediligence-admin-pulse"
+          umask 077
+          key_path="$RUNNER_TEMP/duediligence-admin-pulse-release.jks"
+          printf '%s' "$ADMIN_PULSE_ANDROID_KEYSTORE_BASE64" | base64 --decode > "$key_path"
+          test -s "$key_path"
+          echo "ADMIN_PULSE_ANDROID_KEY_PATH=$key_path" >> "$GITHUB_ENV"
+
+      - name: Build, sign, and verify the exact release
+        working-directory: android/admin-pulse-twa
+        env:
+          ADMIN_PULSE_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ADMIN_PULSE_ANDROID_KEYSTORE_PASSWORD }}
+          ADMIN_PULSE_ANDROID_KEY_ALIAS: ${{ secrets.ADMIN_PULSE_ANDROID_KEY_ALIAS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x ./gradlew
+          ./gradlew --no-daemon clean assembleRelease bundleRelease
+          build_tools="$ANDROID_HOME/build-tools/36.0.0"
+          unsigned_apk="app/build/outputs/apk/release/app-release-unsigned.apk"
+          unsigned_aab="app/build/outputs/bundle/release/app-release.aab"
+          release_dir="$RUNNER_TEMP/admin-pulse-release"
+          mkdir -p "$release_dir"
+          apk="$release_dir/Due-Diligence-Pulse-1.0.0.apk"
+          aab="$release_dir/Due-Diligence-Pulse-1.0.0.aab"
+          "$build_tools/zipalign" -f -p 4 "$unsigned_apk" "$apk"
+          "$build_tools/apksigner" sign \
+            --ks "$ADMIN_PULSE_ANDROID_KEY_PATH" \
+            --ks-key-alias "$ADMIN_PULSE_ANDROID_KEY_ALIAS" \
+            --ks-pass env:ADMIN_PULSE_ANDROID_KEYSTORE_PASSWORD \
+            --key-pass env:ADMIN_PULSE_ANDROID_KEYSTORE_PASSWORD \
+            "$apk"
+          jarsigner \
+            -storepass:env ADMIN_PULSE_ANDROID_KEYSTORE_PASSWORD \
+            -keypass:env ADMIN_PULSE_ANDROID_KEYSTORE_PASSWORD \
+            -keystore "$ADMIN_PULSE_ANDROID_KEY_PATH" \
+            -signedjar "$aab" "$unsigned_aab" "$ADMIN_PULSE_ANDROID_KEY_ALIAS"
+          "$build_tools/zipalign" -c -p 4 "$apk"
+          "$build_tools/apksigner" verify --verbose --print-certs --min-sdk-version 23 "$apk" > "$release_dir/apk-verification.txt"
+          jarsigner -verify "$aab"
+          badging="$("$build_tools/aapt" dump badging "$apk")"
+          grep -Fq "package: name='ph.duediligence.admin' versionCode='1' versionName='1.0.0'" <<<"$badging"
+          grep -Fq "sdkVersion:'23'" <<<"$badging"
+          grep -Fq "targetSdkVersion:'36'" <<<"$badging"
+          digest="$(grep -Eo 'certificate SHA-256 digest: [0-9a-f]{64}' "$release_dir/apk-verification.txt" | awk '{print $4}' | head -n1)"
+          test -n "$digest"
+          fingerprint="$(sed 's/../&:/g;s/:$//' <<<"$digest" | tr '[:lower:]' '[:upper:]')"
+          expected="$(jq -r '.[0].target.sha256_cert_fingerprints[0]' ../../.well-known/assetlinks.json)"
+          test "$fingerprint" = "$expected"
+          live="$(curl -fsS -H 'Cache-Control: no-cache' "https://duediligence.ph/.well-known/assetlinks.json?release=$GITHUB_SHA" | jq -r '.[0].target.sha256_cert_fingerprints[0]')"
+          test "$live" = "$fingerprint"
+          (
+            cd "$release_dir"
+            sha256sum Due-Diligence-Pulse-1.0.0.apk > Due-Diligence-Pulse-1.0.0.apk.sha256
+          )
+          echo "ADMIN_PULSE_RELEASE_DIR=$release_dir" >> "$GITHUB_ENV"
+
+      - name: Preserve the signed AAB privately for a future store release
+        uses: actions/upload-artifact@v4
+        with:
+          name: Due-Diligence-Pulse-1.0.0-AAB
+          path: ${{ runner.temp }}/admin-pulse-release/Due-Diligence-Pulse-1.0.0.aab
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish the public APK and checksum
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: admin-pulse-v1.0.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="$ADMIN_PULSE_RELEASE_DIR/Due-Diligence-Pulse-1.0.0.apk"
+          checksum="$ADMIN_PULSE_RELEASE_DIR/Due-Diligence-Pulse-1.0.0.apk.sha256"
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            tag_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" --jq '.object.sha')"
+            test "$tag_sha" = "$GITHUB_SHA"
+            gh release upload "$RELEASE_TAG" "$apk" "$checksum" \
+              --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$RELEASE_TAG" "$apk" "$checksum" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "Due Diligence Pulse 1.0.0" \
+              --notes "Private administrator pilot. Android administrators install the APK; iPhone administrators use https://duediligence.ph/admin-pulse/ from Safari and choose Add to Home Screen. Sign in with an existing Due Diligence administrator Google email."
+          fi
+
+      - name: Remove the ephemeral signing identity
+        if: always()
+        shell: bash
+        run: |
+          if [[ -n "${ADMIN_PULSE_ANDROID_KEY_PATH:-}" ]]; then
+            rm -f -- "$ADMIN_PULSE_ANDROID_KEY_PATH"
+          fi

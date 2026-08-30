@@ -468,6 +468,46 @@ async function grantSyntheticFoundingAccess(configuration, actorUserId, member) 
   assert.equal(body[0]?.access_program, "founding_beta_2026");
 }
 
+async function acceptSyntheticCurrentTerms(configuration, member) {
+  const settingsUrl = new URL(
+    `${configuration.supabaseUrl}/rest/v1/platform_access_settings`,
+  );
+  settingsUrl.searchParams.set("singleton", "eq.true");
+  settingsUrl.searchParams.set(
+    "select",
+    "current_terms_version,current_privacy_version",
+  );
+  const { body: rows } = await requestJson(settingsUrl, {
+    headers: serviceHeaders(configuration),
+  });
+  assert.equal(
+    Array.isArray(rows) ? rows.length : 0,
+    1,
+    "The current staging legal versions were unavailable.",
+  );
+  const termsVersion = String(rows[0]?.current_terms_version || "").trim();
+  const privacyVersion = String(rows[0]?.current_privacy_version || "").trim();
+  assert.match(termsVersion, /^[A-Za-z0-9._-]{5,120}$/u);
+  assert.match(privacyVersion, /^[A-Za-z0-9._-]{5,120}$/u);
+  await requestJson(
+    `${configuration.supabaseUrl}/rest/v1/rpc/accept_terms`,
+    {
+      method: "POST",
+      headers: {
+        apikey: configuration.publishableKey,
+        Authorization: `Bearer ${member.token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        p_terms_version: termsVersion,
+        p_privacy_version: privacyVersion,
+        p_acceptance_source: "study_room_staging_smoke",
+      }),
+    },
+    [200, 204],
+  );
+}
+
 async function workerPost(
   configuration,
   path,
@@ -1279,6 +1319,7 @@ async function runPositiveSmoke() {
     console.log("STUDY_ROOM_STAGING_POSITIVE: non_admin_denied=true");
 
     checkpoint = "subscriber_access";
+    await acceptSyntheticCurrentTerms(configuration, student);
     await grantSyntheticFoundingAccess(configuration, primaryAdmin.id, student);
     const memberAccess = await workerPost(
       configuration,

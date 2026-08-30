@@ -16,6 +16,10 @@ const instrumentedLiveClient = liveClient.replace(
   `global.__DueDiligenceStudyRoomTestHooks = {
     state,
     createPersonRow,
+    createTile,
+    buildMediaViews,
+    reconcileTile,
+    calculateSquareGrid,
     renderParticipants,
     syncJoinButton,
     setParticipantBlocked,
@@ -34,6 +38,7 @@ const instrumentedLiveClient = liveClient.replace(
     sendChatMessage,
     toggleRaiseHand,
     toggleScreenShare,
+    toggleCompactView,
   };
   ${liveClientTestHooksMarker}`,
 );
@@ -848,6 +853,7 @@ async function eventually(check, message) {
 const liveKitSources = {
   Microphone: 'microphone',
   Camera: 'camera',
+  ScreenShare: 'screen_share',
 };
 
 const labeledDevices = [
@@ -1790,6 +1796,185 @@ class FakeMediaStream {
   assert.equal(playCalls, 2, 'The recovery gesture must retry each attached remote audio element.');
   assert.equal(prompt.hidden, true);
   assert.equal(harness.hooks.state.audioPlaybackBlocked, false);
+}
+
+{
+  let cameraAttachCount = 0;
+  let cameraDetachCount = 0;
+  let screenAttachCount = 0;
+  let screenDetachCount = 0;
+  const makeVideoTrack = (kind) => ({
+    mediaStreamTrack: {
+      readyState: 'live',
+      enabled: true,
+      muted: false,
+      getSettings: () => ({ deviceId: `${kind}-device` }),
+    },
+    attach() {
+      if (kind === 'camera') cameraAttachCount += 1;
+      else screenAttachCount += 1;
+      return new FakeHTMLElement(`${kind}-video`, 'video');
+    },
+    detach(element) {
+      if (kind === 'camera') cameraDetachCount += 1;
+      else screenDetachCount += 1;
+      element?.remove?.();
+    },
+  });
+  const cameraTrack = makeVideoTrack('camera');
+  const screenTrack = makeVideoTrack('screen');
+  const cameraPublication = {
+    source: liveKitSources.Camera,
+    trackSid: 'camera-publication',
+    isMuted: false,
+    track: cameraTrack,
+  };
+  const screenPublication = {
+    source: liveKitSources.ScreenShare,
+    trackSid: 'screen-publication',
+    isMuted: true,
+    track: screenTrack,
+  };
+  const publications = new Map([
+    [liveKitSources.Camera, cameraPublication],
+    [liveKitSources.ScreenShare, screenPublication],
+  ]);
+  const localParticipant = {
+    identity: 'local-self-view',
+    name: 'Participant 505',
+    isLocal: true,
+    attributes: {},
+    trackPublications: publications,
+    getTrackPublication: (source) => publications.get(source) || null,
+  };
+  const harness = createLiveHarness({
+    fetch: async () => authorizedResponse(),
+    enumerateDevices: async () => labeledDevices,
+    getUserMedia: async () => { throw new Error('Automatic permission should not be needed for labeled devices.'); },
+    liveKit: { Track: { Source: liveKitSources } },
+  });
+  await waitForAuthorizedPrejoin(harness);
+  harness.hooks.state.room = {
+    localParticipant,
+    remoteParticipants: new Map(),
+    state: 'connected',
+    canPlaybackAudio: true,
+  };
+  harness.hooks.state.backdropEnabled = false;
+  harness.hooks.state.userApprovedRawCameraTracks.add(cameraTrack);
+
+  harness.hooks.renderParticipants();
+  let tiles = harness.document.getElementById('sr-participant-grid').children;
+  assert.equal(tiles.length, 1, 'The local camera must create one self-view tile.');
+  assert.equal(tiles[0].dataset.trackSource, liveKitSources.Camera);
+  assert.equal(tiles[0].dataset.mediaVisible, 'true', 'An approved raw local camera must be visible to its owner.');
+  assert.equal(cameraAttachCount, 1);
+
+  localParticipant.name = 'Participant 506';
+  harness.hooks.renderParticipants();
+  tiles = harness.document.getElementById('sr-participant-grid').children;
+  assert.equal(cameraAttachCount, 1, 'A metadata-only rerender must preserve the attached local video element.');
+  assert.equal(cameraDetachCount, 0, 'A metadata-only rerender must not detach the local video element.');
+
+  screenPublication.isMuted = false;
+  harness.hooks.renderParticipants();
+  tiles = harness.document.getElementById('sr-participant-grid').children;
+  assert.equal(tiles.length, 2, 'A presenter camera and shared screen must render as separate media views.');
+  assert.equal(tiles[0].dataset.trackSource, liveKitSources.ScreenShare);
+  assert.equal(tiles[1].dataset.trackSource, liveKitSources.Camera);
+  assert.equal(harness.document.getElementById('sr-participant-grid').dataset.presenting, 'true');
+  assert.equal(cameraAttachCount, 1, 'Starting a screen share must not remount the presenter camera.');
+  assert.equal(screenAttachCount, 1);
+
+  const makeRemoteParticipant = (identity) => {
+    const remoteCameraPublication = {
+      source: liveKitSources.Camera,
+      trackSid: `${identity}-camera-publication`,
+      isMuted: false,
+      track: makeVideoTrack('camera'),
+    };
+    return {
+      identity,
+      name: identity,
+      isLocal: false,
+      attributes: {},
+      trackPublications: new Map([[liveKitSources.Camera, remoteCameraPublication]]),
+      getTrackPublication: (source) => source === liveKitSources.Camera ? remoteCameraPublication : null,
+    };
+  };
+  const pinnedRemote = makeRemoteParticipant('pinned-remote');
+  const activeRemote = makeRemoteParticipant('active-remote');
+  harness.hooks.state.pinnedParticipantIdentity = pinnedRemote.identity;
+  harness.hooks.state.activeSpeakers.add(activeRemote.identity);
+  const presentationViews = harness.hooks.buildMediaViews([localParticipant, pinnedRemote, activeRemote]);
+  const companionViews = presentationViews.filter((view) => view.isCompanion);
+  assert.equal(companionViews.length, 2, 'Presentation mode must keep exactly two camera companions.');
+  assert.ok(
+    companionViews.some((view) => view.participant.isLocal),
+    'The local self-view must remain one of the two companions even when different remote participants are pinned and active.',
+  );
+  assert.ok(
+    companionViews.some((view) => view.participant.identity === pinnedRemote.identity),
+    'The remaining companion must respect the highest-priority remote participant.',
+  );
+  harness.hooks.state.layoutMode = 'spotlight';
+  harness.hooks.state.pinnedTrackKey = `${pinnedRemote.identity}:${liveKitSources.Camera}`;
+  const spotlightViews = harness.hooks.buildMediaViews([localParticipant, pinnedRemote, activeRemote]);
+  assert.equal(spotlightViews[0].key, harness.hooks.state.pinnedTrackKey, 'Spotlight must put the pinned camera first even while a screen is shared.');
+  harness.hooks.state.layoutMode = 'auto';
+  harness.hooks.state.pinnedTrackKey = '';
+  harness.hooks.state.room.remoteParticipants = new Map([
+    [pinnedRemote.identity, pinnedRemote],
+    [activeRemote.identity, activeRemote],
+  ]);
+  harness.hooks.state.activeSpeakers = new Set([activeRemote.identity]);
+  harness.hooks.renderParticipants();
+  const cameraAttachmentsBeforeSpeakerChange = cameraAttachCount;
+  harness.hooks.state.activeSpeakers = new Set([pinnedRemote.identity]);
+  harness.hooks.renderParticipants();
+  assert.equal(
+    cameraAttachCount,
+    cameraAttachmentsBeforeSpeakerChange,
+    'Changing the active-speaker companion must not remount any camera track.',
+  );
+  assert.equal(cameraDetachCount, 0, 'Changing the active-speaker companion must not detach camera tracks.');
+  harness.hooks.state.room.remoteParticipants.clear();
+  harness.hooks.state.activeSpeakers.clear();
+  harness.hooks.renderParticipants();
+  harness.hooks.state.pinnedParticipantIdentity = '';
+  harness.hooks.state.activeSpeakers.clear();
+
+  const cameraDetachCountBeforeStoppingShare = cameraDetachCount;
+  screenPublication.isMuted = true;
+  harness.hooks.renderParticipants();
+  tiles = harness.document.getElementById('sr-participant-grid').children;
+  assert.equal(tiles.length, 1, 'Stopping a screen share must remove only the shared-screen view.');
+  assert.equal(tiles[0].dataset.trackSource, liveKitSources.Camera);
+  assert.equal(screenDetachCount, 1);
+  assert.equal(
+    cameraDetachCount,
+    cameraDetachCountBeforeStoppingShare,
+    'Stopping a screen share must preserve the self camera attachment.',
+  );
+
+  await harness.hooks.toggleCompactView();
+  assert.equal(harness.hooks.state.compactMode, true, 'Compact view must provide an in-page fallback when native PiP is unavailable.');
+  assert.equal(harness.document.body.classList.contains('sr-compact-mode'), true);
+  await harness.hooks.toggleCompactView();
+  assert.equal(harness.hooks.state.compactMode, false);
+  assert.equal(harness.document.body.classList.contains('sr-compact-mode'), false);
+
+  for (const viewport of [
+    [1440, 760],
+    [900, 760],
+    [640, 520],
+    [390, 620],
+    [320, 460],
+  ]) {
+    const layout = harness.hooks.calculateSquareGrid(4, viewport[0], viewport[1], 10);
+    assert.ok(layout.columns * layout.rows >= 4);
+    assert.ok(layout.size >= 88, `Square layout failed at ${viewport.join('x')}.`);
+  }
 }
 
 console.log('Study Room admin-window, device, microphone, and local-control behavioral tests passed.');

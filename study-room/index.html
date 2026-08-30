@@ -8,7 +8,7 @@
   <meta name="robots" content="noindex,nofollow,noarchive">
   <title>Study Room — Due Diligence</title>
   <link rel="icon" href="../assets/brand/favicon.ico" sizes="any">
-  <link rel="stylesheet" href="../assets/study-room-live.css?v=study-room-launch-20260830-1">
+  <link rel="stylesheet" href="../assets/study-room-live.css?v=study-room-meet-layout-20260831-5">
 </head>
 <body>
   <a class="sr-skip-link" href="#study-room-main">Skip to Study Room</a>
@@ -161,12 +161,19 @@
                 <span class="sr-live-indicator"><i></i> Live</span>
                 <strong id="sr-room-count">1 studying</strong>
               </div>
-              <button class="sr-room-selector-chip" id="sr-room-selector" type="button"
-                data-room-action="open-selector" aria-haspopup="listbox" aria-expanded="false"
-                aria-controls="sr-room-selector-menu">
-                <img src="../assets/icons/navigation/layout-grid.svg" width="18" height="18" alt="" aria-hidden="true">
-                <span><small>Room</small><strong id="sr-active-room-name">Library</strong></span>
-              </button>
+              <div class="sr-stage-tools">
+                <button class="sr-room-selector-chip" id="sr-room-selector" type="button"
+                  data-room-action="open-selector" aria-haspopup="listbox" aria-expanded="false"
+                  aria-controls="sr-room-selector-menu">
+                  <img src="../assets/icons/navigation/layout-grid.svg" width="18" height="18" alt="" aria-hidden="true">
+                  <span><small>Room</small><strong id="sr-active-room-name">Library</strong></span>
+                </button>
+                <button class="sr-layout-button" id="sr-layout-button" type="button" aria-haspopup="menu"
+                  aria-expanded="false" aria-controls="sr-layout-menu" aria-label="Layout: Auto" title="Change layout">
+                  <img src="../assets/icons/navigation/layout-grid.svg" width="19" height="19" alt="" aria-hidden="true">
+                  <span id="sr-layout-label">Auto</span>
+                </button>
+              </div>
               <div class="sr-focus-clock" aria-label="Shared focus clock">
                 <span>Shared focus</span>
                 <strong id="sr-focus-clock">00:00:00</strong>
@@ -174,6 +181,22 @@
             </div>
             <div class="sr-room-selector-menu" id="sr-room-selector-menu" role="listbox"
               aria-label="Move to another Study Room" hidden></div>
+            <div class="sr-layout-menu" id="sr-layout-menu" role="menu" aria-label="Study Room layout" hidden>
+              <p>Layout</p>
+              <button type="button" role="menuitemradio" data-layout-mode="auto" aria-checked="true">
+                <strong>Auto</strong><span>Maximize available space</span>
+              </button>
+              <button type="button" role="menuitemradio" data-layout-mode="tiled" aria-checked="false">
+                <strong>Tiled</strong><span>Show everyone equally</span>
+              </button>
+              <button type="button" role="menuitemradio" data-layout-mode="spotlight" aria-checked="false">
+                <strong>Spotlight</strong><span>Focus the pinned tile</span>
+              </button>
+              <label for="sr-presentation-size">
+                <span>Shared screen size <output id="sr-presentation-size-value">78%</output></span>
+                <input id="sr-presentation-size" type="range" min="65" max="90" step="1" value="78">
+              </label>
+            </div>
             <div class="sr-connection-banner" id="sr-connection-banner" role="status" aria-live="polite" hidden>
               Reconnecting to the Study Room…
             </div>
@@ -312,6 +335,11 @@
             <img src="../assets/icons/navigation/settings.svg" width="22" height="22" alt="" aria-hidden="true">
             <span class="sr-control-label">Settings</span>
           </button>
+          <button id="sr-toggle-compact" type="button" data-call-control="compact" aria-pressed="false"
+            aria-label="Open compact Study Room view" title="Compact view">
+            <img src="../assets/icons/navigation/layout-grid.svg" width="22" height="22" alt="" aria-hidden="true">
+            <span class="sr-control-label">Compact view</span>
+          </button>
           <button class="is-leave" id="sr-leave" type="button" data-call-control="leave"
             aria-label="Leave Study Room" title="Leave room">
             <img src="../assets/icons/navigation/door-open.svg" width="22" height="22" alt="" aria-hidden="true">
@@ -333,6 +361,6 @@
   <script src="../assets/vendor/livekit-client.umd.js?v=2.22.1"></script>
   <script src="../assets/vendor/livekit-track-processors.iife.js?v=0.7.2"></script>
   <script src="../assets/study-room-backgrounds.js?v=study-room-optional-background-20260829-1"></script>
-  <script src="../assets/study-room-live.js?v=study-room-launch-20260830-1"></script>
+  <script src="../assets/study-room-live.js?v=study-room-meet-layout-20260831-5"></script>
 </body>
 </html>

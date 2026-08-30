@@ -20,7 +20,8 @@
   const MAX_NICKNAME_LENGTH = 32;
   const MAX_ROOMS = 5;
   const ROOM_REFRESH_INTERVAL_MS = 15_000;
-  const MEDIA_RELIABILITY_VERSION = 'study-room-launch-20260830-1';
+  const MEDIA_RELIABILITY_VERSION = 'study-room-meet-layout-20260831-5';
+  const LAYOUT_STORAGE_KEY = 'duediligence.study-room.layout.v1';
   const MICROPHONE_STATS_INTERVAL_MS = 400;
   const MICROPHONE_STATS_ATTEMPTS = 10;
   const STUDY_VIDEO_CAPTURE = Object.freeze({
@@ -90,15 +91,23 @@
     audioPlaybackBlocked: false,
     microphoneTransport: 'off',
     attachedTracks: [],
+    tileViews: new Map(),
     blockedParticipants: new Set(),
     localMutedParticipants: new Set(),
     participantVolumes: new Map(),
     activeSpeakers: new Set(),
     connectionQualities: new Map(),
     pinnedParticipantIdentity: '',
+    pinnedTrackKey: '',
+    layoutMode: 'auto',
+    presentationSize: 78,
+    compactMode: false,
+    layoutObserver: null,
+    layoutFrame: 0,
+    resizeFallbackBound: false,
     handRaised: false,
     panelView: 'people',
-    panelOpen: true,
+    panelOpen: false,
     chatMessages: [],
     unreadMessages: 0,
     lastChatSentAt: 0,
@@ -1072,19 +1081,54 @@
     return publications.find((publication) => publication?.source === source) || null;
   }
 
-  function detachTracks() {
-    state.attachedTracks.forEach(({ track, element }) => {
-      try {
-        track.detach(element);
-      } catch {
-        element.remove();
-      }
+  function detachTrackEntry(entry) {
+    if (!entry) return;
+    try {
+      entry.track?.detach?.(entry.element);
+    } catch {
+      entry.element?.remove?.();
+    }
+  }
+
+  function restoreLayoutPreference() {
+    try {
+      const saved = JSON.parse(global.localStorage?.getItem(LAYOUT_STORAGE_KEY) || '{}');
+      if (['auto', 'tiled', 'spotlight'].includes(saved.mode)) state.layoutMode = saved.mode;
+      const size = Number(saved.presentationSize);
+      if (Number.isFinite(size)) state.presentationSize = Math.max(65, Math.min(90, Math.round(size)));
+    } catch {
+      // Layout preferences are optional and never block a room join.
+    }
+  }
+
+  function saveLayoutPreference() {
+    try {
+      global.localStorage?.setItem(LAYOUT_STORAGE_KEY, JSON.stringify({
+        mode: state.layoutMode,
+        presentationSize: state.presentationSize,
+      }));
+    } catch {
+      // The current room still uses the selected layout when storage is unavailable.
+    }
+  }
+
+  function detachTrackEntries(predicate) {
+    const retained = [];
+    state.attachedTracks.forEach((entry) => {
+      if (predicate(entry)) detachTrackEntry(entry);
+      else retained.push(entry);
     });
+    state.attachedTracks = retained;
+  }
+
+  function detachTracks() {
+    state.attachedTracks.forEach(detachTrackEntry);
     state.attachedTracks = [];
+    state.tileViews.clear();
     byId('sr-audio-bin')?.replaceChildren();
   }
 
-  function attachTrack(track, container, kind, isLocal = false) {
+  function attachTrack(track, container, kind, isLocal = false, key = '') {
     if (!track || !container) return null;
     const element = track.attach();
     element.autoplay = true;
@@ -1095,7 +1139,7 @@
       element.muted = false;
     }
     container.append(element);
-    state.attachedTracks.push({ track, element });
+    state.attachedTracks.push({ track, element, kind, key });
     if (kind === 'audio' && typeof element.play === 'function') {
       try {
         Promise.resolve(element.play())
@@ -1124,32 +1168,130 @@
     return [local, ...remote].filter(Boolean);
   }
 
-  function createTile(participant) {
-    const tile = document.createElement('article');
-    tile.className = `sr-participant-tile${participant.isLocal ? ' is-self' : ''}`;
-    tile.dataset.participantIdentity = participant.identity || '';
-    tile.classList.toggle('is-speaking', state.activeSpeakers.has(participant.identity));
-    tile.classList.toggle('is-pinned', state.pinnedParticipantIdentity === participant.identity);
+  function mediaViewKey(participant, source) {
+    return `${String(participant?.identity || 'participant')}:${String(source || 'camera')}`;
+  }
 
-    const screenPublication = publicationFor(participant, LiveKit?.Track?.Source?.ScreenShare || 'screen_share');
-    const cameraPublication = publicationFor(participant, LiveKit?.Track?.Source?.Camera || 'camera');
-    const videoPublication = screenPublication?.track && !screenPublication.isMuted
-      ? screenPublication
-      : cameraPublication;
-    const videoTrack = videoPublication?.track;
-    const isScreenShare = videoPublication === screenPublication;
-    tile.classList.toggle('is-screen-share', isScreenShare);
-    const localCameraProtected = isScreenShare
-      || !participant.isLocal
-      || isStaticQualityCameraPublication(videoPublication)
-      || isMandatoryProcessedCameraTrack(videoTrack);
-    const cameraVisible = Boolean(videoTrack && !videoPublication?.isMuted && localCameraProtected);
-    if (participant.isLocal && videoTrack && !videoPublication?.isMuted && !localCameraProtected) {
+  function buildMediaViews(participants) {
+    const cameraSource = LiveKit?.Track?.Source?.Camera || 'camera';
+    const screenSource = LiveKit?.Track?.Source?.ScreenShare || 'screen_share';
+    const cameraViews = participants.map((participant) => {
+      const publication = publicationFor(participant, cameraSource);
+      return {
+        key: mediaViewKey(participant, cameraSource),
+        source: cameraSource,
+        participant,
+        publication,
+        track: publication?.track || null,
+        isScreenShare: false,
+      };
+    });
+    const screenViews = participants.map((participant) => {
+      const publication = publicationFor(participant, screenSource);
+      if (!publication?.track || publication.isMuted) return null;
+      return {
+        key: mediaViewKey(participant, screenSource),
+        source: screenSource,
+        participant,
+        publication,
+        track: publication.track,
+        isScreenShare: true,
+      };
+    }).filter(Boolean);
+
+    const scoreCamera = (view) => {
+      let score = 0;
+      if (view.participant.isLocal) score += 100;
+      if (state.pinnedTrackKey === view.key || state.pinnedParticipantIdentity === view.participant.identity) score += 400;
+      if (state.activeSpeakers.has(view.participant.identity)) score += 160;
+      if (view.track && !view.publication?.isMuted) score += 10;
+      return score;
+    };
+    cameraViews.sort((left, right) => scoreCamera(right) - scoreCamera(left));
+
+    const pinnedShare = screenViews.find((view) => state.pinnedTrackKey === view.key);
+    const primaryShare = pinnedShare || screenViews[0] || null;
+    const localCamera = cameraViews.find((view) => view.participant.isLocal) || null;
+    const companionViews = [];
+    if (localCamera) companionViews.push(localCamera);
+    for (const view of cameraViews) {
+      if (companionViews.length >= 2) break;
+      if (!companionViews.some((candidate) => candidate.key === view.key)) companionViews.push(view);
+    }
+    const companionKeys = new Set(companionViews.map((view) => view.key));
+    const orderedShares = primaryShare
+      ? [primaryShare, ...screenViews.filter((view) => view !== primaryShare)]
+      : [];
+    const orderedViews = [...orderedShares, ...cameraViews];
+    if (state.layoutMode === 'spotlight' && state.pinnedTrackKey) {
+      const pinnedIndex = orderedViews.findIndex((view) => view.key === state.pinnedTrackKey);
+      if (pinnedIndex > 0) orderedViews.unshift(...orderedViews.splice(pinnedIndex, 1));
+    }
+    return orderedViews.map((view, index) => ({
+      ...view,
+      isPresentation: Boolean(primaryShare && view === primaryShare),
+      isCompanion: Boolean(primaryShare && companionKeys.has(view.key)),
+      order: index,
+    }));
+  }
+
+  function localViewIsAllowed(view) {
+    if (view.isScreenShare || !view.participant.isLocal) return true;
+    return isStaticQualityCameraPublication(view.publication)
+      || isMandatoryProcessedCameraTrack(view.track)
+      || isUserApprovedRawCameraTrack(view.track);
+  }
+
+  function tileViewState(view) {
+    const localCameraProtected = localViewIsAllowed(view);
+    const mediaVisible = Boolean(view.track && !view.publication?.isMuted && localCameraProtected);
+    const streamPaused = String(view.publication?.streamState || '').toLowerCase().includes('paused');
+    return { localCameraProtected, mediaVisible, streamPaused };
+  }
+
+  function syncTile(tile, view, renderedState) {
+    const participant = view.participant;
+    const pinned = state.pinnedTrackKey
+      ? state.pinnedTrackKey === view.key
+      : state.pinnedParticipantIdentity === participant.identity;
+    tile.className = [
+      'sr-participant-tile',
+      participant.isLocal ? 'is-self' : '',
+      view.isScreenShare ? 'is-screen-share' : 'is-camera',
+      view.isPresentation ? 'is-presentation' : '',
+      view.isCompanion ? 'is-companion' : '',
+      state.activeSpeakers.has(participant.identity) ? 'is-speaking' : '',
+      pinned ? 'is-pinned' : '',
+    ].filter(Boolean).join(' ');
+    tile.dataset.participantIdentity = participant.identity || '';
+    tile.dataset.mediaKey = view.key;
+    tile.dataset.trackSource = view.source;
+    tile.__srName.textContent = view.isScreenShare
+      ? `${participant.isLocal ? 'Your' : `${displayName(participant)}'s`} screen`
+      : participant.isLocal ? `You · ${displayName(participant)}` : displayName(participant);
+
+    const audioPublication = publicationFor(participant, LiveKit?.Track?.Source?.Microphone || 'microphone');
+    const microphoneOn = Boolean(audioPublication && !audioPublication.isMuted);
+    tile.__srMediaState.classList.toggle('is-muted', !microphoneOn);
+    tile.__srMediaState.setAttribute('aria-label', microphoneOn ? 'Microphone on' : 'Microphone muted');
+    tile.__srMediaState.title = microphoneOn ? 'Microphone on' : 'Microphone muted';
+    tile.__srPin.setAttribute('aria-pressed', String(pinned));
+    tile.__srPin.setAttribute('aria-label', `${pinned ? 'Unpin' : 'Pin'} ${view.isScreenShare ? 'shared screen' : displayName(participant)}`);
+    tile.__srPin.title = pinned ? 'Unpin tile' : 'Pin tile';
+    tile.__srHand.hidden = participant.attributes?.['dd.studyRoom.handRaised'] !== 'true';
+    tile.__srHand.title = `${displayName(participant)} raised a hand`;
+    tile.dataset.mediaVisible = String(renderedState.mediaVisible && !renderedState.streamPaused);
+  }
+
+  function createTile(view) {
+    const participant = view.participant;
+    const renderedState = tileViewState(view);
+    const tile = document.createElement('article');
+    if (participant.isLocal && view.track && !view.publication?.isMuted && !renderedState.localCameraProtected) {
       scheduleLocalCameraGuard(state.room);
     }
-    const streamPaused = String(videoPublication?.streamState || '').toLowerCase().includes('paused');
-    if (cameraVisible && !streamPaused) {
-      attachTrack(videoTrack, tile, 'video', participant.isLocal);
+    if (renderedState.mediaVisible && !renderedState.streamPaused) {
+      attachTrack(view.track, tile, 'video', participant.isLocal, view.key);
     } else {
       const placeholder = document.createElement('div');
       placeholder.className = 'sr-tile-placeholder';
@@ -1157,23 +1299,17 @@
       avatar.className = 'sr-avatar';
       avatar.textContent = initials(displayName(participant));
       const copy = document.createElement('span');
-      copy.textContent = streamPaused ? 'Video paused to save bandwidth' : 'Camera off';
+      copy.textContent = renderedState.streamPaused ? 'Video paused to save bandwidth' : 'Camera off';
       placeholder.append(avatar, copy);
       tile.append(placeholder);
     }
 
-    const audioPublication = publicationFor(participant, LiveKit?.Track?.Source?.Microphone || 'microphone');
     const meta = document.createElement('div');
     meta.className = 'sr-tile-meta';
     const name = document.createElement('span');
     name.className = 'sr-tile-name';
-    name.textContent = participant.isLocal ? `You · ${displayName(participant)}` : displayName(participant);
     const mediaState = document.createElement('span');
     mediaState.className = 'sr-tile-media-state';
-    const microphoneOn = Boolean(audioPublication && !audioPublication.isMuted);
-    mediaState.classList.toggle('is-muted', !microphoneOn);
-    mediaState.setAttribute('aria-label', microphoneOn ? 'Microphone on' : 'Microphone muted');
-    mediaState.title = microphoneOn ? 'Microphone on' : 'Microphone muted';
     const microphoneIcon = document.createElement('img');
     microphoneIcon.src = '../assets/icons/navigation/mic.svg';
     microphoneIcon.width = 17;
@@ -1184,27 +1320,20 @@
     meta.append(name, mediaState);
     tile.append(meta);
 
-    if (participant.attributes?.['dd.studyRoom.handRaised'] === 'true') {
-      const hand = document.createElement('span');
-      hand.className = 'sr-raised-hand';
-      hand.title = `${displayName(participant)} raised a hand`;
-      const handIcon = document.createElement('img');
-      handIcon.src = '../assets/icons/navigation/hand.svg';
-      handIcon.width = 18;
-      handIcon.height = 18;
-      handIcon.alt = '';
-      handIcon.setAttribute('aria-hidden', 'true');
-      hand.append(handIcon);
-      tile.append(hand);
-    }
+    const hand = document.createElement('span');
+    hand.className = 'sr-raised-hand';
+    const handIcon = document.createElement('img');
+    handIcon.src = '../assets/icons/navigation/hand.svg';
+    handIcon.width = 18;
+    handIcon.height = 18;
+    handIcon.alt = '';
+    handIcon.setAttribute('aria-hidden', 'true');
+    hand.append(handIcon);
+    tile.append(hand);
 
     const pin = document.createElement('button');
-    const pinned = state.pinnedParticipantIdentity === participant.identity;
     pin.type = 'button';
     pin.className = 'sr-tile-pin';
-    pin.setAttribute('aria-pressed', String(pinned));
-    pin.setAttribute('aria-label', `${pinned ? 'Unpin' : 'Pin'} ${displayName(participant)}`);
-    pin.title = pinned ? 'Unpin tile' : 'Pin tile';
     const pinIcon = document.createElement('img');
     pinIcon.src = '../assets/icons/navigation/pin.svg';
     pinIcon.width = 17;
@@ -1213,10 +1342,24 @@
     pinIcon.setAttribute('aria-hidden', 'true');
     pin.append(pinIcon);
     pin.addEventListener('click', () => {
-      state.pinnedParticipantIdentity = pinned ? '' : participant.identity;
+      const currentlyPinned = state.pinnedTrackKey === tile.dataset.mediaKey;
+      state.pinnedTrackKey = currentlyPinned ? '' : tile.dataset.mediaKey;
+      state.pinnedParticipantIdentity = currentlyPinned ? '' : tile.dataset.participantIdentity;
       renderParticipants();
     });
     tile.append(pin);
+    tile.__srName = name;
+    tile.__srMediaState = mediaState;
+    tile.__srPin = pin;
+    tile.__srHand = hand;
+    syncTile(tile, view, renderedState);
+    state.tileViews.set(view.key, {
+      tile,
+      track: view.track,
+      mediaVisible: renderedState.mediaVisible,
+      streamPaused: renderedState.streamPaused,
+      source: view.source,
+    });
     return tile;
   }
 
@@ -1344,8 +1487,32 @@
     return row;
   }
 
+  function detachTileView(key) {
+    detachTrackEntries((entry) => entry.kind === 'video' && entry.key === key);
+    state.tileViews.delete(key);
+  }
+
+  function reconcileTile(view) {
+    const renderedState = tileViewState(view);
+    const existing = state.tileViews.get(view.key);
+    const canReuse = Boolean(
+      existing
+      && existing.track === view.track
+      && existing.mediaVisible === renderedState.mediaVisible
+      && existing.streamPaused === renderedState.streamPaused
+      && existing.source === view.source
+    );
+    if (!canReuse) {
+      detachTileView(view.key);
+      return createTile(view);
+    }
+    syncTile(existing.tile, view, renderedState);
+    return existing.tile;
+  }
+
   function attachRemoteAudio(participants) {
     const audioBin = byId('sr-audio-bin');
+    const desiredKeys = new Set();
     participants.filter((participant) => !participant.isLocal).forEach((participant) => {
       if (
         state.blockedParticipants.has(participant.identity)
@@ -1353,10 +1520,17 @@
       ) return;
       const publication = publicationFor(participant, LiveKit?.Track?.Source?.Microphone || 'microphone');
       if (publication?.track && !publication.isMuted) {
-        attachTrack(publication.track, audioBin, 'audio', false);
+        const key = `audio:${participant.identity}`;
+        desiredKeys.add(key);
+        const existing = state.attachedTracks.find((entry) => entry.kind === 'audio' && entry.key === key);
+        if (!existing || existing.track !== publication.track) {
+          detachTrackEntries((entry) => entry.kind === 'audio' && entry.key === key);
+          attachTrack(publication.track, audioBin, 'audio', false, key);
+        }
         setParticipantVolume(participant, state.participantVolumes.get(participant.identity) ?? 100);
       }
     });
+    detachTrackEntries((entry) => entry.kind === 'audio' && !desiredKeys.has(entry.key));
   }
 
   function renderPeople(participants = participantCollection()) {
@@ -1366,25 +1540,95 @@
     byId('sr-people-count').textContent = String(participants.length);
   }
 
+  function calculateSquareGrid(count, width, height, gap = 12) {
+    const safeCount = Math.max(1, Number(count) || 1);
+    const safeWidth = Math.max(1, Number(width) || 1);
+    const safeHeight = Math.max(1, Number(height) || 1);
+    let best = { columns: 1, rows: safeCount, size: 1 };
+    for (let columns = 1; columns <= safeCount; columns += 1) {
+      const rows = Math.ceil(safeCount / columns);
+      const size = Math.floor(Math.min(
+        (safeWidth - gap * Math.max(0, columns - 1)) / columns,
+        (safeHeight - gap * Math.max(0, rows - 1)) / rows,
+      ));
+      if (size > best.size) best = { columns, rows, size };
+    }
+    return best;
+  }
+
+  function updateStudyRoomLayout() {
+    const grid = byId('sr-participant-grid');
+    if (!grid || grid.hidden) return;
+    const rect = grid.getBoundingClientRect?.() || {};
+    const width = Number(rect.width || grid.clientWidth || global.innerWidth || 1200);
+    const height = Number(rect.height || grid.clientHeight || Math.max(320, (global.innerHeight || 760) - 170));
+    const count = Math.max(1, Number(
+      state.layoutMode === 'tiled'
+        ? (grid.dataset.count || 1)
+        : (grid.dataset.cameraCount || grid.dataset.count || 1),
+    ));
+    const presenting = grid.dataset.presenting === 'true' && state.layoutMode !== 'tiled';
+    grid.dataset.layoutMode = state.layoutMode;
+    grid.style?.setProperty('--sr-presentation-size', String(state.presentationSize));
+    if (presenting) {
+      const narrow = width <= 720 || width < height * 1.08;
+      const desiredRail = narrow
+        ? Math.min((width - 36) / 2, height * ((100 - state.presentationSize) / 100))
+        : width * ((100 - state.presentationSize) / 100);
+      const companionSize = Math.max(88, Math.floor(Math.min(
+        desiredRail,
+        narrow ? (width - 36) / 2 : (height - 20) / 2,
+      )));
+      grid.style?.setProperty('--sr-companion-size', `${companionSize}px`);
+      return;
+    }
+    const layout = calculateSquareGrid(count, width - 20, height - 20, 10);
+    grid.style?.setProperty('--sr-grid-columns', String(layout.columns));
+    grid.style?.setProperty('--sr-tile-size', `${Math.max(88, layout.size)}px`);
+  }
+
+  function scheduleStudyRoomLayout() {
+    if (state.layoutFrame) global.cancelAnimationFrame?.(state.layoutFrame);
+    state.layoutFrame = global.requestAnimationFrame?.(() => {
+      state.layoutFrame = 0;
+      updateStudyRoomLayout();
+    }) || 0;
+  }
+
+  function installStudyRoomLayoutObserver() {
+    const grid = byId('sr-participant-grid');
+    state.layoutObserver?.disconnect?.();
+    state.layoutObserver = null;
+    if (typeof global.ResizeObserver === 'function' && grid) {
+      state.layoutObserver = new global.ResizeObserver(scheduleStudyRoomLayout);
+      state.layoutObserver.observe(grid);
+    } else if (!state.resizeFallbackBound) {
+      global.addEventListener?.('resize', scheduleStudyRoomLayout);
+      state.resizeFallbackBound = true;
+    }
+    scheduleStudyRoomLayout();
+  }
+
   function renderParticipants() {
     if (!state.room) return;
-    detachTracks();
     const participants = participantCollection();
     const visibleParticipants = participants.filter((participant) => (
       participant.isLocal || !state.blockedParticipants.has(participant.identity)
-    )).sort((left, right) => {
-      const leftPinned = left.identity === state.pinnedParticipantIdentity ? 1 : 0;
-      const rightPinned = right.identity === state.pinnedParticipantIdentity ? 1 : 0;
-      if (leftPinned !== rightPinned) return rightPinned - leftPinned;
-      const screenSource = LiveKit?.Track?.Source?.ScreenShare || 'screen_share';
-      const leftSharing = publicationFor(left, screenSource)?.track ? 1 : 0;
-      const rightSharing = publicationFor(right, screenSource)?.track ? 1 : 0;
-      return rightSharing - leftSharing;
+    ));
+    const mediaViews = buildMediaViews(visibleParticipants);
+    const desiredKeys = new Set(mediaViews.map((view) => view.key));
+    [...state.tileViews.keys()].forEach((key) => {
+      if (!desiredKeys.has(key)) detachTileView(key);
     });
     const grid = byId('sr-participant-grid');
-    grid.dataset.count = String(visibleParticipants.length);
-    grid.dataset.pinned = state.pinnedParticipantIdentity ? 'true' : 'false';
-    grid.replaceChildren(...visibleParticipants.map(createTile));
+    const cameraCount = mediaViews.filter((view) => !view.isScreenShare).length;
+    const presenting = mediaViews.some((view) => view.isPresentation);
+    grid.dataset.count = String(mediaViews.length);
+    grid.dataset.cameraCount = String(cameraCount);
+    grid.dataset.presenting = String(presenting);
+    grid.dataset.pinned = state.pinnedTrackKey || state.pinnedParticipantIdentity ? 'true' : 'false';
+    grid.dataset.layoutMode = state.layoutMode;
+    grid.replaceChildren(...mediaViews.map(reconcileTile));
     attachRemoteAudio(participants);
     renderPeople(participants);
     const countCopy = `${participants.length} ${participants.length === 1 ? 'studying' : 'studying'}`;
@@ -1396,12 +1640,7 @@
       renderRoomSelector();
     }
     syncSelfMediaState();
-  }
-
-  function syncActiveSpeakerTiles() {
-    byId('sr-participant-grid')?.querySelectorAll('[data-participant-identity]').forEach((tile) => {
-      tile.classList.toggle('is-speaking', state.activeSpeakers.has(tile.dataset.participantIdentity));
-    });
+    scheduleStudyRoomLayout();
   }
 
   async function recoverFromTerminalDisconnect(room) {
@@ -1616,6 +1855,7 @@
       updateUnreadBadges();
       global.requestAnimationFrame(() => byId('sr-chat-input')?.focus?.({ preventScroll: true }));
     }
+    scheduleStudyRoomLayout();
   }
 
   function closePanel() {
@@ -1625,6 +1865,101 @@
       byId(id)?.setAttribute('aria-pressed', 'false');
       byId(id)?.setAttribute('aria-expanded', 'false');
     }
+    scheduleStudyRoomLayout();
+  }
+
+  function syncLayoutControls() {
+    document.querySelectorAll('[data-layout-mode]').forEach((button) => {
+      const active = button.dataset.layoutMode === state.layoutMode;
+      button.setAttribute('aria-checked', String(active));
+      button.classList.toggle('is-active', active);
+    });
+    const button = byId('sr-layout-button');
+    const label = byId('sr-layout-label');
+    if (label) label.textContent = state.layoutMode === 'spotlight'
+      ? 'Spotlight'
+      : state.layoutMode === 'tiled' ? 'Tiled' : 'Auto';
+    if (button) button.setAttribute('aria-label', `Layout: ${label?.textContent || 'Auto'}`);
+    const slider = byId('sr-presentation-size');
+    if (slider) slider.value = String(state.presentationSize);
+    const value = byId('sr-presentation-size-value');
+    if (value) value.textContent = `${state.presentationSize}%`;
+  }
+
+  function setLayoutMode(mode) {
+    if (!['auto', 'tiled', 'spotlight'].includes(mode)) return;
+    state.layoutMode = mode;
+    saveLayoutPreference();
+    syncLayoutControls();
+    renderParticipants();
+  }
+
+  function setPresentationSize(value) {
+    state.presentationSize = Math.max(65, Math.min(90, Math.round(Number(value) || 78)));
+    saveLayoutPreference();
+    syncLayoutControls();
+    updateStudyRoomLayout();
+  }
+
+  function syncCompactControl() {
+    const active = Boolean(document.pictureInPictureElement || state.compactMode);
+    const button = byId('sr-toggle-compact');
+    if (!button) return;
+    button.setAttribute('aria-pressed', String(active));
+    button.setAttribute('aria-label', active ? 'Restore full Study Room view' : 'Open compact Study Room view');
+    button.title = active ? 'Restore full view' : 'Compact view';
+    const label = button.querySelector('.sr-control-label');
+    if (label) label.textContent = active ? 'Restore' : 'Compact view';
+  }
+
+  function preferredCompactVideo() {
+    const grid = byId('sr-participant-grid');
+    if (!grid) return null;
+    const preferred = [
+      '.sr-participant-tile.is-presentation video',
+      '.sr-participant-tile.is-self.is-camera video',
+      '.sr-participant-tile.is-camera video',
+      '.sr-participant-tile video',
+    ];
+    for (const selector of preferred) {
+      const video = grid.querySelector(selector);
+      if (video && video.readyState >= 1 && video.getBoundingClientRect().width > 0) return video;
+    }
+    return null;
+  }
+
+  async function toggleCompactView() {
+    const activePictureInPicture = document.pictureInPictureElement;
+    if (activePictureInPicture && typeof document.exitPictureInPicture === 'function') {
+      await document.exitPictureInPicture();
+      return;
+    }
+    if (state.compactMode) {
+      state.compactMode = false;
+      document.body.classList.remove('sr-compact-mode');
+      syncCompactControl();
+      scheduleStudyRoomLayout();
+      return;
+    }
+    const video = preferredCompactVideo();
+    if (document.pictureInPictureEnabled && typeof video?.requestPictureInPicture === 'function') {
+      try {
+        await video.requestPictureInPicture();
+        video.addEventListener('leavepictureinpicture', () => {
+          syncCompactControl();
+          scheduleStudyRoomLayout();
+        }, { once: true });
+        syncCompactControl();
+        return;
+      } catch {
+        // Fall through to the in-page compact window when native PiP is unavailable or denied.
+      }
+    }
+    state.compactMode = true;
+    document.body.classList.add('sr-compact-mode');
+    closePanel();
+    syncCompactControl();
+    scheduleStudyRoomLayout();
   }
 
   async function sendChatMessage(event) {
@@ -1754,8 +2089,8 @@
         state.microphoneTransport = 'sending';
         syncSelfMediaState();
       }
-      // Keep attached audio/video elements stable while only the speaking halo changes.
-      syncActiveSpeakerTiles();
+      // Stable-key reconciliation preserves media elements while the preferred companion changes.
+      renderParticipants();
     });
     room.on(event.ConnectionStateChanged, (connectionState) => {
       syncConnectionState(connectionState);
@@ -2676,9 +3011,11 @@
       await enableInitialMedia();
       byId('sr-prejoin').hidden = true;
       byId('sr-live-room').hidden = false;
+      document.body.classList.add('sr-in-call');
       syncConnectionState(room.state);
       renderParticipants();
-      openPanel('people');
+      closePanel();
+      installStudyRoomLayoutObserver();
       syncInteractiveControls();
       syncBrandedBackdropState({ status: state.backdropEnabled ? 'idle' : 'off', supported: true });
       startFocusClock();
@@ -2894,11 +3231,19 @@
     state.activeSpeakers.clear();
     state.connectionQualities.clear();
     state.pinnedParticipantIdentity = '';
+    state.pinnedTrackKey = '';
     state.handRaised = false;
     state.screenSharing = false;
+    state.compactMode = false;
+    document.body.classList.remove('sr-compact-mode');
     state.currentRoomMicrophoneAllowed = true;
     state.chatMessages = [];
     state.unreadMessages = 0;
+    state.layoutObserver?.disconnect?.();
+    state.layoutObserver = null;
+    if (state.layoutFrame) global.cancelAnimationFrame?.(state.layoutFrame);
+    state.layoutFrame = 0;
+    document.body.classList.remove('sr-in-call');
     updateUnreadBadges();
     const banner = byId('sr-connection-banner');
     if (banner) banner.hidden = true;
@@ -3090,10 +3435,12 @@
     byId('sr-active-room-name').textContent = roomPresentation(activeRoomKey).name;
     byId('sr-prejoin').hidden = true;
     byId('sr-live-room').hidden = false;
+    document.body.classList.add('sr-in-call');
     syncBrandedBackdropState({ status: 'off', supported: true });
     syncConnectionState(state.room.state);
     renderParticipants();
-    openPanel('people');
+    closePanel();
+    installStudyRoomLayoutObserver();
     syncInteractiveControls();
     startFocusClock();
   }
@@ -3146,9 +3493,31 @@
     });
     byId('sr-room-selector').addEventListener('click', () => {
       const menu = byId('sr-room-selector-menu');
+      byId('sr-layout-menu').hidden = true;
+      byId('sr-layout-button').setAttribute('aria-expanded', 'false');
       menu.hidden = !menu.hidden;
       byId('sr-room-selector').setAttribute('aria-expanded', String(!menu.hidden));
       if (!menu.hidden) menu.querySelector?.('[aria-selected="true"]')?.focus?.();
+    });
+    byId('sr-layout-button').addEventListener('click', () => {
+      const menu = byId('sr-layout-menu');
+      byId('sr-room-selector-menu').hidden = true;
+      byId('sr-room-selector').setAttribute('aria-expanded', 'false');
+      menu.hidden = !menu.hidden;
+      byId('sr-layout-button').setAttribute('aria-expanded', String(!menu.hidden));
+    });
+    document.querySelectorAll('[data-layout-mode]').forEach((button) => {
+      button.addEventListener('click', () => {
+        setLayoutMode(button.dataset.layoutMode);
+        byId('sr-layout-menu').hidden = true;
+        byId('sr-layout-button').setAttribute('aria-expanded', 'false');
+      });
+    });
+    byId('sr-presentation-size').addEventListener('input', (event) => {
+      setPresentationSize(event.target.value);
+    });
+    byId('sr-toggle-compact').addEventListener('click', () => {
+      toggleCompactView().catch(() => toast('Compact view is unavailable in this browser.'));
     });
     byId('sr-nickname-form').addEventListener('submit', updateNickname);
     byId('sr-camera-select').addEventListener('change', (event) => {
@@ -3253,7 +3622,9 @@
   }
 
   async function initialize() {
+    restoreLayoutPreference();
     bindControls();
+    syncLayoutControls();
     initializeDateClock();
     const nickname = defaultNickname();
     byId('sr-nickname').value = nickname;

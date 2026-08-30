@@ -985,21 +985,46 @@ async function publishAndProveScreenShare(
   resources.tracks.add(track);
   const options = new TrackPublishOptions();
   options.source = TrackSource.SOURCE_SCREENSHARE;
-  const localPublication = await withTimeout(
-    "screen-share publication",
-    publisherRoom.localParticipant.publishTrack(track, options),
-  );
-  const remote = await subscribed;
-  assert.equal(remote.publication.sid, localPublication.sid);
-  assert.equal(remote.publication.kind, TrackKind.KIND_VIDEO);
-  const reader = new VideoStream(remote.track).getReader();
-  resources.readers.add(reader);
-  const visible = withTimeout("screen-share frame delivery", reader.read());
-  source.captureFrame(syntheticVideoFrame(1, 640, 360));
-  const event = await visible;
-  assert.equal(event.done, false);
-  assert.equal(event.value?.frame?.width, 640);
-  assert.equal(event.value?.frame?.height, 360);
+  let stopProducer = false;
+  // A browser display track is already producing frames when LiveKit publishes
+  // it. Mirror that lifecycle here: screen-share negotiation can wait for an
+  // initial frame before the remote subscription becomes usable.
+  const producer = (async () => {
+    for (let sequence = 0; sequence < 1_200 && !stopProducer; sequence += 1) {
+      source.captureFrame(syntheticVideoFrame(sequence, 640, 360));
+      await new Promise((resolve) => setTimeout(resolve, 34));
+    }
+  })();
+  try {
+    const localPublication = await withTimeout(
+      "screen-share publication",
+      publisherRoom.localParticipant.publishTrack(track, options),
+    );
+    console.log("STUDY_ROOM_STAGING_POSITIVE: screen_share_published=true");
+    const [remote] = await Promise.all([
+      subscribed,
+      withTimeout(
+        "screen-share first subscription",
+        localPublication.waitForSubscription(),
+      ),
+    ]);
+    console.log("STUDY_ROOM_STAGING_POSITIVE: screen_share_subscribed=true");
+    assert.equal(remote.publication.sid, localPublication.sid);
+    assert.equal(remote.publication.kind, TrackKind.KIND_VIDEO);
+    const reader = new VideoStream(remote.track).getReader();
+    resources.readers.add(reader);
+    const event = await withTimeout(
+      "screen-share frame delivery",
+      reader.read(),
+    );
+    assert.equal(event.done, false);
+    assert.equal(event.value?.frame?.width, 640);
+    assert.equal(event.value?.frame?.height, 360);
+    assert.ok(event.value?.frame?.data?.length > 0);
+  } finally {
+    stopProducer = true;
+    await producer;
+  }
 }
 
 async function publishAndProveReconnectAudio(

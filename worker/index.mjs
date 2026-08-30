@@ -46,6 +46,19 @@ import {
   normalizeAnalyticsEvent,
 } from './analytics-core.mjs';
 import {
+  AdminPulseError,
+  adminPulseEnabled,
+  adminPulsePublicVapidKey,
+  adminPulseWebPushConfigured,
+  authorizeAdminPulse,
+  coarsePushUserAgent,
+  drainAdminPulseDeliveries,
+  emptyAdminPulseSnapshot,
+  normalizeAdminPulsePushRequest,
+  normalizeAdminPulseSnapshotRequest,
+  scheduleAdminPulseDispatch,
+} from './admin-pulse-core.mjs';
+import {
   ADMIN_DIRECTORY_EXPORT_MAX_BYTES,
   AdminValidationError,
   aggregateCsv,
@@ -4688,7 +4701,7 @@ async function verifiedAuthenticatedUser(request, env) {
   return verified;
 }
 
-async function handleSignInNotification(request, env, origin, allowedOrigin) {
+async function handleSignInNotification(request, env, origin, allowedOrigin, executionContext) {
   const user = await verifiedAuthenticatedUser(request, env);
   if (!user) {
     throw new GuestAccessError('SIGN_IN_REQUIRED', 'Sign-in is required.', 401);
@@ -4708,6 +4721,7 @@ async function handleSignInNotification(request, env, origin, allowedOrigin) {
   if (['sent', 'suppressed'].includes(delivery.status)) {
     recentSignInNotificationSessions.set(sessionDigest, now);
   }
+  scheduleAdminPulse(env, executionContext);
   return jsonResponse({ ok: true, notification: delivery.status }, 202, origin, allowedOrigin);
 }
 
@@ -5013,13 +5027,14 @@ async function sendExaminationRoomV1ResultReleaseEmails(env, details = {}) {
     : { ...summary, persistenceStatus: 'recorded' };
 }
 
-async function handleSessionMonitoring(request, env, origin, allowedOrigin) {
+async function handleSessionMonitoring(request, env, origin, allowedOrigin, executionContext) {
   const user = await verifiedAuthenticatedUser(request, env);
   if (!user) {
     throw new GuestAccessError('SIGN_IN_REQUIRED', 'Sign-in is required.', 401);
   }
   const sessionDigest = await signInSessionDigest(request, user);
   const recorded = await recordSignInMonitoringEvent(env, request, user, sessionDigest);
+  scheduleAdminPulse(env, executionContext);
   return jsonResponse({
     ok: true,
     monitoring: recorded ? 'recorded' : 'temporarily_unavailable',
@@ -6641,7 +6656,7 @@ async function handleQuorumQuery(request, env, origin, allowedOrigin) {
   );
 }
 
-async function handleQuorumCommand(request, env, origin, allowedOrigin) {
+async function handleQuorumCommand(request, env, origin, allowedOrigin, executionContext) {
   await enforceForumRateLimit(request, env, true);
   const user = await requireAuthenticatedUser(request, env);
   const raw = await parseBoundedJson(request, QUORUM_LIMITS.requestBytes);
@@ -6848,6 +6863,9 @@ async function handleQuorumCommand(request, env, origin, allowedOrigin) {
         502,
       );
     }
+  }
+  if (isEntryCreate || command.operation === 'create_simple_entry') {
+    scheduleAdminPulse(env, executionContext);
   }
   return jsonResponse(
     { ok: true, data: publicResult },
@@ -8323,7 +8341,7 @@ async function handleCorrection(request, env, origin, allowedOrigin) {
   }, 201, origin, allowedOrigin);
 }
 
-async function handleSupport(request, env, origin, allowedOrigin) {
+async function handleSupport(request, env, origin, allowedOrigin, executionContext) {
   await enforceSupportRateLimit(request, env);
   const supportUser = await requireAuthenticatedSubmission(
     request,
@@ -8376,6 +8394,7 @@ async function handleSupport(request, env, origin, allowedOrigin) {
       502,
     );
   }
+  scheduleAdminPulse(env, executionContext);
   await sendSupportNotification(env, {
     subject: 'Due Diligence Support request',
     text: [
@@ -8462,7 +8481,7 @@ async function requirePricingAdministrator(request, env) {
   return { user, authorization };
 }
 
-async function handleAnalytics(request, env, origin, allowedOrigin) {
+async function handleAnalytics(request, env, origin, allowedOrigin, executionContext) {
   await enforceAnalyticsRateLimit(request, env);
   const payload = await parseBoundedJson(request, 12_000);
   let event;
@@ -8480,6 +8499,9 @@ async function handleAnalytics(request, env, origin, allowedOrigin) {
     'record_usage_event',
     analyticsRpcPayload(event, user?.id || null),
   );
+  if (event.eventType === 'session_start') {
+    scheduleAdminPulse(env, executionContext);
+  }
   return jsonResponse({ ok: true, accepted: Boolean(result?.accepted) }, 202, origin, allowedOrigin);
 }
 
@@ -8490,6 +8512,106 @@ async function handleAdminSession(request, env, origin, allowedOrigin) {
     p_actor_user_id: user.id,
   });
   return jsonResponse({ ok: true, ...result }, 200, origin, allowedOrigin);
+}
+
+function scheduleAdminPulse(env, executionContext) {
+  return scheduleAdminPulseDispatch(env, executionContext, {
+    rpc: protectedSupabaseRpc,
+  });
+}
+
+async function handleAdminPulseSnapshot(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const user = await authorizeAdminPulse(request, env, {
+    requireAdministrator,
+    rpc: protectedSupabaseRpc,
+  });
+  const payload = request.body == null
+    ? {}
+    : await parseBoundedJson(request, 2_000);
+  const query = normalizeAdminPulseSnapshotRequest(payload);
+  if (!adminPulseEnabled(env)) {
+    return jsonResponse({
+      ok: true,
+      enabled: false,
+      vapidPublicKey: null,
+      snapshot: emptyAdminPulseSnapshot(),
+      subscribed: false,
+    }, 200, origin, allowedOrigin);
+  }
+
+  const result = await protectedSupabaseRpc(env, 'admin_pulse_snapshot_v1', {
+    p_actor_user_id: user.id,
+    p_limit: query.limit,
+  });
+  const enabled = result?.captureEnabled === true;
+  const deliveryEnabled = enabled
+    && result?.deliveryEnabled === true
+    && adminPulseWebPushConfigured(env);
+  return jsonResponse({
+    ok: true,
+    enabled,
+    vapidPublicKey: deliveryEnabled
+      ? adminPulsePublicVapidKey(env)
+      : null,
+    snapshot: enabled ? {
+      generatedAt: result?.generatedAt || new Date().toISOString(),
+      activeUsers: {
+        count: Math.max(0, Number(result?.activeUsers?.count) || 0),
+      },
+      events: Array.isArray(result?.events) ? result.events : [],
+    } : emptyAdminPulseSnapshot(),
+    subscribed: deliveryEnabled && result?.subscribed === true,
+  }, 200, origin, allowedOrigin);
+}
+
+async function handleAdminPulsePushSubscription(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const user = await authorizeAdminPulse(request, env, {
+    requireAdministrator,
+    rpc: protectedSupabaseRpc,
+  });
+  const command = normalizeAdminPulsePushRequest(
+    await parseBoundedJson(request, 8_000),
+  );
+  if (command.operation === 'upsert' && !adminPulseEnabled(env)) {
+    throw new AdminPulseError(
+      'ADMIN_PULSE_DISABLED',
+      'Due Diligence Pulse is not enabled for this environment.',
+      404,
+    );
+  }
+  if (command.operation === 'upsert' && !adminPulseWebPushConfigured(env)) {
+    throw new AdminPulseError(
+      'ADMIN_PULSE_PUSH_UNAVAILABLE',
+      'Due Diligence Pulse notifications are not configured.',
+      503,
+    );
+  }
+
+  const result = command.operation === 'upsert'
+    ? await protectedSupabaseRpc(env, 'admin_pulse_upsert_push_subscription_v1', {
+      p_actor_user_id: user.id,
+      p_endpoint: command.subscription.endpoint,
+      p_p256dh: command.subscription.keys.p256dh,
+      p_auth_secret: command.subscription.keys.auth,
+      p_expiration_time: command.subscription.expirationTime,
+      p_user_agent_family: coarsePushUserAgent(request.headers.get('User-Agent')),
+    })
+    : await protectedSupabaseRpc(env, 'admin_pulse_remove_push_subscription_v1', {
+      p_actor_user_id: user.id,
+      p_endpoint: command.subscription.endpoint,
+    });
+
+  const enabled = adminPulseEnabled(env) && result?.captureEnabled === true;
+  const deliveryEnabled = enabled
+    && result?.deliveryEnabled === true
+    && adminPulseWebPushConfigured(env);
+  return jsonResponse({
+    ok: true,
+    enabled,
+    subscribed: deliveryEnabled && result?.subscribed === true,
+  }, 200, origin, allowedOrigin);
 }
 
 async function handleAdminDashboard(request, env, origin, allowedOrigin) {
@@ -9616,7 +9738,7 @@ async function handlePhase4AdminData(request, env, origin, allowedOrigin) {
   }, 200, origin, allowedOrigin);
 }
 
-async function handlePhase4AdminAction(request, env, origin, allowedOrigin) {
+async function handlePhase4AdminAction(request, env, origin, allowedOrigin, executionContext) {
   await enforceAdminRateLimit(request, env);
   const user = await requireAdministrator(request, env);
   const action = normalizePhase4AdminAction(await parseBoundedJson(request, 16_000));
@@ -9664,6 +9786,11 @@ async function handlePhase4AdminAction(request, env, origin, allowedOrigin) {
       p_reason: action.reason,
       p_request_key: action.requestKey,
     });
+  }
+  if (action.action === 'payment_review'
+      && result?.payment?.status === 'approved'
+      && result?.replayed !== true) {
+    scheduleAdminPulse(env, executionContext);
   }
   return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
 }
@@ -9961,10 +10088,10 @@ export default {
         return await handleCurrentLegalAcceptance(request, env, origin, allowedOrigin);
       }
       if (pathname === '/auth/sign-in-notification') {
-        return await handleSignInNotification(request, env, origin, allowedOrigin);
+        return await handleSignInNotification(request, env, origin, allowedOrigin, ctx);
       }
       if (pathname === '/auth/session-monitoring') {
-        return await handleSessionMonitoring(request, env, origin, allowedOrigin);
+        return await handleSessionMonitoring(request, env, origin, allowedOrigin, ctx);
       }
       if (privateBetaGateEnabled(env) && pathname === '/beta/access/verify') {
         return await handlePrivateBetaCodeVerification(
@@ -10066,10 +10193,10 @@ export default {
         return await handlePartnershipSubmit(request, env, origin, allowedOrigin);
       }
       if (pathname === '/support') {
-        return await handleSupport(request, env, origin, allowedOrigin);
+        return await handleSupport(request, env, origin, allowedOrigin, ctx);
       }
       if (pathname === '/analytics/events') {
-        return await handleAnalytics(request, env, origin, allowedOrigin);
+        return await handleAnalytics(request, env, origin, allowedOrigin, ctx);
       }
       if (pathname === '/study/annotations/query') {
         return await handleStudyAnnotationQuery(request, env, origin, allowedOrigin);
@@ -10134,7 +10261,7 @@ export default {
         return await handleQuorumQuery(request, env, origin, allowedOrigin);
       }
       if (pathname === '/quorum/command') {
-        return await handleQuorumCommand(request, env, origin, allowedOrigin);
+        return await handleQuorumCommand(request, env, origin, allowedOrigin, ctx);
       }
       if (pathname === '/admin/quorum') {
         return await handleQuorumAdmin(request, env, origin, allowedOrigin);
@@ -10177,6 +10304,12 @@ export default {
       }
       if (pathname === '/admin/session') {
         return await handleAdminSession(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/pulse/snapshot') {
+        return await handleAdminPulseSnapshot(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/pulse/push-subscription') {
+        return await handleAdminPulsePushSubscription(request, env, origin, allowedOrigin);
       }
       if (pathname === '/admin/study-room/access') {
         return await studyRoomHandlers.access(request, env, origin, allowedOrigin);
@@ -10270,7 +10403,7 @@ export default {
         return await handlePhase4AdminData(request, env, origin, allowedOrigin);
       }
       if (pathname === '/admin/phase4-action') {
-        return await handlePhase4AdminAction(request, env, origin, allowedOrigin);
+        return await handlePhase4AdminAction(request, env, origin, allowedOrigin, ctx);
       }
       if (pathname === '/admin/payment-proof') {
         return await handleAdminPaymentProof(request, env, origin, allowedOrigin);
@@ -10281,6 +10414,7 @@ export default {
       return await handleGrade(request, env, origin, allowedOrigin);
     } catch (error) {
       const known = error instanceof ExaminerError
+        || error instanceof AdminPulseError
         || error instanceof GuestAccessError
         || error instanceof AccessValidationError
         || error instanceof PrivateBetaError
@@ -10331,7 +10465,15 @@ export default {
       });
       return 0;
     });
-    const maintenance = Promise.all([recovery, avatarCleanup])
+    const adminPulse = drainAdminPulseDeliveries(runtimeEnv, {
+      rpc: protectedSupabaseRpc,
+    }).catch((error) => {
+      console.error('Scheduled Admin Pulse Web Push drain failed', {
+        code: String(error?.code || error?.name || 'ADMIN_PULSE_DRAIN_FAILED').slice(0, 80),
+      });
+      return { status: 'failed' };
+    });
+    const maintenance = Promise.all([recovery, avatarCleanup, adminPulse])
       .then(([recoveryResult]) => recoveryResult);
     if (typeof ctx?.waitUntil === 'function') {
       ctx.waitUntil(maintenance);

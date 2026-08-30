@@ -112,6 +112,12 @@ const publicFiles = Object.freeze([
   'admin/examination-room-admin.css',
   'admin/examination-room-admin.js',
   'admin/subscription-actions-core.js',
+  'admin-pulse/index.html',
+  'admin-pulse/pulse.css',
+  'admin-pulse/google-identity.js',
+  'admin-pulse/pulse.js',
+  'admin-pulse/manifest.webmanifest',
+  '.well-known/assetlinks.json',
   'assets/exam-session-controller.js',
   'assets/phase2-config.js',
   'assets/pricing-renderer.css',
@@ -430,13 +436,13 @@ for (const [relativePath, expectedHash] of Object.entries(qrHashes)) {
 const files = await listFiles(outputRoot);
 const forbidden = files.filter((file) => (
   /(^|\/)(content|worker|supabase|scripts|docs|node_modules|\.git)(\/|$)/i.test(file)
-  || /\.(json|sql|mjs|csv)$/i.test(file)
+  || (/\.(json|sql|mjs|csv)$/i.test(file) && file !== '.well-known/assetlinks.json')
 ));
 if (forbidden.length) {
   throw new Error(`Private repository material entered the Pages artifact: ${forbidden.join(', ')}`);
 }
 
-const textFiles = files.filter((file) => /\.(?:html|js|css|svg|txt)$/i.test(file));
+const textFiles = files.filter((file) => /\.(?:html|js|css|svg|txt|json|webmanifest|xml)$/i.test(file));
 const searchableArtifact = (
   await Promise.all(textFiles.map((file) => readFile(path.join(outputRoot, file), 'utf8')))
 ).join('\n');

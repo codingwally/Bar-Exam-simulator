@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { readFile, readdir } from 'node:fs/promises';
-import { createHash } from 'node:crypto';
+import { createHash, webcrypto } from 'node:crypto';
 import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
@@ -50,6 +50,12 @@ for (const required of [
   'admin/pricing-editor.js',
   'admin/examination-room-admin.css',
   'admin/examination-room-admin.js',
+  'admin-pulse/index.html',
+  'admin-pulse/pulse.css',
+  'admin-pulse/google-identity.js',
+  'admin-pulse/pulse.js',
+  'admin-pulse/manifest.webmanifest',
+  '.well-known/assetlinks.json',
   'assets/private-beta-session.js',
   'assets/pricing-renderer.css',
   'assets/pricing-renderer.js',
@@ -135,7 +141,9 @@ for (const required of [
 
 assert.ok(files.includes('.nojekyll'));
 assert.ok(files.every((file) => !/(^|\/)(content|worker|supabase|scripts|docs)(\/|$)/i.test(file)));
-assert.ok(files.every((file) => !/\.(json|sql|mjs|csv)$/i.test(file)));
+assert.ok(files.every((file) => (
+  !/\.(json|sql|mjs|csv)$/i.test(file) || file === '.well-known/assetlinks.json'
+)));
 assert.ok(files.every((file) => !/^assets\/private-beta\/.+\.(?:avif|webp|jpe?g)$/i.test(file)));
 assert.ok(!files.includes('assets/phase2-law-library.jpg'));
 
@@ -169,6 +177,20 @@ const examinations = await readFile(path.join(output, 'assets/examinations.js'),
 const featureLoader = await readFile(path.join(output, 'assets/feature-loader.js'), 'utf8');
 const phase2Config = await readFile(path.join(output, 'assets/phase2-config.js'), 'utf8');
 const maintenanceGate = await readFile(path.join(output, 'assets/maintenance-gate.js'), 'utf8');
+const adminPulsePage = await readFile(path.join(output, 'admin-pulse/index.html'), 'utf8');
+const adminPulseStyles = await readFile(path.join(output, 'admin-pulse/pulse.css'), 'utf8');
+const adminPulseGoogleIdentity = await readFile(
+  path.join(output, 'admin-pulse/google-identity.js'),
+  'utf8',
+);
+const adminPulseScript = await readFile(path.join(output, 'admin-pulse/pulse.js'), 'utf8');
+const adminPulseManifest = JSON.parse(
+  await readFile(path.join(output, 'admin-pulse/manifest.webmanifest'), 'utf8'),
+);
+const adminPulseAssetLinks = JSON.parse(
+  await readFile(path.join(output, '.well-known/assetlinks.json'), 'utf8'),
+);
+const serviceWorker = await readFile(path.join(output, 'service-worker.js'), 'utf8');
 const robots = await readFile(path.join(output, 'robots.txt'), 'utf8');
 const sitemap = await readFile(path.join(output, 'sitemap.xml'), 'utf8');
 const publicBackendUrl = 'https://duediligence-api.wallyesteban1993.workers.dev';
@@ -327,7 +349,133 @@ assert.match(maintenanceGate, /We are improving Due Diligence\./);
 assert.match(maintenanceGate, /maintenance\.unlockPath/);
 assert.match(maintenanceGate, /maintenance\.statusPath/);
 assert.doesNotMatch(maintenanceGate, /\b0802\b/);
+assert.match(adminPulsePage, /<title>Due Diligence Pulse<\/title>/);
+assert.match(adminPulsePage, /name="apple-mobile-web-app-capable" content="yes"/);
+assert.match(adminPulsePage, /name="apple-mobile-web-app-title" content="DD Pulse"/);
+assert.match(adminPulsePage, /id="google-button-label"/);
+assert.match(adminPulsePage, /Share[\s\S]*Add to Home Screen[\s\S]*open[\s\S]*Select your Google email[\s\S]*Enable important notifications/i);
+assert.match(adminPulsePage, /id="google-signin-container"/);
+assert.match(adminPulsePage, /id="google-signin-fallback"[\s\S]*id="google-button-label"[\s\S]*Continue with Google in browser/);
+assert.match(adminPulsePage, /src="https:\/\/accounts\.google\.com\/gsi\/client" async defer/);
+assert.match(adminPulsePage, /google-identity\.js\?v=admin-pulse-google-id-token-20260830-1/);
+assert.doesNotMatch(adminPulsePage, /auth-cookie-storage\.js/);
+assert.match(adminPulsePage, /New subscriber/);
+assert.match(adminPulsePage, /Home Wall post/);
+assert.match(adminPulsePage, /Support request/);
+assert.match(adminPulsePage, /Currently using Due Diligence/);
+assert.match(adminPulsePage, /New sign-in/);
+assert.doesNotMatch(adminPulsePage, /type=["']password["']|two-factor|2FA|access code|device approval/i);
+assert.match(adminPulseStyles, /backdrop-filter:\s*blur\(18px\)/);
+assert.match(adminPulseStyles, /--pulse-gold:\s*#d2aa55/);
+assert.match(adminPulseScript, /\/admin\/session/);
+assert.match(adminPulseScript, /\/admin\/pulse\/snapshot/);
+assert.match(adminPulseScript, /\/admin\/pulse\/push-subscription/);
+assert.match(adminPulseScript, /ADMIN_PULSE_CALLBACK_PATH = '\/admin-pulse\/\?auth=callback'/);
+assert.match(adminPulseScript, /GOOGLE_WEB_CLIENT_ID = '601805240028-vgnu9dv3egpm7n6musiveujfp3c9vs5q\.apps\.googleusercontent\.com'/);
+assert.match(adminPulseScript, /google\.accounts\.id\.initialize\(\{/);
+assert.match(adminPulseScript, /google\.accounts\.id\.renderButton\(container/);
+assert.match(adminPulseScript, /ux_mode:\s*'popup'/);
+assert.match(adminPulseScript, /itp_support:\s*true/);
+assert.match(adminPulseScript, /callback:\s*\(response\) => handleGoogleCredential\(response, nonce\.raw, generation\)/);
+assert.match(adminPulseScript, /state\.googleNonce\?\.raw !== rawNonce[\s\S]*state\.googleNonce = null/);
+assert.match(adminPulseScript, /async function startGoogleOAuthFallback\(\)/);
+assert.match(adminPulseScript, /if \(isIosDevice\(\)\)[\s\S]*direct button inside the installed iPhone app/);
+assert.match(adminPulseScript, /signInWithOAuth\(\{/);
+assert.match(adminPulseScript, /#enable-notifications'\)\.addEventListener\('click', enableImportantNotifications\)/);
+assert.match(adminPulseScript, /Notification\.requestPermission\(\)/);
+assert.match(
+  adminPulseScript,
+  /async function enableImportantNotifications\(\)[\s\S]*if \(isIosDevice\(\) && !isStandaloneApp\(\)\)[\s\S]*return;[\s\S]*Notification\.requestPermission\(\)/,
+);
+assert.match(adminPulseScript, /userVisibleOnly:\s*true/);
+assert.match(adminPulseScript, /operation:\s*'remove'/);
+assert.match(adminPulseScript, /subscription\.unsubscribe\(\)/);
+assert.match(adminPulseScript, /function isIosDevice\(\)/);
+assert.match(adminPulseScript, /function isStandaloneApp\(\)/);
+assert.match(adminPulseScript, /const showSafariGuide = isIosSafariBrowser\(\);[\s\S]*#ios-install-guide'\)\.hidden = !showSafariGuide/);
+assert.match(adminPulseScript, /add Pulse to the Home Screen and open the installed app/i);
+assert.doesNotMatch(adminPulseScript, /service_role|SUPABASE_SERVICE_ROLE|VAPID_PRIVATE|google-services\.json/i);
+assert.match(adminPulseGoogleIdentity, /cryptoProvider\.getRandomValues\(bytes\)/);
+assert.match(adminPulseGoogleIdentity, /cryptoProvider\.subtle\.digest\('SHA-256', encoded\)/);
+assert.match(adminPulseGoogleIdentity, /signInWithIdToken\(\{/);
+assert.match(adminPulseGoogleIdentity, /nonce:\s*rawNonce/);
+assert.doesNotMatch(
+  `${adminPulsePage}\n${adminPulseScript}\n${adminPulseGoogleIdentity}`,
+  /document\.cookie|auth-cookie-storage|DueDiligenceAdminPulseAuthStorage/,
+);
+
+{
+  const identityContext = {
+    TextEncoder,
+    Uint8Array,
+    btoa: (value) => Buffer.from(value, 'binary').toString('base64'),
+    crypto: webcrypto,
+  };
+  identityContext.window = identityContext;
+  vm.runInNewContext(adminPulseGoogleIdentity, identityContext, {
+    filename: 'admin-pulse/google-identity.js',
+  });
+  const identity = identityContext.DueDiligenceAdminPulseGoogleIdentity;
+  const nonce = await identity.createNonce();
+  assert.equal(Buffer.from(nonce.raw, 'base64').byteLength, 32);
+  assert.match(nonce.hashed, /^[a-f0-9]{64}$/);
+  assert.equal(
+    nonce.hashed,
+    createHash('sha256').update(nonce.raw).digest('hex'),
+    'GIS receives the SHA-256 nonce while Supabase receives the raw nonce',
+  );
+
+  let idTokenCall = null;
+  const expectedResult = { data: { session: { access_token: 'test-session' } }, error: null };
+  const exchangeResult = await identity.exchangeCredential({
+    client: {
+      auth: {
+        async signInWithIdToken(value) {
+          idTokenCall = value;
+          return expectedResult;
+        },
+      },
+    },
+    credential: 'google-id-token',
+    rawNonce: nonce.raw,
+  });
+  assert.equal(exchangeResult, expectedResult);
+  assert.equal(idTokenCall.provider, 'google');
+  assert.equal(idTokenCall.token, 'google-id-token');
+  assert.equal(idTokenCall.nonce, nonce.raw);
+  await assert.rejects(
+    identity.exchangeCredential({ client: { auth: {} }, credential: '', rawNonce: '' }),
+    /not configured|verifiable credential/,
+  );
+  assert.equal(identity.shouldOfferRedirectFallback({ isIos: false, gisAvailable: false }), true);
+  assert.equal(identity.shouldOfferRedirectFallback({ isIos: true, gisAvailable: false }), false);
+  assert.equal(identity.shouldOfferRedirectFallback({ isIos: false, gisAvailable: true }), false);
+}
+assert.equal(adminPulseManifest.id, '/admin-pulse/');
+assert.equal(adminPulseManifest.start_url, '/admin-pulse/');
+assert.equal(adminPulseManifest.scope, '/admin-pulse/');
+assert.equal(adminPulseManifest.display, 'standalone');
+assert.equal(adminPulseManifest.icons.some((icon) => icon.sizes === '512x512'), true);
+assert.equal(adminPulseAssetLinks[0]?.target?.package_name, 'ph.duediligence.admin');
+assert.deepEqual(adminPulseAssetLinks[0]?.relation, ['delegate_permission/common.handle_all_urls']);
+assert.match(
+  adminPulseAssetLinks[0]?.target?.sha256_cert_fingerprints?.[0] || '',
+  /^(?:[A-F0-9]{2}:){31}[A-F0-9]{2}$/,
+);
+assert.doesNotMatch(
+  JSON.stringify(adminPulseAssetLinks),
+  /REPLACE_WITH_THE_RELEASE_SIGNING_CERTIFICATE_SHA256_FINGERPRINT/,
+);
+for (const eventType of ['new_subscriber', 'home_wall_post', 'support_request', 'user_active', 'new_sign_in']) {
+  assert.match(serviceWorker, new RegExp(`${eventType}: Object\\.freeze`));
+}
+assert.match(serviceWorker, /self\.addEventListener\('push'/);
+assert.match(serviceWorker, /self\.addEventListener\('notificationclick'/);
+assert.match(serviceWorker, /ADMIN_PULSE_NOTIFICATION_OPENED/);
+assert.match(serviceWorker, /payload\?\.data[\s\S]*data\.eventType[\s\S]*data\.eventId/);
+assert.doesNotMatch(serviceWorker, /payload\?\.(?:title|body|summary|email|name)/);
 assert.match(robots, /Disallow: \/admin\//);
+assert.match(robots, /Disallow: \/admin-pulse\//);
 assert.match(robots, /Sitemap: https:\/\/duediligence\.ph\/sitemap\.xml/);
 assert.match(sitemap, /<loc>https:\/\/duediligence\.ph\/<\/loc>/);
 assert.doesNotMatch(sitemap, /\/admin\//);

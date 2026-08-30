@@ -1,0 +1,27 @@
+{
+  "id": "/admin-pulse/",
+  "name": "Due Diligence Pulse",
+  "short_name": "DD Pulse",
+  "description": "A private, read-only website activity monitor for authorized Due Diligence administrators.",
+  "start_url": "/admin-pulse/",
+  "scope": "/admin-pulse/",
+  "display": "standalone",
+  "background_color": "#050b12",
+  "theme_color": "#050b12",
+  "orientation": "portrait-primary",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/assets/brand/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/brand/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

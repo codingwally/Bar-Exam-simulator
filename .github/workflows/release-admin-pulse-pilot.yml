@@ -1,0 +1,458 @@
+name: Release Admin Pulse pilot
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Deploy the exact reviewed Admin Pulse release to staging or production"
+        required: true
+        default: staging
+        type: choice
+        options:
+          - staging
+          - production
+      confirm_release:
+        description: "I confirm this is the reviewed Admin Pulse pilot release"
+        required: true
+        default: false
+        type: boolean
+      expected_source_sha:
+        description: "Exact main-branch SHA being released"
+        required: true
+        type: string
+      expected_current_pages_sha:
+        description: "Exact SHA currently serving duediligence.ph"
+        required: true
+        type: string
+      expected_current_staging_version:
+        description: "Current 100-percent staging Worker version ID; required for staging"
+        required: false
+        type: string
+      database_migration_preapplied:
+        description: "The exact Admin Pulse migration is applied and live-probed in the target database"
+        required: true
+        default: false
+        type: boolean
+      authenticated_pulse_smoke_preapplied:
+        description: "Admin allowed, non-admin denied, and regular/internal event isolation were live-probed"
+        required: true
+        default: false
+        type: boolean
+      approval_reference:
+        description: "Approval/change reference for this Admin Pulse release"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  deployments: read
+
+concurrency:
+  group: ${{ inputs.target == 'staging' && 'duediligence-staging-worker' || 'examination-room-production-cutover' }}
+  cancel-in-progress: false
+
+jobs:
+  verify_release:
+    name: Verify the isolated Admin Pulse release
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout the exact release commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Enforce authorization, exact SHA, and live baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TARGET: ${{ inputs.target }}
+          CONFIRM_RELEASE: ${{ inputs.confirm_release }}
+          EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha }}
+          EXPECTED_CURRENT_PAGES_SHA: ${{ inputs.expected_current_pages_sha }}
+          EXPECTED_CURRENT_STAGING_VERSION: ${{ inputs.expected_current_staging_version }}
+          DATABASE_MIGRATION_PREAPPLIED: ${{ inputs.database_migration_preapplied }}
+          AUTHENTICATED_PULSE_SMOKE_PREAPPLIED: ${{ inputs.authenticated_pulse_smoke_preapplied }}
+          APPROVAL_REFERENCE: ${{ inputs.approval_reference }}
+          STAGING_MARKER_ENVIRONMENT: admin-pulse-pilot-staging-approved
+          STAGING_MARKER_TASK: admin-pulse-pilot-staging-gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "codingwally/Bar-Exam-simulator"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$GITHUB_ACTOR" != "dependabot[bot]"
+          test "$CONFIRM_RELEASE" = "true"
+          test "$DATABASE_MIGRATION_PREAPPLIED" = "true"
+          test "$AUTHENTICATED_PULSE_SMOKE_PREAPPLIED" = "true"
+          test -n "${APPROVAL_REFERENCE//[[:space:]]/}"
+          [[ "$EXPECTED_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$EXPECTED_CURRENT_PAGES_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_SHA" = "$EXPECTED_SOURCE_SHA"
+          git cat-file -e "$EXPECTED_CURRENT_PAGES_SHA^{commit}"
+          git merge-base --is-ancestor "$EXPECTED_CURRENT_PAGES_SHA" "$GITHUB_SHA"
+          if [[ "$RELEASE_TARGET" == "staging" ]]; then
+            [[ "$EXPECTED_CURRENT_STAGING_VERSION" =~ ^[0-9a-f-]{36}$ ]]
+          fi
+
+          deployed_sha=""
+          while IFS=$'\t' read -r deployment_id deployment_sha; do
+            deployment_state="$(gh api "repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses?per_page=1" --jq '.[0].state')"
+            if [[ "$deployment_state" == "success" ]]; then
+              deployed_sha="$deployment_sha"
+              break
+            fi
+          done < <(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=100" --jq '.[] | [.id, .sha] | @tsv')
+          test -n "$deployed_sha"
+          if [[ "$deployed_sha" != "$EXPECTED_CURRENT_PAGES_SHA" ]]; then
+            echo "The live Pages SHA changed. Stop and review the newer release." >&2
+            exit 1
+          fi
+
+          if [[ "$RELEASE_TARGET" == "production" ]]; then
+            marker_json="$(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=$STAGING_MARKER_ENVIRONMENT&sha=$GITHUB_SHA&task=$STAGING_MARKER_TASK&per_page=1")"
+            marker_id="$(jq -r '.[0].id // empty' <<<"$marker_json")"
+            marker_sha="$(jq -r '.[0].sha // empty' <<<"$marker_json")"
+            marker_task="$(jq -r '.[0].task // empty' <<<"$marker_json")"
+            test -n "$marker_id"
+            test "$marker_sha" = "$GITHUB_SHA"
+            test "$marker_task" = "$STAGING_MARKER_TASK"
+            marker_state="$(gh api "repos/$GITHUB_REPOSITORY/deployments/$marker_id/statuses?per_page=1" --jq '.[0].state // empty')"
+            test "$marker_state" = "success"
+          fi
+
+      - name: Enforce the Admin Pulse-only diff
+        env:
+          EXPECTED_CURRENT_PAGES_SHA: ${{ inputs.expected_current_pages_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          allowed='^(\.github/workflows/(release-admin-pulse-pilot|staging-e2e-gate)\.yml|\.well-known/assetlinks\.json|admin-pulse/[^/]+|android/admin-pulse-twa/.+|docs/operations/admin-pulse-pilot\.md|robots\.txt|scripts/(build-pages-artifact|test-admin-pulse-release-workflow|test-pages-artifact)\.mjs|service-worker\.js|supabase/migrations/20260830193000_admin_pulse_notifications\.sql|worker/(admin-pulse-core(\.test)?|index)\.mjs|worker/package(-lock)?\.json|worker/wrangler(\.staging)?\.toml)$'
+          changed="$(git diff --name-only "$EXPECTED_CURRENT_PAGES_SHA" "$GITHUB_SHA")"
+          test -n "$changed"
+          unexpected="$(printf '%s\n' "$changed" | grep -Ev "$allowed" || true)"
+          if [[ -n "$unexpected" ]]; then
+            echo "The release contains files outside the Admin Pulse boundary:" >&2
+            printf '%s\n' "$unexpected" >&2
+            exit 1
+          fi
+          deleted="$(git diff --diff-filter=D --name-only "$EXPECTED_CURRENT_PAGES_SHA" "$GITHUB_SHA")"
+          test -z "$deleted"
+          ! grep -Fq 'REPLACE_WITH_THE_RELEASE_SIGNING_CERTIFICATE_SHA256_FINGERPRINT' .well-known/assetlinks.json
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install reviewed dependencies
+        run: |
+          npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+          npm ci --prefix android/admin-pulse-twa --ignore-scripts --no-audit --no-fund
+
+      - name: Verify Admin Pulse and existing release contracts
+        run: |
+          set -euo pipefail
+          node --check admin-pulse/google-identity.js
+          node --check admin-pulse/pulse.js
+          node --check service-worker.js
+          node --check worker/index.mjs
+          node --check worker/admin-pulse-core.mjs
+          node --test worker/*.test.mjs
+          node scripts/test-pages-artifact.mjs
+          node scripts/test-admin-pulse-release-workflow.mjs
+          pwsh -NoProfile -File android/admin-pulse-twa/scripts/check-config.ps1
+          npm audit --prefix worker --audit-level=high
+          npm audit --prefix worker --omit=dev --audit-level=high
+
+  deploy_staging:
+    name: Deploy and verify Admin Pulse on staging
+    if: inputs.target == 'staging'
+    needs: verify_release
+    environment: staging-e2e
+    permissions:
+      contents: read
+      deployments: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Resolve staging public configuration
+        env:
+          CONFIGURED_STAGING_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          staging_publishable_key="$CONFIGURED_STAGING_PUBLISHABLE_KEY"
+          if [[ -z "$staging_publishable_key" ]]; then
+            staging_publishable_key="$(node --input-type=module -e "const r=await fetch('https://duediligence-examinations-staging.wallyesteban1993.workers.dev/assets/phase2-config.js',{headers:{'cache-control':'no-cache'}}); if(!r.ok)process.exit(1); const m=(await r.text()).match(/sb_publishable_[A-Za-z0-9_-]{20,}/); if(!m)process.exit(1); process.stdout.write(m[0]);")"
+          fi
+          [[ "$staging_publishable_key" =~ ^sb_publishable_[A-Za-z0-9_-]{20,}$ ]]
+          echo "::add-mask::$staging_publishable_key"
+          echo "STAGING_SUPABASE_PUBLISHABLE_KEY=$staging_publishable_key" >> "$GITHUB_ENV"
+
+      - name: Build the isolated staging artifact
+        run: node scripts/test-staging-artifact.mjs
+
+      - name: Recheck the shared staging version immediately before mutation
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EXPECTED_CURRENT_STAGING_VERSION: ${{ inputs.expected_current_staging_version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          status="$(npx --yes wrangler@4.114.0 deployments status --name duediligence-examinations-staging --json)"
+          current="$(jq -r '.versions[] | select(.percentage == 100) | .version_id' <<<"$status")"
+          test "$current" = "$EXPECTED_CURRENT_STAGING_VERSION"
+
+      - name: Prepare the ephemeral staging secret file
+        env:
+          ADMIN_PULSE_VAPID_PRIVATE_KEY: ${{ secrets.ADMIN_PULSE_VAPID_PRIVATE_KEY }}
+          ADMIN_PULSE_VAPID_PUBLIC_KEY: ${{ vars.ADMIN_PULSE_VAPID_PUBLIC_KEY }}
+          LIVEKIT_URL: ${{ secrets.LIVEKIT_URL }}
+          LIVEKIT_API_KEY: ${{ secrets.LIVEKIT_API_KEY }}
+          LIVEKIT_API_SECRET: ${{ secrets.LIVEKIT_API_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$ADMIN_PULSE_VAPID_PRIVATE_KEY"
+          test -n "$ADMIN_PULSE_VAPID_PUBLIC_KEY"
+          grep -Fq "ADMIN_PULSE_VAPID_PUBLIC_KEY = \"$ADMIN_PULSE_VAPID_PUBLIC_KEY\"" worker/wrangler.staging.toml
+          umask 077
+          secret_file="$RUNNER_TEMP/admin-pulse-staging-secrets.json"
+          ADMIN_PULSE_SECRET_FILE="$secret_file" node --input-type=module <<'NODE'
+          import { writeFile } from 'node:fs/promises';
+          const names = ['ADMIN_PULSE_VAPID_PRIVATE_KEY', 'LIVEKIT_URL', 'LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET'];
+          const values = Object.fromEntries(names.map((name) => [name, String(process.env[name] || '').trim()]));
+          if (Object.values(values).some((value) => !value)) throw new Error('The staging release secrets are incomplete.');
+          await writeFile(process.env.ADMIN_PULSE_SECRET_FILE, JSON.stringify(values), { mode: 0o600 });
+          NODE
+          echo "ADMIN_PULSE_SECRET_FILE=$secret_file" >> "$GITHUB_ENV"
+
+      - name: Deploy the staging Worker and static app
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.114.0 deploy --config wrangler.staging.toml --secrets-file "$ADMIN_PULSE_SECRET_FILE" --dry-run
+          npx --yes wrangler@4.114.0 deploy --config wrangler.staging.toml --secrets-file "$ADMIN_PULSE_SECRET_FILE"
+
+      - name: Remove the ephemeral secret file
+        if: always()
+        shell: bash
+        run: rm -f -- "$ADMIN_PULSE_SECRET_FILE"
+
+      - name: Verify staging app and access boundary
+        env:
+          SITE_URL: https://duediligence-examinations-staging.wallyesteban1993.workers.dev
+        shell: bash
+        run: |
+          set -euo pipefail
+          page="$(curl -fsS -H 'Cache-Control: no-cache' "$SITE_URL/admin-pulse/?release=$GITHUB_SHA")"
+          manifest="$(curl -fsS -H 'Cache-Control: no-cache' "$SITE_URL/admin-pulse/manifest.webmanifest?release=$GITHUB_SHA")"
+          assetlinks="$(curl -fsS -H 'Cache-Control: no-cache' "$SITE_URL/.well-known/assetlinks.json?release=$GITHUB_SHA")"
+          grep -Fq '<title>Due Diligence Pulse</title>' <<<"$page"
+          grep -Fq '"start_url": "/admin-pulse/"' <<<"$manifest"
+          grep -Eq '([A-F0-9]{2}:){31}[A-F0-9]{2}' <<<"$assetlinks"
+          status="$(curl -sS -o "$RUNNER_TEMP/pulse-unauthorized.json" -w '%{http_code}' -X POST -H "Origin: $SITE_URL" -H 'Content-Type: application/json' --data '{}' "$SITE_URL/admin/pulse/snapshot")"
+          test "$status" = "401"
+          grep -Fq 'ADMIN_SIGN_IN_REQUIRED' "$RUNNER_TEMP/pulse-unauthorized.json"
+
+      - name: Record the successful exact-SHA staging marker
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STAGING_MARKER_ENVIRONMENT: admin-pulse-pilot-staging-approved
+          STAGING_MARKER_TASK: admin-pulse-pilot-staging-gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(jq -nc --arg ref "$GITHUB_SHA" --arg environment "$STAGING_MARKER_ENVIRONMENT" --arg task "$STAGING_MARKER_TASK" --arg run_id "$GITHUB_RUN_ID" '{ref:$ref,environment:$environment,task:$task,auto_merge:false,required_contexts:[],transient_environment:false,production_environment:false,description:"Admin Pulse staging gate passed",payload:{release:"admin-pulse-pilot",workflow_run_id:$run_id}}')"
+          deployment_id="$(gh api "repos/$GITHUB_REPOSITORY/deployments" --method POST --input - --jq '.id' <<<"$body")"
+          status_body="$(jq -nc '{state:"success",description:"Exact-SHA Admin Pulse staging gate passed",auto_inactive:false}')"
+          gh api "repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses" --method POST --input - <<<"$status_body" >/dev/null
+
+  deploy_production_worker:
+    name: Deploy and verify the production Worker first
+    if: inputs.target == 'production'
+    needs: verify_release
+    environment: production-worker
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Prepare the ephemeral production secret file
+        env:
+          ADMIN_PULSE_VAPID_PRIVATE_KEY: ${{ secrets.ADMIN_PULSE_VAPID_PRIVATE_KEY }}
+          ADMIN_PULSE_VAPID_PUBLIC_KEY: ${{ vars.ADMIN_PULSE_VAPID_PUBLIC_KEY }}
+          LIVEKIT_URL: ${{ secrets.LIVEKIT_URL }}
+          LIVEKIT_API_KEY: ${{ secrets.LIVEKIT_API_KEY }}
+          LIVEKIT_API_SECRET: ${{ secrets.LIVEKIT_API_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$ADMIN_PULSE_VAPID_PRIVATE_KEY"
+          test -n "$ADMIN_PULSE_VAPID_PUBLIC_KEY"
+          grep -Fq "ADMIN_PULSE_VAPID_PUBLIC_KEY = \"$ADMIN_PULSE_VAPID_PUBLIC_KEY\"" worker/wrangler.toml
+          umask 077
+          secret_file="$RUNNER_TEMP/admin-pulse-production-secrets.json"
+          ADMIN_PULSE_SECRET_FILE="$secret_file" node --input-type=module <<'NODE'
+          import { writeFile } from 'node:fs/promises';
+          const names = ['ADMIN_PULSE_VAPID_PRIVATE_KEY', 'LIVEKIT_URL', 'LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET'];
+          const values = Object.fromEntries(names.map((name) => [name, String(process.env[name] || '').trim()]));
+          if (Object.values(values).some((value) => !value)) throw new Error('The production release secrets are incomplete.');
+          await writeFile(process.env.ADMIN_PULSE_SECRET_FILE, JSON.stringify(values), { mode: 0o600 });
+          NODE
+          echo "ADMIN_PULSE_SECRET_FILE=$secret_file" >> "$GITHUB_ENV"
+
+      - name: Dry-run the application Worker
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@4.114.0 deploy --secrets-file "$ADMIN_PULSE_SECRET_FILE" --dry-run
+
+      - name: Recheck live Pages immediately before Worker mutation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_CURRENT_PAGES_SHA: ${{ inputs.expected_current_pages_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          deployed_sha=""
+          while IFS=$'\t' read -r deployment_id deployment_sha; do
+            state="$(gh api "repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses?per_page=1" --jq '.[0].state')"
+            [[ "$state" == "success" ]] && break
+            deployed_sha=""
+          done < <(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=100" --jq '.[] | [.id, .sha] | @tsv')
+          test "$deployed_sha" = "$EXPECTED_CURRENT_PAGES_SHA"
+
+      - name: Deploy the production Worker and public API alias
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.114.0 deploy --secrets-file "$ADMIN_PULSE_SECRET_FILE"
+          npx --yes wrangler@4.114.0 deploy --config wrangler.public-api.toml
+
+      - name: Remove the ephemeral secret file
+        if: always()
+        shell: bash
+        run: rm -f -- "$ADMIN_PULSE_SECRET_FILE"
+
+      - name: Verify production API access boundary before Pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          status="$(curl -sS -o "$RUNNER_TEMP/pulse-unauthorized.json" -w '%{http_code}' -X POST -H 'Origin: https://duediligence.ph' -H 'Content-Type: application/json' --data '{}' 'https://duediligence-api.wallyesteban1993.workers.dev/admin/pulse/snapshot')"
+          test "$status" = "401"
+          grep -Fq 'ADMIN_SIGN_IN_REQUIRED' "$RUNNER_TEMP/pulse-unauthorized.json"
+
+  deploy_production_pages:
+    name: Deploy and verify the Admin Pulse Pages client second
+    if: inputs.target == 'production'
+    needs: deploy_production_worker
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      deployments: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+      - name: Build and verify sanitized Pages artifact
+        run: node scripts/test-pages-artifact.mjs
+      - uses: actions/configure-pages@v4
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .pages-dist
+
+      - name: Recheck the live Pages baseline inside the Pages lock
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_CURRENT_PAGES_SHA: ${{ inputs.expected_current_pages_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          deployed_sha=""
+          while IFS=$'\t' read -r deployment_id deployment_sha; do
+            state="$(gh api "repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses?per_page=1" --jq '.[0].state')"
+            [[ "$state" == "success" ]] && break
+            deployed_sha=""
+          done < <(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=100" --jq '.[] | [.id, .sha] | @tsv')
+          test "$deployed_sha" = "$EXPECTED_CURRENT_PAGES_SHA"
+
+      - name: Deploy Pages after the Worker gate
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  verify_production:
+    name: Verify exact production SHA and install surfaces
+    if: inputs.target == 'production'
+    needs: deploy_production_pages
+    permissions:
+      contents: read
+      deployments: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Verify exact SHA, app route, manifest, service worker, and association
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SITE_URL: https://duediligence.ph
+        shell: bash
+        run: |
+          set -euo pipefail
+          exact=false
+          for attempt in {1..18}; do
+            deployed_sha=""
+            while IFS=$'\t' read -r deployment_id deployment_sha; do
+              state="$(gh api "repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses?per_page=1" --jq '.[0].state')"
+              [[ "$state" == "success" ]] && break
+              deployed_sha=""
+            done < <(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=100" --jq '.[] | [.id, .sha] | @tsv')
+            [[ "$deployed_sha" == "$GITHUB_SHA" ]] && exact=true && break
+            sleep 5
+          done
+          test "$exact" = "true"
+          for attempt in {1..18}; do
+            page="$(curl -fsS -H 'Cache-Control: no-cache' "$SITE_URL/admin-pulse/?release=$GITHUB_SHA" || true)"
+            manifest="$(curl -fsS -H 'Cache-Control: no-cache' "$SITE_URL/admin-pulse/manifest.webmanifest?release=$GITHUB_SHA" || true)"
+            assetlinks="$(curl -fsS -H 'Cache-Control: no-cache' "$SITE_URL/.well-known/assetlinks.json?release=$GITHUB_SHA" || true)"
+            service_worker="$(curl -fsS -H 'Cache-Control: no-cache' "$SITE_URL/service-worker.js?release=$GITHUB_SHA" || true)"
+            if grep -Fq '<title>Due Diligence Pulse</title>' <<<"$page" \
+              && grep -Fq '"start_url": "/admin-pulse/"' <<<"$manifest" \
+              && grep -Fq '"package_name": "ph.duediligence.admin"' <<<"$assetlinks" \
+              && grep -Eq '([A-F0-9]{2}:){31}[A-F0-9]{2}' <<<"$assetlinks" \
+              && grep -Fq 'ADMIN_PULSE_NOTIFICATION_OPENED' <<<"$service_worker"; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "The exact production install surfaces did not become visible in time." >&2
+          exit 1

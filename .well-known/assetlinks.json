@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "ph.duediligence.admin",
+      "sha256_cert_fingerprints": [
+        "6C:33:5E:9E:C6:31:42:CC:19:0D:25:07:11:EF:8B:D7:E8:02:E8:FB:6C:E1:3B:DC:9A:64:C0:ED:22:CC:0C:8D"
+      ]
+    }
+  }
+]

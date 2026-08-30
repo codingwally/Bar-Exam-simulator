@@ -1,0 +1,22 @@
+{
+  "name": "duediligence-admin-pulse-twa",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pinned Bubblewrap project for the Due Diligence Pulse Android TWA.",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "check": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/check-config.ps1",
+    "check:live": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/check-config.ps1 -Live",
+    "twa:doctor": "bubblewrap doctor",
+    "twa:update": "bubblewrap update --skipVersionUpgrade",
+    "build:unsigned": "bubblewrap build --skipSigning --skipPwaValidation",
+    "build:release": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build-release.ps1",
+    "assetlinks": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/generate-assetlinks.ps1",
+    "verify:unsigned": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/verify-unsigned.ps1"
+  },
+  "devDependencies": {
+    "@bubblewrap/cli": "1.25.0"
+  }
+}

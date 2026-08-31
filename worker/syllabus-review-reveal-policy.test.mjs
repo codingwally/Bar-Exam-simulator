@@ -57,7 +57,7 @@ function deniedResponse() {
     status: 403,
     error: {
       code: 'SYLLABUS_REVIEW_SUBSCRIPTION_REQUIRED',
-      message: 'Suggested answers and full legal review require ₱149 Early Access or a paid subscription.',
+      message: 'Suggested answers and full legal review require an active Regular Subscription.',
     },
   };
 }
@@ -577,7 +577,7 @@ test('Worker returns the canonical 403 denial without protected content or a pro
     assert.equal(body.error.code, 'SYLLABUS_REVIEW_SUBSCRIPTION_REQUIRED');
     assert.equal(
       body.error.message,
-      'Suggested answers and full legal review require ₱149 Early Access or a paid subscription.',
+      'Suggested answers and full legal review require an active Regular Subscription.',
     );
     assert.doesNotMatch(body.error.message, /internal|diagnostic|Article 19/i);
     assert.doesNotMatch(body.error.message, /admin|founder|founding|beta|trusted|unlimited/i);

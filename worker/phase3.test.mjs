@@ -642,7 +642,7 @@ test('commercial Admin route forwards the explicit scope to the scoped RPC', asy
     if (url.endsWith('/auth/v1/user')) {
       return Response.json({ id: '91000000-0000-4000-8000-000000000001' });
     }
-    if (url.endsWith('/rest/v1/rpc/phase4_admin_operational_data_scoped_v1')) {
+    if (url.endsWith('/rest/v1/rpc/phase4_admin_operational_data_scoped_v2')) {
       rpcBody = JSON.parse(init.body);
       return Response.json({ total: 0, limit: 100, offset: 0, items: [] });
     }

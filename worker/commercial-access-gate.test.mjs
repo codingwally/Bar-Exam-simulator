@@ -64,9 +64,10 @@ test('public catalog exposes only ₱149 Early Access with ₱199 manual renewal
   assert.doesNotMatch(commercialMigration, /'planCode',\s*'(?:standard|premium)'/);
 });
 
-test('browser presents token access and a single Early Access checkout', () => {
+test('browser presents token access and the current Regular Subscription checkout', () => {
   assert.match(frontend, /five one-time practice tokens/i);
-  assert.match(frontend, /Early Access/);
+  assert.match(frontend, /Regular Subscription/);
+  assert.doesNotMatch(frontend, /Early Access/);
   assert.doesNotMatch(frontend, /dd2-choose-free/);
   assert.doesNotMatch(frontend, /access\/choose/);
   assert.doesNotMatch(frontend, /plan_selection_required/);
@@ -154,11 +155,7 @@ test('enabled payment email sends one To, four BCCs, and the original proof', as
         submittedAt: '2026-08-18T12:00:00.000Z',
         provisionalAccessExpiresAt: '2026-08-19T12:00:00.000Z',
       },
-      fields: {
-        paymentDate: '2026-08-18',
-        transactionReference: 'TEST-REFERENCE-123',
-        note: 'Automated contract test',
-      },
+      fields: {},
       proof,
     });
 
@@ -183,7 +180,8 @@ test('enabled payment email sends one To, four BCCs, and the original proof', as
       bytesToBase64(new TextEncoder().encode('sample-proof')),
     );
     assert.match(dispatched.body.text, /Test Subscriber/);
-    assert.match(dispatched.body.text, /TEST-REFERENCE-123/);
+    assert.match(dispatched.body.text, /Customer-provided payment fields: private proof only/);
+    assert.doesNotMatch(dispatched.body.text, /transaction reference|customer-provided payment date|customer note/i);
     assert.match(dispatched.body.text, /Attached proof SHA-256:/);
   } finally {
     globalThis.fetch = originalFetch;

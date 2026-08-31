@@ -168,6 +168,7 @@ assert.match(staging, /BAR_FORECAST_E2E_CONFIRM: staging:hlzqmreeoghbldnhlybr:30
 assert.match(staging, /BAR_FORECAST_E2E_RELEASE_SHA: \$\{\{ github\.sha \}\}/u);
 assert.match(staging, /BAR_FORECAST_E2E_GITHUB_RUN_ID: \$\{\{ github\.run_id \}\}/u);
 assert.match(staging, /BAR_FORECAST_E2E_CONCURRENCY: '2'/u);
+assert.match(staging, /BAR_FORECAST_E2E_START_INTERVAL_MS: '60000'/u);
 assert.match(staging, /run-bar-forecast-live-journeys\.mjs --environment staging/u);
 assert.match(staging, /artifacts\/staging-e2e\/bar-forecast-live-30\.json/u);
 assert.match(staging, /node scripts\/verify-bar-forecast-live-evidence\.mjs/u);

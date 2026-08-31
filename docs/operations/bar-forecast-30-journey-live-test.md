@@ -2,7 +2,7 @@
 
 This is a destructive-to-test-data, cost-bearing release check for a specifically approved candidate. It runs exactly 30 complete examiner journeys through the real web page and live Worker/Supabase path. It does not mock or intercept HTTP. Use staging by default. Run production only with explicit release-owner approval.
 
-The runner uses one headless Chrome process. Its default and maximum concurrency is two browser contexts, with one disposable least-privilege `admin` account per worker slot. A separate disposable non-admin account proves the Forecast endpoint returns `403 BAR_FORECAST_ADMIN_FORBIDDEN`. Starts are spaced by at least 45 seconds to remain below the dedicated Forecast rate limit on a single outbound IP; other administrator test traffic uses a separate rate-limit bucket.
+The runner uses one headless Chrome process. Its default and maximum concurrency is two browser contexts, with one disposable least-privilege `admin` account per worker slot. A separate disposable non-admin account proves the Forecast endpoint returns `403 BAR_FORECAST_ADMIN_FORBIDDEN`. Starts are spaced by at least 60 seconds to remain comfortably below the dedicated Forecast rate limit on a single outbound IP, including one optional duplicate status request per journey and two boundary-crossing journeys; other administrator test traffic uses a separate rate-limit bucket.
 
 Each counted journey resets only its disposable user's Forecast consent, proves the server rejects start before consent, accepts consent in the UI, selects one of the six subjects, starts 20 real questions, and enters 20 answers of at least ten words. It also exercises a flag, yellow question highlight, bold answer text, answer text size, flagged-question filter, submission confirmation, the total grade, and all 20 feedback/suggested-answer/explanation results. Per-attempt markers prove results did not mix across journeys.
 
@@ -46,6 +46,7 @@ Set the non-secret attestation values and run preflight first. Preflight loads n
 $env:BAR_FORECAST_E2E_CONFIRM = 'staging:hlzqmreeoghbldnhlybr:30'
 $env:BAR_FORECAST_E2E_RELEASE_SHA = '<exact-40-hex-candidate-sha>'
 $env:BAR_FORECAST_E2E_GITHUB_RUN_ID = '<numeric-run-id>'
+$env:BAR_FORECAST_E2E_START_INTERVAL_MS = '60000'
 node scripts/run-bar-forecast-live-journeys.mjs --environment staging --preflight
 ```
 
@@ -72,6 +73,7 @@ $env:BAR_FORECAST_E2E_RELEASE_SHA = '<exact-40-hex-candidate-sha>'
 $env:BAR_FORECAST_E2E_GITHUB_RUN_ID = '<numeric-run-id>'
 $env:BAR_FORECAST_E2E_APPROVAL_REFERENCE = '<approved-change-or-release-reference>'
 $env:BAR_FORECAST_E2E_AWAIT_CLASSIFICATION = 'true'
+$env:BAR_FORECAST_E2E_START_INTERVAL_MS = '60000'
 node scripts/run-bar-forecast-live-journeys.mjs --environment production --preflight
 $env:BAR_FORECAST_E2E_SUPABASE_SECRET_KEY = Read-Host 'Temporary Supabase secret key' -MaskInput
 node scripts/run-bar-forecast-live-journeys.mjs --environment production 1> artifacts/staging-e2e/bar-forecast-live-30.json
@@ -82,7 +84,7 @@ exit $runExitCode
 
 Before the first production sign-in, the runner prints a credential-free `FORECAST_E2E_CLASSIFICATION` checkpoint containing only the run ID and three synthetic user UUID/kind pairs, then pauses for at most ten minutes. Independently validate those exact, newly created `dd-forecast-e2e-<run-id>-*` Auth identities and their expected roles, insert all three into `private.internal_test_accounts`, and only then enter `CONTINUE <run-id>` on stdin. This keeps their telemetry in the internal/test scope and prevents Admin Pulse delivery. Never acknowledge a partial, stale, or mismatched fixture set.
 
-Optional controls are deliberately bounded: `BAR_FORECAST_E2E_CONCURRENCY=1|2`, `BAR_FORECAST_E2E_START_INTERVAL_MS=45000..120000`, `BAR_FORECAST_E2E_JOURNEY_TIMEOUT_MS=300000..900000`, and `BAR_FORECAST_E2E_BROWSER_CHANNEL=chrome|bundled`. There is no option to reduce or increase the journey count.
+Optional controls are deliberately bounded: `BAR_FORECAST_E2E_CONCURRENCY=1|2`, `BAR_FORECAST_E2E_START_INTERVAL_MS=60000..120000`, `BAR_FORECAST_E2E_JOURNEY_TIMEOUT_MS=300000..900000`, and `BAR_FORECAST_E2E_BROWSER_CHANNEL=chrome|bundled`. There is no option to reduce or increase the journey count.
 
 ## Evidence and failure handling
 

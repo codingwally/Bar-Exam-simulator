@@ -28,7 +28,7 @@ assert.equal(evidence.journeysPassed, 30);
 assert.equal(evidence.concurrency, 2);
 assert.ok(Number.isInteger(evidence.maximumActiveContexts));
 assert.ok(evidence.maximumActiveContexts >= 1 && evidence.maximumActiveContexts <= 2);
-assert.ok(Number.isInteger(evidence.startIntervalMs) && evidence.startIntervalMs >= 45_000);
+assert.ok(Number.isInteger(evidence.startIntervalMs) && evidence.startIntervalMs >= 60_000);
 
 const subjectCounts = Object.values(evidence.subjects || {});
 assert.equal(subjectCounts.length, 6);
@@ -64,6 +64,33 @@ assert.equal(evidence.secretsLogged, false);
 assert.ok(Array.isArray(evidence.journeys));
 assert.equal(evidence.journeys.length, 30);
 assert.deepEqual(evidence.journeys.map(({ ordinal }) => ordinal), Array.from({ length: 30 }, (_, index) => index + 1));
+
+function assertForecastOperations(apiOperations) {
+  assert.ok(Array.isArray(apiOperations), 'Journey API operations must be recorded from live traffic.');
+  for (const [operation, count] of Object.entries({
+    'accept:200': 1,
+    'start:409': 1,
+    'start:200': 1,
+    'submit:200': 1,
+  })) {
+    assert.equal(
+      apiOperations.filter((value) => value === operation).length,
+      count,
+      `Every journey must record exactly ${count} ${operation} request.`,
+    );
+  }
+  const statusCount = apiOperations.filter((value) => value === 'status:200').length;
+  assert.ok(
+    statusCount === 1 || statusCount === 2,
+    'Every journey must record one status request and at most one optional duplicate.',
+  );
+  assert.equal(
+    apiOperations.length,
+    4 + statusCount,
+    'A journey recorded an unapproved or extra Forecast request.',
+  );
+}
+
 for (const journey of evidence.journeys) {
   assert.equal(journey.passed, true);
   assert.equal(journey.resultCount, 20);
@@ -74,13 +101,7 @@ for (const journey of evidence.journeys) {
   assert.equal(journey.uniqueAttempt, true);
   assert.equal(journey.pageErrors, 0);
   assert.ok(Number.isFinite(journey.totalScore) && journey.totalScore >= 0 && journey.totalScore <= 100);
-  assert.deepEqual(journey.apiOperations, [
-    'status:200',
-    'start:409',
-    'accept:200',
-    'start:200',
-    'submit:200',
-  ]);
+  assertForecastOperations(journey.apiOperations);
 }
 
 const forbiddenKeys = /^(?:question|prompt|answer|feedback|explanation|token|secret|password|email)(?:Text|Content|Value)?$/iu;

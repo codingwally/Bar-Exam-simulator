@@ -17,7 +17,7 @@ execFileSync(process.execPath, ['--check', runnerPath], { stdio: 'pipe' });
 assert.match(source, /const JOURNEY_COUNT = 30;/u);
 assert.match(source, /const DEFAULT_CONCURRENCY = 2;/u);
 assert.match(source, /const MAX_CONCURRENCY = 2;/u);
-assert.match(source, /const MINIMUM_START_INTERVAL_MS = 45_000;/u);
+assert.match(source, /const MINIMUM_START_INTERVAL_MS = 60_000;/u);
 assert.match(source, /--environment must be staging or production/u);
 assert.match(source, /BAR_FORECAST_E2E_RELEASE_SHA must be a 40-hex commit SHA/u);
 assert.match(source, /BAR_FORECAST_E2E_GITHUB_RUN_ID must be numeric/u);
@@ -129,6 +129,7 @@ assert.deepEqual({
   journeys: stagingPreflight.journeys,
   concurrency: stagingPreflight.concurrency,
   maximumConcurrency: stagingPreflight.maximumConcurrency,
+  startIntervalMs: stagingPreflight.startIntervalMs,
   disposableAdministrators: stagingPreflight.disposableAdministrators,
   disposableNonAdministrators: stagingPreflight.disposableNonAdministrators,
   classificationCheckpoint: stagingPreflight.classificationCheckpoint,
@@ -140,6 +141,7 @@ assert.deepEqual({
   journeys: 30,
   concurrency: 2,
   maximumConcurrency: 2,
+  startIntervalMs: 60_000,
   disposableAdministrators: 2,
   disposableNonAdministrators: 1,
   classificationCheckpoint: false,
@@ -188,6 +190,7 @@ assert.equal(productionPreflight.classificationCheckpoint, true);
 assert.match(runbook, /exactly 30/u);
 assert.match(runbook, /150 live grading calls/u);
 assert.match(runbook, /maximum concurrency is two/u);
+assert.match(runbook, /at least 60 seconds/u);
 assert.match(runbook, /BAR_FORECAST_E2E_RELEASE_SHA/u);
 assert.match(runbook, /BAR_FORECAST_E2E_GITHUB_RUN_ID/u);
 assert.match(runbook, /Do not paste.*secret/iu);

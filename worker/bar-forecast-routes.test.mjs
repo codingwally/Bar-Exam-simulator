@@ -162,6 +162,33 @@ test('status is fail-closed and returns only the contracted fields with private 
   );
 });
 
+test('dedicated rate-limit rejection stops authentication, parsing, storage, and grading', async () => {
+  const touched = [];
+  const rateError = Object.assign(new Error('bounded rate limit'), {
+    code: 'RATE_LIMITED',
+    status: 429,
+  });
+  const { handlers } = harness({
+    dependencies: {
+      enforceBarForecastAdminRateLimit: async () => {
+        touched.push('rate_limit');
+        throw rateError;
+      },
+      requireAdministrator: async () => { touched.push('authenticate'); },
+      authorizeAdministrator: async () => { touched.push('authorize'); },
+      parseBoundedJson: async () => { touched.push('parse'); },
+      barForecastRpc: async () => { touched.push('storage'); },
+      structuredGemini: async () => { touched.push('grading'); },
+    },
+  });
+
+  await assert.rejects(
+    handlers.handle(request({ operation: 'status' }), {}, '', ''),
+    { code: 'RATE_LIMITED', status: 429 },
+  );
+  assert.deepEqual(touched, ['rate_limit']);
+});
+
 test('accept persists the exact version for the authenticated admin user', async () => {
   const { calls, handlers } = harness({ consentAccepted: false });
   const response = await handlers.handle(request({

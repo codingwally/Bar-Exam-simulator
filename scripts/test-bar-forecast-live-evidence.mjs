@@ -47,7 +47,7 @@ const evidence = {
   journeysPassed: 30,
   concurrency: 2,
   maximumActiveContexts: 2,
-  startIntervalMs: 45_000,
+  startIntervalMs: 60_000,
   subjects: Object.fromEntries(Array.from({ length: 6 }, (_, index) => [`Subject ${index + 1}`, 5])),
   proof,
   grades: { minimum: 75, maximum: 75, average: 75 },
@@ -82,6 +82,34 @@ try {
     encoding: 'utf8',
   });
   assert.match(output, /Verified 30\/30 staging Forecast journeys/u);
+
+  const duplicateStatusEvidence = structuredClone(evidence);
+  duplicateStatusEvidence.journeys[0].apiOperations.splice(1, 0, 'status:200');
+  await writeFile(evidenceFile, JSON.stringify(duplicateStatusEvidence), 'utf8');
+  assert.match(execFileSync(process.execPath, [verifier], {
+    cwd: root,
+    env: environment,
+    encoding: 'utf8',
+  }), /Verified 30\/30 staging Forecast journeys/u);
+
+  const extraRequestEvidence = structuredClone(evidence);
+  extraRequestEvidence.journeys[0].apiOperations.push('status:200', 'status:200');
+  await writeFile(evidenceFile, JSON.stringify(extraRequestEvidence), 'utf8');
+  assert.throws(() => execFileSync(process.execPath, [verifier], {
+    cwd: root,
+    env: environment,
+    stdio: 'pipe',
+  }));
+
+  await writeFile(evidenceFile, JSON.stringify({
+    ...evidence,
+    startIntervalMs: 59_999,
+  }), 'utf8');
+  assert.throws(() => execFileSync(process.execPath, [verifier], {
+    cwd: root,
+    env: environment,
+    stdio: 'pipe',
+  }));
 
   await writeFile(evidenceFile, JSON.stringify({
     ...evidence,

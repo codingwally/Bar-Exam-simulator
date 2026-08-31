@@ -8,11 +8,12 @@ const require = createRequire(import.meta.url);
 const JOURNEY_COUNT = 30;
 const DEFAULT_CONCURRENCY = 2;
 const MAX_CONCURRENCY = 2;
-// Forecast performs five administrator requests per journey (including the
-// deliberate pre-consent rejection). Forty-five seconds keeps even a duplicate
-// route-status check below the Worker's dedicated 90-request/10-minute Forecast
-// IP window while keeping browser/RAM pressure to at most two active contexts.
-const MINIMUM_START_INTERVAL_MS = 45_000;
+// Forecast normally performs five administrator requests per journey (including
+// the deliberate pre-consent rejection), with at most one duplicate status check.
+// Sixty seconds keeps that sixth request plus two boundary-crossing journeys below the
+// Worker's dedicated 90-request/10-minute Forecast IP window, while keeping
+// browser/RAM pressure to at most two active contexts.
+const MINIMUM_START_INTERVAL_MS = 60_000;
 const DEFAULT_JOURNEY_TIMEOUT_MS = 8 * 60_000;
 const CONSENT_VERSION = '2026-09-01';
 const FORECAST_PATH = '/admin/dd2026/bar-forecast';
@@ -94,7 +95,7 @@ Production additionally requires:
 
 Optional bounded settings:
   BAR_FORECAST_E2E_CONCURRENCY=1|2         (default 2)
-  BAR_FORECAST_E2E_START_INTERVAL_MS>=45000
+  BAR_FORECAST_E2E_START_INTERVAL_MS>=60000
   BAR_FORECAST_E2E_JOURNEY_TIMEOUT_MS=300000..900000
   BAR_FORECAST_E2E_BROWSER_CHANNEL=chrome|bundled`;
 }
@@ -752,6 +753,36 @@ function assertForecastNetwork(events) {
   assert.ok(statuses('start').includes(200), 'The post-consent start request did not succeed.');
   assert.ok(statuses('submit').includes(200), 'The live submission request did not succeed.');
   assert.equal(events.some((event) => event.failed), false, 'A live Forecast request failed at the network layer.');
+  assert.equal(
+    events.every((event) => Number.isInteger(event.status)),
+    true,
+    'Every live Forecast request must have a completed HTTP response.',
+  );
+  const apiOperations = events.map((event) => `${event.operation}:${event.status}`);
+  const required = Object.freeze({
+    'accept:200': 1,
+    'start:409': 1,
+    'start:200': 1,
+    'submit:200': 1,
+  });
+  for (const [operation, count] of Object.entries(required)) {
+    assert.equal(
+      apiOperations.filter((value) => value === operation).length,
+      count,
+      `The live journey must issue exactly ${count} ${operation} request.`,
+    );
+  }
+  const statusCount = apiOperations.filter((value) => value === 'status:200').length;
+  assert.ok(
+    statusCount === 1 || statusCount === 2,
+    'The live journey may issue only one required and one optional duplicate status request.',
+  );
+  assert.equal(
+    apiOperations.length,
+    4 + statusCount,
+    'The live journey issued an unapproved or extra Forecast request.',
+  );
+  return Object.freeze(apiOperations);
 }
 
 async function runJourney(browser, account, ordinal) {
@@ -825,7 +856,7 @@ async function runJourney(browser, account, ordinal) {
     journeyPhase = 'RESULTS';
     const proof = await resultProof(page, marker);
     journeyPhase = 'NETWORK';
-    assertForecastNetwork(events);
+    const apiOperations = assertForecastNetwork(events);
     assert.equal(pageErrors, 0, 'The Forecast page emitted an uncaught browser error.');
 
     journeyPhase = 'CONSENT_PERSISTENCE';
@@ -845,7 +876,7 @@ async function runJourney(browser, account, ordinal) {
       highlight: true,
       formatting: true,
       uniqueAttempt: true,
-      apiOperations: Object.freeze(['status:200', 'start:409', 'accept:200', 'start:200', 'submit:200']),
+      apiOperations,
       pageErrors,
       consoleErrors,
       durationMs: Date.now() - startedAt,

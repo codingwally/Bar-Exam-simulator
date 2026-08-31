@@ -48,7 +48,8 @@ assert.match(source, /cleanupDisposableAdministrator/u);
 assert.match(source, /deleteAndVerifyDisposableUsage/u);
 assert.match(source, /usageResidueVerified/u);
 assert.match(source, /diagnostic:\s*\{\s*stage: diagnosticStage,\s*cleanupFailed,/u);
-assert.match(source, /journeysPassed: results\.length/u);
+assert.match(source, /const completedJourneys = \[\]/u);
+assert.match(source, /journeysPassed: completedJourneys\.length/u);
 assert.match(source, /function phaseFailure\(error, phase\)/u);
 assert.match(source, /FORECAST_E2E_\$\{safePhase\}/u);
 
@@ -81,6 +82,8 @@ for (const phase of [
   'AUTH_FORECAST_VISIBLE',
 ]) assert.ok(source.includes(phase), `Live harness must retain safe failure phase ${phase}.`);
 assert.match(source, /journeyPhase = 'RESULTS'/u);
+assert.match(source, /startOffsetMs/u);
+assert.match(source, /observedMinimumStartIntervalMs/u);
 assert.match(source, /phaseFailure\(error, `JOURNEY_\$\{journeyPhase\}`\)/u);
 assert.match(source, /I Understand & Agree/u);
 assert.match(source, /\[data-subject\]/u);
@@ -191,6 +194,7 @@ assert.match(runbook, /exactly 30/u);
 assert.match(runbook, /150 live grading calls/u);
 assert.match(runbook, /maximum concurrency is two/u);
 assert.match(runbook, /at least 60 seconds/u);
+assert.match(runbook, /observed start spacing/u);
 assert.match(runbook, /BAR_FORECAST_E2E_RELEASE_SHA/u);
 assert.match(runbook, /BAR_FORECAST_E2E_GITHUB_RUN_ID/u);
 assert.match(runbook, /Do not paste.*secret/iu);

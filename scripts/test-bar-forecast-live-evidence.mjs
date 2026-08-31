@@ -21,6 +21,7 @@ const journey = (ordinal) => ({
   formatting: true,
   uniqueAttempt: true,
   apiOperations: ['status:200', 'start:409', 'accept:200', 'start:200', 'submit:200'],
+  startOffsetMs: (ordinal - 1) * 60_000,
   pageErrors: 0,
   consoleErrors: 0,
   durationMs: 1_000,
@@ -48,6 +49,7 @@ const evidence = {
   concurrency: 2,
   maximumActiveContexts: 2,
   startIntervalMs: 60_000,
+  observedMinimumStartIntervalMs: 60_000,
   subjects: Object.fromEntries(Array.from({ length: 6 }, (_, index) => [`Subject ${index + 1}`, 5])),
   proof,
   grades: { minimum: 75, maximum: 75, average: 75 },
@@ -101,9 +103,40 @@ try {
     stdio: 'pipe',
   }));
 
+  const outOfOrderEvidence = structuredClone(evidence);
+  outOfOrderEvidence.journeys[0].apiOperations = [
+    'status:200', 'accept:200', 'start:409', 'start:200', 'submit:200',
+  ];
+  await writeFile(evidenceFile, JSON.stringify(outOfOrderEvidence), 'utf8');
+  assert.throws(() => execFileSync(process.execPath, [verifier], {
+    cwd: root,
+    env: environment,
+    stdio: 'pipe',
+  }));
+
+  const earlyStartEvidence = structuredClone(evidence);
+  earlyStartEvidence.journeys[1].startOffsetMs = 59_999;
+  earlyStartEvidence.observedMinimumStartIntervalMs = 59_999;
+  await writeFile(evidenceFile, JSON.stringify(earlyStartEvidence), 'utf8');
+  assert.throws(() => execFileSync(process.execPath, [verifier], {
+    cwd: root,
+    env: environment,
+    stdio: 'pipe',
+  }));
+
   await writeFile(evidenceFile, JSON.stringify({
     ...evidence,
     startIntervalMs: 59_999,
+  }), 'utf8');
+  assert.throws(() => execFileSync(process.execPath, [verifier], {
+    cwd: root,
+    env: environment,
+    stdio: 'pipe',
+  }));
+
+  await writeFile(evidenceFile, JSON.stringify({
+    ...evidence,
+    startIntervalMs: 120_001,
   }), 'utf8');
   assert.throws(() => execFileSync(process.execPath, [verifier], {
     cwd: root,

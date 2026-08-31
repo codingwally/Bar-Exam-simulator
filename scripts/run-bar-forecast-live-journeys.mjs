@@ -218,6 +218,7 @@ const serviceHeaders = Object.freeze({
 const sensitiveValues = new Set([config.secretKey]);
 const createdAccounts = [];
 const activeContexts = new Set();
+const completedJourneys = [];
 const stopController = new AbortController();
 let stopSignal = '';
 let maximumActiveContexts = 0;
@@ -782,10 +783,17 @@ function assertForecastNetwork(events) {
     4 + statusCount,
     'The live journey issued an unapproved or extra Forecast request.',
   );
+  assert.deepEqual(apiOperations, [
+    ...Array.from({ length: statusCount }, () => 'status:200'),
+    'start:409',
+    'accept:200',
+    'start:200',
+    'submit:200',
+  ], 'The live Forecast operations occurred out of the approved order.');
   return Object.freeze(apiOperations);
 }
 
-async function runJourney(browser, account, ordinal) {
+async function runJourney(browser, account, ordinal, startOffsetMs) {
   const startedAt = Date.now();
   const subject = SUBJECTS[(ordinal - 1) % SUBJECTS.length];
   const marker = `${runId.toUpperCase()}-J${ordinal}`;
@@ -877,6 +885,7 @@ async function runJourney(browser, account, ordinal) {
       formatting: true,
       uniqueAttempt: true,
       apiOperations,
+      startOffsetMs,
       pageErrors,
       consoleErrors,
       durationMs: Date.now() - startedAt,
@@ -897,6 +906,7 @@ async function runJourney(browser, account, ordinal) {
 function startGate() {
   let chain = Promise.resolve();
   let lastStart = 0;
+  let firstStart = 0;
   return async () => {
     let release;
     const current = new Promise((resolve) => { release = resolve; });
@@ -908,6 +918,8 @@ function startGate() {
       if (remaining) await delay(remaining, undefined, { signal: stopController.signal });
       if (stopSignal) throw new Error(`Forecast E2E interrupted by ${stopSignal}.`);
       lastStart = Date.now();
+      if (!firstStart) firstStart = lastStart;
+      return lastStart - firstStart;
     } finally {
       release();
     }
@@ -1036,7 +1048,6 @@ async function main() {
     ...(config.browserChannel === 'bundled' ? {} : { channel: config.browserChannel }),
   };
   const browser = await chromium.launch(launchOptions);
-  const results = [];
   const cleanupErrors = [];
   const administratorAccounts = [];
   let primaryError = null;
@@ -1067,9 +1078,9 @@ async function main() {
         nextOrdinal += 1;
         try {
           await resetForecastConsent(account.userId);
-          await waitForStart();
-          const result = await runJourney(browser, account, ordinal);
-          results.push(result);
+          const startOffsetMs = await waitForStart();
+          const result = await runJourney(browser, account, ordinal, startOffsetMs);
+          completedJourneys.push(result);
           process.stderr.write(`Forecast E2E journey ${ordinal}/${JOURNEY_COUNT} passed (${result.subject}).\n`);
         } catch (error) {
           firstFailure ||= error;
@@ -1079,7 +1090,7 @@ async function main() {
     await Promise.all(administratorAccounts.map(worker));
     if (firstFailure) throw firstFailure;
     if (stopSignal) throw new Error(`Forecast E2E interrupted by ${stopSignal}.`);
-    assert.equal(results.length, JOURNEY_COUNT, 'The harness did not complete exactly 30 journeys.');
+    assert.equal(completedJourneys.length, JOURNEY_COUNT, 'The harness did not complete exactly 30 journeys.');
   } catch (error) {
     primaryError = error;
     primaryFailureStage = diagnosticStage;
@@ -1106,18 +1117,30 @@ async function main() {
   }
 
   setDiagnosticStage('evidence');
-  results.sort((left, right) => left.ordinal - right.ordinal);
+  completedJourneys.sort((left, right) => left.ordinal - right.ordinal);
   const subjectCounts = Object.fromEntries(SUBJECTS.map((subject) => [
     subject,
-    results.filter((result) => result.subject === subject).length,
+    completedJourneys.filter((result) => result.subject === subject).length,
   ]));
   assert.deepEqual(
     Object.values(subjectCounts),
     SUBJECTS.map(() => JOURNEY_COUNT / SUBJECTS.length),
     'The exact 30-journey subject rotation is incomplete.',
   );
-  assert.equal(new Set(results.map((result) => result.ordinal)).size, JOURNEY_COUNT);
-  const scores = results.map((result) => result.totalScore);
+  assert.equal(new Set(completedJourneys.map((result) => result.ordinal)).size, JOURNEY_COUNT);
+  const startOffsets = completedJourneys
+    .map((result) => result.startOffsetMs)
+    .sort((left, right) => left - right);
+  assert.equal(startOffsets[0], 0, 'Observed journey timing must begin at a zero offset.');
+  const observedStartGaps = startOffsets.slice(1).map((offset, index) => (
+    offset - startOffsets[index]
+  ));
+  const observedMinimumStartIntervalMs = Math.min(...observedStartGaps);
+  assert.ok(
+    observedMinimumStartIntervalMs >= config.startIntervalMs,
+    'Observed journey starts violated the configured release-gate spacing.',
+  );
+  const scores = completedJourneys.map((result) => result.totalScore);
   const summary = {
     ok: true,
     target: config.targetName,
@@ -1125,22 +1148,23 @@ async function main() {
     githubRunId: config.githubRunId,
     runId,
     journeysRequested: JOURNEY_COUNT,
-    journeysPassed: results.length,
+    journeysPassed: completedJourneys.length,
     concurrency: config.concurrency,
     maximumActiveContexts,
     startIntervalMs: config.startIntervalMs,
+    observedMinimumStartIntervalMs,
     subjects: subjectCounts,
     proof: {
-      realForecastHttpJourneys: results.length,
+      realForecastHttpJourneys: completedJourneys.length,
       nonAdministratorDenied: nonAdministratorDenial?.denied === true,
-      consentGateRejections: results.filter((result) => result.consentGate).length,
-      twentyAnswerSubmissions: results.filter((result) => result.resultCount === 20).length,
-      flags: results.filter((result) => result.flag).length,
-      highlights: results.filter((result) => result.highlight).length,
-      editorFormatting: results.filter((result) => result.formatting).length,
+      consentGateRejections: completedJourneys.filter((result) => result.consentGate).length,
+      twentyAnswerSubmissions: completedJourneys.filter((result) => result.resultCount === 20).length,
+      flags: completedJourneys.filter((result) => result.flag).length,
+      highlights: completedJourneys.filter((result) => result.highlight).length,
+      editorFormatting: completedJourneys.filter((result) => result.formatting).length,
       totalGrades: scores.length,
-      suggestedAnswerAndExplanationSets: results.filter((result) => result.resultCount === 20).length,
-      uniqueAttemptIsolation: results.filter((result) => result.uniqueAttempt).length,
+      suggestedAnswerAndExplanationSets: completedJourneys.filter((result) => result.resultCount === 20).length,
+      uniqueAttemptIsolation: completedJourneys.filter((result) => result.uniqueAttempt).length,
     },
     grades: {
       minimum: Math.min(...scores),
@@ -1163,7 +1187,7 @@ async function main() {
       ) && activeContexts.size === 0,
     },
     secretsLogged: false,
-    journeys: results,
+    journeys: completedJourneys,
   };
   const serialized = JSON.stringify(summary, null, 2);
   for (const sensitive of sensitiveValues) assert.equal(serialized.includes(sensitive), false);
@@ -1181,7 +1205,7 @@ main().catch((error) => {
     diagnostic: {
       stage: diagnosticStage,
       cleanupFailed,
-      journeysPassed: results.length,
+      journeysPassed: completedJourneys.length,
     },
     cleanup: {
       disposableAccountsCreated: createdAccounts.length,

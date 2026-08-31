@@ -88,7 +88,7 @@ Optional controls are deliberately bounded: `BAR_FORECAST_E2E_CONCURRENCY=1|2`, 
 
 ## Evidence and failure handling
 
-A passing JSON artifact must show `journeysRequested: 30`, `journeysPassed: 30`, no more than two active contexts, five journeys for every subject, all proof counters at 30, `nonAdministratorDenied: true`, and `cleanup.complete: true`. The `releaseSha` and `githubRunId` must match the reviewed workflow candidate.
+A passing JSON artifact must show `journeysRequested: 30`, `journeysPassed: 30`, no more than two active contexts, observed start spacing of at least 60 seconds, no more than six approved Forecast requests in their exact order per journey, five journeys for every subject, all proof counters at 30, `nonAdministratorDenied: true`, and `cleanup.complete: true`. The `releaseSha` and `githubRunId` must match the reviewed workflow candidate.
 
 Any journey, authorization, candidate-SHA, sign-out, or cleanup failure emits sanitized failure JSON to stdout and exits nonzero. Failure detail is deliberately suppressed to prevent protected content from reaching logs. Use the last stderr progress line to locate the failed ordinal, then inspect approved platform diagnostics rather than adding content capture.
 

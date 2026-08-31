@@ -28,7 +28,11 @@ assert.equal(evidence.journeysPassed, 30);
 assert.equal(evidence.concurrency, 2);
 assert.ok(Number.isInteger(evidence.maximumActiveContexts));
 assert.ok(evidence.maximumActiveContexts >= 1 && evidence.maximumActiveContexts <= 2);
-assert.ok(Number.isInteger(evidence.startIntervalMs) && evidence.startIntervalMs >= 60_000);
+assert.ok(
+  Number.isInteger(evidence.startIntervalMs)
+    && evidence.startIntervalMs >= 60_000
+    && evidence.startIntervalMs <= 120_000,
+);
 
 const subjectCounts = Object.values(evidence.subjects || {});
 assert.equal(subjectCounts.length, 6);
@@ -89,6 +93,13 @@ function assertForecastOperations(apiOperations) {
     4 + statusCount,
     'A journey recorded an unapproved or extra Forecast request.',
   );
+  assert.deepEqual(apiOperations, [
+    ...Array.from({ length: statusCount }, () => 'status:200'),
+    'start:409',
+    'accept:200',
+    'start:200',
+    'submit:200',
+  ], 'A journey recorded Forecast operations out of the approved order.');
 }
 
 for (const journey of evidence.journeys) {
@@ -101,8 +112,36 @@ for (const journey of evidence.journeys) {
   assert.equal(journey.uniqueAttempt, true);
   assert.equal(journey.pageErrors, 0);
   assert.ok(Number.isFinite(journey.totalScore) && journey.totalScore >= 0 && journey.totalScore <= 100);
+  assert.ok(Number.isInteger(journey.startOffsetMs) && journey.startOffsetMs >= 0);
   assertForecastOperations(journey.apiOperations);
 }
+
+const observedStartOffsets = evidence.journeys
+  .map((journey) => journey.startOffsetMs)
+  .sort((left, right) => left - right);
+assert.equal(observedStartOffsets[0], 0, 'Observed start timing must begin at zero.');
+assert.equal(new Set(observedStartOffsets).size, 30, 'Every journey must have one distinct observed start.');
+const observedStartGaps = observedStartOffsets.slice(1).map((offset, index) => (
+  offset - observedStartOffsets[index]
+));
+const observedMinimumStartIntervalMs = Math.min(...observedStartGaps);
+assert.ok(
+  observedMinimumStartIntervalMs >= evidence.startIntervalMs,
+  'Observed live starts did not honor the configured spacing.',
+);
+assert.equal(
+  evidence.observedMinimumStartIntervalMs,
+  observedMinimumStartIntervalMs,
+  'The observed start-spacing summary does not match the journey evidence.',
+);
+const maximumStartsPerTenMinutes = Math.max(...observedStartOffsets.map((windowStart) => (
+  observedStartOffsets.filter((offset) => offset >= windowStart && offset < windowStart + 600_000).length
+)));
+assert.ok(maximumStartsPerTenMinutes <= 10, 'Observed live starts exceeded the bounded ten-minute rate plan.');
+assert.ok(
+  ((maximumStartsPerTenMinutes + evidence.concurrency) * 6) + 1 <= 90,
+  'Observed timing cannot prove safe headroom below the dedicated Forecast rate limit.',
+);
 
 const forbiddenKeys = /^(?:question|prompt|answer|feedback|explanation|token|secret|password|email)(?:Text|Content|Value)?$/iu;
 function inspectKeys(value, path = '$') {

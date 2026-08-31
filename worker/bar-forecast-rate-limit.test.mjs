@@ -58,6 +58,15 @@ test('Forecast enforces 90 per ten minutes and remains isolated from generic adm
     );
     assert.equal(genericAfterForecastLimit.status, 401, 'Forecast exhaustion must not consume generic admin capacity.');
 
+    now = startedAt + (10 * 60 * 1000) - 1;
+    const immediatelyBeforeBoundary = await worker.fetch(
+      request('/admin/dd2026/bar-forecast', forecastIp),
+      ENV,
+      {},
+    );
+    assert.equal(immediatelyBeforeBoundary.status, 429, 'Forecast capacity must remain exhausted at 9:59.999.');
+    assert.equal(await responseCode(immediatelyBeforeBoundary), 'RATE_LIMITED');
+
     now = startedAt + (10 * 60 * 1000);
     const exactBoundaryReset = await worker.fetch(
       request('/admin/dd2026/bar-forecast', forecastIp),

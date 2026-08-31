@@ -6,7 +6,7 @@ The runner uses one headless Chrome process. Its default and maximum concurrency
 
 Each counted journey resets only its disposable user's Forecast consent, proves the server rejects start before consent, accepts consent in the UI, selects one of the six subjects, starts 20 real questions, and enters 20 answers of at least ten words. It also exercises a flag, yellow question highlight, bold answer text, answer text size, flagged-question filter, submission confirmation, the total grade, and all 20 feedback/suggested-answer/explanation results. Per-attempt markers prove results did not mix across journeys.
 
-The subject rotation is deterministic: five journeys per subject. Thirty submissions produce 150 live grading calls (five grading batches per submission). The 45-second start cadence alone makes the run at least about 22 minutes; model latency can make it materially longer. Treat the run as billable production-like traffic.
+The subject rotation is deterministic: five journeys per subject. Thirty submissions produce 150 live grading calls (five grading batches per submission). The 60-second start cadence alone makes the run at least about 29 minutes; model latency can make it materially longer. Treat the run as billable production-like traffic.
 
 ## Safety boundaries
 

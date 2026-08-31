@@ -54,6 +54,7 @@ const evidence = {
   cleanup: {
     disposableAccountsCreated: 3,
     disposableAccountsDeleted: 3,
+    usageResidueAccountsVerified: 3,
     disposableAdministratorsCreated: 2,
     disposableAdministratorsDeleted: 2,
     browserContextsOpen: 0,
@@ -85,6 +86,19 @@ try {
   await writeFile(evidenceFile, JSON.stringify({
     ...evidence,
     journeysPassed: 29,
+  }), 'utf8');
+  assert.throws(() => execFileSync(process.execPath, [verifier], {
+    cwd: root,
+    env: environment,
+    stdio: 'pipe',
+  }));
+
+  await writeFile(evidenceFile, JSON.stringify({
+    ...evidence,
+    cleanup: {
+      ...evidence.cleanup,
+      usageResidueAccountsVerified: 2,
+    },
   }), 'utf8');
   assert.throws(() => execFileSync(process.execPath, [verifier], {
     cwd: root,

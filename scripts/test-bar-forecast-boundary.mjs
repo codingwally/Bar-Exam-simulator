@@ -154,6 +154,11 @@ export async function main() {
   assert.match(workerIndex, /request\.method !== 'POST'/, 'Forecast route must be POST-only');
   assert.match(workerIndex, /createBarForecastHandlers/, 'Worker must instantiate the dedicated handlers');
   assert.match(workerIndex, /admin_authorization_context/, 'Worker must use the canonical admin authorization context');
+  assert.match(
+    workerIndex,
+    /authorizeAdministrator:\s*\(env, user\) => protectedSupabaseRpc\([\s\S]*?'admin_authorization_context'[\s\S]*?\{ p_actor_user_id: user\.id \}[\s\S]*?\{ returnNullOnAuthorizationDenial: true \}[\s\S]*?\),/,
+    'database authorization denials must reach the Forecast-specific 403 contract',
+  );
   assert.match(workerIndex, /BAR_FORECAST_RPC_FUNCTIONS/, 'Worker must use a dedicated RPC allowlist');
   assert.match(routes, /enforceAdminRateLimit/, 'Forecast route must be rate limited');
   assert.match(routes, /requireAdministrator/, 'Forecast route must require verified bearer authentication');

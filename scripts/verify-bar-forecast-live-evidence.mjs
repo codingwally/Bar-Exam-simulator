@@ -54,6 +54,7 @@ assert.ok(Number.isFinite(evidence.grades?.maximum) && evidence.grades.maximum <
 assert.ok(Number.isFinite(evidence.grades?.average));
 assert.equal(evidence.cleanup?.disposableAccountsCreated, 3);
 assert.equal(evidence.cleanup?.disposableAccountsDeleted, 3);
+assert.equal(evidence.cleanup?.usageResidueAccountsVerified, 3);
 assert.equal(evidence.cleanup?.disposableAdministratorsCreated, 2);
 assert.equal(evidence.cleanup?.disposableAdministratorsDeleted, 2);
 assert.equal(evidence.cleanup?.browserContextsOpen, 0);

@@ -40,6 +40,25 @@ assert.match(source, /auth\/v1\/admin\/users/u);
 assert.match(source, /dd2026_bar_forecast_consents/u);
 assert.match(source, /user_roles/u);
 assert.match(source, /cleanupDisposableAdministrator/u);
+assert.match(source, /deleteAndVerifyDisposableUsage/u);
+assert.match(source, /usageResidueVerified/u);
+assert.match(source, /diagnostic:\s*\{\s*stage: diagnosticStage,\s*cleanupFailed,/u);
+
+const usageCleanupStart = source.indexOf('async function deleteAndVerifyDisposableUsage');
+const accountCleanupStart = source.indexOf('async function cleanupDisposableAdministrator');
+assert.ok(usageCleanupStart >= 0 && accountCleanupStart > usageCleanupStart);
+const usageCleanup = source.slice(usageCleanupStart, accountCleanupStart);
+assert.ok(
+  usageCleanup.indexOf("['usage_events', 'usage_sessions']") >= 0,
+  'Usage events must be deleted before their parent sessions.',
+);
+assert.match(usageCleanup, /user_id=eq\.\$\{encodeURIComponent\(account\.userId\)\}/u);
+assert.match(usageCleanup, /select=id/u);
+assert.match(usageCleanup, /assert\.equal\(rows\.length, 0/u);
+assert.match(
+  source,
+  /complete: createdAccounts\.every\([\s\S]*?account\.deleted && account\.usageResidueVerified/,
+);
 
 assert.match(source, /chromium\.launch/u);
 assert.match(source, /browser\.newContext/u);
@@ -134,5 +153,6 @@ assert.match(runbook, /BAR_FORECAST_E2E_GITHUB_RUN_ID/u);
 assert.match(runbook, /Do not paste.*secret/iu);
 assert.match(runbook, /no protected question or answer text/iu);
 assert.match(runbook, /manual cleanup/iu);
+assert.match(runbook, /usage_events[\s\S]*usage_sessions[\s\S]*Auth users/iu);
 
 process.stdout.write('Bar Forecast 30-journey live harness contract tests passed.\n');

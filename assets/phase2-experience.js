@@ -2556,7 +2556,7 @@
       if (nativeOverlay) nativeOverlay.dataset.pricingPresentation = 'regular-subscription';
       const nativeMeta = document.getElementById('dd2-native-meta');
       if (nativeMeta) {
-        nativeMeta.textContent = 'Regular Subscription · ₱199 · 30 Days';
+        nativeMeta.textContent = `Regular Subscription · ${formatPhp(regularPlan.priceCentavos)} · ${regularPlan.durationDays} Days`;
         nativeMeta.hidden = false;
       }
       const renderedMethodId = document.querySelector('.dd-regular-checkout')

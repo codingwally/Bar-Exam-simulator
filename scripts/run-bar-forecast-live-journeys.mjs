@@ -17,6 +17,16 @@ const FORECAST_PATH = '/admin/dd2026/bar-forecast';
 const SYNTHETIC_CONTENT = /(?:^synthetic-ui-|synthetic interface-test question|\bmock permit\s+\d+\b|deterministic mock output for visual)/iu;
 const TOKEN_PATTERN = /\b[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\b/gu;
 const SUPABASE_PRIVILEGED_KEY_PATTERN = /^(?:sb_secret_[A-Za-z0-9_-]{20,}|[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,})$/u;
+const DIAGNOSTIC_STAGES = new Set([
+  'browser_launch',
+  'public_root',
+  'non_admin_create',
+  'non_admin_denial',
+  'admin_create',
+  'journeys',
+  'cleanup',
+  'evidence',
+]);
 
 const SUBJECTS = Object.freeze([
   'Political and Public International Law',
@@ -196,6 +206,13 @@ const activeContexts = new Set();
 const stopController = new AbortController();
 let stopSignal = '';
 let maximumActiveContexts = 0;
+let diagnosticStage = 'browser_launch';
+let cleanupFailed = false;
+
+function setDiagnosticStage(stage) {
+  assert.ok(DIAGNOSTIC_STAGES.has(stage), 'Unsupported Forecast E2E diagnostic stage.');
+  diagnosticStage = stage;
+}
 
 function requestStop(signal) {
   if (!stopSignal) {
@@ -300,7 +317,15 @@ async function createDisposableAccount(label, kind) {
   }, [200, 201]);
   const userId = String(result.body?.id || '');
   assert.match(userId, /^[0-9a-f-]{36}$/iu, 'Disposable account creation failed.');
-  const account = { label, kind, userId, email, password, deleted: false };
+  const account = {
+    label,
+    kind,
+    userId,
+    email,
+    password,
+    deleted: false,
+    usageResidueVerified: false,
+  };
   createdAccounts.push(account);
   return account;
 }
@@ -341,6 +366,25 @@ async function createDisposableNonAdministrator() {
   return account;
 }
 
+async function deleteAndVerifyDisposableUsage(account) {
+  const userFilter = `user_id=eq.${encodeURIComponent(account.userId)}`;
+  account.usageResidueVerified = false;
+  // Events must be removed before their parent sessions. Both deletions are
+  // scoped to the exact disposable user id; broad or prefix deletion is never
+  // permitted here.
+  for (const table of ['usage_events', 'usage_sessions']) {
+    await serviceRequest(`/rest/v1/${table}?${userFilter}`, {
+      method: 'DELETE',
+      headers: { Prefer: 'return=minimal' },
+    }, [200, 204], { honorStop: false });
+  }
+  for (const table of ['usage_events', 'usage_sessions']) {
+    const rows = await serviceRows(table, `${userFilter}&select=id`, { honorStop: false });
+    assert.equal(rows.length, 0, `${table} cleanup is incomplete.`);
+  }
+  account.usageResidueVerified = true;
+}
+
 async function cleanupDisposableAdministrator(account) {
   const errors = [];
   await resetForecastConsent(account.userId, { honorStop: false }).catch((error) => errors.push(error));
@@ -354,6 +398,7 @@ async function cleanupDisposableAdministrator(account) {
   let deleted = false;
   for (let attempt = 1; attempt <= 2 && !deleted; attempt += 1) {
     try {
+      await deleteAndVerifyDisposableUsage(account);
       await serviceRequest(`/auth/v1/admin/users/${encodeURIComponent(account.userId)}`, {
         method: 'DELETE',
       }, [200, 204], { honorStop: false });
@@ -368,6 +413,7 @@ async function cleanupDisposableAdministrator(account) {
     await serviceRequest(`/auth/v1/admin/users/${encodeURIComponent(account.userId)}`, {
       method: 'GET',
     }, [404], { honorStop: false }).catch((error) => errors.push(error));
+    await deleteAndVerifyDisposableUsage(account).catch((error) => errors.push(error));
   }
 
   for (const [table, query] of [
@@ -873,6 +919,7 @@ async function proveNonAdministratorDenied(browser, account) {
 }
 
 async function main() {
+  setDiagnosticStage('browser_launch');
   const chromium = await loadChromium();
   const launchOptions = {
     headless: true,
@@ -883,15 +930,21 @@ async function main() {
   const cleanupErrors = [];
   const administratorAccounts = [];
   let primaryError = null;
+  let primaryFailureStage = '';
   let nonAdministratorDenial = null;
   try {
+    setDiagnosticStage('public_root');
     await verifyUnauthenticatedProductRoot(browser);
+    setDiagnosticStage('non_admin_create');
     const nonAdministrator = await createDisposableNonAdministrator();
+    setDiagnosticStage('non_admin_denial');
     nonAdministratorDenial = await proveNonAdministratorDenied(browser, nonAdministrator);
+    setDiagnosticStage('admin_create');
     for (let slot = 1; slot <= config.concurrency; slot += 1) {
       administratorAccounts.push(await createDisposableAdministrator(slot));
     }
 
+    setDiagnosticStage('journeys');
     let nextOrdinal = 1;
     let firstFailure = null;
     const waitForStart = startGate();
@@ -917,22 +970,30 @@ async function main() {
     assert.equal(results.length, JOURNEY_COUNT, 'The harness did not complete exactly 30 journeys.');
   } catch (error) {
     primaryError = error;
+    primaryFailureStage = diagnosticStage;
   } finally {
+    setDiagnosticStage('cleanup');
     for (const context of activeContexts) await context.close().catch(() => {});
     await browser.close().catch((error) => cleanupErrors.push(error));
     for (const account of [...createdAccounts].reverse()) {
       await cleanupDisposableAdministrator(account).catch((error) => cleanupErrors.push(error));
     }
+    cleanupFailed = cleanupErrors.length > 0;
   }
 
   if (cleanupErrors.length) {
+    diagnosticStage = primaryFailureStage || 'cleanup';
     throw new AggregateError(
       primaryError ? [primaryError, ...cleanupErrors] : cleanupErrors,
       'Forecast E2E failed to complete exact cleanup.',
     );
   }
-  if (primaryError) throw primaryError;
+  if (primaryError) {
+    diagnosticStage = primaryFailureStage;
+    throw primaryError;
+  }
 
+  setDiagnosticStage('evidence');
   results.sort((left, right) => left.ordinal - right.ordinal);
   const subjectCounts = Object.fromEntries(SUBJECTS.map((subject) => [
     subject,
@@ -977,12 +1038,17 @@ async function main() {
     cleanup: {
       disposableAccountsCreated: createdAccounts.length,
       disposableAccountsDeleted: createdAccounts.filter((account) => account.deleted).length,
+      usageResidueAccountsVerified: createdAccounts.filter(
+        (account) => account.usageResidueVerified,
+      ).length,
       disposableAdministratorsCreated: createdAccounts.filter((account) => account.kind === 'administrator').length,
       disposableAdministratorsDeleted: createdAccounts.filter(
         (account) => account.kind === 'administrator' && account.deleted,
       ).length,
       browserContextsOpen: activeContexts.size,
-      complete: createdAccounts.every((account) => account.deleted) && activeContexts.size === 0,
+      complete: createdAccounts.every(
+        (account) => account.deleted && account.usageResidueVerified,
+      ) && activeContexts.size === 0,
     },
     secretsLogged: false,
     journeys: results,
@@ -1000,15 +1066,24 @@ main().catch((error) => {
     githubRunId: config.githubRunId,
     runId,
     error: errorSummary(error),
+    diagnostic: {
+      stage: diagnosticStage,
+      cleanupFailed,
+    },
     cleanup: {
       disposableAccountsCreated: createdAccounts.length,
       disposableAccountsDeleted: createdAccounts.filter((account) => account.deleted).length,
+      usageResidueAccountsVerified: createdAccounts.filter(
+        (account) => account.usageResidueVerified,
+      ).length,
       disposableAdministratorsCreated: createdAccounts.filter((account) => account.kind === 'administrator').length,
       disposableAdministratorsDeleted: createdAccounts.filter(
         (account) => account.kind === 'administrator' && account.deleted,
       ).length,
       browserContextsOpen: activeContexts.size,
-      complete: createdAccounts.every((account) => account.deleted) && activeContexts.size === 0,
+      complete: createdAccounts.every(
+        (account) => account.deleted && account.usageResidueVerified,
+      ) && activeContexts.size === 0,
     },
     secretsLogged: false,
   }, null, 2)}\n`);

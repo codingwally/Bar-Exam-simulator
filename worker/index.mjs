@@ -9979,6 +9979,7 @@ const barForecastHandlers = createBarForecastHandlers({
     env,
     'admin_authorization_context',
     { p_actor_user_id: user.id },
+    { returnNullOnAuthorizationDenial: true },
   ),
   barForecastRpc,
   enforceAdminRateLimit,

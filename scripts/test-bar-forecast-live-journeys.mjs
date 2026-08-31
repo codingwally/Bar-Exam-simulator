@@ -50,6 +50,25 @@ assert.match(source, /usageResidueVerified/u);
 assert.match(source, /diagnostic:\s*\{\s*stage: diagnosticStage,\s*cleanupFailed,/u);
 assert.match(source, /const completedJourneys = \[\]/u);
 assert.match(source, /journeysPassed: completedJourneys\.length/u);
+assert.match(source, /journey: journeyFailureDiagnostic/u);
+assert.match(source, /function safeForecastEvents\(events\)/u);
+assert.match(source, /function safeForecastInterfaceState\(page\)/u);
+assert.match(source, /page\.on\('requestfinished'/u);
+assert.match(source, /event\.finished === true/u);
+assert.match(source, /startShape: event\.startShape \|\| null/u);
+assert.match(source, /subjectMatches: payload\?\.subject === subject/u);
+assert.match(source, /questionCount: questions\.length/u);
+assert.match(source, /response\.request\(\)\.postDataJSON\(\)\?\.operation/u);
+assert.match(source, /await startResponse\.finished\(\)/u);
+assert.match(source, /startResponse\.status\(\), 200/u);
+const safeInterfaceStart = source.indexOf('async function safeForecastInterfaceState');
+const safeInterfaceEnd = source.indexOf('function timeoutSignal', safeInterfaceStart);
+assert.ok(safeInterfaceStart >= 0 && safeInterfaceEnd > safeInterfaceStart);
+assert.doesNotMatch(
+  source.slice(safeInterfaceStart, safeInterfaceEnd),
+  /textContent|innerText|innerHTML|prompt|answer|email|token/iu,
+  'Failure diagnostics must not capture protected content or credentials.',
+);
 assert.match(source, /function phaseFailure\(error, phase\)/u);
 assert.match(source, /FORECAST_E2E_\$\{safePhase\}/u);
 
@@ -84,6 +103,7 @@ for (const phase of [
 assert.match(source, /journeyPhase = 'RESULTS'/u);
 assert.match(source, /startOffsetMs/u);
 assert.match(source, /observedMinimumStartIntervalMs/u);
+assert.match(source, /if \(firstFailure \|\| stopSignal\) return;/u);
 assert.match(source, /phaseFailure\(error, `JOURNEY_\$\{journeyPhase\}`\)/u);
 assert.match(source, /I Understand & Agree/u);
 assert.match(source, /\[data-subject\]/u);

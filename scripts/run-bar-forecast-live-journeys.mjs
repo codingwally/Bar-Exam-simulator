@@ -224,6 +224,7 @@ let stopSignal = '';
 let maximumActiveContexts = 0;
 let diagnosticStage = 'browser_launch';
 let cleanupFailed = false;
+let journeyFailureDiagnostic = null;
 
 function setDiagnosticStage(stage) {
   assert.ok(DIAGNOSTIC_STAGES.has(stage), 'Unsupported Forecast E2E diagnostic stage.');
@@ -277,6 +278,57 @@ function phaseFailure(error, phase) {
   wrapped.name = safeText(error?.name || 'Error');
   wrapped.code = `FORECAST_E2E_${safePhase}`;
   return wrapped;
+}
+
+function safeForecastEvents(events) {
+  const allowedOperations = new Set(['status', 'start', 'accept', 'submit']);
+  return Object.freeze(events.map((event) => Object.freeze({
+    operation: allowedOperations.has(event.operation) ? event.operation : 'unknown',
+    status: Number.isInteger(event.status) && event.status >= 100 && event.status <= 599
+      ? event.status
+      : null,
+    code: /^(?:BAR_FORECAST_[A-Z0-9_]+|ADMIN_DATA_UNAVAILABLE|ADMIN_FORBIDDEN|RATE_LIMITED|STUDY_SERVICE_UNAVAILABLE|INTERNAL_ERROR)$/u
+      .test(String(event.code || '').toUpperCase())
+      ? String(event.code).toUpperCase()
+      : null,
+    startShape: event.startShape || null,
+    failed: event.failed === true,
+    finished: event.finished === true,
+    durationMs: Number.isInteger(event.finishedAt) && Number.isInteger(event.startedAt)
+      ? Math.max(0, event.finishedAt - event.startedAt)
+      : null,
+  })));
+}
+
+async function safeForecastInterfaceState(page) {
+  return page.evaluate(() => {
+    const visible = (selector) => {
+      const node = document.querySelector(selector);
+      return Boolean(node && !node.hidden && node.getClientRects().length > 0);
+    };
+    const statusKind = String(document.querySelector('[data-bf26-status]')?.dataset?.kind || '');
+    const subjectButtons = [...document.querySelectorAll('[data-subject]')];
+    return {
+      view: visible('.bf26-exam')
+        ? 'exam'
+        : visible('.bf26-picker')
+          ? 'picker'
+          : visible('.bf26-agreement')
+            ? 'consent'
+            : visible('.bf26-preview-grid')
+              ? 'preview'
+              : 'unknown',
+      statusKind: statusKind === 'error' ? 'error' : 'none',
+      subjectButtonCount: subjectButtons.length,
+      subjectButtonsDisabled: subjectButtons.length > 0
+        && subjectButtons.every((button) => button.disabled === true),
+    };
+  }).catch(() => ({
+    view: 'unavailable',
+    statusKind: 'none',
+    subjectButtonCount: 0,
+    subjectButtonsDisabled: false,
+  }));
 }
 
 function timeoutSignal(milliseconds, honorStop = true) {
@@ -755,7 +807,7 @@ function assertForecastNetwork(events) {
   assert.ok(statuses('submit').includes(200), 'The live submission request did not succeed.');
   assert.equal(events.some((event) => event.failed), false, 'A live Forecast request failed at the network layer.');
   assert.equal(
-    events.every((event) => Number.isInteger(event.status)),
+    events.every((event) => Number.isInteger(event.status) && event.finished === true),
     true,
     'Every live Forecast request must have a completed HTTP response.',
   );
@@ -808,6 +860,7 @@ async function runJourney(browser, account, ordinal, startOffsetMs) {
   page.setDefaultTimeout(45_000);
   const events = [];
   const eventByRequest = new WeakMap();
+  const responseDiagnostics = [];
   let pageErrors = 0;
   let consoleErrors = 0;
   page.on('pageerror', () => { pageErrors += 1; });
@@ -818,13 +871,56 @@ async function runJourney(browser, account, ordinal, startOffsetMs) {
     if (url.pathname !== FORECAST_PATH) return;
     let operation = '';
     try { operation = String(request.postDataJSON()?.operation || ''); } catch { operation = ''; }
-    const event = { operation, status: null, failed: false };
+    const event = {
+      operation,
+      status: null,
+      code: null,
+      startShape: null,
+      failed: false,
+      finished: false,
+      startedAt: Date.now(),
+      finishedAt: null,
+    };
     events.push(event);
     eventByRequest.set(request, event);
   });
   page.on('response', (response) => {
     const event = eventByRequest.get(response.request());
-    if (event) event.status = response.status();
+    if (!event) return;
+    event.status = response.status();
+    if (event.status >= 400) {
+      responseDiagnostics.push(response.json().then((payload) => {
+        const code = String(payload?.error?.code || '').trim().toUpperCase();
+        event.code = /^(?:BAR_FORECAST_[A-Z0-9_]+|ADMIN_DATA_UNAVAILABLE|ADMIN_FORBIDDEN|RATE_LIMITED|STUDY_SERVICE_UNAVAILABLE|INTERNAL_ERROR)$/u
+          .test(code) ? code : null;
+      }).catch(() => {}));
+    } else if (event.status === 200 && event.operation === 'start') {
+      responseDiagnostics.push(response.json().then((payload) => {
+        const questions = Array.isArray(payload?.questions) ? payload.questions : [];
+        const ids = questions.map((question) => String(question?.id || '').trim());
+        const numbers = questions.map((question) => Number(question?.number));
+        event.startShape = Object.freeze({
+          subjectMatches: payload?.subject === subject,
+          sourceVersionMatches: payload?.sourceVersion === '2026.3',
+          contentTypeMatches: payload?.contentType === 'bar_forecast_question',
+          setIdFormat: /^sha256:[0-9a-f]{64}$/u.test(String(payload?.setId || '')),
+          questionCount: questions.length,
+          uniqueIds: ids.length === 20 && ids.every(Boolean) && new Set(ids).size === 20,
+          completeNumbers: numbers.length === 20
+            && new Set(numbers).size === 20
+            && numbers.every((number) => Number.isInteger(number) && number >= 1 && number <= 20),
+          promptsPresent: questions.length === 20
+            && questions.every((question) => String(question?.prompt || '').trim().length >= 20),
+        });
+      }).catch(() => {}));
+    }
+  });
+  page.on('requestfinished', (request) => {
+    const event = eventByRequest.get(request);
+    if (event) {
+      event.finished = true;
+      event.finishedAt = Date.now();
+    }
   });
   page.on('requestfailed', (request) => {
     const event = eventByRequest.get(request);
@@ -849,8 +945,28 @@ async function runJourney(browser, account, ordinal, startOffsetMs) {
       (buttons) => buttons.map((button) => button.dataset.subject),
     );
     assert.deepEqual(offeredSubjects, SUBJECTS);
-    journeyPhase = 'SUBJECT_START';
+    journeyPhase = 'SUBJECT_START_REQUEST';
+    const subjectStartResponse = page.waitForResponse((response) => {
+      let url;
+      try { url = new URL(response.url()); } catch { return false; }
+      if (url.pathname !== FORECAST_PATH) return false;
+      try {
+        return String(response.request().postDataJSON()?.operation || '') === 'start';
+      } catch {
+        return false;
+      }
+    });
     await page.locator('[data-subject]').nth(SUBJECTS.indexOf(subject)).click();
+    journeyPhase = 'SUBJECT_START_RESPONSE';
+    const startResponse = await subjectStartResponse;
+    await startResponse.finished();
+    await Promise.allSettled(responseDiagnostics);
+    assert.equal(startResponse.status(), 200, 'The Forecast subject start request was not accepted.');
+    journeyPhase = 'SUBJECT_EXAM_VISIBLE';
+    await page.waitForFunction(() => (
+      Boolean(document.querySelector('.bf26-exam'))
+      || document.querySelector('[data-bf26-status]')?.dataset?.kind === 'error'
+    ));
     await page.locator('.bf26-exam').waitFor({ state: 'visible' });
     assert.equal(await page.locator('.bf26-question-jump').count(), 20);
 
@@ -864,6 +980,7 @@ async function runJourney(browser, account, ordinal, startOffsetMs) {
     journeyPhase = 'RESULTS';
     const proof = await resultProof(page, marker);
     journeyPhase = 'NETWORK';
+    await Promise.allSettled(responseDiagnostics);
     const apiOperations = assertForecastNetwork(events);
     assert.equal(pageErrors, 0, 'The Forecast page emitted an uncaught browser error.');
 
@@ -891,6 +1008,15 @@ async function runJourney(browser, account, ordinal, startOffsetMs) {
       durationMs: Date.now() - startedAt,
     });
   } catch (error) {
+    await Promise.allSettled(responseDiagnostics);
+    journeyFailureDiagnostic ||= Object.freeze({
+      ordinal,
+      phase: journeyPhase,
+      api: safeForecastEvents(events),
+      interface: await safeForecastInterfaceState(page),
+      pageErrors,
+      consoleErrors,
+    });
     primaryError = phaseFailure(error, `JOURNEY_${journeyPhase}`);
     throw primaryError;
   } finally {
@@ -1079,6 +1205,7 @@ async function main() {
         try {
           await resetForecastConsent(account.userId);
           const startOffsetMs = await waitForStart();
+          if (firstFailure || stopSignal) return;
           const result = await runJourney(browser, account, ordinal, startOffsetMs);
           completedJourneys.push(result);
           process.stderr.write(`Forecast E2E journey ${ordinal}/${JOURNEY_COUNT} passed (${result.subject}).\n`);
@@ -1206,6 +1333,7 @@ main().catch((error) => {
       stage: diagnosticStage,
       cleanupFailed,
       journeysPassed: completedJourneys.length,
+      journey: journeyFailureDiagnostic,
     },
     cleanup: {
       disposableAccountsCreated: createdAccounts.length,

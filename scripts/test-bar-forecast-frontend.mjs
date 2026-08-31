@@ -35,7 +35,7 @@ for (const markup of [rail, drawer]) {
   const quickDrillsPosition = markup.indexOf('>Quick Drills<');
   assert.ok(forecastPosition >= 0 && forecastPosition < quickDrillsPosition,
     'Forecast must appear immediately before Quick Drills');
-  assert.match(markup, /data-public-feature="bar-forecast"[^>]*aria-controls="bf26-root"/);
+  assert.doesNotMatch(markup, /data-public-feature="bar-forecast"[^>]*aria-controls=/);
   assert.doesNotMatch(markup, /data-public-feature="bar-forecast"[^>]*aria-haspopup="dialog"/);
 }
 assert.match(drawer, /id="spa-bar-forecast"[\s\S]*id="spa-bar-easy"/);

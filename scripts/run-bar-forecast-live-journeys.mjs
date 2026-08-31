@@ -259,6 +259,23 @@ function errorSummary(error) {
   });
 }
 
+function phaseFailure(error, phase) {
+  const existingCode = String(error?.code || '').trim().toUpperCase();
+  if (/^FORECAST_E2E_[A-Z0-9_]{3,64}$/u.test(existingCode)) return error;
+  const safePhase = String(phase || 'UNKNOWN')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/gu, '_')
+    .replace(/^_+|_+$/gu, '')
+    .slice(0, 48) || 'UNKNOWN';
+  const wrapped = new Error('The Forecast live journey failed during a protected phase.', {
+    cause: error,
+  });
+  wrapped.name = safeText(error?.name || 'Error');
+  wrapped.code = `FORECAST_E2E_${safePhase}`;
+  return wrapped;
+}
+
 function timeoutSignal(milliseconds, honorStop = true) {
   const timeout = AbortSignal.timeout(milliseconds);
   return honorStop ? AbortSignal.any([timeout, stopController.signal]) : timeout;
@@ -519,65 +536,75 @@ async function globallySignOut(page) {
 }
 
 async function authenticate(page, account) {
-  await page.goto(`${config.siteUrl}/?forecast-e2e=${encodeURIComponent(runId)}#bar-forecast-2026`, {
-    waitUntil: 'domcontentloaded',
-    timeout: 60_000,
-  });
-  await page.waitForFunction(
-    () => Boolean(window.supabase?.createClient && window.DueDiligencePhase2Config?.supabase),
-    null,
-    { timeout: 30_000 },
-  );
-  const publicConfiguration = await page.evaluate(() => ({
-    supabaseUrl: window.DueDiligencePhase2Config.supabase.url,
-    workerUrl: window.DueDiligencePhase2Config.workerUrl,
-    publishable: /^sb_publishable_[A-Za-z0-9_-]{20,}$/u.test(
-      window.DueDiligencePhase2Config.supabase.publishableKey,
-    ),
-    title: document.title,
-    syntheticHarness: /Synthetic UI QA Harness|local-preview-token|Mock Permit/u.test(document.documentElement.innerHTML),
-  }));
-  assert.deepEqual(publicConfiguration, {
-    supabaseUrl: config.supabaseUrl,
-    workerUrl: config.workerUrl,
-    publishable: true,
-    title: 'Due Diligence — Philippine Bar Exam Simulator',
-    syntheticHarness: false,
-  });
-
-  const authentication = await page.evaluate(async (credentials) => {
-    const configuration = window.DueDiligencePhase2Config.supabase;
-    const client = window.supabase.createClient(configuration.url, configuration.publishableKey, {
-      auth: {
-        persistSession: true,
-        storage: window.DueDiligenceAuthSessionStorage?.prepare?.(configuration.url)
-          || window.localStorage
-          || window.sessionStorage,
-        autoRefreshToken: true,
-        detectSessionInUrl: false,
-      },
+  let phase = 'AUTH_NAVIGATE';
+  try {
+    await page.goto(`${config.siteUrl}/?forecast-e2e=${encodeURIComponent(runId)}#bar-forecast-2026`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 60_000,
     });
-    const { data, error } = await client.auth.signInWithPassword(credentials);
-    return {
-      ok: Boolean(data?.session?.access_token),
-      userId: data?.user?.id || '',
-      error: error ? 'AUTHENTICATION_FAILED' : null,
-    };
-  }, { email: account.email, password: account.password });
-  assert.equal(authentication.error, null);
-  assert.equal(authentication.ok, true);
-  assert.equal(authentication.userId, account.userId);
+    phase = 'AUTH_SDK_READY';
+    await page.waitForFunction(
+      () => Boolean(window.supabase?.createClient && window.DueDiligencePhase2Config?.supabase),
+      null,
+      { timeout: 30_000 },
+    );
+    const publicConfiguration = await page.evaluate(() => ({
+      supabaseUrl: window.DueDiligencePhase2Config.supabase.url,
+      workerUrl: window.DueDiligencePhase2Config.workerUrl,
+      publishable: /^sb_publishable_[A-Za-z0-9_-]{20,}$/u.test(
+        window.DueDiligencePhase2Config.supabase.publishableKey,
+      ),
+      title: document.title,
+      syntheticHarness: /Synthetic UI QA Harness|local-preview-token|Mock Permit/u.test(document.documentElement.innerHTML),
+    }));
+    assert.deepEqual(publicConfiguration, {
+      supabaseUrl: config.supabaseUrl,
+      workerUrl: config.workerUrl,
+      publishable: true,
+      title: 'Due Diligence — Philippine Bar Exam Simulator',
+      syntheticHarness: false,
+    });
 
-  await page.reload({ waitUntil: 'domcontentloaded', timeout: 60_000 });
-  await page.waitForFunction(
-    () => Boolean(
-      window.DueDiligencePhase4?.getSession?.()?.access_token
-      && window.DueDiligencePhase2?.getSession?.()?.access_token,
-    ),
-    null,
-    { timeout: 45_000 },
-  );
-  await page.locator('#bf26-root:not([hidden])').waitFor({ state: 'visible', timeout: 45_000 });
+    phase = 'AUTH_SIGN_IN';
+    const authentication = await page.evaluate(async (credentials) => {
+      const configuration = window.DueDiligencePhase2Config.supabase;
+      const client = window.supabase.createClient(configuration.url, configuration.publishableKey, {
+        auth: {
+          persistSession: true,
+          storage: window.DueDiligenceAuthSessionStorage?.prepare?.(configuration.url)
+            || window.localStorage
+            || window.sessionStorage,
+          autoRefreshToken: true,
+          detectSessionInUrl: false,
+        },
+      });
+      const { data, error } = await client.auth.signInWithPassword(credentials);
+      return {
+        ok: Boolean(data?.session?.access_token),
+        userId: data?.user?.id || '',
+        error: error ? 'AUTHENTICATION_FAILED' : null,
+      };
+    }, { email: account.email, password: account.password });
+    assert.equal(authentication.error, null);
+    assert.equal(authentication.ok, true);
+    assert.equal(authentication.userId, account.userId);
+
+    phase = 'AUTH_SESSION_RELOAD';
+    await page.reload({ waitUntil: 'domcontentloaded', timeout: 60_000 });
+    phase = 'AUTH_SESSION_READY';
+    await page.waitForFunction(
+      () => Boolean(
+        window.DueDiligencePhase4?.getSession?.()?.access_token
+        && window.DueDiligencePhase2?.getSession?.()?.access_token,
+      ),
+      null,
+      { timeout: 45_000 },
+    );
+    phase = 'AUTH_FORECAST_VISIBLE';
+    await page.locator('#bf26-root:not([hidden])').waitFor({ state: 'visible', timeout: 45_000 });
+  } catch (error) {
+    throw phaseFailure(error, phase);
+  }
 }
 
 async function assertServerConsentGate(page, subject) {
@@ -766,31 +793,41 @@ async function runJourney(browser, account, ordinal) {
 
   let primaryError = null;
   let signOutCompleted = false;
+  let journeyPhase = 'AUTHENTICATE';
   try {
     await authenticate(page, account);
+    journeyPhase = 'NOTICE';
     await page.getByRole('heading', { name: 'Notice & Disclaimer' }).waitFor({ state: 'visible' });
     assert.equal(await page.locator('[data-subject]').count(), 0, 'Subject selection appeared before consent.');
+    journeyPhase = 'CONSENT_GATE';
     await assertServerConsentGate(page, subject);
 
+    journeyPhase = 'CONSENT_ACCEPT';
     await page.getByRole('button', { name: 'I Understand & Agree' }).click();
     await page.getByRole('heading', { name: 'Choose a 2026 Bar subject.' }).waitFor({ state: 'visible' });
     const offeredSubjects = await page.locator('[data-subject]').evaluateAll(
       (buttons) => buttons.map((button) => button.dataset.subject),
     );
     assert.deepEqual(offeredSubjects, SUBJECTS);
+    journeyPhase = 'SUBJECT_START';
     await page.locator('[data-subject]').nth(SUBJECTS.indexOf(subject)).click();
     await page.locator('.bf26-exam').waitFor({ state: 'visible' });
     assert.equal(await page.locator('.bf26-question-jump').count(), 20);
 
+    journeyPhase = 'ANSWERS';
     await fillAllAnswers(page, marker);
     page.once('dialog', (dialog) => dialog.accept());
     const submit = page.locator('.bf26-exam-footer').getByRole('button', { name: 'Submit all answers' });
     assert.equal(await submit.isEnabled(), true);
+    journeyPhase = 'SUBMIT';
     await submit.click();
+    journeyPhase = 'RESULTS';
     const proof = await resultProof(page, marker);
+    journeyPhase = 'NETWORK';
     assertForecastNetwork(events);
     assert.equal(pageErrors, 0, 'The Forecast page emitted an uncaught browser error.');
 
+    journeyPhase = 'CONSENT_PERSISTENCE';
     const consentRows = await serviceRows(
       'dd2026_bar_forecast_consents',
       `user_id=eq.${encodeURIComponent(account.userId)}&consent_version=eq.${CONSENT_VERSION}&select=user_id`,
@@ -813,8 +850,8 @@ async function runJourney(browser, account, ordinal) {
       durationMs: Date.now() - startedAt,
     });
   } catch (error) {
-    primaryError = error;
-    throw error;
+    primaryError = phaseFailure(error, `JOURNEY_${journeyPhase}`);
+    throw primaryError;
   } finally {
     signOutCompleted = await globallySignOut(page);
     await context.close().catch(() => {});
@@ -1112,6 +1149,7 @@ main().catch((error) => {
     diagnostic: {
       stage: diagnosticStage,
       cleanupFailed,
+      journeysPassed: results.length,
     },
     cleanup: {
       disposableAccountsCreated: createdAccounts.length,

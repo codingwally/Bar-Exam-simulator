@@ -63,6 +63,21 @@ function request(body, token = 'admin-token') {
   });
 }
 
+function completeSetupAccess(overrides = {}) {
+  return {
+    allowed: true,
+    role: 'admin',
+    basis: 'introductory_tokens',
+    termsRequired: false,
+    reauthenticationRequired: false,
+    profileCompleted: true,
+    tokenAcknowledgementRequired: false,
+    paidSubscriptionExpired: false,
+    commercialLaunchEnabled: true,
+    ...overrides,
+  };
+}
+
 function harness(overrides = {}) {
   const calls = [];
   let consentAccepted = overrides.consentAccepted ?? true;
@@ -97,6 +112,9 @@ function harness(overrides = {}) {
     }),
     parseBoundedJson: async (incoming) => incoming.json(),
     approvedSetIds: overrides.approvedSetIds ?? { [SUBJECT]: SET_ID },
+    requiredSetupAccess: async () => Object.prototype.hasOwnProperty.call(overrides, 'setupAccess')
+      ? overrides.setupAccess
+      : completeSetupAccess(),
     requireAdministrator: async (incoming) => {
       if (incoming.headers.get('Authorization') !== 'Bearer admin-token') {
         const error = new Error('Administrator sign-in is required.');
@@ -187,6 +205,64 @@ test('dedicated rate-limit rejection stops authentication, parsing, storage, and
     { code: 'RATE_LIMITED', status: 429 },
   );
   assert.deepEqual(touched, ['rate_limit']);
+});
+
+test('required account setup fails closed server-side while payment state remains exempt', async () => {
+  for (const setupAccess of [
+    null,
+    { allowed: true, role: 'admin' },
+    completeSetupAccess({ termsRequired: true }),
+    completeSetupAccess({ reauthenticationRequired: true }),
+    completeSetupAccess({ profileCompleted: false }),
+    completeSetupAccess({ tokenAcknowledgementRequired: true }),
+  ]) {
+    const blocked = harness({
+      authorization: { authorized: true, role: 'admin' },
+      setupAccess,
+    });
+    await assert.rejects(
+      blocked.handlers.handle(request({ operation: 'status' }), {}, '', ''),
+      { code: 'BAR_FORECAST_SETUP_REQUIRED', status: 403 },
+    );
+    assert.equal(
+      blocked.calls.some((call) => call.functionName === 'dd2026_bar_forecast_consent_status'),
+      false,
+    );
+  }
+
+  const paymentOnly = harness({
+    consentAccepted: false,
+    authorization: { authorized: true, role: 'admin' },
+    setupAccess: completeSetupAccess({
+      basis: 'paid_subscription_expired',
+      allowed: false,
+      paymentRequired: true,
+      paidSubscriptionExpired: true,
+      profileCompleted: false,
+      tokenAcknowledgementRequired: true,
+    }),
+  });
+  const response = await paymentOnly.handlers.handle(
+    request({ operation: 'status' }), {}, '', '',
+  );
+  assert.equal(response.status, 200);
+  assert.equal((await responseBody(response)).consentAccepted, false);
+
+  for (const setupAccess of [
+    completeSetupAccess({ role: 'super_admin', basis: 'super_admin', termsRequired: true }),
+    completeSetupAccess({ role: 'founder_admin', basis: 'founder_admin', termsRequired: true }),
+    completeSetupAccess({ basis: 'founding_beta', termsRequired: true }),
+    completeSetupAccess({ termsRequired: true, freeBeta: { active: true } }),
+  ]) {
+    const privileged = harness({
+      authorization: { authorized: true, role: setupAccess.role },
+      setupAccess,
+    });
+    await assert.rejects(
+      privileged.handlers.handle(request({ operation: 'status' }), {}, '', ''),
+      { code: 'BAR_FORECAST_SETUP_REQUIRED', status: 403 },
+    );
+  }
 });
 
 test('accept persists the exact version for the authenticated admin user', async () => {

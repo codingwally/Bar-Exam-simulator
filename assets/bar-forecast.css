@@ -63,8 +63,12 @@
   box-sizing: border-box;
 }
 
-body.bf26-page-open > :not(.bf26-root) {
+body.bf26-page-open > :not(.bf26-root):not(.dd2-overlay.is-open):not(.modal-overlay.open):not(#private-beta-dialog[open]):not(#dd-maintenance-gate) {
   display: none !important;
+}
+
+body.bf26-page-open > :is(.dd2-overlay.is-open, .modal-overlay.open, #dd-maintenance-gate) {
+  z-index: 16000;
 }
 
 .bf26-root {

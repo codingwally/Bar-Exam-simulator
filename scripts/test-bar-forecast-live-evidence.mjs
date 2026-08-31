@@ -38,6 +38,7 @@ const proof = Object.fromEntries([
   'uniqueAttemptIsolation',
 ].map((key) => [key, 30]));
 proof.nonAdministratorDenied = true;
+proof.requiredSetupBoundaryAccounts = 2;
 const evidence = {
   ok: true,
   target: 'staging',
@@ -57,6 +58,7 @@ const evidence = {
     disposableAccountsCreated: 3,
     disposableAccountsDeleted: 3,
     usageResidueAccountsVerified: 3,
+    setupResidueAccountsVerified: 3,
     disposableAdministratorsCreated: 2,
     disposableAdministratorsDeleted: 2,
     browserContextsOpen: 0,
@@ -126,6 +128,19 @@ try {
 
   await writeFile(evidenceFile, JSON.stringify({
     ...evidence,
+    proof: {
+      ...evidence.proof,
+      requiredSetupBoundaryAccounts: 1,
+    },
+  }), 'utf8');
+  assert.throws(() => execFileSync(process.execPath, [verifier], {
+    cwd: root,
+    env: environment,
+    stdio: 'pipe',
+  }));
+
+  await writeFile(evidenceFile, JSON.stringify({
+    ...evidence,
     startIntervalMs: 59_999,
   }), 'utf8');
   assert.throws(() => execFileSync(process.execPath, [verifier], {
@@ -159,6 +174,19 @@ try {
     cleanup: {
       ...evidence.cleanup,
       usageResidueAccountsVerified: 2,
+    },
+  }), 'utf8');
+  assert.throws(() => execFileSync(process.execPath, [verifier], {
+    cwd: root,
+    env: environment,
+    stdio: 'pipe',
+  }));
+
+  await writeFile(evidenceFile, JSON.stringify({
+    ...evidence,
+    cleanup: {
+      ...evidence.cleanup,
+      setupResidueAccountsVerified: 2,
     },
   }), 'utf8');
   assert.throws(() => execFileSync(process.execPath, [verifier], {

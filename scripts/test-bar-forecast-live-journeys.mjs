@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import vm from 'node:vm';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const runnerPath = path.join(repositoryRoot, 'scripts', 'run-bar-forecast-live-journeys.mjs');
@@ -47,18 +48,33 @@ assert.match(source, /user_roles/u);
 assert.match(source, /cleanupDisposableAdministrator/u);
 assert.match(source, /deleteAndVerifyDisposableUsage/u);
 assert.match(source, /usageResidueVerified/u);
+assert.match(source, /verifyDisposableSetupResidue/u);
+assert.match(source, /setupResidueVerified/u);
+for (const setupTable of [
+  'profiles',
+  'terms_acceptances',
+  'introductory_token_grants',
+  'introductory_token_ledger',
+]) assert.ok(source.includes(setupTable), `Live cleanup must verify ${setupTable}.`);
 assert.match(source, /diagnostic:\s*\{\s*stage: diagnosticStage,\s*cleanupFailed,/u);
 assert.match(source, /const completedJourneys = \[\]/u);
 assert.match(source, /journeysPassed: completedJourneys\.length/u);
 assert.match(source, /journey: journeyFailureDiagnostic/u);
 assert.match(source, /function safeForecastEvents\(events\)/u);
 assert.match(source, /function safeForecastInterfaceState\(page\)/u);
+assert.match(source, /inspectionAvailable: true/u);
+assert.match(source, /inspectionAvailable: false/u);
 assert.match(source, /page\.on\('requestfinished'/u);
 assert.match(source, /event\.finished === true/u);
 assert.match(source, /startShape: event\.startShape \|\| null/u);
 assert.match(source, /failureKind: \['aborted', 'timed_out', 'network_error', 'other'\]/u);
 assert.match(source, /consentButtonCount: consentButtons\.length/u);
 assert.match(source, /consentButtonBusy: consentButton\?\.getAttribute\('aria-busy'\) === 'true'/u);
+assert.match(source, /rootInert: root\?\.inert === true/u);
+assert.match(source, /rootModalInert: root\?\.dataset\?\.ddModalInert === 'true'/u);
+assert.match(source, /openBlockingSurfaceCount/u);
+assert.match(source, /rootInert: null/u);
+assert.match(source, /openBlockingSurfaceCount: null/u);
 assert.match(source, /subjectMatches: payload\?\.subject === subject/u);
 assert.match(source, /questionCount: questions\.length/u);
 assert.match(source, /response\.request\(\)\.postDataJSON\(\)\?\.operation/u);
@@ -88,7 +104,7 @@ assert.match(usageCleanup, /select=id/u);
 assert.match(usageCleanup, /assert\.equal\(rows\.length, 0/u);
 assert.match(
   source,
-  /complete: createdAccounts\.every\([\s\S]*?account\.deleted && account\.usageResidueVerified/,
+  /complete: createdAccounts\.every\([\s\S]*?account\.deleted[\s\S]*?account\.usageResidueVerified[\s\S]*?account\.setupResidueVerified/,
 );
 const classificationStart = source.indexOf('async function awaitInternalTestClassification');
 assert.ok(classificationStart >= 0 && classificationStart < usageCleanupStart);
@@ -102,11 +118,67 @@ assert.match(source, /#bar-forecast-2026/u);
 for (const phase of [
   'AUTH_SESSION_READY',
   'AUTH_FORECAST_VISIBLE',
+  'AUTH_FORECAST_ACTIONABLE',
   'CONSENT_ACCEPT_ACTIONABLE',
   'CONSENT_ACCEPT_CLICK',
   'CONSENT_ACCEPT_RESPONSE',
   'CONSENT_PICKER_VISIBLE',
 ]) assert.ok(source.includes(phase), `Live harness must retain safe failure phase ${phase}.`);
+assert.match(source, /\/beta\/access\/accept-terms/u);
+assert.match(source, /complete_commercial_profile_onboarding_v2/u);
+assert.match(source, /p_trial_acknowledged: true/u);
+assert.match(source, /applicationSetupCompleted/u);
+assert.match(source, /BAR_FORECAST_SETUP_REQUIRED/u);
+assert.match(source, /SETUP_BOUNDARY_FAILED/u);
+assert.match(source, /setupBoundaryVerified/u);
+assert.match(source, /requiredSetupBoundaryAccounts/u);
+assert.match(source, /preparedAccess\?\.role === 'admin'/u);
+assert.match(source, /preparedAccess\?\.allowed === true/u);
+assert.match(source, /preparedAccess\?\.basis === 'introductory_tokens'/u);
+assert.match(source, /preparedAccess\?\.accessMode === 'introductory'/u);
+assert.match(source, /preparedAccess\?\.termsRequired === false/u);
+assert.match(source, /preparedAccess\?\.profileCompleted === true/u);
+assert.match(source, /preparedAccess\?\.tokenAcknowledgementRequired === false/u);
+assert.match(source, /preparedAccess\?\.tokensRemaining === 5/u);
+assert.match(source, /acceptancePayload\?\.ok !== true/u);
+assert.match(source, /acceptance\?\.acceptedAt/u);
+assert.match(source, /postSetupResponse/u);
+assert.ok(
+  (source.match(/signal: AbortSignal\.timeout\(30_000\)/gu) || []).length >= 3,
+  'Every disposable setup fetch must have a browser-enforced timeout.',
+);
+assert.match(source, /profileRequest\.abortSignal\([\s\S]*AbortSignal\.timeout\(30_000\)/u);
+assert.match(source, /consentActionability\.rootInert, false/u);
+assert.match(source, /consentActionability\.openBlockingSurfaceCount/u);
+assert.match(source, /consentActionability\.inspectionAvailable,[\s\S]*true/u);
+
+function extractNamedFunction(functionSource, name) {
+  const match = new RegExp(`(?:async\\s+)?function\\s+${name}\\s*\\(`, 'u').exec(functionSource);
+  assert.ok(match, `Missing function ${name}.`);
+  const openingBrace = functionSource.indexOf('{', match.index);
+  let depth = 0;
+  for (let index = openingBrace; index < functionSource.length; index += 1) {
+    if (functionSource[index] === '{') depth += 1;
+    if (functionSource[index] === '}') depth -= 1;
+    if (depth === 0) return functionSource.slice(match.index, index + 1);
+  }
+  throw new Error(`Unbalanced function ${name}.`);
+}
+
+const failedInspectionContext = vm.createContext({
+  unavailablePage: { evaluate: async () => { throw new Error('execution context unavailable'); } },
+});
+vm.runInContext(
+  extractNamedFunction(source, 'safeForecastInterfaceState'),
+  failedInspectionContext,
+);
+const failedInspection = await vm.runInContext(
+  'safeForecastInterfaceState(unavailablePage)',
+  failedInspectionContext,
+);
+assert.equal(failedInspection.inspectionAvailable, false);
+assert.equal(failedInspection.rootInert, null);
+assert.equal(failedInspection.openBlockingSurfaceCount, null);
 assert.match(source, /postDataJSON\(\)\?\.operation \|\| ''\) === 'accept'/u);
 assert.match(source, /await acceptResponseResult\.finished\(\)/u);
 assert.match(source, /acceptResponseResult\.status\(\), 200/u);
@@ -231,6 +303,10 @@ assert.match(runbook, /Do not paste.*secret/iu);
 assert.match(runbook, /no protected question or answer text/iu);
 assert.match(runbook, /manual cleanup/iu);
 assert.match(runbook, /usage_events[\s\S]*usage_sessions[\s\S]*Auth users/iu);
+assert.match(
+  runbook,
+  /profiles[\s\S]*terms_acceptances[\s\S]*introductory_token_grants[\s\S]*introductory_token_ledger/iu,
+);
 assert.match(runbook, /BAR_FORECAST_E2E_AWAIT_CLASSIFICATION/u);
 
 process.stdout.write('Bar Forecast 30-journey live harness contract tests passed.\n');

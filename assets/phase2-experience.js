@@ -1558,12 +1558,8 @@
     state.admin = admin;
     syncAuthUi();
     if (!terms?.length) {
-      try {
-        await recordCurrentTermsAcceptance();
-      } catch {
-        setStatus('dd2-auth-status', 'Your account setup could not be verified. Check your connection and try again.', 'error');
-        return;
-      }
+      openTermsAcceptance();
+      return;
     }
     closeEntry();
     if (global.DueDiligencePhase4?.refreshAccess) {

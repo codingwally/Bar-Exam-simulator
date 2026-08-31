@@ -594,7 +594,7 @@ assert.ok(
   'assets/phase2-experience.js must use the profile-photo release cache key',
 );
 assert.ok(
-  index.includes('assets/phase4-experience.js?v=syllabus-reveal-p0-20260826-2&amp;access=paid-expiry-20260827-1&amp;recovery=subject-review-timeout-20260828-1'),
+  index.includes('assets/phase4-experience.js?v=syllabus-reveal-p0-20260826-2&amp;access=paid-expiry-20260827-1&amp;recovery=subject-review-timeout-20260828-1&amp;forecast-setup=20260901-2'),
   'assets/phase4-experience.js must use the reviewed cache-busting release',
 );
 assert.ok(
@@ -617,7 +617,7 @@ for (const asset of [
     `${asset} must use the public reliability lazy-load cache-busting release`,
   );
 }
-assert.match(serviceWorker, /duediligence-shell-20260901-bar-forecast-exam-tools-2/);
+assert.match(serviceWorker, /duediligence-shell-20260901-bar-forecast-exam-tools-4/);
 assert.match(studyWorkspace, /service-worker\.js\?v=commercial-readiness-profile-analytics-offline-paid-expiry-20260827-1/);
 assert.ok(
   featureLoader.includes('assets/examinations.js?v=pedro-release2-20260827-1&baseline=public-reliability-20260827-1&hotfix=ian-provisional-reveal-20260828-1&recovery=subject-review-timeout-20260828-1'),

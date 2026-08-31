@@ -372,17 +372,30 @@
     if (enabled) {
       state.isolation = [...document.body.children]
         .filter((node) => node !== state.root)
-        .map((node) => ({ node, inert: Boolean(node.inert) }));
-      for (const entry of state.isolation) entry.node.inert = true;
+        .map((node) => ({
+          node,
+          owned: !node.inert || node.dataset.ddModalInert === 'true',
+        }));
+      for (const entry of state.isolation) {
+        if (!entry.owned) continue;
+        entry.node.inert = true;
+        entry.node.dataset.bf26PageInert = 'true';
+      }
       state.previousOverflow = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
       document.body.classList.add('bf26-page-open');
+      global.syncModalIsolation?.();
       return;
     }
-    for (const entry of state.isolation) entry.node.inert = entry.inert;
+    for (const entry of state.isolation) {
+      if (!entry.owned) continue;
+      entry.node.inert = false;
+      delete entry.node.dataset.bf26PageInert;
+    }
     state.isolation = [];
     document.body.style.overflow = state.previousOverflow;
     document.body.classList.remove('bf26-page-open');
+    global.syncModalIsolation?.();
   }
 
   function setForecastRoute() {
@@ -1292,6 +1305,18 @@
     // replace the consent view underneath an agreement click.
     state.authorizationOwnerId = ownerId;
     try {
+      const ensureRequiredSetup = global.DueDiligencePhase4?.ensureRequiredSetup;
+      if (typeof ensureRequiredSetup !== 'function') {
+        throw new Error('Required account setup could not be verified.');
+      }
+      const setupReady = await ensureRequiredSetup(ROUTE);
+      if (!state.isOpen || ownerId !== runtimeOwnerId()) return false;
+      if (setupReady !== true) {
+        renderPreview({
+          message: 'Complete the required account setup before opening the administrator pilot.',
+        });
+        return true;
+      }
       const payload = await requestForecast({ operation: 'status' });
       if (!state.isOpen || ownerId !== runtimeOwnerId()) return false;
       if (payload?.authorized !== true) {
@@ -1377,6 +1402,13 @@
   }
 
   global.addEventListener('duediligence:session', handleForecastSessionChange);
+
+  global.addEventListener('duediligence:access', () => {
+    if (!state.isOpen || state.authorizationOwnerId) return;
+    const ownerId = runtimeOwnerId();
+    if (!ownerId || ownerId === state.ownerId) return;
+    checkAuthorization();
+  });
 
   function recoverBlockedForecastRoute() {
     state.routeRecovery = true;

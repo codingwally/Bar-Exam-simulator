@@ -192,11 +192,18 @@ export async function main() {
   );
   assert.match(routes, /requireAdministrator/, 'Forecast route must require verified bearer authentication');
   assert.match(routes, /requireBarForecastAdministrator/, 'Forecast route must require an allowed admin role');
+  assert.match(routes, /requiredSetupPending/, 'Forecast route must enforce required account setup');
+  assert.match(routes, /BAR_FORECAST_SETUP_REQUIRED/, 'Forecast setup rejection must use a stable safe code');
+  assert.match(
+    workerIndex,
+    /const barForecastHandlers = createBarForecastHandlers\(\{[\s\S]*?requiredSetupAccess: \(env, user\) => phase4SetupAccessForUser\(env, user\.id\)[\s\S]*?\}\);/,
+    'Forecast setup enforcement must use the canonical server access snapshot',
+  );
   assert.match(routes, /private, no-store, max-age=0/, 'Forecast responses must be private and non-cacheable');
   assert.doesNotMatch(
     `${core}\n${routes}`,
-    /requireCommercialAccess|phase4AccessForUser|subscription|pricing|payment/i,
-    'Forecast backend must have no commercial-entitlement dependency',
+    /requireCommercialAccess|openPaymentGate|phase4_create_payment|plan_catalog|pricing|paymentRequired/i,
+    'Forecast backend must not enforce or invoke a commercial-entitlement gate',
   );
 
   assert.match(core, /complete and exclusive legal source of truth/i, 'grader must be confined to curated law');

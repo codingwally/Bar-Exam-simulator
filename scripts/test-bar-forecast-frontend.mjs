@@ -7,6 +7,7 @@ const root = new URL('../', import.meta.url);
 const [
   html,
   forecast,
+  phase4,
   styles,
   loader,
   landing,
@@ -18,6 +19,7 @@ const [
 ] = await Promise.all([
   readFile(new URL('index.html', root), 'utf8'),
   readFile(new URL('assets/bar-forecast.js', root), 'utf8'),
+  readFile(new URL('assets/phase4-experience.js', root), 'utf8'),
   readFile(new URL('assets/bar-forecast.css', root), 'utf8'),
   readFile(new URL('assets/feature-loader.js', root), 'utf8'),
   readFile(new URL('assets/private-beta-landing.js', root), 'utf8'),
@@ -88,6 +90,18 @@ assert.match(
 );
 assert.match(forecast, /refs\.submit\.disabled = !allAnswersComplete\(\)/);
 assert.match(forecast, /payload\?\.authorized !== true/);
+assert.match(
+  forecast,
+  /ensureRequiredSetup\(ROUTE\)[\s\S]*setupReady !== true[\s\S]*Complete the required account setup/,
+  'Forecast authorization must stop at the setup-only gate before requesting protected status',
+);
+assert.match(forecast, /global\.addEventListener\('duediligence:access'/);
+assert.match(
+  phase4,
+  /async function ensureRequiredSetup\(routeHash = location\.hash\)[\s\S]*request\('\/access'[\s\S]*payload\?\.access[\s\S]*adoptAccess\(payload\.access[\s\S]*setupRequired\(access\)[\s\S]*openRequiredSetup\(access, routeHash\)/,
+);
+assert.match(phase4, /ensureProtectedAccess,[\s\S]*ensureRequiredSetup,/);
+assert.doesNotMatch(phase4, /acceptCurrentTerms/);
 assert.match(forecast, /payload\?\.consentAccepted === true/);
 assert.match(forecast, /renderPreview\(\{ checking: true \}\)/);
 assert.match(
@@ -107,6 +121,9 @@ assert.match(forecast, /<section class="bf26-page" aria-labelledby="bf26-page-ti
 assert.match(forecast, /<main class="bf26-view" data-bf26-view aria-labelledby="bf26-page-title"><\/main>/);
 assert.doesNotMatch(forecast, /role="dialog"|aria-modal/);
 assert.match(forecast, /document\.body\.classList\.add\('bf26-page-open'\)/);
+assert.match(forecast, /entry\.node\.dataset\.bf26PageInert = 'true'/);
+assert.match(forecast, /global\.syncModalIsolation\?\.\(\)/);
+assert.match(html, /child\.dataset\.bf26PageInert === 'true'/);
 assert.doesNotMatch(forecast, /localStorage|sessionStorage/);
 assert.doesNotMatch(forecast, /\bALAC\b|legal[_ ]basis|controlling[_ ]doctrine|prediction score|transparent rubric/i);
 assert.doesNotMatch(forecast, /wallyesteban1993\.workers\.dev|supabase\.co/i);
@@ -164,6 +181,14 @@ for (const allowedResultField of [
 
 assert.match(styles, /data-public-feature="bar-forecast"/);
 assert.match(styles, /@keyframes bf26-radiate/);
+assert.match(
+  styles,
+  /body\.bf26-page-open > :not\(\.bf26-root\):not\(\.dd2-overlay\.is-open\):not\(\.modal-overlay\.open\):not\(#private-beta-dialog\[open\]\):not\(#dd-maintenance-gate\)/,
+);
+assert.match(
+  styles,
+  /body\.bf26-page-open > :is\(\.dd2-overlay\.is-open, \.modal-overlay\.open, #dd-maintenance-gate\)[\s\S]*z-index:\s*16000/,
+);
 assert.match(styles, /margin:\s*3px 3px 7px/);
 assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
 assert.match(styles, /\.bf26-exam-workspace[\s\S]*grid-template-columns/);
@@ -221,7 +246,7 @@ for (const source of [build, serviceWorker]) {
   assert.match(source, /assets\/bar-forecast\/forecast-workspace-preview\.webp/);
 }
 assert.match(build, /'flag\.svg'/);
-assert.match(serviceWorker, /duediligence-shell-20260901-bar-forecast-exam-tools-2/);
+assert.match(serviceWorker, /duediligence-shell-20260901-bar-forecast-exam-tools-4/);
 assert.match(serviceWorker, /assets\/icons\/navigation\/flag\.svg/);
 assert.match(qaHarness, /dataset\.ddBarForecastQa = 'synthetic'/);
 assert.match(qaHarness, /__DD_BAR_FORECAST_SYNTHETIC_QA__ = '2026-09-01'/);
@@ -243,10 +268,93 @@ function extractNamedFunction(source, name) {
   throw new Error(`Unbalanced function ${name}.`);
 }
 
+// Forecast owns the background isolation while it is open. A mandatory global
+// gate must temporarily become the only interactive body child, then return
+// control without leaving either layer inert or changing pre-existing owners.
+{
+  const background = { inert: false, dataset: {}, contains: () => false };
+  const preexisting = { inert: true, dataset: {}, contains: () => false };
+  const overlay = {
+    inert: false,
+    dataset: {},
+    contains(node) { return node === this; },
+    getAttribute: () => 'false',
+  };
+  const rootNode = { inert: false, dataset: {}, contains(node) { return node === this; } };
+  const classes = new Set();
+  let overlayOpen = false;
+  const isolationContext = vm.createContext({
+    state: { root: rootNode, isolation: [], previousOverflow: '' },
+    document: {
+      documentElement: { dataset: {} },
+      body: {
+        children: [background, preexisting, overlay, rootNode],
+        style: { overflow: '' },
+        classList: {
+          add: (name) => classes.add(name),
+          remove: (name) => classes.delete(name),
+        },
+      },
+      querySelector: () => null,
+      querySelectorAll: () => (overlayOpen ? [overlay] : []),
+    },
+    global: {},
+  });
+  vm.runInContext(extractNamedFunction(html, 'syncModalIsolation'), isolationContext);
+  vm.runInContext('global.syncModalIsolation = syncModalIsolation', isolationContext);
+  vm.runInContext(extractNamedFunction(forecast, 'isolatePage'), isolationContext);
+
+  vm.runInContext('isolatePage(true)', isolationContext);
+  assert.equal(rootNode.inert, false, 'Forecast must be interactive without a global gate');
+  assert.equal(background.inert, true);
+  assert.equal(overlay.inert, true);
+  assert.equal(preexisting.inert, true);
+  assert.equal(overlay.dataset.bf26PageInert, 'true');
+
+  overlayOpen = true;
+  vm.runInContext('syncModalIsolation()', isolationContext);
+  assert.equal(rootNode.inert, true, 'the mandatory gate must isolate Forecast');
+  assert.equal(rootNode.dataset.ddModalInert, 'true');
+  assert.equal(overlay.inert, false, 'the mandatory gate must remain actionable');
+  assert.equal(background.inert, true);
+  assert.equal(preexisting.inert, true);
+
+  overlayOpen = false;
+  vm.runInContext('syncModalIsolation()', isolationContext);
+  assert.equal(rootNode.inert, false, 'Forecast must resume after the mandatory gate closes');
+  assert.equal(rootNode.dataset.ddModalInert, undefined);
+  assert.equal(overlay.inert, true, 'closed Forecast siblings remain isolated');
+
+  vm.runInContext('isolatePage(false)', isolationContext);
+  assert.equal(background.inert, false);
+  assert.equal(overlay.inert, false);
+  assert.equal(preexisting.inert, true, 'pre-existing inert ownership must be preserved');
+  assert.equal(classes.has('bf26-page-open'), false);
+
+  // If Forecast opens while a global gate already owns the background, it
+  // adopts only that modal-owned inert state. Once the gate closes, Forecast
+  // must keep its hidden siblings isolated until Forecast itself closes.
+  overlayOpen = true;
+  background.inert = true;
+  background.dataset.ddModalInert = 'true';
+  overlay.inert = false;
+  rootNode.inert = false;
+  vm.runInContext('isolatePage(true)', isolationContext);
+  overlayOpen = false;
+  vm.runInContext('syncModalIsolation()', isolationContext);
+  assert.equal(background.inert, true, 'Forecast must retain background isolation after a pre-open gate closes');
+  assert.equal(background.dataset.bf26PageInert, 'true');
+  assert.equal(preexisting.inert, true);
+  vm.runInContext('isolatePage(false)', isolationContext);
+  assert.equal(background.inert, false);
+  assert.equal(background.dataset.ddModalInert, undefined);
+  assert.equal(preexisting.inert, true);
+}
+
 // Reproduce the live failure deterministically: a same-user session event lands
 // while the first authorization status request is unresolved. It must neither
 // abort that request nor start a duplicate that can replace the consent button.
-function authorizationHarness() {
+function authorizationHarness(options = {}) {
   let currentOwnerId = 'admin-a';
   const state = {
     isOpen: true,
@@ -254,10 +362,25 @@ function authorizationHarness() {
     authorizationOwnerId: '',
     consentAccepted: false,
   };
-  const observations = { aborts: 0, requests: 0, disclaimers: 0, pickers: 0 };
+  const observations = {
+    aborts: 0,
+    requests: 0,
+    disclaimers: 0,
+    pickers: 0,
+    setupChecks: 0,
+  };
   const responses = [];
   const context = vm.createContext({
+    ROUTE: '#bar-forecast-2026',
     state,
+    global: {
+      DueDiligencePhase4: {
+        ensureRequiredSetup: async () => {
+          observations.setupChecks += 1;
+          return options.setupReady !== false;
+        },
+      },
+    },
     runtimeOwnerId: () => currentOwnerId,
     runtimeSession: () => (currentOwnerId
       ? { access_token: 'test-token', user: { id: currentOwnerId } }
@@ -289,12 +412,69 @@ function authorizationHarness() {
   };
 }
 
+{
+  const completeAccess = (overrides = {}) => ({
+    role: 'admin',
+    basis: 'introductory_tokens',
+    termsRequired: false,
+    reauthenticationRequired: false,
+    profileCompleted: true,
+    tokenAcknowledgementRequired: false,
+    paidSubscriptionExpired: false,
+    commercialLaunchEnabled: true,
+    paymentRequired: true,
+    needsSetup: false,
+    ...overrides,
+  });
+  let access = completeAccess();
+  const setupChecks = { opened: 0, routeHash: '' };
+  const setupContext = vm.createContext({
+    location: { hash: '#bar-forecast-2026' },
+    session: () => ({ access_token: 'test-session' }),
+    request: async () => ({ access }),
+    adoptAccess: (candidate) => candidate,
+    setupRequired: (candidate) => candidate.needsSetup === true,
+    openRequiredSetup: (_candidate, routeHash) => {
+      setupChecks.opened += 1;
+      setupChecks.routeHash = routeHash;
+    },
+  });
+  vm.runInContext(extractNamedFunction(phase4, 'ensureRequiredSetup'), setupContext);
+  assert.equal(
+    await vm.runInContext("ensureRequiredSetup('#bar-forecast-2026')", setupContext),
+    true,
+    'payment state alone must not gate the independent administrator Forecast',
+  );
+  assert.equal(setupChecks.opened, 0);
+  access = { role: 'admin', basis: 'introductory_tokens' };
+  assert.equal(
+    await vm.runInContext("ensureRequiredSetup('#bar-forecast-2026')", setupContext),
+    false,
+    'partial access data must fail closed',
+  );
+  access = null;
+  assert.equal(
+    await vm.runInContext("ensureRequiredSetup('#bar-forecast-2026')", setupContext),
+    false,
+    'missing access data must fail closed',
+  );
+  assert.equal(setupChecks.opened, 0);
+  access = completeAccess({ needsSetup: true });
+  assert.equal(
+    await vm.runInContext("ensureRequiredSetup('#bar-forecast-2026')", setupContext),
+    false,
+  );
+  assert.equal(setupChecks.opened, 1);
+  assert.equal(setupChecks.routeHash, '#bar-forecast-2026');
+}
+
 const sameOwner = authorizationHarness();
 const pendingAuthorization = vm.runInContext('checkAuthorization()', sameOwner.context);
 assert.equal(sameOwner.state.authorizationOwnerId, 'admin-a');
-assert.equal(sameOwner.observations.requests, 1);
 vm.runInContext('handleForecastSessionChange()', sameOwner.context);
 assert.equal(sameOwner.observations.aborts, 0, 'a same-owner refresh must not abort pending authorization');
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(sameOwner.observations.requests, 1);
 assert.equal(sameOwner.observations.requests, 1, 'a same-owner refresh must not duplicate pending authorization');
 sameOwner.responses[0].resolve({ authorized: true, consentAccepted: false });
 assert.equal(await pendingAuthorization, true);
@@ -302,8 +482,16 @@ assert.equal(sameOwner.state.ownerId, 'admin-a');
 assert.equal(sameOwner.state.authorizationOwnerId, '');
 assert.equal(sameOwner.observations.disclaimers, 1);
 
+const setupBlocked = authorizationHarness({ setupReady: false });
+assert.equal(await vm.runInContext('checkAuthorization()', setupBlocked.context), true);
+assert.equal(setupBlocked.observations.setupChecks, 1);
+assert.equal(setupBlocked.observations.requests, 0, 'setup-required accounts must not reach Forecast status');
+assert.equal(setupBlocked.observations.disclaimers, 0, 'Forecast consent must stay closed during setup');
+assert.equal(setupBlocked.state.ownerId, '');
+
 const signedOut = authorizationHarness();
 const staleSignedOutAuthorization = vm.runInContext('checkAuthorization()', signedOut.context);
+await new Promise((resolve) => setImmediate(resolve));
 signedOut.setOwner('');
 vm.runInContext('handleForecastSessionChange()', signedOut.context);
 assert.equal(signedOut.observations.aborts, 1, 'sign-out must abort pending authorization');
@@ -315,8 +503,10 @@ assert.equal(signedOut.observations.pickers, 0, 'a stale response must not expos
 
 const changedOwner = authorizationHarness();
 const staleChangedOwnerAuthorization = vm.runInContext('checkAuthorization()', changedOwner.context);
+await new Promise((resolve) => setImmediate(resolve));
 changedOwner.setOwner('admin-b');
 vm.runInContext('handleForecastSessionChange()', changedOwner.context);
+await new Promise((resolve) => setImmediate(resolve));
 assert.equal(changedOwner.observations.aborts, 1, 'an account change must abort pending authorization');
 assert.equal(changedOwner.observations.requests, 2, 'an account change must check the new owner exactly once');
 changedOwner.responses[0].resolve({ authorized: true, consentAccepted: true });

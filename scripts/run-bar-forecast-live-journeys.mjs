@@ -313,7 +313,12 @@ async function safeForecastInterfaceState(page) {
     const subjectButtons = [...document.querySelectorAll('[data-subject]')];
     const consentButtons = [...document.querySelectorAll('.bf26-agreement .bf26-button--primary')];
     const consentButton = consentButtons[0] || null;
+    const root = document.getElementById('bf26-root');
+    const openBlockingSurfaceCount = document.querySelectorAll(
+      '.dd2-overlay.is-open, .modal-overlay.open, #private-beta-dialog[open]',
+    ).length + (document.documentElement.dataset.ddMaintenance === 'locked' ? 1 : 0);
     return {
+      inspectionAvailable: true,
       view: visible('.bf26-exam')
         ? 'exam'
         : visible('.bf26-picker')
@@ -333,8 +338,12 @@ async function safeForecastInterfaceState(page) {
       ),
       consentButtonEnabled: Boolean(consentButton && consentButton.disabled !== true),
       consentButtonBusy: consentButton?.getAttribute('aria-busy') === 'true',
+      rootInert: root?.inert === true,
+      rootModalInert: root?.dataset?.ddModalInert === 'true',
+      openBlockingSurfaceCount,
     };
   }).catch(() => ({
+    inspectionAvailable: false,
     view: 'unavailable',
     statusKind: 'none',
     subjectButtonCount: 0,
@@ -343,6 +352,9 @@ async function safeForecastInterfaceState(page) {
     consentButtonVisible: false,
     consentButtonEnabled: false,
     consentButtonBusy: false,
+    rootInert: null,
+    rootModalInert: null,
+    openBlockingSurfaceCount: null,
   }));
 }
 
@@ -433,6 +445,8 @@ async function createDisposableAccount(label, kind) {
     password,
     deleted: false,
     usageResidueVerified: false,
+    setupResidueVerified: false,
+    setupBoundaryVerified: false,
   };
   createdAccounts.push(account);
   return account;
@@ -521,6 +535,21 @@ async function deleteAndVerifyDisposableUsage(account) {
   account.usageResidueVerified = true;
 }
 
+async function verifyDisposableSetupResidue(account) {
+  account.setupResidueVerified = false;
+  const encodedUserId = encodeURIComponent(account.userId);
+  for (const [table, query] of [
+    ['profiles', `id=eq.${encodedUserId}&select=id`],
+    ['terms_acceptances', `user_id=eq.${encodedUserId}&select=user_id`],
+    ['introductory_token_grants', `user_id=eq.${encodedUserId}&select=user_id`],
+    ['introductory_token_ledger', `user_id=eq.${encodedUserId}&select=user_id`],
+  ]) {
+    const rows = await serviceRows(table, query, { honorStop: false });
+    assert.equal(rows.length, 0, `${table} setup cleanup is incomplete.`);
+  }
+  account.setupResidueVerified = true;
+}
+
 async function cleanupDisposableAdministrator(account) {
   const errors = [];
   await resetForecastConsent(account.userId, { honorStop: false }).catch((error) => errors.push(error));
@@ -550,6 +579,7 @@ async function cleanupDisposableAdministrator(account) {
       method: 'GET',
     }, [404], { honorStop: false }).catch((error) => errors.push(error));
     await deleteAndVerifyDisposableUsage(account).catch((error) => errors.push(error));
+    await verifyDisposableSetupResidue(account).catch((error) => errors.push(error));
   }
 
   for (const [table, query] of [
@@ -644,7 +674,7 @@ async function authenticate(page, account) {
     });
 
     phase = 'AUTH_SIGN_IN';
-    const authentication = await page.evaluate(async (credentials) => {
+    const authentication = await page.evaluate(async ({ credentials, prepareSetup }) => {
       const configuration = window.DueDiligencePhase2Config.supabase;
       const client = window.supabase.createClient(configuration.url, configuration.publishableKey, {
         auth: {
@@ -657,15 +687,171 @@ async function authenticate(page, account) {
         },
       });
       const { data, error } = await client.auth.signInWithPassword(credentials);
+      if (error || !data?.session?.access_token) {
+        return {
+          ok: false,
+          userId: data?.user?.id || '',
+          setupPrepared: false,
+          error: 'AUTHENTICATION_FAILED',
+        };
+      }
+      let setupPrepared = prepareSetup !== true;
+      let setupBoundaryVerified = prepareSetup !== true;
+      if (prepareSetup === true) {
+        const requestHeaders = {
+          Authorization: `Bearer ${data.session.access_token}`,
+          'Content-Type': 'application/json',
+          'X-Request-ID': crypto.randomUUID(),
+          ...(window.DueDiligencePrivateBeta?.accessHeaders?.() || {}),
+        };
+        const forecastEndpoint = `${window.DueDiligencePhase2Config.workerUrl}/admin/dd2026/bar-forecast`;
+        const setupBoundaryResults = [];
+        for (const body of [
+          { operation: 'status' },
+          { operation: 'accept', version: '2026-09-01' },
+          { operation: 'start', subject: 'Political and Public International Law' },
+        ]) {
+          const blockedResponse = await fetch(forecastEndpoint, {
+            method: 'POST',
+            headers: {
+              ...requestHeaders,
+              'X-Request-ID': `forecast-setup-boundary-${crypto.randomUUID()}`,
+            },
+            body: JSON.stringify(body),
+            signal: AbortSignal.timeout(30_000),
+          });
+          const blockedPayload = await blockedResponse.json().catch(() => null);
+          setupBoundaryResults.push({
+            status: blockedResponse.status,
+            code: String(blockedPayload?.error?.code || ''),
+          });
+        }
+        setupBoundaryVerified = setupBoundaryResults.every((result) => (
+          result.status === 403 && result.code === 'BAR_FORECAST_SETUP_REQUIRED'
+        ));
+        if (!setupBoundaryVerified) {
+          return {
+            ok: true,
+            userId: data.user?.id || '',
+            setupPrepared: false,
+            setupBoundaryVerified: false,
+            error: 'SETUP_BOUNDARY_FAILED',
+          };
+        }
+        const acceptanceResponse = await fetch(
+          `${window.DueDiligencePhase2Config.workerUrl}/beta/access/accept-terms`,
+          {
+            method: 'POST',
+            headers: requestHeaders,
+            body: '{}',
+            signal: AbortSignal.timeout(30_000),
+          },
+        );
+        const acceptancePayload = await acceptanceResponse.json().catch(() => null);
+        const termsVersion = String(acceptancePayload?.acceptance?.termsVersion || '');
+        const privacyVersion = String(acceptancePayload?.acceptance?.privacyVersion || '');
+        if (!acceptanceResponse.ok
+            || acceptancePayload?.ok !== true
+            || acceptancePayload?.acceptance?.recorded !== true
+            || !termsVersion.startsWith('terms-')
+            || !privacyVersion.startsWith('privacy-')
+            || !String(acceptancePayload?.acceptance?.acceptedAt || '').trim()) {
+          return {
+            ok: true,
+            userId: data.user?.id || '',
+            setupPrepared: false,
+            error: 'LEGAL_SETUP_FAILED',
+          };
+        }
+        const accessResponse = await fetch(`${window.DueDiligencePhase2Config.workerUrl}/access`, {
+          method: 'POST',
+          headers: { ...requestHeaders, 'X-Request-ID': crypto.randomUUID() },
+          body: '{}',
+          signal: AbortSignal.timeout(30_000),
+        });
+        const accessPayload = await accessResponse.json().catch(() => null);
+        const disclosureVersion = String(accessPayload?.access?.tokenDisclosureVersion || '');
+        if (!accessResponse.ok || !disclosureVersion) {
+          return {
+            ok: true,
+            userId: data.user?.id || '',
+            setupPrepared: false,
+            error: 'PROFILE_POLICY_FAILED',
+          };
+        }
+        const profileRequest = client.rpc(
+          'complete_commercial_profile_onboarding_v2',
+          {
+            p_display_name: 'Forecast Release Examiner',
+            p_law_school_id: 'other',
+            p_law_school_other: 'Internal release testing',
+            p_category: 'review',
+            p_professor_license_number: null,
+            p_terms_version: termsVersion,
+            p_privacy_version: privacyVersion,
+            p_trial_disclosure_version: disclosureVersion,
+            p_trial_acknowledged: true,
+          },
+        );
+        const { data: rpcAccess, error: profileError } = await profileRequest.abortSignal(
+          AbortSignal.timeout(30_000),
+        );
+        const postSetupResponse = profileError ? null : await fetch(
+          `${window.DueDiligencePhase2Config.workerUrl}/access`,
+          {
+            method: 'POST',
+            headers: { ...requestHeaders, 'X-Request-ID': crypto.randomUUID() },
+            body: '{}',
+            signal: AbortSignal.timeout(30_000),
+          },
+        );
+        const postSetupPayload = postSetupResponse
+          ? await postSetupResponse.json().catch(() => null)
+          : null;
+        const preparedAccess = postSetupPayload?.access;
+        setupPrepared = !profileError
+          && rpcAccess?.role === 'admin'
+          && postSetupResponse?.ok === true
+          && postSetupPayload?.ok === true
+          && preparedAccess?.role === 'admin'
+          && preparedAccess?.allowed === true
+          && preparedAccess?.basis === 'introductory_tokens'
+          && preparedAccess?.accessMode === 'introductory'
+          && preparedAccess?.profileCompleted === true
+          && preparedAccess?.termsRequired === false
+          && preparedAccess?.tokenAcknowledgementRequired === false
+          && preparedAccess?.tokensRemaining === 5;
+        if (!setupPrepared) {
+          return {
+            ok: true,
+            userId: data.user?.id || '',
+            setupPrepared: false,
+            error: 'PROFILE_SETUP_FAILED',
+          };
+        }
+      }
       return {
-        ok: Boolean(data?.session?.access_token),
+        ok: true,
         userId: data?.user?.id || '',
-        error: error ? 'AUTHENTICATION_FAILED' : null,
+        setupPrepared,
+        setupBoundaryVerified,
+        error: null,
       };
-    }, { email: account.email, password: account.password });
+    }, {
+      credentials: { email: account.email, password: account.password },
+      prepareSetup: account.applicationSetupCompleted !== true,
+    });
     assert.equal(authentication.error, null);
     assert.equal(authentication.ok, true);
     assert.equal(authentication.userId, account.userId);
+    assert.equal(authentication.setupPrepared, true, 'The disposable examiner setup is incomplete.');
+    assert.equal(
+      authentication.setupBoundaryVerified,
+      true,
+      'Required setup did not block Forecast status, consent, and questions server-side.',
+    );
+    account.applicationSetupCompleted = true;
+    account.setupBoundaryVerified = true;
 
     phase = 'AUTH_SESSION_RELOAD';
     await page.reload({ waitUntil: 'domcontentloaded', timeout: 60_000 });
@@ -680,6 +866,20 @@ async function authenticate(page, account) {
     );
     phase = 'AUTH_FORECAST_VISIBLE';
     await page.locator('#bf26-root:not([hidden])').waitFor({ state: 'visible', timeout: 45_000 });
+    phase = 'AUTH_FORECAST_ACTIONABLE';
+    await page.waitForFunction(() => {
+      const root = document.getElementById('bf26-root');
+      const blockingSurface = document.querySelector(
+        '.dd2-overlay.is-open, .modal-overlay.open, #private-beta-dialog[open]',
+      );
+      return Boolean(
+        root
+        && root.hidden !== true
+        && root.inert !== true
+        && !blockingSurface
+        && document.documentElement.dataset.ddMaintenance !== 'locked',
+      );
+    }, null, { timeout: 45_000 });
   } catch (error) {
     throw phaseFailure(error, phase);
   }
@@ -892,6 +1092,7 @@ async function runJourney(browser, account, ordinal, startOffsetMs) {
     let url;
     try { url = new URL(request.url()); } catch { return; }
     if (url.pathname !== FORECAST_PATH) return;
+    if (String(request.headers()['x-request-id'] || '').startsWith('forecast-setup-boundary-')) return;
     let operation = '';
     try { operation = String(request.postDataJSON()?.operation || ''); } catch { operation = ''; }
     const event = {
@@ -970,6 +1171,18 @@ async function runJourney(browser, account, ordinal, startOffsetMs) {
     const consentButton = page.locator('.bf26-agreement .bf26-button--primary');
     await consentButton.waitFor({ state: 'visible' });
     assert.equal(await consentButton.isEnabled(), true, 'The consent action is not enabled.');
+    const consentActionability = await safeForecastInterfaceState(page);
+    assert.equal(
+      consentActionability.inspectionAvailable,
+      true,
+      'The Forecast consent actionability check did not complete.',
+    );
+    assert.equal(consentActionability.rootInert, false, 'The Forecast page is inert before consent.');
+    assert.equal(
+      consentActionability.openBlockingSurfaceCount,
+      0,
+      'A required account or platform screen still has priority over Forecast consent.',
+    );
     const acceptResponsePromise = page.waitForResponse((response) => {
       let url;
       try { url = new URL(response.url()); } catch { return false; }
@@ -1341,6 +1554,9 @@ async function main() {
       totalGrades: scores.length,
       suggestedAnswerAndExplanationSets: completedJourneys.filter((result) => result.resultCount === 20).length,
       uniqueAttemptIsolation: completedJourneys.filter((result) => result.uniqueAttempt).length,
+      requiredSetupBoundaryAccounts: createdAccounts.filter(
+        (account) => account.kind === 'administrator' && account.setupBoundaryVerified,
+      ).length,
     },
     grades: {
       minimum: Math.min(...scores),
@@ -1353,13 +1569,18 @@ async function main() {
       usageResidueAccountsVerified: createdAccounts.filter(
         (account) => account.usageResidueVerified,
       ).length,
+      setupResidueAccountsVerified: createdAccounts.filter(
+        (account) => account.setupResidueVerified,
+      ).length,
       disposableAdministratorsCreated: createdAccounts.filter((account) => account.kind === 'administrator').length,
       disposableAdministratorsDeleted: createdAccounts.filter(
         (account) => account.kind === 'administrator' && account.deleted,
       ).length,
       browserContextsOpen: activeContexts.size,
       complete: createdAccounts.every(
-        (account) => account.deleted && account.usageResidueVerified,
+        (account) => account.deleted
+          && account.usageResidueVerified
+          && account.setupResidueVerified,
       ) && activeContexts.size === 0,
     },
     secretsLogged: false,
@@ -1390,13 +1611,18 @@ main().catch((error) => {
       usageResidueAccountsVerified: createdAccounts.filter(
         (account) => account.usageResidueVerified,
       ).length,
+      setupResidueAccountsVerified: createdAccounts.filter(
+        (account) => account.setupResidueVerified,
+      ).length,
       disposableAdministratorsCreated: createdAccounts.filter((account) => account.kind === 'administrator').length,
       disposableAdministratorsDeleted: createdAccounts.filter(
         (account) => account.kind === 'administrator' && account.deleted,
       ).length,
       browserContextsOpen: activeContexts.size,
       complete: createdAccounts.every(
-        (account) => account.deleted && account.usageResidueVerified,
+        (account) => account.deleted
+          && account.usageResidueVerified
+          && account.setupResidueVerified,
       ) && activeContexts.size === 0,
     },
     secretsLogged: false,

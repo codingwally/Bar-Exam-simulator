@@ -40,6 +40,7 @@ assert.deepEqual(subjectCounts, [5, 5, 5, 5, 5, 5]);
 
 assert.equal(evidence.proof?.realForecastHttpJourneys, 30);
 assert.equal(evidence.proof?.nonAdministratorDenied, true);
+assert.equal(evidence.proof?.requiredSetupBoundaryAccounts, 2);
 for (const field of [
   'consentGateRejections',
   'twentyAnswerSubmissions',
@@ -59,6 +60,7 @@ assert.ok(Number.isFinite(evidence.grades?.average));
 assert.equal(evidence.cleanup?.disposableAccountsCreated, 3);
 assert.equal(evidence.cleanup?.disposableAccountsDeleted, 3);
 assert.equal(evidence.cleanup?.usageResidueAccountsVerified, 3);
+assert.equal(evidence.cleanup?.setupResidueAccountsVerified, 3);
 assert.equal(evidence.cleanup?.disposableAdministratorsCreated, 2);
 assert.equal(evidence.cleanup?.disposableAdministratorsDeleted, 2);
 assert.equal(evidence.cleanup?.browserContextsOpen, 0);

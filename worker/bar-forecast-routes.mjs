@@ -30,6 +30,39 @@ function acceptedConsent(value) {
   return value?.consentAccepted === true || value?.consent_accepted === true || value === true;
 }
 
+function setupExempt(access, authorization) {
+  const role = String(authorization?.role || access?.role || '').trim().toLowerCase();
+  const basis = String(access?.basis || '').trim().toLowerCase();
+  return ['super_admin', 'founder_admin'].includes(role)
+    || ['super_admin', 'founder_admin', 'founding_beta'].includes(basis)
+    || access?.freeBeta?.active === true;
+}
+
+function requiredSetupPending(access, authorization) {
+  if (!access || typeof access !== 'object') return true;
+  for (const field of [
+    'termsRequired',
+    'reauthenticationRequired',
+    'profileCompleted',
+    'tokenAcknowledgementRequired',
+    'paidSubscriptionExpired',
+    'commercialLaunchEnabled',
+  ]) {
+    if (typeof access[field] !== 'boolean') return true;
+  }
+  if (!String(access.role || '').trim() || !String(access.basis || '').trim()) return true;
+  const basis = String(access.basis || '').trim().toLowerCase();
+  if (access.termsRequired === true || basis === 'legal_acceptance_required') return true;
+  if (setupExempt(access, authorization)) return false;
+  if (access.reauthenticationRequired === true || basis === 'reauthentication_required') return true;
+  const paidSubscriptionExpired = access.paidSubscriptionExpired === true
+    || basis === 'paid_subscription_expired';
+  if (paidSubscriptionExpired) return false;
+  return basis === 'profile_required'
+    || access.tokenAcknowledgementRequired === true
+    || (access.commercialLaunchEnabled === true && access.profileCompleted === false);
+}
+
 export function createBarForecastHandlers(deps) {
   const {
     authorizeAdministrator,
@@ -37,6 +70,7 @@ export function createBarForecastHandlers(deps) {
     enforceBarForecastAdminRateLimit,
     jsonResponse,
     parseBoundedJson,
+    requiredSetupAccess,
     requireAdministrator,
     structuredGemini,
     approvedSetIds = BAR_FORECAST_APPROVED_SET_IDS,
@@ -48,6 +82,14 @@ export function createBarForecastHandlers(deps) {
     const authorization = requireBarForecastAdministrator(
       await authorizeAdministrator(env, user),
     );
+    const setupAccess = await requiredSetupAccess(env, user);
+    if (requiredSetupPending(setupAccess, authorization)) {
+      throw new BarForecastError(
+        'BAR_FORECAST_SETUP_REQUIRED',
+        'Complete the required account setup before opening the administrator pilot.',
+        403,
+      );
+    }
     return { user, authorization };
   }
 

@@ -9,6 +9,7 @@ const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 
 const index = read('index.html');
 const experience = read('assets/phase2-experience.js');
+const phase4Experience = read('assets/phase4-experience.js');
 const experienceCss = read('assets/phase2.css');
 const configSource = read('assets/phase2-config.js');
 const migration = read('supabase/migrations/20260728_003_phase2_guest_access_support.sql');
@@ -62,6 +63,16 @@ assert.doesNotMatch(
   experience,
   /Current policy verification failed\. No acceptance was recorded\./,
   'The policy gate must not expose an internal verification failure to the user.',
+);
+assert.match(
+  experience,
+  /if \(!terms\?\.length\) \{\s*openTermsAcceptance\(\);\s*return;\s*\}/,
+  'Missing current terms must open the explicit acceptance screen without persisting acceptance.',
+);
+assert.doesNotMatch(
+  phase4Experience,
+  /acceptCurrentTerms/,
+  'Background access refresh must never persist legal acceptance implicitly.',
 );
 assert.match(
   experience,
@@ -137,6 +148,7 @@ assert.ok(experience.includes('Review the <button class="link-button" type="butt
 assert.ok(experience.includes('data-dd2-view="privacy">Privacy Policy</button> before continuing.'));
 assert.ok(experience.includes("note.innerHTML = 'Google opens its secure consent screen."));
 assert.ok(index.includes('assets/phase2-experience.js?v=profile-photo-release2-20260827-1'));
+assert.ok(index.includes('legal=explicit-20260901-1'));
 assert.ok(index.includes('assets/phase2.css?release=profile-photo-release2-20260827-1'));
 assert.match(experience, /nativeOverlay\.dataset\.nativeView = view/,
   'Native views must expose their active view so pricing can use the approved centered presentation.');

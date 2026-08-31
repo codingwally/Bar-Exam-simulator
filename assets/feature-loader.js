@@ -39,10 +39,10 @@
     }),
     forecast: Object.freeze({
       styles: [
-        'assets/bar-forecast.css?v=exam-tools-20260901-2',
+        'assets/bar-forecast.css?v=exam-tools-20260901-3',
       ],
       scripts: [
-        'assets/bar-forecast.js?v=exam-tools-20260901-2',
+        'assets/bar-forecast.js?v=exam-tools-20260901-3',
       ],
     }),
   });

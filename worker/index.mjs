@@ -5302,6 +5302,14 @@ async function phase4AccessForUser(env, userId, options = {}) {
   return normalizeAccessSnapshot(result);
 }
 
+async function phase4SetupAccessForUser(env, userId) {
+  return phase4Rpc(env, 'phase4_access_snapshot', {
+    p_user_id: userId,
+    p_activate_trial: false,
+    p_request_key: null,
+  });
+}
+
 function studyRoomMemberAccess(access) {
   const basis = String(access?.basis || '').trim().toLowerCase();
   const allowed = access?.allowed === true
@@ -9996,6 +10004,7 @@ const barForecastHandlers = createBarForecastHandlers({
   enforceBarForecastAdminRateLimit,
   jsonResponse,
   parseBoundedJson,
+  requiredSetupAccess: (env, user) => phase4SetupAccessForUser(env, user.id),
   requireAdministrator,
   structuredGemini: callGeminiStructured,
 });

@@ -436,20 +436,7 @@
         requestId: false,
         recoverAccess: false,
       })
-        .then(async (payload) => {
-          let refreshedAccess = payload.access;
-          if (legalRequired(refreshedAccess)
-              && !setupExempt(refreshedAccess)
-              && typeof legacy.acceptCurrentTerms === 'function') {
-            await legacy.acceptCurrentTerms();
-            const refreshed = await request('/access', {
-              requestId: false,
-              recoverAccess: false,
-            });
-            refreshedAccess = refreshed.access;
-          }
-          return adoptAccess(refreshedAccess, { enforce: false });
-        })
+        .then((payload) => adoptAccess(payload.access, { enforce: false }))
         .finally(() => {
           if (state.accessPromise === pending) state.accessPromise = null;
         });
@@ -475,6 +462,34 @@
     if (access?.allowed === true) return true;
     if (paymentRequired(access)) openPaymentGate(access, routeHash);
     else global.toast?.(accessMessage(access), 'warn');
+    return false;
+  }
+
+  async function ensureRequiredSetup(routeHash = location.hash) {
+    if (!session()?.access_token) return false;
+    // Forecast inspects a fresh server snapshot. Required setup remains an
+    // explicit user action, while payment state is intentionally ignored.
+    const payload = await request('/access', {
+      requestId: false,
+      recoverAccess: false,
+    });
+    if (!payload?.access || typeof payload.access !== 'object') return false;
+    for (const field of [
+      'termsRequired',
+      'reauthenticationRequired',
+      'profileCompleted',
+      'tokenAcknowledgementRequired',
+      'paidSubscriptionExpired',
+      'commercialLaunchEnabled',
+    ]) {
+      if (typeof payload.access[field] !== 'boolean') return false;
+    }
+    if (!String(payload.access.role || '').trim() || !String(payload.access.basis || '').trim()) {
+      return false;
+    }
+    const access = adoptAccess(payload.access, { enforce: false });
+    if (!setupRequired(access)) return true;
+    openRequiredSetup(access, routeHash);
     return false;
   }
 
@@ -718,6 +733,7 @@
     refreshAccess,
     adoptAccess,
     ensureProtectedAccess,
+    ensureRequiredSetup,
     canRevealSubjectReview: subjectReviewRevealAllowed,
     isSubjectReviewAccessError,
     openSubjectReviewAccessGate,

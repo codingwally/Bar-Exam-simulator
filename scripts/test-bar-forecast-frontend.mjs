@@ -95,7 +95,7 @@ assert.match(
   /ensureRequiredSetup\(ROUTE\)[\s\S]*setupReady !== true[\s\S]*Complete the required account setup/,
   'Forecast authorization must stop at the setup-only gate before requesting protected status',
 );
-assert.match(forecast, /global\.addEventListener\('duediligence:access'/);
+assert.match(forecast, /global\.addEventListener\('duediligence:access', handleForecastAccessChange\)/);
 assert.match(
   phase4,
   /async function ensureRequiredSetup\(routeHash = location\.hash\)[\s\S]*request\('\/access'[\s\S]*payload\?\.access[\s\S]*adoptAccess\(payload\.access[\s\S]*setupRequired\(access\)[\s\S]*openRequiredSetup\(access, routeHash\)/,
@@ -114,7 +114,13 @@ assert.match(
   /nextOwnerId === state\.ownerId[\s\S]*nextOwnerId === state\.authorizationOwnerId/,
   'same-owner session refreshes must preserve both settled and pending authorization',
 );
-assert.match(forecast, /async function openForecast\(trigger = null\) \{[\s\S]*ensureRoot\(\);[\s\S]*if \(state\.isOpen\) return true;/);
+assert.match(forecast, /async function openForecast\(trigger = null\) \{[\s\S]*ensureRoot\(\);[\s\S]*if \(state\.isOpen\) \{/);
+assert.match(
+  forecast,
+  /if \(state\.isOpen\) \{[\s\S]*ownerId !== state\.ownerId[\s\S]*await checkAuthorization\(\)/,
+  'an already-open Forecast must recheck a newly restored signed-in owner',
+);
+assert.match(forecast, /recoverAuthorizationAfterAuthReady\(\)/);
 assert.match(forecast, /state\.root\.hidden = true[\s\S]*trigger\.focus\(\{ preventScroll: true \}\)/);
 assert.match(forecast, /event\.key === 'Escape'/);
 assert.match(forecast, /<section class="bf26-page" aria-labelledby="bf26-page-title"/);
@@ -246,7 +252,7 @@ for (const source of [build, serviceWorker]) {
   assert.match(source, /assets\/bar-forecast\/forecast-workspace-preview\.webp/);
 }
 assert.match(build, /'flag\.svg'/);
-assert.match(serviceWorker, /duediligence-shell-20260901-bar-forecast-exam-tools-4/);
+assert.match(serviceWorker, /duediligence-shell-20260901-bar-forecast-exam-tools-5/);
 assert.match(serviceWorker, /assets\/icons\/navigation\/flag\.svg/);
 assert.match(qaHarness, /dataset\.ddBarForecastQa = 'synthetic'/);
 assert.match(qaHarness, /__DD_BAR_FORECAST_SYNTHETIC_QA__ = '2026-09-01'/);
@@ -360,6 +366,8 @@ function authorizationHarness(options = {}) {
     isOpen: true,
     ownerId: '',
     authorizationOwnerId: '',
+    authorizationRetryRequested: false,
+    authorizationRetryInProgress: false,
     consentAccepted: false,
   };
   const observations = {
@@ -403,6 +411,8 @@ function authorizationHarness(options = {}) {
   });
   vm.runInContext(extractNamedFunction(forecast, 'checkAuthorization'), context);
   vm.runInContext(extractNamedFunction(forecast, 'handleForecastSessionChange'), context);
+  vm.runInContext(extractNamedFunction(forecast, 'setupReadyFromAccessEvent'), context);
+  vm.runInContext(extractNamedFunction(forecast, 'handleForecastAccessChange'), context);
   return {
     context,
     state,
@@ -411,6 +421,15 @@ function authorizationHarness(options = {}) {
     setOwner: (ownerId) => { currentOwnerId = ownerId; },
   };
 }
+
+const readyAccessEvent = Object.freeze({
+  role: 'admin',
+  basis: 'introductory_tokens',
+  termsRequired: false,
+  reauthenticationRequired: false,
+  profileCompleted: true,
+  tokenAcknowledgementRequired: false,
+});
 
 {
   const completeAccess = (overrides = {}) => ({
@@ -481,6 +500,46 @@ assert.equal(await pendingAuthorization, true);
 assert.equal(sameOwner.state.ownerId, 'admin-a');
 assert.equal(sameOwner.state.authorizationOwnerId, '');
 assert.equal(sameOwner.observations.disclaimers, 1);
+
+const queuedAccess = authorizationHarness();
+const firstQueuedAuthorization = vm.runInContext('checkAuthorization()', queuedAccess.context);
+await new Promise((resolve) => setImmediate(resolve));
+queuedAccess.context.readyAccessEvent = readyAccessEvent;
+assert.equal(
+  vm.runInContext('setupReadyFromAccessEvent(readyAccessEvent)', queuedAccess.context),
+  true,
+  'a ready access event may omit payment-only policy fields',
+);
+vm.runInContext('handleForecastAccessChange({ detail: readyAccessEvent })', queuedAccess.context);
+assert.equal(queuedAccess.state.authorizationRetryRequested, true);
+assert.equal(queuedAccess.observations.requests, 1, 'the access event must not overlap the pending request');
+queuedAccess.responses[0].resolve({ authorized: false, consentAccepted: false });
+assert.equal(await firstQueuedAuthorization, true);
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(queuedAccess.observations.requests, 2, 'one setup-ready access event must queue one retry');
+queuedAccess.responses[1].resolve({ authorized: true, consentAccepted: false });
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(queuedAccess.state.ownerId, 'admin-a');
+assert.equal(queuedAccess.observations.requests, 2, 'the queued retry must never loop');
+
+{
+  let restoredOwner = '';
+  let resolveReady;
+  let checks = 0;
+  const ready = new Promise((resolve) => { resolveReady = resolve; });
+  const authReadyContext = vm.createContext({
+    state: { isOpen: true, ownerId: '', authorizationOwnerId: '' },
+    global: { DueDiligencePhase2: { whenAuthReady: () => ready } },
+    runtimeOwnerId: () => restoredOwner,
+    checkAuthorization: () => { checks += 1; },
+  });
+  vm.runInContext(extractNamedFunction(forecast, 'recoverAuthorizationAfterAuthReady'), authReadyContext);
+  vm.runInContext('recoverAuthorizationAfterAuthReady()', authReadyContext);
+  restoredOwner = 'restored-admin';
+  resolveReady();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(checks, 1, 'a missed session event must be recovered once auth restoration finishes');
+}
 
 const setupBlocked = authorizationHarness({ setupReady: false });
 assert.equal(await vm.runInContext('checkAuthorization()', setupBlocked.context), true);

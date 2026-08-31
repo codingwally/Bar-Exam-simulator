@@ -16,9 +16,13 @@ const [source, runbook] = await Promise.all([
 execFileSync(process.execPath, ['--check', runnerPath], { stdio: 'pipe' });
 
 assert.match(source, /const JOURNEY_COUNT = 30;/u);
+assert.match(source, /const BATCH_COUNT = 15;/u);
+assert.match(source, /const BATCH_SIZE = 2;/u);
 assert.match(source, /const DEFAULT_CONCURRENCY = 2;/u);
 assert.match(source, /const MAX_CONCURRENCY = 2;/u);
-assert.match(source, /const MINIMUM_START_INTERVAL_MS = 60_000;/u);
+assert.match(source, /const MINIMUM_BATCH_INTERVAL_MS = 180_000;/u);
+assert.match(source, /const PLANNED_MAX_REQUESTS_PER_RATE_WINDOW/u);
+assert.match(source, /const PLANNED_RATE_HEADROOM/u);
 assert.match(source, /--environment must be staging or production/u);
 assert.match(source, /BAR_FORECAST_E2E_RELEASE_SHA must be a 40-hex commit SHA/u);
 assert.match(source, /BAR_FORECAST_E2E_GITHUB_RUN_ID must be numeric/u);
@@ -110,11 +114,16 @@ const classificationStart = source.indexOf('async function awaitInternalTestClas
 assert.ok(classificationStart >= 0 && classificationStart < usageCleanupStart);
 const classificationFunction = source.slice(classificationStart, usageCleanupStart);
 assert.match(classificationFunction, /accounts\.map\(\(\{ userId, kind \}\) => \(\{ userId, kind \}\)\)/u);
+assert.match(classificationFunction, /accounts\.length, JOURNEY_COUNT \+ 1/u);
 assert.doesNotMatch(classificationFunction, /account\.(?:email|password)|credentials/u);
 
 assert.match(source, /chromium\.launch/u);
 assert.match(source, /browser\.newContext/u);
 assert.match(source, /#bar-forecast-2026/u);
+assert.match(source, /forecast-e2e-auth=\$\{encodeURIComponent\(runId\)\}`/u);
+const neutralNavigation = source.indexOf('forecast-e2e-auth=${encodeURIComponent(runId)}`');
+const finalForecastNavigation = source.indexOf('forecast-e2e=${encodeURIComponent(runId)}#bar-forecast-2026`');
+assert.ok(neutralNavigation >= 0 && finalForecastNavigation > neutralNavigation);
 for (const phase of [
   'AUTH_SESSION_READY',
   'AUTH_FORECAST_VISIBLE',
@@ -132,6 +141,13 @@ assert.match(source, /BAR_FORECAST_SETUP_REQUIRED/u);
 assert.match(source, /SETUP_BOUNDARY_FAILED/u);
 assert.match(source, /setupBoundaryVerified/u);
 assert.match(source, /requiredSetupBoundaryAccounts/u);
+assert.match(source, /forecast-setup-ready-\$\{crypto\.randomUUID\(\)\}/u);
+assert.match(source, /readyResponse\.status === 200/u);
+assert.match(source, /readyPayload\?\.authorized === true/u);
+assert.match(source, /readyPayload\?\.consentAccepted === false/u);
+assert.match(source, /postSetupStatusAccounts/u);
+assert.match(source, /isSetupProbeRequestId\(request\.headers\(\)\['x-request-id'\]\)/u);
+assert.match(source, /\^forecast-setup-\(\?:boundary\|ready\)-/u);
 assert.match(source, /preparedAccess\?\.role === 'admin'/u);
 assert.match(source, /preparedAccess\?\.allowed === true/u);
 assert.match(source, /preparedAccess\?\.basis === 'introductory_tokens'/u);
@@ -165,6 +181,41 @@ function extractNamedFunction(functionSource, name) {
   throw new Error(`Unbalanced function ${name}.`);
 }
 
+const helperContext = vm.createContext({ assert });
+for (const helperName of [
+  'isSetupProbeRequestId',
+  'isExpectedConsoleResourceError',
+  'createBatchBarrier',
+]) {
+  vm.runInContext(extractNamedFunction(source, helperName), helperContext);
+}
+assert.equal(vm.runInContext("isSetupProbeRequestId('forecast-setup-boundary-fixture')", helperContext), true);
+assert.equal(vm.runInContext("isSetupProbeRequestId('forecast-setup-ready-fixture')", helperContext), true);
+assert.equal(vm.runInContext("isSetupProbeRequestId('ordinary-journey-request')", helperContext), false);
+assert.equal(vm.runInContext(`isExpectedConsoleResourceError({
+  type: () => 'error',
+  text: () => 'Failed to load resource: the server responded with a status of 403 ()',
+})`, helperContext), true);
+assert.equal(vm.runInContext(`isExpectedConsoleResourceError({
+  type: () => 'error',
+  text: () => 'Application crashed while rendering results',
+})`, helperContext), false);
+const batchBarrier = vm.runInContext('createBatchBarrier(2)', helperContext);
+let firstBatchParticipantReleased = false;
+const firstBatchParticipant = batchBarrier.wait().then((startedAt) => {
+  firstBatchParticipantReleased = true;
+  return startedAt;
+});
+await Promise.resolve();
+assert.equal(firstBatchParticipantReleased, false, 'A batch must not start with only one browser journey.');
+const secondBatchParticipant = batchBarrier.wait();
+const [firstBatchStartedAt, secondBatchStartedAt] = await Promise.all([
+  firstBatchParticipant,
+  secondBatchParticipant,
+]);
+assert.equal(firstBatchStartedAt, secondBatchStartedAt);
+assert.equal(firstBatchParticipantReleased, true);
+
 const failedInspectionContext = vm.createContext({
   unavailablePage: { evaluate: async () => { throw new Error('execution context unavailable'); } },
 });
@@ -183,9 +234,16 @@ assert.match(source, /postDataJSON\(\)\?\.operation \|\| ''\) === 'accept'/u);
 assert.match(source, /await acceptResponseResult\.finished\(\)/u);
 assert.match(source, /acceptResponseResult\.status\(\), 200/u);
 assert.match(source, /journeyPhase = 'RESULTS'/u);
-assert.match(source, /startOffsetMs/u);
-assert.match(source, /observedMinimumStartIntervalMs/u);
-assert.match(source, /if \(firstFailure \|\| stopSignal\) return;/u);
+assert.match(source, /batchStartOffsetMs/u);
+assert.match(source, /observedMinimumBatchIntervalMs/u);
+assert.match(source, /createBatchBarrier\(BATCH_SIZE\)/u);
+assert.match(source, /activeContextsAtStart,[\s\S]*BATCH_SIZE/u);
+assert.match(source, /for \(let slot = 1; slot <= JOURNEY_COUNT; slot \+= 1\)/u);
+assert.match(source, /administratorAccounts\.slice\(firstOrdinal - 1, firstOrdinal - 1 \+ BATCH_SIZE\)/u);
+assert.match(source, /config\.batchIntervalMs - \(Date\.now\(\) - previousBatchStartedAt\)/u);
+assert.match(source, /expectedConsoleErrors/u);
+assert.match(source, /unexpectedConsoleErrors/u);
+assert.match(source, /Failed to load resource:[\s\S]*status of \(\?:403\|409\)/u);
 assert.match(source, /phaseFailure\(error, `JOURNEY_\$\{journeyPhase\}`\)/u);
 assert.match(source, /\.bf26-agreement \.bf26-button--primary/u);
 assert.match(source, /\[data-subject\]/u);
@@ -232,11 +290,16 @@ assert.deepEqual({
   mode: stagingPreflight.mode,
   target: stagingPreflight.target,
   journeys: stagingPreflight.journeys,
+  batches: stagingPreflight.batches,
+  batchSize: stagingPreflight.batchSize,
   concurrency: stagingPreflight.concurrency,
   maximumConcurrency: stagingPreflight.maximumConcurrency,
-  startIntervalMs: stagingPreflight.startIntervalMs,
+  batchIntervalMs: stagingPreflight.batchIntervalMs,
   disposableAdministrators: stagingPreflight.disposableAdministrators,
   disposableNonAdministrators: stagingPreflight.disposableNonAdministrators,
+  disposableAccountsTotal: stagingPreflight.disposableAccountsTotal,
+  plannedMaxRequestsPerRateWindow: stagingPreflight.plannedMaxRequestsPerRateWindow,
+  plannedRateHeadroom: stagingPreflight.plannedRateHeadroom,
   classificationCheckpoint: stagingPreflight.classificationCheckpoint,
   secretLoaded: stagingPreflight.secretLoaded,
 }, {
@@ -244,11 +307,16 @@ assert.deepEqual({
   mode: 'preflight',
   target: 'staging',
   journeys: 30,
+  batches: 15,
+  batchSize: 2,
   concurrency: 2,
   maximumConcurrency: 2,
-  startIntervalMs: 60_000,
-  disposableAdministrators: 2,
+  batchIntervalMs: 180_000,
+  disposableAdministrators: 30,
   disposableNonAdministrators: 1,
+  disposableAccountsTotal: 31,
+  plannedMaxRequestsPerRateWindow: 81,
+  plannedRateHeadroom: 9,
   classificationCheckpoint: false,
   secretLoaded: false,
 });
@@ -257,7 +325,7 @@ assert.throws(() => execFileSync(
   process.execPath,
   [runnerPath, '--environment', 'staging', '--preflight'],
   {
-    env: { ...baseEnvironment, BAR_FORECAST_E2E_CONCURRENCY: '3' },
+    env: { ...baseEnvironment, BAR_FORECAST_E2E_BATCH_INTERVAL_MS: '179999' },
     stdio: 'pipe',
   },
 ));
@@ -294,9 +362,12 @@ assert.equal(productionPreflight.classificationCheckpoint, true);
 
 assert.match(runbook, /exactly 30/u);
 assert.match(runbook, /150 live grading calls/u);
-assert.match(runbook, /maximum concurrency is two/u);
-assert.match(runbook, /at least 60 seconds/u);
-assert.match(runbook, /observed start spacing/u);
+assert.match(runbook, /30 distinct.*administrator/iu);
+assert.match(runbook, /15 batches/iu);
+assert.match(runbook, /exactly two.*browser/iu);
+assert.match(runbook, /at least 180 seconds/u);
+assert.match(runbook, /observed batch spacing/u);
+assert.match(runbook, /31.*accounts/iu);
 assert.match(runbook, /BAR_FORECAST_E2E_RELEASE_SHA/u);
 assert.match(runbook, /BAR_FORECAST_E2E_GITHUB_RUN_ID/u);
 assert.match(runbook, /Do not paste.*secret/iu);

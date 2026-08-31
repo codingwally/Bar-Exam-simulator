@@ -163,12 +163,12 @@ const workerOnly = await read('.github/workflows/deploy-worker.yml');
 const staging = await read('.github/workflows/staging-e2e-gate.yml');
 
 assert.match(staging, /refs\/heads\/feature\/bar-forecast-examplify-parity-20260901/u);
-assert.match(staging, /name: Run 30 complete live Forecast examiner journeys, two at a time/u);
+assert.match(staging, /name: Run 30 live Forecast examiners in 15 two-browser batches/u);
 assert.match(staging, /BAR_FORECAST_E2E_CONFIRM: staging:hlzqmreeoghbldnhlybr:30/u);
 assert.match(staging, /BAR_FORECAST_E2E_RELEASE_SHA: \$\{\{ github\.sha \}\}/u);
 assert.match(staging, /BAR_FORECAST_E2E_GITHUB_RUN_ID: \$\{\{ github\.run_id \}\}/u);
-assert.match(staging, /BAR_FORECAST_E2E_CONCURRENCY: '2'/u);
-assert.match(staging, /BAR_FORECAST_E2E_START_INTERVAL_MS: '60000'/u);
+assert.match(staging, /BAR_FORECAST_E2E_BATCH_INTERVAL_MS: '180000'/u);
+assert.match(staging, /timeout-minutes: 90/u);
 assert.match(staging, /run-bar-forecast-live-journeys\.mjs --environment staging/u);
 assert.match(staging, /artifacts\/staging-e2e\/bar-forecast-live-30\.json/u);
 assert.match(staging, /node scripts\/verify-bar-forecast-live-evidence\.mjs/u);

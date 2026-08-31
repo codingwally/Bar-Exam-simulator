@@ -40,13 +40,14 @@ function setupExempt(access, authorization) {
 
 function requiredSetupPending(access, authorization) {
   if (!access || typeof access !== 'object') return true;
+  // These four values are the actual setup contract. Payment-policy wrappers
+  // may omit derived fields such as paidSubscriptionExpired, so basis remains
+  // the authoritative fallback for that independent payment state.
   for (const field of [
     'termsRequired',
     'reauthenticationRequired',
     'profileCompleted',
     'tokenAcknowledgementRequired',
-    'paidSubscriptionExpired',
-    'commercialLaunchEnabled',
   ]) {
     if (typeof access[field] !== 'boolean') return true;
   }
@@ -60,7 +61,7 @@ function requiredSetupPending(access, authorization) {
   if (paidSubscriptionExpired) return false;
   return basis === 'profile_required'
     || access.tokenAcknowledgementRequired === true
-    || (access.commercialLaunchEnabled === true && access.profileCompleted === false);
+    || access.profileCompleted === false;
 }
 
 export function createBarForecastHandlers(deps) {

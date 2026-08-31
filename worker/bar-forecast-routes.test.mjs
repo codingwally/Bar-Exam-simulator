@@ -208,9 +208,20 @@ test('dedicated rate-limit rejection stops authentication, parsing, storage, and
 });
 
 test('required account setup fails closed server-side while payment state remains exempt', async () => {
+  const missingRequiredFields = [
+    'termsRequired',
+    'reauthenticationRequired',
+    'profileCompleted',
+    'tokenAcknowledgementRequired',
+  ].map((field) => {
+    const setupAccess = completeSetupAccess();
+    delete setupAccess[field];
+    return setupAccess;
+  });
   for (const setupAccess of [
     null,
     { allowed: true, role: 'admin' },
+    ...missingRequiredFields,
     completeSetupAccess({ termsRequired: true }),
     completeSetupAccess({ reauthenticationRequired: true }),
     completeSetupAccess({ profileCompleted: false }),
@@ -230,17 +241,33 @@ test('required account setup fails closed server-side while payment state remain
     );
   }
 
+  const setupWithoutPaymentPolicyFields = completeSetupAccess();
+  delete setupWithoutPaymentPolicyFields.paidSubscriptionExpired;
+  delete setupWithoutPaymentPolicyFields.commercialLaunchEnabled;
+  const compatibleSnapshot = harness({
+    consentAccepted: false,
+    authorization: { authorized: true, role: 'admin' },
+    setupAccess: setupWithoutPaymentPolicyFields,
+  });
+  const compatibleResponse = await compatibleSnapshot.handlers.handle(
+    request({ operation: 'status' }), {}, '', '',
+  );
+  assert.equal(compatibleResponse.status, 200);
+  assert.equal((await responseBody(compatibleResponse)).consentAccepted, false);
+
+  const paidExpiredSnapshot = completeSetupAccess({
+    basis: 'paid_subscription_expired',
+    allowed: false,
+    paymentRequired: true,
+    profileCompleted: false,
+    tokenAcknowledgementRequired: true,
+  });
+  delete paidExpiredSnapshot.paidSubscriptionExpired;
+  delete paidExpiredSnapshot.commercialLaunchEnabled;
   const paymentOnly = harness({
     consentAccepted: false,
     authorization: { authorized: true, role: 'admin' },
-    setupAccess: completeSetupAccess({
-      basis: 'paid_subscription_expired',
-      allowed: false,
-      paymentRequired: true,
-      paidSubscriptionExpired: true,
-      profileCompleted: false,
-      tokenAcknowledgementRequired: true,
-    }),
+    setupAccess: paidExpiredSnapshot,
   });
   const response = await paymentOnly.handlers.handle(
     request({ operation: 'status' }), {}, '', '',

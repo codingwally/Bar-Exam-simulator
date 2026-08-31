@@ -67,6 +67,8 @@
     view: 'preview',
     ownerId: '',
     authorizationOwnerId: '',
+    authorizationRetryRequested: false,
+    authorizationRetryInProgress: false,
     consentAccepted: false,
     subject: '',
     schedule: null,
@@ -106,6 +108,32 @@
   function runtimeOwnerId() {
     const session = runtimeSession();
     return session?.access_token ? String(session.user?.id || '').trim() : '';
+  }
+
+  function setupReadyFromAccessEvent(access) {
+    if (!access || typeof access !== 'object') return false;
+    for (const field of [
+      'termsRequired',
+      'reauthenticationRequired',
+      'profileCompleted',
+      'tokenAcknowledgementRequired',
+    ]) {
+      if (typeof access[field] !== 'boolean') return false;
+    }
+    const role = String(access.role || '').trim().toLowerCase();
+    const basis = String(access.basis || '').trim().toLowerCase();
+    if (!role || !basis || access.termsRequired === true || basis === 'legal_acceptance_required') {
+      return false;
+    }
+    const exempt = ['super_admin', 'founder_admin'].includes(role)
+      || ['super_admin', 'founder_admin', 'founding_beta'].includes(basis)
+      || access.freeBeta?.active === true;
+    if (exempt) return true;
+    if (access.reauthenticationRequired === true || basis === 'reauthentication_required') return false;
+    if (access.paidSubscriptionExpired === true || basis === 'paid_subscription_expired') return true;
+    return basis !== 'profile_required'
+      && access.profileCompleted === true
+      && access.tokenAcknowledgementRequired === false;
   }
 
   function wordCount(value) {
@@ -1338,7 +1366,25 @@
       });
       return true;
     } finally {
+      const shouldRetry = state.authorizationRetryRequested
+        && state.authorizationRetryInProgress !== true
+        && state.isOpen
+        && !state.ownerId
+        && ownerId === runtimeOwnerId();
+      state.authorizationRetryRequested = false;
       if (state.authorizationOwnerId === ownerId) state.authorizationOwnerId = '';
+      if (shouldRetry) {
+        Promise.resolve().then(async () => {
+          if (!state.isOpen || state.ownerId || state.authorizationOwnerId
+              || ownerId !== runtimeOwnerId()) return;
+          state.authorizationRetryInProgress = true;
+          try {
+            await checkAuthorization();
+          } finally {
+            state.authorizationRetryInProgress = false;
+          }
+        });
+      }
     }
   }
 
@@ -1347,12 +1393,28 @@
       && [...state.answers.values()].some((answer) => String(answer || '').trim());
   }
 
+  function recoverAuthorizationAfterAuthReady() {
+    const whenAuthReady = global.DueDiligencePhase2?.whenAuthReady;
+    if (typeof whenAuthReady !== 'function') return;
+    Promise.resolve()
+      .then(() => whenAuthReady())
+      .then(() => {
+        const ownerId = runtimeOwnerId();
+        if (state.isOpen && ownerId && !state.ownerId && !state.authorizationOwnerId) {
+          checkAuthorization();
+        }
+      })
+      .catch(() => {});
+  }
+
   function closeForecast(options = {}) {
     if (!state.isOpen) return true;
     if (state.view === 'submitting' && options.force !== true) return false;
     if (hasDraftAnswers() && options.force !== true
         && !global.confirm('Close the forecast and discard all unsubmitted answers?')) return false;
     abortRequest();
+    state.authorizationRetryRequested = false;
+    state.authorizationRetryInProgress = false;
     const trigger = state.lastTrigger;
     state.isOpen = false;
     state.viewNode?.replaceChildren();
@@ -1367,7 +1429,13 @@
 
   async function openForecast(trigger = null) {
     ensureRoot();
-    if (state.isOpen) return true;
+    if (state.isOpen) {
+      const ownerId = runtimeOwnerId();
+      if (ownerId && ownerId !== state.ownerId && ownerId !== state.authorizationOwnerId) {
+        await checkAuthorization();
+      }
+      return true;
+    }
     state.lastTrigger = trigger instanceof Element ? trigger : document.activeElement;
     state.isOpen = true;
     setForecastRoute();
@@ -1380,6 +1448,7 @@
       checking: Boolean(runtimeOwnerId()),
     });
     if (runtimeOwnerId()) await checkAuthorization();
+    else recoverAuthorizationAfterAuthReady();
     return true;
   }
 
@@ -1391,6 +1460,8 @@
       || nextOwnerId === state.authorizationOwnerId
     )) return;
     abortRequest();
+    state.authorizationRetryRequested = false;
+    state.authorizationRetryInProgress = false;
     resetProtectedState();
     renderPreview({
       message: nextOwnerId
@@ -1403,12 +1474,22 @@
 
   global.addEventListener('duediligence:session', handleForecastSessionChange);
 
-  global.addEventListener('duediligence:access', () => {
-    if (!state.isOpen || state.authorizationOwnerId) return;
+  function handleForecastAccessChange(event) {
+    if (!state.isOpen) return;
     const ownerId = runtimeOwnerId();
     if (!ownerId || ownerId === state.ownerId) return;
+    if (state.authorizationOwnerId) {
+      if (state.authorizationRetryInProgress !== true
+          && ownerId === state.authorizationOwnerId
+          && setupReadyFromAccessEvent(event.detail)) {
+        state.authorizationRetryRequested = true;
+      }
+      return;
+    }
     checkAuthorization();
-  });
+  }
+
+  global.addEventListener('duediligence:access', handleForecastAccessChange);
 
   function recoverBlockedForecastRoute() {
     state.routeRecovery = true;

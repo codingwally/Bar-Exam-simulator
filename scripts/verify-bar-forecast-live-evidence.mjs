@@ -25,14 +25,12 @@ assert.equal(String(evidence.githubRunId), expectedGithubRunId);
 assert.match(String(evidence.runId || ''), /^f30-[a-z0-9-]+$/u);
 assert.equal(evidence.journeysRequested, 30);
 assert.equal(evidence.journeysPassed, 30);
+assert.equal(evidence.batchesRequested, 15);
+assert.equal(evidence.batchesPassed, 15);
+assert.equal(evidence.batchSize, 2);
 assert.equal(evidence.concurrency, 2);
-assert.ok(Number.isInteger(evidence.maximumActiveContexts));
-assert.ok(evidence.maximumActiveContexts >= 1 && evidence.maximumActiveContexts <= 2);
-assert.ok(
-  Number.isInteger(evidence.startIntervalMs)
-    && evidence.startIntervalMs >= 60_000
-    && evidence.startIntervalMs <= 120_000,
-);
+assert.equal(evidence.maximumActiveContexts, 2);
+assert.equal(evidence.batchIntervalMs, 180_000);
 
 const subjectCounts = Object.values(evidence.subjects || {});
 assert.equal(subjectCounts.length, 6);
@@ -40,7 +38,14 @@ assert.deepEqual(subjectCounts, [5, 5, 5, 5, 5, 5]);
 
 assert.equal(evidence.proof?.realForecastHttpJourneys, 30);
 assert.equal(evidence.proof?.nonAdministratorDenied, true);
-assert.equal(evidence.proof?.requiredSetupBoundaryAccounts, 2);
+assert.equal(evidence.proof?.distinctAdministratorIdentities, 30);
+assert.equal(evidence.proof?.oneJourneyAdministratorAccounts, 30);
+assert.equal(evidence.proof?.requiredSetupBoundaryAccounts, 30);
+assert.equal(evidence.proof?.postSetupStatusAccounts, 30);
+assert.equal(evidence.proof?.simultaneousBatches, 15);
+assert.ok(Number.isInteger(evidence.proof?.expectedConsoleErrors));
+assert.ok(evidence.proof.expectedConsoleErrors >= 0);
+assert.equal(evidence.proof?.unexpectedConsoleErrors, 0);
 for (const field of [
   'consentGateRejections',
   'twentyAnswerSubmissions',
@@ -57,12 +62,12 @@ for (const field of [
 assert.ok(Number.isFinite(evidence.grades?.minimum) && evidence.grades.minimum >= 0);
 assert.ok(Number.isFinite(evidence.grades?.maximum) && evidence.grades.maximum <= 100);
 assert.ok(Number.isFinite(evidence.grades?.average));
-assert.equal(evidence.cleanup?.disposableAccountsCreated, 3);
-assert.equal(evidence.cleanup?.disposableAccountsDeleted, 3);
-assert.equal(evidence.cleanup?.usageResidueAccountsVerified, 3);
-assert.equal(evidence.cleanup?.setupResidueAccountsVerified, 3);
-assert.equal(evidence.cleanup?.disposableAdministratorsCreated, 2);
-assert.equal(evidence.cleanup?.disposableAdministratorsDeleted, 2);
+assert.equal(evidence.cleanup?.disposableAccountsCreated, 31);
+assert.equal(evidence.cleanup?.disposableAccountsDeleted, 31);
+assert.equal(evidence.cleanup?.usageResidueAccountsVerified, 31);
+assert.equal(evidence.cleanup?.setupResidueAccountsVerified, 31);
+assert.equal(evidence.cleanup?.disposableAdministratorsCreated, 30);
+assert.equal(evidence.cleanup?.disposableAdministratorsDeleted, 30);
 assert.equal(evidence.cleanup?.browserContextsOpen, 0);
 assert.equal(evidence.cleanup?.complete, true);
 assert.equal(evidence.secretsLogged, false);
@@ -113,37 +118,88 @@ for (const journey of evidence.journeys) {
   assert.equal(journey.formatting, true);
   assert.equal(journey.uniqueAttempt, true);
   assert.equal(journey.pageErrors, 0);
+  assert.ok(Number.isInteger(journey.consoleErrors) && journey.consoleErrors >= 0);
+  assert.ok(Number.isInteger(journey.expectedConsoleErrors) && journey.expectedConsoleErrors >= 0);
+  assert.equal(journey.unexpectedConsoleErrors, 0);
+  assert.equal(journey.consoleErrors, journey.expectedConsoleErrors + journey.unexpectedConsoleErrors);
   assert.ok(Number.isFinite(journey.totalScore) && journey.totalScore >= 0 && journey.totalScore <= 100);
-  assert.ok(Number.isInteger(journey.startOffsetMs) && journey.startOffsetMs >= 0);
+  assert.ok(Number.isInteger(journey.batchNumber) && journey.batchNumber >= 1 && journey.batchNumber <= 15);
+  assert.ok(journey.batchMember === 1 || journey.batchMember === 2);
+  assert.equal(journey.activeContextsAtStart, 2);
+  assert.ok(Number.isInteger(journey.batchStartOffsetMs) && journey.batchStartOffsetMs >= 0);
   assertForecastOperations(journey.apiOperations);
 }
-
-const observedStartOffsets = evidence.journeys
-  .map((journey) => journey.startOffsetMs)
-  .sort((left, right) => left - right);
-assert.equal(observedStartOffsets[0], 0, 'Observed start timing must begin at zero.');
-assert.equal(new Set(observedStartOffsets).size, 30, 'Every journey must have one distinct observed start.');
-const observedStartGaps = observedStartOffsets.slice(1).map((offset, index) => (
-  offset - observedStartOffsets[index]
-));
-const observedMinimumStartIntervalMs = Math.min(...observedStartGaps);
-assert.ok(
-  observedMinimumStartIntervalMs >= evidence.startIntervalMs,
-  'Observed live starts did not honor the configured spacing.',
+assert.equal(
+  evidence.proof.expectedConsoleErrors,
+  evidence.journeys.reduce((total, journey) => total + journey.expectedConsoleErrors, 0),
+  'The expected browser-console classification total does not match the journeys.',
 );
 assert.equal(
-  evidence.observedMinimumStartIntervalMs,
-  observedMinimumStartIntervalMs,
-  'The observed start-spacing summary does not match the journey evidence.',
+  evidence.proof.unexpectedConsoleErrors,
+  evidence.journeys.reduce((total, journey) => total + journey.unexpectedConsoleErrors, 0),
+  'The unexpected browser-console classification total does not match the journeys.',
 );
-const maximumStartsPerTenMinutes = Math.max(...observedStartOffsets.map((windowStart) => (
-  observedStartOffsets.filter((offset) => offset >= windowStart && offset < windowStart + 600_000).length
-)));
-assert.ok(maximumStartsPerTenMinutes <= 10, 'Observed live starts exceeded the bounded ten-minute rate plan.');
+
+assert.ok(Array.isArray(evidence.batches));
+assert.equal(evidence.batches.length, 15);
+const observedBatchStartOffsets = [];
+for (let batchNumber = 1; batchNumber <= 15; batchNumber += 1) {
+  const journeys = evidence.journeys.filter((journey) => journey.batchNumber === batchNumber);
+  assert.equal(journeys.length, 2, `Batch ${batchNumber} must contain exactly two journeys.`);
+  assert.deepEqual(journeys.map((journey) => journey.batchMember).sort(), [1, 2]);
+  assert.deepEqual(
+    journeys.map((journey) => journey.ordinal).sort((left, right) => left - right),
+    [(batchNumber * 2) - 1, batchNumber * 2],
+  );
+  assert.equal(
+    new Set(journeys.map((journey) => journey.batchStartOffsetMs)).size,
+    1,
+    `Batch ${batchNumber} journeys must share one simultaneous start.`,
+  );
+  const startOffsetMs = journeys[0].batchStartOffsetMs;
+  observedBatchStartOffsets.push(startOffsetMs);
+  assert.deepEqual(evidence.batches[batchNumber - 1], {
+    number: batchNumber,
+    startOffsetMs,
+    journeyOrdinals: [(batchNumber * 2) - 1, batchNumber * 2],
+    members: 2,
+    activeContextsAtStart: 2,
+  });
+}
+assert.equal(observedBatchStartOffsets[0], 0, 'Observed batch timing must begin at zero.');
+assert.equal(new Set(observedBatchStartOffsets).size, 15, 'Every batch must have one distinct start.');
+const observedBatchStartGaps = observedBatchStartOffsets.slice(1).map((offset, index) => (
+  offset - observedBatchStartOffsets[index]
+));
+const observedMinimumBatchIntervalMs = Math.min(...observedBatchStartGaps);
 assert.ok(
-  ((maximumStartsPerTenMinutes + evidence.concurrency) * 6) + 1 <= 90,
-  'Observed timing cannot prove safe headroom below the dedicated Forecast rate limit.',
+  observedMinimumBatchIntervalMs >= evidence.batchIntervalMs,
+  'Observed live batches did not honor the configured spacing.',
 );
+assert.equal(
+  evidence.observedMinimumBatchIntervalMs,
+  observedMinimumBatchIntervalMs,
+  'The observed batch-spacing summary does not match the journey evidence.',
+);
+const maximumBatchesPerTenMinutes = Math.max(...observedBatchStartOffsets.map((windowStart) => (
+  observedBatchStartOffsets.filter((offset) => offset >= windowStart && offset < windowStart + 600_000).length
+)));
+assert.ok(maximumBatchesPerTenMinutes <= 4, 'Observed live batches exceeded the ten-minute rate plan.');
+
+const rateLimitPlan = evidence.rateLimitPlan || {};
+assert.equal(rateLimitPlan.windowMs, 600_000);
+assert.equal(rateLimitPlan.requestLimit, 90);
+assert.equal(rateLimitPlan.fixedForecastProbeRequests, 1);
+assert.equal(rateLimitPlan.setupProbeRequestsPerJourney, 4);
+assert.equal(rateLimitPlan.maximumJourneyRequests, 6);
+assert.equal(rateLimitPlan.maximumBatchesPerWindow, 4);
+assert.equal(rateLimitPlan.plannedMaximumRequestsPerWindow, 81);
+assert.equal(rateLimitPlan.plannedHeadroom, 9);
+const observedMaximumRequestsPerWindow = 1 + (maximumBatchesPerTenMinutes * 2 * (4 + 6));
+assert.equal(rateLimitPlan.observedMaximumBatchesPerWindow, maximumBatchesPerTenMinutes);
+assert.equal(rateLimitPlan.observedMaximumRequestsPerWindow, observedMaximumRequestsPerWindow);
+assert.equal(rateLimitPlan.observedHeadroom, 90 - observedMaximumRequestsPerWindow);
+assert.ok(rateLimitPlan.observedHeadroom >= 9);
 
 const forbiddenKeys = /^(?:question|prompt|answer|feedback|explanation|token|secret|password|email)(?:Text|Content|Value)?$/iu;
 function inspectKeys(value, path = '$') {

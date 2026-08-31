@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'duediligence-shell-20260901-bar-forecast-exam-tools-4';
+const CACHE_VERSION = 'duediligence-shell-20260901-bar-forecast-exam-tools-5';
 const EXAMINATION_STUDENT_SHELL = '/examination-room/student.html';
 const EXAMINATION_OFFLINE_GRADER = '/examination-room/offline-grading.html';
 const SHELL = Object.freeze([
@@ -15,9 +15,9 @@ const SHELL = Object.freeze([
   '/assets/private-beta-landing.css?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4',
   '/assets/due-diligence-controls.css?v=subject-matter-controls-20260817-4',
   '/assets/quorum-first-shell.css?v=profile-photo-release2-20260827-1&baseline=public-reliability-20260827-3',
-  '/assets/quorum-first-shell.js?v=syllabus-review-20260823-1&forecast=exam-tools-20260901-3',
-  '/assets/feature-loader.js?v=profile-photo-release2-20260827-1&baseline=public-reliability-20260827-1&feedback=offline-save-20260827-1&hotfix=ian-provisional-reveal-20260828-1&recovery=subject-review-timeout-20260828-1&cta=home-subscription-20260828-2&collapse=home-read-more-20260828-1&results=history-20260828-1&forecast=exam-tools-20260901-3',
-  '/assets/private-beta-landing.js?v=public-reliability-20260827-2&feedback=quiet-navigation-20260828-1&forecast=exam-tools-20260901-3',
+  '/assets/quorum-first-shell.js?v=syllabus-review-20260823-1&forecast=exam-tools-20260901-4',
+  '/assets/feature-loader.js?v=profile-photo-release2-20260827-1&baseline=public-reliability-20260827-1&feedback=offline-save-20260827-1&hotfix=ian-provisional-reveal-20260828-1&recovery=subject-review-timeout-20260828-1&cta=home-subscription-20260828-2&collapse=home-read-more-20260828-1&results=history-20260828-1&forecast=exam-tools-20260901-4',
+  '/assets/private-beta-landing.js?v=public-reliability-20260827-2&feedback=quiet-navigation-20260828-1&forecast=exam-tools-20260901-4',
   '/assets/profile-photo.js?v=profile-photo-release2-20260827-1',
   '/assets/phase2-experience.js?v=profile-photo-release2-20260827-1&baseline=syllabus-reveal-p0-20260826-2-examination-room-4&profile=chambers-20260827-1&access=paid-expiry-20260827-1&pricing=regular-checkout-r1&legal=explicit-20260901-1',
   '/assets/pedro-navigation.js?v=pedro-release2-20260827-1',
@@ -36,8 +36,8 @@ const SHELL = Object.freeze([
   '/assets/phase2-config.js?v=provider-neutral-release2-20260827-1',
   '/assets/auth-session-storage.js?v=auth-persistence-20260812-1',
   '/assets/private-beta-session.js?v=beta-all-access-20260802-1',
-  '/assets/bar-forecast.css?v=exam-tools-20260901-3',
-  '/assets/bar-forecast.js?v=exam-tools-20260901-3',
+  '/assets/bar-forecast.css?v=exam-tools-20260901-4',
+  '/assets/bar-forecast.js?v=exam-tools-20260901-4',
   '/assets/icons/navigation/flag.svg',
   '/assets/bar-forecast/forecast-workspace-preview.webp',
 ]);

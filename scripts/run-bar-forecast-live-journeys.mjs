@@ -6,14 +6,26 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 const require = createRequire(import.meta.url);
 const JOURNEY_COUNT = 30;
+const BATCH_COUNT = 15;
+const BATCH_SIZE = 2;
 const DEFAULT_CONCURRENCY = 2;
 const MAX_CONCURRENCY = 2;
-// Forecast normally performs five administrator requests per journey (including
-// the deliberate pre-consent rejection), with at most one duplicate status check.
-// Sixty seconds keeps that sixth request plus two boundary-crossing journeys below the
-// Worker's dedicated 90-request/10-minute Forecast IP window, while keeping
-// browser/RAM pressure to at most two active contexts.
-const MINIMUM_START_INTERVAL_MS = 60_000;
+// Each distinct examiner performs four setup-boundary/ready probes and at most
+// six counted Forecast requests. Two examiners per batch and a three-minute
+// batch cadence keep four possible batch starts plus the non-admin denial at
+// 81 requests in any ten-minute window, below the dedicated limit of 90.
+const MINIMUM_BATCH_INTERVAL_MS = 180_000;
+const RATE_WINDOW_MS = 600_000;
+const RATE_REQUEST_LIMIT = 90;
+const SETUP_PROBE_REQUESTS_PER_JOURNEY = 4;
+const MAX_JOURNEY_REQUESTS = 6;
+const FIXED_FORECAST_PROBE_REQUESTS = 1;
+const MAX_BATCHES_PER_RATE_WINDOW = Math.ceil(RATE_WINDOW_MS / MINIMUM_BATCH_INTERVAL_MS);
+const PLANNED_MAX_REQUESTS_PER_RATE_WINDOW = FIXED_FORECAST_PROBE_REQUESTS
+  + (MAX_BATCHES_PER_RATE_WINDOW
+    * BATCH_SIZE
+    * (SETUP_PROBE_REQUESTS_PER_JOURNEY + MAX_JOURNEY_REQUESTS));
+const PLANNED_RATE_HEADROOM = RATE_REQUEST_LIMIT - PLANNED_MAX_REQUESTS_PER_RATE_WINDOW;
 const DEFAULT_JOURNEY_TIMEOUT_MS = 8 * 60_000;
 const CONSENT_VERSION = '2026-09-01';
 const FORECAST_PATH = '/admin/dd2026/bar-forecast';
@@ -94,8 +106,7 @@ Production additionally requires:
   BAR_FORECAST_E2E_AWAIT_CLASSIFICATION=true
 
 Optional bounded settings:
-  BAR_FORECAST_E2E_CONCURRENCY=1|2         (default 2)
-  BAR_FORECAST_E2E_START_INTERVAL_MS>=60000
+  BAR_FORECAST_E2E_BATCH_INTERVAL_MS=180000
   BAR_FORECAST_E2E_JOURNEY_TIMEOUT_MS=300000..900000
   BAR_FORECAST_E2E_BROWSER_CHANNEL=chrome|bundled`;
 }
@@ -151,17 +162,12 @@ function configuration({ requireSecret = true } = {}) {
   if (requireSecret && !SUPABASE_PRIVILEGED_KEY_PATTERN.test(secretKey)) {
     throw new Error('A Supabase secret key or legacy service-role JWT is required.');
   }
-  const concurrency = integerSetting(
-    'BAR_FORECAST_E2E_CONCURRENCY',
-    DEFAULT_CONCURRENCY,
-    1,
-    MAX_CONCURRENCY,
-  );
-  const startIntervalMs = integerSetting(
-    'BAR_FORECAST_E2E_START_INTERVAL_MS',
-    MINIMUM_START_INTERVAL_MS,
-    MINIMUM_START_INTERVAL_MS,
-    120_000,
+  const concurrency = DEFAULT_CONCURRENCY;
+  const batchIntervalMs = integerSetting(
+    'BAR_FORECAST_E2E_BATCH_INTERVAL_MS',
+    MINIMUM_BATCH_INTERVAL_MS,
+    MINIMUM_BATCH_INTERVAL_MS,
+    MINIMUM_BATCH_INTERVAL_MS,
   );
   const journeyTimeoutMs = integerSetting(
     'BAR_FORECAST_E2E_JOURNEY_TIMEOUT_MS',
@@ -179,7 +185,7 @@ function configuration({ requireSecret = true } = {}) {
     githubRunId,
     secretKey,
     concurrency,
-    startIntervalMs,
+    batchIntervalMs,
     journeyTimeoutMs,
     browserChannel,
     awaitClassification: targetName === 'production',
@@ -195,12 +201,16 @@ if (commandLine.preflight) {
     releaseSha: config.releaseSha,
     githubRunId: config.githubRunId,
     journeys: JOURNEY_COUNT,
+    batches: BATCH_COUNT,
+    batchSize: BATCH_SIZE,
     concurrency: config.concurrency,
     maximumConcurrency: MAX_CONCURRENCY,
-    startIntervalMs: config.startIntervalMs,
-    disposableAdministrators: config.concurrency,
+    batchIntervalMs: config.batchIntervalMs,
+    disposableAdministrators: JOURNEY_COUNT,
     disposableNonAdministrators: 1,
-    disposableAccountsTotal: config.concurrency + 1,
+    disposableAccountsTotal: JOURNEY_COUNT + 1,
+    plannedMaxRequestsPerRateWindow: PLANNED_MAX_REQUESTS_PER_RATE_WINDOW,
+    plannedRateHeadroom: PLANNED_RATE_HEADROOM,
     classificationCheckpoint: config.awaitClassification,
     secretLoaded: false,
   }, null, 2)}\n`);
@@ -447,6 +457,8 @@ async function createDisposableAccount(label, kind) {
     usageResidueVerified: false,
     setupResidueVerified: false,
     setupBoundaryVerified: false,
+    postSetupStatusVerified: false,
+    journeyCount: 0,
   };
   createdAccounts.push(account);
   return account;
@@ -491,7 +503,7 @@ async function createDisposableNonAdministrator() {
 async function awaitInternalTestClassification(accounts) {
   if (!config.awaitClassification) return;
   assert.equal(config.targetName, 'production');
-  assert.equal(accounts.length, config.concurrency + 1);
+  assert.equal(accounts.length, JOURNEY_COUNT + 1);
   const request = {
     event: 'classification_required',
     runId,
@@ -646,7 +658,10 @@ async function globallySignOut(page) {
 async function authenticate(page, account) {
   let phase = 'AUTH_NAVIGATE';
   try {
-    await page.goto(`${config.siteUrl}/?forecast-e2e=${encodeURIComponent(runId)}#bar-forecast-2026`, {
+    // Provision and prove required setup on a neutral page. Opening the
+    // Forecast hash before setup would let its automatic status request race
+    // the deliberate server-side setup boundary probes.
+    await page.goto(`${config.siteUrl}/?forecast-e2e-auth=${encodeURIComponent(runId)}`, {
       waitUntil: 'domcontentloaded',
       timeout: 60_000,
     });
@@ -697,14 +712,15 @@ async function authenticate(page, account) {
       }
       let setupPrepared = prepareSetup !== true;
       let setupBoundaryVerified = prepareSetup !== true;
+      let postSetupStatusVerified = false;
+      const requestHeaders = {
+        Authorization: `Bearer ${data.session.access_token}`,
+        'Content-Type': 'application/json',
+        'X-Request-ID': crypto.randomUUID(),
+        ...(window.DueDiligencePrivateBeta?.accessHeaders?.() || {}),
+      };
+      const forecastEndpoint = `${window.DueDiligencePhase2Config.workerUrl}/admin/dd2026/bar-forecast`;
       if (prepareSetup === true) {
-        const requestHeaders = {
-          Authorization: `Bearer ${data.session.access_token}`,
-          'Content-Type': 'application/json',
-          'X-Request-ID': crypto.randomUUID(),
-          ...(window.DueDiligencePrivateBeta?.accessHeaders?.() || {}),
-        };
-        const forecastEndpoint = `${window.DueDiligencePhase2Config.workerUrl}/admin/dd2026/bar-forecast`;
         const setupBoundaryResults = [];
         for (const body of [
           { operation: 'status' },
@@ -830,11 +846,36 @@ async function authenticate(page, account) {
           };
         }
       }
+      const readyResponse = await fetch(forecastEndpoint, {
+        method: 'POST',
+        headers: {
+          ...requestHeaders,
+          'X-Request-ID': `forecast-setup-ready-${crypto.randomUUID()}`,
+        },
+        body: JSON.stringify({ operation: 'status' }),
+        signal: AbortSignal.timeout(30_000),
+      });
+      const readyPayload = await readyResponse.json().catch(() => null);
+      postSetupStatusVerified = readyResponse.status === 200
+        && readyPayload?.ok === true
+        && readyPayload?.authorized === true
+        && readyPayload?.consentAccepted === false;
+      if (!postSetupStatusVerified) {
+        return {
+          ok: true,
+          userId: data.user?.id || '',
+          setupPrepared,
+          setupBoundaryVerified,
+          postSetupStatusVerified: false,
+          error: 'POST_SETUP_STATUS_FAILED',
+        };
+      }
       return {
         ok: true,
         userId: data?.user?.id || '',
         setupPrepared,
         setupBoundaryVerified,
+        postSetupStatusVerified,
         error: null,
       };
     }, {
@@ -850,18 +891,28 @@ async function authenticate(page, account) {
       true,
       'Required setup did not block Forecast status, consent, and questions server-side.',
     );
+    assert.equal(
+      authentication.postSetupStatusVerified,
+      true,
+      'The post-setup Forecast status did not authorize the disposable examiner.',
+    );
     account.applicationSetupCompleted = true;
     account.setupBoundaryVerified = true;
+    account.postSetupStatusVerified = true;
 
-    phase = 'AUTH_SESSION_RELOAD';
-    await page.reload({ waitUntil: 'domcontentloaded', timeout: 60_000 });
+    phase = 'AUTH_FORECAST_NAVIGATE';
+    await page.goto(`${config.siteUrl}/?forecast-e2e=${encodeURIComponent(runId)}#bar-forecast-2026`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 60_000,
+    });
     phase = 'AUTH_SESSION_READY';
     await page.waitForFunction(
-      () => Boolean(
+      (expectedUserId) => Boolean(
         window.DueDiligencePhase4?.getSession?.()?.access_token
+        && window.DueDiligencePhase4?.getSession?.()?.user?.id === expectedUserId
         && window.DueDiligencePhase2?.getSession?.()?.access_token,
       ),
-      null,
+      account.userId,
       { timeout: 45_000 },
     );
     phase = 'AUTH_FORECAST_VISIBLE';
@@ -1068,8 +1119,16 @@ function assertForecastNetwork(events) {
   return Object.freeze(apiOperations);
 }
 
-async function runJourney(browser, account, ordinal, startOffsetMs) {
-  const startedAt = Date.now();
+function isSetupProbeRequestId(value) {
+  return /^forecast-setup-(?:boundary|ready)-/u.test(String(value || ''));
+}
+
+function isExpectedConsoleResourceError(message) {
+  return message.type() === 'error'
+    && /Failed to load resource:[\s\S]*status of (?:403|409)\b/iu.test(message.text());
+}
+
+async function runJourney(browser, account, ordinal, batch) {
   const subject = SUBJECTS[(ordinal - 1) % SUBJECTS.length];
   const marker = `${runId.toUpperCase()}-J${ordinal}`;
   const context = await browser.newContext({
@@ -1086,13 +1145,20 @@ async function runJourney(browser, account, ordinal, startOffsetMs) {
   const responseDiagnostics = [];
   let pageErrors = 0;
   let consoleErrors = 0;
+  let expectedConsoleErrors = 0;
+  let unexpectedConsoleErrors = 0;
   page.on('pageerror', () => { pageErrors += 1; });
-  page.on('console', (message) => { if (message.type() === 'error') consoleErrors += 1; });
+  page.on('console', (message) => {
+    if (message.type() !== 'error') return;
+    consoleErrors += 1;
+    if (isExpectedConsoleResourceError(message)) expectedConsoleErrors += 1;
+    else unexpectedConsoleErrors += 1;
+  });
   page.on('request', (request) => {
     let url;
     try { url = new URL(request.url()); } catch { return; }
     if (url.pathname !== FORECAST_PATH) return;
-    if (String(request.headers()['x-request-id'] || '').startsWith('forecast-setup-boundary-')) return;
+    if (isSetupProbeRequestId(request.headers()['x-request-id'])) return;
     let operation = '';
     try { operation = String(request.postDataJSON()?.operation || ''); } catch { operation = ''; }
     const event = {
@@ -1158,8 +1224,20 @@ async function runJourney(browser, account, ordinal, startOffsetMs) {
 
   let primaryError = null;
   let signOutCompleted = false;
-  let journeyPhase = 'AUTHENTICATE';
+  let journeyPhase = 'BATCH_START';
+  let batchStartedAt = 0;
+  let activeContextsAtStart = 0;
+  let startedAt = Date.now();
   try {
+    batchStartedAt = await batch.waitForStart();
+    startedAt = batchStartedAt;
+    activeContextsAtStart = activeContexts.size;
+    assert.equal(
+      activeContextsAtStart,
+      BATCH_SIZE,
+      'Each live batch must begin with exactly two isolated browser contexts.',
+    );
+    journeyPhase = 'AUTHENTICATE';
     await authenticate(page, account);
     journeyPhase = 'NOTICE';
     await page.getByRole('heading', { name: 'Notice & Disclaimer' }).waitFor({ state: 'visible' });
@@ -1245,6 +1323,11 @@ async function runJourney(browser, account, ordinal, startOffsetMs) {
     await Promise.allSettled(responseDiagnostics);
     const apiOperations = assertForecastNetwork(events);
     assert.equal(pageErrors, 0, 'The Forecast page emitted an uncaught browser error.');
+    assert.equal(
+      unexpectedConsoleErrors,
+      0,
+      'The Forecast page emitted an unexpected browser-console error.',
+    );
 
     journeyPhase = 'CONSENT_PERSISTENCE';
     const consentRows = await serviceRows(
@@ -1264,9 +1347,14 @@ async function runJourney(browser, account, ordinal, startOffsetMs) {
       formatting: true,
       uniqueAttempt: true,
       apiOperations,
-      startOffsetMs,
+      batchNumber: batch.number,
+      batchMember: batch.member,
+      batchStartedAt,
+      activeContextsAtStart,
       pageErrors,
       consoleErrors,
+      expectedConsoleErrors,
+      unexpectedConsoleErrors,
       durationMs: Date.now() - startedAt,
     });
   } catch (error) {
@@ -1278,6 +1366,8 @@ async function runJourney(browser, account, ordinal, startOffsetMs) {
       interface: await safeForecastInterfaceState(page),
       pageErrors,
       consoleErrors,
+      expectedConsoleErrors,
+      unexpectedConsoleErrors,
     });
     primaryError = phaseFailure(error, `JOURNEY_${journeyPhase}`);
     throw primaryError;
@@ -1291,27 +1381,37 @@ async function runJourney(browser, account, ordinal, startOffsetMs) {
   }
 }
 
-function startGate() {
-  let chain = Promise.resolve();
-  let lastStart = 0;
-  let firstStart = 0;
-  return async () => {
-    let release;
-    const current = new Promise((resolve) => { release = resolve; });
-    const previous = chain;
-    chain = current;
-    await previous;
-    try {
-      const remaining = Math.max(0, config.startIntervalMs - (Date.now() - lastStart));
-      if (remaining) await delay(remaining, undefined, { signal: stopController.signal });
-      if (stopSignal) throw new Error(`Forecast E2E interrupted by ${stopSignal}.`);
-      lastStart = Date.now();
-      if (!firstStart) firstStart = lastStart;
-      return lastStart - firstStart;
-    } finally {
-      release();
-    }
-  };
+function createBatchBarrier(expectedParticipants) {
+  let participants = 0;
+  let settled = false;
+  let release;
+  let reject;
+  const gate = new Promise((resolve, rejectGate) => {
+    release = resolve;
+    reject = rejectGate;
+  });
+  // Keep an aborted barrier handled even if a browser-context creation failed
+  // before either journey reached wait(); callers still observe the rejection.
+  void gate.catch(() => {});
+  return Object.freeze({
+    async wait() {
+      participants += 1;
+      assert.ok(
+        participants <= expectedParticipants,
+        'A live batch exceeded its exact browser-journey membership.',
+      );
+      if (participants === expectedParticipants && !settled) {
+        settled = true;
+        release(Date.now());
+      }
+      return gate;
+    },
+    abort(error) {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    },
+  });
 }
 
 async function loadChromium() {
@@ -1447,37 +1547,77 @@ async function main() {
     setDiagnosticStage('non_admin_create');
     const nonAdministrator = await createDisposableNonAdministrator();
     setDiagnosticStage('admin_create');
-    for (let slot = 1; slot <= config.concurrency; slot += 1) {
+    for (let slot = 1; slot <= JOURNEY_COUNT; slot += 1) {
       administratorAccounts.push(await createDisposableAdministrator(slot));
     }
+    assert.equal(
+      new Set(administratorAccounts.map((account) => account.userId)).size,
+      JOURNEY_COUNT,
+      'The release gate requires 30 distinct disposable administrator identities.',
+    );
     setDiagnosticStage('classification');
     await awaitInternalTestClassification([nonAdministrator, ...administratorAccounts]);
     setDiagnosticStage('non_admin_denial');
     nonAdministratorDenial = await proveNonAdministratorDenied(browser, nonAdministrator);
 
     setDiagnosticStage('journeys');
-    let nextOrdinal = 1;
-    let firstFailure = null;
-    const waitForStart = startGate();
-    const worker = async (account) => {
-      while (!firstFailure && !stopSignal) {
-        const ordinal = nextOrdinal;
-        if (ordinal > JOURNEY_COUNT) return;
-        nextOrdinal += 1;
-        try {
-          await resetForecastConsent(account.userId);
-          const startOffsetMs = await waitForStart();
-          if (firstFailure || stopSignal) return;
-          const result = await runJourney(browser, account, ordinal, startOffsetMs);
-          completedJourneys.push(result);
-          process.stderr.write(`Forecast E2E journey ${ordinal}/${JOURNEY_COUNT} passed (${result.subject}).\n`);
-        } catch (error) {
-          firstFailure ||= error;
-        }
+    let firstBatchStartedAt = 0;
+    let previousBatchStartedAt = 0;
+    for (let batchNumber = 1; batchNumber <= BATCH_COUNT; batchNumber += 1) {
+      if (previousBatchStartedAt) {
+        const remaining = Math.max(
+          0,
+          config.batchIntervalMs - (Date.now() - previousBatchStartedAt),
+        );
+        if (remaining) await delay(remaining, undefined, { signal: stopController.signal });
       }
-    };
-    await Promise.all(administratorAccounts.map(worker));
-    if (firstFailure) throw firstFailure;
+      if (stopSignal) throw new Error(`Forecast E2E interrupted by ${stopSignal}.`);
+
+      const firstOrdinal = ((batchNumber - 1) * BATCH_SIZE) + 1;
+      const accounts = administratorAccounts.slice(firstOrdinal - 1, firstOrdinal - 1 + BATCH_SIZE);
+      assert.equal(accounts.length, BATCH_SIZE, 'A live batch is missing a disposable examiner.');
+      await Promise.all(accounts.map((account) => resetForecastConsent(account.userId)));
+
+      const barrier = createBatchBarrier(BATCH_SIZE);
+      const journeyPromises = accounts.map((account, memberIndex) => runJourney(
+        browser,
+        account,
+        firstOrdinal + memberIndex,
+        {
+          number: batchNumber,
+          member: memberIndex + 1,
+          waitForStart: () => barrier.wait(),
+        },
+      ));
+      let batchResults;
+      try {
+        batchResults = await Promise.all(journeyPromises);
+      } catch (error) {
+        barrier.abort(error);
+        for (const context of activeContexts) await context.close().catch(() => {});
+        await Promise.allSettled(journeyPromises);
+        throw error;
+      }
+
+      const batchStartTimes = new Set(batchResults.map((result) => result.batchStartedAt));
+      assert.equal(batchStartTimes.size, 1, 'The two live journeys did not share one batch start.');
+      const [batchStartedAt] = batchStartTimes;
+      if (!firstBatchStartedAt) firstBatchStartedAt = batchStartedAt;
+      previousBatchStartedAt = batchStartedAt;
+
+      batchResults.forEach((result, index) => {
+        const { batchStartedAt: internalBatchStartedAt, ...publicResult } = result;
+        assert.equal(internalBatchStartedAt, batchStartedAt);
+        accounts[index].journeyCount += 1;
+        completedJourneys.push(Object.freeze({
+          ...publicResult,
+          batchStartOffsetMs: batchStartedAt - firstBatchStartedAt,
+        }));
+        process.stderr.write(
+          `Forecast E2E journey ${result.ordinal}/${JOURNEY_COUNT} passed (${result.subject}).\n`,
+        );
+      });
+    }
     if (stopSignal) throw new Error(`Forecast E2E interrupted by ${stopSignal}.`);
     assert.equal(completedJourneys.length, JOURNEY_COUNT, 'The harness did not complete exactly 30 journeys.');
   } catch (error) {
@@ -1517,18 +1657,57 @@ async function main() {
     'The exact 30-journey subject rotation is incomplete.',
   );
   assert.equal(new Set(completedJourneys.map((result) => result.ordinal)).size, JOURNEY_COUNT);
-  const startOffsets = completedJourneys
-    .map((result) => result.startOffsetMs)
-    .sort((left, right) => left - right);
-  assert.equal(startOffsets[0], 0, 'Observed journey timing must begin at a zero offset.');
-  const observedStartGaps = startOffsets.slice(1).map((offset, index) => (
-    offset - startOffsets[index]
-  ));
-  const observedMinimumStartIntervalMs = Math.min(...observedStartGaps);
-  assert.ok(
-    observedMinimumStartIntervalMs >= config.startIntervalMs,
-    'Observed journey starts violated the configured release-gate spacing.',
+  assert.equal(maximumActiveContexts, MAX_CONCURRENCY, 'The harness did not exercise exactly two contexts.');
+  assert.equal(createdAccounts.length, JOURNEY_COUNT + 1, 'The harness did not create exactly 31 accounts.');
+  assert.equal(
+    administratorAccounts.filter((account) => account.journeyCount === 1).length,
+    JOURNEY_COUNT,
+    'Every disposable administrator must execute exactly one journey.',
   );
+
+  const batches = Array.from({ length: BATCH_COUNT }, (_, index) => {
+    const batchNumber = index + 1;
+    const journeys = completedJourneys.filter((result) => result.batchNumber === batchNumber);
+    assert.equal(journeys.length, BATCH_SIZE, 'Each live batch must contain exactly two journeys.');
+    assert.deepEqual(journeys.map((result) => result.batchMember).sort(), [1, 2]);
+    assert.equal(new Set(journeys.map((result) => result.batchStartOffsetMs)).size, 1);
+    assert.ok(journeys.every((result) => result.activeContextsAtStart === BATCH_SIZE));
+    return Object.freeze({
+      number: batchNumber,
+      startOffsetMs: journeys[0].batchStartOffsetMs,
+      journeyOrdinals: journeys.map((result) => result.ordinal).sort((left, right) => left - right),
+      members: journeys.length,
+      activeContextsAtStart: BATCH_SIZE,
+    });
+  });
+  const batchStartOffsets = batches.map((batch) => batch.startOffsetMs);
+  assert.equal(batchStartOffsets[0], 0, 'Observed batch timing must begin at a zero offset.');
+  const observedBatchGaps = batchStartOffsets.slice(1).map((offset, index) => (
+    offset - batchStartOffsets[index]
+  ));
+  const observedMinimumBatchIntervalMs = Math.min(...observedBatchGaps);
+  assert.ok(
+    observedMinimumBatchIntervalMs >= config.batchIntervalMs,
+    'Observed batch starts violated the configured release-gate spacing.',
+  );
+  let observedMaximumBatchesPerRateWindow = 0;
+  for (let startIndex = 0; startIndex < batchStartOffsets.length; startIndex += 1) {
+    const windowEnd = batchStartOffsets[startIndex] + RATE_WINDOW_MS;
+    const batchesInWindow = batchStartOffsets.filter((offset) => (
+      offset >= batchStartOffsets[startIndex] && offset < windowEnd
+    )).length;
+    observedMaximumBatchesPerRateWindow = Math.max(
+      observedMaximumBatchesPerRateWindow,
+      batchesInWindow,
+    );
+  }
+  assert.ok(observedMaximumBatchesPerRateWindow <= MAX_BATCHES_PER_RATE_WINDOW);
+  const observedMaximumRequestsPerRateWindow = FIXED_FORECAST_PROBE_REQUESTS
+    + (observedMaximumBatchesPerRateWindow
+      * BATCH_SIZE
+      * (SETUP_PROBE_REQUESTS_PER_JOURNEY + MAX_JOURNEY_REQUESTS));
+  const observedRateHeadroom = RATE_REQUEST_LIMIT - observedMaximumRequestsPerRateWindow;
+  assert.ok(observedRateHeadroom >= PLANNED_RATE_HEADROOM && observedRateHeadroom > 0);
   const scores = completedJourneys.map((result) => result.totalScore);
   const summary = {
     ok: true,
@@ -1538,10 +1717,26 @@ async function main() {
     runId,
     journeysRequested: JOURNEY_COUNT,
     journeysPassed: completedJourneys.length,
+    batchesRequested: BATCH_COUNT,
+    batchesPassed: batches.length,
+    batchSize: BATCH_SIZE,
     concurrency: config.concurrency,
     maximumActiveContexts,
-    startIntervalMs: config.startIntervalMs,
-    observedMinimumStartIntervalMs,
+    batchIntervalMs: config.batchIntervalMs,
+    observedMinimumBatchIntervalMs,
+    rateLimitPlan: {
+      windowMs: RATE_WINDOW_MS,
+      requestLimit: RATE_REQUEST_LIMIT,
+      fixedForecastProbeRequests: FIXED_FORECAST_PROBE_REQUESTS,
+      setupProbeRequestsPerJourney: SETUP_PROBE_REQUESTS_PER_JOURNEY,
+      maximumJourneyRequests: MAX_JOURNEY_REQUESTS,
+      maximumBatchesPerWindow: MAX_BATCHES_PER_RATE_WINDOW,
+      plannedMaximumRequestsPerWindow: PLANNED_MAX_REQUESTS_PER_RATE_WINDOW,
+      plannedHeadroom: PLANNED_RATE_HEADROOM,
+      observedMaximumBatchesPerWindow: observedMaximumBatchesPerRateWindow,
+      observedMaximumRequestsPerWindow: observedMaximumRequestsPerRateWindow,
+      observedHeadroom: observedRateHeadroom,
+    },
     subjects: subjectCounts,
     proof: {
       realForecastHttpJourneys: completedJourneys.length,
@@ -1554,9 +1749,29 @@ async function main() {
       totalGrades: scores.length,
       suggestedAnswerAndExplanationSets: completedJourneys.filter((result) => result.resultCount === 20).length,
       uniqueAttemptIsolation: completedJourneys.filter((result) => result.uniqueAttempt).length,
+      distinctAdministratorIdentities: new Set(administratorAccounts.map(
+        (account) => account.userId,
+      )).size,
+      oneJourneyAdministratorAccounts: administratorAccounts.filter(
+        (account) => account.journeyCount === 1,
+      ).length,
       requiredSetupBoundaryAccounts: createdAccounts.filter(
         (account) => account.kind === 'administrator' && account.setupBoundaryVerified,
       ).length,
+      postSetupStatusAccounts: createdAccounts.filter(
+        (account) => account.kind === 'administrator' && account.postSetupStatusVerified,
+      ).length,
+      simultaneousBatches: batches.filter((batch) => (
+        batch.members === BATCH_SIZE && batch.activeContextsAtStart === BATCH_SIZE
+      )).length,
+      expectedConsoleErrors: completedJourneys.reduce(
+        (total, result) => total + result.expectedConsoleErrors,
+        0,
+      ),
+      unexpectedConsoleErrors: completedJourneys.reduce(
+        (total, result) => total + result.unexpectedConsoleErrors,
+        0,
+      ),
     },
     grades: {
       minimum: Math.min(...scores),
@@ -1584,6 +1799,7 @@ async function main() {
       ) && activeContexts.size === 0,
     },
     secretsLogged: false,
+    batches,
     journeys: completedJourneys,
   };
   const serialized = JSON.stringify(summary, null, 2);

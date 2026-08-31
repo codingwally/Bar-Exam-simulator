@@ -562,15 +562,14 @@ jobs:
           npm install --no-save --no-package-lock playwright@1.54.2
           node scripts/run-staging-e2e-suite.mjs examinations
 
-      - name: Run 30 complete live Forecast examiner journeys, two at a time
+      - name: Run 30 live Forecast examiners in 15 two-browser batches
         if: inputs.deploy_greenfield == true
         env:
           BAR_FORECAST_E2E_CONFIRM: staging:hlzqmreeoghbldnhlybr:30
           BAR_FORECAST_E2E_RELEASE_SHA: ${{ github.sha }}
           BAR_FORECAST_E2E_GITHUB_RUN_ID: ${{ github.run_id }}
           BAR_FORECAST_E2E_SUPABASE_SECRET_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
-          BAR_FORECAST_E2E_CONCURRENCY: '2'
-          BAR_FORECAST_E2E_START_INTERVAL_MS: '60000'
+          BAR_FORECAST_E2E_BATCH_INTERVAL_MS: '180000'
           BAR_FORECAST_E2E_BROWSER_CHANNEL: chrome
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
         shell: bash

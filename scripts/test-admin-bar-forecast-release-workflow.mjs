@@ -15,6 +15,9 @@ const contracts = Object.freeze([
     automaticContent: true,
     conditional: true,
     deployMarker: '      - name: Deploy reviewed Worker and static artifact to staging',
+    liveMarker: '      - name: Verify the live admin-only Forecast boundary',
+    workerUrl: 'https://duediligence-examinations-staging.wallyesteban1993.workers.dev',
+    allowedOrigin: 'https://duediligence-examinations-staging.wallyesteban1993.workers.dev',
   }),
   Object.freeze({
     path: '.github/workflows/deploy-worker.yml',
@@ -24,7 +27,10 @@ const contracts = Object.freeze([
     environment: 'production',
     automaticContent: false,
     conditional: false,
-    deployMarker: '      - name: Deploy Worker',
+    deployMarker: '      - name: Deploy provider-neutral public API alias',
+    liveMarker: '      - name: Verify the live admin-only Forecast boundary',
+    workerUrl: 'https://duediligence-api.wallyesteban1993.workers.dev',
+    allowedOrigin: 'https://duediligence.ph',
   }),
   Object.freeze({
     path: '.github/workflows/deploy.yml',
@@ -34,7 +40,10 @@ const contracts = Object.freeze([
     environment: 'production',
     automaticContent: false,
     conditional: false,
-    deployMarker: '      - name: Deploy Worker before exposing the new Pages client',
+    deployMarker: '      - name: Deploy provider-neutral public API alias before exposing the new Pages client',
+    liveMarker: '      - name: Verify the live admin-only Forecast boundary before Pages',
+    workerUrl: 'https://duediligence-api.wallyesteban1993.workers.dev',
+    allowedOrigin: 'https://duediligence.ph',
   }),
 ]);
 
@@ -74,10 +83,21 @@ for (const contract of contracts) {
   const forecastDatabaseGate = workflow.indexOf('      - name: Apply and post-apply probe the exact admin-only Bar Forecast migration');
   const forecastContentGate = workflow.indexOf('      - name: Import and verify the exact admin-only Bar Forecast content');
   const workerDeploy = workflow.indexOf(contract.deployMarker);
+  const liveBoundary = workflow.indexOf(contract.liveMarker);
   assert.ok(septemberGate >= 0);
   assert.ok(forecastDatabaseGate > septemberGate, `${contract.path}: Forecast DB must follow pricing DB.`);
   assert.ok(forecastContentGate > forecastDatabaseGate, `${contract.path}: content must follow Forecast schema.`);
   assert.ok(workerDeploy > forecastContentGate, `${contract.path}: Worker must follow verified Forecast content.`);
+  assert.ok(liveBoundary > workerDeploy, `${contract.path}: live Forecast denial must follow the deployed Worker endpoint.`);
+
+  const liveBoundaryNext = workflow.indexOf('\n      - name:', liveBoundary + 8);
+  const liveBoundaryStep = workflow.slice(liveBoundary, liveBoundaryNext);
+  assert.ok(liveBoundaryStep.includes(`ADMIN_BAR_FORECAST_WORKER_URL: ${contract.workerUrl}`));
+  assert.ok(liveBoundaryStep.includes(`ADMIN_BAR_FORECAST_ALLOWED_ORIGIN: ${contract.allowedOrigin}`));
+  assert.match(liveBoundaryStep, /run: node scripts\/verify-admin-bar-forecast-deployment\.mjs/u);
+  if (contract.conditional) {
+    assert.match(liveBoundaryStep, /if: inputs\.deploy_greenfield == true/u);
+  }
 
   const databaseNext = workflow.indexOf('\n      - name:', forecastDatabaseGate + 8);
   const databaseStep = workflow.slice(forecastDatabaseGate, databaseNext);
@@ -122,6 +142,7 @@ for (const contract of contracts) {
   for (const command of [
     'node scripts/test-admin-bar-forecast-release-bundle.mjs',
     'node scripts/test-admin-bar-forecast-content-release.mjs',
+    'node --test scripts/test-admin-bar-forecast-deployment-smoke.mjs',
     'node scripts/test-admin-bar-forecast-release-workflow.mjs',
   ]) {
     const position = workflow.indexOf(command);
@@ -132,9 +153,38 @@ for (const contract of contracts) {
 
 const combined = await read('.github/workflows/deploy.yml');
 assert.match(combined, /\n  deploy_pages:\s*\n\s+needs: deploy_worker/u);
+assert.match(combined, /\n  verify_production_pages:\s*\n\s+name: Verify the exact Pages SHA and approved pricing client\s*\n\s+needs: deploy_pages/u);
+const pagesDeploy = combined.indexOf('  deploy_pages:');
+const pagesVerification = combined.indexOf('  verify_production_pages:');
+assert.ok(pagesVerification > pagesDeploy, 'Production Pages verification must follow the Pages deployment.');
+const pagesVerificationBlock = combined.slice(pagesVerification);
+assert.match(pagesVerificationBlock, /deployments: read/u);
+assert.match(pagesVerificationBlock, /latest_authoritative_pages_deployment/u);
+assert.match(pagesVerificationBlock, /deployment_state" == "success" && "\$deployed_sha" == "\$GITHUB_SHA/u);
+assert.match(pagesVerificationBlock, /postflight_deployment_record="\$\(latest_authoritative_pages_deployment\)"/u);
+assert.match(pagesVerificationBlock, /postflight_deployment_state" == "success" && "\$postflight_deployed_sha" == "\$GITHUB_SHA/u);
+assert.match(pagesVerificationBlock, /\.well-known\/duediligence-release\.txt\?release=\$GITHUB_SHA/u);
+assert.match(pagesVerificationBlock, /cmp -s "\$expected_release_file" "\$served_release_file"/u);
+for (const asset of [
+  'index.html',
+  'service-worker.js',
+  'assets/feature-loader.js',
+  'assets/phase2.css',
+  'assets/phase2-experience.js',
+  'assets/pricing-renderer.css',
+  'assets/pricing-renderer.js',
+  'assets/pricing-checkout-safety.js',
+  'assets/payments/bpi-instapay-199-qr.png',
+  'assets/payments/bpi-mark.png',
+  'assets/bar-forecast.css',
+  'assets/bar-forecast.js',
+  'assets/bar-forecast/forecast-workspace-preview.webp',
+]) {
+  assert.ok(pagesVerificationBlock.includes(asset), `Production Pages verification must byte-check ${asset}.`);
+}
 console.log(JSON.stringify({
   ok: true,
   workflows: contracts.map(({ path: workflowPath }) => workflowPath),
-  releaseOrder: 'September pricing -> Forecast schema/probe -> Forecast import/checksum -> Worker -> Pages',
+  releaseOrder: 'September pricing -> Forecast schema/probe -> Forecast import/checksum -> Worker -> live denial -> Pages -> exact served SHA and bytes',
   fallback: 'exact-database-bundle-and-content-manifest-hashes',
 }));

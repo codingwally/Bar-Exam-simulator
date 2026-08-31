@@ -140,6 +140,7 @@ jobs:
           node scripts/test-september-pricing-release-workflow.mjs
           node scripts/test-admin-bar-forecast-release-bundle.mjs
           node scripts/test-admin-bar-forecast-content-release.mjs
+          node --test scripts/test-admin-bar-forecast-deployment-smoke.mjs
           node scripts/test-admin-bar-forecast-release-workflow.mjs
           node scripts/test-approved-renovation-shell.mjs
           node scripts/test-design-correction-release.mjs
@@ -410,6 +411,12 @@ jobs:
           wranglerVersion: "4.114.0"
           command: deploy --config wrangler.public-api.toml
 
+      - name: Verify the live admin-only Forecast boundary before Pages
+        env:
+          ADMIN_BAR_FORECAST_WORKER_URL: https://duediligence-api.wallyesteban1993.workers.dev
+          ADMIN_BAR_FORECAST_ALLOWED_ORIGIN: https://duediligence.ph
+        run: node scripts/verify-admin-bar-forecast-deployment.mjs
+
       - name: Verify public pricing and reject unauthenticated Admin pricing access before Pages
         env:
           PRICING_WORKER_URL: https://duediligence-api.wallyesteban1993.workers.dev
@@ -488,3 +495,122 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  verify_production_pages:
+    name: Verify the exact Pages SHA and approved pricing client
+    needs: deploy_pages
+    permissions:
+      contents: read
+      deployments: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout the exact release commit
+        uses: actions/checkout@v4
+
+      - name: Verify the exact Pages SHA and live approved assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SITE_URL: https://duediligence.ph
+        shell: bash
+        run: |
+          set -euo pipefail
+          latest_authoritative_pages_deployment() {
+            local deployment_id deployment_sha deployment_state
+            while IFS=$'\t' read -r deployment_id deployment_sha; do
+              deployment_state="$(gh api "repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses?per_page=1" --jq '.[0].state // "unknown"')"
+              case "$deployment_state" in
+                inactive|failure|error)
+                  continue
+                  ;;
+                success|queued|pending|in_progress)
+                  printf '%s\t%s' "$deployment_state" "$deployment_sha"
+                  return 0
+                  ;;
+                *)
+                  printf 'unknown\t%s' "$deployment_sha"
+                  return 0
+                  ;;
+              esac
+            done < <(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=100" --jq '.[] | [.id, .sha] | @tsv')
+            printf 'missing\t'
+          }
+          exact_sha_is_latest=false
+          for attempt in {1..12}; do
+            deployment_record="$(latest_authoritative_pages_deployment)"
+            deployment_state="${deployment_record%%$'\t'*}"
+            deployed_sha="${deployment_record#*$'\t'}"
+            if [[ "$deployment_state" == "success" && "$deployed_sha" == "$GITHUB_SHA" ]]; then
+              exact_sha_is_latest=true
+              break
+            fi
+            sleep 5
+          done
+          if [[ "$exact_sha_is_latest" != "true" ]]; then
+            echo "The pricing release SHA is not the latest successful Pages deployment." >&2
+            exit 1
+          fi
+
+          approved_assets=(
+            index.html
+            service-worker.js
+            assets/feature-loader.js
+            assets/phase2.css
+            assets/phase2-experience.js
+            assets/pricing-renderer.css
+            assets/pricing-renderer.js
+            assets/pricing-checkout-safety.js
+            assets/payments/bpi-instapay-199-qr.png
+            assets/payments/bpi-mark.png
+            assets/bar-forecast.css
+            assets/bar-forecast.js
+            assets/bar-forecast/forecast-workspace-preview.webp
+          )
+          live_root="$(mktemp -d "$RUNNER_TEMP/duediligence-pages-live.XXXXXX")"
+          trap 'rm -rf -- "$live_root"' EXIT
+          expected_release_file="$live_root/expected-release.txt"
+          printf '%s\n' "$GITHUB_SHA" > "$expected_release_file"
+          test "$(sha256sum assets/payments/bpi-instapay-199-qr.png | awk '{print $1}')" = 'b1267985ec3263f9e5b2c6aacbbe81e2890e1aa36c0a8b58d7d7aa050cc8741c'
+          test "$(sha256sum assets/payments/bpi-mark.png | awk '{print $1}')" = 'ee48a0aa321fda850d3a08ede404ef37b0b811b7219d1f4bbb05d225666557b1'
+          for attempt in {1..24}; do
+            attempt_root="$live_root/$attempt"
+            mkdir -p "$attempt_root"
+            served_release_file="$attempt_root/duediligence-release.txt"
+            all_assets_match=true
+            if ! curl --fail --location --silent --show-error \
+              -H 'Cache-Control: no-cache' \
+              --output "$served_release_file" \
+              "$SITE_URL/.well-known/duediligence-release.txt?release=$GITHUB_SHA"; then
+              all_assets_match=false
+            elif ! cmp -s "$expected_release_file" "$served_release_file"; then
+              all_assets_match=false
+            fi
+            for relative_path in "${approved_assets[@]}"; do
+              live_file="$attempt_root/$relative_path"
+              mkdir -p "$(dirname "$live_file")"
+              if ! curl --fail --location --silent --show-error \
+                -H 'Cache-Control: no-cache' \
+                --output "$live_file" \
+                "$SITE_URL/$relative_path?release=$GITHUB_SHA"; then
+                all_assets_match=false
+                continue
+              fi
+              reviewed_sha="$(sha256sum "$relative_path" | awk '{print $1}')"
+              live_sha="$(sha256sum "$live_file" | awk '{print $1}')"
+              if [[ "$live_sha" != "$reviewed_sha" ]]; then
+                all_assets_match=false
+              fi
+            done
+            if [[ "$all_assets_match" == "true" ]]; then
+              postflight_deployment_record="$(latest_authoritative_pages_deployment)"
+              postflight_deployment_state="${postflight_deployment_record%%$'\t'*}"
+              postflight_deployed_sha="${postflight_deployment_record#*$'\t'}"
+              if [[ "$postflight_deployment_state" == "success" && "$postflight_deployed_sha" == "$GITHUB_SHA" ]]; then
+                echo "The authoritative Pages deployment, served release SHA, approved payment assets, pricing client, and admin Forecast client all match $GITHUB_SHA."
+                exit 0
+              fi
+            fi
+            sleep 5
+          done
+          echo "Pages deployed, but its served SHA or approved asset bytes did not match the reviewed release in time." >&2
+          exit 1

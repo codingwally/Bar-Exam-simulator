@@ -71,9 +71,10 @@ assert.match(css, /dd-study-room-mute:focus-visible/);
 
 assert.match(client, /ADMIN_ROLES/);
 assert.match(client, /DueDiligenceSubscriptionCta\?\.isAudienceEligible\?\.\(value\) === true/);
-assert.match(client, /const subscribed = known && !eligible/);
+assert.match(client, /const subscribed = known && !eligible && !liveAccess/);
 assert.match(client, /subscribe\.disabled = !eligible/);
-assert.match(client, /subscribed \? 'Already subscribed' : 'Subscribe now'/);
+assert.match(client, /liveAccess \? 'Live access enabled' : subscribed \? 'Subscription active' : 'Subscribe now'/);
+assert.match(client, /subscribed \? 'Study Room access is not yet available during testing' : 'Opens Plans & Pricing'/);
 assert.match(client, /hasLiveRoomAccess\(access\)[\s\S]*accessResolutionFailed[\s\S]*return openLiveRoom\(\)/);
 assert.match(client, /new URL\('\/study-room\/', global\.location\.origin\)/);
 assert.match(client, /global\.open\([\s\S]*roomUrl\.href[\s\S]*popup=yes[\s\S]*toolbar=no[\s\S]*location=no/);
@@ -112,7 +113,13 @@ const accessContext = vm.createContext({
   ADMIN_ROLES: new Set(['admin', 'administrator', 'super admin', 'founder admin']),
   global: subscriptionContext,
 });
-for (const name of ['normalized', 'isAdmin', 'isSubscriptionEligible', 'hasLiveRoomAccess']) {
+for (const name of [
+  'normalized',
+  'isAdmin',
+  'isSubscriptionEligible',
+  'isFoundingBetaTester',
+  'hasLiveRoomAccess',
+]) {
   vm.runInContext(extractNamedFunction(client, name), accessContext);
 }
 assert.equal(vm.runInContext("isAdmin({ role: 'founder_admin' })", accessContext), true);
@@ -127,7 +134,9 @@ assert.equal(vm.runInContext("isSubscriptionEligible({ basis: 'complimentary', u
 assert.equal(vm.runInContext("isSubscriptionEligible({ role: 'member', subscription: null })", accessContext), true);
 assert.equal(vm.runInContext("isSubscriptionEligible(null)", accessContext), false);
 assert.equal(vm.runInContext("hasLiveRoomAccess({ role: 'admin' })", accessContext), true);
-assert.equal(vm.runInContext("hasLiveRoomAccess({ allowed: true, subscription: { status: 'active', planCode: 'early_access_beta' } })", accessContext), true);
+assert.equal(vm.runInContext("hasLiveRoomAccess({ allowed: true, basis: 'founding_beta' })", accessContext), true);
+assert.equal(vm.runInContext("hasLiveRoomAccess({ allowed: false, basis: 'founding_beta' })", accessContext), false);
+assert.equal(vm.runInContext("hasLiveRoomAccess({ allowed: true, subscription: { status: 'active', planCode: 'early_access_beta' } })", accessContext), false);
 assert.equal(vm.runInContext("hasLiveRoomAccess({ allowed: true, basis: 'introductory', introductoryTokensEligible: true })", accessContext), false);
 
 const liveWindowFunction = extractNamedFunction(client, 'openLiveRoom');
@@ -169,7 +178,7 @@ assert.doesNotMatch(css, /study-room-demo|home-current/);
 assert.doesNotMatch(html, /study-room-demo|home-current|assets\/study-room\/[^"'\s>]+\.png/);
 assert.match(pricingClient, /id="dd2-pricing-retry"/);
 assert.match(pricingClient, /Plans &amp; Pricing could not load just now\./);
-assert.match(html, /phase2-experience\.js[^"\n]*pricing=admin-builder-20260830-1/);
+assert.match(html, /phase2-experience\.js[^"\n]*pricing=regular-checkout-r1/);
 assert.doesNotMatch(
   pricingClient,
   /host\.innerHTML\s*=\s*`<div class="dd2-status is-error">\$\{escapeHtml\(error\.message/,

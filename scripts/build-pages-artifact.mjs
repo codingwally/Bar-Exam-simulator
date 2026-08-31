@@ -197,9 +197,11 @@ const publicFiles = Object.freeze([
   'service-worker.js',
 ]);
 
-const qrHashes = Object.freeze({
+const paymentAssetHashes = Object.freeze({
   'assets/payments/bpi-instapay-199-qr.png':
     'B1267985EC3263F9E5B2C6AACBBE81E2890E1AA36C0A8B58D7D7AA050CC8741C',
+  'assets/payments/bpi-mark.png':
+    'EE48A0AA321FDA850D3A08EDE404EF37B0B811B7219D1F4BBB05D225666557B1',
 });
 
 function sha256(buffer) {
@@ -438,10 +440,24 @@ await Promise.all([
 ]);
 await writeFile(path.join(outputRoot, '.nojekyll'), '', 'utf8');
 
-for (const [relativePath, expectedHash] of Object.entries(qrHashes)) {
+const releaseSha = process.env.GITHUB_SHA || '';
+if (releaseSha) {
+  if (!/^[0-9a-f]{40}$/u.test(releaseSha)) {
+    throw new Error('GITHUB_SHA must be an exact lowercase 40-character Git commit SHA.');
+  }
+  const releaseMetadataRoot = path.join(outputRoot, '.well-known');
+  await mkdir(releaseMetadataRoot, { recursive: true });
+  await writeFile(
+    path.join(releaseMetadataRoot, 'duediligence-release.txt'),
+    `${releaseSha}\n`,
+    'utf8',
+  );
+}
+
+for (const [relativePath, expectedHash] of Object.entries(paymentAssetHashes)) {
   const actualHash = sha256(await readFile(path.join(outputRoot, relativePath)));
   if (actualHash !== expectedHash) {
-    throw new Error(`${relativePath} does not match the approved payment QR pixels.`);
+    throw new Error(`${relativePath} does not match the approved payment asset pixels.`);
   }
 }
 

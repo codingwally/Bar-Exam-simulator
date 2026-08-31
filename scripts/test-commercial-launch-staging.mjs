@@ -360,7 +360,8 @@ try {
   });
   const founding = await accessSnapshot(foundingUser.id);
   assert.equal(founding.accessMode, 'founding_beta');
-  assert.equal(founding.accountLabel, 'Founding Beta');
+  assert.equal(founding.basis, 'founding_beta');
+  assert.equal(founding.accountLabel, 'Complimentary Access');
   assert.equal(founding.unlimited, true);
   assert.equal(Date.parse(founding.entitlementEndsAt), Date.parse(foundingExpiresAt));
 

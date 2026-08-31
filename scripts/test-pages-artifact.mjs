@@ -7,9 +7,12 @@ import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const expectedReleaseSha = process.env.GITHUB_SHA
+  || '0123456789abcdef0123456789abcdef01234567';
 execFileSync(process.execPath, ['scripts/build-pages-artifact.mjs'], {
   cwd: root,
   stdio: 'pipe',
+  env: { ...process.env, GITHUB_SHA: expectedReleaseSha },
 });
 
 async function walk(directory, prefix = '') {
@@ -56,6 +59,7 @@ for (const required of [
   'admin-pulse/pulse.js',
   'admin-pulse/manifest.webmanifest',
   '.well-known/assetlinks.json',
+  '.well-known/duediligence-release.txt',
   'assets/private-beta-session.js',
   'assets/pricing-renderer.css',
   'assets/pricing-renderer.js',
@@ -150,6 +154,11 @@ for (const required of [
 ]) {
   assert.ok(files.includes(required), `${required} must ship in the Pages artifact`);
 }
+assert.equal(
+  await readFile(path.join(output, '.well-known/duediligence-release.txt'), 'utf8'),
+  `${expectedReleaseSha}\n`,
+  'The served release marker must contain only the exact build SHA and one newline.',
+);
 assert.ok(
   !files.includes('assets/payments/bpi-instapay-149.png'),
   'the retired 149-peso QR must not remain publicly addressable in the Pages artifact',

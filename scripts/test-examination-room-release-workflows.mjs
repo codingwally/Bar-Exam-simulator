@@ -716,4 +716,33 @@ for (const requiredLiveProbe of [
 assert.doesNotMatch(adminAnalyticsProbe, /\b(?:create|alter|drop|truncate)\b/iu);
 assert.doesNotMatch(adminAnalyticsProbe, /\bcommit\b/iu);
 
+const deployPagesPosition = pagesWorkflow.indexOf('\n  deploy_pages:');
+const verifyPagesPosition = pagesWorkflow.indexOf('\n  verify_production_pages:');
+assert.ok(
+  deployPagesPosition >= 0 && verifyPagesPosition > deployPagesPosition,
+  'The exact production Pages verification must follow the Pages deployment.',
+);
+const verifyPagesBlock = pagesWorkflow.slice(verifyPagesPosition);
+for (const requiredProof of [
+  'needs: deploy_pages',
+  'deployments: read',
+  'latest_authoritative_pages_deployment',
+  '"$deployment_state" == "success" && "$deployed_sha" == "$GITHUB_SHA"',
+  'postflight_deployment_record="$(latest_authoritative_pages_deployment)"',
+  '"$postflight_deployment_state" == "success" && "$postflight_deployed_sha" == "$GITHUB_SHA"',
+  '.well-known/duediligence-release.txt?release=$GITHUB_SHA',
+  'cmp -s "$expected_release_file" "$served_release_file"',
+  'assets/pricing-renderer.js',
+  'assets/pricing-checkout-safety.js',
+  'assets/payments/bpi-instapay-199-qr.png',
+  'assets/payments/bpi-mark.png',
+  'assets/bar-forecast.js',
+  'assets/bar-forecast/forecast-workspace-preview.webp',
+]) {
+  assert.ok(
+    verifyPagesBlock.includes(requiredProof),
+    `The production Pages postflight is missing: ${requiredProof}`,
+  );
+}
+
 console.log('Examination Room release workflow contract checks passed.');

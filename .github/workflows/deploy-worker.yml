@@ -143,6 +143,7 @@ jobs:
           node scripts/test-september-pricing-release-workflow.mjs
           node scripts/test-admin-bar-forecast-release-bundle.mjs
           node scripts/test-admin-bar-forecast-content-release.mjs
+          node --test scripts/test-admin-bar-forecast-deployment-smoke.mjs
           node scripts/test-admin-bar-forecast-release-workflow.mjs
           node scripts/test-import-duediligence-2026-content.mjs
           node scripts/validate-duediligence-2026-content.mjs
@@ -395,6 +396,12 @@ jobs:
           workingDirectory: worker
           wranglerVersion: "4.114.0"
           command: deploy --config wrangler.public-api.toml
+
+      - name: Verify the live admin-only Forecast boundary
+        env:
+          ADMIN_BAR_FORECAST_WORKER_URL: https://duediligence-api.wallyesteban1993.workers.dev
+          ADMIN_BAR_FORECAST_ALLOWED_ORIGIN: https://duediligence.ph
+        run: node scripts/verify-admin-bar-forecast-deployment.mjs
 
       - name: Verify public pricing and reject unauthenticated Admin pricing access
         env:

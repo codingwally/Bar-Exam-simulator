@@ -1007,13 +1007,46 @@ try {
         scrollTo(maxScrollX, scrollY);
         const horizontalScrollReach = Math.abs(scrollX - originalScrollX);
         scrollTo(originalScrollX, scrollY);
+        const practiceRail = document.getElementById('qfs-practice-rail');
+        const railBounds = practiceRail?.getBoundingClientRect();
+        const railStyle = practiceRail ? getComputedStyle(practiceRail) : null;
+        const originalRailScrollLeft = practiceRail?.scrollLeft || 0;
+        if (practiceRail) practiceRail.scrollLeft = practiceRail.scrollWidth;
+        const railScrollReach = practiceRail
+          ? Math.abs(practiceRail.scrollLeft - originalRailScrollLeft)
+          : 0;
+        const lastRailControlBounds = practiceRail
+          ?.querySelector('[data-public-feature]:last-child')
+          ?.getBoundingClientRect();
+        const lastRailControlReachable = Boolean(
+          railBounds
+          && lastRailControlBounds
+          && lastRailControlBounds.left >= railBounds.left - 1
+          && lastRailControlBounds.right <= railBounds.right + 1,
+        );
+        if (practiceRail) practiceRail.scrollLeft = originalRailScrollLeft;
+        const isClippedByBoundedHorizontalScroller = (element) => {
+          let ancestor = element.parentElement;
+          while (ancestor && ancestor !== document.body) {
+            const style = getComputedStyle(ancestor);
+            const horizontallyScrollable = ['auto', 'scroll'].includes(style.overflowX)
+              && ancestor.scrollWidth > ancestor.clientWidth + 1;
+            if (horizontallyScrollable) {
+              const bounds = ancestor.getBoundingClientRect();
+              return bounds.left >= -1 && bounds.right <= innerWidth + 1;
+            }
+            ancestor = ancestor.parentElement;
+          }
+          return false;
+        };
         const offenders = [...document.querySelectorAll('body *')]
           .filter((element) => {
             const style = getComputedStyle(element);
             return style.display !== 'none'
               && style.visibility !== 'hidden'
               && Number.parseFloat(style.opacity || '1') > 0
-              && !element.closest('[hidden], [inert], [aria-hidden="true"], .dd2-sr-only');
+              && !element.closest('[hidden], [inert], [aria-hidden="true"], .dd2-sr-only')
+              && !isClippedByBoundedHorizontalScroller(element);
           })
           .map((element) => {
             const rect = element.getBoundingClientRect();
@@ -1036,6 +1069,14 @@ try {
           scrollWidth: document.documentElement.scrollWidth,
           horizontalScrollReach,
           offenders,
+          practiceRail: practiceRail && railBounds && railStyle ? {
+            overflowX: railStyle.overflowX,
+            boundedByViewport: railBounds.left >= -1 && railBounds.right <= innerWidth + 1,
+            clientWidth: practiceRail.clientWidth,
+            scrollWidth: practiceRail.scrollWidth,
+            scrollReach: railScrollReach,
+            lastControlReachableAtMaxScroll: lastRailControlReachable,
+          } : null,
         };
       });
       const activeRoot = page.locator(
@@ -1058,6 +1099,13 @@ try {
         true,
         `${label} heading was not visible in the active examination root`,
       );
+      if (viewport.width === 1_024) {
+        assert.ok(['auto', 'scroll'].includes(layout.practiceRail?.overflowX));
+        assert.equal(layout.practiceRail?.boundedByViewport, true);
+        assert.ok(layout.practiceRail?.scrollWidth > layout.practiceRail?.clientWidth + 1);
+        assert.ok(layout.practiceRail?.scrollReach > 1);
+        assert.equal(layout.practiceRail?.lastControlReachableAtMaxScroll, true);
+      }
       await runAccessibilityAudit(page, label);
     }
   }

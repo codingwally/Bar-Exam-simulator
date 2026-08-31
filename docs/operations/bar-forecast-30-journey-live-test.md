@@ -71,6 +71,7 @@ $env:BAR_FORECAST_E2E_CONFIRM = 'production:hbllomlijfznnuudpdvr:30'
 $env:BAR_FORECAST_E2E_RELEASE_SHA = '<exact-40-hex-candidate-sha>'
 $env:BAR_FORECAST_E2E_GITHUB_RUN_ID = '<numeric-run-id>'
 $env:BAR_FORECAST_E2E_APPROVAL_REFERENCE = '<approved-change-or-release-reference>'
+$env:BAR_FORECAST_E2E_AWAIT_CLASSIFICATION = 'true'
 node scripts/run-bar-forecast-live-journeys.mjs --environment production --preflight
 $env:BAR_FORECAST_E2E_SUPABASE_SECRET_KEY = Read-Host 'Temporary Supabase secret key' -MaskInput
 node scripts/run-bar-forecast-live-journeys.mjs --environment production 1> artifacts/staging-e2e/bar-forecast-live-30.json
@@ -78,6 +79,8 @@ $runExitCode = $LASTEXITCODE
 Remove-Item Env:BAR_FORECAST_E2E_SUPABASE_SECRET_KEY -ErrorAction SilentlyContinue
 exit $runExitCode
 ```
+
+Before the first production sign-in, the runner prints a credential-free `FORECAST_E2E_CLASSIFICATION` checkpoint containing only the run ID and three synthetic user UUID/kind pairs, then pauses for at most ten minutes. Independently validate those exact, newly created `dd-forecast-e2e-<run-id>-*` Auth identities and their expected roles, insert all three into `private.internal_test_accounts`, and only then enter `CONTINUE <run-id>` on stdin. This keeps their telemetry in the internal/test scope and prevents Admin Pulse delivery. Never acknowledge a partial, stale, or mismatched fixture set.
 
 Optional controls are deliberately bounded: `BAR_FORECAST_E2E_CONCURRENCY=1|2`, `BAR_FORECAST_E2E_START_INTERVAL_MS=45000..120000`, `BAR_FORECAST_E2E_JOURNEY_TIMEOUT_MS=300000..900000`, and `BAR_FORECAST_E2E_BROWSER_CHANNEL=chrome|bundled`. There is no option to reduce or increase the journey count.
 

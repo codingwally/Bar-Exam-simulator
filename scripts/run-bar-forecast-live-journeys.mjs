@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
+import { createInterface } from 'node:readline/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const require = createRequire(import.meta.url);
@@ -23,6 +24,7 @@ const DIAGNOSTIC_STAGES = new Set([
   'non_admin_create',
   'non_admin_denial',
   'admin_create',
+  'classification',
   'journeys',
   'cleanup',
   'evidence',
@@ -87,6 +89,7 @@ Required environment:
 
 Production additionally requires:
   BAR_FORECAST_E2E_APPROVAL_REFERENCE=<reviewed change or approval reference>
+  BAR_FORECAST_E2E_AWAIT_CLASSIFICATION=true
 
 Optional bounded settings:
   BAR_FORECAST_E2E_CONCURRENCY=1|2         (default 2)
@@ -132,6 +135,11 @@ function configuration({ requireSecret = true } = {}) {
       String(process.env.BAR_FORECAST_E2E_APPROVAL_REFERENCE || '').trim().length >= 8,
       'A reviewed production approval reference is required.',
     );
+    assert.equal(
+      String(process.env.BAR_FORECAST_E2E_AWAIT_CLASSIFICATION || '').trim().toLowerCase(),
+      'true',
+      'Production requires the internal-test classification checkpoint.',
+    );
   }
   const releaseSha = String(process.env.BAR_FORECAST_E2E_RELEASE_SHA || '').trim().toLowerCase();
   assert.match(releaseSha, /^[0-9a-f]{40}$/u, 'BAR_FORECAST_E2E_RELEASE_SHA must be a 40-hex commit SHA.');
@@ -172,6 +180,7 @@ function configuration({ requireSecret = true } = {}) {
     startIntervalMs,
     journeyTimeoutMs,
     browserChannel,
+    awaitClassification: targetName === 'production',
   });
 }
 
@@ -190,6 +199,7 @@ if (commandLine.preflight) {
     disposableAdministrators: config.concurrency,
     disposableNonAdministrators: 1,
     disposableAccountsTotal: config.concurrency + 1,
+    classificationCheckpoint: config.awaitClassification,
     secretLoaded: false,
   }, null, 2)}\n`);
   process.exit(0);
@@ -367,6 +377,34 @@ async function createDisposableNonAdministrator() {
   );
   await resetForecastConsent(account.userId);
   return account;
+}
+
+async function awaitInternalTestClassification(accounts) {
+  if (!config.awaitClassification) return;
+  assert.equal(config.targetName, 'production');
+  assert.equal(accounts.length, config.concurrency + 1);
+  const request = {
+    event: 'classification_required',
+    runId,
+    accounts: accounts.map(({ userId, kind }) => ({ userId, kind })),
+  };
+  // UUIDs are synthetic release-fixture identifiers. Credentials, emails,
+  // protected content, and the service key never leave process memory.
+  process.stderr.write(`FORECAST_E2E_CLASSIFICATION ${JSON.stringify(request)}\n`);
+  const input = createInterface({ input: process.stdin, terminal: false });
+  try {
+    const response = await input.question('', {
+      signal: AbortSignal.timeout(10 * 60_000),
+    });
+    assert.equal(
+      response.trim(),
+      `CONTINUE ${runId}`,
+      'Production classification acknowledgement did not match this exact run.',
+    );
+  } finally {
+    input.close();
+  }
+  process.stderr.write('Forecast E2E internal-test classification acknowledged.\n');
 }
 
 async function deleteAndVerifyDisposableUsage(account) {
@@ -940,12 +978,14 @@ async function main() {
     await verifyUnauthenticatedProductRoot(browser);
     setDiagnosticStage('non_admin_create');
     const nonAdministrator = await createDisposableNonAdministrator();
-    setDiagnosticStage('non_admin_denial');
-    nonAdministratorDenial = await proveNonAdministratorDenied(browser, nonAdministrator);
     setDiagnosticStage('admin_create');
     for (let slot = 1; slot <= config.concurrency; slot += 1) {
       administratorAccounts.push(await createDisposableAdministrator(slot));
     }
+    setDiagnosticStage('classification');
+    await awaitInternalTestClassification([nonAdministrator, ...administratorAccounts]);
+    setDiagnosticStage('non_admin_denial');
+    nonAdministratorDenial = await proveNonAdministratorDenied(browser, nonAdministrator);
 
     setDiagnosticStage('journeys');
     let nextOrdinal = 1;

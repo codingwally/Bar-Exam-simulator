@@ -36,6 +36,10 @@ assert.match(source, /status: 403/u);
 assert.match(source, /BAR_FORECAST_CONSENT_REQUIRED/u);
 assert.match(source, /status: 409/u);
 assert.match(source, /signOut\(\{ scope: 'global' \}\)/u);
+assert.match(source, /awaitInternalTestClassification/u);
+assert.match(source, /FORECAST_E2E_CLASSIFICATION/u);
+assert.match(source, /CONTINUE \$\{runId\}/u);
+assert.match(source, /AbortSignal\.timeout\(10 \* 60_000\)/u);
 assert.match(source, /DueDiligenceAuthSessionStorage\?\.prepare/u);
 assert.match(source, /auth\/v1\/admin\/users/u);
 assert.match(source, /dd2026_bar_forecast_consents/u);
@@ -60,6 +64,11 @@ assert.match(
   source,
   /complete: createdAccounts\.every\([\s\S]*?account\.deleted && account\.usageResidueVerified/,
 );
+const classificationStart = source.indexOf('async function awaitInternalTestClassification');
+assert.ok(classificationStart >= 0 && classificationStart < usageCleanupStart);
+const classificationFunction = source.slice(classificationStart, usageCleanupStart);
+assert.match(classificationFunction, /accounts\.map\(\(\{ userId, kind \}\) => \(\{ userId, kind \}\)\)/u);
+assert.doesNotMatch(classificationFunction, /account\.(?:email|password)|credentials/u);
 
 assert.match(source, /chromium\.launch/u);
 assert.match(source, /browser\.newContext/u);
@@ -112,6 +121,7 @@ assert.deepEqual({
   maximumConcurrency: stagingPreflight.maximumConcurrency,
   disposableAdministrators: stagingPreflight.disposableAdministrators,
   disposableNonAdministrators: stagingPreflight.disposableNonAdministrators,
+  classificationCheckpoint: stagingPreflight.classificationCheckpoint,
   secretLoaded: stagingPreflight.secretLoaded,
 }, {
   ok: true,
@@ -122,6 +132,7 @@ assert.deepEqual({
   maximumConcurrency: 2,
   disposableAdministrators: 2,
   disposableNonAdministrators: 1,
+  classificationCheckpoint: false,
   secretLoaded: false,
 });
 
@@ -140,11 +151,29 @@ assert.throws(() => execFileSync(
     env: {
       ...baseEnvironment,
       BAR_FORECAST_E2E_CONFIRM: 'production:hbllomlijfznnuudpdvr:30',
+      BAR_FORECAST_E2E_AWAIT_CLASSIFICATION: 'true',
       BAR_FORECAST_E2E_APPROVAL_REFERENCE: '',
     },
     stdio: 'pipe',
   },
 ));
+
+const productionPreflight = JSON.parse(execFileSync(
+  process.execPath,
+  [runnerPath, '--environment', 'production', '--preflight'],
+  {
+    env: {
+      ...baseEnvironment,
+      BAR_FORECAST_E2E_CONFIRM: 'production:hbllomlijfznnuudpdvr:30',
+      BAR_FORECAST_E2E_AWAIT_CLASSIFICATION: 'true',
+      BAR_FORECAST_E2E_APPROVAL_REFERENCE: 'PR-286-release',
+    },
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  },
+));
+assert.equal(productionPreflight.target, 'production');
+assert.equal(productionPreflight.classificationCheckpoint, true);
 
 assert.match(runbook, /exactly 30/u);
 assert.match(runbook, /150 live grading calls/u);
@@ -155,5 +184,6 @@ assert.match(runbook, /Do not paste.*secret/iu);
 assert.match(runbook, /no protected question or answer text/iu);
 assert.match(runbook, /manual cleanup/iu);
 assert.match(runbook, /usage_events[\s\S]*usage_sessions[\s\S]*Auth users/iu);
+assert.match(runbook, /BAR_FORECAST_E2E_AWAIT_CLASSIFICATION/u);
 
 process.stdout.write('Bar Forecast 30-journey live harness contract tests passed.\n');

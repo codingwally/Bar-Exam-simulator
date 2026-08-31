@@ -24,7 +24,7 @@ assert.match(index, /assets\/feature-loader\.js\?v=profile-photo-release2-202608
 assert.doesNotMatch(index, /<script[^>]+src="assets\/(?:lex-forum|examinations|duediligence-2026)\.js/);
 assert.doesNotMatch(index, /<link[^>]+href="assets\/(?:lex-forum|examinations|duediligence-2026)\.css/);
 
-for (const group of ['quorum', 'examinations', 'content']) {
+for (const group of ['quorum', 'examinations', 'content', 'forecast']) {
   assert.match(loader, new RegExp(`${group}: Object\\.freeze`));
 }
 assert.match(loader, /await Promise\.all\(manifests\[group\]\.styles\.map\(loadStyle\)\)/);

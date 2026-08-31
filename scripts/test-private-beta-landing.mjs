@@ -32,7 +32,7 @@ assert.match(sharedHeader, /class="brand pb-brand"[^>]*data-public-home/,
   'The brand must remain the authenticated Home control.');
 assert.match(sharedHeader, /id="site-menu-toggle"[^>]*aria-controls="spa-nav"[^>]*aria-label="Open navigation menu"[\s\S]*class="site-menu-icon"[\s\S]*<span><\/span><span><\/span><span><\/span>[\s\S]*<\/button>/);
 assert.match(sharedHeader, /id="spa-community"[^>]*data-public-feature="quorum"[^>]*>Home<\/button>/);
-assert.match(sharedHeader, /<summary>Study Features<\/summary>[\s\S]*Quick Drills[\s\S]*Doctrine Review[\s\S]*Syllabus-Based Review[\s\S]*Bar Question Practice[\s\S]*Bar Exam Simulation[\s\S]*Analytics/);
+assert.match(sharedHeader, /<summary>Study Features<\/summary>[\s\S]*2026 Bar Forecast[\s\S]*Quick Drills[\s\S]*Doctrine Review[\s\S]*Syllabus-Based Review[\s\S]*Bar Question Practice[\s\S]*Bar Exam Simulation[\s\S]*Analytics/);
 assert.match(sharedHeader, /data-public-action="docket"[^>]*aria-label="Sign in or open your profile"[^>]*>Profile<\/button>/);
 assert.match(sharedHeader, /Plans &amp; Pricing[\s\S]*>Support</);
 assert.doesNotMatch(sharedHeader, />The Academy<|>The Commons<|>BarBound<|>The Docket/,

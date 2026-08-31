@@ -49,8 +49,18 @@ assert.doesNotMatch(index, /duediligence-gemini-examiner\.wallyesteban1993\.work
 assert.doesNotMatch(config, /duediligence-api\.wallyesteban1993\.workers\.dev/);
 assert.doesNotMatch(index, /duediligence-api\.wallyesteban1993\.workers\.dev/);
 
-for (const required of ['assets/examinations.css', 'assets/examinations.js']) {
+for (const required of [
+  'assets/examinations.css',
+  'assets/examinations.js',
+  'assets/bar-forecast.css',
+  'assets/bar-forecast.js',
+  'assets/bar-forecast/forecast-workspace-preview.webp',
+]) {
   await assert.doesNotReject(() => readFile(path.join(output, required)));
 }
+
+const forecast = await readFile(path.join(output, 'assets/bar-forecast.js'), 'utf8');
+assert.match(forecast, /\/admin\/dd2026\/bar-forecast/);
+assert.doesNotMatch(forecast, /duediligence-api\.wallyesteban1993\.workers\.dev/);
 
 console.log('Authorized staging artifact contract checks passed.');

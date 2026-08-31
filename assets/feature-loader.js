@@ -37,6 +37,14 @@
         'assets/duediligence-2026.js?v=pedro-release2-20260827-1&baseline=public-reliability-20260827-1',
       ],
     }),
+    forecast: Object.freeze({
+      styles: [
+        'assets/bar-forecast.css?v=admin-pilot-20260831-1',
+      ],
+      scripts: [
+        'assets/bar-forecast.js?v=admin-pilot-20260831-1',
+      ],
+    }),
   });
 
   const featureGroups = Object.freeze({
@@ -44,6 +52,7 @@
     'subject-matter': 'examinations',
     'bar-feels': 'examinations',
     'bar-easy': 'content',
+    'bar-forecast': 'forecast',
     verdict: 'content',
     'chair-cases': 'content',
     doctrines: 'content',
@@ -264,6 +273,7 @@
 
   global.DueDiligenceFeatureLoader = Object.freeze({ loadForFeature, loadGroup });
   global.openBarEasy = deferredFunction('bar-easy', 'openBarEasy');
+  global.openBarForecast = deferredFunction('bar-forecast', 'openBarForecast');
   global.openChairCases = deferredFunction('chair-cases', 'openChairCases');
   global.openDoctrines = deferredFunction('doctrines', 'openDoctrines');
   global.openAnchorCases = deferredFunction('anchor-cases', 'openAnchorCases');

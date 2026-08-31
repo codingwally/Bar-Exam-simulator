@@ -20,6 +20,7 @@ const signIn = html.slice(
 assert.ok(rail, 'The approved desktop practice rail must ship in the canonical header.');
 const expectedRail = [
   'Home',
+  '2026 Bar Forecast',
   'Quick Drills',
   'Doctrine Review',
   'Syllabus-Based Review',
@@ -33,8 +34,9 @@ for (const label of expectedRail) {
   assert.ok(position > lastPosition, `${label} must remain in the approved header order.`);
   lastPosition = position;
 }
-assert.ok(rail.indexOf('>Home<') < rail.indexOf('>Quick Drills<'),
-  'Home must remain immediately before Quick Drills.');
+assert.ok(rail.indexOf('>Home<') < rail.indexOf('>2026 Bar Forecast<')
+  && rail.indexOf('>2026 Bar Forecast<') < rail.indexOf('>Quick Drills<'),
+  'The owner-approved Forecast entry must sit between Home and Quick Drills.');
 assert.equal((rail.match(/data-public-feature=/g) || []).length, expectedRail.length);
 assert.doesNotMatch(rail, /<img|<svg|role="img"/, 'The practice rail must remain icon-free.');
 
@@ -69,12 +71,14 @@ assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
 
 assert.match(shell, /function synchronizePracticeRail/);
 assert.match(shell, /synchronizePracticeRail\(refs, 'quorum'\)/);
-assert.match(shell, /'spa-community'[\s\S]*'spa-bar-easy'[\s\S]*'spa-jurisprudence'[\s\S]*'spa-mock'[\s\S]*'spa-bar-feels'[\s\S]*'spa-progress'/);
-assert.match(shell, /'#quorum':\s*'quorum'[\s\S]*'#verdict':\s*'verdict'/);
+assert.match(shell, /'spa-community'[\s\S]*'spa-bar-easy'[\s\S]*'spa-bar-forecast'[\s\S]*'spa-jurisprudence'[\s\S]*'spa-mock'[\s\S]*'spa-bar-feels'[\s\S]*'spa-progress'/);
+assert.match(shell, /'#quorum':\s*'quorum'[\s\S]*'#bar-forecast-2026':\s*'bar-forecast'[\s\S]*'#verdict':\s*'verdict'/);
+assert.match(shell, /'bar-forecast':\s*'spa-bar-forecast'/);
+assert.match(shell, /'spa-bar-forecast':\s*'2026 Bar Forecast'/);
 assert.match(shell, /addEventListener\('hashchange',[\s\S]*synchronizePracticeRail/);
 assert.match(landing, /const stillHoldMs = 30 \* 60 \* 1000/);
 assert.match(landing, /Promise\.allSettled\(playback\)/);
-assert.match(serviceWorker, /duediligence-shell-20260828-examination-room-reliability-1/);
+assert.match(serviceWorker, /duediligence-shell-20260831-bar-forecast-admin-1/);
 assert.match(serviceWorker, /quorum-first-shell\.css\?v=profile-photo-release2-20260827-1/);
 assert.match(serviceWorker, /quorum-first-shell\.js\?v=syllabus-review-20260823-1/);
 

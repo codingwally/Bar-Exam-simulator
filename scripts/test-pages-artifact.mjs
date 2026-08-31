@@ -63,6 +63,9 @@ for (const required of [
   'assets/due-diligence-controls.css',
   'assets/private-beta-landing.js',
   'assets/feature-loader.js',
+  'assets/bar-forecast.css',
+  'assets/bar-forecast.js',
+  'assets/bar-forecast/forecast-workspace-preview.webp',
   'assets/subscription-cta.css',
   'assets/subscription-cta.js',
   'assets/study-room-preview.css',
@@ -154,6 +157,7 @@ assert.ok(
 
 assert.ok(files.includes('.nojekyll'));
 assert.ok(files.every((file) => !/(^|\/)(content|worker|supabase|scripts|docs)(\/|$)/i.test(file)));
+assert.equal(files.includes('content/duediligence-2026/bar-forecast.json'), false);
 assert.ok(files.every((file) => (
   !/\.(json|sql|mjs|csv)$/i.test(file) || file === '.well-known/assetlinks.json'
 )));
@@ -188,6 +192,11 @@ const expectedMediaPipeRuntimeHashes = Object.freeze({
 });
 const examinations = await readFile(path.join(output, 'assets/examinations.js'), 'utf8');
 const featureLoader = await readFile(path.join(output, 'assets/feature-loader.js'), 'utf8');
+const barForecast = await readFile(path.join(output, 'assets/bar-forecast.js'), 'utf8');
+const barForecastStyles = await readFile(path.join(output, 'assets/bar-forecast.css'), 'utf8');
+const barForecastPreview = await readFile(
+  path.join(output, 'assets/bar-forecast/forecast-workspace-preview.webp'),
+);
 const phase2Config = await readFile(path.join(output, 'assets/phase2-config.js'), 'utf8');
 const maintenanceGate = await readFile(path.join(output, 'assets/maintenance-gate.js'), 'utf8');
 const adminPulsePage = await readFile(path.join(output, 'admin-pulse/index.html'), 'utf8');
@@ -218,7 +227,7 @@ assert.match(index, /<html lang="en-PH">/);
 assert.match(index, /id="private-beta-landing"/);
 assert.match(index, /<h1 id="pb-pillars-title">Prepare with purpose\.<\/h1>/);
 assert.equal((index.match(/id="site-header"/g) || []).length, 1);
-assert.match(index, /id="site-header"[\s\S]*id="site-menu-toggle"[\s\S]*>Home<[\s\S]*>Study Features<[\s\S]*Quick Drills[\s\S]*Doctrine Review[\s\S]*Syllabus-Based Review[\s\S]*Bar Question Practice[\s\S]*Bar Exam Simulation[\s\S]*Analytics[\s\S]*>Profile<[\s\S]*Plans &amp; Pricing[\s\S]*>Support/);
+assert.match(index, /id="site-header"[\s\S]*id="site-menu-toggle"[\s\S]*>Home<[\s\S]*>Study Features<[\s\S]*2026 Bar Forecast[\s\S]*Quick Drills[\s\S]*Doctrine Review[\s\S]*Syllabus-Based Review[\s\S]*Bar Question Practice[\s\S]*Bar Exam Simulation[\s\S]*Analytics[\s\S]*>Profile<[\s\S]*Plans &amp; Pricing[\s\S]*>Support/);
 assert.match(index, /id="dd2-header-role-button"[\s\S]*id="dd2-header-exam-button"[\s\S]*>Examination Room<[\s\S]*id="dd-study-room-trigger"[\s\S]*>Study Room<[\s\S]*id="dd2-header-pricing-button"[\s\S]*>Plans &amp; Pricing</);
 assert.match(index, /id="dd-study-room-dialog" role="dialog" aria-modal="true"/);
 assert.match(index, /You won&rsquo;t have to study alone\./);
@@ -359,6 +368,25 @@ assert.match(examinations, /Improved model response/);
 assert.doesNotMatch(examinations, /id="dd-upload-timer"/);
 assert.doesNotMatch(featureLoader, /assets\/free-trial-five-daily\.js/);
 assert.match(featureLoader, /'subject-matter': '#subject-matter'/);
+assert.match(featureLoader, /forecast:\s*Object\.freeze\([\s\S]*assets\/bar-forecast\.css[\s\S]*assets\/bar-forecast\.js/);
+assert.match(barForecast, /const ENDPOINT = '\/admin\/dd2026\/bar-forecast'/);
+assert.match(barForecast, /operation:\s*'status'/);
+assert.match(barForecast, /operation:\s*'accept', version:\s*CONSENT_VERSION/);
+assert.match(barForecast, /operation:\s*'start', subject:\s*subjectName/);
+assert.match(barForecast, /operation:\s*'submit'[\s\S]*answers:\s*submittedAnswers/);
+assert.match(barForecast, /designed to train issue spotting/i);
+assert.match(barForecast, /historical question repetition/i);
+assert.match(barForecast, /not an exact science and is not guaranteed accurate/i);
+assert.match(barForecast, /textarea\.maxLength = 6000/);
+assert.match(barForecast, /appendResultSection\(body, 'Question', state\.questions\[index\]\?\.prompt/);
+assert.doesNotMatch(barForecast, /\bALAC\b|legal[_ ]basis|controlling[_ ]doctrine|prediction score|transparent rubric/i);
+assert.doesNotMatch(barForecast, /localStorage|sessionStorage/);
+assert.match(barForecastStyles, /@keyframes bf26-radiate/);
+assert.equal(
+  createHash('sha256').update(barForecastPreview).digest('hex').toUpperCase(),
+  '8D3A68F68AD252EB88AB8DABDFF2A57DC41EF603A7948A79917EF73DE9BBD4B3',
+  'the approved Forecast workspace preview must remain unchanged',
+);
 assert.ok(!files.includes('assets/free-trial-five-daily.js'));
 assert.match(phase2Config, /maintenance:\s*Object\.freeze\(\{/);
 assert.match(phase2Config, /unlockPath:\s*'\/maintenance\/unlock'/);

@@ -59,7 +59,7 @@ assert.ok(html.indexOf('id="site-header"') < html.indexOf('id="private-beta-land
 assert.ok(html.indexOf('id="site-header"') < html.indexOf('id="authenticated-app-shell"'));
 assert.match(sharedHeader, /id="header-account-control"[^>]*data-public-action="docket"[^>]*>Profile<\/button>/);
 assert.match(sharedHeader, /id="spa-community"[^>]*data-public-feature="quorum"[^>]*>Home<\/button>/);
-assert.match(sharedHeader, /<summary>Study Features<\/summary>[\s\S]*Quick Drills[\s\S]*Doctrine Review[\s\S]*Syllabus-Based Review[\s\S]*Bar Question Practice[\s\S]*Bar Exam Simulation[\s\S]*Analytics/);
+assert.match(sharedHeader, /<summary>Study Features<\/summary>[\s\S]*2026 Bar Forecast[\s\S]*Quick Drills[\s\S]*Doctrine Review[\s\S]*Syllabus-Based Review[\s\S]*Bar Question Practice[\s\S]*Bar Exam Simulation[\s\S]*Analytics/);
 assert.doesNotMatch(sharedHeader, />The Academy<|>The Commons<|>BarBound<|>The Docket/);
 assert.match(landingJs, /function openQuorumHome\(trigger = null\)[\s\S]*openProtectedFeature\('quorum', trigger\)/);
 assert.match(landingJs, /global\.addEventListener\('popstate'[\s\S]*runPublicNavigation\('quorum'\)/);
@@ -260,7 +260,7 @@ assert.match(html, /assets\/phase2\.css\?release=profile-photo-release2-20260827
 assert.match(html, /assets\/private-beta-landing\.css[^"\n]*subject-matter-gil-fixes-20260817-4/);
 assert.match(html, /assets\/due-diligence-controls\.css\?v=subject-matter-controls-20260817-4/);
 assert.match(loader, /subject-matter-gil-fixes-20260817-4/);
-assert.match(serviceWorker, /duediligence-shell-20260828-examination-room-reliability-1/);
+assert.match(serviceWorker, /duediligence-shell-20260831-bar-forecast-admin-1/);
 assert.match(serviceWorker, /quorum-first-shell\.css\?v=profile-photo-release2-20260827-1/);
 assert.match(serviceWorker, /quorum-first-shell\.js\?v=syllabus-review-20260823-1/);
 assert.match(serviceWorker, /phase2\.css\?release=profile-photo-release2-20260827-1/);

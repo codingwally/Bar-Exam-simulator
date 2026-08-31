@@ -3,16 +3,17 @@ import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 
 const CONTENT_ROOT = new URL('../content/duediligence-2026/', import.meta.url);
-const SOURCE_VERSION = '2026.1';
+const DEFAULT_SOURCE_VERSION = '2026.1';
 const SOURCE_STATUS = 'AI_PREPARED_BETA';
 const PRODUCTION_REF = 'hbllomlijfznnuudpdvr';
 const STAGING_REF = 'hlzqmreeoghbldnhlybr';
 
 const COLLECTIONS = Object.freeze([
-  Object.freeze({ file: 'bar-easy.json', contentType: 'bar_easy', title: (row) => `${row.id} — ${row.syllabus_topic}` }),
-  Object.freeze({ file: 'doctrines.json', contentType: 'doctrine', title: (row) => row.doctrine_title }),
-  Object.freeze({ file: 'chairs-cases.json', contentType: 'chair_case', title: (row) => row.short_title || row.case_title }),
-  Object.freeze({ file: 'anchor-cases.json', contentType: 'anchor_case', title: (row) => row.short_title || row.case_title }),
+  Object.freeze({ file: 'bar-easy.json', contentType: 'bar_easy', sourceVersion: DEFAULT_SOURCE_VERSION, title: (row) => `${row.id} — ${row.syllabus_topic}` }),
+  Object.freeze({ file: 'doctrines.json', contentType: 'doctrine', sourceVersion: DEFAULT_SOURCE_VERSION, title: (row) => row.doctrine_title }),
+  Object.freeze({ file: 'chairs-cases.json', contentType: 'chair_case', sourceVersion: DEFAULT_SOURCE_VERSION, title: (row) => row.short_title || row.case_title }),
+  Object.freeze({ file: 'anchor-cases.json', contentType: 'anchor_case', sourceVersion: DEFAULT_SOURCE_VERSION, title: (row) => row.short_title || row.case_title }),
+  Object.freeze({ file: 'bar-forecast.json', contentType: 'bar_forecast_question', sourceVersion: '2026.3', title: (row) => `${row.editorial_ref} — ${row.title}` }),
 ]);
 
 function stableValue(value) {
@@ -41,7 +42,7 @@ export function transformContentRow(row, collection) {
   if (!row || typeof row !== 'object' || Array.isArray(row)) throw new Error('Content row must be an object.');
   const sourceVersion = requiredText(row.version, `${collection.file} version`, 40);
   const sourceStatus = requiredText(row.status, `${collection.file} status`, 80);
-  if (sourceVersion !== SOURCE_VERSION || sourceStatus !== SOURCE_STATUS) {
+  if (sourceVersion !== collection.sourceVersion || sourceStatus !== SOURCE_STATUS) {
     throw new Error(`${row.id || collection.file}: source version/status is not approved for this beta import.`);
   }
   const id = requiredText(row.id, `${collection.file} id`, 80).toLowerCase();
@@ -54,7 +55,7 @@ export function transformContentRow(row, collection) {
     content_type: collection.contentType,
     subject,
     title,
-    source_version: SOURCE_VERSION,
+    source_version: sourceVersion,
     source_status: SOURCE_STATUS,
     payload,
     checksum: contentChecksum(payload),
@@ -139,7 +140,10 @@ export async function main(argv = process.argv.slice(2)) {
     ok: true,
     mode: options.apply ? 'apply' : 'dry-run',
     environment: options.apply ? options.environment : null,
-    sourceVersion: SOURCE_VERSION,
+    sourceVersions: Object.fromEntries(COLLECTIONS.map((collection) => [
+      collection.contentType,
+      collection.sourceVersion,
+    ])),
     sourceStatus: SOURCE_STATUS,
     counts: manifest.counts,
     total: manifest.total,

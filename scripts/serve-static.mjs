@@ -16,6 +16,7 @@ const contentTypes = {
   '.mp4': 'video/mp4',
   '.png': 'image/png',
   '.svg': 'image/svg+xml; charset=utf-8',
+  '.webp': 'image/webp',
 };
 
 http.createServer(async (request, response) => {

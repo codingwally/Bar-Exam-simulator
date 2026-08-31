@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 
 const CONTENT_ROOT = new URL('../content/duediligence-2026/', import.meta.url);
 const SOURCE_STATUS = 'AI_PREPARED_BETA';
-const SOURCE_VERSION = '2026.1';
+const DEFAULT_SOURCE_VERSION = '2026.1';
 
 const files = Object.freeze({
   subjects: 'subjects.json',
@@ -12,6 +12,7 @@ const files = Object.freeze({
   chairCases: 'chairs-cases.json',
   anchorCases: 'anchor-cases.json',
   deploymentGates: 'deployment-gates.json',
+  barForecast: 'bar-forecast.json',
 });
 
 async function load(name) {
@@ -33,9 +34,9 @@ function assertUnique(label, rows, field = 'id') {
   assert.equal(new Set(values).size, rows.length, `${label}: duplicate ${field}`);
 }
 
-function assertBeta(label, rows) {
+function assertBeta(label, rows, version = DEFAULT_SOURCE_VERSION) {
   assert.ok(rows.every((row) => row.status === SOURCE_STATUS), `${label}: invalid beta status`);
-  assert.ok(rows.every((row) => row.version === SOURCE_VERSION), `${label}: invalid version`);
+  assert.ok(rows.every((row) => row.version === version), `${label}: invalid version`);
 }
 
 function assertHttps(label, rows, field) {
@@ -106,7 +107,7 @@ async function verifyChairSources(rows) {
   return results;
 }
 
-const [subjects, barEasy, doctrines, chairCases, anchorCases, deploymentGates] =
+const [subjects, barEasy, doctrines, chairCases, anchorCases, deploymentGates, barForecast] =
   await Promise.all(Object.keys(files).map(load));
 
 assert.equal(subjects.length, 6);
@@ -195,6 +196,51 @@ assertDistribution('Anchor Case Digests', anchorCases, {
   'Remedial Law, Legal and Judicial Ethics, with Practical Exercises': 10,
 });
 
+assert.equal(barForecast.length, 120);
+assertUnique('2026 Bar Forecast', barForecast);
+assertBeta('2026 Bar Forecast', barForecast, '2026.3');
+requireFields('2026 Bar Forecast', barForecast, [
+  'id', 'subject', 'syllabus_topic', 'title', 'prompt', 'suggested_answer',
+  'legal_basis', 'controlling_doctrine', 'jurisprudence', 'citation',
+  'primary_source_url', 'prediction_rationale', 'editorial_ref',
+  'editorial_standard', 'status', 'version', 'publication_readiness',
+]);
+assertHttps('2026 Bar Forecast', barForecast, 'primary_source_url');
+assertDistribution('2026 Bar Forecast', barForecast, {
+  'Political and Public International Law': 20,
+  'Commercial and Taxation Laws': 20,
+  'Civil Law and Land Titles and Deeds': 20,
+  'Labor Law and Social Legislation': 20,
+  'Criminal Law': 20,
+  'Remedial Law, Legal and Judicial Ethics, with Practical Exercises': 20,
+});
+
+for (const row of barForecast) {
+  assert.match(row.prompt.trim(), /\?$/, `${row.id}: Forecast prompt must end in a question mark`);
+  assert.match(
+    row.prompt.trim(),
+    /\b(?:May|Is|Are|Was|Were|Can|Could|Should|Would|Did|Does|Do|Must|Will|Has|Have)\b[^?]*\?$/i,
+    `${row.id}: Forecast prompt must be answerable by yes or no`,
+  );
+  assert.match(row.suggested_answer, /^Answer:\s+(?:Yes|No)\./, `${row.id}: answer must begin Yes or No`);
+  assert.equal((row.suggested_answer.match(/\n\nLegal Basis:/g) || []).length, 1,
+    `${row.id}: answer must contain one Legal Basis section`);
+  assert.equal((row.suggested_answer.match(/\n\nApplication:/g) || []).length, 1,
+    `${row.id}: answer must contain one Application section`);
+  assert.equal((row.suggested_answer.match(/\n\nConclusion:/g) || []).length, 1,
+    `${row.id}: answer must contain one Conclusion section`);
+  assert.match(
+    row.suggested_answer,
+    /\n\nConclusion:\s+(?:Thus|Hence|Wherefore),\s+\S/i,
+    `${row.id}: conclusion must begin with Thus, Hence, or Wherefore and give a reason`,
+  );
+  assert.equal(row.publication_readiness, 'HUMAN_LEGAL_REVIEW_REQUIRED');
+  assert.equal(row.editorial_standard,
+    '2025_BAR_ONE_QUESTION_ONE_DOCTRINE_ALAC_YES_NO_REASONED_CONCLUSION');
+  assert.ok(Array.isArray(row.source_links) && row.source_links.length >= 1,
+    `${row.id}: at least one source link is required`);
+}
+
 const sourceResults = process.argv.includes('--sources') ? await verifyChairSources(chairCases) : [];
 
 console.log(JSON.stringify({
@@ -206,12 +252,14 @@ console.log(JSON.stringify({
     chairCases: chairCases.length,
     anchorCases: anchorCases.length,
     deploymentGates: deploymentGates.length,
+    barForecast: barForecast.length,
   },
   distributions: {
     barEasy: distribution(barEasy),
     doctrines: distribution(doctrines),
     chairCases: distribution(chairCases),
     anchorCases: distribution(anchorCases),
+    barForecast: distribution(barForecast),
   },
   chairSourcesVerified: sourceResults.length,
   sourceResults,

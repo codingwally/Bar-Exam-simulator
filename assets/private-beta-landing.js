@@ -218,6 +218,7 @@
     if (state.lastActivatedHash === route) return;
     const contentRoutes = Object.freeze({
       'bar-easy': Object.freeze({ feature: 'bar-easy', opener: 'openBarEasy' }),
+      'bar-forecast-2026': Object.freeze({ feature: 'bar-forecast', opener: 'openBarForecast' }),
       'chairs-cases': Object.freeze({ feature: 'chair-cases', opener: 'openChairCases' }),
       doctrines: Object.freeze({ feature: 'doctrines', opener: 'openDoctrines' }),
       'anchor-case-digests': Object.freeze({ feature: 'anchor-cases', opener: 'openAnchorCases' }),
@@ -719,6 +720,7 @@
     'subject-matter': 'Syllabus-Based Review',
     verdict: 'Analytics',
     'bar-easy': 'Quick Drills',
+    'bar-forecast': '2026 Bar Forecast',
     quorum: 'Home',
     retainer: 'Plans & Pricing',
     'bar-feels': 'Bar Exam Simulation',
@@ -830,6 +832,7 @@
       'subject-matter': '#subject-matter',
       verdict: '#verdict',
       'bar-easy': '#bar-easy',
+      'bar-forecast': '#bar-forecast-2026',
       quorum: '#quorum',
       retainer: '#pricing',
       'bar-feels': '#bar-feels',
@@ -838,6 +841,17 @@
       'anchor-cases': '#anchor-case-digests',
     };
     const returnHash = routes[feature] || '#mock-bar';
+    if (feature === 'bar-forecast') {
+      const loaded = await loadFeature(feature);
+      if (loaded === false) return false;
+      await invokePublicOpener(
+        'openBarForecast',
+        '2026 Bar Forecast could not be opened. Please try again.',
+        trigger,
+      );
+      state.lastActivatedHash = 'bar-forecast-2026';
+      return true;
+    }
     await global.DueDiligencePhase2?.whenAuthReady?.();
     if (!currentSession()?.access_token) {
       global.DueDiligencePhase2?.openSignIn?.({
@@ -1094,6 +1108,10 @@
     });
     global.addEventListener('popstate', () => {
       closePublicMenus();
+      if (requestedApplicationRoute() === 'bar-forecast-2026') {
+        runPublicNavigation('bar-forecast');
+        return;
+      }
       if (!applicationRouteRequested()) {
         if (currentSession()?.access_token && (!gateEnabled || state.accessAllowed === true)) {
           runPublicNavigation('quorum');
@@ -1109,6 +1127,10 @@
     });
     global.addEventListener('hashchange', () => {
       closePublicMenus();
+      if (requestedApplicationRoute() === 'bar-forecast-2026') {
+        runPublicNavigation('bar-forecast');
+        return;
+      }
       if (!applicationRouteRequested()) {
         if (currentSession()?.access_token && (!gateEnabled || state.accessAllowed === true)) {
           runPublicNavigation('quorum');
@@ -1135,6 +1157,13 @@
       && document.documentElement.dataset.ddMaintenance !== 'open'
     ) {
       global.addEventListener('duediligence:maintenance-unlocked', initialize, { once: true });
+      return;
+    }
+    if (requestedApplicationRoute() === 'bar-forecast-2026') {
+      bindEvents();
+      showLanding({ accessAllowed: !gateEnabled });
+      renderPublicRoute();
+      await openProtectedFeature('bar-forecast');
       return;
     }
     await global.DueDiligencePhase2?.whenAuthReady?.();

@@ -2,11 +2,12 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const root = new URL('../', import.meta.url);
-const [html, landingJs, experience, features2026, shellCss, shellJs] = await Promise.all([
+const [html, landingJs, experience, features2026, forecastJs, shellCss, shellJs] = await Promise.all([
   readFile(new URL('index.html', root), 'utf8'),
   readFile(new URL('assets/private-beta-landing.js', root), 'utf8'),
   readFile(new URL('assets/phase2-experience.js', root), 'utf8'),
   readFile(new URL('assets/duediligence-2026.js', root), 'utf8'),
+  readFile(new URL('assets/bar-forecast.js', root), 'utf8'),
   readFile(new URL('assets/quorum-first-shell.css', root), 'utf8'),
   readFile(new URL('assets/quorum-first-shell.js', root), 'utf8'),
 ]);
@@ -35,6 +36,7 @@ const assertOrder = (markup, labels) => {
 assertOrder(navigation, [
   'Home',
   'Study Features',
+  '2026 Bar Forecast',
   'Quick Drills',
   'Doctrine Review',
   'Syllabus-Based Review',
@@ -50,10 +52,15 @@ assert.match(navigation, /id="header-account-control"[^>]*data-public-action="do
 assert.match(navigation, /class="quorum-shell-compat" hidden aria-hidden="true"/);
 
 for (const id of [
-  'spa-community', 'spa-bar-easy', 'spa-jurisprudence', 'spa-mock', 'spa-bar-feels',
+  'spa-community', 'spa-bar-forecast', 'spa-bar-easy', 'spa-jurisprudence', 'spa-mock', 'spa-bar-feels',
   'header-account-control', 'spa-examination-room', 'spa-pricing', 'spa-support', 'spa-subject-matter',
   'spa-progress', 'spa-chairs-case', 'spa-case-digest', 'btn-signin',
 ]) assert.match(navigation, new RegExp(`id="${id}"`));
+
+assert.match(navigation, /id="spa-bar-forecast"[^>]*data-public-feature="bar-forecast"[^>]*aria-haspopup="dialog"[^>]*aria-controls="bf26-root"/);
+assert.match(forecastJs, /global\.openBarForecast = openForecast/);
+assert.match(landingJs, /'bar-forecast': '#bar-forecast-2026'/);
+assert.match(shellJs, /'#bar-forecast-2026': 'bar-forecast'/);
 
 for (const [id, handler] of [
   ['spa-bar-easy', 'openBarEasy'],

@@ -204,6 +204,8 @@ import {
   dd2026DatabaseError,
 } from './duediligence-2026-core.mjs';
 import { createDD2026Handlers } from './duediligence-2026-routes.mjs';
+import { BarForecastError } from './bar-forecast-core.mjs';
+import { createBarForecastHandlers } from './bar-forecast-routes.mjs';
 import { createAuxiliaryWritingDiagnosticsHandlers } from './auxiliary-writing-diagnostics-routes.mjs';
 import { StudyRoomError } from './study-room-core.mjs';
 import { createStudyRoomHandlers } from './study-room-routes.mjs';
@@ -3342,6 +3344,22 @@ async function dd2026Rpc(env, functionName, body) {
     );
   }
   return result;
+}
+
+const BAR_FORECAST_RPC_FUNCTIONS = new Set([
+  'dd2026_bar_forecast_consent_status',
+  'dd2026_bar_forecast_accept_consent',
+  'dd2026_bar_forecast_admin_list',
+]);
+
+async function barForecastRpc(env, functionName, body) {
+  if (!BAR_FORECAST_RPC_FUNCTIONS.has(functionName)) {
+    throw new BarForecastError(
+      'BAR_FORECAST_OPERATION_UNSUPPORTED',
+      'This Forecast operation is not supported.',
+    );
+  }
+  return protectedSupabaseRpc(env, functionName, body);
 }
 
 function quorumStorageObjectUrl(env, objectPath, suffix = '') {
@@ -9956,6 +9974,20 @@ const dd2026Handlers = createDD2026Handlers({
   structuredGemini: callGeminiStructured,
 });
 
+const barForecastHandlers = createBarForecastHandlers({
+  authorizeAdministrator: (env, user) => protectedSupabaseRpc(
+    env,
+    'admin_authorization_context',
+    { p_actor_user_id: user.id },
+  ),
+  barForecastRpc,
+  enforceAdminRateLimit,
+  jsonResponse,
+  parseBoundedJson,
+  requireAdministrator,
+  structuredGemini: callGeminiStructured,
+});
+
 const auxiliaryWritingDiagnosticsHandlers = createAuxiliaryWritingDiagnosticsHandlers({
   dd2026Rpc,
   enforceDD2026RateLimit,
@@ -10228,6 +10260,16 @@ export default {
       }
       if (pathname === '/admin/dd2026/import') {
         return await dd2026Handlers.importContent(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/dd2026/bar-forecast') {
+        if (request.method !== 'POST') {
+          throw new BarForecastError(
+            'BAR_FORECAST_METHOD_NOT_ALLOWED',
+            'Use POST for the Bar Forecast administrator endpoint.',
+            405,
+          );
+        }
+        return await barForecastHandlers.handle(request, env, origin, allowedOrigin);
       }
       if (pathname === '/corrections') {
         return await handleCorrection(request, env, origin, allowedOrigin);
@@ -10506,6 +10548,7 @@ export default {
         || error instanceof ExaminationValidationError
         || error instanceof ReleaseContentError
         || error instanceof DD2026ValidationError
+        || error instanceof BarForecastError
         || error instanceof StudyRoomError;
       const errorResponse = jsonResponse({
         ok: false,
@@ -10529,6 +10572,10 @@ export default {
       }, known ? error.status : 500, requestOrigin, allowedOrigin);
       if (known && Number.isSafeInteger(error.retryAfterSeconds)) {
         errorResponse.headers.set('Retry-After', String(error.retryAfterSeconds));
+      }
+      if (pathname === '/admin/dd2026/bar-forecast') {
+        errorResponse.headers.set('Cache-Control', 'private, no-store, max-age=0');
+        errorResponse.headers.set('Pragma', 'no-cache');
       }
       return errorResponse;
     }

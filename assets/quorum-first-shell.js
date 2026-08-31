@@ -120,6 +120,7 @@
     const sourceControls = Object.freeze({
       quorum: 'spa-community',
       'bar-easy': 'spa-bar-easy',
+      'bar-forecast': 'spa-bar-forecast',
       doctrines: 'spa-jurisprudence',
       'subject-matter': 'spa-subject-matter',
       mock: 'spa-mock',
@@ -129,6 +130,7 @@
     const hashFeatures = Object.freeze({
       '#quorum': 'quorum',
       '#bar-easy': 'bar-easy',
+      '#bar-forecast-2026': 'bar-forecast',
       '#doctrines': 'doctrines',
       '#subject-matter': 'subject-matter',
       '#mock-bar': 'mock',
@@ -162,6 +164,7 @@
     const sourceIds = [
       'spa-community',
       'spa-bar-easy',
+      'spa-bar-forecast',
       'spa-jurisprudence',
       'spa-subject-matter',
       'spa-mock',
@@ -183,6 +186,7 @@
     const labels = Object.freeze({
       'spa-community': 'Home',
       'spa-bar-easy': 'Quick Drills',
+      'spa-bar-forecast': '2026 Bar Forecast',
       'spa-jurisprudence': 'Doctrine Review',
       'spa-subject-matter': 'Syllabus-Based Review',
       'spa-mock': 'Bar Question Practice',

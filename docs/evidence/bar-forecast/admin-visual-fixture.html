@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>2026 Bar Forecast visual QA fixture</title>
+  <link rel="stylesheet" href="../../../assets/bar-forecast.css">
+  <style>
+    body { margin: 0; min-height: 100vh; background: #e8e8e4; }
+    #open-fixture { margin: 24px; }
+  </style>
+</head>
+<body>
+  <button id="open-fixture" type="button">Open visual QA fixture</button>
+  <script>
+    (() => {
+      const questions = Array.from({ length: 20 }, (_, index) => ({
+        id: `visual-qa-${index + 1}`,
+        number: index + 1,
+        prompt: `Visual QA question ${index + 1}. This placeholder verifies the Bar-style reading and writing workspace without exposing protected forecast content. Should the requested relief be granted?`,
+      }));
+      const session = { access_token: 'local-visual-qa', user: { id: 'local-admin-visual-qa' } };
+      window.DueDiligencePhase4 = {
+        getSession: () => session,
+        request: async (_endpoint, options) => {
+          const operation = options?.body?.operation;
+          if (operation === 'status') return { ok: true, authorized: true, consentAccepted: false };
+          if (operation === 'accept') return { ok: true, authorized: true, consentAccepted: true };
+          if (operation === 'start') {
+            return {
+              ok: true,
+              authorized: true,
+              consentAccepted: true,
+              subject: options.body.subject,
+              questions,
+              schedule: {},
+            };
+          }
+          if (operation === 'submit') {
+            return {
+              ok: true,
+              authorized: true,
+              consentAccepted: true,
+              subject: options.body.subject,
+              totalScore: 80,
+              maxScore: 100,
+              results: questions.map((question) => ({
+                questionId: question.id,
+                number: question.number,
+                score: 4,
+                maxScore: 5,
+                feedback: 'Visual QA feedback placeholder.',
+                userAnswer: 'This is a complete visual QA answer with more than ten words for interface testing only.',
+                suggestedAnswer: 'Suggested answer placeholder supplied only to verify the protected results layout.',
+                explanation: 'Explanation placeholder supplied only to verify the protected results layout.',
+              })),
+            };
+          }
+          throw new Error('Unsupported visual QA operation.');
+        },
+      };
+    })();
+  </script>
+  <script src="../../../assets/bar-forecast.js"></script>
+  <script>
+    document.getElementById('open-fixture').addEventListener('click', (event) => {
+      window.openBarForecast(event.currentTarget);
+    });
+  </script>
+</body>
+</html>

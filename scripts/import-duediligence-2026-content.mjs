@@ -33,6 +33,19 @@ export function contentChecksum(payload) {
   return createHash('sha256').update(stableJson(payload), 'utf8').digest('hex');
 }
 
+export function supabaseServiceHeaders(key, additionalHeaders = {}) {
+  for (const headerName of Object.keys(additionalHeaders)) {
+    if (['apikey', 'authorization'].includes(headerName.toLowerCase())) {
+      throw new Error(`${headerName} cannot override a Supabase service credential header.`);
+    }
+  }
+  return {
+    ...additionalHeaders,
+    apikey: key,
+    ...(key.startsWith('sb_secret_') ? {} : { Authorization: `Bearer ${key}` }),
+  };
+}
+
 function requiredText(value, label, maximum) {
   const text = String(value ?? '').trim();
   if (!text || text.length > maximum) throw new Error(`${label} is invalid.`);
@@ -128,11 +141,9 @@ async function applyImport(rows, environment, productionConfirmation) {
   const response = await fetch(endpoint, {
     method: 'POST',
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    headers: {
-      apikey: target.key,
-      Authorization: `Bearer ${target.key}`,
+    headers: supabaseServiceHeaders(target.key, {
       'Content-Type': 'application/json',
-    },
+    }),
     body: JSON.stringify({ p_actor_user_id: null, p_rows: rows }),
   });
   const result = await response.json().catch(() => null);

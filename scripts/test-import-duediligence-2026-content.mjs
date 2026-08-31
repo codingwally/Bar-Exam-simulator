@@ -4,6 +4,7 @@ import {
   buildImportRows,
   contentChecksum,
   stableJson,
+  supabaseServiceHeaders,
   transformContentRow,
 } from './import-duediligence-2026-content.mjs';
 
@@ -27,6 +28,29 @@ test('prepared 2026 content builds an exact idempotent 360-row manifest', async 
 test('checksum is stable across object key order', () => {
   assert.equal(stableJson({ b: 2, a: { d: 4, c: 3 } }), '{"a":{"c":3,"d":4},"b":2}');
   assert.equal(contentChecksum({ b: 2, a: 1 }), contentChecksum({ a: 1, b: 2 }));
+});
+
+test('service headers support modern secret keys without an invalid Bearer credential', () => {
+  assert.deepEqual(
+    supabaseServiceHeaders('sb_secret_modern-test', { Accept: 'application/json' }),
+    { apikey: 'sb_secret_modern-test', Accept: 'application/json' },
+  );
+  assert.deepEqual(
+    supabaseServiceHeaders('legacy-service-role-jwt', { Accept: 'application/json' }),
+    {
+      apikey: 'legacy-service-role-jwt',
+      Authorization: 'Bearer legacy-service-role-jwt',
+      Accept: 'application/json',
+    },
+  );
+  assert.throws(
+    () => supabaseServiceHeaders('sb_secret_modern-test', { authorization: 'Bearer wrong' }),
+    /cannot override a Supabase service credential header/u,
+  );
+  assert.throws(
+    () => supabaseServiceHeaders('legacy-service-role-jwt', { APIKEY: 'wrong' }),
+    /cannot override a Supabase service credential header/u,
+  );
 });
 
 test('transform rejects unpublished or wrong-version data', () => {

@@ -112,7 +112,15 @@ try {
   });
   assert.equal(requests.length, 4, 'One item request and three bounded version requests are expected.');
   assert.ok(requests.every(({ url }) => url.hostname === 'hlzqmreeoghbldnhlybr.supabase.co'));
+  assert.ok(requests.every(({ init }) => init.headers.apikey === 'test-service-role-secret'));
   assert.ok(requests.every(({ init }) => init.headers.Authorization === 'Bearer test-service-role-secret'));
+  requests.length = 0;
+  process.env.DD2026_SUPABASE_SERVICE_ROLE_KEY = 'sb_secret_test-modern';
+  await verifyForecastContent({ environment: 'staging', fetchImpl });
+  assert.equal(requests.length, 4);
+  assert.ok(requests.every(({ init }) => init.headers.apikey === 'sb_secret_test-modern'));
+  assert.ok(requests.every(({ init }) => !Object.hasOwn(init.headers, 'Authorization')));
+  process.env.DD2026_SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-secret';
   const originalTitle = items[0].title;
   items[0].title = `${originalTitle} drift`;
   await assert.rejects(

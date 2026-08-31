@@ -5,6 +5,7 @@ import {
   buildImportRows,
   contentChecksum,
   stableJson,
+  supabaseServiceHeaders,
 } from './import-duediligence-2026-content.mjs';
 
 const FORECAST_CONTENT_TYPE = 'bar_forecast_question';
@@ -83,11 +84,9 @@ async function fetchRows(target, pathname, search, fetchImpl) {
   for (const [key, value] of Object.entries(search)) endpoint.searchParams.set(key, value);
   const response = await fetchImpl(endpoint, {
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    headers: {
-      apikey: target.key,
-      Authorization: `Bearer ${target.key}`,
+    headers: supabaseServiceHeaders(target.key, {
       Accept: 'application/json',
-    },
+    }),
   });
   if (!response.ok) {
     throw new Error(`Forecast verification failed with HTTP ${response.status}; no credential was logged.`);

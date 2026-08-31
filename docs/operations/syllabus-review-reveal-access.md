@@ -53,16 +53,16 @@ The following invariants are release gates:
 
 ### What happens when I choose Reveal Answer?
 
-If ₱149 Early Access or a paid subscription is active, the approved suggested
-answer and legal review open immediately. Revealing before you submit marks the
-attempt as assisted; submit first if you want the attempt to remain unassisted.
+If an active subscription is confirmed, the approved suggested answer and
+legal review open immediately. Revealing before you submit marks the attempt as
+assisted; submit first if you want the attempt to remain unassisted.
 
 `Reveal Answer` does **not** use one of your introductory practice tokens.
 
-### Why do I see the ₱149 access screen?
+### Why do I see the subscription access screen?
 
-The review material is part of Early Access. Your answer remains saved and
-editable while the access screen is open, and the review timer continues.
+The review material requires an active subscription. Your answer remains saved
+and editable while the access screen is open, and the review timer continues.
 You may close the screen with the upper-right Close button, `Back to my
 answer`, the backdrop, the Escape key, or the browser Back button. Each path
 returns you to the same Syllabus-Based Review editor; it does not submit,
@@ -70,7 +70,7 @@ erase, or reveal anything.
 
 Submitting payment proof is not approval. While verification is pending, the
 answer remains locked. You may continue answering or submit the attempt. When
-your ₱149 Early Access payment or paid subscription is approved, return to the
+the payment is approved and the subscription becomes active, return to the
 review and choose `Reveal Answer` again. Approval never opens the answer by
 itself.
 
@@ -80,11 +80,11 @@ A valid release made under the current access rules is attached to
 both the signed-in owner and the attempt. It should return after a reload or
 revisit without another charge, token change, audit event, or AI request. A
 historical reveal timestamp from before this policy is not sufficient by
-itself; an owner with active ₱149 Early Access or a paid subscription may create
-the new valid release, while an account without either remains locked. If a
-current-policy release does not recover, keep the attempt open and send Support
-the incident reference; do not reveal information from another account or copy
-review material into a support ticket.
+itself; an owner with an active subscription may create the new valid release,
+while an account without one remains locked. If a current-policy release does
+not recover, keep the attempt open and send Support the incident reference; do
+not reveal information from another account or copy review material into a
+support ticket.
 
 ## Technical contract
 

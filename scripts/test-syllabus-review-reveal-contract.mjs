@@ -291,7 +291,7 @@ const publicDenialMessage = examinationCore.match(
 assert.ok(publicDenialMessage, 'the reveal denial must have a fixed public message');
 assert.equal(
   publicDenialMessage,
-  'Suggested answers and full legal review require ₱149 Early Access or a paid subscription.',
+  'Suggested answers and full legal review require an active Regular Subscription.',
 );
 assert.doesNotMatch(publicDenialMessage, /admin|founder|founding|beta|trusted|unlimited|provisional/i);
 assert.match(
@@ -540,7 +540,7 @@ assert.match(examinations, /<button class="dd-subject-review-reveal"[^>]*data-su
 assert.match(examinations, /<span>Reveal Answer<\/span>/);
 assert.doesNotMatch(examinations, /data-subject-review-upgrade|View Early Access — ₱149/,
   'A separate payment CTA must not replace or compete with the original reveal control');
-assert.match(examinations, /requires? ₱149 Early Access or a paid subscription/);
+assert.match(examinations, /requires? an active Regular Subscription/);
 assert.match(examinations, /INTERNAL_SUBJECT_REVIEW_MARKER/);
 assert.match(examinations, /stripInternalSubjectReviewBlocks\(value\)/);
 assert.match(examinations, /SUBJECT_REVIEW_USER_TEXT_KEYS[\s\S]*?'answertext'[\s\S]*?'studentanswer'[\s\S]*?'prompt'/,
@@ -629,12 +629,12 @@ const technicalContractStart = runbook.indexOf('## Technical contract');
 assert.notEqual(userInstructionsStart, -1, 'the runbook must include copy-ready user and Support instructions');
 assert.ok(technicalContractStart > userInstructionsStart, 'the user instructions must be bounded before the technical contract');
 const userInstructions = runbook.slice(userInstructionsStart, technicalContractStart);
-assert.match(userInstructions, /₱149 Early Access/);
-assert.match(userInstructions, /paid subscription/i);
+assert.match(userInstructions, /active subscription/i);
+assert.match(userInstructions, /subscription access screen/i);
 assert.match(userInstructions, /does \*\*not\*\* use one of your introductory practice tokens/);
 assert.doesNotMatch(
   userInstructions,
-  /super_admin|founder_admin|founding_beta|provisional_payment|founding beta|trusted|unlimited|other approved/i,
+  /super_admin|founder_admin|founding_beta|provisional_payment|founding beta|early access|₱149|trusted|unlimited|other approved/i,
   'copy-ready user and Support wording must not disclose internal entitlement bases or policy terminology',
 );
 

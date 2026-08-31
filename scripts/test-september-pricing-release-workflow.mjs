@@ -82,6 +82,7 @@ for (const contract of workflowContracts) {
     'node scripts/test-september-pricing-sql-contract.mjs',
     'node scripts/test-september-pricing-release-bundle.mjs',
     'node scripts/test-september-pricing-release-workflow.mjs',
+    'node scripts/test-syllabus-review-reveal-contract.mjs',
   ]) {
     const testPosition = workflow.indexOf(testCommand);
     assert.ok(testPosition >= 0, `${contract.path} must run ${testCommand}.`);
@@ -93,6 +94,29 @@ const staging = await read('.github/workflows/staging-e2e-gate.yml');
 assert.match(staging, /refs\/heads\/feature\/pricing-september-cutover-20260831/u);
 const combinedRelease = await read('.github/workflows/deploy.yml');
 assert.match(combinedRelease, /\n  deploy_pages:\s*\n\s+needs: deploy_worker/u);
+
+const commandList = (workflow, startMarker, endMarker) => {
+  const start = workflow.indexOf(startMarker);
+  const end = workflow.indexOf(endMarker, start + startMarker.length);
+  assert.ok(start >= 0 && end > start, `Release command block ${startMarker} is missing or unbounded.`);
+  return workflow.slice(start, end)
+    .split(/\r?\n/gu)
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('node '));
+};
+const stagingCommands = new Set(commandList(
+  staging,
+  '      - name: Verify greenfield release contracts before staging deploy',
+  '      - name: Apply and probe only the ordered Examination Room migrations',
+));
+const productionCommands = commandList(
+  combinedRelease,
+  '      - name: Verify authentication, maintenance, admission, and public-shell contracts',
+  '      - name: Apply and probe only the ordered Examination Room migrations',
+);
+for (const command of productionCommands) {
+  assert.ok(stagingCommands.has(command), `Protected staging must run the production predeploy command: ${command}`);
+}
 
 console.log(JSON.stringify({
   ok: true,

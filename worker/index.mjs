@@ -10158,8 +10158,9 @@ export default {
     env = normalizedRuntimeSecrets(env);
     const allowedOrigin = env.ALLOWED_ORIGIN || 'https://duediligence.ph';
     const requestOrigin = request.headers.get('Origin') || '';
+    let pathname = '';
     try {
-      const pathname = new URL(request.url).pathname.replace(/\/+$/, '') || '/';
+      pathname = new URL(request.url).pathname.replace(/\/+$/, '') || '/';
       const publicPricingAssetMatch = pathname.match(
         /^\/pricing\/assets\/([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/iu,
       );

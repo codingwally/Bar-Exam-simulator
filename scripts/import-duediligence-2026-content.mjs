@@ -7,6 +7,7 @@ const DEFAULT_SOURCE_VERSION = '2026.1';
 const SOURCE_STATUS = 'AI_PREPARED_BETA';
 const PRODUCTION_REF = 'hbllomlijfznnuudpdvr';
 const STAGING_REF = 'hlzqmreeoghbldnhlybr';
+const REQUEST_TIMEOUT_MS = 60_000;
 
 const COLLECTIONS = Object.freeze([
   Object.freeze({ file: 'bar-easy.json', contentType: 'bar_easy', sourceVersion: DEFAULT_SOURCE_VERSION, title: (row) => `${row.id} — ${row.syllabus_topic}` }),
@@ -89,12 +90,17 @@ function parseArgs(argv) {
   const apply = argv.includes('--apply');
   const environmentIndex = argv.indexOf('--environment');
   const environment = environmentIndex >= 0 ? argv[environmentIndex + 1] : 'dry-run';
+  const contentTypeIndex = argv.indexOf('--content-type');
+  const contentType = contentTypeIndex >= 0 ? String(argv[contentTypeIndex + 1] || '') : '';
   const productionConfirmationIndex = argv.indexOf('--confirm-production');
   const productionConfirmation = productionConfirmationIndex >= 0 ? argv[productionConfirmationIndex + 1] : '';
   if (apply && !['staging', 'production'].includes(environment)) {
     throw new Error('Use --environment staging or --environment production with --apply.');
   }
-  return { apply, environment, productionConfirmation };
+  if (contentType && !COLLECTIONS.some((collection) => collection.contentType === contentType)) {
+    throw new Error(`Unknown content type: ${contentType}.`);
+  }
+  return { apply, environment, contentType, productionConfirmation };
 }
 
 function expectedRef(environment) {
@@ -121,6 +127,7 @@ async function applyImport(rows, environment, productionConfirmation) {
   const endpoint = new URL('/rest/v1/rpc/dd2026_import_content_batch', target.url);
   const response = await fetch(endpoint, {
     method: 'POST',
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     headers: {
       apikey: target.key,
       Authorization: `Bearer ${target.key}`,
@@ -136,21 +143,31 @@ async function applyImport(rows, environment, productionConfirmation) {
 export async function main(argv = process.argv.slice(2)) {
   const options = parseArgs(argv);
   const manifest = await buildImportRows();
+  const selectedRows = options.contentType
+    ? manifest.rows.filter((row) => row.content_type === options.contentType)
+    : manifest.rows;
+  const selectedCounts = options.contentType
+    ? { [options.contentType]: selectedRows.length }
+    : manifest.counts;
+  if (options.contentType && selectedRows.length < 1) {
+    throw new Error(`No rows matched content type ${options.contentType}.`);
+  }
   const report = {
     ok: true,
     mode: options.apply ? 'apply' : 'dry-run',
     environment: options.apply ? options.environment : null,
+    contentType: options.contentType || null,
     sourceVersions: Object.fromEntries(COLLECTIONS.map((collection) => [
       collection.contentType,
       collection.sourceVersion,
     ])),
     sourceStatus: SOURCE_STATUS,
-    counts: manifest.counts,
-    total: manifest.total,
+    counts: selectedCounts,
+    total: selectedRows.length,
     duplicateIds: [],
   };
   if (options.apply) {
-    const applied = await applyImport(manifest.rows, options.environment, options.productionConfirmation);
+    const applied = await applyImport(selectedRows, options.environment, options.productionConfirmation);
     report.targetRef = applied.targetRef;
     report.result = applied.result;
   }

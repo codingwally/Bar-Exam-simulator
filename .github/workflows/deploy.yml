@@ -38,6 +38,16 @@ on:
         required: false
         default: ""
         type: string
+      admin_bar_forecast_database_preapplied_sha256:
+        description: "When DB URL is absent: SHA-256 of exact 20260831170000 bundle + rollback-only probe"
+        required: false
+        default: ""
+        type: string
+      admin_bar_forecast_content_preapplied_sha256:
+        description: "When content credentials are absent: exact reviewed Forecast content-manifest SHA-256"
+        required: false
+        default: ""
+        type: string
       approval_reference:
         description: "Approval/change reference recorded in the release log"
         required: true
@@ -128,6 +138,9 @@ jobs:
           node scripts/test-september-pricing-sql-contract.mjs
           node scripts/test-september-pricing-release-bundle.mjs
           node scripts/test-september-pricing-release-workflow.mjs
+          node scripts/test-admin-bar-forecast-release-bundle.mjs
+          node scripts/test-admin-bar-forecast-content-release.mjs
+          node scripts/test-admin-bar-forecast-release-workflow.mjs
           node scripts/test-approved-renovation-shell.mjs
           node scripts/test-design-correction-release.mjs
           node scripts/test-subject-matter-consolidation.mjs
@@ -310,6 +323,48 @@ jobs:
             echo "EXAMINATION_ROOM_PRODUCTION_DATABASE_URL is missing. Manually apply the generated September pricing bundle, verify its embedded rollback-only probe, then rerun with this exact attestation: $expected_attestation" >&2
             exit 1
           fi
+
+      - name: Apply and post-apply probe the exact admin-only Bar Forecast migration
+        env:
+          ADMIN_BAR_FORECAST_DATABASE_URL: ${{ secrets.EXAMINATION_ROOM_PRODUCTION_DATABASE_URL }}
+          ADMIN_BAR_FORECAST_DATABASE_PREAPPLIED_SHA256: ${{ inputs.admin_bar_forecast_database_preapplied_sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          admin_bar_forecast_release_bundle="$RUNNER_TEMP/admin-bar-forecast-release.sql"
+          trap 'rm -f -- "$admin_bar_forecast_release_bundle"' EXIT
+          node scripts/build-admin-bar-forecast-release-bundle.mjs --output "$admin_bar_forecast_release_bundle"
+          expected_attestation="$(node --input-type=module -e 'import { createHash } from "node:crypto"; import { readFileSync } from "node:fs"; process.stdout.write("sha256:" + createHash("sha256").update(readFileSync(process.argv[1])).digest("hex"));' "$admin_bar_forecast_release_bundle")"
+          test -n "$expected_attestation"
+          if [[ -n "$ADMIN_BAR_FORECAST_DATABASE_URL" ]]; then
+            if ! command -v psql >/dev/null 2>&1; then
+              sudo apt-get update
+              sudo apt-get install --yes postgresql-client
+            fi
+            psql --version
+            psql "$ADMIN_BAR_FORECAST_DATABASE_URL" -X --set=ON_ERROR_STOP=1 --file "$admin_bar_forecast_release_bundle"
+          elif [[ "$ADMIN_BAR_FORECAST_DATABASE_PREAPPLIED_SHA256" == "$expected_attestation" ]]; then
+            echo "The exact bundle-hash attestation confirms migration 20260831170000, its ledger source hash, and its rollback-only admin/schema probe completed on production."
+          else
+            echo "EXAMINATION_ROOM_PRODUCTION_DATABASE_URL is missing. Manually apply the generated Admin Bar Forecast bundle and embedded rollback-only probe, then rerun with this exact attestation: $expected_attestation" >&2
+            exit 1
+          fi
+
+      - name: Import and verify the exact admin-only Bar Forecast content
+        env:
+          DD2026_SUPABASE_URL: https://hbllomlijfznnuudpdvr.supabase.co
+          ADMIN_BAR_FORECAST_CONTENT_PREAPPLIED_SHA256: ${{ inputs.admin_bar_forecast_content_preapplied_sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_content_attestation="$(node scripts/verify-admin-bar-forecast-content.mjs --print-attestation)"
+          [[ "$expected_content_attestation" =~ ^sha256:[0-9a-f]{64}$ ]]
+          if [[ "$ADMIN_BAR_FORECAST_CONTENT_PREAPPLIED_SHA256" != "$expected_content_attestation" ]]; then
+            echo "No production service-role credential is exposed to GitHub Actions. Using a protected external service-role credential, run the Forecast-only importer against project hbllomlijfznnuudpdvr and run the exact current-published read-back verifier. Then rerun with this exact content-manifest attestation: $expected_content_attestation" >&2
+            echo "Required external commands: node scripts/import-duediligence-2026-content.mjs --apply --environment production --content-type bar_forecast_question --confirm-production hbllomlijfznnuudpdvr ; node scripts/verify-admin-bar-forecast-content.mjs --verify --environment production --confirm-production hbllomlijfznnuudpdvr" >&2
+            exit 1
+          fi
+          echo "The exact content-manifest hash attests that an external protected operator imported only the 120 reviewed Forecast items and verified their current-published ids, subjects, titles, payload checksums, and source metadata on production."
 
       - name: Verify production Examination Room Worker secrets exist
         working-directory: worker

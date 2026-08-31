@@ -43,6 +43,16 @@ on:
         required: false
         default: ""
         type: string
+      admin_bar_forecast_database_preapplied_sha256:
+        description: "When DB URL is absent: SHA-256 of exact 20260831170000 bundle + rollback-only probe"
+        required: false
+        default: ""
+        type: string
+      admin_bar_forecast_content_preapplied_sha256:
+        description: "When content credentials are absent: exact reviewed Forecast content-manifest SHA-256"
+        required: false
+        default: ""
+        type: string
       approval_reference:
         description: "Required approval/change reference when deploy_greenfield is selected"
         required: false
@@ -130,6 +140,9 @@ jobs:
           node scripts/test-september-pricing-sql-contract.mjs
           node scripts/test-september-pricing-release-bundle.mjs
           node scripts/test-september-pricing-release-workflow.mjs
+          node scripts/test-admin-bar-forecast-release-bundle.mjs
+          node scripts/test-admin-bar-forecast-content-release.mjs
+          node scripts/test-admin-bar-forecast-release-workflow.mjs
           node scripts/test-feature-decommission-boundary.mjs
           node --test scripts/test-profile-photo-release2.mjs
           node scripts/test-profile-avatar-cleanup-migration.mjs
@@ -292,6 +305,71 @@ jobs:
             echo "The exact bundle-hash attestation confirms both September pricing migrations, their ledger records, and the rollback-only post-apply probe completed on staging before Worker cutover."
           else
             echo "EXAMINATION_ROOM_STAGING_DATABASE_URL is missing. Manually apply the generated September pricing bundle, verify its embedded rollback-only probe, then rerun with this exact attestation: $expected_attestation" >&2
+            exit 1
+          fi
+
+      - name: Apply and post-apply probe the exact admin-only Bar Forecast migration
+        if: inputs.deploy_greenfield == true
+        env:
+          ADMIN_BAR_FORECAST_DATABASE_URL: ${{ secrets.EXAMINATION_ROOM_STAGING_DATABASE_URL }}
+          ADMIN_BAR_FORECAST_DATABASE_PREAPPLIED_SHA256: ${{ inputs.admin_bar_forecast_database_preapplied_sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          admin_bar_forecast_release_bundle="$RUNNER_TEMP/admin-bar-forecast-release.sql"
+          trap 'rm -f -- "$admin_bar_forecast_release_bundle"' EXIT
+          node scripts/build-admin-bar-forecast-release-bundle.mjs --output "$admin_bar_forecast_release_bundle"
+          expected_attestation="$(node --input-type=module -e 'import { createHash } from "node:crypto"; import { readFileSync } from "node:fs"; process.stdout.write("sha256:" + createHash("sha256").update(readFileSync(process.argv[1])).digest("hex"));' "$admin_bar_forecast_release_bundle")"
+          test -n "$expected_attestation"
+          if [[ -n "$ADMIN_BAR_FORECAST_DATABASE_URL" ]]; then
+            if ! command -v psql >/dev/null 2>&1; then
+              sudo apt-get update
+              sudo apt-get install --yes postgresql-client
+            fi
+            psql --version
+            psql "$ADMIN_BAR_FORECAST_DATABASE_URL" -X --set=ON_ERROR_STOP=1 --file "$admin_bar_forecast_release_bundle"
+          elif [[ "$ADMIN_BAR_FORECAST_DATABASE_PREAPPLIED_SHA256" == "$expected_attestation" ]]; then
+            echo "The exact bundle-hash attestation confirms migration 20260831170000, its ledger source hash, and its rollback-only admin/schema probe completed on staging."
+          else
+            echo "EXAMINATION_ROOM_STAGING_DATABASE_URL is missing. Manually apply the generated Admin Bar Forecast bundle and embedded rollback-only probe, then rerun with this exact attestation: $expected_attestation" >&2
+            exit 1
+          fi
+
+      - name: Import and verify the exact admin-only Bar Forecast content
+        if: inputs.deploy_greenfield == true
+        env:
+          DD2026_SUPABASE_URL: https://hlzqmreeoghbldnhlybr.supabase.co
+          DD2026_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+          ADMIN_BAR_FORECAST_CONTENT_PREAPPLIED_SHA256: ${{ inputs.admin_bar_forecast_content_preapplied_sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          forecast_import_report="$RUNNER_TEMP/admin-bar-forecast-import.json"
+          forecast_verify_report="$RUNNER_TEMP/admin-bar-forecast-verify.json"
+          trap 'rm -f -- "$forecast_import_report" "$forecast_verify_report"' EXIT
+          expected_content_attestation="$(node scripts/verify-admin-bar-forecast-content.mjs --print-attestation)"
+          [[ "$expected_content_attestation" =~ ^sha256:[0-9a-f]{64}$ ]]
+          if [[ -n "$DD2026_SUPABASE_URL" && -n "$DD2026_SUPABASE_SERVICE_ROLE_KEY" ]]; then
+            node scripts/import-duediligence-2026-content.mjs --apply --environment staging --content-type bar_forecast_question > "$forecast_import_report"
+            node scripts/verify-admin-bar-forecast-content.mjs --verify --environment staging > "$forecast_verify_report"
+            FORECAST_IMPORT_REPORT="$forecast_import_report" FORECAST_VERIFY_REPORT="$forecast_verify_report" EXPECTED_CONTENT_ATTESTATION="$expected_content_attestation" node --input-type=module <<'NODE'
+          import { readFile } from 'node:fs/promises';
+          const imported = JSON.parse(await readFile(process.env.FORECAST_IMPORT_REPORT, 'utf8'));
+          const verified = JSON.parse(await readFile(process.env.FORECAST_VERIFY_REPORT, 'utf8'));
+          if (imported.targetRef !== 'hlzqmreeoghbldnhlybr'
+              || imported.contentType !== 'bar_forecast_question'
+              || imported.total !== 120
+              || imported.counts?.bar_forecast_question !== 120
+              || verified.targetRef !== 'hlzqmreeoghbldnhlybr'
+              || verified.count !== 120
+              || verified.sha256 !== process.env.EXPECTED_CONTENT_ATTESTATION) {
+            throw new Error('The staging Forecast import or exact content-manifest verification failed.');
+          }
+          NODE
+          elif [[ "$ADMIN_BAR_FORECAST_CONTENT_PREAPPLIED_SHA256" == "$expected_content_attestation" ]]; then
+            echo "The exact content-manifest hash attests that the 120 reviewed Forecast items were imported and checksum-verified on staging."
+          else
+            echo "Staging content credentials are missing. Manually import and verify the reviewed Forecast manifest, then rerun with this exact attestation: $expected_content_attestation" >&2
             exit 1
           fi
 

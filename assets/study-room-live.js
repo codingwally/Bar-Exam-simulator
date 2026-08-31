@@ -318,7 +318,7 @@
       const error = new Error(
         payload?.error?.message
         || (response.status === 403
-          ? 'The live Study Room is currently limited to authorized administrators.'
+          ? 'The live Study Room is currently limited to authorized testers.'
           : 'The Study Room is temporarily unavailable.'),
       );
       error.status = response.status;

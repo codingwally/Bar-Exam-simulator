@@ -2096,10 +2096,10 @@
     ]);
     const directoryById = new Map((directory.items || []).map((account) => [String(account.id), account]));
     return `
-      ${heading('Payments', 'Review ₱149 Early Access requests. Private proofs open for five minutes, and every view is recorded in the activity log.')}
-      <div class="notice danger"><strong>Money and access warning.</strong> Approval verifies the current Early Access term. The next manual renewal date is October 1, 2026 at ₱199. Confirm the student, amount, channel, reference, date, and private proof before proceeding.</div>
+      ${heading('Payments', 'Review manual subscription payments. Private proofs open for five minutes, and every view is recorded in the activity log.')}
+      <div class="notice danger"><strong>Money and access warning.</strong> Confirm the student, trusted plan amount, payment channel, and private proof. For a rolling plan, enter the exact payment date and time shown on the proof before approval; the purchased term is anchored to that verified timestamp.</div>
       ${table(
-        ['Student', 'Amount & channel', 'Reference', 'Verification', 'Reviewed by', 'Verifier email', 'Proof', 'Submitted', 'Actions'],
+        ['Student', 'Amount & channel', 'Verified payment time', 'Verification', 'Reviewed by', 'Verifier email', 'Proof', 'Submitted', 'Actions'],
         (data.items || []).map((row) => {
           const notification = paymentNotificationLabel(row);
           const studentDetails = [row.email, row.school, row.year_level].filter(Boolean);
@@ -2108,8 +2108,8 @@
             .filter(Boolean);
           return [
             { html: true, value: `<strong>${escapeHtml(row.display_name || 'Not provided')}</strong>${studentDetails.length ? `<br><small>${escapeHtml(studentDetails.join(' · '))}</small>` : ''}` },
-            { html: true, value: `<strong>₱${number(row.trusted_amount_php,2)}</strong><br><small>${escapeHtml(row.payment_method || 'Not provided')} · ${escapeHtml(row.payment_date || 'No date')}</small>` },
-            row.transaction_reference,
+            { html: true, value: `<strong>₱${number(row.trusted_amount_php,2)}</strong><br><small>${escapeHtml(row.planName || commercialPlanLabel(row.plan_code))} · ${escapeHtml(row.payment_method || 'Not provided')}</small>` },
+            row.verifiedPaidAt ? dateTime(row.verifiedPaidAt) : 'Verify from proof',
             { html: true, value: `<span class="status ${row.status === 'approved' ? 'ok' : row.status === 'rejected' ? 'danger' : 'warn'}">${escapeHtml(commercialPaymentLabel(row.status))}</span>${row.provisional_access_expires_at ? `<br><small>Provisional until ${escapeHtml(dateTime(row.provisional_access_expires_at))}</small>` : ''}` },
             row.reviewed_by ? administratorIdentity(row.reviewed_by, directoryById) : 'Pending review',
             { html: true, value: `<span class="status ${notification.className}">${escapeHtml(notification.text)}</span>${row.verification_email_last_attempt_at ? `<br><small>${escapeHtml(dateTime(row.verification_email_last_attempt_at))}</small>` : ''}` },
@@ -2121,6 +2121,11 @@
                 ${['pending', 'needs_information'].includes(row.status) ? actionButton('Approve subscription', 'payment_review', row.id, {
                   status: row.status,
                   planCode: row.plan_code,
+                  planName: row.planName || commercialPlanLabel(row.plan_code),
+                  entitlementMode: row.entitlementMode || null,
+                  verifiedPaidAt: row.verifiedPaidAt || null,
+                  requiresVerifiedPaidAt: row.entitlementMode === 'rolling_days'
+                    || row.plan_code === 'bar_access_30d',
                   approvalOnly: true,
                 }).value : ''}
                 ${actionButton('View private proof', 'view_payment_proof', row.id, {
@@ -2128,8 +2133,12 @@
                   studentEmail: row.email || 'Not available',
                   amountPhp: row.trusted_amount_php,
                   paymentMethod: row.payment_method || 'Not provided',
-                  paymentDate: row.payment_date || 'Not provided',
-                  transactionReference: row.transaction_reference || 'Not provided',
+                  planCode: row.plan_code,
+                  planName: row.planName || commercialPlanLabel(row.plan_code),
+                  entitlementMode: row.entitlementMode || null,
+                  verifiedPaidAt: row.verifiedPaidAt || null,
+                  requiresVerifiedPaidAt: row.entitlementMode === 'rolling_days'
+                    || row.plan_code === 'bar_access_30d',
                   proofOriginalName: row.proof_original_name || 'Not available',
                   proofMimeType: row.proof_mime_type || 'Not available',
                   proofSizeBytes: row.proof_size_bytes || null,
@@ -3837,8 +3846,8 @@
             ${privateProofDetail('Email', payload.studentEmail)}
             ${privateProofDetail('Amount', Number.isFinite(Number(payload.amountPhp)) ? `₱${number(payload.amountPhp, 2)}` : 'Not available')}
             ${privateProofDetail('Method', humanizeAuditValue(payload.paymentMethod))}
-            ${privateProofDetail('Payment date', payload.paymentDate)}
-            ${privateProofDetail('Reference', payload.transactionReference)}
+            ${privateProofDetail('Plan', payload.planName || commercialPlanLabel(payload.planCode))}
+            ${privateProofDetail('Verified payment time', payload.verifiedPaidAt ? dateTime(payload.verifiedPaidAt) : 'Pending administrator verification')}
             ${privateProofDetail('Submitted', dateTime(payload.submittedAt))}
             ${privateProofDetail('File', payload.proofOriginalName)}
             ${privateProofDetail('Type and size', [mimeType || payload.proofMimeType, sizeLabel].filter(Boolean).join(' · '))}
@@ -3915,17 +3924,26 @@
       warning = 'This action changes the student’s access and may affect future billing records. Confirm the requested change and effective dates before continuing.';
     } else if (action === 'payment_review') {
       title = 'Approve subscription';
+      const verifiedPaymentField = payload.requiresVerifiedPaidAt === true
+        ? actionField(
+          'Verified payment date and time shown on proof',
+          'action-paid-at',
+          localDateTimeValue(payload.verifiedPaidAt),
+          'datetime-local',
+        ) : '';
       fields = payload.approvalOnly === true
-        ? '<div class="notice"><strong>Receipt delivery</strong><br>Confirming approves Early Access and sends the subscriber an electronic receipt with the exact reviewed payment proof attached.</div>'
+        ? `<div class="notice"><strong>Receipt delivery</strong><br>Confirming approves ${escapeHtml(payload.planName || 'the selected subscription')} and sends the subscriber an electronic receipt with the exact reviewed payment proof attached.</div>${verifiedPaymentField}`
         : `<label class="field">Decision<select id="action-status">
-          <option value="approved">Approve Early Access</option>
+          <option value="approved">Approve subscription</option>
           <option value="needs_information">Needs information</option>
           <option value="rejected">Reject</option>
-        </select></label>`;
-      warning = 'Approval activates the verified Early Access term and emails the user a professional electronic receipt with the exact reviewed payment proof attached. No automatic charge or renewal is scheduled.';
+        </select></label>${verifiedPaymentField}`;
+      warning = payload.requiresVerifiedPaidAt === true
+        ? 'Approval requires the exact payment timestamp visible on the private proof. The 30-day term is calculated from that verified time, or after a later finite expiry so existing paid days are not lost. No automatic charge or renewal is scheduled.'
+        : 'Approval activates the captured fixed entitlement and emails the user a professional electronic receipt with the exact reviewed proof attached. No automatic charge or renewal is scheduled.';
     } else if (action === 'view_payment_proof') {
       title = 'View private payment proof';
-      fields = `<div class="notice"><strong>Review context</strong><br>${escapeHtml(payload.studentName || 'Not provided')} · ${escapeHtml(payload.transactionReference || 'No reference')} · ${Number.isFinite(Number(payload.amountPhp)) ? `₱${number(payload.amountPhp, 2)}` : 'Amount unavailable'}</div>`;
+      fields = `<div class="notice"><strong>Review context</strong><br>${escapeHtml(payload.studentName || 'Not provided')} · ${escapeHtml(payload.planName || commercialPlanLabel(payload.planCode))} · ${Number.isFinite(Number(payload.amountPhp)) ? `₱${number(payload.amountPhp, 2)}` : 'Amount unavailable'}</div>`;
       warning = 'Enter why access is necessary. The reason is written to Payment history and Admin activity before the private image is displayed.';
     } else if (action === 'refund_review') {
       title = 'Review refund request';
@@ -4116,7 +4134,9 @@
           ? payload.approvalOnly === true ? 'Confirm' : 'Approve subscription'
           : selected === 'rejected' ? 'Reject request' : 'Request information';
         $('#action-warning').textContent = isApproval
-          ? 'Confirming activates the verified Early Access term and emails the user an electronic receipt with the exact reviewed proof attached. No automatic charge or renewal is scheduled.'
+          ? payload.requiresVerifiedPaidAt === true
+            ? 'Confirm the exact payment timestamp shown on the private proof. The server anchors the 30-day term to that verified time and emails the user an electronic receipt with the reviewed proof attached.'
+            : 'Confirming activates the captured fixed entitlement and emails the user an electronic receipt with the exact reviewed proof attached. No automatic charge or renewal is scheduled.'
           : selected === 'rejected'
             ? 'Rejecting revokes provisional access and records your reason. No receipt is sent.'
             : 'The request remains unapproved while the user provides the missing information. No receipt is sent.';
@@ -4190,6 +4210,18 @@
           : payload.status === 'expired' ? 'expire' : 'adjust';
     } else if (action === 'payment_review') {
       payload.status = payload.approvalOnly === true ? 'approved' : $('#action-status').value;
+      payload.verifiedPaidAt = null;
+      if (payload.status === 'approved' && payload.requiresVerifiedPaidAt === true) {
+        payload.verifiedPaidAt = isoFromLocalInput($('#action-paid-at')?.value);
+        if (!payload.verifiedPaidAt) {
+          toast('Enter the exact payment date and time shown on the private proof.');
+          return;
+        }
+        if (new Date(payload.verifiedPaidAt).getTime() > Date.now() + 5 * 60_000) {
+          toast('The verified payment time cannot be in the future.');
+          return;
+        }
+      }
     } else if (action === 'refund_review') {
       payload.status = $('#action-status').value;
       payload.approvedRefundPhp = Number($('#action-refund-amount').value);

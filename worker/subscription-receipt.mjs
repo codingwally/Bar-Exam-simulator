@@ -105,14 +105,10 @@ export function subscriptionReceiptContent(context = {}) {
       || payment.paymentChannelName
       || payment.paymentMethod,
   );
-  const reference = cleanLine(
-    payment.paymentReference || payment.transactionReference,
-    120,
-  ) || 'Not provided';
-  const paymentDate = cleanLine(payment.paymentDate, 40) || 'Not provided';
   const approvedAt = manilaDateTime(payment.reviewedAt || payment.approvedAt);
   const durationDays = Number(payment.durationDays);
   const capturedAccessStart = payment.purchasedStartsAt || subscription.startsAt;
+  const verifiedPaidAt = payment.verifiedPaidAt || capturedAccessStart;
   const capturedAccessEnd = payment.purchasedEndsAt
     || subscription.expiresAt
     || payment.fixedEntitlementEndsAt
@@ -121,7 +117,7 @@ export function subscriptionReceiptContent(context = {}) {
     ? manilaDateTime(capturedAccessEnd)
     : 'No expiration returned by the approved access record';
   const term = Number.isInteger(durationDays) && durationDays > 0
-    ? `${durationDays} days from approval`
+    ? `${durationDays} days from verified payment`
     : capturedAccessEnd
       ? `Access through ${accessEndsAt}`
       : historicalEarlyAccess ? 'Legacy Early Access terms' : 'As captured by the approved plan';
@@ -152,8 +148,7 @@ export function subscriptionReceiptContent(context = {}) {
     `Plan: ${planName}${planCode ? ` (${planCode})` : ''}`,
     `Term: ${term}`,
     `Payment method: ${method}`,
-    `Transaction reference: ${reference}`,
-    `Payment date provided: ${paymentDate}`,
+    ...(verifiedPaidAt ? [`Verified payment time: ${manilaDateTime(verifiedPaidAt)}`] : []),
     `Approved: ${approvedAt}`,
     ...(capturedAccessStart ? [`Access begins: ${manilaDateTime(capturedAccessStart)}`] : []),
     `Access through: ${accessEndsAt}`,
@@ -187,8 +182,7 @@ export function subscriptionReceiptContent(context = {}) {
             ${detailRow('Plan', planName)}
             ${detailRow('Term', term)}
             ${detailRow('Payment method', method)}
-            ${detailRow('Transaction reference', reference)}
-            ${detailRow('Payment date provided', paymentDate)}
+            ${verifiedPaidAt ? detailRow('Verified payment time', manilaDateTime(verifiedPaidAt)) : ''}
             ${detailRow('Approved', approvedAt)}
             ${capturedAccessStart ? detailRow('Access begins', manilaDateTime(capturedAccessStart)) : ''}
             ${detailRow('Access through', accessEndsAt)}

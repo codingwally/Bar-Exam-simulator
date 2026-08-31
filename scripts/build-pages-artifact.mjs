@@ -83,6 +83,9 @@ const navigationIconFiles = Object.freeze([
   'monitor-up.svg',
   'pin.svg',
   'settings.svg',
+  'circle-check.svg',
+  'cloud-upload.svg',
+  'shield-check.svg',
   'LICENSE.txt',
 ].map((name) => `assets/icons/navigation/${name}`));
 
@@ -126,6 +129,7 @@ const publicFiles = Object.freeze([
   'assets/phase2-config.js',
   'assets/pricing-renderer.css',
   'assets/pricing-renderer.js',
+  'assets/pricing-checkout-safety.js',
   'assets/maintenance-gate.js',
   'assets/auth-session-storage.js',
   'assets/private-beta-session.js',
@@ -184,14 +188,15 @@ const publicFiles = Object.freeze([
   'assets/duediligence-2026.js',
   'assets/lex-forum.css',
   'assets/lex-forum.js',
-  'assets/payments/bpi-instapay-149.png',
+  'assets/payments/bpi-instapay-199-qr.png',
+  'assets/payments/bpi-mark.png',
   'offline.html',
   'service-worker.js',
 ]);
 
 const qrHashes = Object.freeze({
-  'assets/payments/bpi-instapay-149.png':
-    '00DF8567B0068B980D2135BCC74DD2963E8398AE472209E9C84F89F6B0F3C1B9',
+  'assets/payments/bpi-instapay-199-qr.png':
+    'B1267985EC3263F9E5B2C6AACBBE81E2890E1AA36C0A8B58D7D7AA050CC8741C',
 });
 
 function sha256(buffer) {

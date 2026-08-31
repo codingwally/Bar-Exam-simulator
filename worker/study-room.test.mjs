@@ -438,7 +438,13 @@ test('upstream LiveKit failures expose only a stable safe error', async () => {
   assert.match(logText, /502/u);
 });
 
-function routeHarness({ role = 'admin', authorized = true, memberAllowed = false, body = {} } = {}) {
+function routeHarness({
+  role = 'admin',
+  authorized = true,
+  memberAllowed = false,
+  memberAccess = null,
+  body = {},
+} = {}) {
   const calls = [];
   const user = { id: TEST_USER_ID };
   const catalog = {
@@ -459,7 +465,10 @@ function routeHarness({ role = 'admin', authorized = true, memberAllowed = false
     },
     authorizeMember: async (_env, receivedUser) => {
       calls.push(['authorizeMember', receivedUser.id]);
-      return { allowed: memberAllowed };
+      return memberAccess || {
+        allowed: memberAllowed,
+        basis: memberAllowed ? 'founding_beta' : 'none',
+      };
     },
     parseJson: async (_request, maximumBytes) => {
       calls.push(['parseJson', maximumBytes]);
@@ -540,17 +549,17 @@ test('admin, founder_admin, and super_admin can create and enter all five rooms'
     await assert.rejects(
       handlers.access(new Request('https://worker.test'), TEST_ENV, '', ''),
       (error) => error instanceof StudyRoomError
-        && error.code === 'STUDY_ROOM_SUBSCRIPTION_REQUIRED'
+        && error.code === 'STUDY_ROOM_PRIVATE_TEST_REQUIRED'
         && error.status === 403,
     );
   }
 });
 
-test('paid members can list and join open public rooms but cannot create rooms', async () => {
+test('Founding Beta testers can list and join open public rooms but cannot create rooms', async () => {
   const listed = routeHarness({
     role: 'member',
     authorized: false,
-    memberAllowed: true,
+    memberAccess: { allowed: true, basis: 'founding_beta' },
     body: { operation: 'list' },
   });
   const access = await listed.handlers.access(new Request('https://worker.test'), TEST_ENV, '', '');
@@ -568,7 +577,7 @@ test('paid members can list and join open public rooms but cannot create rooms',
   const joined = routeHarness({
     role: 'member',
     authorized: false,
-    memberAllowed: true,
+    memberAccess: { allowed: true, basis: 'founding_beta' },
     body: { roomKey: '2', nickname: 'Participant 12' },
   });
   const join = await joined.handlers.join(new Request('https://worker.test'), TEST_ENV, '', '');
@@ -581,7 +590,7 @@ test('paid members can list and join open public rooms but cannot create rooms',
   const create = routeHarness({
     role: 'member',
     authorized: false,
-    memberAllowed: true,
+    memberAccess: { allowed: true, basis: 'founding_beta' },
     body: { operation: 'create', roomKey: '2' },
   });
   await assert.rejects(
@@ -591,6 +600,99 @@ test('paid members can list and join open public rooms but cannot create rooms',
       && error.status === 403,
   );
   assert.equal(create.calls.some(([operation]) => operation === 'createRoom'), false);
+});
+
+test('paid, early-access, trialing, and other subscribers are denied before room listing or token issuance', async () => {
+  const deniedAccesses = [
+    {
+      label: 'regular paid subscription',
+      access: {
+        allowed: true,
+        basis: 'paid_subscription',
+        subscription: { status: 'active', planCode: 'bar_access_30d' },
+      },
+    },
+    {
+      label: 'early access / PHP 149',
+      access: {
+        allowed: true,
+        basis: 'early_access',
+        subscription: { status: 'active', planCode: 'early_access_beta' },
+      },
+    },
+    {
+      label: 'trialing subscriber',
+      access: {
+        allowed: true,
+        basis: 'trial',
+        subscription: { status: 'trialing', planCode: 'trial' },
+      },
+    },
+    {
+      label: 'other subscriber',
+      access: {
+        allowed: true,
+        basis: 'lifetime_free',
+        subscription: { status: 'active', planCode: 'complimentary' },
+      },
+    },
+  ];
+
+  for (const { label, access: memberAccess } of deniedAccesses) {
+    const listed = routeHarness({
+      role: 'member',
+      authorized: false,
+      memberAccess,
+      body: { operation: 'list' },
+    });
+    await assert.rejects(
+      listed.handlers.rooms(new Request('https://worker.test/study-room/rooms'), TEST_ENV, '', ''),
+      (error) => error instanceof StudyRoomError
+        && error.code === 'STUDY_ROOM_PRIVATE_TEST_REQUIRED'
+        && error.status === 403,
+      label,
+    );
+    assert.equal(listed.calls.some(([operation]) => operation === 'parseJson'), false, `${label} payload was parsed`);
+    assert.equal(listed.calls.some(([operation]) => operation === 'listRooms'), false, `${label} reached LiveKit room listing`);
+
+    const joined = routeHarness({
+      role: 'member',
+      authorized: false,
+      memberAccess,
+      body: { roomKey: '2', nickname: 'Participant 12' },
+    });
+    await assert.rejects(
+      joined.handlers.join(new Request('https://worker.test/study-room/join'), TEST_ENV, '', ''),
+      (error) => error instanceof StudyRoomError
+        && error.code === 'STUDY_ROOM_PRIVATE_TEST_REQUIRED'
+        && error.status === 403,
+      label,
+    );
+    assert.equal(joined.calls.some(([operation]) => operation === 'parseJson'), false, `${label} payload was parsed`);
+    assert.equal(joined.calls.some(([operation]) => operation === 'issueCredential'), false, `${label} reached LiveKit token issuance`);
+  }
+});
+
+test('all moderation remains administrator-only, including a Founding Beta nickname change', async () => {
+  const moderated = routeHarness({
+    role: 'member',
+    authorized: false,
+    memberAccess: { allowed: true, basis: 'founding_beta' },
+    body: {
+      operation: 'rename',
+      roomKey: '2',
+      participantIdentity: 'sr_abcdefghijklmnopqrstuvwx',
+      nickname: 'Dimasalang',
+    },
+  });
+  await assert.rejects(
+    moderated.handlers.moderate(new Request('https://worker.test/study-room/moderate'), TEST_ENV, '', ''),
+    (error) => error instanceof StudyRoomError
+      && error.code === 'STUDY_ROOM_ADMIN_REQUIRED'
+      && error.status === 403,
+  );
+  assert.equal(moderated.calls.some(([operation]) => operation === 'parseJson'), false);
+  assert.equal(moderated.calls.some(([operation]) => operation === 'renameParticipant'), false);
 });
 
 test('room creation is authenticated, bounded, idempotent-status aware, and ignores raw name fields', async () => {
@@ -723,7 +825,7 @@ test('access, rooms, join, and moderation rate-limit and re-authorize before pay
   await assert.rejects(
     handlers.access(new Request('https://worker.test'), TEST_ENV, '', ''),
     (error) => error instanceof StudyRoomError
-      && error.code === 'STUDY_ROOM_SUBSCRIPTION_REQUIRED'
+      && error.code === 'STUDY_ROOM_PRIVATE_TEST_REQUIRED'
       && error.status === 403,
   );
 });
@@ -783,7 +885,7 @@ test('production Worker route re-verifies Supabase admin authorization and retur
   }
 });
 
-test('production Worker falls through an expected admin denial to paid-member Study Room access', async () => {
+test('production Worker falls through an expected admin denial to Founding Beta Study Room access', async () => {
   const originalFetch = globalThis.fetch;
   const upstreamCalls = [];
   globalThis.fetch = async (input, init = {}) => {
@@ -848,6 +950,99 @@ test('production Worker falls through an expected admin denial to paid-member St
       ['/rest/v1/rpc/admin_authorization_context', 'POST'],
       ['/rest/v1/rpc/phase4_access_snapshot', 'POST'],
     ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('production Worker denies paid and early-access accounts before LiveKit list or join calls', async () => {
+  const originalFetch = globalThis.fetch;
+  const deniedAccesses = [
+    {
+      label: 'regular paid subscription',
+      access: {
+        allowed: true,
+        basis: 'paid_subscription',
+        termsRequired: false,
+        reauthenticationRequired: false,
+        paidSubscriptionExpired: false,
+        subscription: { status: 'active', planCode: 'bar_access_30d' },
+      },
+    },
+    {
+      label: 'early access / PHP 149',
+      access: {
+        allowed: true,
+        basis: 'early_access',
+        termsRequired: false,
+        reauthenticationRequired: false,
+        paidSubscriptionExpired: false,
+        subscription: { status: 'active', planCode: 'early_access_beta' },
+      },
+    },
+  ];
+  const endpointCases = [
+    ['/study-room/rooms', { operation: 'list' }],
+    ['/study-room/join', { roomKey: '2', nickname: 'Participant 12' }],
+  ];
+
+  try {
+    for (const { label, access } of deniedAccesses) {
+      for (const [pathname, payload] of endpointCases) {
+        const upstreamCalls = [];
+        globalThis.fetch = async (input, init = {}) => {
+          const url = new URL(String(input));
+          upstreamCalls.push([url.origin, url.pathname, init.method || 'GET']);
+          if (url.pathname === '/auth/v1/user') {
+            return Response.json({
+              id: TEST_USER_ID,
+              email: 'member@example.com',
+              user_metadata: { full_name: 'Member Tester' },
+              app_metadata: { provider: 'email' },
+            });
+          }
+          if (url.pathname === '/rest/v1/rpc/admin_authorization_context') {
+            return Response.json(
+              { message: 'Administrator authorization required' },
+              { status: 403 },
+            );
+          }
+          if (url.pathname === '/rest/v1/rpc/phase4_access_snapshot') {
+            return Response.json(access);
+          }
+          throw new Error(`Unexpected upstream call after ${label} denial: ${url.origin}${url.pathname}`);
+        };
+
+        const response = await studyRoomWorker.fetch(new Request(
+          `https://worker.example${pathname}`,
+          {
+            method: 'POST',
+            headers: {
+              Origin: 'https://duediligence.ph',
+              Authorization: 'Bearer opaque-member-session',
+              'CF-Connecting-IP': '203.0.113.11',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+          },
+        ), {
+          ...TEST_ENV,
+          ALLOWED_ORIGIN: 'https://duediligence.ph',
+          SUPABASE_URL: 'https://project.supabase.co',
+          SUPABASE_SERVICE_ROLE_KEY: 'test_service_role',
+          GUEST_USAGE_HMAC_KEY: 'test_rate_limit_key',
+        });
+        const body = await response.json();
+        assert.equal(response.status, 403, `${label} was not denied at ${pathname}`);
+        assert.equal(body.ok, false);
+        assert.equal(body.error.code, 'STUDY_ROOM_PRIVATE_TEST_REQUIRED');
+        assert.deepEqual(upstreamCalls, [
+          ['https://project.supabase.co', '/auth/v1/user', 'GET'],
+          ['https://project.supabase.co', '/rest/v1/rpc/admin_authorization_context', 'POST'],
+          ['https://project.supabase.co', '/rest/v1/rpc/phase4_access_snapshot', 'POST'],
+        ], `${label} reached a LiveKit upstream at ${pathname}`);
+      }
+    }
   } finally {
     globalThis.fetch = originalFetch;
   }

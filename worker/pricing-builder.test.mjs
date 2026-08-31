@@ -95,7 +95,7 @@ function publishedSnapshot() {
         priceCentavos: 19900,
         currency: 'PHP',
         durationDays: 30,
-        description: 'Thirty days from approval.',
+        description: 'Thirty days from verified payment.',
         features: ['All paid study tools'],
         ctaLabel: 'Subscribe',
         renewalNote: 'Manual renewal only.',
@@ -302,8 +302,6 @@ test('payment field normalization ignores browser price and plan labels', () => 
   assert.deepEqual(normalized, {
     planVersionId: PLAN_199_ID,
     paymentChannelVersionId: CHANNEL_ID,
-    paymentDate: '2026-09-02',
-    paymentReference: 'BPI-REF-199',
   });
 });
 
@@ -462,7 +460,7 @@ test('/payments/submit forwards only version IDs and lets the database return tr
     if (pathname.startsWith('/storage/v1/object/payment-proofs/')) {
       return new Response(null, { status: 200 });
     }
-    if (pathname === '/rest/v1/rpc/phase4_create_payment_request_v2') {
+    if (pathname === '/rest/v1/rpc/phase4_create_payment_request_v3') {
       paymentRpcBody = JSON.parse(init.body);
       return Response.json({
         id: PAYMENT_ID,
@@ -490,8 +488,6 @@ test('/payments/submit forwards only version IDs and lets the database return tr
     const form = new FormData();
     form.set('planVersionId', PLAN_199_ID);
     form.set('paymentChannelVersionId', CHANNEL_ID);
-    form.set('paymentDate', '2026-09-02');
-    form.set('paymentReference', 'BPI-REF-199');
     form.set('amountPhp', '0.01');
     form.set('planCode', 'early_access_beta');
     form.set('proof', new Blob([pngBytes()], { type: 'image/png' }), 'proof.png');
@@ -509,7 +505,8 @@ test('/payments/submit forwards only version IDs and lets the database return tr
     assert.equal('proofObjectPath' in payload.payment, false);
     assert.equal(paymentRpcBody.p_plan_version_id, PLAN_199_ID);
     assert.equal(paymentRpcBody.p_payment_channel_version_id, CHANNEL_ID);
-    assert.equal(paymentRpcBody.p_payment_reference, 'BPI-REF-199');
+    assert.equal('p_payment_reference' in paymentRpcBody, false);
+    assert.equal('p_payment_date' in paymentRpcBody, false);
     assert.equal('p_amount_php' in paymentRpcBody, false);
     assert.equal('p_plan_code' in paymentRpcBody, false);
     assert.equal('p_payment_method' in paymentRpcBody, false);
@@ -539,7 +536,7 @@ test('/payments/submit preserves its immutable proof when the committed RPC resp
         ? new Response(null, { status: 200 })
         : Response.json({ code: 'KeyAlreadyExists', message: 'Asset Already Exists' }, { status: 409 });
     }
-    if (pathname === '/rest/v1/rpc/phase4_create_payment_request_v2') {
+    if (pathname === '/rest/v1/rpc/phase4_create_payment_request_v3') {
       paymentCalls += 1;
       const body = JSON.parse(init.body);
       if (paymentCalls === 1) {
@@ -572,8 +569,6 @@ test('/payments/submit preserves its immutable proof when the committed RPC resp
     const form = new FormData();
     form.set('planVersionId', PLAN_199_ID);
     form.set('paymentChannelVersionId', CHANNEL_ID);
-    form.set('paymentDate', '2026-09-02');
-    form.set('paymentReference', 'BPI-RETRY-199');
     form.set('proof', new Blob([pngBytes()], { type: 'image/png' }), 'proof.png');
     return coreWorker.fetch(request('/payments/submit', {
       method: 'POST',
@@ -610,7 +605,7 @@ test('/payments/submit preserves its deterministic proof on an ambiguous databas
       storageMethods.push(init.method || 'GET');
       return new Response(null, { status: 200 });
     }
-    if (pathname === '/rest/v1/rpc/phase4_create_payment_request_v2') {
+    if (pathname === '/rest/v1/rpc/phase4_create_payment_request_v3') {
       return Response.json({ message: 'temporary database outage' }, { status: 500 });
     }
     throw new Error(`Unexpected fetch: ${url}`);
@@ -619,8 +614,6 @@ test('/payments/submit preserves its deterministic proof on an ambiguous databas
     const form = new FormData();
     form.set('planVersionId', PLAN_199_ID);
     form.set('paymentChannelVersionId', CHANNEL_ID);
-    form.set('paymentDate', '2026-09-02');
-    form.set('paymentReference', 'BPI-AMBIGUOUS-500');
     form.set('proof', new Blob([pngBytes()], { type: 'image/png' }), 'proof.png');
     const response = await coreWorker.fetch(request('/payments/submit', {
       method: 'POST',
@@ -644,7 +637,7 @@ test('/payments/submit keeps the pre-cutover legacy form working through the fai
     if (pathname.startsWith('/storage/v1/object/payment-proofs/')) {
       return new Response(null, { status: 200 });
     }
-    if (pathname === '/rest/v1/rpc/phase4_create_payment_request_v2') {
+    if (pathname === '/rest/v1/rpc/phase4_create_payment_request_v3') {
       versionedRpcCalls += 1;
       throw new Error('The legacy form must not call the versioned RPC directly.');
     }
@@ -713,7 +706,7 @@ test('/payments/submit reports a stale published selection and removes its unacc
       storageMethods.push(init.method || 'GET');
       return new Response(null, { status: 200 });
     }
-    if (pathname === '/rest/v1/rpc/phase4_create_payment_request_v2') {
+    if (pathname === '/rest/v1/rpc/phase4_create_payment_request_v3') {
       return Response.json(
         { message: 'Selected pricing plan is not open for checkout' },
         { status: 400 },
@@ -725,8 +718,6 @@ test('/payments/submit reports a stale published selection and removes its unacc
     const form = new FormData();
     form.set('planVersionId', PLAN_199_ID);
     form.set('paymentChannelVersionId', CHANNEL_ID);
-    form.set('paymentDate', '2026-09-02');
-    form.set('paymentReference', 'BPI-STALE-199');
     form.set('proof', new Blob([pngBytes()], { type: 'image/png' }), 'proof.png');
     const response = await coreWorker.fetch(request('/payments/submit', {
       method: 'POST',
@@ -1105,8 +1096,7 @@ test('verifier email uses trusted dynamic plan, amount, term, and channel contex
       currency: 'PHP',
       durationDays: 30,
       paymentChannelLabel: 'BPI InstaPay',
-      paymentDate: '2026-09-02',
-      paymentReference: 'BPI-REF-199',
+      paymentEvidenceMode: 'proof_only',
       submittedAt: '2026-09-02T01:02:03Z',
     },
     user: { id: USER_ID, email: 'student@example.test' },
@@ -1115,7 +1105,9 @@ test('verifier email uses trusted dynamic plan, amount, term, and channel contex
   });
   assert.match(text, /30-Day Access/);
   assert.match(text, /₱199\.00/);
-  assert.match(text, /30 days from approval/);
+  assert.match(text, /30 days from verified payment/);
+  assert.match(text, /Customer-provided payment fields: private proof only/);
+  assert.doesNotMatch(text, /Transaction reference|Payment date provided/iu);
   assert.match(text, /BPI InstaPay/);
   assert.doesNotMatch(text, /₱149\.00/);
 });
@@ -1131,8 +1123,8 @@ test('receipt uses dynamic captured context and retains historical Early Access 
       currency: 'PHP',
       durationDays: 30,
       paymentChannelLabel: 'BPI InstaPay',
-      paymentReference: 'BPI-REF-199',
-      paymentDate: '2026-09-02',
+      paymentEvidenceMode: 'proof_only',
+      verifiedPaidAt: '2026-09-02T02:00:00Z',
       approvedAt: '2026-09-02T02:00:00Z',
       purchasedStartsAt: '2026-09-02T02:00:00Z',
       purchasedEndsAt: '2026-10-02T02:00:00Z',
@@ -1142,7 +1134,8 @@ test('receipt uses dynamic captured context and retains historical Early Access 
   });
   assert.match(current.subject, /30-Day Access/);
   assert.match(current.text, /₱199\.00/);
-  assert.match(current.text, /Term: 30 days from approval/);
+  assert.match(current.text, /Term: 30 days from verified payment/);
+  assert.doesNotMatch(current.text, /Transaction reference|Payment date provided/iu);
   assert.match(current.text, /Access begins:/);
   assert.match(current.text, /Access through:/);
   assert.match(current.internalReference, /^DD-PAY-/);

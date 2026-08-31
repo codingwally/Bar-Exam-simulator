@@ -154,11 +154,11 @@
     }
     if (paidSubscriptionExpired(access)) {
       return access?.checkoutOpen === true
-        ? 'Your paid Bar Exam Simulator access has expired. Renew Early Access to continue. Home and Examination Room remain available.'
+        ? 'Your paid Bar Exam Simulator access has expired. Choose the current Regular Subscription to continue. Home and Examination Room remain available.'
         : 'Your paid Bar Exam Simulator access has expired. Open Support for renewal assistance. Home and Examination Room remain available.';
     }
     if (paymentRequired(access)) {
-      return 'Your five one-time practice tokens have been used. Early Access is required for more graded practice.';
+      return 'Your five one-time practice tokens have been used. Choose the current Regular Subscription for more graded practice.';
     }
     return 'Access is not currently available for this account. Review your access or contact Support.';
   }
@@ -305,9 +305,9 @@
       let label = '';
       if (access) {
         if (/\badmin(?:istrator)?\b|super_admin|founder_admin/.test(identity)) label = 'Admin';
-        else if (/founding[_\s-]*beta/.test(identity) || access?.freeBeta?.active === true) label = 'Founding Beta';
+        else if (/founding[_\s-]*beta/.test(identity) || access?.freeBeta?.active === true) label = 'Complimentary Access';
         else if (setupRequired(access)) label = 'Complete profile';
-        else if (provisionalPayment) label = 'Early Access - pending';
+        else if (provisionalPayment) label = 'Payment under review';
         else if (access.unlimited) label = 'Paid Access';
         else if (paidSubscriptionExpired(access)) label = 'Renew Bar access';
         else label = `${Math.max(0, Number(access.tokensRemaining) || 0)} tokens remaining`;

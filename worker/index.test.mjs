@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import worker, {
   absoluteSupabaseStorageUrl,
   authenticatedUserTokenCacheSizeForTest,
   outboundEmailMode,
   resetAuthenticatedUserTokenCacheForTest,
+  setLegacyPricingQrLoaderForTest,
   sendSecureNotification,
 } from './index.mjs';
 
@@ -40,6 +43,42 @@ import {
   proofExtension,
   validateProofSignature,
 } from './payment-core.mjs';
+
+test('legacy pricing QR route serves exact private bytes before cutover and closes at the boundary', async () => {
+  const originalDateNow = Date.now;
+  const qr = await readFile(new URL('../assets/payments/bpi-instapay-149.png', import.meta.url));
+  setLegacyPricingQrLoaderForTest(async () => qr);
+  try {
+    Date.now = () => Date.parse('2026-09-13T15:59:59.999Z');
+    const before = await worker.fetch(
+      new Request('https://duediligence.ph/pricing/legacy-149-qr.png'),
+      {},
+      {},
+    );
+    assert.equal(before.status, 200);
+    assert.equal(before.headers.get('content-type'), 'image/png');
+    assert.equal(before.headers.get('cache-control'), 'private, no-store, max-age=0');
+    const served = Buffer.from(await before.arrayBuffer());
+    assert.equal(served.byteLength, qr.byteLength);
+    assert.equal(
+      createHash('sha256').update(served).digest('hex').toUpperCase(),
+      '00DF8567B0068B980D2135BCC74DD2963E8398AE472209E9C84F89F6B0F3C1B9',
+    );
+
+    Date.now = () => Date.parse('2026-09-13T16:00:00.000Z');
+    const atBoundary = await worker.fetch(
+      new Request('https://duediligence.ph/pricing/legacy-149-qr.png'),
+      {},
+      {},
+    );
+    assert.equal(atBoundary.status, 404);
+    assert.equal(atBoundary.headers.get('cache-control'), 'no-store, max-age=0');
+    assert.match(await atBoundary.text(), /no longer available/u);
+  } finally {
+    Date.now = originalDateNow;
+    setLegacyPricingQrLoaderForTest();
+  }
+});
 
 test('Supabase private object signing paths retain the storage API prefix', () => {
   assert.equal(
@@ -1818,24 +1857,31 @@ test('payment field validation accepts published plan and payment-channel versio
   const value = normalizePaymentFields({
     planVersionId: '22222222-2222-4222-8222-222222222222',
     paymentChannelVersionId: '33333333-3333-4333-8333-333333333333',
-    paymentDate: '2026-08-18',
-    paymentReference: 'GOTYME-2026-0001',
     amountPhp: '0.01',
   });
   assert.equal(value.planVersionId, '22222222-2222-4222-8222-222222222222');
   assert.equal(value.paymentChannelVersionId, '33333333-3333-4333-8333-333333333333');
-  assert.equal(value.paymentReference, 'GOTYME-2026-0001');
+  assert.equal('paymentReference' in value, false);
+  assert.equal('paymentDate' in value, false);
   assert.equal('amountPhp' in value, false);
 });
 
-test('payment validation rejects malformed version IDs and references', () => {
+test('payment validation rejects malformed version IDs and ignores retired customer fields', () => {
   for (const input of [
-    { planVersionId: 'premium', paymentChannelVersionId: '33333333-3333-4333-8333-333333333333', paymentDate: '2026-08-18', paymentReference: 'REF-1' },
-    { planVersionId: '22222222-2222-4222-8222-222222222222', paymentChannelVersionId: 'gcash', paymentDate: '2026-08-18', paymentReference: 'REF-1' },
-    { planVersionId: '22222222-2222-4222-8222-222222222222', paymentChannelVersionId: '33333333-3333-4333-8333-333333333333', paymentDate: '2026-08-18', paymentReference: '<script>' },
+    { planVersionId: 'premium', paymentChannelVersionId: '33333333-3333-4333-8333-333333333333' },
+    { planVersionId: '22222222-2222-4222-8222-222222222222', paymentChannelVersionId: 'gcash' },
   ]) {
     assert.throws(() => normalizePaymentFields(input), PaymentValidationError);
   }
+  assert.deepEqual(normalizePaymentFields({
+    planVersionId: '22222222-2222-4222-8222-222222222222',
+    paymentChannelVersionId: '33333333-3333-4333-8333-333333333333',
+    paymentDate: 'invalid',
+    paymentReference: '<script>',
+  }), {
+    planVersionId: '22222222-2222-4222-8222-222222222222',
+    paymentChannelVersionId: '33333333-3333-4333-8333-333333333333',
+  });
 });
 
 test('proof validation enforces matching PNG, JPEG, and PDF signatures', () => {
@@ -1985,7 +2031,7 @@ test('payment endpoint authenticates, verifies file bytes, uploads privately, an
       assert.equal(init.headers['Content-Type'], 'image/png');
       return Response.json({ Key: 'private-object' });
     }
-    if (target.endsWith('/rest/v1/rpc/phase4_create_payment_request_v2')) {
+    if (target.endsWith('/rest/v1/rpc/phase4_create_payment_request_v3')) {
       const body = JSON.parse(init.body);
       assert.equal(body.p_user_id, '11111111-1111-4111-8111-111111111111');
       assert.equal(body.p_plan_version_id, '33333333-3333-4333-8333-333333333333');
@@ -2015,8 +2061,6 @@ test('payment endpoint authenticates, verifies file bytes, uploads privately, an
     form.set('planVersionId', '33333333-3333-4333-8333-333333333333');
     form.set('paymentChannelVersionId', '44444444-4444-4444-8444-444444444444');
     form.set('amountPhp', '0.01');
-    form.set('paymentDate', '2026-08-18');
-    form.set('paymentReference', 'GOTYME-TEST-001');
     form.set(
       'proof',
       new File(

@@ -28,10 +28,14 @@
     return global.DueDiligenceSubscriptionCta?.isAudienceEligible?.(value) === true;
   }
 
+  function isFoundingBetaTester(value = access) {
+    return normalized(value?.basis) === 'founding beta';
+  }
+
   function hasLiveRoomAccess(value = access) {
     return Boolean(value && typeof value === 'object' && (
       isAdmin(value)
-      || (value.allowed === true && !isSubscriptionEligible(value))
+      || (value.allowed === true && isFoundingBetaTester(value))
     ));
   }
 
@@ -95,15 +99,18 @@
     if (!subscribe || !note) return;
     const known = Boolean(access && typeof access === 'object');
     const eligible = isSubscriptionEligible(access);
-    const subscribed = known && !eligible;
+    const liveAccess = hasLiveRoomAccess(access);
+    const subscribed = known && !eligible && !liveAccess;
     subscribe.disabled = !eligible;
     subscribe.classList.toggle('is-subscribed', subscribed);
     subscribe.querySelector('span').textContent = !known
       ? 'Checking access…'
-      : subscribed ? 'Already subscribed' : 'Subscribe now';
+      : liveAccess ? 'Live access enabled' : subscribed ? 'Subscription active' : 'Subscribe now';
     note.textContent = !known
       ? 'Confirming your account status'
-      : subscribed ? 'Subscription active' : 'Opens Plans & Pricing';
+      : liveAccess
+        ? 'Authorized test access'
+        : subscribed ? 'Study Room access is not yet available during testing' : 'Opens Plans & Pricing';
   }
 
   function hydratePreviewImages() {
@@ -134,7 +141,9 @@
     document.body.classList.add('dd-study-room-open');
     global.requestAnimationFrame(() => document.getElementById('dd-study-room-close')?.focus({ preventScroll: true }));
     global.DueDiligenceAnalytics?.track?.('study_room_preview_opened', {
-      access: isAdmin(access) ? 'admin' : (isSubscriptionEligible(access) ? 'eligible' : 'subscribed'),
+      access: isAdmin(access)
+        ? 'admin'
+        : (isFoundingBetaTester(access) ? 'test_cohort' : (isSubscriptionEligible(access) ? 'eligible' : 'subscribed')),
     });
     return true;
   }
@@ -168,7 +177,7 @@
     }
     popup.focus?.();
     global.DueDiligenceAnalytics?.track?.('study_room_window_opened', {
-      audience: isAdmin(access) ? 'admin' : 'subscriber',
+      audience: isAdmin(access) ? 'admin' : 'test_cohort',
     });
     return true;
   }

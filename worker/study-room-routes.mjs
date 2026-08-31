@@ -11,6 +11,7 @@ import {
 
 const STUDY_ROOM_ADMIN_ROLES = new Set(['admin', 'founder_admin', 'super_admin']);
 const STUDY_ROOM_PRIVILEGED_MODERATOR_ROLES = new Set(['founder_admin', 'super_admin']);
+const STUDY_ROOM_TEST_ACCESS_BASIS = 'founding_beta';
 
 function normalizedAdministratorRole(value) {
   return String(value || '').trim().toLowerCase();
@@ -20,6 +21,13 @@ function authorizedAdministrator(authorization) {
   const role = normalizedAdministratorRole(authorization?.role);
   return authorization?.authorized === true && STUDY_ROOM_ADMIN_ROLES.has(role)
     ? { ...authorization, role }
+    : null;
+}
+
+function authorizedTestMember(access) {
+  const basis = String(access?.basis || '').trim().toLowerCase();
+  return access?.allowed === true && basis === STUDY_ROOM_TEST_ACCESS_BASIS
+    ? access
     : null;
 }
 
@@ -104,13 +112,13 @@ export function createStudyRoomHandlers(dependencies) {
         'Open the Study Room from the signed-in website instead.',
       );
     }
-    const memberAccess = await authorizeMember(env, user);
-    if (memberAccess?.allowed !== true) {
+    const memberAccess = authorizedTestMember(await authorizeMember(env, user));
+    if (!memberAccess) {
       throw new StudyRoomError(
-        'STUDY_ROOM_SUBSCRIPTION_REQUIRED',
-        'The Study Room is available with an active Due Diligence subscription.',
+        'STUDY_ROOM_PRIVATE_TEST_REQUIRED',
+        'The Study Room is currently limited to authorized testers.',
         403,
-        'Open Plans & Pricing to subscribe, then try again.',
+        'This account is not yet eligible while testing continues.',
       );
     }
     return {
@@ -199,6 +207,7 @@ export function createStudyRoomHandlers(dependencies) {
 
     async moderate(request, env, origin, allowedOrigin) {
       const context = await authorizedContext(request, env, 'moderate');
+      requireAdministrator(context);
       const body = await parseJson(request, 6_144);
       const operation = String(body?.operation || '').trim().toLowerCase();
       const roomKey = requestedRoomKey(body);

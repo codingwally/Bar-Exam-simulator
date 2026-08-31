@@ -8,6 +8,7 @@ import {
 } from './access-core.mjs';
 import {
   PaymentValidationError,
+  normalizePhase4AdminAction,
   normalizePaymentFields,
   normalizeRefundRequest,
 } from './payment-core.mjs';
@@ -24,7 +25,7 @@ test('commercial study completion RPCs are allowed through the Worker storage bo
   }
 });
 
-test('normalizes the authoritative introductory-token response without exposing unknown fields', () => {
+test('normalizes the authoritative introductory-token response without exposing unknown fields or private schedule dates', () => {
   const normalized = normalizeAccessSnapshot({
     allowed: true,
     basis: 'introductory_tokens',
@@ -62,7 +63,8 @@ test('normalizes the authoritative introductory-token response without exposing 
   assert.equal(normalized.resetAt, null);
   assert.equal(normalized.priceCentavos, 14900);
   assert.equal(normalized.regularPriceCentavos, 19900);
-  assert.equal(normalized.renewalAt, '2026-10-01T00:00:00+08:00');
+  assert.equal(normalized.renewalAt, null);
+  assert.equal(normalized.salesCloseAt, null);
   assert.equal(normalized.manualRenewal, true);
   assert.equal(normalized.automaticRenewal, false);
   assert.deepEqual(normalized.freeGrades, { limit: 5, used: 2, remaining: 2 });
@@ -175,20 +177,25 @@ function validPayment(overrides = {}) {
   return {
     planVersionId: '22222222-2222-4222-8222-222222222222',
     paymentChannelVersionId: '33333333-3333-4333-8333-333333333333',
+    // These retired customer-entered fields are deliberately present to prove
+    // that the versioned checkout accepts only the selected plan/channel.
     paymentDate: '2026-08-18',
     paymentReference: 'COMMERCIAL-REF-0001',
+    note: 'This must not cross the proof-only payment boundary.',
     ...overrides,
   };
 }
 
-test('accepts a published plan-version and payment-channel selection', () => {
+test('proof-only checkout accepts only the published plan and payment-channel selection', () => {
   const normalized = normalizePaymentFields(validPayment());
   assert.deepEqual(normalized, {
     planVersionId: '22222222-2222-4222-8222-222222222222',
     paymentChannelVersionId: '33333333-3333-4333-8333-333333333333',
-    paymentDate: '2026-08-18',
-    paymentReference: 'COMMERCIAL-REF-0001',
   });
+  assert.equal('paymentDate' in normalized, false);
+  assert.equal('paymentReference' in normalized, false);
+  assert.equal('transactionReference' in normalized, false);
+  assert.equal('note' in normalized, false);
   assert.equal('amountPhp' in normalized, false);
   assert.equal('planCode' in normalized, false);
   assert.equal('paymentMethod' in normalized, false);
@@ -221,6 +228,45 @@ test('ignores every client-supplied price and plan label', () => {
     assert.equal('planCode' in normalized, false);
     assert.equal('paymentMethod' in normalized, false);
   }
+});
+
+test('reviewer payment decision normalizes the exact verified payment timestamp', () => {
+  const normalized = normalizePhase4AdminAction({
+    action: 'payment_review',
+    targetId: '44444444-4444-4444-8444-444444444444',
+    reason: 'Verified against the private payment proof.',
+    requestKey: 'payment_review_test_0001',
+    payload: {
+      status: 'approved',
+      verifiedPaidAt: '2026-09-14T00:15:00+08:00',
+      paymentDate: '2026-09-14',
+      transactionReference: 'CUSTOMER-FIELD-MUST-NOT-PASS',
+    },
+  });
+
+  assert.deepEqual(normalized.payload, {
+    status: 'approved',
+    verifiedPaidAt: '2026-09-13T16:15:00.000Z',
+  });
+  assert.equal('paymentDate' in normalized.payload, false);
+  assert.equal('transactionReference' in normalized.payload, false);
+});
+
+test('reviewer payment decision rejects an invalid verified payment timestamp', () => {
+  assert.throws(
+    () => normalizePhase4AdminAction({
+      action: 'payment_review',
+      targetId: '44444444-4444-4444-8444-444444444444',
+      reason: 'Verified against the private payment proof.',
+      requestKey: 'payment_review_test_0002',
+      payload: {
+        status: 'approved',
+        verifiedPaidAt: 'not-a-date',
+      },
+    }),
+    (error) => error instanceof PaymentValidationError
+      && error.code === 'INVALID_ADMIN_ACTION',
+  );
 });
 
 test('refund normalization accepts only a selected payment and a substantive reason', () => {

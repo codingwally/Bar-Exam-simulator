@@ -1,4 +1,5 @@
 import { resolveExaminationRoomActivationWindow } from './examination-room-activation-window.mjs';
+import { legacyPricingQrAvailableAt } from './legacy-pricing-qr.mjs';
 import {
   DEFAULT_MODEL,
   ExaminerError,
@@ -3778,7 +3779,7 @@ async function commerceRpc(env, functionName, body) {
   });
   if (
     authoritativeRejection
-    && functionName === 'phase4_create_payment_request_v2'
+    && ['phase4_create_payment_request_v2', 'phase4_create_payment_request_v3'].includes(functionName)
     && /selected pricing plan is not open|payment method is not compatible/i.test(databaseMessage)
   ) {
     throw markRpcOutcome(new PaymentValidationError(
@@ -3794,7 +3795,7 @@ async function commerceRpc(env, functionName, body) {
   ) {
     throw markRpcOutcome(new PaymentValidationError(
       'CHECKOUT_CLOSED',
-      'Early Access checkout has closed. Reload Plans & Pricing for the current offer.',
+      'This checkout has closed. Reload Plans & Pricing for the current offer.',
       409,
     ), response.status);
   }
@@ -3805,7 +3806,7 @@ async function commerceRpc(env, functionName, body) {
   ) {
     throw markRpcOutcome(new PaymentValidationError(
       'PRICING_OFFER_STALE',
-      'The legacy payment details no longer match the published offer. Nothing was accepted. Reload Plans & Pricing.',
+      'The previous payment details no longer match the published offer. Nothing was accepted. Reload Plans & Pricing.',
       409,
     ), response.status);
   }
@@ -5210,7 +5211,7 @@ async function privateBetaCapabilityExempt(request, pathname) {
     return true;
   }
   // Study Room routes re-authenticate the user and enforce either a verified
-  // administrator role or a current paid-equivalent entitlement.
+  // administrator role or the explicitly authorized Founding Beta test cohort.
   if (pathname === '/study-room' || pathname.startsWith('/study-room/')) {
     return true;
   }
@@ -5274,18 +5275,11 @@ async function phase4AccessForUser(env, userId, options = {}) {
 
 function studyRoomMemberAccess(access) {
   const basis = String(access?.basis || '').trim().toLowerCase();
-  const subscriptionStatus = String(access?.subscription?.status || '').trim().toLowerCase();
-  const activeSubscription = new Set(['active', 'trialing']).has(subscriptionStatus);
-  const paidEquivalentBasis = new Set([
-    'paid_subscription',
-    'early_access',
-    'founding_beta',
-  ]).has(basis);
   const allowed = access?.allowed === true
     && access?.termsRequired !== true
     && access?.reauthenticationRequired !== true
     && access?.paidSubscriptionExpired !== true
-    && (activeSubscription || paidEquivalentBasis);
+    && basis === 'founding_beta';
   return { ...access, allowed };
 }
 
@@ -9362,6 +9356,53 @@ async function handlePublicPricingAsset(
   );
 }
 
+let legacyPricingQrModulePromise = null;
+const defaultLegacyPricingQrLoader = () => import('../assets/payments/bpi-instapay-149.png');
+let legacyPricingQrLoader = defaultLegacyPricingQrLoader;
+
+export function setLegacyPricingQrLoaderForTest(loader = null) {
+  legacyPricingQrLoader = typeof loader === 'function' ? loader : defaultLegacyPricingQrLoader;
+  legacyPricingQrModulePromise = null;
+}
+
+async function handleLegacyPricingQr() {
+  if (!legacyPricingQrAvailableAt(Date.now())) {
+    return new Response('The requested image is no longer available.', {
+      status: 404,
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-store, max-age=0',
+        Pragma: 'no-cache',
+        Expires: '0',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Robots-Tag': 'noindex, nofollow, noarchive',
+      },
+    });
+  }
+  legacyPricingQrModulePromise ||= Promise.resolve().then(() => legacyPricingQrLoader());
+  const module = await legacyPricingQrModulePromise;
+  const body = module?.default ?? module;
+  if (!(body instanceof ArrayBuffer) && !ArrayBuffer.isView(body)) {
+    throw new PricingValidationError(
+      'PRICING_ASSET_NOT_FOUND',
+      'The QR image is not available.',
+      404,
+    );
+  }
+  return new Response(body, {
+    status: 200,
+    headers: {
+      'Content-Type': 'image/png',
+      'Content-Length': String(body.byteLength),
+      'Cache-Control': 'private, no-store, max-age=0',
+      Pragma: 'no-cache',
+      Expires: '0',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Robots-Tag': 'noindex, nofollow, noarchive',
+    },
+  });
+}
+
 async function handleAdminPricingQuery(request, env, origin, allowedOrigin) {
   await enforceAdminRateLimit(request, env);
   const { user } = await requirePricingAdministrator(request, env);
@@ -9584,8 +9625,6 @@ async function handlePaymentSubmit(request, env, origin, allowedOrigin) {
     ? normalizePaymentFields({
       planVersionId: form.get('planVersionId'),
       paymentChannelVersionId: form.get('paymentChannelVersionId'),
-      paymentDate: form.get('paymentDate'),
-      paymentReference: form.get('paymentReference') ?? form.get('transactionReference'),
     })
     : normalizeLegacyPaymentFields({
       planCode: form.get('planCode'),
@@ -9610,8 +9649,8 @@ async function handlePaymentSubmit(request, env, origin, allowedOrigin) {
   const proofSha256 = await sha256Hex(bytes);
   const proofStorageKey = hasVersionedSelection
     ? [
-      'pricing-v2', user.id, fields.planVersionId, fields.paymentChannelVersionId,
-      fields.paymentReference.toLowerCase(), proofSha256,
+      'pricing-v3', user.id, fields.planVersionId, fields.paymentChannelVersionId,
+      proofSha256,
     ].join('|')
     : [
       'pricing-legacy', user.id, legacyRequestKey,
@@ -9636,12 +9675,10 @@ async function handlePaymentSubmit(request, env, origin, allowedOrigin) {
   let result;
   try {
     result = hasVersionedSelection
-      ? await commerceRpc(env, 'phase4_create_payment_request_v2', {
+      ? await commerceRpc(env, 'phase4_create_payment_request_v3', {
         p_user_id: user.id,
         p_plan_version_id: fields.planVersionId,
         p_payment_channel_version_id: fields.paymentChannelVersionId,
-        p_payment_date: fields.paymentDate,
-        p_payment_reference: fields.paymentReference,
         p_proof_bucket: 'payment-proofs',
         p_proof_path: objectPath,
         p_proof_mime_type: mimeType,
@@ -9752,7 +9789,7 @@ async function handlePhase4AdminData(request, env, origin, allowedOrigin) {
   await enforceAdminRateLimit(request, env);
   const user = await requireAdministrator(request, env);
   const query = normalizePhase4AdminRequest(await parseBoundedJson(request, 8_000));
-  const result = await protectedSupabaseRpc(env, 'phase4_admin_operational_data_scoped_v1', {
+  const result = await protectedSupabaseRpc(env, 'phase4_admin_operational_data_scoped_v2', {
       p_actor_user_id: user.id,
       p_section: query.section === 'introductory_access' ? 'access' : query.section,
       p_search: query.search,
@@ -10094,6 +10131,9 @@ export default {
       const publicPricingAssetMatch = pathname.match(
         /^\/pricing\/assets\/([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/iu,
       );
+      if (request.method === 'GET' && pathname === '/pricing/legacy-149-qr.png') {
+        return await handleLegacyPricingQr();
+      }
       if (request.method === 'GET' && publicPricingAssetMatch) {
         const assetOrigin = requestOrigin ? assertOrigin(request, allowedOrigin) : allowedOrigin;
         return await handlePublicPricingAsset(

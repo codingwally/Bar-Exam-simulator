@@ -232,7 +232,7 @@ function trustedPaymentEmailDetails(payment = {}, fields = {}) {
     || payment.purchasedEndsAt
     || payment.subscription?.expiresAt;
   const termLabel = Number.isInteger(durationDays) && durationDays > 0
-    ? `${durationDays} days from approval`
+    ? `${durationDays} days from verified payment`
     : fixedEndsAt
       ? `Through ${philippineDateTime(fixedEndsAt)}`
       : historicalEarlyAccess ? 'Legacy Early Access terms' : 'As captured by the approved plan';
@@ -249,11 +249,6 @@ function trustedPaymentEmailDetails(payment = {}, fields = {}) {
 export function paymentEmailText({ payment, fields = {}, user, proof, proofHash }) {
   const submittedAt = payment?.submittedAt || new Date().toISOString();
   const trusted = trustedPaymentEmailDetails(payment, fields);
-  const paymentDate = payment?.paymentDate || fields.paymentDate;
-  const paymentReference = payment?.paymentReference
-    || payment?.transactionReference
-    || fields.paymentReference
-    || fields.transactionReference;
   return [
     `A Due Diligence user submitted proof for the ${trusted.planName} plan (${trusted.amountLabel}).`,
     '',
@@ -267,11 +262,9 @@ export function paymentEmailText({ payment, fields = {}, user, proof, proofHash 
     `Amount to verify: ${trusted.amountLabel}`,
     `Access term: ${trusted.termLabel}`,
     `Payment channel: ${trusted.channel}`,
-    `Payment date declared by subscriber: ${cleanSingleLine(paymentDate, 10) || 'Not provided'}`,
+    'Customer-provided payment fields: private proof only',
     `Proof submitted in the Philippines: ${philippineDateTime(submittedAt)}`,
     `Proof submitted in UTC: ${new Date(submittedAt).toISOString()}`,
-    `Transaction reference: ${cleanSingleLine(paymentReference, 100) || 'Not provided'}`,
-    `Subscriber note: ${cleanSingleLine(payment?.note || fields.note, 2000) || 'None'}`,
     '',
     'VERIFICATION RECORD',
     `Payment request ID: ${cleanSingleLine(payment?.id, 80) || 'Not available'}`,
@@ -286,7 +279,7 @@ export function paymentEmailText({ payment, fields = {}, user, proof, proofHash 
     '',
     `Authorized review page: https://duediligence.ph/admin/payments?request=${encodeURIComponent(payment?.id || '')}`,
     '',
-    'Verify the amount, transaction reference, payment date/time shown in the attached receipt, and recipient account before approving access. This email and attachment contain private payment information; do not forward them outside the authorized verification group.',
+    'Verify the amount, exact payment date/time shown in the attached receipt, and recipient account before approving access. Enter that timestamp in the protected Admin review; never infer it from upload time or file metadata. This email and attachment contain private payment information; do not forward them outside the authorized verification group.',
   ].join('\n');
 }
 
@@ -402,10 +395,6 @@ export async function dispatchQueuedPaymentNotification(env, paymentRequestId = 
       proof,
       fields: {
         paymentMethod: payment.paymentMethod,
-        paymentDate: payment.paymentDate,
-        paymentReference: payment.paymentReference,
-        transactionReference: payment.transactionReference,
-        note: payment.note,
       },
     });
     errorCode = notification.status === 'not_configured'

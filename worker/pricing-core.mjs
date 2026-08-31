@@ -364,6 +364,7 @@ function publicQrUrl(value, assetId) {
   const supplied = safeText(value, 500);
   const match = supplied.match(/^\/pricing\/assets\/([0-9a-f-]{36})$/iu);
   if (match && optionalUuid(match[1])) return supplied;
+  if (supplied === '/pricing/legacy-149-qr.png') return supplied;
   if (/^\/assets\/payments\/[a-z0-9._-]+\.(?:png|jpe?g)$/iu.test(supplied)) return supplied;
   return assetId ? `/pricing/assets/${assetId}` : null;
 }
@@ -406,12 +407,8 @@ function sanitizedPlan(value) {
     ctaLabel: safeText(value.ctaLabel, 120),
     renewalNote: safeText(value.renewalNote, 1000, { multiline: true }),
     visible: safeBoolean(value.visible),
-    displayStartsAt: safeTimestamp(value.displayStartsAt),
-    displayEndsAt: safeTimestamp(value.displayEndsAt),
     displayOpen: safeBoolean(value.displayOpen),
     checkoutEnabled: safeBoolean(value.checkoutEnabled),
-    checkoutStartsAt: safeTimestamp(value.checkoutStartsAt),
-    checkoutEndsAt: safeTimestamp(value.checkoutEndsAt),
     checkoutOpen: safeBoolean(value.checkoutOpen),
     sortOrder: safeInteger(value.sortOrder, -10_000, 10_000, 0),
     ...(value.status != null ? { status: safeText(value.status, 40) } : {}),
@@ -515,8 +512,6 @@ export function sanitizePublicPricingSnapshot(value) {
         2_147_483_647,
         0,
       ),
-      effectiveAt: safeTimestamp(revisionSource.effectiveAt ?? source.effectiveAt),
-      publishedAt: safeTimestamp(revisionSource.publishedAt ?? source.publishedAt),
     },
     serverNow: safeTimestamp(source.serverNow) || new Date().toISOString(),
     page: {

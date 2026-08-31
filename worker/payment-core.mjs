@@ -49,40 +49,21 @@ export function normalizePaymentFields(fields) {
       'Select the payment channel shown for the current published plan.',
     );
   }
-  const paymentDate = text(fields?.paymentDate, 10, 'Payment date', 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(paymentDate)
-      || Number.isNaN(Date.parse(`${paymentDate}T00:00:00Z`))) {
-    throw new PaymentValidationError('INVALID_PAYMENT_DATE', 'Enter a valid payment date.');
-  }
-  const paymentReference = text(
-    fields?.paymentReference ?? fields?.transactionReference,
-    PAYMENT_LIMITS.maxReferenceLength,
-    'Transaction reference',
-    4,
-  );
-  if (!/^[\p{L}\p{N}][\p{L}\p{N} ._:/#-]{3,99}$/u.test(paymentReference)) {
-    throw new PaymentValidationError(
-      'INVALID_PAYMENT_REFERENCE',
-      'Enter the reference exactly as shown by the payment channel.',
-    );
-  }
   return {
     planVersionId,
     paymentChannelVersionId,
-    paymentDate,
-    paymentReference,
   };
 }
 
 // Kept only for the short zero-downtime cutover window. The database closes
-// this legacy contract at the authoritative September 1 Manila cutoff, while
+// this legacy contract at the authoritative September 14 Manila cutoff, while
 // the new browser contract uses immutable plan/channel version identifiers.
 export function normalizeLegacyPaymentFields(fields) {
   const planCode = text(fields?.planCode, 64, 'Plan', 3).toLowerCase();
   if (planCode !== 'early_access_beta') {
     throw new PaymentValidationError(
       'PLAN_UNAVAILABLE',
-      'Only the legacy Early Access offer can use this checkout form.',
+      'This older checkout form cannot be used for the current published plan.',
     );
   }
   const paymentMethod = text(fields?.paymentMethod, 64, 'Payment method', 3).toLowerCase();
@@ -310,18 +291,18 @@ export function normalizePhase4AdminAction(payload) {
     if (!['needs_information', 'approved', 'rejected'].includes(status)) {
       throw new PaymentValidationError('INVALID_ADMIN_ACTION', 'Select a valid payment decision.');
     }
-    let expiresAt = null;
-    if (rawActionPayload.expiresAt) {
-      const date = new Date(String(rawActionPayload.expiresAt));
-      if (!Number.isFinite(date.getTime()) || date.getTime() <= Date.now()) {
+    let verifiedPaidAt = null;
+    if (rawActionPayload.verifiedPaidAt) {
+      const date = new Date(String(rawActionPayload.verifiedPaidAt));
+      if (!Number.isFinite(date.getTime())) {
         throw new PaymentValidationError(
           'INVALID_ADMIN_ACTION',
-          'Premium payment approval requires a future expiration.',
+          'Enter the exact payment date and time shown on the private proof.',
         );
       }
-      expiresAt = date.toISOString();
+      verifiedPaidAt = date.toISOString();
     }
-    actionPayload = { status, expiresAt };
+    actionPayload = { status, verifiedPaidAt };
   } else if (action === 'subscription_change') {
     const operation = String(rawActionPayload.operation || '').trim().toLowerCase();
     const allowedOperations = new Set([

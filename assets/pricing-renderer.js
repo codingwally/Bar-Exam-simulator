@@ -291,6 +291,53 @@
     </article>`;
   }
 
+  function regularPaymentMethod(plan, paymentMethods) {
+    return paymentMethods.find((method) => (
+      method.enabled
+      && method.visible
+      && method.channelCode === 'bpi_instapay'
+      && method.qrUrl === '/assets/payments/bpi-instapay-199-qr.png'
+      && method.planCode === plan.planCode
+      && method.qrAmountMode === 'exact'
+      && method.qrAmountCentavos === plan.priceCentavos
+    )) || null;
+  }
+
+  function regularCheckoutHtml(plan, paymentMethod, availability) {
+    const exactAmount = (plan.priceCentavos / 100).toFixed(2);
+    const qrUrl = paymentMethod?.qrUrl || (paymentMethod?.qrAsset?.assetId
+      ? `/pricing/assets/${paymentMethod.qrAsset.assetId}` : '');
+    const features = plan.features.map((feature) => `<li>
+      <img src="/assets/icons/navigation/circle-check.svg" width="22" height="22" alt="" aria-hidden="true">
+      <span>${escapeHtml(feature)}</span>
+    </li>`).join('');
+    return `<section class="dd-regular-checkout" data-plan-code="${escapeHtml(plan.planCode)}" data-payment-method-version-id="${escapeHtml(paymentMethod?.versionId || '')}" data-checkout-state="${escapeHtml(availability.state)}">
+      <section class="dd-regular-summary" aria-labelledby="dd-regular-summary-title">
+        <p class="dd-regular-price"><strong>${escapeHtml(pesos(plan.priceCentavos))}</strong><span>${escapeHtml(plan.durationDays)} days from payment</span></p>
+        <div class="dd-regular-divider" aria-hidden="true"></div>
+        <h2 id="dd-regular-summary-title">Everything included</h2>
+        ${plan.description ? `<p class="dd-regular-description">${escapeHtml(plan.description)}</p>` : ''}
+        <ul class="dd-regular-features">${features}</ul>
+        <div class="dd-regular-assurance">
+          <img src="/assets/icons/navigation/shield-check.svg" width="34" height="34" alt="" aria-hidden="true">
+          <p>Manual verification required. The ${escapeHtml(plan.durationDays)}-day term begins when payment is made.</p>
+        </div>
+        <p class="dd-regular-renewal">One-time payment <span aria-hidden="true">·</span> No automatic renewal</p>
+      </section>
+      <section class="dd-regular-qr" aria-labelledby="dd-regular-qr-title">
+        <p class="dd-regular-channel"><span></span>BPI InstaPay<span></span></p>
+        <h2 id="dd-regular-qr-title">Pay exactly ₱${escapeHtml(exactAmount)}</h2>
+        <figure class="dd-regular-qr-card">
+          <img class="dd-regular-bpi-mark" src="/assets/payments/bpi-mark.png" width="110" height="60" alt="BPI">
+          <strong>DUE DILIGENCE</strong>
+          <img class="dd-regular-qr-image" src="${escapeHtml(qrUrl)}" width="496" height="496" alt="BPI InstaPay QR code for PHP ${escapeHtml(exactAmount)}">
+          <figcaption><strong>PHP ${escapeHtml(exactAmount)}</strong><span>Transfer fees may apply</span></figcaption>
+        </figure>
+      </section>
+      <div class="dd-regular-proof-slot" id="dd2-regular-proof-host" aria-live="polite"></div>
+    </section>`;
+  }
+
   function render(host, config, options = {}) {
     if (!(host instanceof Element)) throw new TypeError('A pricing preview host is required.');
     const normalized = normalizeConfig(config);
@@ -308,6 +355,20 @@
       plan.planCode,
       planAvailability(plan, normalized.paymentMethods, access, useRuntimeState),
     ]));
+
+    const regularPlan = mode === 'public' && plans.length === 1
+      && plans[0].planCode === 'bar_access_30d'
+      ? plans[0] : null;
+    const regularAvailability = regularPlan
+      ? availabilityByPlan.get(regularPlan.planCode) : null;
+    const regularMethod = regularPlan
+      ? regularPaymentMethod(regularPlan, normalized.paymentMethods) : null;
+    if (regularPlan && regularAvailability?.disabled === false && regularMethod) {
+      host.innerHTML = `<section class="dd-pricing dd-pricing-regular" data-pricing-mode="${mode}">
+        ${regularCheckoutHtml(regularPlan, regularMethod, regularAvailability)}
+      </section>`;
+      return normalized;
+    }
 
     host.innerHTML = `<section class="dd-pricing" data-pricing-mode="${mode}">
       <header class="dd-pricing-hero">

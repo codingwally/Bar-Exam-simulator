@@ -280,10 +280,10 @@ export function normalizeAccessSnapshot(value) {
       0,
       10_000_000,
     ),
-    renewalAt: value.renewalAt || null,
+    renewalAt: null,
     manualRenewal: value.manualRenewal === true,
     automaticRenewal: value.automaticRenewal === true,
-    salesCloseAt: value.salesCloseAt || null,
+    salesCloseAt: null,
     entitlementEndsAt: value.entitlementEndsAt || null,
     paymentState: clean(value.paymentState) || null,
     commercialLaunchEnabled,
@@ -382,7 +382,7 @@ export function accessDeniedError(access) {
   ) {
     return new AccessValidationError(
       'INTRODUCTORY_TOKENS_EXHAUSTED',
-      'Your five one-time practice tokens have been used. Early Access is required to continue.',
+      'Your five one-time practice tokens have been used. Choose the current Regular Subscription to continue.',
       403,
     );
   }

@@ -33,6 +33,11 @@ on:
         required: true
         default: false
         type: boolean
+      september_pricing_database_preapplied_sha256:
+        description: "When DB URL is absent: SHA-256 of exact 20260831100000/20260831101000 bundle + probe"
+        required: false
+        default: ""
+        type: string
       approval_reference:
         description: "Approval/change reference recorded in the release log"
         required: true
@@ -123,6 +128,9 @@ jobs:
           node scripts/test-admin-pricing-editor.mjs
           node scripts/test-pricing-public-contract.mjs
           node scripts/test-admin-pricing-release.mjs
+          node scripts/test-september-pricing-sql-contract.mjs
+          node scripts/test-september-pricing-release-bundle.mjs
+          node scripts/test-september-pricing-release-workflow.mjs
           node scripts/test-import-duediligence-2026-content.mjs
           node scripts/validate-duediligence-2026-content.mjs
 
@@ -241,6 +249,32 @@ jobs:
             psql "$PRICING_DATABASE_URL" -X --set=ON_ERROR_STOP=1 --file "$pricing_probe"
           else
             echo "The explicit pricing_database_preapplied confirmation attests that exact migration 20260830054727 and its rollback-only probe passed on production."
+          fi
+
+      - name: Apply and post-apply probe the exact September pricing migrations
+        env:
+          SEPTEMBER_PRICING_DATABASE_URL: ${{ secrets.EXAMINATION_ROOM_PRODUCTION_DATABASE_URL }}
+          SEPTEMBER_PRICING_DATABASE_PREAPPLIED_SHA256: ${{ inputs.september_pricing_database_preapplied_sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          september_pricing_release_bundle="$RUNNER_TEMP/september-pricing-release.sql"
+          trap 'rm -f -- "$september_pricing_release_bundle"' EXIT
+          node scripts/build-september-pricing-release-bundle.mjs --output "$september_pricing_release_bundle"
+          expected_attestation="$(node --input-type=module -e 'import { createHash } from "node:crypto"; import { readFileSync } from "node:fs"; process.stdout.write("sha256:" + createHash("sha256").update(readFileSync(process.argv[1])).digest("hex"));' "$september_pricing_release_bundle")"
+          test -n "$expected_attestation"
+          if [[ -n "$SEPTEMBER_PRICING_DATABASE_URL" ]]; then
+            if ! command -v psql >/dev/null 2>&1; then
+              sudo apt-get update
+              sudo apt-get install --yes postgresql-client
+            fi
+            psql --version
+            psql "$SEPTEMBER_PRICING_DATABASE_URL" -X --set=ON_ERROR_STOP=1 --file "$september_pricing_release_bundle"
+          elif [[ "$SEPTEMBER_PRICING_DATABASE_PREAPPLIED_SHA256" == "$expected_attestation" ]]; then
+            echo "The exact bundle-hash attestation confirms both September pricing migrations, their ledger records, and the rollback-only post-apply probe completed on production before Worker cutover."
+          else
+            echo "EXAMINATION_ROOM_PRODUCTION_DATABASE_URL is missing. Manually apply the generated September pricing bundle, verify its embedded rollback-only probe, then rerun with this exact attestation: $expected_attestation" >&2
+            exit 1
           fi
 
       - name: Verify production notification, persistence, and Examination Room secrets exist

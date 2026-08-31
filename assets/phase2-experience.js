@@ -3,6 +3,7 @@
 
   const config = global.DueDiligencePhase2Config;
   if (!config) return;
+  const pricingCheckoutSafety = global.DueDiligencePricingCheckoutSafety || null;
 
   const state = {
     client: null,
@@ -49,6 +50,9 @@
     pricingSnapshot: null,
     selectedPricingPlan: null,
     selectedPaymentMethod: null,
+    selectedPaymentProof: null,
+    regularPaymentQrReady: false,
+    pricingRefreshTimer: null,
   };
 
   let resolveAuthReady;
@@ -459,7 +463,10 @@
               <div class="dd2-view-kicker" id="dd2-native-kicker">Due Diligence</div>
               <h2 id="dd2-native-title">Information</h2>
             </div>
-            <button type="button" class="dd2-close" id="dd2-native-close" aria-label="Close">×</button>
+            <div class="dd2-native-header-actions">
+              <p class="dd2-native-meta" id="dd2-native-meta" hidden></p>
+              <button type="button" class="dd2-close" id="dd2-native-close" aria-label="Close">×</button>
+            </div>
           </header>
           <div id="dd2-native-body"></div>
           <div class="dd2-dialog-footer"><button type="button" class="dd2-button dd2-button-secondary dd2-dialog-back" id="dd2-native-back">Back</button></div>
@@ -1721,7 +1728,7 @@
         <h3>Introductory tokens and paid access</h3>
         <p>Each eligible first-time account receives one lifetime allowance of five practice tokens. A token is consumed only after a successful graded submission. Failed grading and duplicate retries do not consume a token, and used tokens do not reset by date, browser, device, sign-out, account update, or the end of a paid subscription. The plan, price, duration, and payment details shown at proof submission are stored with that request and do not change while it is reviewed.</p>
         <h3>Payments, cancellation, and refunds</h3>
-        <p>Paid access uses manual payment and has no automatic charge or automatic renewal. The first valid payment-proof submission may create one non-renewable 24-hour provisional entitlement while it is reviewed. Approved rolling plans begin on approval or extend an existing paid period without shortening it. Eligible refund requests must be filed within seven calendar days of the applicable access start and are reviewed using the published unused-time formula, without limiting statutory consumer rights.</p>
+        <p>Paid access uses manual payment and has no automatic charge or automatic renewal. The first valid payment-proof submission may create one non-renewable 24-hour provisional entitlement while it is reviewed. For a rolling plan, an administrator verifies the payment timestamp shown on the private proof; the purchased term begins at that verified payment time or after a later existing finite expiry so unused access is not shortened. Eligible refund requests must be filed within seven calendar days of the applicable access start and are reviewed using the published unused-time formula, without limiting statutory consumer rights.</p>
         <h3>Your submissions</h3>
         <p>You remain responsible for submitted content. Do not submit confidential, privileged, unlawful, or third-party personal information. Service processing of an answer is necessary to provide grading. Separate optional consent governs retention of de-identified answer content for internal quality improvement.</p>
         <h3>Acceptable use</h3>
@@ -1746,7 +1753,7 @@
         <h3>Support and corrections</h3>
         <p>Support stores the category, message, optional reply email, status, and timestamps. Do not submit examination answers through Support. Correction submissions store only the reviewed correction fields described in that form.</p>
         <h3>Payments and infrastructure</h3>
-        <p>Payment amount, channel, date, reference, status, and proof are processed for manual verification. Proofs are private and available only through short-lived authorized review. Supabase, Cloudflare, GitHub Pages, Google authentication, and the configured assessment provider process data only as needed for their platform roles.</p>
+        <p>Payment amount, channel, status, private proof, and the payment timestamp verified from that proof are processed for manual verification. The customer submits only the private payment proof. Proofs are available only through short-lived authorized review. Supabase, Cloudflare, GitHub Pages, Google authentication, and the configured assessment provider process data only as needed for their platform roles.</p>
         <h3>Purpose and legal basis</h3>
         <p>We process account and answer data to perform the requested educational service, secure the platform, prevent fraud, maintain records, and meet legal obligations. Optional AI-improvement processing relies on separate consent that may be withdrawn. No email-marketing program is active.</p>
         <h3>Retention and security</h3>
@@ -2024,6 +2031,7 @@
   }
 
   function renderNativeView(view, options = {}) {
+    clearCommercialPricingRefresh();
     const definition = nativeDefinition(view);
     if (!definition) {
       hideNativeView();
@@ -2055,6 +2063,8 @@
     if (nativeOverlay) {
       nativeOverlay.dataset.nativeView = view;
       nativeOverlay.dataset.nativeMode = state.nativeViewMode;
+      nativeOverlay.classList.remove('is-regular-subscription');
+      delete nativeOverlay.dataset.pricingPresentation;
       if (subjectReviewAction) nativeOverlay.setAttribute('aria-describedby', 'dd2-native-description');
       else nativeOverlay.removeAttribute('aria-describedby');
     }
@@ -2064,6 +2074,11 @@
     document.getElementById('dd2-native-title').textContent = subjectReviewAction
       ? 'Paid access for protected review material'
       : definition[1];
+    const nativeMeta = document.getElementById('dd2-native-meta');
+    if (nativeMeta) {
+      nativeMeta.hidden = true;
+      nativeMeta.textContent = '';
+    }
     document.getElementById('dd2-native-body').innerHTML = definition[2]();
     const closeButton = document.getElementById('dd2-native-close');
     const backButton = document.getElementById('dd2-native-back');
@@ -2088,6 +2103,7 @@
   }
 
   function hideNativeView(options = {}) {
+    clearCommercialPricingRefresh();
     const closingView = state.nativeView;
     const closingMode = state.nativeViewMode;
     const closingActionId = state.nativeViewActionId;
@@ -2106,11 +2122,15 @@
     state.nativeViewReturnFocus = null;
     state.nativeViewScrollPosition = null;
     state.nativeViewClosing = false;
+    state.selectedPaymentProof = null;
+    state.regularPaymentQrReady = false;
     state.nativeViewSequence += 1;
     const nativeOverlay = document.getElementById('dd2-native-view');
     if (nativeOverlay) {
       delete nativeOverlay.dataset.nativeView;
       delete nativeOverlay.dataset.nativeMode;
+      delete nativeOverlay.dataset.pricingPresentation;
+      nativeOverlay.classList.remove('is-regular-subscription');
       nativeOverlay.removeAttribute('aria-describedby');
     }
     if (ownsActionHistoryEntry) {
@@ -2420,9 +2440,17 @@
   }
 
   function paymentMethodSupportsPlan(method, plan) {
-    if (!method || method.enabled === false || !plan) return false;
+    if (!method || method.enabled === false || method.visible === false || !plan) return false;
     if (method.planCode && method.planCode !== plan.planCode) return false;
     const amount = Number(method.qrAmountCentavos);
+    if (isRegularSubscriptionPlan(plan)) {
+      return method.planCode === plan.planCode
+        && method.channelCode === 'bpi_instapay'
+        && method.qrUrl === '/assets/payments/bpi-instapay-199-qr.png'
+        && method.qrAmountMode === 'exact'
+        && Number.isSafeInteger(amount)
+        && amount === Number(plan.priceCentavos);
+    }
     return method.qrAmountMode === 'generic'
       || (Number.isSafeInteger(amount) && amount > 0 && amount === Number(plan.priceCentavos));
   }
@@ -2443,6 +2471,7 @@
       return raw.startsWith('/') ? raw : `/${raw}`;
     }
     const workerBase = String(config.workerUrl || '').replace(/\/+$/, '');
+    if (raw === '/pricing/legacy-149-qr.png') return `${workerBase}${raw}`;
     if (raw.startsWith(`${workerBase}/pricing/assets/`)
         && uuid.test(raw.slice(`${workerBase}/pricing/assets/`.length))) return raw;
     return '';
@@ -2459,9 +2488,28 @@
     }).format(amount).replace('PHP', '₱');
   }
 
+  function isRegularSubscriptionPlan(plan) {
+    return String(plan?.planCode || '').trim().toLowerCase() === 'bar_access_30d'
+      && Number(plan?.priceCentavos) === 19900
+      && Number(plan?.durationDays) === 30
+      && String(plan?.entitlementMode || '').trim().toLowerCase() === 'rolling_days';
+  }
+
   function renderCommercialPlanCards(payload, access = null) {
     const host = document.getElementById('dd2-pricing-page');
     if (!host) return;
+    if (!pricingCheckoutSafety) {
+      state.selectedPricingPlan = null;
+      state.selectedPaymentMethod = null;
+      state.selectedPaymentProof = null;
+      state.regularPaymentQrReady = false;
+      host.innerHTML = `
+        <div class="dd2-status is-error" role="alert">
+          <strong>Secure payment controls are unavailable.</strong>
+          <span>Reload Plans &amp; Pricing before paying or uploading proof.</span>
+        </div>`;
+      return;
+    }
     const pricing = normalizedCommercialPricing(payload);
     const safePlans = normalizedCommercialPlans(pricing);
     if (!safePlans.length) throw new Error('No published plan is currently visible.');
@@ -2473,6 +2521,7 @@
     state.pricingSnapshot = pricing;
     state.selectedPricingPlan = null;
     state.selectedPaymentMethod = null;
+    state.regularPaymentQrReady = false;
     const renderer = global.DueDiligencePricingRenderer;
     renderer.render(host, { ...pricing.config, plans: safePlans }, {
       mode: 'public',
@@ -2497,10 +2546,29 @@
         renderPaymentForm(plan);
       },
     });
+    const regularPlan = safePlans.length === 1 && isRegularSubscriptionPlan(safePlans[0])
+      ? safePlans[0] : null;
+    const regularProofHost = document.getElementById('dd2-regular-proof-host');
+    if (regularPlan && regularProofHost
+        && regularPlan.checkoutOpen === true && regularPlan.checkoutEnabled !== false) {
+      const nativeOverlay = document.getElementById('dd2-native-view');
+      nativeOverlay?.classList.add('is-regular-subscription');
+      if (nativeOverlay) nativeOverlay.dataset.pricingPresentation = 'regular-subscription';
+      const nativeMeta = document.getElementById('dd2-native-meta');
+      if (nativeMeta) {
+        nativeMeta.textContent = 'Regular Subscription · ₱199 · 30 Days';
+        nativeMeta.hidden = false;
+      }
+      const renderedMethodId = document.querySelector('.dd-regular-checkout')
+        ?.getAttribute('data-payment-method-version-id') || '';
+      renderPaymentForm(regularPlan, renderedMethodId, { embedded: true });
+    }
   }
 
-  function renderPaymentForm(selectedPlan, preferredMethodId = '') {
-    const host = document.getElementById('dd2-payment-host');
+  function renderPaymentForm(selectedPlan, preferredMethodId = '', options = {}) {
+    const embedded = options.embedded === true && isRegularSubscriptionPlan(selectedPlan);
+    const host = document.getElementById(embedded
+      ? 'dd2-regular-proof-host' : 'dd2-payment-host');
     if (!host) return;
     const plan = normalizedCommercialPlans(state.pricingSnapshot)
       .find((candidate) => candidate.versionId === selectedPlan?.versionId)
@@ -2511,7 +2579,9 @@
       return;
     }
     const methods = commercialPaymentMethods(plan);
-    const method = methods.find((item) => item.versionId === preferredMethodId) || methods[0];
+    const method = preferredMethodId
+      ? methods.find((item) => item.versionId === preferredMethodId)
+      : methods[0];
     const qrUrl = commercialQrUrl(method);
     if (!method || !method.versionId || !qrUrl) {
       host.innerHTML = '<div class="dd2-status is-error" role="alert">Payment is not open yet because this plan has no published matching QR. No payment was requested.</div>';
@@ -2519,16 +2589,77 @@
     }
     state.selectedPricingPlan = plan;
     state.selectedPaymentMethod = method;
+    if (embedded && !state.session?.access_token) {
+      host.innerHTML = `
+        <section class="dd2-payment-panel dd2-payment-panel-regular" aria-labelledby="dd2-payment-title">
+          <h2 id="dd2-payment-title">Sign in to upload proof</h2>
+          <p class="dd2-payment-intro">Sign in securely before selecting your receipt or screenshot so your proof stays attached to the correct account.</p>
+          <button class="dd2-button dd2-button-primary" id="dd2-payment-sign-in" type="button">Sign in securely</button>
+        </section>`;
+      document.getElementById('dd2-payment-sign-in')?.addEventListener('click', () => {
+        hideNativeView({ reason: 'authentication-required' });
+        showEntry({ allowDismiss: true, routeBound: true, returnHash: '#pricing' });
+      });
+      return;
+    }
     const today = manilaTodayInput();
     const subjectReviewAction = state.nativeViewMode === 'action'
       && state.nativeViewContext?.reason === 'subject_reveal_review';
     const planAmount = formatPhp(plan.priceCentavos, { alwaysDecimals: true });
     const rollingTerm = plan.entitlementMode === 'rolling_days';
     const termCopy = rollingTerm
-      ? `Approval provides ${Math.max(1, Number(plan.durationDays) || 30)} days. If paid access is still active, the new period is added after the current expiry.`
+      ? `${Math.max(1, Number(plan.durationDays) || 30)} days are anchored to the payment time verified from the proof. If finite paid access is still active, the new period is added after the current expiry.`
       : plan.fixedEntitlementEndsAt
         ? `Approval keeps this legacy plan active through ${manilaDate(plan.fixedEntitlementEndsAt, { includeTime: true })} Philippine time.`
         : 'The captured legacy entitlement dates are kept with this payment request.';
+    if (embedded) {
+      host.innerHTML = `
+        <section class="dd2-payment-panel dd2-payment-panel-regular" aria-labelledby="dd2-payment-title">
+          <h2 id="dd2-payment-title">Upload proof of payment</h2>
+          <p class="dd2-payment-intro">After paying, upload your BPI receipt or screenshot for manual verification.</p>
+          <form class="dd2-form dd2-proof-only-form" id="dd2-payment-form">
+            <span class="dd2-proof-label">Payment proof</span>
+            <input class="dd2-visually-hidden" id="dd2-payment-proof" type="file" accept="image/png,image/jpeg,application/pdf,.png,.jpg,.jpeg,.pdf">
+            <label class="dd2-payment-dropzone" id="dd2-payment-dropzone" for="dd2-payment-proof">
+              <img src="/assets/icons/navigation/cloud-upload.svg" width="58" height="58" alt="" aria-hidden="true">
+              <strong>Click to upload or drag and drop</strong>
+              <span>PNG, JPEG, or PDF only, up to 6 MiB.</span>
+            </label>
+            <div class="dd2-proof-preview" id="dd2-proof-preview" hidden></div>
+            <div class="dd2-proof-private">
+              <img src="/assets/icons/navigation/shield-check.svg" width="34" height="34" alt="" aria-hidden="true">
+              <span>Your proof is private and submitted securely.</span>
+            </div>
+            <p class="dd2-proof-term">The payment date shown on your proof determines the 30-day term.</p>
+            <div class="dd2-status" id="dd2-payment-status" role="status" aria-live="polite"></div>
+            <div class="dd2-upload-progress" id="dd2-upload-progress" role="progressbar" aria-label="Payment proof upload progress" hidden><span></span></div>
+            <button class="dd2-button dd2-button-primary" id="dd2-payment-submit" type="submit" disabled>Submit proof securely</button>
+          </form>
+        </section>`;
+      document.getElementById('dd2-payment-form')?.addEventListener('submit', submitCommercialPayment);
+      document.getElementById('dd2-payment-proof')?.addEventListener('change', previewCommercialPaymentProof);
+      attachCommercialProofDropzone();
+      restoreCommercialPaymentProof();
+      const qrImage = document.querySelector('.dd-regular-qr-image');
+      const submit = document.getElementById('dd2-payment-submit');
+      const planVersionId = plan.versionId;
+      const paymentMethodVersionId = method.versionId;
+      const markQrReady = () => {
+        if (state.selectedPricingPlan?.versionId !== planVersionId
+            || state.selectedPaymentMethod?.versionId !== paymentMethodVersionId) return;
+        state.regularPaymentQrReady = true;
+        if (submit) submit.disabled = false;
+      };
+      state.regularPaymentQrReady = false;
+      if (pricingCheckoutSafety?.imageReady(qrImage)) markQrReady();
+      else qrImage?.addEventListener('load', markQrReady, { once: true });
+      qrImage?.addEventListener('error', () => {
+        state.regularPaymentQrReady = false;
+        if (submit) submit.disabled = true;
+        setStatus('dd2-payment-status', 'This QR could not be loaded, so payment submission is paused. Reload the page or contact Support.', 'error');
+      }, { once: true });
+      return;
+    }
     const methodOptions = methods.map((item) => `<option value="${escapeHtml(item.versionId)}"${item.versionId === method.versionId ? ' selected' : ''}>${escapeHtml(item.label)}</option>`).join('');
     host.innerHTML = `
       <section class="dd2-payment-panel" aria-labelledby="dd2-payment-title">
@@ -2577,11 +2708,43 @@
     });
     document.getElementById('dd2-payment-form')?.addEventListener('submit', submitCommercialPayment);
     document.getElementById('dd2-payment-proof')?.addEventListener('change', previewCommercialPaymentProof);
+    restoreCommercialPaymentProof();
     document.getElementById('dd2-payment-qr')?.addEventListener('error', () => {
       const submit = document.getElementById('dd2-payment-submit');
       if (submit) submit.disabled = true;
       setStatus('dd2-payment-status', 'This QR could not be loaded, so payment submission is paused. Reload the page or contact Support.', 'error');
     }, { once: true });
+  }
+
+  function attachCommercialProofDropzone() {
+    const dropzone = document.getElementById('dd2-payment-dropzone');
+    const input = document.getElementById('dd2-payment-proof');
+    if (!dropzone || !input) return;
+    const setDragging = (active) => dropzone.classList.toggle('is-dragging', active);
+    for (const eventName of ['dragenter', 'dragover']) {
+      dropzone.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        setDragging(true);
+      });
+    }
+    for (const eventName of ['dragleave', 'drop']) {
+      dropzone.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        setDragging(false);
+      });
+    }
+    dropzone.addEventListener('drop', (event) => {
+      const file = event.dataTransfer?.files?.[0];
+      if (!file) return;
+      if (typeof global.DataTransfer !== 'function') {
+        setStatus('dd2-payment-status', 'Drag and drop is not supported by this browser. Click the upload area to choose your proof.', 'error');
+        return;
+      }
+      const transfer = new global.DataTransfer();
+      transfer.items.add(file);
+      input.files = transfer.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
   }
 
   function validCommercialProof(file) {
@@ -2599,11 +2762,18 @@
     if (!host) return;
     const validation = validCommercialProof(file);
     if (validation) {
+      state.selectedPaymentProof = null;
+      document.getElementById('dd2-payment-dropzone')?.classList.remove('has-proof');
       host.hidden = true;
       host.replaceChildren();
       if (file) setStatus('dd2-payment-status', validation, 'error');
       return;
     }
+    state.selectedPaymentProof = pricingCheckoutSafety?.captureProof(
+      file,
+      state.selectedPricingPlan?.versionId,
+      state.selectedPaymentMethod?.versionId,
+    ) || null;
     host.replaceChildren();
     const summary = document.createElement('div');
     summary.className = 'dd2-proof-summary';
@@ -2628,7 +2798,36 @@
     replace.addEventListener('click', () => document.getElementById('dd2-payment-proof')?.click());
     host.append(replace);
     host.hidden = false;
+    document.getElementById('dd2-payment-dropzone')?.classList.add('has-proof');
     setStatus('dd2-payment-status', 'Proof ready for secure submission.', 'success');
+  }
+
+  function restoreCommercialPaymentProof() {
+    const selection = state.selectedPaymentProof;
+    const input = document.getElementById('dd2-payment-proof');
+    if (!selection || !input) return;
+    const reconciled = pricingCheckoutSafety?.reconcileProof(
+      selection,
+      state.selectedPricingPlan?.versionId,
+      state.selectedPaymentMethod?.versionId,
+    ) || { matched: false, cleared: true, file: null };
+    if (!reconciled.matched) {
+      state.selectedPaymentProof = null;
+      setStatus(
+        'dd2-payment-status',
+        'Pricing changed. Select the payment proof again for the current plan.',
+        'error',
+      );
+      return;
+    }
+    const file = reconciled.file;
+    if (!input || validCommercialProof(file)) return;
+    if (typeof global.DataTransfer === 'function') {
+      const transfer = new global.DataTransfer();
+      transfer.items.add(file);
+      input.files = transfer.files;
+    }
+    previewCommercialPaymentProof({ currentTarget: { files: [file] } });
   }
 
   async function submitCommercialPayment(event) {
@@ -2643,7 +2842,17 @@
       setStatus('dd2-payment-status', 'This offer is no longer current. Reload Plans & Pricing before submitting.', 'error');
       return;
     }
-    const proof = document.getElementById('dd2-payment-proof')?.files?.[0];
+    if (isRegularSubscriptionPlan(plan) && state.regularPaymentQrReady !== true) {
+      setStatus('dd2-payment-status', 'The payment QR is still loading. Wait a moment, then try again.', 'error');
+      return;
+    }
+    if (!state.session?.access_token) {
+      hideNativeView({ reason: 'authentication-required' });
+      showEntry({ allowDismiss: true, routeBound: true, returnHash: '#pricing' });
+      return;
+    }
+    const proof = document.getElementById('dd2-payment-proof')?.files?.[0]
+      || state.selectedPaymentProof?.file;
     const proofValidation = validCommercialProof(proof);
     if (proofValidation) {
       setStatus('dd2-payment-status', proofValidation, 'error');
@@ -2654,9 +2863,11 @@
     form.set('paymentChannelVersionId', paymentMethod.versionId);
     form.set('planCode', plan.planCode);
     form.set('paymentMethod', paymentMethod.channelCode);
-    form.set('paymentDate', document.getElementById('dd2-payment-date').value);
-    form.set('transactionReference', document.getElementById('dd2-payment-reference').value.trim());
-    form.set('note', document.getElementById('dd2-payment-note').value.trim());
+    if (!isRegularSubscriptionPlan(plan)) {
+      form.set('paymentDate', document.getElementById('dd2-payment-date')?.value || '');
+      form.set('transactionReference', document.getElementById('dd2-payment-reference')?.value.trim() || '');
+      form.set('note', document.getElementById('dd2-payment-note')?.value.trim() || '');
+    }
     form.set('proof', proof);
     submit.disabled = true;
     submit.textContent = 'Submitting securely…';
@@ -2670,11 +2881,14 @@
         submissionDraft: { planCode: plan.planCode },
       });
       const access = await global.DueDiligencePhase4?.refreshAccess?.({ force: true, enforce: false }).catch(() => null);
+      state.selectedPaymentProof = null;
+      state.regularPaymentQrReady = false;
       if (state.nativeViewSequence !== viewSequence || state.nativeView !== 'pricing') {
         global.toast?.(`${plan.name} proof received securely.`, 'ok');
         return;
       }
-      const host = document.getElementById('dd2-payment-host');
+      const host = document.getElementById(isRegularSubscriptionPlan(plan)
+        ? 'dd2-regular-proof-host' : 'dd2-payment-host');
       if (host) host.innerHTML = `
         <section class="dd2-payment-success" role="status" aria-live="polite">
           <div class="dd2-view-kicker">Proof received</div>
@@ -2700,7 +2914,8 @@
     } catch (error) {
       if (['PRICING_OFFER_STALE', 'PLAN_NOT_AVAILABLE', 'CHECKOUT_CLOSED', 'PAYMENT_CHANNEL_NOT_AVAILABLE']
         .includes(String(error?.code || ''))) {
-        const paymentHost = document.getElementById('dd2-payment-host');
+        const paymentHost = document.getElementById(isRegularSubscriptionPlan(plan)
+          ? 'dd2-regular-proof-host' : 'dd2-payment-host');
         if (paymentHost) paymentHost.innerHTML = '<div class="dd2-status is-error" role="alert">Pricing changed before submission. Nothing was charged or accepted. The current published plan is shown above.</div>';
         await loadCommercialPricing(viewSequence);
         return;
@@ -2712,12 +2927,53 @@
     }
   }
 
-  async function loadCommercialPricing(viewSequence = state.nativeViewSequence) {
+  function clearCommercialPricingRefresh() {
+    state.pricingRefreshTimer = pricingCheckoutSafety?.cancelScheduledRefresh(
+      state.pricingRefreshTimer,
+      global.clearTimeout.bind(global),
+    ) ?? null;
+  }
+
+  function scheduleCommercialPricingRefresh(serverNow, viewSequence) {
+    clearCommercialPricingRefresh();
+    if (!pricingCheckoutSafety || state.nativeView !== 'pricing') return;
+    const isActive = () => state.nativeViewSequence === viewSequence
+      && state.nativeView === 'pricing';
+    state.pricingRefreshTimer = pricingCheckoutSafety.scheduleOneShotRefresh({
+      serverNow,
+      setTimer: global.setTimeout.bind(global),
+      fetchPlans: () => publicWorkerRequest('/plans'),
+      isActive,
+      onPayload: async (payload) => {
+        state.pricingRefreshTimer = null;
+        await loadCommercialPricing(viewSequence, { plansPayload: payload });
+      },
+      onError: async () => {
+        state.regularPaymentQrReady = false;
+        const host = document.getElementById('dd2-pricing-page');
+        if (host && isActive()) {
+          host.innerHTML = `
+            <div class="dd2-status is-error" role="alert">
+              <strong>Payment is paused while the current plan is rechecked.</strong>
+              <span>No proof can be submitted until a fresh pricing response is received.</span>
+            </div>`;
+        }
+        state.pricingRefreshTimer = global.setTimeout(() => {
+          state.pricingRefreshTimer = null;
+          if (isActive()) loadCommercialPricing(viewSequence);
+        }, 30_000);
+      },
+    });
+  }
+
+  async function loadCommercialPricing(viewSequence = state.nativeViewSequence, options = {}) {
     const host = document.getElementById('dd2-pricing-page');
     if (!host) return;
     try {
       const [plansPayload, accessPayload] = await Promise.all([
-        publicWorkerRequest('/plans'),
+        options.plansPayload
+          ? Promise.resolve(options.plansPayload)
+          : publicWorkerRequest('/plans'),
         state.session?.access_token
           ? nativeWorkerRequest('/access', { requestId: randomId(18) })
           : Promise.resolve({ access: null }),
@@ -2734,6 +2990,10 @@
         return;
       }
       renderCommercialPlanCards(plansPayload, access);
+      scheduleCommercialPricingRefresh(
+        plansPayload?.pricing?.serverNow || plansPayload?.serverNow,
+        viewSequence,
+      );
     } catch (error) {
       if (state.nativeViewSequence !== viewSequence || state.nativeView !== 'pricing') return;
       host.innerHTML = `

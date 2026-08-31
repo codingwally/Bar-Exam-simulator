@@ -901,7 +901,7 @@ export function examinationDatabaseError(error) {
     EXAM_SUBJECT_SKIP_UNAVAILABLE: 'This question can no longer be skipped safely.',
     EXAM_SUBJECT_NO_ALTERNATE_QUESTION: 'No different question is available in this course right now.',
     EXAM_SUBJECT_REVIEW_MATERIAL_UNAVAILABLE: 'Verified review material is not available for this question.',
-    SYLLABUS_REVIEW_SUBSCRIPTION_REQUIRED: 'Suggested answers and full legal review require ₱149 Early Access or a paid subscription.',
+    SYLLABUS_REVIEW_SUBSCRIPTION_REQUIRED: 'Suggested answers and full legal review require an active Regular Subscription.',
     SYLLABUS_REVIEW_RELEASE_INTEGRITY: 'The protected review release could not be verified. Please try again later.',
     BAR_SIMULATION_START_INVALID: 'The Bar Exam Simulation could not be started because its request was invalid.',
     BAR_SIMULATION_CATALOG_STALE: 'This Bar Exam Simulation set changed. Return to the Simulation list and open it again.',

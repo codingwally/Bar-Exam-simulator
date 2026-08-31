@@ -377,13 +377,36 @@ for (const popupFailure of [
   const harness = createPreviewHarness({
     role: 'member',
     open: () => popup,
-    access: { allowed: true, subscription_status: 'active' },
+    access: {
+      allowed: true,
+      basis: 'paid_subscription',
+      subscription_status: 'active',
+      subscription: { status: 'active', planCode: 'bar_access_30d' },
+    },
   });
   fireStudyRoomClick(harness.document);
-  assert.equal(harness.openCalls.length, 1, 'A paid member must open the live Study Room.');
+  assert.equal(harness.openCalls.length, 0, 'A paid member must not open the live Study Room during testing.');
+  assert.equal(harness.document.getElementById('dd-study-room-overlay').hidden, false);
+  assert.deepEqual(harness.analytics.map(({ name }) => name), ['study_room_preview_opened']);
+  assert.equal(harness.analytics[0].detail.access, 'subscribed');
+  assert.equal(
+    harness.document.getElementById('dd-study-room-subscribe-note').textContent,
+    'Study Room access is not yet available during testing',
+  );
+}
+
+{
+  const popup = { closed: false, opener: {}, focus() {} };
+  const harness = createPreviewHarness({
+    role: 'member',
+    open: () => popup,
+    access: { allowed: true, basis: 'founding_beta' },
+  });
+  fireStudyRoomClick(harness.document);
+  assert.equal(harness.openCalls.length, 1, 'A Founding Beta tester must retain live Study Room access.');
   assert.equal(harness.document.getElementById('dd-study-room-overlay').hidden, true);
   assert.deepEqual(harness.analytics.map(({ name }) => name), ['study_room_window_opened']);
-  assert.equal(harness.analytics[0].detail.audience, 'subscriber');
+  assert.equal(harness.analytics[0].detail.audience, 'test_cohort');
 }
 
 function response({ ok, status, payload }) {

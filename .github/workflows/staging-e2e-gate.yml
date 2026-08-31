@@ -38,6 +38,11 @@ on:
         required: true
         default: false
         type: boolean
+      september_pricing_database_preapplied_sha256:
+        description: "When DB URL is absent: SHA-256 of exact 20260831100000/20260831101000 bundle + probe"
+        required: false
+        default: ""
+        type: string
       approval_reference:
         description: "Required approval/change reference when deploy_greenfield is selected"
         required: false
@@ -76,7 +81,7 @@ jobs:
           test "$REPOSITORY_NAME" = "codingwally/Bar-Exam-simulator"
           test "$RELEASE_ACTOR" != "dependabot[bot]"
           case "$RELEASE_REF" in
-            refs/heads/main|refs/heads/feature/admin-pricing-builder-20260830|refs/heads/fix/admin-marketing-live-20260828|refs/heads/agent/master-experience-release-20260813|refs/heads/agent/header-subject-review-correction-20260814|refs/heads/agent/subject-matter-split-review-20260814|refs/heads/agent/high-value-subject-review-20260815|refs/heads/agent/homepage-feature-ledger-20260815|refs/heads/agent/commercial-launch-20260818|refs/heads/agent/commercial-terms-acceptance-hotfix-20260818|refs/heads/agent/commercial-terms-worker-persistence-20260818|refs/heads/agent/renovation-commercial-cutover-20260820|refs/heads/agent/soft-launch-five-token-20260821|refs/heads/codex/examination-room-greenfield-20260826|refs/heads/codex/examination-room-owner-command-center-20260826) ;;
+            refs/heads/main|refs/heads/feature/admin-pricing-builder-20260830|refs/heads/feature/pricing-september-cutover-20260831|refs/heads/fix/admin-marketing-live-20260828|refs/heads/agent/master-experience-release-20260813|refs/heads/agent/header-subject-review-correction-20260814|refs/heads/agent/subject-matter-split-review-20260814|refs/heads/agent/high-value-subject-review-20260815|refs/heads/agent/homepage-feature-ledger-20260815|refs/heads/agent/commercial-launch-20260818|refs/heads/agent/commercial-terms-acceptance-hotfix-20260818|refs/heads/agent/commercial-terms-worker-persistence-20260818|refs/heads/agent/renovation-commercial-cutover-20260820|refs/heads/agent/soft-launch-five-token-20260821|refs/heads/codex/examination-room-greenfield-20260826|refs/heads/codex/examination-room-owner-command-center-20260826) ;;
             *)
               echo "The staging gate may run only from an explicitly trusted release branch." >&2
               exit 1
@@ -122,6 +127,9 @@ jobs:
           node scripts/test-admin-pricing-editor.mjs
           node scripts/test-pricing-public-contract.mjs
           node scripts/test-admin-pricing-release.mjs
+          node scripts/test-september-pricing-sql-contract.mjs
+          node scripts/test-september-pricing-release-bundle.mjs
+          node scripts/test-september-pricing-release-workflow.mjs
           node scripts/test-feature-decommission-boundary.mjs
           node --test scripts/test-profile-photo-release2.mjs
           node scripts/test-profile-avatar-cleanup-migration.mjs
@@ -258,6 +266,33 @@ jobs:
             psql "$PRICING_DATABASE_URL" -X --set=ON_ERROR_STOP=1 --file "$pricing_probe"
           else
             echo "The explicit pricing_database_preapplied confirmation attests that exact migration 20260830054727 and its rollback-only probe passed on staging."
+          fi
+
+      - name: Apply and post-apply probe the exact September pricing migrations
+        if: inputs.deploy_greenfield == true
+        env:
+          SEPTEMBER_PRICING_DATABASE_URL: ${{ secrets.EXAMINATION_ROOM_STAGING_DATABASE_URL }}
+          SEPTEMBER_PRICING_DATABASE_PREAPPLIED_SHA256: ${{ inputs.september_pricing_database_preapplied_sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          september_pricing_release_bundle="$RUNNER_TEMP/september-pricing-release.sql"
+          trap 'rm -f -- "$september_pricing_release_bundle"' EXIT
+          node scripts/build-september-pricing-release-bundle.mjs --output "$september_pricing_release_bundle"
+          expected_attestation="$(node --input-type=module -e 'import { createHash } from "node:crypto"; import { readFileSync } from "node:fs"; process.stdout.write("sha256:" + createHash("sha256").update(readFileSync(process.argv[1])).digest("hex"));' "$september_pricing_release_bundle")"
+          test -n "$expected_attestation"
+          if [[ -n "$SEPTEMBER_PRICING_DATABASE_URL" ]]; then
+            if ! command -v psql >/dev/null 2>&1; then
+              sudo apt-get update
+              sudo apt-get install --yes postgresql-client
+            fi
+            psql --version
+            psql "$SEPTEMBER_PRICING_DATABASE_URL" -X --set=ON_ERROR_STOP=1 --file "$september_pricing_release_bundle"
+          elif [[ "$SEPTEMBER_PRICING_DATABASE_PREAPPLIED_SHA256" == "$expected_attestation" ]]; then
+            echo "The exact bundle-hash attestation confirms both September pricing migrations, their ledger records, and the rollback-only post-apply probe completed on staging before Worker cutover."
+          else
+            echo "EXAMINATION_ROOM_STAGING_DATABASE_URL is missing. Manually apply the generated September pricing bundle, verify its embedded rollback-only probe, then rerun with this exact attestation: $expected_attestation" >&2
+            exit 1
           fi
 
       - name: Verify staging secrets and private Supabase Storage recovery configuration

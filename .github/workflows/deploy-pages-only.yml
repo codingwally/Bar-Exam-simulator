@@ -59,7 +59,7 @@ jobs:
           git cat-file -e "$EXPECTED_BASE_SHA^{commit}"
           git merge-base --is-ancestor "$EXPECTED_BASE_SHA" "$EXPECTED_SOURCE_SHA"
 
-          allowed='^(\.github/workflows/deploy-pages-only\.yml|assets/feature-loader\.js|assets/icons/(community/image|navigation/(hand|mic|monitor-up|pin|settings))\.svg|assets/lex-forum\.css|assets/lex-forum\.js|assets/pedro-navigation\.js|assets/phase2-experience\.js|assets/private-beta-landing\.js|assets/study-room-backgrounds\.js|assets/study-room-live\.(css|js)|assets/study-room-preview\.(css|js)|assets/study-room/(dimasalang-library|participant-2-tropical|participant-3-bedroom|participant-4-condo|virtual-background-due-diligence-branded)\.webp|assets/subscription-cta\.css|assets/subscription-cta\.js|assets/vendor/mediapipe/(LICENSE|PROVENANCE)\.txt|assets/vendor/mediapipe/selfie_segmenter-float16-2023-05-07\.tflite|design-qa\.md|index\.html|scripts/build-pages-artifact\.mjs|scripts/test-home-post-collapse\.mjs|scripts/test-lex-forum\.mjs|scripts/test-pages-artifact\.mjs|scripts/test-pedro-navigation\.mjs|scripts/test-public-home-responsive-css\.mjs|scripts/test-public-release1-reliability\.mjs|scripts/test-quorum\.mjs|scripts/test-study-room-(backgrounds|hotfix-behavior|live|preview)\.mjs|study-room/index\.html)$'
+          allowed='^(\.github/workflows/deploy-pages-only\.yml|assets/feature-loader\.js|assets/icons/(community/image|navigation/(circle-check|cloud-upload|hand|mic|monitor-up|pin|settings|shield-check))\.svg|assets/lex-forum\.css|assets/lex-forum\.js|assets/payments/(bpi-instapay-199-qr\.png|bpi-mark\.png)|assets/pedro-navigation\.js|assets/phase2-experience\.js|assets/phase2\.css|assets/pricing-checkout-safety\.js|assets/pricing-renderer\.(css|js)|assets/private-beta-landing\.js|assets/study-room-backgrounds\.js|assets/study-room-live\.(css|js)|assets/study-room-preview\.(css|js)|assets/study-room/(dimasalang-library|participant-2-tropical|participant-3-bedroom|participant-4-condo|virtual-background-due-diligence-branded)\.webp|assets/subscription-cta\.css|assets/subscription-cta\.js|assets/vendor/mediapipe/(LICENSE|PROVENANCE)\.txt|assets/vendor/mediapipe/selfie_segmenter-float16-2023-05-07\.tflite|design-qa\.md|index\.html|scripts/build-pages-artifact\.mjs|scripts/test-home-post-collapse\.mjs|scripts/test-lex-forum\.mjs|scripts/test-pages-artifact\.mjs|scripts/test-pedro-navigation\.mjs|scripts/test-pricing-checkout-safety\.mjs|scripts/test-public-home-responsive-css\.mjs|scripts/test-public-release1-reliability\.mjs|scripts/test-quorum\.mjs|scripts/test-september-pricing-(sql|ui)-contract\.mjs|scripts/test-study-room-(backgrounds|hotfix-behavior|live|preview)\.mjs|service-worker\.js|study-room/index\.html)$'
           unexpected="$(git diff --name-only "$EXPECTED_BASE_SHA..$EXPECTED_SOURCE_SHA" | grep -Ev "$allowed" || true)"
           if [[ -n "$unexpected" ]]; then
             echo "The frontend-only release contains files outside the approved isolation boundary:" >&2
@@ -75,9 +75,11 @@ jobs:
       - name: Install reviewed Pages build dependencies
         run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
 
-      - name: Verify the subscription CTA and unchanged community contracts
+      - name: Verify the pricing checkout, subscription CTA, and unchanged community contracts
         run: |
           node --check assets/subscription-cta.js
+          node --check assets/pricing-checkout-safety.js
+          node --check assets/pricing-renderer.js
           node --check assets/study-room-backgrounds.js
           node --check assets/study-room-live.js
           node --check assets/study-room-preview.js
@@ -92,6 +94,9 @@ jobs:
           node scripts/test-lex-forum.mjs
           node scripts/test-public-release1-reliability.mjs
           node scripts/test-pedro-navigation.mjs
+          node scripts/test-pricing-checkout-safety.mjs
+          node scripts/test-september-pricing-ui-contract.mjs
+          node scripts/test-september-pricing-sql-contract.mjs
 
       - name: Build and verify the sanitized Pages artifact
         run: node scripts/test-pages-artifact.mjs
@@ -169,7 +174,8 @@ jobs:
               && grep -q "announcementOnly = kind === 'loading'" <<<"$pedro_js" \
               && grep -q 'id="dd2-pricing-retry"' <<<"$pricing_js" \
               && grep -q 'Plans &amp; Pricing could not load just now\.' <<<"$pricing_js" \
-              && grep -q 'phase2-experience.js[^" ]*pricing=admin-builder-20260830-1' <<<"$index" \
+              && grep -q 'pricing-checkout-safety.js?v=regular-checkout-r1' <<<"$index" \
+              && grep -q 'phase2-experience.js[^" ]*pricing=regular-checkout-r1' <<<"$index" \
               && grep -q 'id="dd-study-room-trigger"' <<<"$index" \
               && grep -q 'id="dd-study-room-dialog"' <<<"$index" \
               && grep -q 'You won&rsquo;t have to study alone\.' <<<"$index" \

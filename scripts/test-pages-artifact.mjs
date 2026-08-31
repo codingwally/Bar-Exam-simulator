@@ -101,6 +101,9 @@ for (const required of [
   'assets/icons/navigation/monitor-up.svg',
   'assets/icons/navigation/pin.svg',
   'assets/icons/navigation/settings.svg',
+  'assets/icons/navigation/circle-check.svg',
+  'assets/icons/navigation/cloud-upload.svg',
+  'assets/icons/navigation/shield-check.svg',
   'examination-room/index.html',
   'examination-room/professor.css',
   'examination-room/professor.js',
@@ -138,10 +141,16 @@ for (const required of [
   'assets/brand/logo1-master.png',
   'assets/brand/social-card-1200x630.png',
   'assets/brand/signin-intro.mp4',
-  'assets/payments/bpi-instapay-149.png',
+  'assets/payments/bpi-instapay-199-qr.png',
+  'assets/payments/bpi-mark.png',
+  'assets/pricing-checkout-safety.js',
 ]) {
   assert.ok(files.includes(required), `${required} must ship in the Pages artifact`);
 }
+assert.ok(
+  !files.includes('assets/payments/bpi-instapay-149.png'),
+  'the retired 149-peso QR must not remain publicly addressable in the Pages artifact',
+);
 
 assert.ok(files.includes('.nojekyll'));
 assert.ok(files.every((file) => !/(^|\/)(content|worker|supabase|scripts|docs)(\/|$)/i.test(file)));
@@ -213,10 +222,11 @@ assert.match(index, /id="site-header"[\s\S]*id="site-menu-toggle"[\s\S]*>Home<[\
 assert.match(index, /id="dd2-header-role-button"[\s\S]*id="dd2-header-exam-button"[\s\S]*>Examination Room<[\s\S]*id="dd-study-room-trigger"[\s\S]*>Study Room<[\s\S]*id="dd2-header-pricing-button"[\s\S]*>Plans &amp; Pricing</);
 assert.match(index, /id="dd-study-room-dialog" role="dialog" aria-modal="true"/);
 assert.match(index, /You won&rsquo;t have to study alone\./);
-assert.match(index, /pricing-renderer\.js\?v=admin-pricing-builder-20260830-1[\s\S]*phase2-experience\.js[^"\n]*pricing=admin-builder-20260830-1/);
+assert.match(index, /phase2\.css[^"\n]*pricing=regular-checkout-r1[\s\S]*pricing-renderer\.js\?v=regular-checkout-r1[\s\S]*pricing-checkout-safety\.js\?v=regular-checkout-r1[\s\S]*phase2-experience\.js[^"\n]*pricing=regular-checkout-r1/);
+assert.doesNotMatch(index, /20260914|2026-09-14/u, 'Public cache keys must not reveal the private cutover date.');
 assert.doesNotMatch(index, /href=["']\/study-room\//i);
 assert.match(studyRoomPage, /<title>Study Room — Due Diligence<\/title>/);
-assert.match(studyRoomPage, /Subscribers can join open rooms/);
+assert.match(studyRoomPage, /Authorized testers can join open rooms/);
 assert.match(studyRoomPage, /camera and microphone remain off/i);
 assert.match(studyRoomPage, /assets\/vendor\/livekit-client\.umd\.js\?v=2\.22\.1/);
 assert.match(studyRoomPage, /study-room-backgrounds\.js\?v=study-room-optional-background-20260829-1/);

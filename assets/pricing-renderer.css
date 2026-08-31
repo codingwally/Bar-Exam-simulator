@@ -229,6 +229,229 @@
 .dd2-payment-account strong { color: var(--pricing-navy, #07182f); }
 .dd2-payment-method-choice { margin-top: 20px; }
 
+.dd-pricing-regular {
+  width: 100%;
+}
+
+.dd-regular-checkout {
+  display: grid;
+  grid-template-columns: minmax(300px, 1.04fr) minmax(300px, .98fr) minmax(340px, 1.08fr);
+  width: 100%;
+  min-width: 0;
+}
+
+.dd-regular-summary,
+.dd-regular-qr,
+.dd-regular-proof-slot {
+  min-width: 0;
+  padding: 0 clamp(24px, 2.35vw, 38px);
+}
+
+.dd-regular-summary {
+  padding-left: 0;
+}
+
+.dd-regular-qr,
+.dd-regular-proof-slot {
+  border-left: 1px solid rgba(184, 147, 79, .48);
+}
+
+.dd-regular-proof-slot {
+  padding-right: 0;
+}
+
+.dd-regular-price {
+  margin: -4px 0 0;
+  text-align: center;
+}
+
+.dd-regular-price strong {
+  display: block;
+  color: var(--pricing-navy);
+  font: 700 clamp(64px, 6vw, 88px)/.92 var(--serif, Georgia, serif);
+  letter-spacing: -.035em;
+}
+
+.dd-regular-price span {
+  display: block;
+  margin-top: 12px;
+  color: #845a10;
+  font: 700 15px/1.25 var(--mono, "IBM Plex Mono", monospace);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.dd-regular-divider {
+  height: 1px;
+  margin: 17px 0 12px;
+  background: rgba(184, 147, 79, .6);
+}
+
+.dd-regular-summary h2,
+.dd-regular-qr h2 {
+  margin: 0;
+  color: var(--pricing-navy);
+  font: 700 23px/1.18 var(--serif, Georgia, serif);
+  text-align: center;
+}
+
+.dd-regular-description {
+  max-width: 390px;
+  margin: 13px auto 12px;
+  color: #233a59;
+  font: 500 12px/1.45 var(--sans, Inter, sans-serif);
+  text-align: center;
+}
+
+.dd-regular-features {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dd-regular-features li {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 41px;
+  padding: 7px 0;
+  color: #112c4f;
+  border-bottom: 1px dashed rgba(15, 39, 68, .15);
+  font: 500 13px/1.35 var(--sans, Inter, sans-serif);
+}
+
+.dd-regular-features img,
+.dd-regular-assurance img {
+  filter: brightness(0) saturate(100%) invert(54%) sepia(39%) saturate(833%) hue-rotate(3deg) brightness(93%) contrast(91%);
+}
+
+.dd-regular-assurance {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  margin-top: 25px;
+  color: #112c4f;
+}
+
+.dd-regular-assurance p {
+  margin: 0;
+  font: 550 12.5px/1.45 var(--sans, Inter, sans-serif);
+}
+
+.dd-regular-renewal {
+  margin: 40px 0 0 44px;
+  color: #183454;
+  font: 500 12px/1.4 var(--sans, Inter, sans-serif);
+}
+
+.dd-regular-renewal span {
+  padding-inline: 4px;
+}
+
+.dd-regular-channel {
+  display: grid;
+  grid-template-columns: minmax(30px, 56px) auto minmax(30px, 56px);
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  margin: 8px 0 20px;
+  color: #845a10;
+  font: 700 12px/1.3 var(--mono, "IBM Plex Mono", monospace);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.dd-regular-channel span {
+  height: 1px;
+  background: rgba(184, 147, 79, .75);
+}
+
+.dd-regular-qr-card {
+  width: min(100%, 356px);
+  margin: 16px auto 0;
+  padding: 25px 23px 46px;
+  background: rgba(255, 255, 255, .63);
+  border: 1px solid rgba(184, 147, 79, .38);
+  border-radius: 9px;
+  text-align: center;
+}
+
+.dd-regular-bpi-mark {
+  display: block;
+  width: 110px;
+  height: 60px;
+  margin: -2px auto 16px;
+  object-fit: contain;
+}
+
+.dd-regular-qr-card > strong {
+  display: block;
+  margin-bottom: 15px;
+  color: #102d49;
+  font: 800 19px/1.1 var(--sans, Inter, sans-serif);
+  letter-spacing: .01em;
+}
+
+.dd-regular-qr-image {
+  display: block;
+  width: min(100%, 300px);
+  height: auto;
+  margin: 0 auto;
+  background: #fff;
+}
+
+.dd-regular-qr-card figcaption strong,
+.dd-regular-qr-card figcaption span {
+  display: block;
+}
+
+.dd-regular-qr-card figcaption strong {
+  margin-top: 11px;
+  color: #102d49;
+  font: 700 26px/1.1 var(--sans, Inter, sans-serif);
+}
+
+.dd-regular-qr-card figcaption span {
+  margin-top: 8px;
+  color: #5c697b;
+  font: 500 13px/1.35 var(--sans, Inter, sans-serif);
+}
+
+@media (max-width: 1120px) {
+  .dd-regular-checkout {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .dd-regular-proof-slot {
+    grid-column: 1 / -1;
+    margin-top: 30px;
+    padding: 30px 0 0;
+    border-top: 1px solid rgba(184, 147, 79, .48);
+    border-left: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .dd-regular-checkout {
+    grid-template-columns: 1fr;
+  }
+  .dd-regular-summary,
+  .dd-regular-qr,
+  .dd-regular-proof-slot {
+    padding: 0;
+    border-left: 0;
+  }
+  .dd-regular-qr,
+  .dd-regular-proof-slot {
+    margin-top: 28px;
+    padding-top: 28px;
+    border-top: 1px solid rgba(184, 147, 79, .48);
+  }
+  .dd-regular-price strong { font-size: 68px; }
+  .dd-regular-renewal { margin-left: 44px; }
+}
+
 @media (max-width: 560px) {
   .dd-pricing-hero { text-align: left; }
   .dd-pricing-plan-heading { display: block; }

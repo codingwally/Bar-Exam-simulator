@@ -2591,7 +2591,7 @@
   function subjectReviewAccessHint(allowed = subjectReviewAccessAllowed()) {
     return allowed
       ? 'Your review access is active.'
-      : 'Reveal Answer requires ₱149 Early Access or a paid subscription.';
+      : 'Reveal Answer requires an active Regular Subscription.';
   }
 
   function subjectReviewPanelIsCurrent(panel) {

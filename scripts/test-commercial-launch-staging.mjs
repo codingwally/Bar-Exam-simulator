@@ -418,8 +418,14 @@ try {
     createdNotificationIds.push(...notifications.map((item) => item.id));
     const provisional = await accessSnapshot(provisionalUser.id);
     assert.equal(provisional.accessMode, 'provisional');
-    assert.equal(provisional.accountLabel, `${checkoutPlan.name} — pending`);
+    assert.equal(provisional.basis, 'provisional_payment');
+    assert.equal(provisional.allowed, true);
+    assert.equal(provisional.accountLabel, 'Payment under review');
     assert.equal(provisional.unlimited, true);
+    assert.equal(
+      Date.parse(provisional.entitlementEndsAt),
+      Date.parse(payment.provisionalAccessExpiresAt),
+    );
     const repeatedPayment = await serviceRpc('phase4_create_payment_request_v2', paymentPayload);
     assert.equal(repeatedPayment.id, payment.id);
     assert.equal(repeatedPayment.replayed, true);

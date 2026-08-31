@@ -96,6 +96,24 @@ assert.match(schedule, /2026-09-30 23:59:59\.999999\+08[\s\S]*2026-10-01 00:00:0
 assert.match(schedule, /v_existing_beta\.user_id is not null and not v_existing_beta\.enabled/u);
 assert.match(schedule, /v_existing_beta\.expires_at > v_invite\.access_ends_at/u);
 
+const customerAccessLabelWrapper = schedule.slice(
+  schedule.indexOf('-- Keep internal entitlement bases intact'),
+  schedule.indexOf('-- Founding Beta stays valid throughout September 30'),
+);
+assert.match(
+  customerAccessLabelWrapper,
+  /v_basis := lower\(btrim\(coalesce\(v_access->>'basis', ''\)\)\)[\s\S]*when v_basis = 'provisional_payment' then 'Payment under review'/u,
+);
+assert.match(
+  customerAccessLabelWrapper,
+  /when v_basis in \('founding_beta', 'free_beta', 'global_beta_all_access'\)[\s\S]*then 'Complimentary Access'/u,
+);
+assert.match(
+  customerAccessLabelWrapper,
+  /return v_access \|\| jsonb_build_object\('accountLabel', nullif\(btrim\(v_label\), ''\)\)/u,
+  'The September wrapper must change only the customer label while preserving the internal access snapshot.',
+);
+
 const v3Signature = payment.match(
   /create or replace function public\.phase4_create_payment_request_v3\(([\s\S]*?)\)\nreturns jsonb/u,
 )?.[1] || '';

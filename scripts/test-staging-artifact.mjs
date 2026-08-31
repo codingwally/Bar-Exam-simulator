@@ -55,12 +55,19 @@ for (const required of [
   'assets/bar-forecast.css',
   'assets/bar-forecast.js',
   'assets/bar-forecast/forecast-workspace-preview.webp',
+  'assets/icons/navigation/flag.svg',
 ]) {
   await assert.doesNotReject(() => readFile(path.join(output, required)));
 }
 
 const forecast = await readFile(path.join(output, 'assets/bar-forecast.js'), 'utf8');
 assert.match(forecast, /\/admin\/dd2026\/bar-forecast/);
+assert.match(forecast, /\|\| syntheticQaContent\) \{/);
+assert.doesNotMatch(
+  forecast,
+  /isExplicitLoopbackQaHarness|__DD_BAR_FORECAST_SYNTHETIC_QA__|ddBarForecastQa|\|\| false\) \{/,
+  'the deployable staging runtime must not contain a synthetic-QA bypass',
+);
 assert.doesNotMatch(forecast, /duediligence-api\.wallyesteban1993\.workers\.dev/);
 
 console.log('Authorized staging artifact contract checks passed.');

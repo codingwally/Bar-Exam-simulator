@@ -1,4 +1,4 @@
-export const BAR_FORECAST_CONSENT_VERSION = '2026-08-31';
+export const BAR_FORECAST_CONSENT_VERSION = '2026-09-01';
 export const BAR_FORECAST_SOURCE_VERSION = '2026.3';
 export const BAR_FORECAST_CONTENT_TYPE = 'bar_forecast_question';
 
@@ -17,8 +17,18 @@ export const BAR_FORECAST_SUBJECTS = Object.freeze([
   'Remedial Law, Legal and Judicial Ethics, with Practical Exercises',
 ]);
 
+export const BAR_FORECAST_APPROVED_SET_IDS = Object.freeze({
+  'Political and Public International Law': 'sha256:ccf4a476a29763cbcb0f32c1e4b8fa43995625d6f4678e97aeec695cfd82c8f6',
+  'Commercial and Taxation Laws': 'sha256:a9cd8ac979b41cb849b3ce3b1d406d4e98abb8425ad2812d9bab1b1aa36636d5',
+  'Civil Law and Land Titles and Deeds': 'sha256:d5681cd399472b13d9f8975666eed4e67de96654d9db2a01e0b730cf88bbaf6c',
+  'Labor Law and Social Legislation': 'sha256:ee133d6036a65ffac27b40477b777b3558476baa86dc390943d9775a2d9bf116',
+  'Criminal Law': 'sha256:94de8d2495a9d788aaa500d80f1b279db17c7f4eb82bfd2c650ddaf1a05691e7',
+  'Remedial Law, Legal and Judicial Ethics, with Practical Exercises': 'sha256:2b23f3be657f226f1ce959875a0b04d81884a9a8234e5ad9d8272b75f51adc3c',
+});
+
 const BAR_FORECAST_SUBJECT_SET = new Set(BAR_FORECAST_SUBJECTS);
 const BAR_FORECAST_ADMIN_ROLE_SET = new Set(BAR_FORECAST_ADMIN_ROLES);
+const BAR_FORECAST_SYNTHETIC_QA_PATTERN = /(?:^synthetic-ui-|synthetic interface-test question|\bmock permit\s+\d+\b|deterministic mock output for visual)/iu;
 
 export const BAR_FORECAST_OFFICIAL_SCHEDULE = Object.freeze({
   title: '2026 Philippine Bar Examinations',
@@ -91,6 +101,20 @@ function exactKeys(value, allowedKeys, label = 'request') {
       `The ${label} contains unsupported or missing fields.`,
     );
   }
+}
+
+function stableJsonValue(value) {
+  if (Array.isArray(value)) return value.map(stableJsonValue);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.keys(value).sort().map((key) => [key, stableJsonValue(value[key])]),
+    );
+  }
+  return value;
+}
+
+function canonicalPayload(value) {
+  return JSON.stringify(stableJsonValue(value));
 }
 
 function unicodeLength(value) {
@@ -166,10 +190,18 @@ export function normalizeBarForecastRequest(value) {
     input,
     operation === 'start'
       ? ['operation', 'subject']
-      : ['operation', 'subject', 'answers'],
+      : ['operation', 'subject', 'setId', 'answers'],
   );
   const subject = exactSubject(input.subject);
   if (operation === 'start') return Object.freeze({ operation, subject });
+  const setId = boundedText(input.setId, 'Forecast set ID', 71, 71).toLowerCase();
+  if (String(input.setId ?? '') !== setId || !/^sha256:[0-9a-f]{64}$/u.test(setId)) {
+    throw new BarForecastError(
+      'BAR_FORECAST_SET_ID_INVALID',
+      'The Forecast question-set identity is invalid. Restart this subject.',
+      409,
+    );
+  }
   if (!Array.isArray(input.answers)
       || input.answers.length !== BAR_FORECAST_LIMITS.questionsPerSubject) {
     throw new BarForecastError(
@@ -207,13 +239,7 @@ export function normalizeBarForecastRequest(value) {
       'Each Forecast question must be answered exactly once.',
     );
   }
-  return Object.freeze({ operation, subject, answers: Object.freeze(answers) });
-}
-
-function contentPayload(item) {
-  return item?.payload && typeof item.payload === 'object' && !Array.isArray(item.payload)
-    ? item.payload
-    : item;
+  return Object.freeze({ operation, subject, setId, answers: Object.freeze(answers) });
 }
 
 export function validatedForecastRows(value, subject) {
@@ -230,16 +256,35 @@ export function validatedForecastRows(value, subject) {
     );
   }
   const rows = source.map((item) => {
-    const payload = contentPayload(item);
-    object(payload, 'Forecast content row');
-    const id = boundedText(item?.id || payload.id, 'Forecast question ID', 80, 3).toLowerCase();
-    const rowSubject = String(item?.subject || payload.subject || '').trim();
-    const sourceVersion = String(item?.version || payload.version || '').trim();
-    const contentType = String(item?.contentType || item?.content_type || BAR_FORECAST_CONTENT_TYPE).trim();
+    object(item, 'Forecast content envelope');
+    exactKeys(
+      item,
+      ['checksum', 'contentType', 'id', 'payload', 'subject', 'title', 'version'],
+      'Forecast content envelope',
+    );
+    const payload = object(item.payload, 'Forecast content payload');
+    const envelopeId = boundedText(item.id, 'Forecast envelope ID', 80, 3).toLowerCase();
+    const payloadId = boundedText(payload.id, 'Forecast payload ID', 80, 3).toLowerCase();
+    const rowSubject = boundedText(item.subject, 'Forecast envelope subject', 160, 2);
+    const payloadSubject = boundedText(payload.subject, 'Forecast payload subject', 160, 2);
+    const sourceVersion = boundedText(item.version, 'Forecast envelope version', 40, 1);
+    const payloadVersion = boundedText(payload.version, 'Forecast payload version', 40, 1);
+    const contentType = boundedText(item.contentType, 'Forecast content type', 80, 1);
+    const title = boundedText(item.title, 'Forecast title', 500, 2);
+    const expectedTitle = `${boundedText(payload.editorial_ref, 'Forecast editorial reference', 80, 2)} — ${boundedText(payload.title, 'Forecast payload title', 400, 2)}`;
+    const checksum = String(item.checksum ?? '').trim().toLowerCase();
     const number = Number(payload.rank_within_subject);
-    if (rowSubject !== selectedSubject
+    if (String(item.id ?? '') !== envelopeId
+        || String(payload.id ?? '') !== payloadId
+        || envelopeId !== payloadId
+        || rowSubject !== selectedSubject
+        || payloadSubject !== selectedSubject
         || sourceVersion !== BAR_FORECAST_SOURCE_VERSION
+        || payloadVersion !== BAR_FORECAST_SOURCE_VERSION
         || contentType !== BAR_FORECAST_CONTENT_TYPE
+        || title !== expectedTitle
+        || String(item.checksum ?? '') !== checksum
+        || !/^[0-9a-f]{64}$/u.test(checksum)
         || !Number.isInteger(number)
         || number < 1
         || number > BAR_FORECAST_LIMITS.questionsPerSubject) {
@@ -249,10 +294,13 @@ export function validatedForecastRows(value, subject) {
         503,
       );
     }
-    return Object.freeze({
-      id,
+    const row = {
+      id: envelopeId,
       number,
       subject: rowSubject,
+      title,
+      checksum,
+      payloadCanonical: canonicalPayload(payload),
       prompt: boundedText(payload.prompt, `Forecast question ${number}`, 20_000, 20),
       suggestedAnswer: boundedText(
         payload.suggested_answer,
@@ -269,7 +317,17 @@ export function validatedForecastRows(value, subject) {
       ),
       jurisprudence: boundedText(payload.jurisprudence, `Forecast authority ${number}`, 2_000, 1),
       citation: boundedText(payload.citation, `Forecast citation ${number}`, 1_000, 1),
-    });
+    };
+    if (Object.values(row).some((field) => (
+      typeof field === 'string' && BAR_FORECAST_SYNTHETIC_QA_PATTERN.test(field)
+    ))) {
+      throw new BarForecastError(
+        'BAR_FORECAST_SYNTHETIC_CONTENT_REJECTED',
+        'Synthetic QA content cannot be used as a Forecast examination source.',
+        503,
+      );
+    }
+    return Object.freeze(row);
   }).sort((left, right) => left.number - right.number);
   if (new Set(rows.map((row) => row.id)).size !== rows.length
       || new Set(rows.map((row) => row.number)).size !== rows.length) {
@@ -288,6 +346,41 @@ export function publicForecastQuestions(rows) {
     number: row.number,
     prompt: row.prompt,
   }));
+}
+
+export async function forecastSetId(rows) {
+  if (!Array.isArray(rows) || rows.length !== BAR_FORECAST_LIMITS.questionsPerSubject) {
+    throw new BarForecastError(
+      'BAR_FORECAST_CONTENT_INCOMPLETE',
+      'The selected Forecast subject is not ready. No examination was started.',
+      503,
+    );
+  }
+  const canonical = [...rows]
+    .sort((left, right) => left.number - right.number)
+    .map((row) => JSON.stringify([
+      row.number,
+      row.id,
+      row.subject,
+      row.title,
+      row.checksum,
+      row.payloadCanonical,
+      row.prompt,
+      row.suggestedAnswer,
+      row.legalBasis,
+      row.controllingDoctrine,
+      row.jurisprudence,
+      row.citation,
+    ]))
+    .join('\n');
+  const digest = await globalThis.crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(canonical),
+  );
+  const hex = [...new Uint8Array(digest)]
+    .map((value) => value.toString(16).padStart(2, '0'))
+    .join('');
+  return `sha256:${hex}`;
 }
 
 export function answersForForecastRows(answers, rows) {

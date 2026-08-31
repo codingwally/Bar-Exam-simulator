@@ -9,6 +9,12 @@ import {
   buildForecastContentManifest,
   verifyForecastContent,
 } from './verify-admin-bar-forecast-content.mjs';
+import {
+  BAR_FORECAST_APPROVED_SET_IDS,
+  BAR_FORECAST_SUBJECTS,
+  forecastSetId,
+  validatedForecastRows,
+} from '../worker/bar-forecast-core.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const manifest = await buildForecastContentManifest();
@@ -28,6 +34,25 @@ assert.deepEqual(scopedDryRun.counts, { bar_forecast_question: 120 });
 
 const imported = await buildImportRows();
 const forecastRows = imported.rows.filter((row) => row.content_type === 'bar_forecast_question');
+for (const subject of BAR_FORECAST_SUBJECTS) {
+  const envelopes = forecastRows
+    .filter((row) => row.subject === subject)
+    .map((row) => ({
+      id: row.id,
+      contentType: row.content_type,
+      subject: row.subject,
+      title: row.title,
+      version: row.source_version,
+      checksum: row.checksum,
+      payload: row.payload,
+    }));
+  const actualSetId = await forecastSetId(validatedForecastRows(envelopes, subject));
+  assert.equal(
+    BAR_FORECAST_APPROVED_SET_IDS[subject],
+    actualSetId,
+    `${subject} must match the independently pinned Worker question-set manifest`,
+  );
+}
 const versionIdByContentId = new Map(forecastRows.map((row, index) => [
   row.id,
   `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,

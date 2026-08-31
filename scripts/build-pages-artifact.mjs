@@ -86,6 +86,7 @@ const navigationIconFiles = Object.freeze([
   'circle-check.svg',
   'cloud-upload.svg',
   'shield-check.svg',
+  'flag.svg',
   'LICENSE.txt',
 ].map((name) => `assets/icons/navigation/${name}`));
 

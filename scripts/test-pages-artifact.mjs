@@ -33,11 +33,17 @@ const publicTextSources = await Promise.all(publicTextFiles.map(async (file) => 
   file,
   source: await readFile(path.join(output, file), 'utf8'),
 })));
+const syntheticQaPayload = /(?:SYNTHETIC-UI-(?:\d{1,3}|\$\{)|Synthetic interface-test question\s+(?:\d{1,3}|\$\{)|Mock Permit\s+(?:\d{1,3}|\$\{)|local-preview-token|Synthetic UI QA Harness|__DD_BAR_FORECAST_SYNTHETIC_QA__)/iu;
 for (const { file, source } of publicTextSources) {
   assert.doesNotMatch(
     source,
     /gemini|generativelanguage(?:\.googleapis\.com)?|generative language/i,
     `${file} must not disclose the private application provider`,
+  );
+  assert.doesNotMatch(
+    source,
+    syntheticQaPayload,
+    `${file} must not contain the synthetic Forecast QA harness or its mock content`,
   );
 }
 for (const required of [
@@ -166,6 +172,7 @@ assert.ok(
 
 assert.ok(files.includes('.nojekyll'));
 assert.ok(files.every((file) => !/(^|\/)(content|worker|supabase|scripts|docs)(\/|$)/i.test(file)));
+assert.ok(files.every((file) => !/local-preview|qa-harness|synthetic-ui/i.test(file)));
 assert.equal(files.includes('content/duediligence-2026/bar-forecast.json'), false);
 assert.ok(files.every((file) => (
   !/\.(json|sql|mjs|csv)$/i.test(file) || file === '.well-known/assetlinks.json'
@@ -383,14 +390,36 @@ assert.match(barForecast, /operation:\s*'status'/);
 assert.match(barForecast, /operation:\s*'accept', version:\s*CONSENT_VERSION/);
 assert.match(barForecast, /operation:\s*'start', subject:\s*subjectName/);
 assert.match(barForecast, /operation:\s*'submit'[\s\S]*answers:\s*submittedAnswers/);
-assert.match(barForecast, /designed to train issue spotting/i);
-assert.match(barForecast, /historical question repetition/i);
-assert.match(barForecast, /not an exact science and is not guaranteed accurate/i);
-assert.match(barForecast, /textarea\.maxLength = 6000/);
+for (const exactNoticeCopy of [
+  'Notice & Disclaimer',
+  'This pilot program is designed to train issue-spotting skills using question sets aligned with historical exam patterns, cases associated with the 2026 Bar Chairperson, and independent legal research.',
+  'By proceeding, you acknowledge and agree to the following:',
+  'Not Official Material',
+  'All forecast questions and study content are independently created. They are not official Supreme Court questions, leaks, or confidential materials.',
+  'No Warranties or Guarantees',
+  'Topic predictions are instructional aids, not an exact science. Predicted topics do not guarantee or promise appearance in the 2026 Bar Examinations.',
+  'Educational Use Only',
+  'Suggested answers, feedback, and scoring may contain errors and do not constitute legal advice.',
+  'Authoritative Sources',
+  'Official Supreme Court Bar bulletins, syllabi, statutes, rules, and controlling jurisprudence remain the sole authoritative references.',
+]) assert.ok(barForecast.includes(exactNoticeCopy), `public artifact must preserve exact notice copy: ${exactNoticeCopy}`);
+assert.match(barForecast, /const accept = makeButton\('I Understand & Agree'/);
+assert.match(barForecast, /const decline = makeButton\('Decline'\)/);
+assert.match(barForecast, /decline\.addEventListener\('click', \(\) => closeForecast\(\)\)/);
+assert.match(barForecast, /actions\.append\(decline, accept\)/);
+assert.doesNotMatch(barForecast, /bar-forecast-disclaimer|Accept and choose a subject|Return to preview/);
+assert.match(barForecast, /const MAX_ANSWER_CHARACTERS = 6000/);
+assert.match(barForecast, /editor\.contentEditable = 'true'/);
+assert.match(barForecast, /state\.flaggedQuestions = new Set\(\)/);
+assert.match(barForecast, /renderPromptHighlights/);
+assert.doesNotMatch(barForecast, /AI-assisted|editorial indicators/i);
 assert.match(barForecast, /appendResultSection\(body, 'Question', state\.questions\[index\]\?\.prompt/);
 assert.doesNotMatch(barForecast, /\bALAC\b|legal[_ ]basis|controlling[_ ]doctrine|prediction score|transparent rubric/i);
 assert.doesNotMatch(barForecast, /localStorage|sessionStorage/);
 assert.match(barForecastStyles, /@keyframes bf26-radiate/);
+assert.match(barForecastStyles, /\.bf26-page\s*\{[\s\S]*height:\s*100dvh/);
+assert.match(barForecastStyles, /\.bf26-editor-toolbar/);
+assert.ok(files.includes('assets/icons/navigation/flag.svg'));
 assert.equal(
   createHash('sha256').update(barForecastPreview).digest('hex').toUpperCase(),
   '8D3A68F68AD252EB88AB8DABDFF2A57DC41EF603A7948A79917EF73DE9BBD4B3',

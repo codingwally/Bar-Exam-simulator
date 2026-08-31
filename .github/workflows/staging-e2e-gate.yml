@@ -44,7 +44,7 @@ on:
         default: ""
         type: string
       admin_bar_forecast_database_preapplied_sha256:
-        description: "When DB URL is absent: SHA-256 of exact 20260831170000 bundle + rollback-only probe"
+        description: "When DB URL is absent: SHA-256 of exact 20260831170000/20260901010837/20260901014500 bundle + rollback-only probe"
         required: false
         default: ""
         type: string
@@ -91,7 +91,7 @@ jobs:
           test "$REPOSITORY_NAME" = "codingwally/Bar-Exam-simulator"
           test "$RELEASE_ACTOR" != "dependabot[bot]"
           case "$RELEASE_REF" in
-            refs/heads/main|refs/heads/feature/admin-pricing-builder-20260830|refs/heads/feature/pricing-september-cutover-20260831|refs/heads/fix/admin-marketing-live-20260828|refs/heads/agent/master-experience-release-20260813|refs/heads/agent/header-subject-review-correction-20260814|refs/heads/agent/subject-matter-split-review-20260814|refs/heads/agent/high-value-subject-review-20260815|refs/heads/agent/homepage-feature-ledger-20260815|refs/heads/agent/commercial-launch-20260818|refs/heads/agent/commercial-terms-acceptance-hotfix-20260818|refs/heads/agent/commercial-terms-worker-persistence-20260818|refs/heads/agent/renovation-commercial-cutover-20260820|refs/heads/agent/soft-launch-five-token-20260821|refs/heads/codex/examination-room-greenfield-20260826|refs/heads/codex/examination-room-owner-command-center-20260826) ;;
+            refs/heads/main|refs/heads/feature/bar-forecast-examplify-parity-20260901|refs/heads/feature/admin-pricing-builder-20260830|refs/heads/feature/pricing-september-cutover-20260831|refs/heads/fix/admin-marketing-live-20260828|refs/heads/agent/master-experience-release-20260813|refs/heads/agent/header-subject-review-correction-20260814|refs/heads/agent/subject-matter-split-review-20260814|refs/heads/agent/high-value-subject-review-20260815|refs/heads/agent/homepage-feature-ledger-20260815|refs/heads/agent/commercial-launch-20260818|refs/heads/agent/commercial-terms-acceptance-hotfix-20260818|refs/heads/agent/commercial-terms-worker-persistence-20260818|refs/heads/agent/renovation-commercial-cutover-20260820|refs/heads/agent/soft-launch-five-token-20260821|refs/heads/codex/examination-room-greenfield-20260826|refs/heads/codex/examination-room-owner-command-center-20260826) ;;
             *)
               echo "The staging gate may run only from an explicitly trusted release branch." >&2
               exit 1
@@ -159,6 +159,11 @@ jobs:
           node scripts/test-september-pricing-sql-contract.mjs
           node scripts/test-september-pricing-release-bundle.mjs
           node scripts/test-september-pricing-release-workflow.mjs
+          node scripts/test-bar-forecast-frontend.mjs
+          node scripts/test-bar-forecast-boundary.mjs
+          node scripts/test-bar-forecast-preview-isolation.mjs
+          node scripts/test-bar-forecast-live-journeys.mjs
+          node scripts/test-bar-forecast-live-evidence.mjs
           node scripts/test-admin-bar-forecast-release-bundle.mjs
           node scripts/test-admin-bar-forecast-content-release.mjs
           node --test scripts/test-admin-bar-forecast-deployment-smoke.mjs
@@ -354,7 +359,7 @@ jobs:
             exit 1
           fi
 
-      - name: Apply and post-apply probe the exact admin-only Bar Forecast migration
+      - name: Apply and post-apply probe the exact admin-only Bar Forecast migrations
         if: inputs.deploy_greenfield == true
         env:
           ADMIN_BAR_FORECAST_DATABASE_URL: ${{ secrets.EXAMINATION_ROOM_STAGING_DATABASE_URL }}
@@ -556,6 +561,30 @@ jobs:
         run: |
           npm install --no-save --no-package-lock playwright@1.54.2
           node scripts/run-staging-e2e-suite.mjs examinations
+
+      - name: Run 30 complete live Forecast examiner journeys, two at a time
+        if: inputs.deploy_greenfield == true
+        env:
+          BAR_FORECAST_E2E_CONFIRM: staging:hlzqmreeoghbldnhlybr:30
+          BAR_FORECAST_E2E_RELEASE_SHA: ${{ github.sha }}
+          BAR_FORECAST_E2E_GITHUB_RUN_ID: ${{ github.run_id }}
+          BAR_FORECAST_E2E_SUPABASE_SECRET_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+          BAR_FORECAST_E2E_CONCURRENCY: '2'
+          BAR_FORECAST_E2E_BROWSER_CHANNEL: chrome
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/staging-e2e
+          npm install --no-save --no-package-lock playwright@1.54.2
+          node scripts/run-bar-forecast-live-journeys.mjs --environment staging --preflight > /dev/null
+          node scripts/run-bar-forecast-live-journeys.mjs --environment staging \
+            > artifacts/staging-e2e/bar-forecast-live-30.json
+          BAR_FORECAST_EVIDENCE_FILE=artifacts/staging-e2e/bar-forecast-live-30.json \
+          BAR_FORECAST_EVIDENCE_TARGET=staging \
+          BAR_FORECAST_EVIDENCE_RELEASE_SHA="$GITHUB_SHA" \
+          BAR_FORECAST_EVIDENCE_GITHUB_RUN_ID="$GITHUB_RUN_ID" \
+            node scripts/verify-bar-forecast-live-evidence.mjs
 
       - name: Publish sanitized suite summary
         if: always()

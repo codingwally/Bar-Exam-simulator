@@ -50,9 +50,11 @@ const contracts = Object.freeze([
 const builder = await read('scripts/build-admin-bar-forecast-release-bundle.mjs');
 assert.deepEqual(
   [...builder.matchAll(/version: '(\d{14})'/gu)].map((match) => match[1]),
-  ['20260831100000', '20260831101000', '20260831170000'],
+  ['20260831100000', '20260831101000', '20260831170000', '20260901010837', '20260901014500'],
 );
 assert.match(builder, /file: '20260831170000_admin_bar_forecast\.sql'/u);
+assert.match(builder, /file: '20260901010837_admin_bar_forecast_consent_version\.sql'/u);
+assert.match(builder, /file: '20260901014500_admin_bar_forecast_runtime_integrity\.sql'/u);
 assert.match(builder, /probe-admin-bar-forecast-release\.sql/u);
 assert.ok(builder.includes('${probe}`'));
 assert.doesNotMatch(builder, /readdir|glob|supabase\s+db\s+(?:push|reset)|supabase\s+migration\s+up/iu);
@@ -61,7 +63,7 @@ for (const contract of contracts) {
   const workflow = await read(contract.path);
   assert.match(
     workflow,
-    /admin_bar_forecast_database_preapplied_sha256:\s*\n\s+description: "When DB URL is absent: SHA-256 of exact 20260831170000 bundle \+ rollback-only probe"\s*\n\s+required: false\s*\n\s+default: ""\s*\n\s+type: string/u,
+    /admin_bar_forecast_database_preapplied_sha256:\s*\n\s+description: "When DB URL is absent: SHA-256 of exact 20260831170000\/20260901010837\/20260901014500 bundle \+ rollback-only probe"\s*\n\s+required: false\s*\n\s+default: ""\s*\n\s+type: string/u,
   );
   assert.match(
     workflow,
@@ -80,7 +82,7 @@ for (const contract of contracts) {
   ));
 
   const septemberGate = workflow.indexOf('      - name: Apply and post-apply probe the exact September pricing migrations');
-  const forecastDatabaseGate = workflow.indexOf('      - name: Apply and post-apply probe the exact admin-only Bar Forecast migration');
+  const forecastDatabaseGate = workflow.indexOf('      - name: Apply and post-apply probe the exact admin-only Bar Forecast migrations');
   const forecastContentGate = workflow.indexOf('      - name: Import and verify the exact admin-only Bar Forecast content');
   const workerDeploy = workflow.indexOf(contract.deployMarker);
   const liveBoundary = workflow.indexOf(contract.liveMarker);
@@ -140,6 +142,11 @@ for (const contract of contracts) {
   }
 
   for (const command of [
+    'node scripts/test-bar-forecast-frontend.mjs',
+    'node scripts/test-bar-forecast-boundary.mjs',
+    'node scripts/test-bar-forecast-preview-isolation.mjs',
+    'node scripts/test-bar-forecast-live-journeys.mjs',
+    'node scripts/test-bar-forecast-live-evidence.mjs',
     'node scripts/test-admin-bar-forecast-release-bundle.mjs',
     'node scripts/test-admin-bar-forecast-content-release.mjs',
     'node --test scripts/test-admin-bar-forecast-deployment-smoke.mjs',
@@ -152,6 +159,34 @@ for (const contract of contracts) {
 }
 
 const combined = await read('.github/workflows/deploy.yml');
+const workerOnly = await read('.github/workflows/deploy-worker.yml');
+const staging = await read('.github/workflows/staging-e2e-gate.yml');
+
+assert.match(staging, /refs\/heads\/feature\/bar-forecast-examplify-parity-20260901/u);
+assert.match(staging, /name: Run 30 complete live Forecast examiner journeys, two at a time/u);
+assert.match(staging, /BAR_FORECAST_E2E_CONFIRM: staging:hlzqmreeoghbldnhlybr:30/u);
+assert.match(staging, /BAR_FORECAST_E2E_RELEASE_SHA: \$\{\{ github\.sha \}\}/u);
+assert.match(staging, /BAR_FORECAST_E2E_GITHUB_RUN_ID: \$\{\{ github\.run_id \}\}/u);
+assert.match(staging, /BAR_FORECAST_E2E_CONCURRENCY: '2'/u);
+assert.match(staging, /run-bar-forecast-live-journeys\.mjs --environment staging/u);
+assert.match(staging, /artifacts\/staging-e2e\/bar-forecast-live-30\.json/u);
+assert.match(staging, /node scripts\/verify-bar-forecast-live-evidence\.mjs/u);
+
+for (const productionWorkflow of [combined, workerOnly]) {
+  assert.match(
+    productionWorkflow,
+    /staging_run_id:\s*\n\s+description: "Successful Trusted staging E2E run for this exact main SHA, including 30 live Forecast journeys"\s*\n\s+required: true\s*\n\s+type: string/u,
+  );
+  assert.match(productionWorkflow, /permissions:\s*\n\s+actions: read\s*\n\s+contents: read/u);
+  assert.match(productionWorkflow, /repos\/\$GITHUB_REPOSITORY\/actions\/runs\/\$STAGING_RUN_ID/u);
+  assert.match(productionWorkflow, /test "\$\(jq -r '\.head_sha' <<<"\$staging_run"\)" = "\$GITHUB_SHA"/u);
+  assert.match(productionWorkflow, /uses: actions\/download-artifact@v4/u);
+  assert.match(productionWorkflow, /run-id: \$\{\{ inputs\.staging_run_id \}\}/u);
+  assert.match(productionWorkflow, /name: staging-e2e-sanitized-\$\{\{ inputs\.staging_run_id \}\}/u);
+  assert.match(productionWorkflow, /BAR_FORECAST_EVIDENCE_FILE: artifacts\/release-staging-evidence\/bar-forecast-live-30\.json/u);
+  assert.match(productionWorkflow, /run: node scripts\/verify-bar-forecast-live-evidence\.mjs/u);
+}
+
 assert.match(combined, /\n  deploy_pages:\s*\n\s+needs: deploy_worker/u);
 assert.match(combined, /\n  verify_production_pages:\s*\n\s+name: Verify the exact Pages SHA and approved pricing client\s*\n\s+needs: deploy_pages/u);
 const pagesDeploy = combined.indexOf('  deploy_pages:');
@@ -185,6 +220,6 @@ for (const asset of [
 console.log(JSON.stringify({
   ok: true,
   workflows: contracts.map(({ path: workflowPath }) => workflowPath),
-  releaseOrder: 'September pricing -> Forecast schema/probe -> Forecast import/checksum -> Worker -> live denial -> Pages -> exact served SHA and bytes',
+  releaseOrder: 'exact-SHA staging + 30 live journeys -> Forecast schema/probe -> Forecast import/checksum -> Worker -> live denial -> Pages -> exact served SHA and bytes',
   fallback: 'exact-database-bundle-and-content-manifest-hashes',
 }));

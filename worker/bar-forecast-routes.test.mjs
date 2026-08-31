@@ -6,10 +6,14 @@ import {
   BAR_FORECAST_CONTENT_TYPE,
   BAR_FORECAST_SOURCE_VERSION,
   BAR_FORECAST_SUBJECTS,
+  forecastSetId,
+  validatedForecastRows,
 } from './bar-forecast-core.mjs';
 import { createBarForecastHandlers } from './bar-forecast-routes.mjs';
 
 const SUBJECT = BAR_FORECAST_SUBJECTS[0];
+
+assert.equal(BAR_FORECAST_CONSENT_VERSION, '2026-09-01');
 
 function items() {
   return Array.from({ length: 20 }, (_, index) => {
@@ -18,11 +22,15 @@ function items() {
       id: `route-forecast-${number}`,
       contentType: BAR_FORECAST_CONTENT_TYPE,
       subject: SUBJECT,
+      title: `POL-${String(number).padStart(2, '0')} — Route forecast ${number}`,
       version: BAR_FORECAST_SOURCE_VERSION,
+      checksum: number.toString(16).padStart(64, '0'),
       payload: {
         id: `route-forecast-${number}`,
         subject: SUBJECT,
         version: BAR_FORECAST_SOURCE_VERSION,
+        editorial_ref: `POL-${String(number).padStart(2, '0')}`,
+        title: `Route forecast ${number}`,
         rank_within_subject: number,
         prompt: `May the requested relief be granted under the single doctrine in question ${number}?`,
         suggested_answer: `Answer: Yes. Suggested answer ${number} applies the curated doctrine to every stated fact.`,
@@ -41,6 +49,8 @@ function answers() {
     answer: `Yes. Answer ${index + 1} states the controlling rule, applies the stated facts, and reaches a supported conclusion.`,
   }));
 }
+
+const SET_ID = await forecastSetId(validatedForecastRows(items(), SUBJECT));
 
 function request(body, token = 'admin-token') {
   return new Request('https://api.example.test/admin/dd2026/bar-forecast', {
@@ -71,7 +81,10 @@ function harness(overrides = {}) {
         return { consentAccepted: true };
       }
       if (functionName === 'dd2026_bar_forecast_admin_list') {
-        return { items: items(), total: 20 };
+        return {
+          items: typeof overrides.items === 'function' ? overrides.items() : items(),
+          total: 20,
+        };
       }
       throw new Error(`Unexpected RPC ${functionName}`);
     },
@@ -83,6 +96,7 @@ function harness(overrides = {}) {
       headers: { 'Content-Type': 'application/json' },
     }),
     parseBoundedJson: async (incoming) => incoming.json(),
+    approvedSetIds: overrides.approvedSetIds ?? { [SUBJECT]: SET_ID },
     requireAdministrator: async (incoming) => {
       if (incoming.headers.get('Authorization') !== 'Bearer admin-token') {
         const error = new Error('Administrator sign-in is required.');
@@ -180,6 +194,9 @@ test('start requires persisted consent and exposes exactly 20 sanitized question
   const response = await handlers.handle(request({ operation: 'start', subject: SUBJECT }), {}, '', '');
   const body = await responseBody(response);
   assert.equal(body.subject, SUBJECT);
+  assert.equal(body.sourceVersion, BAR_FORECAST_SOURCE_VERSION);
+  assert.equal(body.contentType, BAR_FORECAST_CONTENT_TYPE);
+  assert.equal(body.setId, SET_ID);
   assert.equal(body.schedule.entries.length, 6);
   assert.equal(body.schedule.entries[0].startTime, '08:00');
   assert.equal(body.schedule.entries[0].endTime, '12:00');
@@ -198,6 +215,7 @@ test('submit grades five bounded batches and returns only the public holistic re
   const response = await handlers.handle(request({
     operation: 'submit',
     subject: SUBJECT,
+    setId: SET_ID,
     answers: answers(),
   }), {}, '', '');
   const body = await responseBody(response);
@@ -214,11 +232,49 @@ test('submit grades five bounded batches and returns only the public holistic re
   assert.equal(JSON.stringify(body).includes('controllingDoctrine'), false);
 });
 
+test('submit rejects a question set that changed after start before grading', async () => {
+  let currentItems = items();
+  const approvedSetIds = { [SUBJECT]: SET_ID };
+  const { calls, handlers } = harness({ items: () => currentItems, approvedSetIds });
+  const startResponse = await handlers.handle(
+    request({ operation: 'start', subject: SUBJECT }),
+    {},
+    '',
+    '',
+  );
+  const started = await responseBody(startResponse);
+  currentItems = items();
+  currentItems[0].checksum = 'f'.repeat(64);
+  approvedSetIds[SUBJECT] = await forecastSetId(validatedForecastRows(currentItems, SUBJECT));
+
+  await assert.rejects(
+    handlers.handle(request({
+      operation: 'submit',
+      subject: SUBJECT,
+      setId: started.setId,
+      answers: answers(),
+    }), {}, '', ''),
+    { code: 'BAR_FORECAST_SET_CHANGED', status: 409 },
+  );
+  assert.equal(calls.some((call) => call.functionName === 'structured_gemini'), false);
+});
+
+test('unapproved curated question content fails before questions or grading are returned', async () => {
+  const changedItems = items();
+  changedItems[0].payload.prompt = 'May this altered and unapproved question be shown to the examinee?';
+  const { calls, handlers } = harness({ items: () => changedItems });
+  await assert.rejects(
+    handlers.handle(request({ operation: 'start', subject: SUBJECT }), {}, '', ''),
+    { code: 'BAR_FORECAST_CONTENT_MANIFEST_MISMATCH', status: 503 },
+  );
+  assert.equal(calls.some((call) => call.functionName === 'structured_gemini'), false);
+});
+
 test('malformed answer sets are rejected before curated content or Gemini is requested', async () => {
   const { calls, handlers } = harness();
   await assert.rejects(
     handlers.handle(request({
-      operation: 'submit', subject: SUBJECT, answers: answers().slice(0, 19),
+      operation: 'submit', subject: SUBJECT, setId: SET_ID, answers: answers().slice(0, 19),
     }), {}, '', ''),
     { code: 'BAR_FORECAST_ANSWERS_INCOMPLETE' },
   );

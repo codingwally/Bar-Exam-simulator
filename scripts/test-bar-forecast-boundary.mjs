@@ -23,24 +23,44 @@ function functionBody(sql, name, nextMarker) {
 export async function main() {
   const [
     migration,
+    consentMigration,
+    runtimeIntegrityMigration,
     pgTap,
     workerIndex,
     core,
     routes,
+    frontend,
     importer,
     forecastSource,
   ] = await Promise.all([
     text('supabase/migrations/20260831170000_admin_bar_forecast.sql'),
+    text('supabase/migrations/20260901010837_admin_bar_forecast_consent_version.sql'),
+    text('supabase/migrations/20260901014500_admin_bar_forecast_runtime_integrity.sql'),
     text('supabase/tests/20260831_039_admin_bar_forecast_test.sql'),
     text('worker/index.mjs'),
     text('worker/bar-forecast-core.mjs'),
     text('worker/bar-forecast-routes.mjs'),
+    text('assets/bar-forecast.js'),
     text('scripts/import-duediligence-2026-content.mjs'),
     text('content/duediligence-2026/bar-forecast.json'),
   ]);
 
   assert.match(migration, /^--[\s\S]*\nbegin;/i, 'migration must begin transactionally');
   assert.match(migration, /\ncommit;\s*$/i, 'migration must commit transactionally');
+  assert.match(consentMigration, /^--[\s\S]*\nbegin;/i, 'consent migration must begin transactionally');
+  assert.match(consentMigration, /\ncommit;\s*$/i, 'consent migration must commit transactionally');
+  assert.match(runtimeIntegrityMigration, /^--[\s\S]*\nbegin;/i, 'runtime-integrity migration must begin transactionally');
+  assert.match(runtimeIntegrityMigration, /\ncommit;\s*$/i, 'runtime-integrity migration must commit transactionally');
+  assert.match(
+    consentMigration,
+    /consent_version in \('2026-08-31', '2026-09-01'\)/,
+    'consent storage must retain the prior version while permitting the current version',
+  );
+  assert.doesNotMatch(
+    consentMigration,
+    /delete\s+from\s+public\.dd2026_bar_forecast_consents/i,
+    'the version bump must not delete prior consent rows',
+  );
   assert.match(migration, /'bar_forecast_question'/, 'dedicated content type must be additive');
   assert.match(migration, /source_version in \('2026\.1', '2026\.3'\)/, 'both source versions must remain valid');
   assert.match(
@@ -65,16 +85,16 @@ export async function main() {
   );
 
   const statusRpc = functionBody(
-    migration,
+    consentMigration,
     'dd2026_bar_forecast_consent_status',
     'create or replace function public.dd2026_bar_forecast_accept_consent',
   );
   const acceptRpc = functionBody(
-    migration,
+    consentMigration,
     'dd2026_bar_forecast_accept_consent',
     'create or replace function public.dd2026_bar_forecast_admin_list',
   );
-  const listRpc = functionBody(migration, 'dd2026_bar_forecast_admin_list');
+  const listRpc = functionBody(runtimeIntegrityMigration, 'dd2026_bar_forecast_admin_list');
   for (const [name, body] of [
     ['status', statusRpc],
     ['accept', acceptRpc],
@@ -87,10 +107,19 @@ export async function main() {
     );
     assert.match(body, /security definer/i, `${name} RPC must declare its privileged boundary`);
     assert.match(body, /set search_path = ''/i, `${name} RPC must pin an empty search path`);
+    assert.match(body, /p_consent_version is distinct from '2026-09-01'/, `${name} RPC must require the current disclosure`);
   }
   assert.match(listRpc, /i\.current_published_version_id/, 'list must use the current published version');
   assert.match(listRpc, /v\.lifecycle_state = 'published'/, 'list must require published content');
-  assert.match(listRpc, /v_count <> 20 or v_rank_count <> 20/, 'list must fail closed unless all 20 ranks exist');
+  assert.match(listRpc, /v\.payload ->> 'id' = i\.id/, 'list must bind the payload id to its content envelope');
+  assert.match(listRpc, /v\.payload ->> 'version' = v\.source_version/, 'list must bind the payload version to its content envelope');
+  assert.match(listRpc, /v\.payload ->> 'subject' = i\.subject/, 'list must bind the payload subject to its content envelope');
+  assert.match(listRpc, /v\.checksum ~ '\^\[0-9a-f\]\{64\}\$'/, 'list must require a complete lowercase SHA-256 checksum');
+  assert.match(
+    listRpc,
+    /v_count <> 20[\s\S]*v_rank_count <> 20[\s\S]*v_prompt_count <> 20[\s\S]*v_editorial_count <> 20[\s\S]*v_checksum_count <> 20/,
+    'list must fail closed unless every runtime-integrity dimension has 20 unique rows',
+  );
 
   assert.match(migration, /'BAR_FORECAST_ENABLED', false/, 'public Forecast flag must default off');
   assert.match(migration, /'BAR_FORECAST_ADMIN_ONLY', true/, 'admin-only flag must default on');
@@ -105,6 +134,16 @@ export async function main() {
     occurrences(migration, 'from public, anon, authenticated;') >= 5,
     true,
     'table and function privileges must be revoked from browser roles',
+  );
+  assert.equal(
+    occurrences(consentMigration, 'from public, anon, authenticated;'),
+    3,
+    'all replaced consent/list RPCs must remain revoked from browser roles',
+  );
+  assert.equal(
+    occurrences(runtimeIntegrityMigration, 'from public, anon, authenticated;'),
+    1,
+    'the final runtime-integrity list RPC must remain revoked from browser roles',
   );
 
   assert.equal(
@@ -131,6 +170,8 @@ export async function main() {
   assert.match(core, /Do not produce or reveal rubric categories, component scores/i, 'rubric must remain hidden');
   assert.match(core, /startTime: '08:00', endTime: '12:00'/, 'morning schedule times must be exact');
   assert.match(core, /startTime: '14:00', endTime: '18:00'/, 'afternoon schedule times must be exact');
+  assert.match(core, /BAR_FORECAST_CONSENT_VERSION = '2026-09-01'/, 'Worker must require the current disclosure version');
+  assert.match(frontend, /CONSENT_VERSION = '2026-09-01'/, 'frontend and Worker must require the same disclosure version');
 
   assert.match(importer, /contentType: 'bar_forecast_question', sourceVersion: '2026\.3'/, 'importer must include the Forecast source');
   const parsed = JSON.parse(forecastSource);
@@ -147,6 +188,9 @@ export async function main() {
   assert.match(pgTap, /rollback;\s*$/i, 'pgTAP fixtures must roll back');
   assert.match(pgTap, /legacy content types cannot be imported under source version 2026\.3/, 'pgTAP must test an invalid legacy pairing');
   assert.match(pgTap, /Forecast questions cannot be imported under legacy source version 2026\.1/, 'pgTAP must test an invalid Forecast pairing');
+  assert.match(pgTap, /prior disclosure acceptance remains stored after the version bump/, 'pgTAP must preserve prior consent rows');
+  assert.match(pgTap, /prior-version consent cannot satisfy the current Worker contract/, 'pgTAP must reject prior consent for current access');
+  assert.match(pgTap, /current acceptance is added without overwriting prior-version consent/, 'pgTAP must retain both versioned rows');
 
   console.log(JSON.stringify({
     ok: true,

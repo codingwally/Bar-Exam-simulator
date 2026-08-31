@@ -1,12 +1,16 @@
 import {
   BAR_FORECAST_CONSENT_VERSION,
+  BAR_FORECAST_CONTENT_TYPE,
+  BAR_FORECAST_APPROVED_SET_IDS,
   BAR_FORECAST_GRADING_RESPONSE_SCHEMA,
   BAR_FORECAST_LIMITS,
   BAR_FORECAST_OFFICIAL_SCHEDULE,
+  BAR_FORECAST_SOURCE_VERSION,
   BarForecastError,
   answersForForecastRows,
   buildBarForecastGradingPrompt,
   completeBarForecastResult,
+  forecastSetId,
   forecastGradingBatches,
   normalizeBarForecastRequest,
   publicForecastQuestions,
@@ -35,6 +39,7 @@ export function createBarForecastHandlers(deps) {
     parseBoundedJson,
     requireAdministrator,
     structuredGemini,
+    approvedSetIds = BAR_FORECAST_APPROVED_SET_IDS,
   } = deps;
 
   async function authorizedContext(request, env) {
@@ -123,15 +128,34 @@ export function createBarForecastHandlers(deps) {
 
     await requireConsent(env, user.id);
     const rows = await subjectRows(env, user.id, input.subject);
+    const setId = await forecastSetId(rows);
+    if (approvedSetIds[input.subject] !== setId) {
+      throw new BarForecastError(
+        'BAR_FORECAST_CONTENT_MANIFEST_MISMATCH',
+        'The selected Forecast content does not match the independently approved question manifest.',
+        503,
+      );
+    }
     if (input.operation === 'start') {
       return privateJson(jsonResponse, {
         ok: true,
         authorized: true,
         consentAccepted: true,
         subject: input.subject,
+        sourceVersion: BAR_FORECAST_SOURCE_VERSION,
+        contentType: BAR_FORECAST_CONTENT_TYPE,
+        setId,
         schedule: BAR_FORECAST_OFFICIAL_SCHEDULE,
         questions: publicForecastQuestions(rows),
       }, 200, origin, allowedOrigin);
+    }
+
+    if (input.setId !== setId) {
+      throw new BarForecastError(
+        'BAR_FORECAST_SET_CHANGED',
+        'This Forecast question set changed after it was opened. Restart the subject before submitting.',
+        409,
+      );
     }
 
     const rowsWithAnswers = answersForForecastRows(input.answers, rows);

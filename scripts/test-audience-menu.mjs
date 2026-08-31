@@ -57,7 +57,8 @@ for (const id of [
   'spa-progress', 'spa-chairs-case', 'spa-case-digest', 'btn-signin',
 ]) assert.match(navigation, new RegExp(`id="${id}"`));
 
-assert.match(navigation, /id="spa-bar-forecast"[^>]*data-public-feature="bar-forecast"[^>]*aria-haspopup="dialog"[^>]*aria-controls="bf26-root"/);
+assert.match(navigation, /id="spa-bar-forecast"[^>]*data-public-feature="bar-forecast"[^>]*aria-controls="bf26-root"/);
+assert.doesNotMatch(navigation, /id="spa-bar-forecast"[^>]*aria-haspopup="dialog"/);
 assert.match(forecastJs, /global\.openBarForecast = openForecast/);
 assert.match(landingJs, /'bar-forecast': '#bar-forecast-2026'/);
 assert.match(shellJs, /'#bar-forecast-2026': 'bar-forecast'/);

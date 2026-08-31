@@ -248,6 +248,7 @@ const WINDOW_MS = 10 * 60 * 1000;
 const MAX_REQUESTS_PER_WINDOW = 12;
 const MAX_CORRECTIONS_PER_WINDOW = 5;
 const MAX_SUPPORT_REQUESTS_PER_WINDOW = 4;
+const MAX_BAR_FORECAST_ADMIN_REQUESTS_PER_WINDOW = 90;
 const DUPLICATE_TTL_MS = 20 * 1000;
 const GEMINI_TIMEOUT_MS = 45 * 1000;
 const SUBJECT_MATTER_TEACHING_TIMEOUT_MS = 8 * 1000;
@@ -277,6 +278,7 @@ const correctionRateWindows = new Map();
 const supportRateWindows = new Map();
 const analyticsRateWindows = new Map();
 const adminRateWindows = new Map();
+const barForecastAdminRateWindows = new Map();
 const studyRoomAccessRateWindows = new Map();
 const studyRoomRoomsRateWindows = new Map();
 const studyRoomJoinRateWindows = new Map();
@@ -404,6 +406,15 @@ async function enforceAdminRateLimit(request, env) {
     await transientRateKey(request, env, 'admin'),
     90,
     'Too many administrator requests. Please wait and try again.',
+  );
+}
+
+async function enforceBarForecastAdminRateLimit(request, env) {
+  enforceWindow(
+    barForecastAdminRateWindows,
+    await transientRateKey(request, env, 'bar-forecast-admin'),
+    MAX_BAR_FORECAST_ADMIN_REQUESTS_PER_WINDOW,
+    'Too many Forecast administrator requests. Please wait and try again.',
   );
 }
 
@@ -9982,7 +9993,7 @@ const barForecastHandlers = createBarForecastHandlers({
     { returnNullOnAuthorizationDenial: true },
   ),
   barForecastRpc,
-  enforceAdminRateLimit,
+  enforceBarForecastAdminRateLimit,
   jsonResponse,
   parseBoundedJson,
   requireAdministrator,

@@ -34,7 +34,7 @@ export function createBarForecastHandlers(deps) {
   const {
     authorizeAdministrator,
     barForecastRpc,
-    enforceAdminRateLimit,
+    enforceBarForecastAdminRateLimit,
     jsonResponse,
     parseBoundedJson,
     requireAdministrator,
@@ -43,7 +43,7 @@ export function createBarForecastHandlers(deps) {
   } = deps;
 
   async function authorizedContext(request, env) {
-    await enforceAdminRateLimit(request, env);
+    await enforceBarForecastAdminRateLimit(request, env);
     const user = await requireAdministrator(request, env);
     const authorization = requireBarForecastAdministrator(
       await authorizeAdministrator(env, user),

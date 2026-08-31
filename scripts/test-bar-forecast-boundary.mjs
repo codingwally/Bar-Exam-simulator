@@ -160,7 +160,36 @@ export async function main() {
     'database authorization denials must reach the Forecast-specific 403 contract',
   );
   assert.match(workerIndex, /BAR_FORECAST_RPC_FUNCTIONS/, 'Worker must use a dedicated RPC allowlist');
-  assert.match(routes, /enforceAdminRateLimit/, 'Forecast route must be rate limited');
+  assert.match(
+    routes,
+    /enforceBarForecastAdminRateLimit/,
+    'Forecast route must use its dedicated administrator rate limiter',
+  );
+  assert.match(
+    workerIndex,
+    /const barForecastAdminRateWindows = new Map\(\);/,
+    'Forecast traffic must have an isolated rate-limit window',
+  );
+  assert.match(
+    workerIndex,
+    /barForecastAdminRateWindows,[\s\S]*?transientRateKey\(request, env, 'bar-forecast-admin'\),[\s\S]*?MAX_BAR_FORECAST_ADMIN_REQUESTS_PER_WINDOW/,
+    'Forecast rate limiting must use its own scope and exact configured maximum',
+  );
+  assert.match(
+    workerIndex,
+    /const MAX_BAR_FORECAST_ADMIN_REQUESTS_PER_WINDOW = 90;/,
+    'Forecast must permit the bounded 30-examiner gate without sharing generic admin traffic',
+  );
+  assert.match(
+    workerIndex,
+    /const barForecastHandlers = createBarForecastHandlers\(\{[\s\S]*?enforceBarForecastAdminRateLimit,[\s\S]*?\}\);/,
+    'Forecast handlers must receive the dedicated limiter',
+  );
+  assert.doesNotMatch(
+    routes,
+    /enforceAdminRateLimit/,
+    'Forecast routes must not fall back to the shared generic administrator bucket',
+  );
   assert.match(routes, /requireAdministrator/, 'Forecast route must require verified bearer authentication');
   assert.match(routes, /requireBarForecastAdministrator/, 'Forecast route must require an allowed admin role');
   assert.match(routes, /private, no-store, max-age=0/, 'Forecast responses must be private and non-cacheable');

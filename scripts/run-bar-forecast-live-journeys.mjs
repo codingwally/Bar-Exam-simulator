@@ -10,7 +10,8 @@ const DEFAULT_CONCURRENCY = 2;
 const MAX_CONCURRENCY = 2;
 // Forecast performs five administrator requests per journey (including the
 // deliberate pre-consent rejection). Forty-five seconds keeps even a duplicate
-// route-status check below the Worker's 90-request/10-minute shared IP window.
+// route-status check below the Worker's dedicated 90-request/10-minute Forecast
+// IP window while keeping browser/RAM pressure to at most two active contexts.
 const MINIMUM_START_INTERVAL_MS = 45_000;
 const DEFAULT_JOURNEY_TIMEOUT_MS = 8 * 60_000;
 const CONSENT_VERSION = '2026-09-01';

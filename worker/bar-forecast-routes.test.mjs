@@ -88,7 +88,7 @@ function harness(overrides = {}) {
       }
       throw new Error(`Unexpected RPC ${functionName}`);
     },
-    enforceAdminRateLimit: async () => {
+    enforceBarForecastAdminRateLimit: async () => {
       calls.push({ functionName: 'rate_limit' });
     },
     jsonResponse: (body, status) => new Response(JSON.stringify(body), {

@@ -2,7 +2,7 @@
 
 This is a destructive-to-test-data, cost-bearing release check for a specifically approved candidate. It runs exactly 30 complete examiner journeys through the real web page and live Worker/Supabase path. It does not mock or intercept HTTP. Use staging by default. Run production only with explicit release-owner approval.
 
-The runner uses one headless Chrome process. Its default and maximum concurrency is two browser contexts, with one disposable least-privilege `admin` account per worker slot. A separate disposable non-admin account proves the Forecast endpoint returns `403 BAR_FORECAST_ADMIN_FORBIDDEN`. Starts are spaced by at least 45 seconds to remain below the shared Forecast rate limit on a single outbound IP.
+The runner uses one headless Chrome process. Its default and maximum concurrency is two browser contexts, with one disposable least-privilege `admin` account per worker slot. A separate disposable non-admin account proves the Forecast endpoint returns `403 BAR_FORECAST_ADMIN_FORBIDDEN`. Starts are spaced by at least 45 seconds to remain below the dedicated Forecast rate limit on a single outbound IP; other administrator test traffic uses a separate rate-limit bucket.
 
 Each counted journey resets only its disposable user's Forecast consent, proves the server rejects start before consent, accepts consent in the UI, selects one of the six subjects, starts 20 real questions, and enters 20 answers of at least ten words. It also exercises a flag, yellow question highlight, bold answer text, answer text size, flagged-question filter, submission confirmation, the total grade, and all 20 feedback/suggested-answer/explanation results. Per-attempt markers prove results did not mix across journeys.
 

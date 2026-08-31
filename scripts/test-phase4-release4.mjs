@@ -52,7 +52,7 @@ for (const rpc of [
   const workerRpc = ({
     phase4_plan_catalog: 'phase4_pricing_snapshot',
     phase4_create_payment_request: 'phase4_create_payment_request_v2',
-    phase4_admin_operational_data: 'phase4_admin_operational_data_scoped_v1',
+    phase4_admin_operational_data: 'phase4_admin_operational_data_scoped_v2',
   })[rpc] || rpc;
   assert.ok(worker.includes(`'${workerRpc}'`), `${workerRpc} must be called by the Worker`);
 }

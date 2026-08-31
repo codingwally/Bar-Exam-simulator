@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
+import vm from 'node:vm';
 
 const root = new URL('../', import.meta.url);
 const [
@@ -89,6 +90,16 @@ assert.match(forecast, /refs\.submit\.disabled = !allAnswersComplete\(\)/);
 assert.match(forecast, /payload\?\.authorized !== true/);
 assert.match(forecast, /payload\?\.consentAccepted === true/);
 assert.match(forecast, /renderPreview\(\{ checking: true \}\)/);
+assert.match(
+  forecast,
+  /renderPreview\(\{ checking: true \}\);[\s\S]*state\.authorizationOwnerId = ownerId;[\s\S]*requestForecast\(\{ operation: 'status' \}\)/,
+  'authorization must claim the pending owner before awaiting status',
+);
+assert.match(
+  forecast,
+  /nextOwnerId === state\.ownerId[\s\S]*nextOwnerId === state\.authorizationOwnerId/,
+  'same-owner session refreshes must preserve both settled and pending authorization',
+);
 assert.match(forecast, /async function openForecast\(trigger = null\) \{[\s\S]*ensureRoot\(\);[\s\S]*if \(state\.isOpen\) return true;/);
 assert.match(forecast, /state\.root\.hidden = true[\s\S]*trigger\.focus\(\{ preventScroll: true \}\)/);
 assert.match(forecast, /event\.key === 'Escape'/);
@@ -121,6 +132,8 @@ assert.match(
   /accept\.addEventListener\('click', async \(\) => \{[\s\S]*requestForecast\(\{ operation: 'accept', version: CONSENT_VERSION \}\)[\s\S]*state\.consentAccepted = true;[\s\S]*renderSubjectPicker\(\)/,
   'only the explicit agreement action may record consent and open subject selection',
 );
+assert.match(forecast, /accept\.setAttribute\('aria-busy', 'true'\)/);
+assert.match(forecast, /accept\.setAttribute\('aria-busy', 'false'\)/);
 assert.match(forecast, /actions\.append\(decline, accept\)/);
 assert.doesNotMatch(forecast, /bar-forecast-disclaimer|Accept and choose a subject|Return to preview/);
 assert.match(forecast, /appendResultSection\(body, 'Question', state\.questions\[index\]\?\.prompt/);
@@ -208,13 +221,112 @@ for (const source of [build, serviceWorker]) {
   assert.match(source, /assets\/bar-forecast\/forecast-workspace-preview\.webp/);
 }
 assert.match(build, /'flag\.svg'/);
-assert.match(serviceWorker, /duediligence-shell-20260901-bar-forecast-exam-tools-1/);
+assert.match(serviceWorker, /duediligence-shell-20260901-bar-forecast-exam-tools-2/);
 assert.match(serviceWorker, /assets\/icons\/navigation\/flag\.svg/);
 assert.match(qaHarness, /dataset\.ddBarForecastQa = 'synthetic'/);
 assert.match(qaHarness, /__DD_BAR_FORECAST_SYNTHETIC_QA__ = '2026-09-01'/);
 assert.match(qaHarness, /Synthetic UI QA harness — not real Forecast questions or grading/);
 assert.doesNotMatch(qaHarness, /window\.openBarForecast\?\.\(document\.getElementById\('open-forecast'\)\)/);
 assert.doesNotMatch(build, /content\/duediligence-2026\/bar-forecast\.json/);
+
+function extractNamedFunction(source, name) {
+  const match = new RegExp(`(?:async\\s+)?function\\s+${name}\\s*\\(`, 'u').exec(source);
+  assert.ok(match, `Missing function ${name}.`);
+  const start = match.index;
+  const openingBrace = source.indexOf('{', start);
+  let depth = 0;
+  for (let index = openingBrace; index < source.length; index += 1) {
+    if (source[index] === '{') depth += 1;
+    if (source[index] === '}') depth -= 1;
+    if (depth === 0) return source.slice(start, index + 1);
+  }
+  throw new Error(`Unbalanced function ${name}.`);
+}
+
+// Reproduce the live failure deterministically: a same-user session event lands
+// while the first authorization status request is unresolved. It must neither
+// abort that request nor start a duplicate that can replace the consent button.
+function authorizationHarness() {
+  let currentOwnerId = 'admin-a';
+  const state = {
+    isOpen: true,
+    ownerId: '',
+    authorizationOwnerId: '',
+    consentAccepted: false,
+  };
+  const observations = { aborts: 0, requests: 0, disclaimers: 0, pickers: 0 };
+  const responses = [];
+  const context = vm.createContext({
+    state,
+    runtimeOwnerId: () => currentOwnerId,
+    runtimeSession: () => (currentOwnerId
+      ? { access_token: 'test-token', user: { id: currentOwnerId } }
+      : null),
+    renderPreview: () => {},
+    requestForecast: () => {
+      observations.requests += 1;
+      let resolve;
+      const promise = new Promise((accept) => { resolve = accept; });
+      responses.push({ promise, resolve });
+      return promise;
+    },
+    renderSubjectPicker: () => { observations.pickers += 1; },
+    renderDisclaimer: () => { observations.disclaimers += 1; },
+    abortRequest: () => { observations.aborts += 1; },
+    resetProtectedState: () => {
+      state.ownerId = '';
+      state.authorizationOwnerId = '';
+    },
+  });
+  vm.runInContext(extractNamedFunction(forecast, 'checkAuthorization'), context);
+  vm.runInContext(extractNamedFunction(forecast, 'handleForecastSessionChange'), context);
+  return {
+    context,
+    state,
+    observations,
+    responses,
+    setOwner: (ownerId) => { currentOwnerId = ownerId; },
+  };
+}
+
+const sameOwner = authorizationHarness();
+const pendingAuthorization = vm.runInContext('checkAuthorization()', sameOwner.context);
+assert.equal(sameOwner.state.authorizationOwnerId, 'admin-a');
+assert.equal(sameOwner.observations.requests, 1);
+vm.runInContext('handleForecastSessionChange()', sameOwner.context);
+assert.equal(sameOwner.observations.aborts, 0, 'a same-owner refresh must not abort pending authorization');
+assert.equal(sameOwner.observations.requests, 1, 'a same-owner refresh must not duplicate pending authorization');
+sameOwner.responses[0].resolve({ authorized: true, consentAccepted: false });
+assert.equal(await pendingAuthorization, true);
+assert.equal(sameOwner.state.ownerId, 'admin-a');
+assert.equal(sameOwner.state.authorizationOwnerId, '');
+assert.equal(sameOwner.observations.disclaimers, 1);
+
+const signedOut = authorizationHarness();
+const staleSignedOutAuthorization = vm.runInContext('checkAuthorization()', signedOut.context);
+signedOut.setOwner('');
+vm.runInContext('handleForecastSessionChange()', signedOut.context);
+assert.equal(signedOut.observations.aborts, 1, 'sign-out must abort pending authorization');
+assert.equal(signedOut.observations.requests, 1, 'sign-out must not begin another status request');
+signedOut.responses[0].resolve({ authorized: true, consentAccepted: true });
+assert.equal(await staleSignedOutAuthorization, false);
+assert.equal(signedOut.state.ownerId, '', 'a stale response must not restore the signed-out owner');
+assert.equal(signedOut.observations.pickers, 0, 'a stale response must not expose subject selection');
+
+const changedOwner = authorizationHarness();
+const staleChangedOwnerAuthorization = vm.runInContext('checkAuthorization()', changedOwner.context);
+changedOwner.setOwner('admin-b');
+vm.runInContext('handleForecastSessionChange()', changedOwner.context);
+assert.equal(changedOwner.observations.aborts, 1, 'an account change must abort pending authorization');
+assert.equal(changedOwner.observations.requests, 2, 'an account change must check the new owner exactly once');
+changedOwner.responses[0].resolve({ authorized: true, consentAccepted: true });
+assert.equal(await staleChangedOwnerAuthorization, false);
+assert.notEqual(changedOwner.state.ownerId, 'admin-a', 'a stale response must not authorize the old owner');
+changedOwner.responses[1].resolve({ authorized: true, consentAccepted: false });
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(changedOwner.state.ownerId, 'admin-b');
+assert.equal(changedOwner.observations.disclaimers, 1);
+
 assert.equal(
   createHash('sha256').update(preview).digest('hex').toUpperCase(),
   '8D3A68F68AD252EB88AB8DABDFF2A57DC41EF603A7948A79917EF73DE9BBD4B3',

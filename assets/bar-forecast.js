@@ -66,6 +66,7 @@
     isOpen: false,
     view: 'preview',
     ownerId: '',
+    authorizationOwnerId: '',
     consentAccepted: false,
     subject: '',
     schedule: null,
@@ -412,6 +413,7 @@
 
   function resetProtectedState() {
     state.ownerId = '';
+    state.authorizationOwnerId = '';
     state.consentAccepted = false;
     state.subject = '';
     state.schedule = null;
@@ -572,9 +574,11 @@
     const decline = makeButton('Decline');
     decline.addEventListener('click', () => closeForecast());
     const accept = makeButton('I Understand & Agree', 'bf26-button bf26-button--primary');
+    accept.setAttribute('aria-busy', 'false');
     accept.addEventListener('click', async () => {
       if (accept.disabled) return;
       accept.disabled = true;
+      accept.setAttribute('aria-busy', 'true');
       decline.disabled = true;
       accept.textContent = 'Saving acceptance…';
       setStatus('Saving this disclosure acceptance…');
@@ -597,6 +601,7 @@
         }
         decline.disabled = false;
         accept.disabled = false;
+        accept.setAttribute('aria-busy', 'false');
         accept.textContent = 'I Understand & Agree';
         setStatus(error?.message || 'The disclaimer could not be accepted. Please try again.', 'error');
       }
@@ -1282,6 +1287,10 @@
       return true;
     }
     renderPreview({ checking: true });
+    // Session restoration can emit another same-user event while this request is
+    // pending. Claim the owner before awaiting so that event cannot abort and
+    // replace the consent view underneath an agreement click.
+    state.authorizationOwnerId = ownerId;
     try {
       const payload = await requestForecast({ operation: 'status' });
       if (!state.isOpen || ownerId !== runtimeOwnerId()) return false;
@@ -1303,6 +1312,8 @@
         kind: error?.status ? '' : 'error',
       });
       return true;
+    } finally {
+      if (state.authorizationOwnerId === ownerId) state.authorizationOwnerId = '';
     }
   }
 
@@ -1347,10 +1358,13 @@
     return true;
   }
 
-  global.addEventListener('duediligence:session', () => {
+  function handleForecastSessionChange() {
     if (!state.isOpen) return;
     const nextOwnerId = runtimeOwnerId();
-    if (nextOwnerId && nextOwnerId === state.ownerId) return;
+    if (nextOwnerId && (
+      nextOwnerId === state.ownerId
+      || nextOwnerId === state.authorizationOwnerId
+    )) return;
     abortRequest();
     resetProtectedState();
     renderPreview({
@@ -1360,7 +1374,9 @@
       checking: Boolean(nextOwnerId),
     });
     if (nextOwnerId) checkAuthorization();
-  });
+  }
+
+  global.addEventListener('duediligence:session', handleForecastSessionChange);
 
   function recoverBlockedForecastRoute() {
     state.routeRecovery = true;

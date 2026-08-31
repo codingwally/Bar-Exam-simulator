@@ -293,6 +293,9 @@ function safeForecastEvents(events) {
       : null,
     startShape: event.startShape || null,
     failed: event.failed === true,
+    failureKind: ['aborted', 'timed_out', 'network_error', 'other'].includes(event.failureKind)
+      ? event.failureKind
+      : null,
     finished: event.finished === true,
     durationMs: Number.isInteger(event.finishedAt) && Number.isInteger(event.startedAt)
       ? Math.max(0, event.finishedAt - event.startedAt)
@@ -308,6 +311,8 @@ async function safeForecastInterfaceState(page) {
     };
     const statusKind = String(document.querySelector('[data-bf26-status]')?.dataset?.kind || '');
     const subjectButtons = [...document.querySelectorAll('[data-subject]')];
+    const consentButtons = [...document.querySelectorAll('.bf26-agreement .bf26-button--primary')];
+    const consentButton = consentButtons[0] || null;
     return {
       view: visible('.bf26-exam')
         ? 'exam'
@@ -322,13 +327,31 @@ async function safeForecastInterfaceState(page) {
       subjectButtonCount: subjectButtons.length,
       subjectButtonsDisabled: subjectButtons.length > 0
         && subjectButtons.every((button) => button.disabled === true),
+      consentButtonCount: consentButtons.length,
+      consentButtonVisible: Boolean(
+        consentButton && !consentButton.hidden && consentButton.getClientRects().length > 0,
+      ),
+      consentButtonEnabled: Boolean(consentButton && consentButton.disabled !== true),
+      consentButtonBusy: consentButton?.getAttribute('aria-busy') === 'true',
     };
   }).catch(() => ({
     view: 'unavailable',
     statusKind: 'none',
     subjectButtonCount: 0,
     subjectButtonsDisabled: false,
+    consentButtonCount: 0,
+    consentButtonVisible: false,
+    consentButtonEnabled: false,
+    consentButtonBusy: false,
   }));
+}
+
+function requestFailureKind(errorText) {
+  const value = String(errorText || '').trim().toLowerCase();
+  if (/aborted|cancelled/u.test(value)) return 'aborted';
+  if (/timed?\s*out|timeout/u.test(value)) return 'timed_out';
+  if (/connection|network|name_not_resolved|internet|failed/u.test(value)) return 'network_error';
+  return 'other';
 }
 
 function timeoutSignal(milliseconds, honorStop = true) {
@@ -877,6 +900,7 @@ async function runJourney(browser, account, ordinal, startOffsetMs) {
       code: null,
       startShape: null,
       failed: false,
+      failureKind: null,
       finished: false,
       startedAt: Date.now(),
       finishedAt: null,
@@ -924,7 +948,11 @@ async function runJourney(browser, account, ordinal, startOffsetMs) {
   });
   page.on('requestfailed', (request) => {
     const event = eventByRequest.get(request);
-    if (event) event.failed = true;
+    if (event) {
+      event.failed = true;
+      event.failureKind = requestFailureKind(request.failure()?.errorText);
+      event.finishedAt = Date.now();
+    }
   });
 
   let primaryError = null;
@@ -938,8 +966,29 @@ async function runJourney(browser, account, ordinal, startOffsetMs) {
     journeyPhase = 'CONSENT_GATE';
     await assertServerConsentGate(page, subject);
 
-    journeyPhase = 'CONSENT_ACCEPT';
-    await page.getByRole('button', { name: 'I Understand & Agree' }).click();
+    journeyPhase = 'CONSENT_ACCEPT_ACTIONABLE';
+    const consentButton = page.locator('.bf26-agreement .bf26-button--primary');
+    await consentButton.waitFor({ state: 'visible' });
+    assert.equal(await consentButton.isEnabled(), true, 'The consent action is not enabled.');
+    const acceptResponsePromise = page.waitForResponse((response) => {
+      let url;
+      try { url = new URL(response.url()); } catch { return false; }
+      if (url.pathname !== FORECAST_PATH) return false;
+      try {
+        return String(response.request().postDataJSON()?.operation || '') === 'accept';
+      } catch {
+        return false;
+      }
+    }).catch((error) => ({ error }));
+    journeyPhase = 'CONSENT_ACCEPT_CLICK';
+    await consentButton.click();
+    journeyPhase = 'CONSENT_ACCEPT_RESPONSE';
+    const acceptResponseResult = await acceptResponsePromise;
+    if (acceptResponseResult?.error) throw acceptResponseResult.error;
+    await acceptResponseResult.finished();
+    await Promise.allSettled(responseDiagnostics);
+    assert.equal(acceptResponseResult.status(), 200, 'The Forecast consent request was not accepted.');
+    journeyPhase = 'CONSENT_PICKER_VISIBLE';
     await page.getByRole('heading', { name: 'Choose a 2026 Bar subject.' }).waitFor({ state: 'visible' });
     const offeredSubjects = await page.locator('[data-subject]').evaluateAll(
       (buttons) => buttons.map((button) => button.dataset.subject),

@@ -56,6 +56,9 @@ assert.match(source, /function safeForecastInterfaceState\(page\)/u);
 assert.match(source, /page\.on\('requestfinished'/u);
 assert.match(source, /event\.finished === true/u);
 assert.match(source, /startShape: event\.startShape \|\| null/u);
+assert.match(source, /failureKind: \['aborted', 'timed_out', 'network_error', 'other'\]/u);
+assert.match(source, /consentButtonCount: consentButtons\.length/u);
+assert.match(source, /consentButtonBusy: consentButton\?\.getAttribute\('aria-busy'\) === 'true'/u);
 assert.match(source, /subjectMatches: payload\?\.subject === subject/u);
 assert.match(source, /questionCount: questions\.length/u);
 assert.match(source, /response\.request\(\)\.postDataJSON\(\)\?\.operation/u);
@@ -99,13 +102,20 @@ assert.match(source, /#bar-forecast-2026/u);
 for (const phase of [
   'AUTH_SESSION_READY',
   'AUTH_FORECAST_VISIBLE',
+  'CONSENT_ACCEPT_ACTIONABLE',
+  'CONSENT_ACCEPT_CLICK',
+  'CONSENT_ACCEPT_RESPONSE',
+  'CONSENT_PICKER_VISIBLE',
 ]) assert.ok(source.includes(phase), `Live harness must retain safe failure phase ${phase}.`);
+assert.match(source, /postDataJSON\(\)\?\.operation \|\| ''\) === 'accept'/u);
+assert.match(source, /await acceptResponseResult\.finished\(\)/u);
+assert.match(source, /acceptResponseResult\.status\(\), 200/u);
 assert.match(source, /journeyPhase = 'RESULTS'/u);
 assert.match(source, /startOffsetMs/u);
 assert.match(source, /observedMinimumStartIntervalMs/u);
 assert.match(source, /if \(firstFailure \|\| stopSignal\) return;/u);
 assert.match(source, /phaseFailure\(error, `JOURNEY_\$\{journeyPhase\}`\)/u);
-assert.match(source, /I Understand & Agree/u);
+assert.match(source, /\.bf26-agreement \.bf26-button--primary/u);
 assert.match(source, /\[data-subject\]/u);
 assert.match(source, /number <= 20/u);
 assert.match(source, /answerWordCount\(answer\) >= 10/u);

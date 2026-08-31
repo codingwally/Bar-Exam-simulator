@@ -26,7 +26,8 @@ assert.match(source, /SUPABASE_PRIVILEGED_KEY_PATTERN/u);
 assert.match(source, /sb_secret_\[A-Za-z0-9_-\]\{20,/u);
 assert.match(source, /\[A-Za-z0-9_-\]\{20,\}\\\.\[A-Za-z0-9_-\]\{20,/u);
 assert.match(source, /apikey: config\.secretKey/u);
-assert.match(source, /Authorization: `Bearer \$\{config\.secretKey\}`/u);
+assert.match(source, /modernSecretKey = config\.secretKey\.startsWith\('sb_secret_'\)/u);
+assert.match(source, /modernSecretKey \? \{\} : \{ Authorization: `Bearer \$\{config\.secretKey\}` \}/u);
 
 assert.match(source, /role: 'admin'/u);
 assert.doesNotMatch(source, /role: '(?:founder_admin|super_admin)'/u);

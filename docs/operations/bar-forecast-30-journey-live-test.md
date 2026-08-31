@@ -11,7 +11,7 @@ The subject rotation is deterministic: five journeys per subject. Thirty submiss
 ## Safety boundaries
 
 - Run only after the exact Pages/Worker candidate and required database migration are staged and approved.
-- Prefer a dedicated, temporary `sb_secret_` Supabase key with the narrowest practical lifetime. For compatibility, the runner also accepts an explicitly approved legacy three-segment service-role JWT. Revoke or rotate the credential immediately after the run.
+- Prefer a dedicated, temporary `sb_secret_` Supabase key with the narrowest practical lifetime. The runner sends a modern secret only through Supabase's `apikey` header; for compatibility, it sends an explicitly approved legacy three-segment service-role JWT through both `apikey` and bearer authorization. Delete or rotate the credential immediately after the run.
 - Do not paste the secret into a command, chat, workflow log, or evidence file. Supply it only through the masked environment prompt or an approved secret store.
 - The runner writes progress only to stderr. Its stdout JSON contains candidate SHA/run ID, counts, statuses, durations, and scores, but no protected question or answer text, disposable email, password, access token, or service key.
 - The runner creates only temporary `admin` and non-admin test identities bearing the `dd-forecast-e2e-` prefix. It globally signs out each browser session, deletes consent and role rows, removes that exact user's `usage_events` and then `usage_sessions`, deletes each Auth user, and verifies every scoped row is gone before reporting success.

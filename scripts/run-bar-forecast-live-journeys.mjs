@@ -196,9 +196,12 @@ if (commandLine.preflight) {
 }
 
 const runId = `f30-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
+const modernSecretKey = config.secretKey.startsWith('sb_secret_');
 const serviceHeaders = Object.freeze({
   apikey: config.secretKey,
-  Authorization: `Bearer ${config.secretKey}`,
+  // Modern Supabase secret keys are opaque API keys, not JWTs. Legacy
+  // service-role keys remain bearer JWTs for backward-compatible staging.
+  ...(modernSecretKey ? {} : { Authorization: `Bearer ${config.secretKey}` }),
 });
 const sensitiveValues = new Set([config.secretKey]);
 const createdAccounts = [];

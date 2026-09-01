@@ -371,7 +371,7 @@
       <section class="bf26-page" aria-labelledby="bf26-page-title" tabindex="-1">
         <header class="bf26-dialog-header">
           <div class="bf26-brand">
-            <p class="bf26-eyebrow">Administrator pilot</p>
+            <p class="bf26-eyebrow">Member access</p>
             <h1 class="bf26-dialog-title" id="bf26-page-title">2026 Bar Forecast</h1>
           </div>
           <button class="bf26-close" type="button" aria-label="Exit 2026 Bar Forecast">Exit forecast</button>
@@ -485,7 +485,7 @@
   async function requestForecast(body) {
     const client = global.DueDiligencePhase4 || global.DueDiligencePhase2;
     if (typeof client?.request !== 'function') {
-      const error = new Error('Administrator access could not be checked yet.');
+      const error = new Error('Bar Forecast access could not be checked yet.');
       error.code = 'AUTH_UNRESOLVED';
       throw error;
     }
@@ -549,7 +549,7 @@
       element(
         'p',
         '',
-        'This limited pilot is available only to authorized Due Diligence administrators. The public preview does not contain forecast questions, answers, scoring methods, or internal prediction data.',
+        'Bar Forecast is available to active paid members, Founding Beta members, and authorized Due Diligence administrators. The public preview does not contain forecast questions, answers, scoring methods, or internal prediction data.',
       ),
     );
     const actions = element('div', 'bf26-actions');
@@ -569,7 +569,7 @@
     status.textContent = options.message || (
       options.checking
         ? 'Verifying this signed-in account without exposing protected material…'
-        : 'If you are an authorized administrator, sign in through Due Diligence and check access again.'
+        : 'Sign in through Due Diligence to check your Bar Forecast access.'
     );
     copy.append(actions, status);
     grid.append(figure, copy);
@@ -628,7 +628,7 @@
         const payload = await requestForecast({ operation: 'accept', version: CONSENT_VERSION });
         if (!state.isOpen || ownerId !== runtimeOwnerId()) return;
         if (payload?.authorized !== true || payload?.consentAccepted !== true) {
-          renderPreview({ message: 'Administrator authorization could not be confirmed.', kind: 'error' });
+          renderPreview({ message: 'Bar Forecast access could not be confirmed.', kind: 'error' });
           return;
         }
         state.ownerId = ownerId;
@@ -637,7 +637,7 @@
       } catch (error) {
         if (error?.name === 'AbortError') return;
         if ([401, 403].includes(Number(error?.status))) {
-          renderPreview({ message: 'This account is not authorized for the administrator pilot.', kind: 'error' });
+          renderPreview({ message: 'This account does not currently have Bar Forecast access.', kind: 'error' });
           return;
         }
         decline.disabled = false;
@@ -661,12 +661,12 @@
   function renderSubjectPicker(message = '') {
     const picker = element('section', 'bf26-picker');
     picker.append(
-      element('p', 'bf26-badge', 'Authorized administrator'),
+      element('p', 'bf26-badge', 'Forecast access confirmed'),
       element('h2', '', 'Choose a 2026 Bar subject.'),
       element(
         'p',
         '',
-        'Each subject opens an independent twenty-question forecast simulation. Questions are delivered securely only after the server confirms administrator access.',
+        'Each subject opens an independent twenty-question forecast simulation. Questions are delivered securely only after the server confirms paid, Founding Beta, or administrator access.',
       ),
       element(
         'div',
@@ -739,7 +739,7 @@
     if (!SUBJECT_NAMES.has(subjectName) || !state.consentAccepted) return;
     const ownerId = runtimeOwnerId();
     if (!ownerId || ownerId !== state.ownerId) {
-      renderPreview({ message: 'Administrator access must be confirmed again.', kind: 'error' });
+      renderPreview({ message: 'Bar Forecast access must be confirmed again.', kind: 'error' });
       return;
     }
     const buttons = [...state.viewNode.querySelectorAll('[data-subject]')];
@@ -769,7 +769,7 @@
     } catch (error) {
       if (error?.name === 'AbortError') return;
       if ([401, 403].includes(Number(error?.status))) {
-        renderPreview({ message: 'Administrator authorization expired or was not confirmed.', kind: 'error' });
+        renderPreview({ message: 'Bar Forecast access expired or was not confirmed.', kind: 'error' });
         return;
       }
       renderSubjectPicker(error?.message || 'The forecast could not be opened. Please try again.');
@@ -1158,7 +1158,7 @@
       element(
         'p',
         'bf26-status',
-        'Keep this window open while the administrator forecast is graded.',
+        'Keep this window open while your Bar Forecast is graded.',
       ),
     );
     centered.querySelector('.bf26-spinner').setAttribute('aria-hidden', 'true');
@@ -1237,7 +1237,7 @@
     } catch (error) {
       if (error?.name === 'AbortError') return;
       if ([401, 403].includes(Number(error?.status))) {
-        renderPreview({ message: 'Administrator authorization expired before grading completed.', kind: 'error' });
+        renderPreview({ message: 'Bar Forecast access expired before grading completed.', kind: 'error' });
         return;
       }
       renderExam();
@@ -1323,7 +1323,7 @@
     const ownerId = runtimeOwnerId();
     if (!ownerId || !runtimeSession()?.access_token) {
       renderPreview({
-        message: 'Administrator access is not available for this signed-out or unresolved session.',
+        message: 'Bar Forecast access is not available for this signed-out or unresolved session.',
       });
       return true;
     }
@@ -1341,14 +1341,14 @@
       if (!state.isOpen || ownerId !== runtimeOwnerId()) return false;
       if (setupReady !== true) {
         renderPreview({
-          message: 'Complete the required account setup before opening the administrator pilot.',
+          message: 'Complete the required account setup before opening Bar Forecast.',
         });
         return true;
       }
       const payload = await requestForecast({ operation: 'status' });
       if (!state.isOpen || ownerId !== runtimeOwnerId()) return false;
       if (payload?.authorized !== true) {
-        renderPreview({ message: 'This account is not authorized for the administrator pilot.' });
+        renderPreview({ message: 'This account does not currently have Bar Forecast access.' });
         return true;
       }
       state.ownerId = ownerId;
@@ -1360,8 +1360,8 @@
       if (error?.name === 'AbortError') return false;
       renderPreview({
         message: [401, 403].includes(Number(error?.status))
-          ? 'This account is not authorized for the administrator pilot.'
-          : 'Administrator access could not be confirmed. The protected forecast remains closed.',
+          ? 'This account does not currently have Bar Forecast access.'
+          : 'Bar Forecast access could not be confirmed. The protected forecast remains closed.',
         kind: error?.status ? '' : 'error',
       });
       return true;
@@ -1444,7 +1444,7 @@
     renderPreview({
       message: runtimeOwnerId()
         ? 'Checking whether this signed-in account is authorized…'
-        : 'Administrator access is not available for this signed-out or unresolved session.',
+        : 'Bar Forecast access is not available for this signed-out or unresolved session.',
       checking: Boolean(runtimeOwnerId()),
     });
     if (runtimeOwnerId()) await checkAuthorization();
@@ -1465,8 +1465,8 @@
     resetProtectedState();
     renderPreview({
       message: nextOwnerId
-        ? 'The signed-in account changed. Checking administrator access again…'
-        : 'Administrator access is not available for this signed-out session.',
+        ? 'The signed-in account changed. Checking Bar Forecast access again…'
+        : 'Bar Forecast access is not available for this signed-out session.',
       checking: Boolean(nextOwnerId),
     });
     if (nextOwnerId) checkAuthorization();

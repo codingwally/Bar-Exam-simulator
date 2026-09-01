@@ -77,16 +77,21 @@ const evidence = {
   observedMinimumBatchIntervalMs: 180_000,
   rateLimitPlan: {
     windowMs: 600_000,
-    requestLimit: 90,
+    networkRequestLimit: 180,
+    verifiedUserRequestLimit: 30,
     fixedForecastProbeRequests: 1,
     setupProbeRequestsPerJourney: 4,
     maximumJourneyRequests: 6,
     maximumBatchesPerWindow: 4,
-    plannedMaximumRequestsPerWindow: 81,
-    plannedHeadroom: 9,
+    plannedMaximumNetworkRequestsPerWindow: 81,
+    plannedNetworkHeadroom: 99,
+    plannedMaximumVerifiedUserRequestsPerWindow: 10,
+    plannedVerifiedUserHeadroom: 20,
     observedMaximumBatchesPerWindow: 4,
-    observedMaximumRequestsPerWindow: 81,
-    observedHeadroom: 9,
+    observedMaximumNetworkRequestsPerWindow: 81,
+    observedNetworkHeadroom: 99,
+    observedMaximumVerifiedUserRequestsPerWindow: 9,
+    observedVerifiedUserHeadroom: 21,
   },
   subjects: Object.fromEntries(Array.from({ length: 6 }, (_, index) => [`Subject ${index + 1}`, 5])),
   proof,
@@ -127,6 +132,8 @@ try {
 
   const duplicateStatusEvidence = structuredClone(evidence);
   duplicateStatusEvidence.journeys[0].apiOperations.splice(1, 0, 'status:200');
+  duplicateStatusEvidence.rateLimitPlan.observedMaximumVerifiedUserRequestsPerWindow = 10;
+  duplicateStatusEvidence.rateLimitPlan.observedVerifiedUserHeadroom = 20;
   await writeFile(evidenceFile, JSON.stringify(duplicateStatusEvidence), 'utf8');
   assert.match(execFileSync(process.execPath, [verifier], {
     cwd: root,
@@ -264,9 +271,18 @@ try {
     stdio: 'pipe',
   }));
 
-  const noRateHeadroomEvidence = structuredClone(evidence);
-  noRateHeadroomEvidence.rateLimitPlan.plannedHeadroom = 0;
-  await writeFile(evidenceFile, JSON.stringify(noRateHeadroomEvidence), 'utf8');
+  const invalidNetworkHeadroomEvidence = structuredClone(evidence);
+  invalidNetworkHeadroomEvidence.rateLimitPlan.plannedNetworkHeadroom = 0;
+  await writeFile(evidenceFile, JSON.stringify(invalidNetworkHeadroomEvidence), 'utf8');
+  assert.throws(() => execFileSync(process.execPath, [verifier], {
+    cwd: root,
+    env: environment,
+    stdio: 'pipe',
+  }));
+
+  const invalidVerifiedUserHeadroomEvidence = structuredClone(evidence);
+  invalidVerifiedUserHeadroomEvidence.rateLimitPlan.plannedVerifiedUserHeadroom = 0;
+  await writeFile(evidenceFile, JSON.stringify(invalidVerifiedUserHeadroomEvidence), 'utf8');
   assert.throws(() => execFileSync(process.execPath, [verifier], {
     cwd: root,
     env: environment,

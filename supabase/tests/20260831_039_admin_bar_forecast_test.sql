@@ -1,4 +1,4 @@
--- Transactional pgTAP coverage for the administrator-only 2026 Bar Forecast.
+-- Transactional pgTAP coverage for the protected 2026 Bar Forecast foundation.
 
 begin;
 set local search_path = public, extensions, auth, pg_temp;
@@ -24,19 +24,19 @@ select has_function(
   'public',
   'dd2026_bar_forecast_consent_status',
   array['uuid', 'text'],
-  'admin-only consent status RPC exists'
+  'protected consent status RPC exists'
 );
 select has_function(
   'public',
   'dd2026_bar_forecast_accept_consent',
   array['uuid', 'text'],
-  'admin-only consent acceptance RPC exists'
+  'protected consent acceptance RPC exists'
 );
 select has_function(
   'public',
   'dd2026_bar_forecast_admin_list',
   array['uuid', 'text', 'text'],
-  'admin-only Forecast list RPC exists'
+  'protected Forecast list RPC exists'
 );
 
 select function_privs_are(
@@ -70,8 +70,8 @@ select is(
     from public.dd2026_feature_flags
     where flag_key = 'BAR_FORECAST_ENABLED'
   ),
-  false,
-  'Bar Forecast remains disabled for public delivery by default'
+  true,
+  'Bar Forecast is enabled for eligible signed-in members'
 );
 select is(
   (
@@ -79,8 +79,8 @@ select is(
     from public.dd2026_feature_flags
     where flag_key = 'BAR_FORECAST_ADMIN_ONLY'
   ),
-  true,
-  'Bar Forecast is explicitly administrator-only'
+  false,
+  'Bar Forecast is not restricted to administrators'
 );
 
 insert into auth.users (
@@ -111,7 +111,7 @@ select throws_ok(
     '2026-09-01'
   )$$,
   'P0001',
-  'DD2026_ADMIN_REQUIRED',
+  'DD2026_BAR_FORECAST_ACCESS_REQUIRED',
   'consent status independently rejects a null actor'
 );
 select throws_ok(
@@ -120,7 +120,7 @@ select throws_ok(
     '2026-09-01'
   )$$,
   'P0001',
-  'DD2026_ADMIN_REQUIRED',
+  'DD2026_BAR_FORECAST_ACCESS_REQUIRED',
   'consent status independently rejects a learner'
 );
 select throws_ok(
@@ -129,7 +129,7 @@ select throws_ok(
     '2026-09-01'
   )$$,
   'P0001',
-  'DD2026_ADMIN_REQUIRED',
+  'DD2026_BAR_FORECAST_ACCESS_REQUIRED',
   'consent acceptance independently rejects a learner'
 );
 select throws_ok(
@@ -139,7 +139,7 @@ select throws_ok(
     '2026-09-01'
   )$$,
   'P0001',
-  'DD2026_ADMIN_REQUIRED',
+  'DD2026_BAR_FORECAST_ACCESS_REQUIRED',
   'Forecast listing independently rejects a learner'
 );
 

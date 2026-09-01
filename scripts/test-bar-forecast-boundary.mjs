@@ -25,7 +25,9 @@ export async function main() {
     migration,
     consentMigration,
     runtimeIntegrityMigration,
+    memberAccessMigration,
     pgTap,
+    memberPgTap,
     workerIndex,
     core,
     routes,
@@ -36,7 +38,9 @@ export async function main() {
     text('supabase/migrations/20260831170000_admin_bar_forecast.sql'),
     text('supabase/migrations/20260901010837_admin_bar_forecast_consent_version.sql'),
     text('supabase/migrations/20260901014500_admin_bar_forecast_runtime_integrity.sql'),
+    text('supabase/migrations/20260901030000_bar_forecast_member_access.sql'),
     text('supabase/tests/20260831_039_admin_bar_forecast_test.sql'),
+    text('supabase/tests/20260901_040_bar_forecast_member_access_test.sql'),
     text('worker/index.mjs'),
     text('worker/bar-forecast-core.mjs'),
     text('worker/bar-forecast-routes.mjs'),
@@ -51,6 +55,8 @@ export async function main() {
   assert.match(consentMigration, /\ncommit;\s*$/i, 'consent migration must commit transactionally');
   assert.match(runtimeIntegrityMigration, /^--[\s\S]*\nbegin;/i, 'runtime-integrity migration must begin transactionally');
   assert.match(runtimeIntegrityMigration, /\ncommit;\s*$/i, 'runtime-integrity migration must commit transactionally');
+  assert.match(memberAccessMigration, /^--[\s\S]*\nbegin;/i, 'member-access migration must begin transactionally');
+  assert.match(memberAccessMigration, /\ncommit;\s*$/i, 'member-access migration must commit transactionally');
   assert.match(
     consentMigration,
     /consent_version in \('2026-08-31', '2026-09-01'\)/,
@@ -85,16 +91,21 @@ export async function main() {
   );
 
   const statusRpc = functionBody(
-    consentMigration,
+    memberAccessMigration,
     'dd2026_bar_forecast_consent_status',
     'create or replace function public.dd2026_bar_forecast_accept_consent',
   );
   const acceptRpc = functionBody(
-    consentMigration,
+    memberAccessMigration,
     'dd2026_bar_forecast_accept_consent',
     'create or replace function public.dd2026_bar_forecast_admin_list',
   );
-  const listRpc = functionBody(runtimeIntegrityMigration, 'dd2026_bar_forecast_admin_list');
+  const accessRpc = functionBody(
+    memberAccessMigration,
+    'dd2026_bar_forecast_access_allowed',
+    'create or replace function public.dd2026_bar_forecast_consent_status',
+  );
+  const listRpc = functionBody(memberAccessMigration, 'dd2026_bar_forecast_admin_list');
   for (const [name, body] of [
     ['status', statusRpc],
     ['accept', acceptRpc],
@@ -102,13 +113,19 @@ export async function main() {
   ]) {
     assert.match(
       body,
-      /p_actor_user_id is null or not public\.dd2026_is_admin\(p_actor_user_id\)/,
-      `${name} RPC must independently reject non-admin actors`,
+      /not public\.dd2026_bar_forecast_access_allowed\(p_actor_user_id\)/,
+      `${name} RPC must independently enforce Forecast eligibility`,
     );
     assert.match(body, /security definer/i, `${name} RPC must declare its privileged boundary`);
     assert.match(body, /set search_path = ''/i, `${name} RPC must pin an empty search path`);
     assert.match(body, /p_consent_version is distinct from '2026-09-01'/, `${name} RPC must require the current disclosure`);
   }
+  assert.match(accessRpc, /public\.dd2026_is_admin\(p_actor_user_id\)/, 'all administrator roles must remain eligible');
+  assert.match(accessRpc, /public\.free_beta_access/, 'Founding Beta eligibility must be read directly');
+  assert.match(accessRpc, /access_program = 'founding_beta_2026'/, 'only the Founding Beta program may qualify');
+  assert.match(accessRpc, /public\.subscriptions/, 'paid eligibility must be read directly');
+  assert.match(accessRpc, /source in \('manual_payment', 'admin_adjustment', 'migration'\)/, 'complimentary subscriptions must not qualify');
+  assert.doesNotMatch(accessRpc, /phase4_access_snapshot/, 'the stable database gate must not call a mutating snapshot');
   assert.match(listRpc, /i\.current_published_version_id/, 'list must use the current published version');
   assert.match(listRpc, /v\.lifecycle_state = 'published'/, 'list must require published content');
   assert.match(listRpc, /v\.payload ->> 'id' = i\.id/, 'list must bind the payload id to its content envelope');
@@ -123,6 +140,8 @@ export async function main() {
 
   assert.match(migration, /'BAR_FORECAST_ENABLED', false/, 'public Forecast flag must default off');
   assert.match(migration, /'BAR_FORECAST_ADMIN_ONLY', true/, 'admin-only flag must default on');
+  assert.match(memberAccessMigration, /'BAR_FORECAST_ENABLED', true/, 'member release must enable Forecast');
+  assert.match(memberAccessMigration, /'BAR_FORECAST_ADMIN_ONLY', false/, 'member release must retire the admin-only flag');
   assert.match(migration, /enable row level security/i, 'consent table must enable RLS');
   assert.match(migration, /force row level security/i, 'consent table must force RLS');
   assert.match(
@@ -145,6 +164,11 @@ export async function main() {
     1,
     'the final runtime-integrity list RPC must remain revoked from browser roles',
   );
+  assert.equal(
+    occurrences(memberAccessMigration, 'from public, anon, authenticated;'),
+    4,
+    'the final access and content RPCs must remain revoked from browser roles',
+  );
 
   assert.equal(
     occurrences(workerIndex, "pathname === '/admin/dd2026/bar-forecast'"),
@@ -162,27 +186,32 @@ export async function main() {
   assert.match(workerIndex, /BAR_FORECAST_RPC_FUNCTIONS/, 'Worker must use a dedicated RPC allowlist');
   assert.match(
     routes,
-    /enforceBarForecastAdminRateLimit/,
-    'Forecast route must use its dedicated administrator rate limiter',
+    /enforceBarForecastRateLimit/,
+    'Forecast route must use its dedicated member-safe rate limiter',
   );
   assert.match(
     workerIndex,
-    /const barForecastAdminRateWindows = new Map\(\);/,
-    'Forecast traffic must have an isolated rate-limit window',
+    /const barForecastNetworkRateWindows = new Map\(\);[\s\S]*const barForecastUserRateWindows = new Map\(\);/,
+    'Forecast traffic must have isolated network and verified-user windows',
   );
   assert.match(
     workerIndex,
-    /barForecastAdminRateWindows,[\s\S]*?transientRateKey\(request, env, 'bar-forecast-admin'\),[\s\S]*?MAX_BAR_FORECAST_ADMIN_REQUESTS_PER_WINDOW/,
-    'Forecast rate limiting must use its own scope and exact configured maximum',
+    /barForecastNetworkRateWindows,[\s\S]*?transientRateKey\(request, env, 'bar-forecast-network'\),[\s\S]*?MAX_BAR_FORECAST_NETWORK_REQUESTS_PER_WINDOW/,
+    'Forecast network rate limiting must use its own bounded scope',
   );
   assert.match(
     workerIndex,
-    /const MAX_BAR_FORECAST_ADMIN_REQUESTS_PER_WINDOW = 90;/,
-    'Forecast must permit the bounded 30-examiner gate without sharing generic admin traffic',
+    /barForecastUserRateWindows,[\s\S]*?`bar-forecast-user\\0\$\{user\.id\}`,[\s\S]*?MAX_BAR_FORECAST_USER_REQUESTS_PER_WINDOW/,
+    'Forecast signed-in traffic must be limited by verified user id, not shared IP or raw token',
   );
   assert.match(
     workerIndex,
-    /const barForecastHandlers = createBarForecastHandlers\(\{[\s\S]*?enforceBarForecastAdminRateLimit,[\s\S]*?\}\);/,
+    /const MAX_BAR_FORECAST_NETWORK_REQUESTS_PER_WINDOW = 180;[\s\S]*const MAX_BAR_FORECAST_USER_REQUESTS_PER_WINDOW = 30;/,
+    'Forecast must retain bounded network and per-user ceilings',
+  );
+  assert.match(
+    workerIndex,
+    /const barForecastHandlers = createBarForecastHandlers\(\{[\s\S]*?enforceBarForecastRateLimit,[\s\S]*?\}\);/,
     'Forecast handlers must receive the dedicated limiter',
   );
   assert.doesNotMatch(
@@ -190,8 +219,13 @@ export async function main() {
     /enforceAdminRateLimit/,
     'Forecast routes must not fall back to the shared generic administrator bucket',
   );
-  assert.match(routes, /requireAdministrator/, 'Forecast route must require verified bearer authentication');
-  assert.match(routes, /requireBarForecastAdministrator/, 'Forecast route must require an allowed admin role');
+  assert.match(routes, /requireAuthenticatedUser/, 'Forecast route must require verified bearer authentication');
+  assert.match(routes, /requireBarForecastAccess/, 'Forecast route must require an eligible role or entitlement');
+  assert.match(core, /BAR_FORECAST_MEMBER_BASES[\s\S]*'early_access'[\s\S]*'founding_beta'[\s\S]*'paid_subscription'/, 'Forecast must declare the exact member bases');
+  assert.match(core, /BAR_FORECAST_PAID_SUBSCRIPTION_SOURCES[\s\S]*'admin_adjustment'[\s\S]*'manual_payment'[\s\S]*'migration'/, 'Forecast must declare genuine paid sources');
+  assert.match(core, /subscriptionStatus === 'active'/, 'Forecast must require an active subscription');
+  assert.match(core, /freeBeta\?\.program[\s\S]*founding_beta_2026/, 'Forecast must bind beta access to the current program');
+  assert.match(core, /BAR_FORECAST_ACCESS_REQUIRED/, 'Forecast ineligible accounts must receive a stable denial code');
   assert.match(routes, /requiredSetupPending/, 'Forecast route must enforce required account setup');
   assert.match(routes, /BAR_FORECAST_SETUP_REQUIRED/, 'Forecast setup rejection must use a stable safe code');
   assert.match(
@@ -202,8 +236,8 @@ export async function main() {
   assert.match(routes, /private, no-store, max-age=0/, 'Forecast responses must be private and non-cacheable');
   assert.doesNotMatch(
     `${core}\n${routes}`,
-    /requireCommercialAccess|openPaymentGate|phase4_create_payment|plan_catalog|pricing|paymentRequired/i,
-    'Forecast backend must not enforce or invoke a commercial-entitlement gate',
+    /openPaymentGate|phase4_create_payment|plan_catalog|pricing/i,
+    'Forecast authorization must inspect existing entitlements without starting checkout',
   );
 
   assert.match(core, /complete and exclusive legal source of truth/i, 'grader must be confined to curated law');
@@ -232,6 +266,14 @@ export async function main() {
   assert.match(pgTap, /prior disclosure acceptance remains stored after the version bump/, 'pgTAP must preserve prior consent rows');
   assert.match(pgTap, /prior-version consent cannot satisfy the current Worker contract/, 'pgTAP must reject prior consent for current access');
   assert.match(pgTap, /current acceptance is added without overwriting prior-version consent/, 'pgTAP must retain both versioned rows');
+  assert.match(memberPgTap, /select no_plan\(\)/i, 'member pgTAP must declare its plan');
+  assert.match(memberPgTap, /rollback;\s*$/i, 'member pgTAP fixtures must roll back');
+  assert.match(memberPgTap, /active manually paid member is eligible/, 'member pgTAP must prove paid access');
+  assert.match(memberPgTap, /active Founding Beta member is eligible/, 'member pgTAP must prove Founding Beta access');
+  assert.match(memberPgTap, /ordinary administrator is eligible/, 'member pgTAP must preserve administrator access');
+  assert.match(memberPgTap, /complimentary subscription is not treated as paid/, 'member pgTAP must reject complimentary access');
+  assert.match(memberPgTap, /expired paid subscription is ineligible/, 'member pgTAP must reject expired paid access');
+  assert.match(memberPgTap, /ordinary free account is ineligible/, 'member pgTAP must reject unpaid access');
 
   console.log(JSON.stringify({
     ok: true,

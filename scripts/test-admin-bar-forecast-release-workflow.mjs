@@ -15,7 +15,7 @@ const contracts = Object.freeze([
     automaticContent: true,
     conditional: true,
     deployMarker: '      - name: Deploy reviewed Worker and static artifact to staging',
-    liveMarker: '      - name: Verify the live admin-only Forecast boundary',
+    liveMarker: '      - name: Verify live Forecast signed-out and origin boundaries',
     workerUrl: 'https://duediligence-examinations-staging.wallyesteban1993.workers.dev',
     allowedOrigin: 'https://duediligence-examinations-staging.wallyesteban1993.workers.dev',
   }),
@@ -28,7 +28,7 @@ const contracts = Object.freeze([
     automaticContent: false,
     conditional: false,
     deployMarker: '      - name: Deploy provider-neutral public API alias',
-    liveMarker: '      - name: Verify the live admin-only Forecast boundary',
+    liveMarker: '      - name: Verify live Forecast signed-out and origin boundaries',
     workerUrl: 'https://duediligence-api.wallyesteban1993.workers.dev',
     allowedOrigin: 'https://duediligence.ph',
   }),
@@ -41,7 +41,7 @@ const contracts = Object.freeze([
     automaticContent: false,
     conditional: false,
     deployMarker: '      - name: Deploy provider-neutral public API alias before exposing the new Pages client',
-    liveMarker: '      - name: Verify the live admin-only Forecast boundary before Pages',
+    liveMarker: '      - name: Verify live Forecast signed-out and origin boundaries before Pages',
     workerUrl: 'https://duediligence-api.wallyesteban1993.workers.dev',
     allowedOrigin: 'https://duediligence.ph',
   }),
@@ -50,11 +50,19 @@ const contracts = Object.freeze([
 const builder = await read('scripts/build-admin-bar-forecast-release-bundle.mjs');
 assert.deepEqual(
   [...builder.matchAll(/version: '(\d{14})'/gu)].map((match) => match[1]),
-  ['20260831100000', '20260831101000', '20260831170000', '20260901010837', '20260901014500'],
+  [
+    '20260831100000',
+    '20260831101000',
+    '20260831170000',
+    '20260901010837',
+    '20260901014500',
+    '20260901030000',
+  ],
 );
 assert.match(builder, /file: '20260831170000_admin_bar_forecast\.sql'/u);
 assert.match(builder, /file: '20260901010837_admin_bar_forecast_consent_version\.sql'/u);
 assert.match(builder, /file: '20260901014500_admin_bar_forecast_runtime_integrity\.sql'/u);
+assert.match(builder, /file: '20260901030000_bar_forecast_member_access\.sql'/u);
 assert.match(builder, /probe-admin-bar-forecast-release\.sql/u);
 assert.ok(builder.includes('${probe}`'));
 assert.doesNotMatch(builder, /readdir|glob|supabase\s+db\s+(?:push|reset)|supabase\s+migration\s+up/iu);
@@ -63,7 +71,7 @@ for (const contract of contracts) {
   const workflow = await read(contract.path);
   assert.match(
     workflow,
-    /admin_bar_forecast_database_preapplied_sha256:\s*\n\s+description: "When DB URL is absent: SHA-256 of exact 20260831170000\/20260901010837\/20260901014500 bundle \+ rollback-only probe"\s*\n\s+required: false\s*\n\s+default: ""\s*\n\s+type: string/u,
+    /admin_bar_forecast_database_preapplied_sha256:\s*\n\s+description: "When DB URL is absent: SHA-256 of exact 20260831170000\/20260901010837\/20260901014500\/20260901030000 bundle \+ rollback-only probe"\s*\n\s+required: false\s*\n\s+default: ""\s*\n\s+type: string/u,
   );
   assert.match(
     workflow,
@@ -82,15 +90,15 @@ for (const contract of contracts) {
   ));
 
   const septemberGate = workflow.indexOf('      - name: Apply and post-apply probe the exact September pricing migrations');
-  const forecastDatabaseGate = workflow.indexOf('      - name: Apply and post-apply probe the exact admin-only Bar Forecast migrations');
-  const forecastContentGate = workflow.indexOf('      - name: Import and verify the exact admin-only Bar Forecast content');
+  const forecastDatabaseGate = workflow.indexOf('      - name: Apply and probe the exact paid, Founding Beta, and admin Forecast migrations');
+  const forecastContentGate = workflow.indexOf('      - name: Import and verify the exact protected Bar Forecast content');
   const workerDeploy = workflow.indexOf(contract.deployMarker);
   const liveBoundary = workflow.indexOf(contract.liveMarker);
   assert.ok(septemberGate >= 0);
   assert.ok(forecastDatabaseGate > septemberGate, `${contract.path}: Forecast DB must follow pricing DB.`);
   assert.ok(forecastContentGate > forecastDatabaseGate, `${contract.path}: content must follow Forecast schema.`);
   assert.ok(workerDeploy > forecastContentGate, `${contract.path}: Worker must follow verified Forecast content.`);
-  assert.ok(liveBoundary > workerDeploy, `${contract.path}: live Forecast denial must follow the deployed Worker endpoint.`);
+  assert.ok(liveBoundary > workerDeploy, `${contract.path}: live Forecast signed-out/origin checks must follow the deployed Worker endpoint.`);
 
   const liveBoundaryNext = workflow.indexOf('\n      - name:', liveBoundary + 8);
   const liveBoundaryStep = workflow.slice(liveBoundary, liveBoundaryNext);
@@ -221,6 +229,6 @@ for (const asset of [
 console.log(JSON.stringify({
   ok: true,
   workflows: contracts.map(({ path: workflowPath }) => workflowPath),
-  releaseOrder: 'exact-SHA staging + 30 live journeys -> Forecast schema/probe -> Forecast import/checksum -> Worker -> live denial -> Pages -> exact served SHA and bytes',
+  releaseOrder: 'exact-SHA staging + 30 live journeys -> four Forecast migrations and entitlement probe -> Forecast import/checksum -> Worker -> live signed-out/origin boundaries -> Pages -> exact served SHA and bytes',
   fallback: 'exact-database-bundle-and-content-manifest-hashes',
 }));

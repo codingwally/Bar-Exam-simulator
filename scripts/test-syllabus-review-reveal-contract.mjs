@@ -598,7 +598,7 @@ assert.ok(
   'assets/phase4-experience.js must use the reviewed cache-busting release',
 );
 assert.ok(
-  index.includes('assets/feature-loader.js?v=profile-photo-release2-20260827-1&amp;baseline=public-reliability-20260827-1&amp;feedback=offline-save-20260827-1&amp;hotfix=ian-provisional-reveal-20260828-1&amp;recovery=subject-review-timeout-20260828-1'),
+  index.includes('assets/feature-loader.js?v=profile-photo-release2-20260827-1&amp;baseline=public-reliability-20260827-1&amp;feedback=offline-save-20260827-1&amp;hotfix=ian-provisional-reveal-20260828-1&amp;recovery=subject-review-timeout-20260828-1&amp;cta=home-subscription-20260828-2&amp;collapse=home-read-more-20260828-1&amp;results=history-20260828-1&amp;forecast=member-access-20260901-1'),
   'assets/feature-loader.js must publish the provisional-to-paid reveal hotfix',
 );
 for (const asset of [
@@ -617,7 +617,7 @@ for (const asset of [
     `${asset} must use the public reliability lazy-load cache-busting release`,
   );
 }
-assert.match(serviceWorker, /duediligence-shell-20260901-login-loop-p0-1/);
+assert.match(serviceWorker, /duediligence-shell-20260901-forecast-member-access-1/);
 assert.match(studyWorkspace, /service-worker\.js\?v=commercial-readiness-profile-analytics-offline-paid-expiry-20260827-1/);
 assert.ok(
   featureLoader.includes('assets/examinations.js?v=pedro-release2-20260827-1&baseline=public-reliability-20260827-1&hotfix=ian-provisional-reveal-20260828-1&recovery=subject-review-timeout-20260828-1'),

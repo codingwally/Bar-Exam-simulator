@@ -39,7 +39,7 @@ on:
         default: ""
         type: string
       admin_bar_forecast_database_preapplied_sha256:
-        description: "When DB URL is absent: SHA-256 of exact 20260831170000/20260901010837/20260901014500 bundle + rollback-only probe"
+        description: "When DB URL is absent: SHA-256 of exact 20260831170000/20260901010837/20260901014500/20260901030000 bundle + rollback-only probe"
         required: false
         default: ""
         type: string
@@ -374,7 +374,7 @@ jobs:
             exit 1
           fi
 
-      - name: Apply and post-apply probe the exact admin-only Bar Forecast migrations
+      - name: Apply and probe the exact paid, Founding Beta, and admin Forecast migrations
         env:
           ADMIN_BAR_FORECAST_DATABASE_URL: ${{ secrets.EXAMINATION_ROOM_PRODUCTION_DATABASE_URL }}
           ADMIN_BAR_FORECAST_DATABASE_PREAPPLIED_SHA256: ${{ inputs.admin_bar_forecast_database_preapplied_sha256 }}
@@ -394,13 +394,13 @@ jobs:
             psql --version
             psql "$ADMIN_BAR_FORECAST_DATABASE_URL" -X --set=ON_ERROR_STOP=1 --file "$admin_bar_forecast_release_bundle"
           elif [[ "$ADMIN_BAR_FORECAST_DATABASE_PREAPPLIED_SHA256" == "$expected_attestation" ]]; then
-            echo "The exact bundle-hash attestation confirms migration 20260831170000, its ledger source hash, and its rollback-only admin/schema probe completed on production."
+            echo "The exact bundle-hash attestation confirms all four Forecast migrations, their ledger source hashes, and the rollback-only paid, Founding Beta, admin, denial, and schema probe completed on production."
           else
-            echo "EXAMINATION_ROOM_PRODUCTION_DATABASE_URL is missing. Manually apply the generated Admin Bar Forecast bundle and embedded rollback-only probe, then rerun with this exact attestation: $expected_attestation" >&2
+            echo "EXAMINATION_ROOM_PRODUCTION_DATABASE_URL is missing. Manually apply the generated Bar Forecast member-access bundle and embedded rollback-only probe, then rerun with this exact attestation: $expected_attestation" >&2
             exit 1
           fi
 
-      - name: Import and verify the exact admin-only Bar Forecast content
+      - name: Import and verify the exact protected Bar Forecast content
         env:
           DD2026_SUPABASE_URL: https://hbllomlijfznnuudpdvr.supabase.co
           ADMIN_BAR_FORECAST_CONTENT_PREAPPLIED_SHA256: ${{ inputs.admin_bar_forecast_content_preapplied_sha256 }}
@@ -460,7 +460,7 @@ jobs:
           wranglerVersion: "4.114.0"
           command: deploy --config wrangler.public-api.toml
 
-      - name: Verify the live admin-only Forecast boundary before Pages
+      - name: Verify live Forecast signed-out and origin boundaries before Pages
         env:
           ADMIN_BAR_FORECAST_WORKER_URL: https://duediligence-api.wallyesteban1993.workers.dev
           ADMIN_BAR_FORECAST_ALLOWED_ORIGIN: https://duediligence.ph

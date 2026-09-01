@@ -100,7 +100,12 @@ export async function verifyAdminBarForecastDeployment({
   assert.equal(wrongOrigin.headers.get('pragma'), 'no-cache');
   assert.equal(wrongOrigin.headers.get('x-content-type-options'), 'nosniff');
 
-  return Object.freeze({ ok: true, endpoint, boundary: 'admin-only' });
+  return Object.freeze({
+    ok: true,
+    endpoint,
+    accessPolicy: 'paid-founding-beta-admin',
+    verifiedBoundary: 'signed-out-and-origin',
+  });
 }
 
 const invokedPath = process.argv[1] ? path.resolve(process.argv[1]) : '';

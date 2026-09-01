@@ -38,7 +38,7 @@ function noteFor(row) {
     `Editorial reference: ${row.editorial_ref}.`,
     `Forecast source ID: ${row.id}.`,
     `Training-priority index: ${row.prediction_score}.`,
-    'Runtime source: protected administrator-only 2026 Bar Forecast import.',
+    'Runtime source: protected 2026 Bar Forecast import.',
   ].join(' ');
 }
 

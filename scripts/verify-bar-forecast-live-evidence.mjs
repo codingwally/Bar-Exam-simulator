@@ -188,18 +188,38 @@ assert.ok(maximumBatchesPerTenMinutes <= 4, 'Observed live batches exceeded the 
 
 const rateLimitPlan = evidence.rateLimitPlan || {};
 assert.equal(rateLimitPlan.windowMs, 600_000);
-assert.equal(rateLimitPlan.requestLimit, 90);
+assert.equal(rateLimitPlan.networkRequestLimit, 180);
+assert.equal(rateLimitPlan.verifiedUserRequestLimit, 30);
 assert.equal(rateLimitPlan.fixedForecastProbeRequests, 1);
 assert.equal(rateLimitPlan.setupProbeRequestsPerJourney, 4);
 assert.equal(rateLimitPlan.maximumJourneyRequests, 6);
 assert.equal(rateLimitPlan.maximumBatchesPerWindow, 4);
-assert.equal(rateLimitPlan.plannedMaximumRequestsPerWindow, 81);
-assert.equal(rateLimitPlan.plannedHeadroom, 9);
-const observedMaximumRequestsPerWindow = 1 + (maximumBatchesPerTenMinutes * 2 * (4 + 6));
+assert.equal(rateLimitPlan.plannedMaximumNetworkRequestsPerWindow, 81);
+assert.equal(rateLimitPlan.plannedNetworkHeadroom, 99);
+assert.equal(rateLimitPlan.plannedMaximumVerifiedUserRequestsPerWindow, 10);
+assert.equal(rateLimitPlan.plannedVerifiedUserHeadroom, 20);
+const observedMaximumNetworkRequestsPerWindow = 1
+  + (maximumBatchesPerTenMinutes * 2 * (4 + 6));
+const observedMaximumVerifiedUserRequestsPerWindow = Math.max(
+  1,
+  ...evidence.journeys.map((journey) => 4 + journey.apiOperations.length),
+);
 assert.equal(rateLimitPlan.observedMaximumBatchesPerWindow, maximumBatchesPerTenMinutes);
-assert.equal(rateLimitPlan.observedMaximumRequestsPerWindow, observedMaximumRequestsPerWindow);
-assert.equal(rateLimitPlan.observedHeadroom, 90 - observedMaximumRequestsPerWindow);
-assert.ok(rateLimitPlan.observedHeadroom >= 9);
+assert.equal(
+  rateLimitPlan.observedMaximumNetworkRequestsPerWindow,
+  observedMaximumNetworkRequestsPerWindow,
+);
+assert.equal(rateLimitPlan.observedNetworkHeadroom, 180 - observedMaximumNetworkRequestsPerWindow);
+assert.ok(rateLimitPlan.observedNetworkHeadroom >= 99);
+assert.equal(
+  rateLimitPlan.observedMaximumVerifiedUserRequestsPerWindow,
+  observedMaximumVerifiedUserRequestsPerWindow,
+);
+assert.equal(
+  rateLimitPlan.observedVerifiedUserHeadroom,
+  30 - observedMaximumVerifiedUserRequestsPerWindow,
+);
+assert.ok(rateLimitPlan.observedVerifiedUserHeadroom >= 20);
 
 const forbiddenKeys = /^(?:question|prompt|answer|feedback|explanation|token|secret|password|email)(?:Text|Content|Value)?$/iu;
 function inspectKeys(value, path = '$') {

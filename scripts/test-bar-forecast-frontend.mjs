@@ -44,6 +44,8 @@ for (const markup of [rail, drawer]) {
 assert.match(drawer, /id="spa-bar-forecast"[\s\S]*id="spa-bar-easy"/);
 
 assert.match(loader, /forecast:\s*Object\.freeze\([\s\S]*assets\/bar-forecast\.css[\s\S]*assets\/bar-forecast\.js/);
+assert.match(loader, /assets\/bar-forecast\.js\?v=exam-tools-20260901-5/);
+assert.doesNotMatch(loader, /assets\/bar-forecast\.js\?v=exam-tools-20260901-4/);
 assert.match(loader, /'bar-forecast': 'forecast'/);
 assert.match(loader, /global\.openBarForecast = deferredFunction\('bar-forecast', 'openBarForecast'\)/);
 assert.match(landing, /'bar-forecast-2026': Object\.freeze\(\{ feature: 'bar-forecast', opener: 'openBarForecast' \}\)/);
@@ -103,6 +105,8 @@ assert.match(
 assert.match(phase4, /ensureProtectedAccess,[\s\S]*ensureRequiredSetup,/);
 assert.doesNotMatch(phase4, /acceptCurrentTerms/);
 assert.match(forecast, /payload\?\.consentAccepted === true/);
+assert.match(forecast, /active paid members, Founding Beta members, and authorized Due Diligence administrators/);
+assert.match(forecast, /server confirms paid, Founding Beta, or administrator access/);
 assert.match(forecast, /renderPreview\(\{ checking: true \}\)/);
 assert.match(
   forecast,
@@ -252,7 +256,11 @@ for (const source of [build, serviceWorker]) {
   assert.match(source, /assets\/bar-forecast\/forecast-workspace-preview\.webp/);
 }
 assert.match(build, /'flag\.svg'/);
-assert.match(serviceWorker, /duediligence-shell-20260901-login-loop-p0-1/);
+assert.match(html, /assets\/feature-loader\.js[^"\n]*forecast=member-access-20260901-1/);
+assert.match(serviceWorker, /duediligence-shell-20260901-forecast-member-access-1/);
+assert.match(serviceWorker, /assets\/feature-loader\.js[^'\n]*forecast=member-access-20260901-1/);
+assert.match(serviceWorker, /assets\/bar-forecast\.js\?v=exam-tools-20260901-5/);
+assert.doesNotMatch(serviceWorker, /assets\/bar-forecast\.js\?v=exam-tools-20260901-4/);
 assert.match(serviceWorker, /assets\/icons\/navigation\/flag\.svg/);
 assert.match(qaHarness, /dataset\.ddBarForecastQa = 'synthetic'/);
 assert.match(qaHarness, /__DD_BAR_FORECAST_SYNTHETIC_QA__ = '2026-09-01'/);
@@ -462,7 +470,7 @@ const readyAccessEvent = Object.freeze({
   assert.equal(
     await vm.runInContext("ensureRequiredSetup('#bar-forecast-2026')", setupContext),
     true,
-    'payment state alone must not gate the independent administrator Forecast',
+    'payment state alone must not replace the independent member Forecast authorization',
   );
   assert.equal(setupChecks.opened, 0);
   access = { role: 'admin', basis: 'introductory_tokens' };

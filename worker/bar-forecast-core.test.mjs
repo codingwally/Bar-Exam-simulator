@@ -6,6 +6,8 @@ import {
   BAR_FORECAST_CONSENT_VERSION,
   BAR_FORECAST_CONTENT_TYPE,
   BAR_FORECAST_LIMITS,
+  BAR_FORECAST_MEMBER_BASES,
+  BAR_FORECAST_PAID_SUBSCRIPTION_SOURCES,
   BAR_FORECAST_SOURCE_VERSION,
   BAR_FORECAST_SUBJECTS,
   BarForecastError,
@@ -16,7 +18,7 @@ import {
   forecastGradingBatches,
   normalizeBarForecastRequest,
   publicForecastQuestions,
-  requireBarForecastAdministrator,
+  requireBarForecastAccess,
   validateBarForecastGradingResult,
   validatedForecastRows,
 } from './bar-forecast-core.mjs';
@@ -61,23 +63,111 @@ function completeAnswers() {
   }));
 }
 
-test('administrator authorization requires an explicit allowed role', () => {
+test('Forecast access admits administrators and verified paid or Founding Beta members only', () => {
   for (const role of BAR_FORECAST_ADMIN_ROLES) {
-    assert.deepEqual(requireBarForecastAdministrator({ authorized: true, role }), {
+    assert.deepEqual(requireBarForecastAccess({
+      administrator: { authorized: true, role },
+      access: { role: 'student', basis: 'locked' },
+    }), {
       authorized: true,
+      kind: 'administrator',
       role,
+      basis: 'locked',
     });
   }
-  for (const authorization of [
+
+  assert.deepEqual(BAR_FORECAST_MEMBER_BASES, [
+    'early_access', 'founding_beta', 'paid_subscription',
+  ]);
+  assert.deepEqual(BAR_FORECAST_PAID_SUBSCRIPTION_SOURCES, [
+    'admin_adjustment', 'manual_payment', 'migration',
+  ]);
+  for (const basis of ['early_access', 'paid_subscription']) {
+    for (const source of BAR_FORECAST_PAID_SUBSCRIPTION_SOURCES) {
+      assert.deepEqual(requireBarForecastAccess({
+        administrator: null,
+        access: {
+          allowed: true,
+          unlimited: true,
+          role: 'student',
+          basis,
+          termsRequired: false,
+          paidSubscriptionExpired: false,
+          subscription: { status: 'active', source },
+        },
+      }), {
+        authorized: true,
+        kind: 'member',
+        role: 'student',
+        basis,
+      });
+    }
+  }
+  assert.deepEqual(requireBarForecastAccess({
+    administrator: null,
+    access: {
+      allowed: true,
+      unlimited: true,
+      role: 'student',
+      basis: 'founding_beta',
+      termsRequired: false,
+      paidSubscriptionExpired: false,
+      freeBeta: { active: true, program: 'founding_beta_2026' },
+    },
+  }), {
+    authorized: true,
+    kind: 'member',
+    role: 'student',
+    basis: 'founding_beta',
+  });
+
+  for (const context of [
     null,
-    { authorized: false, role: 'super_admin' },
-    { authorized: true, role: 'subscriber' },
-    { authorized: true, role: '' },
+    { administrator: { authorized: false, role: 'super_admin' }, access: null },
+    { administrator: { authorized: true, role: 'subscriber' }, access: null },
+    { administrator: null, access: { allowed: true, unlimited: false, basis: 'introductory_tokens' } },
+    { administrator: null, access: { allowed: true, unlimited: true, basis: 'provisional_payment' } },
+    {
+      administrator: null,
+      access: {
+        allowed: true,
+        unlimited: true,
+        basis: 'paid_subscription',
+        subscription: { status: 'active', source: 'complimentary' },
+      },
+    },
+    {
+      administrator: null,
+      access: {
+        allowed: true,
+        unlimited: true,
+        basis: 'early_access',
+        subscription: { status: 'expired', source: 'manual_payment' },
+      },
+    },
+    {
+      administrator: null,
+      access: {
+        allowed: true,
+        unlimited: true,
+        basis: 'founding_beta',
+        freeBeta: { active: false, program: 'founding_beta_2026' },
+      },
+    },
+    {
+      administrator: null,
+      access: {
+        allowed: true,
+        unlimited: true,
+        basis: 'founding_beta',
+        freeBeta: { active: true, program: 'other_program' },
+      },
+    },
   ]) {
     assert.throws(
-      () => requireBarForecastAdministrator(authorization),
+      () => requireBarForecastAccess(context),
       (error) => error instanceof BarForecastError
-        && error.code === 'BAR_FORECAST_ADMIN_FORBIDDEN'
+        && error.code === 'BAR_FORECAST_ACCESS_REQUIRED'
         && error.status === 403,
     );
   }

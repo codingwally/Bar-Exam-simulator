@@ -8,6 +8,18 @@ export const BAR_FORECAST_ADMIN_ROLES = Object.freeze([
   'super_admin',
 ]);
 
+export const BAR_FORECAST_MEMBER_BASES = Object.freeze([
+  'early_access',
+  'founding_beta',
+  'paid_subscription',
+]);
+
+export const BAR_FORECAST_PAID_SUBSCRIPTION_SOURCES = Object.freeze([
+  'admin_adjustment',
+  'manual_payment',
+  'migration',
+]);
+
 export const BAR_FORECAST_SUBJECTS = Object.freeze([
   'Political and Public International Law',
   'Commercial and Taxation Laws',
@@ -28,6 +40,10 @@ export const BAR_FORECAST_APPROVED_SET_IDS = Object.freeze({
 
 const BAR_FORECAST_SUBJECT_SET = new Set(BAR_FORECAST_SUBJECTS);
 const BAR_FORECAST_ADMIN_ROLE_SET = new Set(BAR_FORECAST_ADMIN_ROLES);
+const BAR_FORECAST_MEMBER_BASIS_SET = new Set(BAR_FORECAST_MEMBER_BASES);
+const BAR_FORECAST_PAID_SUBSCRIPTION_SOURCE_SET = new Set(
+  BAR_FORECAST_PAID_SUBSCRIPTION_SOURCES,
+);
 const BAR_FORECAST_SYNTHETIC_QA_PATTERN = /(?:^synthetic-ui-|synthetic interface-test question|\bmock permit\s+\d+\b|deterministic mock output for visual)/iu;
 
 export const BAR_FORECAST_OFFICIAL_SCHEDULE = Object.freeze({
@@ -151,16 +167,35 @@ function answerWordCount(value) {
   return String(value || '').trim().split(/\s+/u).filter(Boolean).length;
 }
 
-export function requireBarForecastAdministrator(authorization) {
-  const role = String(authorization?.role || '').trim().toLowerCase();
-  if (authorization?.authorized !== true || !BAR_FORECAST_ADMIN_ROLE_SET.has(role)) {
-    throw new BarForecastError(
-      'BAR_FORECAST_ADMIN_FORBIDDEN',
-      'This Forecast workspace is restricted to authorized administrators.',
-      403,
-    );
+export function requireBarForecastAccess(context) {
+  const administrator = context?.administrator;
+  const access = context?.access;
+  const role = String(administrator?.role || access?.role || '').trim().toLowerCase();
+  const basis = String(access?.basis || '').trim().toLowerCase();
+  const subscriptionStatus = String(access?.subscription?.status || '').trim().toLowerCase();
+  const subscriptionSource = String(access?.subscription?.source || '').trim().toLowerCase();
+  if (administrator?.authorized === true && BAR_FORECAST_ADMIN_ROLE_SET.has(role)) {
+    return Object.freeze({ authorized: true, kind: 'administrator', role, basis });
   }
-  return Object.freeze({ authorized: true, role });
+  const foundingBeta = basis === 'founding_beta'
+    && access?.freeBeta?.active === true
+    && String(access?.freeBeta?.program || '').trim().toLowerCase() === 'founding_beta_2026';
+  const paidMember = ['early_access', 'paid_subscription'].includes(basis)
+    && subscriptionStatus === 'active'
+    && BAR_FORECAST_PAID_SUBSCRIPTION_SOURCE_SET.has(subscriptionSource);
+  if (access?.allowed === true
+      && access?.unlimited === true
+      && BAR_FORECAST_MEMBER_BASIS_SET.has(basis)
+      && (foundingBeta || paidMember)
+      && access?.termsRequired !== true
+      && access?.paidSubscriptionExpired !== true) {
+    return Object.freeze({ authorized: true, kind: 'member', role, basis });
+  }
+  throw new BarForecastError(
+    'BAR_FORECAST_ACCESS_REQUIRED',
+    'Bar Forecast access requires an active paid subscription, Founding Beta access, or an authorized administrator account.',
+    403,
+  );
 }
 
 export function normalizeBarForecastRequest(value) {
@@ -424,7 +459,7 @@ export function buildBarForecastGradingPrompt(batch) {
     citation: row.citation,
     userAnswer: row.userAnswer,
   }));
-  return `You are the hidden evaluator for an administrator-only Philippine Bar Forecast exercise.
+  return `You are the hidden evaluator for a protected Philippine Bar Forecast exercise.
 
 SOURCE-OF-TRUTH AND SAFETY RULES
 - The CURATED FORECAST RECORDS below are the complete and exclusive legal source of truth.

@@ -174,8 +174,8 @@ jobs:
               && grep -q "announcementOnly = kind === 'loading'" <<<"$pedro_js" \
               && grep -q 'id="dd2-pricing-retry"' <<<"$pricing_js" \
               && grep -q 'Plans &amp; Pricing could not load just now\.' <<<"$pricing_js" \
-              && grep -q 'pricing-checkout-safety.js?v=regular-checkout-r1' <<<"$index" \
-              && grep -q 'phase2-experience.js[^" ]*pricing=regular-checkout-r2' <<<"$index" \
+              && grep -q 'pricing-checkout-safety.js?v=regular-checkout-r2' <<<"$index" \
+              && grep -q 'phase2-experience.js[^" ]*pricing=regular-checkout-r3' <<<"$index" \
               && grep -q 'id="dd-study-room-trigger"' <<<"$index" \
               && grep -q 'id="dd-study-room-dialog"' <<<"$index" \
               && grep -q 'You won&rsquo;t have to study alone\.' <<<"$index" \

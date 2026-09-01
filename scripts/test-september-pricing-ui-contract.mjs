@@ -124,6 +124,17 @@ assert.match(experience, /scheduleOneShotRefresh\([\s\S]*onPayload:[\s\S]*loadCo
 assert.match(experience, /onError:[\s\S]*Payment is paused while the current plan is rechecked/u);
 assert.doesNotMatch(experience, /incomingRevision[\s\S]*=== currentRevision/u);
 assert.match(experience, /if \(!pricingCheckoutSafety\)[\s\S]*Secure payment controls are unavailable/u);
+const legacyRefreshContinuity = experience.slice(
+  experience.indexOf('if (hadLegacyPaymentForm) {', experience.indexOf('renderer.render')),
+  experience.indexOf("const regularProofHost = document.getElementById('dd2-regular-proof-host')"),
+);
+assert.match(experience, /hadLegacyPaymentForm[\s\S]*captureCheckoutBinding\([\s\S]*state\.selectedPricingPlan\?\.versionId[\s\S]*state\.selectedPaymentMethod\?\.versionId/u);
+assert.match(legacyRefreshContinuity, /candidate\.versionId === legacyCheckoutBinding\?\.planVersionId/u);
+assert.match(legacyRefreshContinuity, /commercialPaymentMethods\(refreshedPlan\)\.filter\(\(method\) => Boolean\(commercialQrUrl\(method\)\)\)/u);
+assert.match(legacyRefreshContinuity, /reconcileCheckoutBinding\([\s\S]*pricing\.revisionId/u);
+assert.match(legacyRefreshContinuity, /renderPaymentForm\(continuity\.plan, continuity\.method\.versionId, \{ preserveScroll: true \}\)/u);
+assert.doesNotMatch(legacyRefreshContinuity, /planCode/u);
+assert.match(legacyRefreshContinuity, /state\.selectedPaymentProof = null;[\s\S]*Your proof was not submitted/u);
 
 assert.match(phase2Css, /#dd2-payment-proof:focus-visible \+ \.dd2-payment-dropzone/u);
 assert.match(phase2Css, /height: min\(878px, calc\(100dvh - 56px\)\)/u);
@@ -133,14 +144,14 @@ assert.match(pricingCss, /\.dd-regular-qr-card \{[\s\S]*356px/u);
 assert.match(pricingCss, /\.dd-regular-qr-image \{[\s\S]*300px/u);
 
 const rendererAt = index.indexOf('assets/pricing-renderer.js?v=regular-checkout-r2');
-const safetyAt = index.indexOf('assets/pricing-checkout-safety.js?v=regular-checkout-r1');
+const safetyAt = index.indexOf('assets/pricing-checkout-safety.js?v=regular-checkout-r2');
 const phase2At = index.indexOf('assets/phase2-experience.js?');
 assert.ok(rendererAt > 0 && rendererAt < safetyAt, 'Pricing renderer must load before checkout safety.');
 assert.ok(safetyAt < phase2At, 'Checkout safety must load before the checkout controller.');
 assert.doesNotMatch(index, /20260914|2026-09-14/u);
 assert.doesNotMatch(serviceWorker, /20260914|2026-09-14/u);
-assert.match(serviceWorker, /pricing-checkout-safety\.js\?v=regular-checkout-r1/u);
-assert.match(serviceWorker, /phase2-experience\.js[^'\n]*pricing=regular-checkout-r2/u);
+assert.match(serviceWorker, /pricing-checkout-safety\.js\?v=regular-checkout-r2/u);
+assert.match(serviceWorker, /phase2-experience\.js[^'\n]*pricing=regular-checkout-r3/u);
 
 assert.match(pagesBuilder, /assets\/payments\/bpi-instapay-199-qr\.png/u);
 assert.match(pagesBuilder, /assets\/pricing-checkout-safety\.js/u);

@@ -24,6 +24,46 @@
     });
   }
 
+  function captureCheckoutBinding(formOpen, revisionId, planVersionId, paymentMethodVersionId) {
+    if (formOpen !== true) return null;
+    const pricingRevisionId = cleanId(revisionId);
+    const planId = cleanId(planVersionId);
+    const methodId = cleanId(paymentMethodVersionId);
+    if (!pricingRevisionId || !planId || !methodId) return null;
+    return Object.freeze({
+      revisionId: pricingRevisionId,
+      planVersionId: planId,
+      paymentMethodVersionId: methodId,
+    });
+  }
+
+  function reconcileCheckoutBinding(binding, revisionId, plans, compatibleMethods) {
+    if (!binding) {
+      return Object.freeze({ matched: false, stale: false, plan: null, method: null });
+    }
+    const plan = (Array.isArray(plans) ? plans : []).find((candidate) => (
+      cleanId(candidate?.versionId) === cleanId(binding.planVersionId)
+    ));
+    const method = (Array.isArray(compatibleMethods) ? compatibleMethods : []).find((candidate) => (
+      cleanId(candidate?.versionId) === cleanId(binding.paymentMethodVersionId)
+    ));
+    const matched = Boolean(
+      cleanId(binding.revisionId) === cleanId(revisionId)
+      && plan
+      && plan.checkoutOpen === true
+      && plan.checkoutEnabled !== false
+      && method
+      && method.enabled !== false
+      && method.visible !== false,
+    );
+    return Object.freeze({
+      matched,
+      stale: !matched,
+      plan: matched ? plan : null,
+      method: matched ? method : null,
+    });
+  }
+
   function nextServerMinuteDelay(serverNow) {
     const serverTime = Date.parse(String(serverNow || ''));
     if (!Number.isFinite(serverTime)) return null;
@@ -67,6 +107,8 @@
   global.DueDiligencePricingCheckoutSafety = Object.freeze({
     captureProof,
     reconcileProof,
+    captureCheckoutBinding,
+    reconcileCheckoutBinding,
     nextServerMinuteDelay,
     imageReady,
     scheduleOneShotRefresh,

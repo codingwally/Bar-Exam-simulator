@@ -1,0 +1,217 @@
+name: Release Forecast grading hotfix
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_production:
+        description: "I confirm the reviewed Forecast grading hotfix may deploy to production"
+        required: true
+        default: false
+        type: boolean
+      product_sha:
+        description: "Exact merged Forecast grading product SHA"
+        required: true
+        type: string
+      validation_run_id:
+        description: "Successful required validation run for the exact product tree"
+        required: true
+        type: string
+      approval_reference:
+        description: "Owner approval or change reference"
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: examination-room-production-cutover
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    name: Authorize exact Forecast grading hotfix
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact release candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Enforce owner approval, validated product tree, and exact scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CONFIRM_PRODUCTION: ${{ inputs.confirm_production }}
+          PRODUCT_SHA: ${{ inputs.product_sha }}
+          VALIDATION_RUN_ID: ${{ inputs.validation_run_id }}
+          APPROVAL_REFERENCE: ${{ inputs.approval_reference }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$CONFIRM_PRODUCTION" = "true"
+          test "$PRODUCT_SHA" = "3cc8ba8b81671bef90dbea07cd12823d160a294a"
+          test "$VALIDATION_RUN_ID" = "33482650114"
+          test -n "${APPROVAL_REFERENCE//[[:space:]]/}"
+          git merge-base --is-ancestor "$PRODUCT_SHA" "$GITHUB_SHA"
+
+          validation_run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$VALIDATION_RUN_ID")"
+          test "$(jq -r '.event' <<<"$validation_run")" = "pull_request"
+          test "$(jq -r '.path' <<<"$validation_run")" = ".github/workflows/validate-mandatory-early-access.yml"
+          test "$(jq -r '.status' <<<"$validation_run")" = "completed"
+          test "$(jq -r '.conclusion' <<<"$validation_run")" = "success"
+          validated_head="$(jq -r '.head_sha' <<<"$validation_run")"
+          test "$validated_head" = "845b74b771906beb1a4407bbfc2f4922310e773a"
+          test "$(git rev-parse "$validated_head^{tree}")" = "$(git rev-parse "$PRODUCT_SHA^{tree}")"
+
+          expected_product_files="$(printf '%s\n' \
+            worker/bar-forecast-provider-policy.test.mjs \
+            worker/bar-forecast-routes.mjs \
+            worker/bar-forecast-routes.test.mjs \
+            worker/index.mjs | sort)"
+          actual_product_files="$(git diff --name-only "$PRODUCT_SHA^" "$PRODUCT_SHA" | sort)"
+          test "$actual_product_files" = "$expected_product_files"
+          git diff --quiet "$PRODUCT_SHA" "$GITHUB_SHA" -- . \
+            ':(exclude).github/workflows/release-forecast-grading-hotfix.yml' \
+            ':(exclude)scripts/test-forecast-grading-hotfix-release-workflow.mjs'
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install reviewed Worker dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Re-run complete Worker and Forecast contracts
+        run: |
+          set -euo pipefail
+          node --check worker/index.mjs
+          node --check worker/bar-forecast-routes.mjs
+          node --test worker/*.test.mjs
+          node scripts/test-bar-forecast-frontend.mjs
+          node scripts/test-bar-forecast-boundary.mjs
+          node --test scripts/test-admin-bar-forecast-deployment-smoke.mjs
+          node scripts/test-forecast-grading-hotfix-release-workflow.mjs
+          git diff --check
+
+  deploy_staging:
+    name: Deploy and verify staging Worker first
+    needs: authorize
+    environment: staging-e2e
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact release candidate
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install reviewed Worker dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Verify staging grading secret exists
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.114.0 secret list --format json --name duediligence-examinations-staging \
+            | node -e "let value=''; process.stdin.on('data', chunk => value += chunk); process.stdin.on('end', () => { const names = new Set(JSON.parse(value).map(item => item.name)); const required = ['GEMINI_API_KEY', 'SUPABASE_SERVICE_ROLE_KEY']; const missing = required.filter(name => !names.has(name)); if (missing.length) process.exit(1); console.log('Staging Forecast grading secrets are configured.'); });"
+
+      - name: Resolve approved staging browser configuration
+        env:
+          CONFIGURED_STAGING_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          staging_publishable_key="$CONFIGURED_STAGING_PUBLISHABLE_KEY"
+          if [[ -z "$staging_publishable_key" ]]; then
+            staging_publishable_key="$(node --input-type=module -e "const response = await fetch('https://duediligence-examinations-staging.wallyesteban1993.workers.dev/assets/phase2-config.js', { headers: { 'cache-control': 'no-cache' } }); if (!response.ok) process.exit(1); const source = await response.text(); const match = source.match(/sb_publishable_[A-Za-z0-9_-]{20,}/); if (!match) process.exit(1); process.stdout.write(match[0]);")"
+          fi
+          [[ "$staging_publishable_key" =~ ^sb_publishable_[A-Za-z0-9_-]{20,}$ ]]
+          echo "::add-mask::$staging_publishable_key"
+          echo "STAGING_SUPABASE_PUBLISHABLE_KEY=$staging_publishable_key" >> "$GITHUB_ENV"
+
+      - name: Build and verify isolated staging artifact
+        env:
+          STAGING_PUBLIC_URL: https://duediligence-examinations-staging.wallyesteban1993.workers.dev
+          STAGING_WORKER_URL: https://duediligence-examinations-staging.wallyesteban1993.workers.dev
+          STAGING_SUPABASE_URL: https://hlzqmreeoghbldnhlybr.supabase.co
+        run: node scripts/test-staging-artifact.mjs
+
+      - name: Deploy exact hotfix to staging
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          wranglerVersion: "4.114.0"
+          command: deploy --config wrangler.staging.toml
+
+      - name: Verify staging Forecast boundary twice
+        env:
+          ADMIN_BAR_FORECAST_WORKER_URL: https://duediligence-examinations-staging.wallyesteban1993.workers.dev
+          ADMIN_BAR_FORECAST_ALLOWED_ORIGIN: https://duediligence-examinations-staging.wallyesteban1993.workers.dev
+        run: |
+          node scripts/verify-admin-bar-forecast-deployment.mjs
+          node scripts/verify-admin-bar-forecast-deployment.mjs
+
+  deploy_production:
+    name: Deploy and verify production Worker
+    needs: deploy_staging
+    environment: production-worker
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact release candidate
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install reviewed Worker dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Verify production grading secret exists
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.114.0 secret list --format json \
+            | node -e "let value=''; process.stdin.on('data', chunk => value += chunk); process.stdin.on('end', () => { const names = new Set(JSON.parse(value).map(item => item.name)); const required = ['GEMINI_API_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_URL']; const missing = required.filter(name => !names.has(name)); if (missing.length) process.exit(1); console.log('Production Forecast grading secrets are configured.'); });"
+
+      - name: Deploy exact hotfix Worker before public verification
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          wranglerVersion: "4.114.0"
+          command: deploy
+
+      - name: Refresh provider-neutral public API binding
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          wranglerVersion: "4.114.0"
+          command: deploy --config wrangler.public-api.toml
+
+      - name: Verify production Forecast boundary twice
+        env:
+          ADMIN_BAR_FORECAST_WORKER_URL: https://duediligence-api.wallyesteban1993.workers.dev
+          ADMIN_BAR_FORECAST_ALLOWED_ORIGIN: https://duediligence.ph
+        run: |
+          node scripts/verify-admin-bar-forecast-deployment.mjs
+          node scripts/verify-admin-bar-forecast-deployment.mjs

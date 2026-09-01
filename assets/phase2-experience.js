@@ -51,7 +51,7 @@
     selectedPricingPlan: null,
     selectedPaymentMethod: null,
     selectedPaymentProof: null,
-    regularPaymentQrReady: false,
+    paymentQrReady: false,
     pricingRefreshTimer: null,
   };
 
@@ -2119,7 +2119,7 @@
     state.nativeViewScrollPosition = null;
     state.nativeViewClosing = false;
     state.selectedPaymentProof = null;
-    state.regularPaymentQrReady = false;
+    state.paymentQrReady = false;
     state.nativeViewSequence += 1;
     const nativeOverlay = document.getElementById('dd2-native-view');
     if (nativeOverlay) {
@@ -2372,14 +2372,6 @@
     }).format(date);
   }
 
-  function manilaTodayInput() {
-    const parts = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit',
-    }).formatToParts(new Date());
-    const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-    return `${byType.year}-${byType.month}-${byType.day}`;
-  }
-
   function pricingSource(payload) {
     if (!payload || typeof payload !== 'object') return null;
     const source = payload.pricing || payload.snapshot || payload;
@@ -2498,7 +2490,7 @@
       state.selectedPricingPlan = null;
       state.selectedPaymentMethod = null;
       state.selectedPaymentProof = null;
-      state.regularPaymentQrReady = false;
+      state.paymentQrReady = false;
       host.innerHTML = `
         <div class="dd2-status is-error" role="alert">
           <strong>Secure payment controls are unavailable.</strong>
@@ -2517,7 +2509,7 @@
     state.pricingSnapshot = pricing;
     state.selectedPricingPlan = null;
     state.selectedPaymentMethod = null;
-    state.regularPaymentQrReady = false;
+    state.paymentQrReady = false;
     const renderer = global.DueDiligencePricingRenderer;
     renderer.render(host, { ...pricing.config, plans: safePlans }, {
       mode: 'public',
@@ -2598,7 +2590,6 @@
       });
       return;
     }
-    const today = manilaTodayInput();
     const subjectReviewAction = state.nativeViewMode === 'action'
       && state.nativeViewContext?.reason === 'subject_reveal_review';
     const planAmount = formatPhp(plan.priceCentavos, { alwaysDecimals: true });
@@ -2615,7 +2606,7 @@
           <p class="dd2-payment-intro">After paying, upload your BPI receipt or screenshot for manual verification.</p>
           <form class="dd2-form dd2-proof-only-form" id="dd2-payment-form">
             <span class="dd2-proof-label">Payment proof</span>
-            <input class="dd2-visually-hidden" id="dd2-payment-proof" type="file" accept="image/png,image/jpeg,application/pdf,.png,.jpg,.jpeg,.pdf">
+            <input class="dd2-visually-hidden" id="dd2-payment-proof" type="file" accept="image/png,image/jpeg,application/pdf,.png,.jpg,.jpeg,.pdf" required>
             <label class="dd2-payment-dropzone" id="dd2-payment-dropzone" for="dd2-payment-proof">
               <img src="/assets/icons/navigation/cloud-upload.svg" width="58" height="58" alt="" aria-hidden="true">
               <strong>Click to upload or drag and drop</strong>
@@ -2643,14 +2634,14 @@
       const markQrReady = () => {
         if (state.selectedPricingPlan?.versionId !== planVersionId
             || state.selectedPaymentMethod?.versionId !== paymentMethodVersionId) return;
-        state.regularPaymentQrReady = true;
+        state.paymentQrReady = true;
         if (submit) submit.disabled = false;
       };
-      state.regularPaymentQrReady = false;
+      state.paymentQrReady = false;
       if (pricingCheckoutSafety?.imageReady(qrImage)) markQrReady();
       else qrImage?.addEventListener('load', markQrReady, { once: true });
       qrImage?.addEventListener('error', () => {
-        state.regularPaymentQrReady = false;
+        state.paymentQrReady = false;
         if (submit) submit.disabled = true;
         setStatus('dd2-payment-status', 'This QR could not be loaded, so payment submission is paused. Reload the page or contact Support.', 'error');
       }, { once: true });
@@ -2678,24 +2669,23 @@
           <picture><img id="dd2-payment-qr" src="${escapeHtml(qrUrl)}" alt="${escapeHtml(method.label)} QR code for the ${planAmount} ${plan.name} payment" width="${Math.max(1, Number(method.qrAsset?.width) || 570)}" height="${Math.max(1, Number(method.qrAsset?.height) || 735)}"></picture>
           <figcaption>${escapeHtml(method.instructions || `Scan with a compatible banking or e-wallet app. Pay exactly ${planAmount}, then upload the receipt below.`)}</figcaption>
         </figure>
-        <form class="dd2-form" id="dd2-payment-form">
-          <label class="dd2-label">Payment date
-            <input class="dd2-field" id="dd2-payment-date" type="date" value="${today}" max="${today}" required>
-          </label>
-          <label class="dd2-label">Transaction reference
-            <input class="dd2-field" id="dd2-payment-reference" minlength="4" maxlength="100" autocomplete="off" required>
-          </label>
-          <label class="dd2-label">Payment proof
-            <input class="dd2-field" id="dd2-payment-proof" type="file" accept="image/png,image/jpeg,application/pdf,.png,.jpg,.jpeg,.pdf" required>
-            <span class="dd2-field-help">PNG, JPEG, or PDF only, up to 6 MiB. The proof is private and validated by file signature.</span>
+        <form class="dd2-form dd2-proof-only-form" id="dd2-payment-form">
+          <span class="dd2-proof-label">Payment proof</span>
+          <input class="dd2-visually-hidden" id="dd2-payment-proof" type="file" accept="image/png,image/jpeg,application/pdf,.png,.jpg,.jpeg,.pdf" required>
+          <label class="dd2-payment-dropzone" id="dd2-payment-dropzone" for="dd2-payment-proof">
+            <img src="/assets/icons/navigation/cloud-upload.svg" width="58" height="58" alt="" aria-hidden="true">
+            <strong>Click to upload or drag and drop</strong>
+            <span>PNG, JPEG, or PDF only, up to 6 MiB.</span>
           </label>
           <div class="dd2-proof-preview" id="dd2-proof-preview" hidden></div>
-          <label class="dd2-label">Note (optional)
-            <textarea class="dd2-field" id="dd2-payment-note" maxlength="2000" placeholder="Add only information needed to match your payment."></textarea>
-          </label>
+          <div class="dd2-proof-private">
+            <img src="/assets/icons/navigation/shield-check.svg" width="34" height="34" alt="" aria-hidden="true">
+            <span>Your proof is private and submitted securely.</span>
+          </div>
+          <p class="dd2-proof-term">${escapeHtml(termCopy)}</p>
           <div class="dd2-status" id="dd2-payment-status" role="status" aria-live="polite"></div>
           <div class="dd2-upload-progress" id="dd2-upload-progress" role="progressbar" aria-label="Payment proof upload progress" hidden><span></span></div>
-          <button class="dd2-button dd2-button-primary" id="dd2-payment-submit" type="submit">Submit proof securely</button>
+          <button class="dd2-button dd2-button-primary" id="dd2-payment-submit" type="submit" disabled>Submit proof securely</button>
         </form>
       </section>`;
     host.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
@@ -2704,9 +2694,23 @@
     });
     document.getElementById('dd2-payment-form')?.addEventListener('submit', submitCommercialPayment);
     document.getElementById('dd2-payment-proof')?.addEventListener('change', previewCommercialPaymentProof);
+    attachCommercialProofDropzone();
     restoreCommercialPaymentProof();
-    document.getElementById('dd2-payment-qr')?.addEventListener('error', () => {
-      const submit = document.getElementById('dd2-payment-submit');
+    const qrImage = document.getElementById('dd2-payment-qr');
+    const submit = document.getElementById('dd2-payment-submit');
+    const planVersionId = plan.versionId;
+    const paymentMethodVersionId = method.versionId;
+    const markQrReady = () => {
+      if (state.selectedPricingPlan?.versionId !== planVersionId
+          || state.selectedPaymentMethod?.versionId !== paymentMethodVersionId) return;
+      state.paymentQrReady = true;
+      if (submit) submit.disabled = false;
+    };
+    state.paymentQrReady = false;
+    if (pricingCheckoutSafety?.imageReady(qrImage)) markQrReady();
+    else qrImage?.addEventListener('load', markQrReady, { once: true });
+    qrImage?.addEventListener('error', () => {
+      state.paymentQrReady = false;
       if (submit) submit.disabled = true;
       setStatus('dd2-payment-status', 'This QR could not be loaded, so payment submission is paused. Reload the page or contact Support.', 'error');
     }, { once: true });
@@ -2838,7 +2842,7 @@
       setStatus('dd2-payment-status', 'This offer is no longer current. Reload Plans & Pricing before submitting.', 'error');
       return;
     }
-    if (isRegularSubscriptionPlan(plan) && state.regularPaymentQrReady !== true) {
+    if (state.paymentQrReady !== true) {
       setStatus('dd2-payment-status', 'The payment QR is still loading. Wait a moment, then try again.', 'error');
       return;
     }
@@ -2859,11 +2863,6 @@
     form.set('paymentChannelVersionId', paymentMethod.versionId);
     form.set('planCode', plan.planCode);
     form.set('paymentMethod', paymentMethod.channelCode);
-    if (!isRegularSubscriptionPlan(plan)) {
-      form.set('paymentDate', document.getElementById('dd2-payment-date')?.value || '');
-      form.set('transactionReference', document.getElementById('dd2-payment-reference')?.value.trim() || '');
-      form.set('note', document.getElementById('dd2-payment-note')?.value.trim() || '');
-    }
     form.set('proof', proof);
     submit.disabled = true;
     submit.textContent = 'Submitting securely…';
@@ -2878,7 +2877,7 @@
       });
       const access = await global.DueDiligencePhase4?.refreshAccess?.({ force: true, enforce: false }).catch(() => null);
       state.selectedPaymentProof = null;
-      state.regularPaymentQrReady = false;
+      state.paymentQrReady = false;
       if (state.nativeViewSequence !== viewSequence || state.nativeView !== 'pricing') {
         global.toast?.(`${plan.name} proof received securely.`, 'ok');
         return;
@@ -2945,7 +2944,7 @@
         await loadCommercialPricing(viewSequence, { plansPayload: payload });
       },
       onError: async () => {
-        state.regularPaymentQrReady = false;
+        state.paymentQrReady = false;
         const host = document.getElementById('dd2-pricing-page');
         if (host && isActive()) {
           host.innerHTML = `

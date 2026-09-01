@@ -26,6 +26,8 @@ for (const required of [
   'test "$(jq -r \'\.conclusion\' <<<"$validation_run")" = "success"',
   'test "$(git rev-parse "$validated_head^{tree}")" = "$(git rev-parse "$PRODUCT_SHA^{tree}")"',
   'git diff --quiet "$validated_head" "$PRODUCT_SHA" -- .',
+  'gh api "repos/$GITHUB_REPOSITORY/commits/$validated_head/pulls"',
+  'map(select(.base.ref == "main" and .head.sha == $sha and .head.repo.full_name == $repository))',
   'The release contains files outside the reviewed Forecast and Bar Simulation boundary',
   'This focused release may not delete files.',
   'Import and read back the exact Forecast content on staging',

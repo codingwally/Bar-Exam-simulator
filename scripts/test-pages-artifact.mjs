@@ -247,7 +247,7 @@ assert.match(index, /id="site-header"[\s\S]*id="site-menu-toggle"[\s\S]*>Home<[\
 assert.match(index, /id="dd2-header-role-button"[\s\S]*id="dd2-header-exam-button"[\s\S]*>Examination Room<[\s\S]*id="dd-study-room-trigger"[\s\S]*>Study Room<[\s\S]*id="dd2-header-pricing-button"[\s\S]*>Plans &amp; Pricing</);
 assert.match(index, /id="dd-study-room-dialog" role="dialog" aria-modal="true"/);
 assert.match(index, /You won&rsquo;t have to study alone\./);
-assert.match(index, /phase2\.css[^"\n]*pricing=regular-checkout-r1[\s\S]*pricing-renderer\.js\?v=regular-checkout-r2[\s\S]*pricing-checkout-safety\.js\?v=regular-checkout-r1[\s\S]*phase2-experience\.js[^"\n]*pricing=regular-checkout-r2/);
+assert.match(index, /phase2\.css[^"\n]*pricing=regular-checkout-r1[\s\S]*pricing-renderer\.js\?v=regular-checkout-r2[\s\S]*pricing-checkout-safety\.js\?v=regular-checkout-r2[\s\S]*phase2-experience\.js[^"\n]*pricing=regular-checkout-r3/);
 assert.doesNotMatch(index, /20260914|2026-09-14/u, 'Public cache keys must not reveal the private cutover date.');
 assert.doesNotMatch(index, /href=["']\/study-room\//i);
 assert.match(studyRoomPage, /<title>Study Room — Due Diligence<\/title>/);

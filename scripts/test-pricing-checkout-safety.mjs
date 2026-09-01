@@ -18,6 +18,83 @@ test('proof continuity is bound to the exact plan and payment channel', () => {
   );
 });
 
+test('active checkout continuity requires the exact current revision, plan, and compatible QR method', () => {
+  const plan = Object.freeze({
+    versionId: 'plan-149-v1',
+    planCode: 'legacy_access_149',
+    checkoutOpen: true,
+    checkoutEnabled: true,
+  });
+  const method = Object.freeze({
+    versionId: 'method-149-v1',
+    enabled: true,
+    visible: true,
+  });
+  const binding = safety.captureCheckoutBinding(
+    true,
+    'revision-149',
+    plan.versionId,
+    method.versionId,
+  );
+  const continuity = safety.reconcileCheckoutBinding(
+    binding,
+    'revision-149',
+    [plan],
+    [method],
+  );
+  assert.equal(continuity.matched, true);
+  assert.equal(continuity.plan, plan);
+  assert.equal(continuity.method, method);
+
+  const file = Object.freeze({ name: 'receipt.jpg', size: 2_048, type: 'image/jpeg' });
+  const proof = safety.captureProof(file, plan.versionId, method.versionId);
+  assert.equal(
+    safety.reconcileProof(proof, continuity.plan.versionId, continuity.method.versionId).file,
+    file,
+  );
+});
+
+test('changed or closed checkout bindings fail closed and cannot inherit proof by plan code', () => {
+  const originalPlan = Object.freeze({
+    versionId: 'plan-149-v1',
+    planCode: 'legacy_access',
+    checkoutOpen: true,
+    checkoutEnabled: true,
+  });
+  const originalMethod = Object.freeze({
+    versionId: 'method-149-v1',
+    enabled: true,
+    visible: true,
+  });
+  const binding = safety.captureCheckoutBinding(
+    true,
+    'revision-149',
+    originalPlan.versionId,
+    originalMethod.versionId,
+  );
+  const cases = [
+    ['published revision changed', 'revision-199', [originalPlan], [originalMethod]],
+    ['same plan code but version changed', 'revision-149', [{ ...originalPlan, versionId: 'plan-199-v2' }], [originalMethod]],
+    ['payment method version changed', 'revision-149', [originalPlan], [{ ...originalMethod, versionId: 'method-199-v2' }]],
+    ['checkout closed at cutoff', 'revision-149', [{ ...originalPlan, checkoutOpen: false }], [originalMethod]],
+    ['checkout disabled', 'revision-149', [{ ...originalPlan, checkoutEnabled: false }], [originalMethod]],
+    ['method disabled', 'revision-149', [originalPlan], [{ ...originalMethod, enabled: false }]],
+    ['method incompatible or QR rejected', 'revision-149', [originalPlan], []],
+  ];
+  for (const [label, revisionId, plans, methods] of cases) {
+    const result = safety.reconcileCheckoutBinding(binding, revisionId, plans, methods);
+    assert.equal(result.matched, false, label);
+    assert.equal(result.stale, true, label);
+    assert.equal(result.plan, null, label);
+    assert.equal(result.method, null, label);
+  }
+  assert.equal(
+    safety.captureCheckoutBinding(false, 'revision-149', originalPlan.versionId, originalMethod.versionId),
+    null,
+    'success markup without an active form must not be reopened',
+  );
+});
+
 test('already-open checkout refresh uses the trusted next server minute and always delivers the new snapshot', async () => {
   let scheduled = null;
   const delivered = [];

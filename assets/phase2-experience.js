@@ -2486,11 +2486,22 @@
   function renderCommercialPlanCards(payload, access = null) {
     const host = document.getElementById('dd2-pricing-page');
     if (!host) return;
+    const legacyPaymentHost = document.getElementById('dd2-payment-host');
+    const hadLegacyPaymentForm = Boolean(
+      legacyPaymentHost?.querySelector('#dd2-payment-form'),
+    );
+    const legacyCheckoutBinding = pricingCheckoutSafety?.captureCheckoutBinding(
+      hadLegacyPaymentForm,
+      state.pricingSnapshot?.revisionId,
+      state.selectedPricingPlan?.versionId,
+      state.selectedPaymentMethod?.versionId,
+    ) || null;
     if (!pricingCheckoutSafety) {
       state.selectedPricingPlan = null;
       state.selectedPaymentMethod = null;
       state.selectedPaymentProof = null;
       state.paymentQrReady = false;
+      if (hadLegacyPaymentForm) legacyPaymentHost.replaceChildren();
       host.innerHTML = `
         <div class="dd2-status is-error" role="alert">
           <strong>Secure payment controls are unavailable.</strong>
@@ -2500,7 +2511,14 @@
     }
     const pricing = normalizedCommercialPricing(payload);
     const safePlans = normalizedCommercialPlans(pricing);
-    if (!safePlans.length) throw new Error('No published plan is currently visible.');
+    if (!safePlans.length) {
+      state.selectedPricingPlan = null;
+      state.selectedPaymentMethod = null;
+      state.selectedPaymentProof = null;
+      state.paymentQrReady = false;
+      if (hadLegacyPaymentForm) legacyPaymentHost?.replaceChildren();
+      throw new Error('No published plan is currently visible.');
+    }
     const subjectReviewAction = state.nativeViewMode === 'action'
       && state.nativeViewContext?.reason === 'subject_reveal_review';
     const alreadyUnlimited = subjectReviewAction
@@ -2510,6 +2528,7 @@
     state.selectedPricingPlan = null;
     state.selectedPaymentMethod = null;
     state.paymentQrReady = false;
+    if (hadLegacyPaymentForm) legacyPaymentHost?.replaceChildren();
     const renderer = global.DueDiligencePricingRenderer;
     renderer.render(host, { ...pricing.config, plans: safePlans }, {
       mode: 'public',
@@ -2536,6 +2555,31 @@
     });
     const regularPlan = safePlans.length === 1 && isRegularSubscriptionPlan(safePlans[0])
       ? safePlans[0] : null;
+    if (hadLegacyPaymentForm) {
+      const refreshedPlan = safePlans.find((candidate) => (
+        candidate.versionId === legacyCheckoutBinding?.planVersionId
+      ));
+      const compatibleMethods = refreshedPlan
+        ? commercialPaymentMethods(refreshedPlan).filter((method) => Boolean(commercialQrUrl(method)))
+        : [];
+      const continuity = pricingCheckoutSafety.reconcileCheckoutBinding(
+        legacyCheckoutBinding,
+        pricing.revisionId,
+        safePlans,
+        compatibleMethods,
+      );
+      if (continuity.matched) {
+        renderPaymentForm(continuity.plan, continuity.method.versionId, { preserveScroll: true });
+      } else {
+        state.selectedPricingPlan = null;
+        state.selectedPaymentMethod = null;
+        state.selectedPaymentProof = null;
+        state.paymentQrReady = false;
+        if (legacyPaymentHost && !regularPlan) {
+          legacyPaymentHost.innerHTML = '<div class="dd2-status is-error" role="alert">The payment offer changed while this page was open. Your proof was not submitted. Choose the current plan above and select your proof again.</div>';
+        }
+      }
+    }
     const regularProofHost = document.getElementById('dd2-regular-proof-host');
     if (regularPlan && regularProofHost
         && regularPlan.checkoutOpen === true && regularPlan.checkoutEnabled !== false) {
@@ -2688,7 +2732,9 @@
           <button class="dd2-button dd2-button-primary" id="dd2-payment-submit" type="submit" disabled>Submit proof securely</button>
         </form>
       </section>`;
-    host.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+    if (options.preserveScroll !== true) {
+      host.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+    }
     document.getElementById('dd2-payment-method-choice')?.addEventListener('change', (event) => {
       renderPaymentForm(plan, event.currentTarget.value);
     });

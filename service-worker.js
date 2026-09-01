@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'duediligence-shell-20260901-login-loop-p0-1';
+const CACHE_VERSION = 'duediligence-shell-20260901-forecast-member-access-1';
 const EXAMINATION_STUDENT_SHELL = '/examination-room/student.html';
 const EXAMINATION_OFFLINE_GRADER = '/examination-room/offline-grading.html';
 const SHELL = Object.freeze([
@@ -16,7 +16,7 @@ const SHELL = Object.freeze([
   '/assets/due-diligence-controls.css?v=subject-matter-controls-20260817-4',
   '/assets/quorum-first-shell.css?v=profile-photo-release2-20260827-1&baseline=public-reliability-20260827-3',
   '/assets/quorum-first-shell.js?v=syllabus-review-20260823-1&forecast=exam-tools-20260901-4',
-  '/assets/feature-loader.js?v=profile-photo-release2-20260827-1&baseline=public-reliability-20260827-1&feedback=offline-save-20260827-1&hotfix=ian-provisional-reveal-20260828-1&recovery=subject-review-timeout-20260828-1&cta=home-subscription-20260828-2&collapse=home-read-more-20260828-1&results=history-20260828-1&forecast=exam-tools-20260901-4',
+  '/assets/feature-loader.js?v=profile-photo-release2-20260827-1&baseline=public-reliability-20260827-1&feedback=offline-save-20260827-1&hotfix=ian-provisional-reveal-20260828-1&recovery=subject-review-timeout-20260828-1&cta=home-subscription-20260828-2&collapse=home-read-more-20260828-1&results=history-20260828-1&forecast=member-access-20260901-1',
   '/assets/private-beta-landing.js?v=public-reliability-20260827-2&feedback=quiet-navigation-20260828-1&forecast=exam-tools-20260901-4&auth=login-loop-p0-20260901-1',
   '/assets/profile-photo.js?v=profile-photo-release2-20260827-1',
   '/assets/phase2-experience.js?v=profile-photo-release2-20260827-1&baseline=syllabus-reveal-p0-20260826-2-examination-room-4&profile=chambers-20260827-1&access=paid-expiry-20260827-1&pricing=regular-checkout-r3&legal=explicit-20260901-1&auth=login-loop-p0-20260901-1',
@@ -37,7 +37,7 @@ const SHELL = Object.freeze([
   '/assets/auth-session-storage.js?v=auth-persistence-20260812-1',
   '/assets/private-beta-session.js?v=beta-all-access-20260802-1',
   '/assets/bar-forecast.css?v=exam-tools-20260901-4',
-  '/assets/bar-forecast.js?v=exam-tools-20260901-4',
+  '/assets/bar-forecast.js?v=exam-tools-20260901-5',
   '/assets/icons/navigation/flag.svg',
   '/assets/bar-forecast/forecast-workspace-preview.webp',
 ]);

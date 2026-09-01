@@ -57,7 +57,8 @@ test('live Forecast smoke proves CORS, signed-out denial, foreign-origin denial,
     fetchImpl: happyFetch(calls),
   });
   assert.equal(result.ok, true);
-  assert.equal(result.boundary, 'admin-only');
+  assert.equal(result.accessPolicy, 'paid-founding-beta-admin');
+  assert.equal(result.verifiedBoundary, 'signed-out-and-origin');
   assert.equal(calls.length, 3);
   assert.deepEqual(calls.map(({ init }) => init.method), ['OPTIONS', 'POST', 'POST']);
 });

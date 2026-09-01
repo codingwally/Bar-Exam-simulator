@@ -13,19 +13,27 @@ const MAX_CONCURRENCY = 2;
 // Each distinct examiner performs four setup-boundary/ready probes and at most
 // six counted Forecast requests. Two examiners per batch and a three-minute
 // batch cadence keep four possible batch starts plus the non-admin denial at
-// 81 requests in any ten-minute window, below the dedicated limit of 90.
+// 81 network requests in any ten-minute window, below the network limit of 180.
+// A distinct identity runs each journey, so no verified user can issue more
+// than ten requests in the same window, below the per-user limit of 30.
 const MINIMUM_BATCH_INTERVAL_MS = 180_000;
 const RATE_WINDOW_MS = 600_000;
-const RATE_REQUEST_LIMIT = 90;
+const NETWORK_RATE_REQUEST_LIMIT = 180;
+const VERIFIED_USER_RATE_REQUEST_LIMIT = 30;
 const SETUP_PROBE_REQUESTS_PER_JOURNEY = 4;
 const MAX_JOURNEY_REQUESTS = 6;
 const FIXED_FORECAST_PROBE_REQUESTS = 1;
 const MAX_BATCHES_PER_RATE_WINDOW = Math.ceil(RATE_WINDOW_MS / MINIMUM_BATCH_INTERVAL_MS);
-const PLANNED_MAX_REQUESTS_PER_RATE_WINDOW = FIXED_FORECAST_PROBE_REQUESTS
+const PLANNED_MAX_NETWORK_REQUESTS_PER_RATE_WINDOW = FIXED_FORECAST_PROBE_REQUESTS
   + (MAX_BATCHES_PER_RATE_WINDOW
     * BATCH_SIZE
     * (SETUP_PROBE_REQUESTS_PER_JOURNEY + MAX_JOURNEY_REQUESTS));
-const PLANNED_RATE_HEADROOM = RATE_REQUEST_LIMIT - PLANNED_MAX_REQUESTS_PER_RATE_WINDOW;
+const PLANNED_NETWORK_RATE_HEADROOM = NETWORK_RATE_REQUEST_LIMIT
+  - PLANNED_MAX_NETWORK_REQUESTS_PER_RATE_WINDOW;
+const PLANNED_MAX_VERIFIED_USER_REQUESTS_PER_RATE_WINDOW = SETUP_PROBE_REQUESTS_PER_JOURNEY
+  + MAX_JOURNEY_REQUESTS;
+const PLANNED_VERIFIED_USER_RATE_HEADROOM = VERIFIED_USER_RATE_REQUEST_LIMIT
+  - PLANNED_MAX_VERIFIED_USER_REQUESTS_PER_RATE_WINDOW;
 const DEFAULT_JOURNEY_TIMEOUT_MS = 8 * 60_000;
 const CONSENT_VERSION = '2026-09-01';
 const FORECAST_PATH = '/admin/dd2026/bar-forecast';
@@ -209,8 +217,12 @@ if (commandLine.preflight) {
     disposableAdministrators: JOURNEY_COUNT,
     disposableNonAdministrators: 1,
     disposableAccountsTotal: JOURNEY_COUNT + 1,
-    plannedMaxRequestsPerRateWindow: PLANNED_MAX_REQUESTS_PER_RATE_WINDOW,
-    plannedRateHeadroom: PLANNED_RATE_HEADROOM,
+    networkRequestLimit: NETWORK_RATE_REQUEST_LIMIT,
+    verifiedUserRequestLimit: VERIFIED_USER_RATE_REQUEST_LIMIT,
+    plannedMaxNetworkRequestsPerRateWindow: PLANNED_MAX_NETWORK_REQUESTS_PER_RATE_WINDOW,
+    plannedNetworkRateHeadroom: PLANNED_NETWORK_RATE_HEADROOM,
+    plannedMaxVerifiedUserRequestsPerRateWindow: PLANNED_MAX_VERIFIED_USER_REQUESTS_PER_RATE_WINDOW,
+    plannedVerifiedUserRateHeadroom: PLANNED_VERIFIED_USER_RATE_HEADROOM,
     classificationCheckpoint: config.awaitClassification,
     secretLoaded: false,
   }, null, 2)}\n`);
@@ -487,15 +499,19 @@ async function createDisposableAdministrator(slot) {
 
 async function createDisposableNonAdministrator() {
   const account = await createDisposableAccount('non-admin', 'non-administrator');
-  const roles = await serviceRows(
-    'user_roles',
-    `user_id=eq.${encodeURIComponent(account.userId)}&select=role`,
-  );
+  const encodedUserId = encodeURIComponent(account.userId);
+  const [roles, subscriptions, betaAccess] = await Promise.all([
+    serviceRows('user_roles', `user_id=eq.${encodedUserId}&select=role`),
+    serviceRows('subscriptions', `user_id=eq.${encodedUserId}&select=id,status,source`),
+    serviceRows('free_beta_access', `user_id=eq.${encodedUserId}&select=user_id,enabled,access_program`),
+  ]);
   assert.equal(
     roles.some(({ role }) => ['admin', 'founder_admin', 'super_admin'].includes(String(role).toLowerCase())),
     false,
     'The denial-probe account unexpectedly has a Forecast administrator role.',
   );
+  assert.equal(subscriptions.length, 0, 'The denial-probe account unexpectedly has a subscription.');
+  assert.equal(betaAccess.length, 0, 'The denial-probe account unexpectedly has Founding Beta access.');
   await resetForecastConsent(account.userId);
   return account;
 }
@@ -1514,7 +1530,7 @@ async function proveNonAdministratorDenied(browser, account) {
       authenticated: true,
       userId: account.userId,
       status: 403,
-      code: 'BAR_FORECAST_ADMIN_FORBIDDEN',
+      code: 'BAR_FORECAST_ACCESS_REQUIRED',
       questionCount: 0,
     });
     return Object.freeze({ authenticated: true, denied: true, status: 403 });
@@ -1702,12 +1718,28 @@ async function main() {
     );
   }
   assert.ok(observedMaximumBatchesPerRateWindow <= MAX_BATCHES_PER_RATE_WINDOW);
-  const observedMaximumRequestsPerRateWindow = FIXED_FORECAST_PROBE_REQUESTS
+  const observedMaximumNetworkRequestsPerRateWindow = FIXED_FORECAST_PROBE_REQUESTS
     + (observedMaximumBatchesPerRateWindow
       * BATCH_SIZE
       * (SETUP_PROBE_REQUESTS_PER_JOURNEY + MAX_JOURNEY_REQUESTS));
-  const observedRateHeadroom = RATE_REQUEST_LIMIT - observedMaximumRequestsPerRateWindow;
-  assert.ok(observedRateHeadroom >= PLANNED_RATE_HEADROOM && observedRateHeadroom > 0);
+  const observedNetworkRateHeadroom = NETWORK_RATE_REQUEST_LIMIT
+    - observedMaximumNetworkRequestsPerRateWindow;
+  assert.ok(
+    observedNetworkRateHeadroom >= PLANNED_NETWORK_RATE_HEADROOM
+      && observedNetworkRateHeadroom > 0,
+  );
+  const observedMaximumVerifiedUserRequestsPerRateWindow = Math.max(
+    FIXED_FORECAST_PROBE_REQUESTS,
+    ...completedJourneys.map((result) => (
+      SETUP_PROBE_REQUESTS_PER_JOURNEY + result.apiOperations.length
+    )),
+  );
+  const observedVerifiedUserRateHeadroom = VERIFIED_USER_RATE_REQUEST_LIMIT
+    - observedMaximumVerifiedUserRequestsPerRateWindow;
+  assert.ok(
+    observedVerifiedUserRateHeadroom >= PLANNED_VERIFIED_USER_RATE_HEADROOM
+      && observedVerifiedUserRateHeadroom > 0,
+  );
   const scores = completedJourneys.map((result) => result.totalScore);
   const summary = {
     ok: true,
@@ -1726,16 +1758,21 @@ async function main() {
     observedMinimumBatchIntervalMs,
     rateLimitPlan: {
       windowMs: RATE_WINDOW_MS,
-      requestLimit: RATE_REQUEST_LIMIT,
+      networkRequestLimit: NETWORK_RATE_REQUEST_LIMIT,
+      verifiedUserRequestLimit: VERIFIED_USER_RATE_REQUEST_LIMIT,
       fixedForecastProbeRequests: FIXED_FORECAST_PROBE_REQUESTS,
       setupProbeRequestsPerJourney: SETUP_PROBE_REQUESTS_PER_JOURNEY,
       maximumJourneyRequests: MAX_JOURNEY_REQUESTS,
       maximumBatchesPerWindow: MAX_BATCHES_PER_RATE_WINDOW,
-      plannedMaximumRequestsPerWindow: PLANNED_MAX_REQUESTS_PER_RATE_WINDOW,
-      plannedHeadroom: PLANNED_RATE_HEADROOM,
+      plannedMaximumNetworkRequestsPerWindow: PLANNED_MAX_NETWORK_REQUESTS_PER_RATE_WINDOW,
+      plannedNetworkHeadroom: PLANNED_NETWORK_RATE_HEADROOM,
+      plannedMaximumVerifiedUserRequestsPerWindow: PLANNED_MAX_VERIFIED_USER_REQUESTS_PER_RATE_WINDOW,
+      plannedVerifiedUserHeadroom: PLANNED_VERIFIED_USER_RATE_HEADROOM,
       observedMaximumBatchesPerWindow: observedMaximumBatchesPerRateWindow,
-      observedMaximumRequestsPerWindow: observedMaximumRequestsPerRateWindow,
-      observedHeadroom: observedRateHeadroom,
+      observedMaximumNetworkRequestsPerWindow: observedMaximumNetworkRequestsPerRateWindow,
+      observedNetworkHeadroom: observedNetworkRateHeadroom,
+      observedMaximumVerifiedUserRequestsPerWindow: observedMaximumVerifiedUserRequestsPerRateWindow,
+      observedVerifiedUserHeadroom: observedVerifiedUserRateHeadroom,
     },
     subjects: subjectCounts,
     proof: {

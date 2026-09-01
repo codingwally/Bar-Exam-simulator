@@ -21,8 +21,12 @@ assert.match(source, /const BATCH_SIZE = 2;/u);
 assert.match(source, /const DEFAULT_CONCURRENCY = 2;/u);
 assert.match(source, /const MAX_CONCURRENCY = 2;/u);
 assert.match(source, /const MINIMUM_BATCH_INTERVAL_MS = 180_000;/u);
-assert.match(source, /const PLANNED_MAX_REQUESTS_PER_RATE_WINDOW/u);
-assert.match(source, /const PLANNED_RATE_HEADROOM/u);
+assert.match(source, /const NETWORK_RATE_REQUEST_LIMIT = 180;/u);
+assert.match(source, /const VERIFIED_USER_RATE_REQUEST_LIMIT = 30;/u);
+assert.match(source, /const PLANNED_MAX_NETWORK_REQUESTS_PER_RATE_WINDOW/u);
+assert.match(source, /const PLANNED_NETWORK_RATE_HEADROOM/u);
+assert.match(source, /const PLANNED_MAX_VERIFIED_USER_REQUESTS_PER_RATE_WINDOW/u);
+assert.match(source, /const PLANNED_VERIFIED_USER_RATE_HEADROOM/u);
 assert.match(source, /--environment must be staging or production/u);
 assert.match(source, /BAR_FORECAST_E2E_RELEASE_SHA must be a 40-hex commit SHA/u);
 assert.match(source, /BAR_FORECAST_E2E_GITHUB_RUN_ID must be numeric/u);
@@ -36,8 +40,12 @@ assert.match(source, /modernSecretKey \? \{\} : \{ Authorization: `Bearer \$\{co
 
 assert.match(source, /role: 'admin'/u);
 assert.doesNotMatch(source, /role: '(?:founder_admin|super_admin)'/u);
-assert.match(source, /BAR_FORECAST_ADMIN_FORBIDDEN/u);
+assert.match(source, /BAR_FORECAST_ACCESS_REQUIRED/u);
 assert.match(source, /status: 403/u);
+assert.match(source, /serviceRows\('subscriptions'/u);
+assert.match(source, /serviceRows\('free_beta_access'/u);
+assert.match(source, /subscriptions\.length, 0/u);
+assert.match(source, /betaAccess\.length, 0/u);
 assert.match(source, /BAR_FORECAST_CONSENT_REQUIRED/u);
 assert.match(source, /status: 409/u);
 assert.match(source, /signOut\(\{ scope: 'global' \}\)/u);
@@ -298,8 +306,12 @@ assert.deepEqual({
   disposableAdministrators: stagingPreflight.disposableAdministrators,
   disposableNonAdministrators: stagingPreflight.disposableNonAdministrators,
   disposableAccountsTotal: stagingPreflight.disposableAccountsTotal,
-  plannedMaxRequestsPerRateWindow: stagingPreflight.plannedMaxRequestsPerRateWindow,
-  plannedRateHeadroom: stagingPreflight.plannedRateHeadroom,
+  networkRequestLimit: stagingPreflight.networkRequestLimit,
+  verifiedUserRequestLimit: stagingPreflight.verifiedUserRequestLimit,
+  plannedMaxNetworkRequestsPerRateWindow: stagingPreflight.plannedMaxNetworkRequestsPerRateWindow,
+  plannedNetworkRateHeadroom: stagingPreflight.plannedNetworkRateHeadroom,
+  plannedMaxVerifiedUserRequestsPerRateWindow: stagingPreflight.plannedMaxVerifiedUserRequestsPerRateWindow,
+  plannedVerifiedUserRateHeadroom: stagingPreflight.plannedVerifiedUserRateHeadroom,
   classificationCheckpoint: stagingPreflight.classificationCheckpoint,
   secretLoaded: stagingPreflight.secretLoaded,
 }, {
@@ -315,8 +327,12 @@ assert.deepEqual({
   disposableAdministrators: 30,
   disposableNonAdministrators: 1,
   disposableAccountsTotal: 31,
-  plannedMaxRequestsPerRateWindow: 81,
-  plannedRateHeadroom: 9,
+  networkRequestLimit: 180,
+  verifiedUserRequestLimit: 30,
+  plannedMaxNetworkRequestsPerRateWindow: 81,
+  plannedNetworkRateHeadroom: 99,
+  plannedMaxVerifiedUserRequestsPerRateWindow: 10,
+  plannedVerifiedUserRateHeadroom: 20,
   classificationCheckpoint: false,
   secretLoaded: false,
 });
@@ -367,6 +383,10 @@ assert.match(runbook, /15 batches/iu);
 assert.match(runbook, /exactly two.*browser/iu);
 assert.match(runbook, /at least 180 seconds/u);
 assert.match(runbook, /observed batch spacing/u);
+assert.match(runbook, /81 requests.*network limit of 180/iu);
+assert.match(runbook, /ten requests.*per-user limit of 30/iu);
+assert.match(runbook, /99 requests of network headroom/iu);
+assert.match(runbook, /20 requests of verified-user headroom/iu);
 assert.match(runbook, /31.*accounts/iu);
 assert.match(runbook, /BAR_FORECAST_E2E_RELEASE_SHA/u);
 assert.match(runbook, /BAR_FORECAST_E2E_GITHUB_RUN_ID/u);

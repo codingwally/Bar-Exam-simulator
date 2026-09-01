@@ -36,6 +36,12 @@ const releases = Object.freeze([
     name: 'admin_bar_forecast_runtime_integrity',
     stateKey: 'forecast_runtime_integrity',
   }),
+  Object.freeze({
+    version: '20260901030000',
+    file: '20260901030000_bar_forecast_member_access.sql',
+    name: 'bar_forecast_member_access',
+    stateKey: 'forecast_member_access',
+  }),
 ]);
 
 const normalizeLf = (value) => String(value).replace(/\r\n?/gu, '\n');
@@ -176,6 +182,32 @@ const releaseStateProbe = (item) => {
        ) as ${item.stateKey}_state_any
 \\gset`;
   }
+  if (item.stateKey === 'forecast_member_access') {
+    return `select to_regprocedure(
+           'public.dd2026_bar_forecast_access_allowed(uuid)'
+         ) is not null
+         or exists (
+           select 1
+           from public.dd2026_feature_flags flag_row
+           where (flag_row.flag_key = 'BAR_FORECAST_ENABLED' and flag_row.enabled)
+              or (flag_row.flag_key = 'BAR_FORECAST_ADMIN_ONLY' and not flag_row.enabled)
+         )
+         or exists (
+           select 1
+           from (
+             values
+               (to_regprocedure('public.dd2026_bar_forecast_consent_status(uuid,text)')),
+               (to_regprocedure('public.dd2026_bar_forecast_accept_consent(uuid,text)')),
+               (to_regprocedure('public.dd2026_bar_forecast_admin_list(uuid,text,text)'))
+           ) candidate(rpc)
+           where candidate.rpc is not null
+             and position(
+               'dd2026_bar_forecast_access_allowed'
+               in pg_get_functiondef(candidate.rpc::oid)
+             ) > 0
+         ) as ${item.stateKey}_state_any
+\\gset`;
+  }
   throw new Error(`Unsupported Forecast release state key: ${item.stateKey}`);
 };
 
@@ -214,7 +246,7 @@ const releaseBlocks = preparedReleases.map(releaseBlock).join('\n\n');
 const releaseVersions = preparedReleases.map(({ version }) => `'${version}'`).join(', ');
 const exactReleaseLedger = preparedReleases.map(exactLedger).join(' or ');
 
-const bundle = `-- Generated only from the reviewed administrator-only Bar Forecast migrations.
+const bundle = `-- Generated only from the reviewed protected Bar Forecast migrations.
 -- The two September pricing migrations are immutable prerequisites: this bundle
 -- verifies their exact ledger names and source hashes but never reapplies them.
 \\set ON_ERROR_STOP on
@@ -248,7 +280,7 @@ from supabase_migrations.schema_migrations
 where version in (${releaseVersions})
 \\gset
 \\if :forecast_postflight_exact
-  \\echo 'Exact Admin Bar Forecast migration ledger postflight passed for all three migrations.'
+  \\echo 'Exact Bar Forecast migration ledger postflight passed for all four migrations.'
 \\else
   \\echo 'Admin Bar Forecast migration ledger postflight failed.'
   rollback;
@@ -257,7 +289,7 @@ where version in (${releaseVersions})
 commit;
 
 -- The committed schema is now exercised with a rollback-only schema,
--- privilege, feature-flag, and non-admin authorization probe.
+-- privilege, feature-flag, and entitlement authorization probe.
 ${probe}`;
 
 await writeFile(outputPath, normalizeLf(bundle), { encoding: 'utf8', mode: 0o600 });

@@ -14,7 +14,7 @@ import {
   forecastGradingBatches,
   normalizeBarForecastRequest,
   publicForecastQuestions,
-  requireBarForecastAdministrator,
+  requireBarForecastAccess,
   validateBarForecastGradingResult,
   validatedForecastRows,
 } from './bar-forecast-core.mjs';
@@ -68,26 +68,28 @@ export function createBarForecastHandlers(deps) {
   const {
     authorizeAdministrator,
     barForecastRpc,
-    enforceBarForecastAdminRateLimit,
+    enforceBarForecastRateLimit,
     jsonResponse,
     parseBoundedJson,
     requiredSetupAccess,
-    requireAdministrator,
+    requireAuthenticatedUser,
     structuredGemini,
     approvedSetIds = BAR_FORECAST_APPROVED_SET_IDS,
   } = deps;
 
   async function authorizedContext(request, env) {
-    await enforceBarForecastAdminRateLimit(request, env);
-    const user = await requireAdministrator(request, env);
-    const authorization = requireBarForecastAdministrator(
-      await authorizeAdministrator(env, user),
-    );
-    const setupAccess = await requiredSetupAccess(env, user);
+    await enforceBarForecastRateLimit(request, env);
+    const user = await requireAuthenticatedUser(request, env);
+    await enforceBarForecastRateLimit(request, env, user);
+    const [administrator, setupAccess] = await Promise.all([
+      authorizeAdministrator(env, user),
+      requiredSetupAccess(env, user),
+    ]);
+    const authorization = requireBarForecastAccess({ administrator, access: setupAccess });
     if (requiredSetupPending(setupAccess, authorization)) {
       throw new BarForecastError(
         'BAR_FORECAST_SETUP_REQUIRED',
-        'Complete the required account setup before opening the administrator pilot.',
+        'Complete the required account setup before opening Bar Forecast.',
         403,
       );
     }

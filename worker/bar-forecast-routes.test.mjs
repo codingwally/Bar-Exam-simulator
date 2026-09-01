@@ -82,7 +82,10 @@ function harness(overrides = {}) {
   const calls = [];
   let consentAccepted = overrides.consentAccepted ?? true;
   const dependencies = {
-    authorizeAdministrator: async () => overrides.authorization ?? {
+    authorizeAdministrator: async () => Object.prototype.hasOwnProperty.call(
+      overrides,
+      'authorization',
+    ) ? overrides.authorization : {
       authorized: true,
       role: 'super_admin',
     },
@@ -103,8 +106,8 @@ function harness(overrides = {}) {
       }
       throw new Error(`Unexpected RPC ${functionName}`);
     },
-    enforceBarForecastAdminRateLimit: async () => {
-      calls.push({ functionName: 'rate_limit' });
+    enforceBarForecastRateLimit: async (_request, _env, user = null) => {
+      calls.push({ functionName: 'rate_limit', userId: user?.id || null });
     },
     jsonResponse: (body, status) => new Response(JSON.stringify(body), {
       status,
@@ -115,7 +118,7 @@ function harness(overrides = {}) {
     requiredSetupAccess: async () => Object.prototype.hasOwnProperty.call(overrides, 'setupAccess')
       ? overrides.setupAccess
       : completeSetupAccess(),
-    requireAdministrator: async (incoming) => {
+    requireAuthenticatedUser: async (incoming) => {
       if (incoming.headers.get('Authorization') !== 'Bearer admin-token') {
         const error = new Error('Administrator sign-in is required.');
         error.code = 'ADMIN_SIGN_IN_REQUIRED';
@@ -163,21 +166,68 @@ test('status is fail-closed and returns only the contracted fields with private 
     consentAccepted: false,
   });
   assert.deepEqual(calls.map((call) => call.functionName), [
-    'rate_limit', 'dd2026_bar_forecast_consent_status',
+    'rate_limit', 'rate_limit', 'dd2026_bar_forecast_consent_status',
+  ]);
+  assert.deepEqual(calls.filter((call) => call.functionName === 'rate_limit'), [
+    { functionName: 'rate_limit', userId: null },
+    { functionName: 'rate_limit', userId: 'admin-user-id' },
   ]);
 
   const denied = harness({ authorization: { authorized: false, role: 'super_admin' } });
   await assert.rejects(
     denied.handlers.handle(request({ operation: 'status' }), {}, '', ''),
-    { code: 'BAR_FORECAST_ADMIN_FORBIDDEN', status: 403 },
+    { code: 'BAR_FORECAST_ACCESS_REQUIRED', status: 403 },
   );
   assert.equal(denied.calls.some((call) => call.functionName === 'dd2026_bar_forecast_consent_status'), false);
 
-  const subscriber = harness({ authorization: { authorized: true, role: 'subscriber' } });
-  await assert.rejects(
-    subscriber.handlers.handle(request({ operation: 'status' }), {}, '', ''),
-    { code: 'BAR_FORECAST_ADMIN_FORBIDDEN', status: 403 },
-  );
+  for (const setupAccess of [
+    completeSetupAccess({
+      role: 'student',
+      basis: 'early_access',
+      unlimited: true,
+      subscription: { status: 'active', source: 'manual_payment' },
+    }),
+    completeSetupAccess({
+      role: 'student',
+      basis: 'paid_subscription',
+      unlimited: true,
+      subscription: { status: 'active', source: 'manual_payment' },
+    }),
+    completeSetupAccess({
+      role: 'student',
+      basis: 'founding_beta',
+      unlimited: true,
+      freeBeta: { active: true, program: 'founding_beta_2026' },
+    }),
+  ]) {
+    const member = harness({
+      authorization: null,
+      consentAccepted: false,
+      setupAccess,
+    });
+    const memberResponse = await member.handlers.handle(
+      request({ operation: 'status' }), {}, '', '',
+    );
+    assert.equal(memberResponse.status, 200);
+    assert.equal((await responseBody(memberResponse)).authorized, true);
+  }
+
+  for (const setupAccess of [
+    completeSetupAccess({ role: 'student', basis: 'introductory_tokens', unlimited: false }),
+    completeSetupAccess({ role: 'student', basis: 'provisional_payment', unlimited: true }),
+    completeSetupAccess({
+      role: 'student',
+      basis: 'paid_subscription',
+      unlimited: true,
+      subscription: { status: 'active', source: 'complimentary' },
+    }),
+  ]) {
+    const blocked = harness({ authorization: null, setupAccess });
+    await assert.rejects(
+      blocked.handlers.handle(request({ operation: 'status' }), {}, '', ''),
+      { code: 'BAR_FORECAST_ACCESS_REQUIRED', status: 403 },
+    );
+  }
 });
 
 test('dedicated rate-limit rejection stops authentication, parsing, storage, and grading', async () => {
@@ -188,11 +238,11 @@ test('dedicated rate-limit rejection stops authentication, parsing, storage, and
   });
   const { handlers } = harness({
     dependencies: {
-      enforceBarForecastAdminRateLimit: async () => {
+      enforceBarForecastRateLimit: async () => {
         touched.push('rate_limit');
         throw rateError;
       },
-      requireAdministrator: async () => { touched.push('authenticate'); },
+      requireAuthenticatedUser: async () => { touched.push('authenticate'); },
       authorizeAdministrator: async () => { touched.push('authorize'); },
       parseBoundedJson: async () => { touched.push('parse'); },
       barForecastRpc: async () => { touched.push('storage'); },
@@ -292,7 +342,7 @@ test('required account setup fails closed server-side while payment state remain
   }
 });
 
-test('accept persists the exact version for the authenticated admin user', async () => {
+test('accept persists the exact version for the authenticated eligible user', async () => {
   const { calls, handlers } = harness({ consentAccepted: false });
   const response = await handlers.handle(request({
     operation: 'accept',

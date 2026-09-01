@@ -42,7 +42,7 @@
         'assets/bar-forecast.css?v=exam-tools-20260901-4',
       ],
       scripts: [
-        'assets/bar-forecast.js?v=exam-tools-20260901-4',
+        'assets/bar-forecast.js?v=exam-tools-20260901-5',
       ],
     }),
   });

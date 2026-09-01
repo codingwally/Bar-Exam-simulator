@@ -248,7 +248,8 @@ const WINDOW_MS = 10 * 60 * 1000;
 const MAX_REQUESTS_PER_WINDOW = 12;
 const MAX_CORRECTIONS_PER_WINDOW = 5;
 const MAX_SUPPORT_REQUESTS_PER_WINDOW = 4;
-const MAX_BAR_FORECAST_ADMIN_REQUESTS_PER_WINDOW = 90;
+const MAX_BAR_FORECAST_NETWORK_REQUESTS_PER_WINDOW = 180;
+const MAX_BAR_FORECAST_USER_REQUESTS_PER_WINDOW = 30;
 const DUPLICATE_TTL_MS = 20 * 1000;
 const GEMINI_TIMEOUT_MS = 45 * 1000;
 const SUBJECT_MATTER_TEACHING_TIMEOUT_MS = 8 * 1000;
@@ -278,7 +279,8 @@ const correctionRateWindows = new Map();
 const supportRateWindows = new Map();
 const analyticsRateWindows = new Map();
 const adminRateWindows = new Map();
-const barForecastAdminRateWindows = new Map();
+const barForecastNetworkRateWindows = new Map();
+const barForecastUserRateWindows = new Map();
 const studyRoomAccessRateWindows = new Map();
 const studyRoomRoomsRateWindows = new Map();
 const studyRoomJoinRateWindows = new Map();
@@ -409,12 +411,24 @@ async function enforceAdminRateLimit(request, env) {
   );
 }
 
-async function enforceBarForecastAdminRateLimit(request, env) {
+async function enforceBarForecastRateLimit(request, env, user = null) {
+  if (user?.id) {
+    enforceWindow(
+      barForecastUserRateWindows,
+      await hmacHex(
+        env.GUEST_USAGE_HMAC_KEY || 'local-transient-rate-key',
+        `bar-forecast-user\0${user.id}`,
+      ),
+      MAX_BAR_FORECAST_USER_REQUESTS_PER_WINDOW,
+      'Too many Bar Forecast requests for this account. Please wait and try again.',
+    );
+    return;
+  }
   enforceWindow(
-    barForecastAdminRateWindows,
-    await transientRateKey(request, env, 'bar-forecast-admin'),
-    MAX_BAR_FORECAST_ADMIN_REQUESTS_PER_WINDOW,
-    'Too many Forecast administrator requests. Please wait and try again.',
+    barForecastNetworkRateWindows,
+    await transientRateKey(request, env, 'bar-forecast-network'),
+    MAX_BAR_FORECAST_NETWORK_REQUESTS_PER_WINDOW,
+    'Too many Bar Forecast requests from this network. Please wait and try again.',
   );
 }
 
@@ -10001,11 +10015,11 @@ const barForecastHandlers = createBarForecastHandlers({
     { returnNullOnAuthorizationDenial: true },
   ),
   barForecastRpc,
-  enforceBarForecastAdminRateLimit,
+  enforceBarForecastRateLimit,
   jsonResponse,
   parseBoundedJson,
   requiredSetupAccess: (env, user) => phase4SetupAccessForUser(env, user.id),
-  requireAdministrator,
+  requireAuthenticatedUser: requireAdministrator,
   structuredGemini: callGeminiStructured,
 });
 
@@ -10287,7 +10301,7 @@ export default {
         if (request.method !== 'POST') {
           throw new BarForecastError(
             'BAR_FORECAST_METHOD_NOT_ALLOWED',
-            'Use POST for the Bar Forecast administrator endpoint.',
+            'Use POST for the protected Bar Forecast endpoint.',
             405,
           );
         }

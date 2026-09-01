@@ -64,6 +64,39 @@ function requiredSetupPending(access, authorization) {
     || access.profileCompleted === false;
 }
 
+export const BAR_FORECAST_GRADING_PROVIDER_OPTIONS = Object.freeze({
+  quiet: true,
+  requestTimeoutMs: 30_000,
+  modelLimit: 2,
+  attemptsPerModel: 1,
+});
+
+function forecastGradingProviderError(error) {
+  const code = String(error?.code || '').trim().toUpperCase();
+  if (code === 'COACH_TIMEOUT') {
+    return new BarForecastError(
+      'BAR_FORECAST_GRADING_TIMEOUT',
+      'Forecast grading took too long to respond. Your answers remain available; please try submitting again.',
+      503,
+    );
+  }
+  if (code === 'COACH_CAPACITY') {
+    return new BarForecastError(
+      'BAR_FORECAST_GRADING_CAPACITY',
+      'Forecast grading has reached temporary capacity. Your answers remain available; please try again shortly.',
+      503,
+    );
+  }
+  if (['COACH_NOT_CONFIGURED', 'COACH_UNAVAILABLE'].includes(code)) {
+    return new BarForecastError(
+      'BAR_FORECAST_GRADING_UNAVAILABLE',
+      'Forecast grading is temporarily unavailable. Your answers remain available; please try again shortly.',
+      503,
+    );
+  }
+  return error;
+}
+
 export function createBarForecastHandlers(deps) {
   const {
     authorizeAdministrator,
@@ -126,14 +159,18 @@ export function createBarForecastHandlers(deps) {
   async function gradeForecast(env, rowsWithAnswers) {
     const graded = [];
     for (const batch of forecastGradingBatches(rowsWithAnswers)) {
-      const evaluation = await structuredGemini(
-        env,
-        buildBarForecastGradingPrompt(batch),
-        BAR_FORECAST_GRADING_RESPONSE_SCHEMA,
-        (value) => validateBarForecastGradingResult(value, batch),
-        { quiet: true },
-      );
-      graded.push(evaluation.result);
+      try {
+        const evaluation = await structuredGemini(
+          env,
+          buildBarForecastGradingPrompt(batch),
+          BAR_FORECAST_GRADING_RESPONSE_SCHEMA,
+          (value) => validateBarForecastGradingResult(value, batch),
+          BAR_FORECAST_GRADING_PROVIDER_OPTIONS,
+        );
+        graded.push(evaluation.result);
+      } catch (error) {
+        throw forecastGradingProviderError(error);
+      }
     }
     return completeBarForecastResult(rowsWithAnswers, graded);
   }

@@ -6123,6 +6123,15 @@ async function callGemini(env, prompt, groundingEnabled) {
 
 async function callGeminiStructured(env, prompt, responseSchema, validateResult, options = {}) {
   const quiet = options?.quiet === true;
+  const requestTimeoutMs = Number.isInteger(options?.requestTimeoutMs)
+    ? Math.min(Math.max(options.requestTimeoutMs, SUBJECT_MATTER_TEACHING_TIMEOUT_MS), GEMINI_TIMEOUT_MS)
+    : SUBJECT_MATTER_TEACHING_TIMEOUT_MS;
+  const modelLimit = Number.isInteger(options?.modelLimit)
+    ? Math.min(Math.max(options.modelLimit, 1), MODEL_FALLBACKS.length + 1)
+    : 1;
+  const attemptsPerModel = Number.isInteger(options?.attemptsPerModel)
+    ? Math.min(Math.max(options.attemptsPerModel, 1), GEMINI_TRANSIENT_ATTEMPTS)
+    : GEMINI_TRANSIENT_ATTEMPTS;
   if (!env.GEMINI_API_KEY) {
     throw new DD2026ValidationError(
       'COACH_NOT_CONFIGURED',
@@ -6133,16 +6142,17 @@ async function callGeminiStructured(env, prompt, responseSchema, validateResult,
   let quotaSeen = false;
   let timeoutSeen = false;
   let providerFailureSeen = false;
-  // A reveal must never sit behind the examiner's full multi-model retry budget.
-  // One configured model gets one repair attempt, then the curated fallback wins.
-  for (const model of orderedModels(env.GEMINI_MODEL).slice(0, 1)) {
+  // Quick coaching retains the original one-model repair budget. Larger internal
+  // callers may opt into bounded timeout and fallback-model limits explicitly.
+  for (const model of orderedModels(env.GEMINI_MODEL).slice(0, modelLimit)) {
     let unsupported = false;
-    for (let attempt = 0; attempt < 2; attempt += 1) {
+    for (let attempt = 0; attempt < attemptsPerModel; attempt += 1) {
+      const retryAvailable = attempt + 1 < attemptsPerModel;
       const repair = attempt === 1
         ? '\n\nREPAIR: Return only valid JSON matching the supplied schema. Do not add markdown or commentary outside JSON.'
         : '';
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), SUBJECT_MATTER_TEACHING_TIMEOUT_MS);
+      const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
       let response;
       let responseText = '';
       try {
@@ -6175,7 +6185,7 @@ async function callGeminiStructured(env, prompt, responseSchema, validateResult,
             reason: error?.name === 'AbortError' ? 'timeout' : 'network',
           });
         }
-        if (attempt === 0) {
+        if (retryAvailable) {
           await retryDelay(attempt);
           continue;
         }
@@ -6205,7 +6215,7 @@ async function callGeminiStructured(env, prompt, responseSchema, validateResult,
         }
         quotaSeen ||= response.status === 429;
         providerFailureSeen ||= response.status !== 429;
-        if (attempt === 0 && (response.status === 408 || response.status === 429 || response.status >= 500)) {
+        if (retryAvailable && (response.status === 408 || response.status === 429 || response.status >= 500)) {
           await retryDelay(attempt);
           continue;
         }
@@ -6219,7 +6229,7 @@ async function callGeminiStructured(env, prompt, responseSchema, validateResult,
         return { model, result: validateResult(parsed) };
       } catch {
         providerFailureSeen = true;
-        if (attempt === 0) {
+        if (retryAvailable) {
           await retryDelay(attempt);
           continue;
         }
@@ -6241,6 +6251,16 @@ async function callGeminiStructured(env, prompt, responseSchema, validateResult,
       : 'The study coach is temporarily unavailable.',
     503,
   );
+}
+
+export async function callGeminiStructuredForTest(
+  env,
+  prompt,
+  responseSchema,
+  validateResult,
+  options = {},
+) {
+  return callGeminiStructured(env, prompt, responseSchema, validateResult, options);
 }
 
 async function handleGrade(request, env, origin, allowedOrigin) {

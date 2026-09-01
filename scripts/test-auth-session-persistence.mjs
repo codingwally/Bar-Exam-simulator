@@ -287,6 +287,7 @@ assert.match(
 
 const dispatchedSessions = [];
 const dispatchContext = {
+  routineSessionRefreshReasons: new Set(['refresh', 'TOKEN_REFRESHED']),
   state: {
     sessionEventInitialized: false,
     lastSessionEventUserId: null,
@@ -330,8 +331,29 @@ assert.deepEqual(
 );
 assert.equal(
   dispatchSessionState({ ...restoredSession, access_token: 'refreshed-access-token' }, 'TOKEN_REFRESHED'),
+  false,
+  'A routine Supabase token rotation must update session state without broadcasting a new login.',
+);
+assert.equal(
+  dispatchSessionState({ ...restoredSession, access_token: 'manual-refresh-token' }, 'refresh'),
+  false,
+  'A request-driven session refresh must not re-enter authenticated application setup.',
+);
+assert.equal(dispatchedSessions.length, 1, 'Routine refreshes must not add public session events.');
+assert.equal(
+  dispatchContext.state.lastSessionEventAccessToken,
+  'manual-refresh-token',
+  'Silent refreshes must still update the token used for later duplicate detection.',
+);
+assert.equal(dispatchSessionState(null, 'SIGNED_OUT'), true);
+assert.equal(
+  dispatchSessionState({ ...restoredSession, access_token: 'fresh-sign-in-token' }, 'SIGNED_IN'),
   true,
-  'A genuinely refreshed access token must still dispatch a new session event.',
+);
+assert.deepEqual(
+  dispatchedSessions.map(({ reason }) => reason),
+  ['initial-session', 'SIGNED_OUT', 'SIGNED_IN'],
+  'Sign-out and a genuine subsequent sign-in must still reach every session consumer.',
 );
 
 let resolveUserState;
@@ -450,5 +472,7 @@ assert.deepEqual(
   'A completed Google return must emit exactly one welcome toast.',
 );
 assert.equal(restoredDestinations, 4, 'Toast suppression must not suppress destination restoration.');
+
+await import('./test-login-loop-p0.mjs');
 
 console.log('Durable authentication session checks passed.');

@@ -62,8 +62,8 @@ assert.match(
 );
 assert.match(
   shellExperience,
-  /if \(session && \['SIGNED_IN', 'INITIAL_SESSION', 'TOKEN_REFRESHED'\]\.includes\(event\)\) \{\s*closeEntry\(\);/,
-  'Verified auth events must close a stale guest gate.',
+  /if \(session && sessionChanged\) \{\s*closeEntry\(\);\s*setTimeout\(\(\) => loadUserState\(\), 0\);/,
+  'Only a newly published identity may close and rebootstrap the entry gate.',
 );
 assert.match(config, /terms-soft-launch-v1-2026-08-21/);
 assert.match(config, /privacy-soft-launch-v1-2026-08-21/);

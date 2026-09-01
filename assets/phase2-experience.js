@@ -181,10 +181,20 @@
   const pendingSubmissionStorageKey = 'duediligence.pending-submission.v1';
   const authTimeoutMs = 12_000;
   const pendingSubmissionMaxAgeMs = 30 * 60 * 1000;
+  const routineSessionRefreshReasons = new Set(['refresh', 'TOKEN_REFRESHED']);
 
   function dispatchSessionState(session, reason = 'session') {
     const userId = session?.user?.id || null;
     const accessToken = session?.access_token || null;
+    const routineRefresh = routineSessionRefreshReasons.has(reason);
+    const samePublishedIdentity = state.sessionEventInitialized
+      && state.lastSessionEventUserId === userId;
+    if (routineRefresh && samePublishedIdentity) {
+      state.sessionEventInitialized = true;
+      state.lastSessionEventUserId = userId;
+      state.lastSessionEventAccessToken = accessToken;
+      return false;
+    }
     if (state.sessionEventInitialized
         && state.lastSessionEventUserId === userId
         && state.lastSessionEventAccessToken === accessToken) {
@@ -197,7 +207,7 @@
       detail: {
         authenticated: Boolean(accessToken),
         userId,
-        reason,
+        reason: routineRefresh ? (accessToken ? 'SIGNED_IN' : 'SIGNED_OUT') : reason,
       },
     }));
     return true;
@@ -3344,6 +3354,42 @@
     });
   }
 
+  function handleAuthStateChange(event, session) {
+    const previousUserId = state.user?.id || null;
+    const nextUserId = session?.user?.id || null;
+    if (previousUserId !== nextUserId) {
+      state.profile = null;
+      state.admin = null;
+      state.welcomedUserId = null;
+      state.userStatePromise = null;
+      state.userStateUserId = null;
+    }
+    state.session = session || null;
+    state.user = session?.user || null;
+    if (session?.access_token) {
+      safeSessionRemove(authAttemptStorageKey);
+      resetGoogleSignIn();
+    } else if (event === 'SIGNED_OUT') {
+      state.privateBetaAllowed = config.features?.privateBetaGate !== true;
+      global.DueDiligencePrivateBeta?.clear?.();
+      resetGoogleSignIn();
+    }
+    syncAuthUi();
+    const sessionChanged = dispatchSessionState(session, event);
+    if (session && event === 'SIGNED_IN') {
+      global.DueDiligenceAnalytics?.track('sign_in_completed');
+      setTimeout(() => notifyOwnerOfSuccessfulSignIn(session), 0);
+      const createdAt = new Date(session.user?.created_at || 0).getTime();
+      if (createdAt && Date.now() - createdAt < 10 * 60 * 1000) {
+        global.DueDiligenceAnalytics?.track('registration_completed');
+      }
+    }
+    if (session && sessionChanged) {
+      closeEntry();
+      setTimeout(() => loadUserState(), 0);
+    }
+  }
+
   async function initializeAuth() {
     if (!global.supabase?.createClient) {
       syncAuthUi();
@@ -3379,35 +3425,7 @@
       resetGoogleSignIn('Google sign-in was not completed. You can try again now.', 'error');
     }
 
-    state.client.auth.onAuthStateChange((event, session) => {
-      state.session = session || null;
-      state.user = session?.user || null;
-      if (session?.access_token) {
-        safeSessionRemove(authAttemptStorageKey);
-        resetGoogleSignIn();
-      } else if (event === 'SIGNED_OUT') {
-        state.privateBetaAllowed = config.features?.privateBetaGate !== true;
-        state.welcomedUserId = null;
-        state.userStatePromise = null;
-        state.userStateUserId = null;
-        global.DueDiligencePrivateBeta?.clear?.();
-        resetGoogleSignIn();
-      }
-      syncAuthUi();
-      dispatchSessionState(session, event);
-      if (session && ['SIGNED_IN', 'INITIAL_SESSION', 'TOKEN_REFRESHED'].includes(event)) {
-        closeEntry();
-        if (event === 'SIGNED_IN') {
-          global.DueDiligenceAnalytics?.track('sign_in_completed');
-          setTimeout(() => notifyOwnerOfSuccessfulSignIn(session), 0);
-          const createdAt = new Date(session.user?.created_at || 0).getTime();
-          if (createdAt && Date.now() - createdAt < 10 * 60 * 1000) {
-            global.DueDiligenceAnalytics?.track('registration_completed');
-          }
-        }
-        setTimeout(() => loadUserState(), 0);
-      }
-    });
+    state.client.auth.onAuthStateChange(handleAuthStateChange);
 
     if (state.user) await loadUserState();
     if (new URLSearchParams(location.search).has('auth')
@@ -3442,6 +3460,30 @@
       resetGoogleSignIn('Google sign-in was not completed. You can try again now.', 'error');
     } else {
       resetGoogleSignIn();
+    }
+  }
+
+  function handlePhase2SessionChange(event) {
+    if (routineSessionRefreshReasons.has(event.detail?.reason)) return;
+    state.examinationRoomDoorRequest += 1;
+    if (state.nativeView === 'examination-room') checkProfessorDoor();
+    renderHeaderAccountControl();
+    if (event.detail?.authenticated === true) {
+      loadAccountProfilePhoto({
+        force: event.detail?.reason === 'SIGNED_IN',
+        announce: state.nativeView === 'account',
+      }).catch(() => {});
+    }
+  }
+
+  function handleProfileCompleted() {
+    if (state.nativeView === 'examination-room') checkProfessorDoor();
+    state.userStatePromise = null;
+    state.userStateUserId = null;
+    if (state.user) {
+      loadUserState().catch(() => {
+        global.toast?.('Your completed profile could not be refreshed. Reload and try again.', 'warn');
+      });
     }
   }
 
@@ -3618,20 +3660,8 @@
           : global.DueDiligenceProfilePhoto?.current?.(activeUserId) || profilePhotoFallback(),
       );
     });
-    global.addEventListener('duediligence:session', (event) => {
-      state.examinationRoomDoorRequest += 1;
-      if (state.nativeView === 'examination-room') checkProfessorDoor();
-      renderHeaderAccountControl();
-      if (event.detail?.authenticated === true) {
-        loadAccountProfilePhoto({
-          force: event.detail?.reason === 'SIGNED_IN',
-          announce: state.nativeView === 'account',
-        }).catch(() => {});
-      }
-    });
-    global.addEventListener('duediligence:profile-completed', () => {
-      if (state.nativeView === 'examination-room') checkProfessorDoor();
-    });
+    global.addEventListener('duediligence:session', handlePhase2SessionChange);
+    global.addEventListener('duediligence:profile-completed', handleProfileCompleted);
     global.addEventListener('online', () => {
       if (state.nativeView === 'examination-room') checkProfessorDoor();
     });

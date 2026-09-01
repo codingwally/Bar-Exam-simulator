@@ -59,7 +59,7 @@ jobs:
           git cat-file -e "$EXPECTED_BASE_SHA^{commit}"
           git merge-base --is-ancestor "$EXPECTED_BASE_SHA" "$EXPECTED_SOURCE_SHA"
 
-          allowed='^(\.github/workflows/deploy-pages-only\.yml|assets/feature-loader\.js|assets/icons/(community/image|navigation/(circle-check|cloud-upload|hand|mic|monitor-up|pin|settings|shield-check))\.svg|assets/lex-forum\.css|assets/lex-forum\.js|assets/payments/(bpi-instapay-199-qr\.png|bpi-mark\.png)|assets/pedro-navigation\.js|assets/phase2-experience\.js|assets/phase2\.css|assets/pricing-checkout-safety\.js|assets/pricing-renderer\.(css|js)|assets/private-beta-landing\.js|assets/study-room-backgrounds\.js|assets/study-room-live\.(css|js)|assets/study-room-preview\.(css|js)|assets/study-room/(dimasalang-library|participant-2-tropical|participant-3-bedroom|participant-4-condo|virtual-background-due-diligence-branded)\.webp|assets/subscription-cta\.css|assets/subscription-cta\.js|assets/vendor/mediapipe/(LICENSE|PROVENANCE)\.txt|assets/vendor/mediapipe/selfie_segmenter-float16-2023-05-07\.tflite|design-qa\.md|index\.html|scripts/build-pages-artifact\.mjs|scripts/test-home-post-collapse\.mjs|scripts/test-lex-forum\.mjs|scripts/test-pages-artifact\.mjs|scripts/test-pedro-navigation\.mjs|scripts/test-pricing-checkout-safety\.mjs|scripts/test-public-home-responsive-css\.mjs|scripts/test-public-release1-reliability\.mjs|scripts/test-quorum\.mjs|scripts/test-september-pricing-(sql|ui)-contract\.mjs|scripts/test-study-room-(backgrounds|hotfix-behavior|live|preview)\.mjs|service-worker\.js|study-room/index\.html)$'
+          allowed='^(\.github/workflows/deploy-pages-only\.yml|assets/feature-loader\.js|assets/icons/(community/image|navigation/(circle-check|cloud-upload|hand|mic|monitor-up|pin|settings|shield-check))\.svg|assets/lex-forum\.css|assets/lex-forum\.js|assets/payments/(bpi-instapay-199-qr\.png|bpi-mark\.png)|assets/pedro-navigation\.js|assets/phase2-experience\.js|assets/phase4-experience\.js|assets/phase2\.css|assets/pricing-checkout-safety\.js|assets/pricing-renderer\.(css|js)|assets/private-beta-landing\.js|assets/study-room-backgrounds\.js|assets/study-room-live\.(css|js)|assets/study-room-preview\.(css|js)|assets/study-room/(dimasalang-library|participant-2-tropical|participant-3-bedroom|participant-4-condo|virtual-background-due-diligence-branded)\.webp|assets/subscription-cta\.css|assets/subscription-cta\.js|assets/vendor/mediapipe/(LICENSE|PROVENANCE)\.txt|assets/vendor/mediapipe/selfie_segmenter-float16-2023-05-07\.tflite|design-qa\.md|index\.html|scripts/build-pages-artifact\.mjs|scripts/test-approved-renovation-shell\.mjs|scripts/test-auth-session-persistence\.mjs|scripts/test-bar-forecast-frontend\.mjs|scripts/test-design-correction-release\.mjs|scripts/test-home-post-collapse\.mjs|scripts/test-lex-forum\.mjs|scripts/test-login-loop-p0\.mjs|scripts/test-mobile-responsive-hotfix\.mjs|scripts/test-pages-artifact\.mjs|scripts/test-pedro-navigation\.mjs|scripts/test-pedro-release2-integration\.mjs|scripts/test-phase4-release1\.mjs|scripts/test-pricing-checkout-safety\.mjs|scripts/test-public-home-responsive-css\.mjs|scripts/test-public-release1-reliability\.mjs|scripts/test-quorum\.mjs|scripts/test-september-pricing-(sql|ui)-contract\.mjs|scripts/test-study-room-(backgrounds|hotfix-behavior|live|preview)\.mjs|scripts/test-syllabus-review-reveal-contract\.mjs|service-worker\.js|study-room/index\.html)$'
           unexpected="$(git diff --name-only "$EXPECTED_BASE_SHA..$EXPECTED_SOURCE_SHA" | grep -Ev "$allowed" || true)"
           if [[ -n "$unexpected" ]]; then
             echo "The frontend-only release contains files outside the approved isolation boundary:" >&2
@@ -75,7 +75,7 @@ jobs:
       - name: Install reviewed Pages build dependencies
         run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
 
-      - name: Verify the pricing checkout, subscription CTA, and unchanged community contracts
+      - name: Verify P0 authentication and unchanged frontend contracts
         run: |
           node --check assets/subscription-cta.js
           node --check assets/pricing-checkout-safety.js
@@ -84,6 +84,11 @@ jobs:
           node --check assets/study-room-live.js
           node --check assets/study-room-preview.js
           node --check assets/phase2-experience.js
+          node --check assets/phase4-experience.js
+          node --check assets/private-beta-landing.js
+          node scripts/test-auth-session-persistence.mjs
+          node scripts/test-phase4-release1.mjs
+          node scripts/test-bar-forecast-frontend.mjs
           node scripts/test-study-room-backgrounds.mjs
           node scripts/test-study-room-live.mjs
           node scripts/test-study-room-hotfix-behavior.mjs
@@ -130,6 +135,7 @@ jobs:
             navigation_js="$(curl -fsS "$SITE_URL/assets/private-beta-landing.js?release=$GITHUB_SHA" || true)"
             pedro_js="$(curl -fsS "$SITE_URL/assets/pedro-navigation.js?release=$GITHUB_SHA" || true)"
             pricing_js="$(curl -fsS "$SITE_URL/assets/phase2-experience.js?release=$GITHUB_SHA" || true)"
+            access_js="$(curl -fsS "$SITE_URL/assets/phase4-experience.js?release=$GITHUB_SHA" || true)"
             study_room_js="$(curl -fsS "$SITE_URL/assets/study-room-preview.js?release=$GITHUB_SHA" || true)"
             study_room_css="$(curl -fsS "$SITE_URL/assets/study-room-preview.css?release=$GITHUB_SHA" || true)"
             study_room_page="$(curl -fsS "$SITE_URL/study-room/?release=$GITHUB_SHA" || true)"
@@ -162,6 +168,7 @@ jobs:
             done
             if grep -q 'home-subscription-cta-20260828-3' <<<"$index" \
               && grep -q 'private-beta-landing.js?v=public-reliability-20260827-2&amp;feedback=quiet-navigation-20260828-1' <<<"$index" \
+              && grep -q 'auth=login-loop-p0-20260901-1' <<<"$index" \
               && grep -q 'pedro-navigation.js?v=pedro-release2-20260827-1&amp;feedback=quiet-navigation-20260828-1' <<<"$index" \
               && grep -q 'home-subscription-20260828-2' <<<"$loader" \
               && grep -q 'collapse=home-read-more-20260828-1' <<<"$loader" \
@@ -171,7 +178,12 @@ jobs:
               && grep -q 'function renderPostBody(item)' <<<"$forum_js" \
               && grep -q 'lex-post-read-more' <<<"$forum_css" \
               && grep -q "classList.toggle('dd2-sr-only'" <<<"$navigation_js" \
+              && grep -q 'handleLandingSessionChange' <<<"$navigation_js" \
               && grep -q "announcementOnly = kind === 'loading'" <<<"$pedro_js" \
+              && grep -q 'routineSessionRefreshReasons' <<<"$pricing_js" \
+              && grep -q 'session && sessionChanged' <<<"$pricing_js" \
+              && grep -q 'ACCESS_AUTH_RETRY_COOLDOWN_MS' <<<"$access_js" \
+              && grep -q 'handlePhase4SessionChange' <<<"$access_js" \
               && grep -q 'id="dd2-pricing-retry"' <<<"$pricing_js" \
               && grep -q 'Plans &amp; Pricing could not load just now\.' <<<"$pricing_js" \
               && grep -q 'pricing-checkout-safety.js?v=regular-checkout-r2' <<<"$index" \

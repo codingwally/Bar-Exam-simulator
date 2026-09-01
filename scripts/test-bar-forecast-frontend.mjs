@@ -252,7 +252,7 @@ for (const source of [build, serviceWorker]) {
   assert.match(source, /assets\/bar-forecast\/forecast-workspace-preview\.webp/);
 }
 assert.match(build, /'flag\.svg'/);
-assert.match(serviceWorker, /duediligence-shell-20260901-bar-forecast-exam-tools-5/);
+assert.match(serviceWorker, /duediligence-shell-20260901-login-loop-p0-1/);
 assert.match(serviceWorker, /assets\/icons\/navigation\/flag\.svg/);
 assert.match(qaHarness, /dataset\.ddBarForecastQa = 'synthetic'/);
 assert.match(qaHarness, /__DD_BAR_FORECAST_SYNTHETIC_QA__ = '2026-09-01'/);

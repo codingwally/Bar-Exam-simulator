@@ -13,6 +13,8 @@
     'bar-feels',
     'verdict',
   ]);
+  const ACCESS_AUTH_RETRY_COOLDOWN_MS = 5_000;
+  const ROUTINE_SESSION_REFRESH_REASONS = new Set(['refresh', 'TOKEN_REFRESHED']);
 
   const state = {
     access: null,
@@ -26,6 +28,7 @@
     lastOverlayOpen: null,
     releasingGate: false,
     lastRefreshAt: 0,
+    accessAuthRetryBlockedUntil: 0,
     subjectReviewAccessGate: null,
     lastFocusRefreshAt: 0,
   };
@@ -432,11 +435,26 @@
     if (state.accessPromise) {
       access = await state.accessPromise;
     } else {
+      if (Date.now() < state.accessAuthRetryBlockedUntil) {
+        const error = new Error('Session verification is already being retried.');
+        error.code = 'AUTHENTICATION_RETRY_COOLDOWN';
+        error.authRetryExhausted = true;
+        throw error;
+      }
       const pending = request('/access', {
         requestId: false,
         recoverAccess: false,
       })
-        .then((payload) => adoptAccess(payload.access, { enforce: false }))
+        .then((payload) => {
+          state.accessAuthRetryBlockedUntil = 0;
+          return adoptAccess(payload.access, { enforce: false });
+        })
+        .catch((error) => {
+          if (error?.authRetryExhausted === true) {
+            state.accessAuthRetryBlockedUntil = Date.now() + ACCESS_AUTH_RETRY_COOLDOWN_MS;
+          }
+          throw error;
+        })
         .finally(() => {
           if (state.accessPromise === pending) state.accessPromise = null;
         });
@@ -746,8 +764,11 @@
   global.DueDiligencePhase2 = phase4;
   global.DueDiligencePhase4 = phase4;
 
-  global.addEventListener('duediligence:session', (event) => {
-    if (event.detail?.authenticated) {
+  function handlePhase4SessionChange(event) {
+    const detail = event.detail || {};
+    if (detail.authenticated) {
+      if (ROUTINE_SESSION_REFRESH_REASONS.has(detail.reason)) return;
+      state.accessAuthRetryBlockedUntil = 0;
       setTimeout(() => {
         refreshAccess({ enforce: false, force: true }).catch(() => {});
       }, 80);
@@ -755,6 +776,7 @@
     }
 
     state.access = null;
+    state.accessAuthRetryBlockedUntil = 0;
     state.setupGate = false;
     state.paymentGate = false;
     state.gateNoticeShown = false;
@@ -763,7 +785,9 @@
     state.lastFocusRefreshAt = 0;
     document.documentElement?.classList?.remove?.('dd-access-gate-open');
     syncAccessUi();
-  });
+  }
+
+  global.addEventListener('duediligence:session', handlePhase4SessionChange);
 
   global.addEventListener('duediligence:profile-completed', () => {
     if (!session()?.access_token) return;

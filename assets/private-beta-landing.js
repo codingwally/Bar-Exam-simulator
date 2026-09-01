@@ -14,6 +14,7 @@
 
   const gateEnabled = config?.features?.privateBetaGate === true;
   const stages = ['disclosure', 'code', 'google-intro', 'google', 'final'];
+  const routineSessionRefreshReasons = new Set(['refresh', 'TOKEN_REFRESHED']);
   const acknowledgements = Object.freeze({
     aiLimitations: 'ai-limitations',
     educationalOnly: 'educational-only',
@@ -679,6 +680,12 @@
     }
   }
 
+  function handleLandingSessionChange(event) {
+    const detail = event.detail || {};
+    if (routineSessionRefreshReasons.has(detail.reason)) return;
+    syncAuthenticatedState(detail);
+  }
+
   function openLegalView(view) {
     global.DueDiligencePhase2?.openView?.(view);
   }
@@ -1103,9 +1110,7 @@
       event.preventDefault();
       closeAdmission();
     });
-    global.addEventListener('duediligence:session', (event) => {
-      syncAuthenticatedState(event.detail || {});
-    });
+    global.addEventListener('duediligence:session', handleLandingSessionChange);
     global.addEventListener('popstate', () => {
       closePublicMenus();
       if (requestedApplicationRoute() === 'bar-forecast-2026') {

@@ -17,6 +17,7 @@ import {
   completeBarForecastResult,
   forecastSetId,
   forecastGradingBatches,
+  barForecastEntitlementEvidence,
   normalizeBarForecastRequest,
   publicForecastQuestions,
   requireBarForecastAccess,
@@ -191,6 +192,110 @@ test('Forecast access admits administrators and verified paid or Founding Beta m
         && error.code === 'BAR_FORECAST_ACCESS_REQUIRED'
         && error.status === 403,
     );
+  }
+});
+
+test('Forecast entitlement evidence survives setup masking without authorizing access early', () => {
+  const setupMasks = [
+    {
+      allowed: false,
+      unlimited: false,
+      basis: 'legal_acceptance_required',
+      termsRequired: true,
+    },
+    {
+      allowed: false,
+      unlimited: false,
+      basis: 'profile_required',
+      profileCompleted: false,
+      tokenAcknowledgementRequired: true,
+    },
+    {
+      allowed: false,
+      unlimited: false,
+      basis: 'reauthentication_required',
+      reauthenticationRequired: true,
+    },
+  ];
+  for (const source of BAR_FORECAST_PAID_SUBSCRIPTION_SOURCES) {
+    for (const mask of setupMasks) {
+      const context = {
+        administrator: { authorized: false, role: 'founder_admin' },
+        access: {
+          role: 'student',
+          paidSubscriptionExpired: false,
+          subscription: { status: 'active', source },
+          ...mask,
+        },
+      };
+      assert.deepEqual(barForecastEntitlementEvidence(context), {
+        administrator: false,
+        foundingBeta: false,
+        paidSubscription: true,
+        role: 'student',
+        subscriptionSource: source,
+      });
+      assert.throws(
+        () => requireBarForecastAccess(context),
+        { code: 'BAR_FORECAST_ACCESS_REQUIRED', status: 403 },
+      );
+    }
+  }
+
+  assert.deepEqual(barForecastEntitlementEvidence({
+    administrator: { authorized: true, role: 'founder_admin' },
+    access: { role: 'student', basis: 'legal_acceptance_required', termsRequired: true },
+  }), {
+    administrator: true,
+    foundingBeta: false,
+    paidSubscription: false,
+    role: 'founder_admin',
+    subscriptionSource: null,
+  });
+  assert.deepEqual(barForecastEntitlementEvidence({
+    administrator: null,
+    access: {
+      role: 'student',
+      basis: 'legal_acceptance_required',
+      termsRequired: true,
+      freeBeta: { active: true, program: 'founding_beta_2026' },
+    },
+  }), {
+    administrator: false,
+    foundingBeta: true,
+    paidSubscription: false,
+    role: 'student',
+    subscriptionSource: null,
+  });
+
+  for (const context of [
+    { administrator: { authorized: false, role: 'super_admin' }, access: null },
+    { administrator: { authorized: true, role: 'subscriber' }, access: null },
+    {
+      administrator: null,
+      access: { freeBeta: { active: true, program: 'other_program' } },
+    },
+    {
+      administrator: null,
+      access: { freeBeta: { active: false, program: 'founding_beta_2026' } },
+    },
+    {
+      administrator: null,
+      access: { subscription: { status: 'active', source: 'complimentary' } },
+    },
+    {
+      administrator: null,
+      access: { subscription: { status: 'expired', source: 'manual_payment' } },
+    },
+    {
+      administrator: null,
+      access: {
+        paidSubscriptionExpired: true,
+        subscription: { status: 'active', source: 'manual_payment' },
+      },
+    },
+  ]) {
+    assert.equal(barForecastEntitlementEvidence(context), null);
   }
 });
 

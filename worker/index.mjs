@@ -10056,7 +10056,7 @@ const barForecastHandlers = createBarForecastHandlers({
   jsonResponse,
   parseBoundedJson,
   requiredSetupAccess: (env, user) => phase4SetupAccessForUser(env, user.id),
-  requireAuthenticatedUser: requireAdministrator,
+  requireAuthenticatedUser,
   structuredGemini: callGeminiStructured,
 });
 

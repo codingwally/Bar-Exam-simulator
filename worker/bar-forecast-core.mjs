@@ -229,21 +229,16 @@ function answerWordCount(value) {
 }
 
 export function requireBarForecastAccess(context) {
-  const administrator = context?.administrator;
   const access = context?.access;
-  const role = String(administrator?.role || access?.role || '').trim().toLowerCase();
   const basis = String(access?.basis || '').trim().toLowerCase();
-  const subscriptionStatus = String(access?.subscription?.status || '').trim().toLowerCase();
-  const subscriptionSource = String(access?.subscription?.source || '').trim().toLowerCase();
-  if (administrator?.authorized === true && BAR_FORECAST_ADMIN_ROLE_SET.has(role)) {
+  const entitlement = barForecastEntitlementEvidence(context);
+  const role = String(entitlement?.role || access?.role || '').trim().toLowerCase();
+  if (entitlement?.administrator === true) {
     return Object.freeze({ authorized: true, kind: 'administrator', role, basis });
   }
-  const foundingBeta = basis === 'founding_beta'
-    && access?.freeBeta?.active === true
-    && String(access?.freeBeta?.program || '').trim().toLowerCase() === 'founding_beta_2026';
-  const paidMember = ['early_access', 'paid_subscription'].includes(basis)
-    && subscriptionStatus === 'active'
-    && BAR_FORECAST_PAID_SUBSCRIPTION_SOURCE_SET.has(subscriptionSource);
+  const foundingBeta = entitlement?.foundingBeta === true && basis === 'founding_beta';
+  const paidMember = entitlement?.paidSubscription === true
+    && ['early_access', 'paid_subscription'].includes(basis);
   if (access?.allowed === true
       && access?.unlimited === true
       && BAR_FORECAST_MEMBER_BASIS_SET.has(basis)
@@ -257,6 +252,32 @@ export function requireBarForecastAccess(context) {
     'Bar Forecast access requires an active paid subscription, Founding Beta access, or an authorized administrator account.',
     403,
   );
+}
+
+export function barForecastEntitlementEvidence(context) {
+  const administrator = context?.administrator;
+  const access = context?.access;
+  const administratorRole = String(administrator?.role || '').trim().toLowerCase();
+  const accessRole = String(access?.role || '').trim().toLowerCase();
+  const subscriptionStatus = String(access?.subscription?.status || '').trim().toLowerCase();
+  const subscriptionSource = String(access?.subscription?.source || '').trim().toLowerCase();
+  const administratorEntitlement = administrator?.authorized === true
+    && BAR_FORECAST_ADMIN_ROLE_SET.has(administratorRole);
+  const foundingBetaEntitlement = access?.freeBeta?.active === true
+    && String(access?.freeBeta?.program || '').trim().toLowerCase() === 'founding_beta_2026';
+  const paidSubscriptionEntitlement = subscriptionStatus === 'active'
+    && BAR_FORECAST_PAID_SUBSCRIPTION_SOURCE_SET.has(subscriptionSource)
+    && access?.paidSubscriptionExpired !== true;
+  if (!administratorEntitlement && !foundingBetaEntitlement && !paidSubscriptionEntitlement) {
+    return null;
+  }
+  return Object.freeze({
+    administrator: administratorEntitlement,
+    foundingBeta: foundingBetaEntitlement,
+    paidSubscription: paidSubscriptionEntitlement,
+    role: administratorEntitlement ? administratorRole : accessRole,
+    subscriptionSource: paidSubscriptionEntitlement ? subscriptionSource : null,
+  });
 }
 
 export function normalizeBarForecastRequest(value) {

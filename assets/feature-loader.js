@@ -39,10 +39,10 @@
     }),
     forecast: Object.freeze({
       styles: [
-        'assets/bar-forecast.css?v=coaching-report-20260901-1',
+        'assets/bar-forecast.css?v=access-flow-20260902-1',
       ],
       scripts: [
-        'assets/bar-forecast.js?v=coaching-report-20260901-1',
+        'assets/bar-forecast.js?v=access-flow-20260902-1',
       ],
     }),
   });

@@ -77,11 +77,12 @@
     submissionStartedAt: 0,
     submissionElapsedNode: null,
     isOpen: false,
-    view: 'preview',
+    view: 'access',
     ownerId: '',
     authorizationOwnerId: '',
     authorizationRetryRequested: false,
     authorizationRetryInProgress: false,
+    pricingRedirectInProgress: false,
     consentAccepted: false,
     subject: '',
     schedule: null,
@@ -560,58 +561,107 @@
     else delete state.statusNode.dataset.kind;
   }
 
-  function renderPreview(options = {}) {
+  function renderAccessProgress(message = 'Confirming your Forecast access…') {
     resetProtectedState();
     const centered = element('div', 'bf26-centered');
-    const grid = element('div', 'bf26-preview-grid');
-    const figure = element('figure', 'bf26-preview-figure');
-    const image = element('img');
-    image.src = 'assets/bar-forecast/forecast-workspace-preview.webp';
-    image.alt = 'Preview of the 2026 Bar Forecast writing workspace with a twenty-question navigator and blank answer editor.';
-    image.width = 1672;
-    image.height = 939;
-    image.decoding = 'async';
-    const caption = element(
-      'figcaption',
-      '',
-      'Interface preview only. Forecast questions and suggested answers are never included in this public preview.',
-    );
-    figure.append(image, caption);
-
     const copy = element('section', 'bf26-copy');
     copy.append(
-      element('p', 'bf26-badge', 'Coming soon'),
-      element('h2', '', 'A focused forecast workspace is being prepared.'),
+      element('p', 'bf26-badge', '2026 Bar Forecast'),
+      element('h2', '', 'Opening your forecast…'),
       element(
         'p',
         '',
-        'Bar Forecast is available to active paid members, Founding Beta members, and authorized Due Diligence administrators. The public preview does not contain forecast questions, answers, scoring methods, or internal prediction data.',
+        'We are checking this signed-in account securely. Eligible members continue automatically.',
       ),
     );
-    const actions = element('div', 'bf26-actions');
-    const check = makeButton(
-      options.checking ? 'Checking admin access…' : 'Check admin access',
-      'bf26-button bf26-button--primary',
-    );
-    check.disabled = options.checking === true;
-    check.addEventListener('click', () => checkAuthorization());
-    const home = makeButton('Return to Home');
-    home.addEventListener('click', () => closeForecast({ force: true }));
-    actions.append(check, home);
-    const status = element('p', 'bf26-status');
+    const spinner = element('div', 'bf26-spinner');
+    spinner.setAttribute('aria-hidden', 'true');
+    const status = element('p', 'bf26-status', message);
     status.dataset.bf26Status = '';
     status.setAttribute('role', 'status');
     status.setAttribute('aria-live', 'polite');
-    status.textContent = options.message || (
-      options.checking
-        ? 'Verifying this signed-in account without exposing protected material…'
-        : 'Sign in through Due Diligence to check your Bar Forecast access.'
+    copy.append(spinner, status);
+    centered.append(copy);
+    replaceView(centered, 'access');
+  }
+
+  function renderAccessError(message = 'Bar Forecast could not be opened just now. Please try again.') {
+    resetProtectedState();
+    const centered = element('div', 'bf26-centered');
+    const copy = element('section', 'bf26-copy');
+    copy.append(
+      element('p', 'bf26-badge', '2026 Bar Forecast'),
+      element('h2', '', 'We could not open Forecast yet.'),
+      element('p', '', 'Your protected Forecast content remains closed. You can retry without losing account access.'),
     );
+    const actions = element('div', 'bf26-actions');
+    const retry = makeButton('Try again', 'bf26-button bf26-button--primary');
+    retry.addEventListener('click', () => checkAuthorization());
+    const home = makeButton('Return to Home');
+    home.addEventListener('click', () => closeForecast({ force: true }));
+    actions.append(retry, home);
+    const status = element('p', 'bf26-status', message);
+    status.dataset.bf26Status = '';
+    status.dataset.kind = 'error';
+    status.setAttribute('role', 'alert');
     copy.append(actions, status);
-    grid.append(figure, copy);
-    centered.append(grid);
-    replaceView(centered, 'preview');
-    if (options.kind) setStatus(status.textContent, options.kind);
+    centered.append(copy);
+    replaceView(centered, 'access-error');
+  }
+
+  function isForecastAccessRequired(error) {
+    return Number(error?.status) === 403
+      && String(error?.code || '').trim().toUpperCase() === 'BAR_FORECAST_ACCESS_REQUIRED';
+  }
+
+  function isForecastAuthenticationRequired(error) {
+    return Number(error?.status) === 401
+      || ['AUTHENTICATION_REQUIRED', 'INVALID_SESSION'].includes(
+        String(error?.code || '').trim().toUpperCase(),
+      );
+  }
+
+  function openForecastSignIn() {
+    const client = global.DueDiligencePhase4 || global.DueDiligencePhase2;
+    client?.openSignIn?.({
+      allowDismiss: true,
+      routeBound: true,
+      returnHash: ROUTE,
+      title: 'Continue to 2026 Bar Forecast',
+      copy: 'Use Google to continue. Eligible paid, Founding Beta, and administrator accounts open Forecast automatically.',
+    });
+    return true;
+  }
+
+  function routeToPlansAndPricing() {
+    if (state.pricingRedirectInProgress) return true;
+    state.pricingRedirectInProgress = true;
+    const client = global.DueDiligencePhase4 || global.DueDiligencePhase2;
+    closeForecast({ force: true, restoreRoute: false });
+    if (typeof client?.openView === 'function') {
+      client.openView('pricing', { returnToQuorum: true });
+    } else {
+      history.replaceState({ dd2View: 'pricing' }, '', `${location.pathname}${location.search}#pricing`);
+      global.dispatchEvent(new Event('popstate'));
+    }
+    global.toast?.('Choose a plan to unlock the 2026 Bar Forecast.', 'warn');
+    return true;
+  }
+
+  function handleForecastAccessInterruption(error) {
+    if (isForecastAccessRequired(error)) return routeToPlansAndPricing();
+    if (isForecastAuthenticationRequired(error)) {
+      closeForecast({ force: true, restoreRoute: false });
+      return openForecastSignIn();
+    }
+    if (String(error?.code || '').trim().toUpperCase() === 'BAR_FORECAST_SETUP_REQUIRED') {
+      closeForecast({ force: true, restoreRoute: false });
+      Promise.resolve(global.DueDiligencePhase4?.ensureRequiredSetup?.(ROUTE)).catch(() => {
+        global.toast?.('Complete the required account setup before opening Bar Forecast.', 'warn');
+      });
+      return true;
+    }
+    return false;
   }
 
   function renderDisclaimer(message = '') {
@@ -664,7 +714,7 @@
         const payload = await requestForecast({ operation: 'accept', version: CONSENT_VERSION });
         if (!state.isOpen || ownerId !== runtimeOwnerId()) return;
         if (payload?.authorized !== true || payload?.consentAccepted !== true) {
-          renderPreview({ message: 'Bar Forecast access could not be confirmed.', kind: 'error' });
+          renderAccessError('Bar Forecast access could not be confirmed.');
           return;
         }
         state.ownerId = ownerId;
@@ -672,10 +722,8 @@
         renderSubjectPicker();
       } catch (error) {
         if (error?.name === 'AbortError') return;
-        if ([401, 403].includes(Number(error?.status))) {
-          renderPreview({ message: 'This account does not currently have Bar Forecast access.', kind: 'error' });
-          return;
-        }
+        if (!state.isOpen || ownerId !== runtimeOwnerId()) return;
+        if (handleForecastAccessInterruption(error)) return;
         decline.disabled = false;
         accept.disabled = false;
         accept.setAttribute('aria-busy', 'false');
@@ -775,7 +823,8 @@
     if (!SUBJECT_NAMES.has(subjectName) || !state.consentAccepted) return;
     const ownerId = runtimeOwnerId();
     if (!ownerId || ownerId !== state.ownerId) {
-      renderPreview({ message: 'Bar Forecast access must be confirmed again.', kind: 'error' });
+      closeForecast({ force: true, restoreRoute: false });
+      openForecastSignIn();
       return;
     }
     const buttons = [...state.viewNode.querySelectorAll('[data-subject]')];
@@ -804,10 +853,8 @@
       renderExam();
     } catch (error) {
       if (error?.name === 'AbortError') return;
-      if ([401, 403].includes(Number(error?.status))) {
-        renderPreview({ message: 'Bar Forecast access expired or was not confirmed.', kind: 'error' });
-        return;
-      }
+      if (!state.isOpen || ownerId !== runtimeOwnerId()) return;
+      if (handleForecastAccessInterruption(error)) return;
       renderSubjectPicker(error?.message || 'The forecast could not be opened. Please try again.');
       setStatus(state.statusNode?.textContent || '', 'error');
     }
@@ -1420,10 +1467,8 @@
       renderResults();
     } catch (error) {
       if (error?.name === 'AbortError') return;
-      if ([401, 403].includes(Number(error?.status))) {
-        renderPreview({ message: 'Bar Forecast access expired before grading completed.', kind: 'error' });
-        return;
-      }
+      if (!state.isOpen || ownerId !== runtimeOwnerId() || submittedSubject !== state.subject) return;
+      if (handleForecastAccessInterruption(error)) return;
       renderExam();
       setStatus(error?.message || 'The answers were not submitted. Review them and try again.', 'error');
     }
@@ -1674,12 +1719,11 @@
     if (!state.isOpen) return false;
     const ownerId = runtimeOwnerId();
     if (!ownerId || !runtimeSession()?.access_token) {
-      renderPreview({
-        message: 'Bar Forecast access is not available for this signed-out or unresolved session.',
-      });
+      closeForecast({ force: true, restoreRoute: false });
+      openForecastSignIn();
       return true;
     }
-    renderPreview({ checking: true });
+    renderAccessProgress();
     // Session restoration can emit another same-user event while this request is
     // pending. Claim the owner before awaiting so that event cannot abort and
     // replace the consent view underneath an agreement click.
@@ -1692,15 +1736,14 @@
       const setupReady = await ensureRequiredSetup(ROUTE);
       if (!state.isOpen || ownerId !== runtimeOwnerId()) return false;
       if (setupReady !== true) {
-        renderPreview({
-          message: 'Complete the required account setup before opening Bar Forecast.',
-        });
+        closeForecast({ force: true, restoreRoute: false });
+        global.toast?.('Complete the required account setup before opening Bar Forecast.', 'warn');
         return true;
       }
       const payload = await requestForecast({ operation: 'status' });
       if (!state.isOpen || ownerId !== runtimeOwnerId()) return false;
       if (payload?.authorized !== true) {
-        renderPreview({ message: 'This account does not currently have Bar Forecast access.' });
+        routeToPlansAndPricing();
         return true;
       }
       state.ownerId = ownerId;
@@ -1710,21 +1753,28 @@
       return true;
     } catch (error) {
       if (error?.name === 'AbortError') return false;
-      renderPreview({
-        message: [401, 403].includes(Number(error?.status))
-          ? 'This account does not currently have Bar Forecast access.'
-          : 'Bar Forecast access could not be confirmed. The protected forecast remains closed.',
-        kind: error?.status ? '' : 'error',
-      });
+      if (!state.isOpen || ownerId !== runtimeOwnerId()) return false;
+      if (handleForecastAccessInterruption(error)) return true;
+      renderAccessError(
+        error?.message || 'Bar Forecast access could not be confirmed. The protected forecast remains closed.',
+      );
+      // renderAccessError clears protected state. Reclaim this still-current
+      // authorization owner so only this invocation may consume its retry flag
+      // in finally; a stale account's completion must never touch a new owner.
+      if (state.isOpen && ownerId === runtimeOwnerId()) state.authorizationOwnerId = ownerId;
       return true;
     } finally {
-      const shouldRetry = state.authorizationRetryRequested
+      const ownsAuthorization = state.authorizationOwnerId === ownerId;
+      const shouldRetry = ownsAuthorization
+        && state.authorizationRetryRequested
         && state.authorizationRetryInProgress !== true
         && state.isOpen
         && !state.ownerId
         && ownerId === runtimeOwnerId();
-      state.authorizationRetryRequested = false;
-      if (state.authorizationOwnerId === ownerId) state.authorizationOwnerId = '';
+      if (ownsAuthorization) {
+        state.authorizationRetryRequested = false;
+        state.authorizationOwnerId = '';
+      }
       if (shouldRetry) {
         Promise.resolve().then(async () => {
           if (!state.isOpen || state.ownerId || state.authorizationOwnerId
@@ -1743,20 +1793,6 @@
   function hasDraftAnswers() {
     return state.view === 'exam'
       && [...state.answers.values()].some((answer) => String(answer || '').trim());
-  }
-
-  function recoverAuthorizationAfterAuthReady() {
-    const whenAuthReady = global.DueDiligencePhase2?.whenAuthReady;
-    if (typeof whenAuthReady !== 'function') return;
-    Promise.resolve()
-      .then(() => whenAuthReady())
-      .then(() => {
-        const ownerId = runtimeOwnerId();
-        if (state.isOpen && ownerId && !state.ownerId && !state.authorizationOwnerId) {
-          checkAuthorization();
-        }
-      })
-      .catch(() => {});
   }
 
   function closeForecast(options = {}) {
@@ -1781,6 +1817,10 @@
 
   async function openForecast(trigger = null) {
     ensureRoot();
+    if (!runtimeOwnerId() || !runtimeSession()?.access_token) {
+      openForecastSignIn();
+      return true;
+    }
     if (state.isOpen) {
       const ownerId = runtimeOwnerId();
       if (ownerId && ownerId !== state.ownerId && ownerId !== state.authorizationOwnerId) {
@@ -1789,18 +1829,13 @@
       return true;
     }
     state.lastTrigger = trigger instanceof Element ? trigger : document.activeElement;
+    state.pricingRedirectInProgress = false;
     state.isOpen = true;
     setForecastRoute();
     isolatePage(true);
     state.root.hidden = false;
-    renderPreview({
-      message: runtimeOwnerId()
-        ? 'Checking whether this signed-in account is authorized…'
-        : 'Bar Forecast access is not available for this signed-out or unresolved session.',
-      checking: Boolean(runtimeOwnerId()),
-    });
-    if (runtimeOwnerId()) await checkAuthorization();
-    else recoverAuthorizationAfterAuthReady();
+    renderAccessProgress();
+    await checkAuthorization();
     return true;
   }
 
@@ -1815,13 +1850,13 @@
     state.authorizationRetryRequested = false;
     state.authorizationRetryInProgress = false;
     resetProtectedState();
-    renderPreview({
-      message: nextOwnerId
-        ? 'The signed-in account changed. Checking Bar Forecast access again…'
-        : 'Bar Forecast access is not available for this signed-out session.',
-      checking: Boolean(nextOwnerId),
-    });
-    if (nextOwnerId) checkAuthorization();
+    if (nextOwnerId) {
+      renderAccessProgress('The signed-in account changed. Checking Forecast access again…');
+      checkAuthorization();
+    } else {
+      closeForecast({ force: true, restoreRoute: false });
+      openForecastSignIn();
+    }
   }
 
   global.addEventListener('duediligence:session', handleForecastSessionChange);

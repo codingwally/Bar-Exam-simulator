@@ -312,6 +312,71 @@ test('required account setup fails closed server-side while payment state remain
     );
   }
 
+  const paidSetupMasks = [
+    completeSetupAccess({
+      allowed: false,
+      unlimited: false,
+      role: 'student',
+      basis: 'legal_acceptance_required',
+      termsRequired: true,
+      subscription: { status: 'active', source: 'manual_payment' },
+    }),
+    completeSetupAccess({
+      allowed: false,
+      unlimited: false,
+      role: 'student',
+      basis: 'profile_required',
+      profileCompleted: false,
+      tokenAcknowledgementRequired: true,
+      subscription: { status: 'active', source: 'admin_adjustment' },
+    }),
+    completeSetupAccess({
+      allowed: false,
+      unlimited: false,
+      role: 'student',
+      basis: 'reauthentication_required',
+      reauthenticationRequired: true,
+      subscription: { status: 'active', source: 'migration' },
+    }),
+  ];
+  for (const setupAccess of paidSetupMasks) {
+    const entitledSetup = harness({ authorization: null, setupAccess });
+    await assert.rejects(
+      entitledSetup.handlers.handle(request({ operation: 'status' }), {}, '', ''),
+      { code: 'BAR_FORECAST_SETUP_REQUIRED', status: 403 },
+    );
+    assert.equal(
+      entitledSetup.calls.some((call) => call.functionName === 'dd2026_bar_forecast_consent_status'),
+      false,
+    );
+  }
+
+  const betaTermsSetup = harness({
+    authorization: null,
+    setupAccess: completeSetupAccess({
+      allowed: false,
+      unlimited: false,
+      role: 'student',
+      basis: 'legal_acceptance_required',
+      termsRequired: true,
+      freeBeta: { active: true, program: 'founding_beta_2026' },
+    }),
+  });
+  await assert.rejects(
+    betaTermsSetup.handlers.handle(request({ operation: 'status' }), {}, '', ''),
+    { code: 'BAR_FORECAST_SETUP_REQUIRED', status: 403 },
+  );
+
+  for (const setupAccess of paidSetupMasks) {
+    const unpaidAccess = { ...setupAccess };
+    delete unpaidAccess.subscription;
+    const unpaidSetup = harness({ authorization: null, setupAccess: unpaidAccess });
+    await assert.rejects(
+      unpaidSetup.handlers.handle(request({ operation: 'status' }), {}, '', ''),
+      { code: 'BAR_FORECAST_ACCESS_REQUIRED', status: 403 },
+    );
+  }
+
   const setupWithoutPaymentPolicyFields = completeSetupAccess();
   delete setupWithoutPaymentPolicyFields.paidSubscriptionExpired;
   delete setupWithoutPaymentPolicyFields.commercialLaunchEnabled;

@@ -848,17 +848,6 @@
       'anchor-cases': '#anchor-case-digests',
     };
     const returnHash = routes[feature] || '#mock-bar';
-    if (feature === 'bar-forecast') {
-      const loaded = await loadFeature(feature);
-      if (loaded === false) return false;
-      await invokePublicOpener(
-        'openBarForecast',
-        '2026 Bar Forecast could not be opened. Please try again.',
-        trigger,
-      );
-      state.lastActivatedHash = 'bar-forecast-2026';
-      return true;
-    }
     await global.DueDiligencePhase2?.whenAuthReady?.();
     if (!currentSession()?.access_token) {
       global.DueDiligencePhase2?.openSignIn?.({
@@ -869,6 +858,17 @@
         copy: 'Use Google to continue. You will return to the exact feature you selected.',
       });
       return false;
+    }
+    if (feature === 'bar-forecast') {
+      const loaded = await loadFeature(feature);
+      if (loaded === false) return false;
+      await invokePublicOpener(
+        'openBarForecast',
+        '2026 Bar Forecast could not be opened. Please try again.',
+        trigger,
+      );
+      state.lastActivatedHash = 'bar-forecast-2026';
+      return true;
     }
     // Home/community is part of the signed-in shell, not a metered examination
     // feature. Requiring a commercial-access round trip here can strand a valid

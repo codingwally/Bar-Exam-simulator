@@ -14,6 +14,7 @@ import {
   forecastGradingBatches,
   normalizeBarForecastRequest,
   publicForecastQuestions,
+  barForecastEntitlementEvidence,
   requireBarForecastAccess,
   validateBarForecastGradingResult,
   validatedForecastRows,
@@ -132,14 +133,23 @@ export function createBarForecastHandlers(deps) {
       authorizeAdministrator(env, user),
       requiredSetupAccess(env, user),
     ]);
-    const authorization = requireBarForecastAccess({ administrator, access: setupAccess });
-    if (requiredSetupPending(setupAccess, authorization)) {
+    const context = { administrator, access: setupAccess };
+    const entitlement = barForecastEntitlementEvidence(context);
+    if (!entitlement) {
+      throw new BarForecastError(
+        'BAR_FORECAST_ACCESS_REQUIRED',
+        'Bar Forecast access requires an active paid subscription, Founding Beta access, or an authorized administrator account.',
+        403,
+      );
+    }
+    if (requiredSetupPending(setupAccess, entitlement)) {
       throw new BarForecastError(
         'BAR_FORECAST_SETUP_REQUIRED',
         'Complete the required account setup before opening Bar Forecast.',
         403,
       );
     }
+    const authorization = requireBarForecastAccess(context);
     return { user, authorization };
   }
 

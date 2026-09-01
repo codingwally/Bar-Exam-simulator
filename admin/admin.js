@@ -143,6 +143,12 @@
   const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   const SUPPORT_PAGE_SIZE = 100;
   const ADMIN_OPERATIONAL_MAX_OFFSET = 1_000_000;
+  const PAYMENT_INVALIDATION_NO_CHANGE_CODES = new Set([
+    'PAYMENT_RECEIPT_IN_FLIGHT',
+    'PAYMENT_REFUND_IN_PROGRESS',
+    'PAYMENT_INVALIDATION_CONFLICT',
+    'PAYMENT_INVALIDATION_UNSAFE',
+  ]);
   const EARLY_ACCESS_PLAN = Object.freeze({
     id: 'early_access_beta',
     name: 'Early Access',
@@ -1513,10 +1519,10 @@
       <tbody>${rows.map((row) => tableRowHtml(headers, row)).join('')}</tbody></table></div>`;
   }
 
-  function actionButton(label, action, target, payload = {}) {
+  function actionButton(label, action, target, payload = {}, tone = '') {
     return {
       html: true,
-      value: `<span class="row-actions"><button type="button" data-admin-action="${escapeHtml(action)}" data-target="${escapeHtml(target || '')}" data-payload="${escapeHtml(JSON.stringify(payload))}">${escapeHtml(label)}</button></span>`,
+      value: `<span class="row-actions"><button type="button" data-admin-action="${escapeHtml(action)}" data-target="${escapeHtml(target || '')}" data-payload="${escapeHtml(JSON.stringify(payload))}"${tone ? ` data-tone="${escapeHtml(tone)}"` : ''}>${escapeHtml(label)}</button></span>`,
     };
   }
 
@@ -2094,6 +2100,9 @@
       )),
       loadAdministratorIdentityDirectory(context),
     ]);
+    const founderAuthorized = ['founder_admin', 'super_admin'].includes(
+      state.authorization?.role,
+    );
     const directoryById = new Map((directory.items || []).map((account) => [String(account.id), account]));
     return `
       ${heading('Payments', 'Review manual subscription payments. Private proofs open for five minutes, and every view is recorded in the activity log.')}
@@ -2128,6 +2137,14 @@
                     || row.plan_code === 'bar_access_30d',
                   approvalOnly: true,
                 }).value : ''}
+                ${String(row.status || '').toLowerCase() === 'approved' && founderAuthorized
+                  ? actionButton('Mark proof invalid & cancel access', 'payment_invalidate', row.id, {
+                    studentName: row.display_name || 'Not provided',
+                    studentEmail: row.email || 'Not available',
+                    amountPhp: row.trusted_amount_php,
+                    planName: row.planName || commercialPlanLabel(row.plan_code),
+                    status: row.status,
+                  }, 'danger').value : ''}
                 ${actionButton('View private proof', 'view_payment_proof', row.id, {
                   studentName: row.display_name || 'Not provided',
                   studentEmail: row.email || 'Not available',
@@ -2143,6 +2160,7 @@
                   proofMimeType: row.proof_mime_type || 'Not available',
                   proofSizeBytes: row.proof_size_bytes || null,
                   submittedAt: row.submitted_at || null,
+                  status: row.status,
                 }).value}
               </div>`,
             },
@@ -3782,7 +3800,15 @@
   }
 
   function cancelActionDialog(options = {}) {
+    if (state.actionInFlight
+        && state.action?.action === 'payment_invalidate'
+        && options.allowInFlight !== true) {
+      toast('The payment invalidation request is still pending. Keep this dialog open until its outcome is confirmed.');
+      return;
+    }
     const dialog = $('#action-dialog');
+    const reasonInput = $('#action-reason');
+    if (reasonInput) reasonInput.readOnly = false;
     if (!dialog?.open) {
       state.action = null;
       return;
@@ -3796,7 +3822,10 @@
     const reasonField = $('#action-reason')?.closest('label');
     if (reasonField) reasonField.hidden = false;
     const warning = $('#action-warning');
-    if (warning) warning.hidden = false;
+    if (warning) {
+      warning.hidden = false;
+      warning.removeAttribute('role');
+    }
     const confirm = $('#action-confirm');
     if (confirm) confirm.hidden = false;
     const cancel = $('#action-dialog-cancel');
@@ -3864,11 +3893,24 @@
     $('#action-dialog').classList.add('payment-proof-open');
     state.action.payload.proofLoaded = true;
     state.action.payload.proofReviewReason = reason;
+    const paymentStatus = String(payload.status || '').trim().toLowerCase();
+    const founderAuthorized = ['founder_admin', 'super_admin'].includes(
+      state.authorization?.role,
+    );
+    state.action.payload.proofNextAction = ['pending', 'needs_information'].includes(paymentStatus)
+      ? 'payment_review'
+      : paymentStatus === 'approved' && founderAuthorized ? 'payment_invalidate' : null;
     const reasonField = $('#action-reason')?.closest('label');
     if (reasonField) reasonField.hidden = true;
-    $('#action-warning').textContent = 'Review the image and payment details together. Approval sends the user an electronic receipt with this exact proof attached.';
-    $('#action-confirm').hidden = false;
-    $('#action-confirm').textContent = 'Approve subscription';
+    $('#action-warning').textContent = state.action.payload.proofNextAction === 'payment_review'
+      ? 'Review the image and payment details together. Approval sends the user an electronic receipt with this exact proof attached.'
+      : state.action.payload.proofNextAction === 'payment_invalidate'
+        ? 'This payment is approved. If the proof is invalid, continue to a separate destructive confirmation that safely reverses only linked access.'
+        : 'This proof is read-only at your current permission level or payment state.';
+    $('#action-confirm').hidden = state.action.payload.proofNextAction === null;
+    $('#action-confirm').textContent = state.action.payload.proofNextAction === 'payment_invalidate'
+      ? 'Mark proof invalid & cancel access'
+      : 'Approve subscription';
     $('#action-dialog-cancel').textContent = 'Done';
   }
 
@@ -3887,6 +3929,7 @@
       const nextRank = roleRank[String(payload.role || '').toLowerCase()];
       return Number.isFinite(previousRank) && Number.isFinite(nextRank) && nextRank < previousRank;
     }
+    if (action === 'payment_invalidate') return true;
     if (action === 'payment_review') return String(payload.status || '').toLowerCase() === 'rejected';
     if (action.startsWith('forum_') || action.startsWith('quorum_')) {
       return /(hide|remove|restrict|lock|reject)/i.test(action);
@@ -3897,10 +3940,13 @@
   function openAction(action, targetId, payload) {
     state.action = { action, targetId: targetId || null, payload: { ...(payload || {}) } };
     state.actionInFlight = false;
+    const reasonInput = $('#action-reason');
+    if (reasonInput) reasonInput.readOnly = false;
     $('#action-dialog').classList.remove('payment-proof-open');
     const reasonField = $('#action-reason')?.closest('label');
     if (reasonField) reasonField.hidden = false;
     $('#action-warning').hidden = false;
+    $('#action-warning').removeAttribute('role');
     $('#action-confirm').hidden = false;
     $('#action-dialog-cancel').textContent = 'Back';
     let fields = '';
@@ -3941,6 +3987,10 @@
       warning = payload.requiresVerifiedPaidAt === true
         ? 'Approval requires the exact payment timestamp visible on the private proof. The 30-day term is calculated from that verified time, or after a later finite expiry so existing paid days are not lost. No automatic charge or renewal is scheduled.'
         : 'Approval activates the captured fixed entitlement and emails the user a professional electronic receipt with the exact reviewed proof attached. No automatic charge or renewal is scheduled.';
+    } else if (action === 'payment_invalidate') {
+      title = 'Mark proof invalid and cancel access';
+      fields = `<div class="notice danger"><strong>Approved payment</strong><br>${escapeHtml(payload.studentName || 'Not provided')} · ${escapeHtml(payload.planName || 'Selected subscription')} · ${Number.isFinite(Number(payload.amountPhp)) ? `₱${number(payload.amountPhp, 2)}` : 'Amount unavailable'}</div>`;
+      warning = 'This preserves the payment and private proof as audit evidence, marks the payment rejected, and cancels only access created by this approval. Independent access is preserved. Introductory tokens are not replenished; the user returns to the remaining balance. A receipt already sent or being delivered cannot be recalled. Ambiguous legacy linkage is blocked with no change.';
     } else if (action === 'view_payment_proof') {
       title = 'View private payment proof';
       fields = `<div class="notice"><strong>Review context</strong><br>${escapeHtml(payload.studentName || 'Not provided')} · ${escapeHtml(payload.planName || commercialPlanLabel(payload.planCode))} · ${Number.isFinite(Number(payload.amountPhp)) ? `₱${number(payload.amountPhp, 2)}` : 'Amount unavailable'}</div>`;
@@ -4086,6 +4136,7 @@
     $('#action-title').textContent = title;
     const isAccessAction = Boolean(subscriptionActions?.isAccessAction(action));
     const isPaymentReview = action === 'payment_review';
+    const isPaymentInvalidation = action === 'payment_invalidate';
     const isGlobalBetaAction = action === 'global_beta_change';
     const isForumAction = action.startsWith('forum_') || action.startsWith('quorum_');
     if (isAccessAction) buildAccessActionFields(action, state.action.payload);
@@ -4109,12 +4160,15 @@
       ? `I understand this will ${payload.enabled ? 'enable temporary safety access for' : 'activate commercial enforcement for'} all signed-in users and that the immediate change is recorded.`
       : isForumAction
         ? 'I checked the report or content and the proposed moderation action. I understand this immediate action is recorded.'
+        : isPaymentInvalidation
+          ? 'I verified the payment request and proof are invalid. I understand this marks the payment rejected and reverses only access safely linked to that approval.'
         : 'I checked the user, current access, and proposed change. I understand this immediate action is recorded.';
     $('#action-confirm-risk').checked = false;
     $('#action-confirm').textContent = action === 'subscription_audit_view'
       ? 'View activity history'
       : action === 'user_response_export'
         ? 'Download answer records'
+        : isPaymentInvalidation ? 'Mark invalid & cancel access'
         : isPaymentReview && payload.approvalOnly === true ? 'Confirm'
           : isPaymentReview ? 'Approve subscription'
           : isForumAction ? 'Confirm moderation action' : 'Confirm action';
@@ -4186,11 +4240,18 @@
     const action = state.action.action;
     const payload = { ...state.action.payload };
     if (action === 'view_payment_proof' && payload.proofLoaded === true) {
-      openAction('payment_review', state.action.targetId, {
-        ...payload,
-        approvalOnly: true,
-        status: 'approved',
-      });
+      const proofNextAction = payload.proofNextAction;
+      if (proofNextAction === 'payment_invalidate') {
+        openAction('payment_invalidate', state.action.targetId, payload);
+      } else if (proofNextAction === 'payment_review') {
+        openAction('payment_review', state.action.targetId, {
+          ...payload,
+          approvalOnly: true,
+          status: 'approved',
+        });
+      } else {
+        return;
+      }
       $('#action-reason').value = payload.proofReviewReason || reason;
       return;
     }
@@ -4280,6 +4341,14 @@
       payload.durationHours = Number($('#action-duration').value);
     }
     state.action.requestKey ||= uuidKey();
+    if (action === 'payment_invalidate') {
+      state.action.requestReason ||= reason;
+      const reasonInput = $('#action-reason');
+      if (reasonInput) {
+        reasonInput.value = state.action.requestReason;
+        reasonInput.readOnly = true;
+      }
+    }
     state.actionInFlight = true;
     $('#action-confirm').disabled = true;
     try {
@@ -4394,7 +4463,7 @@
         toast('Community moderation action completed and recorded.');
       } else {
         const phase4Actions = new Set([
-          'payment_review','refund_review','subscription_change',
+          'payment_review','payment_invalidate','refund_review','subscription_change',
           'free_beta_change','partnership_update','provider_incident_clear',
           'role_change','discount_assign','subscription_audit_view',
         ]);
@@ -4402,7 +4471,7 @@
           action,
           targetId: state.action.targetId,
           payload,
-          reason,
+          reason: action === 'payment_invalidate' ? state.action.requestReason : reason,
           requestKey: state.action.requestKey,
         };
         let response;
@@ -4421,19 +4490,60 @@
           } else {
             toast('Payment decision recorded. No subscriber receipt was sent.');
           }
+        } else if (action === 'payment_invalidate') {
+          const access = response?.data?.access || {};
+          const tokensRemaining = Number(access.tokensRemaining);
+          if (access.basis === 'introductory_tokens' && Number.isFinite(tokensRemaining)) {
+            toast(`Payment marked invalid and linked access canceled. ${tokensRemaining} introductory token${tokensRemaining === 1 ? '' : 's'} remain.`);
+          } else if (access.basis === 'trial_tokens_exhausted') {
+            toast('Payment marked invalid and linked access canceled. Introductory tokens remain exhausted.');
+          } else if (response?.data?.accessReversed === true) {
+            toast('Payment marked invalid and linked paid access canceled. Other eligible access now applies.');
+          } else {
+            toast('Payment marked invalid. No active linked access needed cancellation.');
+          }
         } else {
           toast('Access change completed, recorded, and refreshed.');
         }
       }
-      cancelActionDialog();
+      cancelActionDialog({ allowInFlight: true });
       state.operational.clear();
       if (action.startsWith('quorum_')) state.quorumPosts = null;
-      if (['subscription_change', 'free_beta_change', 'global_beta_change'].includes(action)) {
+      if (['payment_invalidate', 'subscription_change', 'free_beta_change', 'global_beta_change'].includes(action)) {
         state.report = null;
       }
       await renderSection(state.section);
     } catch (error) {
-      toast(error.message || 'Action failed without changing production data.');
+      const isPaymentInvalidation = state.action?.action === 'payment_invalidate';
+      const message = error.message || (isPaymentInvalidation
+        ? 'Administrator request failed.'
+        : 'Action failed without changing production data.');
+      let displayMessage = message;
+      if (isPaymentInvalidation) {
+        const confirmedNoChange = PAYMENT_INVALIDATION_NO_CHANGE_CODES.has(error.code);
+        displayMessage = confirmedNoChange
+          ? /nothing changed/i.test(message) ? message : `Nothing changed. ${message}`
+          : `Outcome not confirmed. The request may have completed. Refresh Payments to verify its current status. If you retry without closing this dialog, the same safety key is reused. ${message}`;
+        const reasonInput = $('#action-reason');
+        const confirm = $('#action-confirm');
+        if (confirmedNoChange) {
+          delete state.action.requestKey;
+          delete state.action.requestReason;
+          if (reasonInput) reasonInput.readOnly = false;
+          if (confirm) confirm.textContent = 'Mark invalid & cancel access';
+        } else {
+          if (reasonInput) {
+            reasonInput.value = state.action.requestReason || reasonInput.value;
+            reasonInput.readOnly = true;
+          }
+          if (confirm) confirm.textContent = 'Retry same request safely';
+        }
+        const warning = $('#action-warning');
+        warning.textContent = displayMessage;
+        warning.setAttribute('role', 'alert');
+        warning.hidden = false;
+      }
+      toast(displayMessage);
     } finally {
       state.actionInFlight = false;
       $('#action-confirm').disabled = false;

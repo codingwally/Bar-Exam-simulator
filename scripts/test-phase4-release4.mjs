@@ -135,6 +135,19 @@ assert.match(
   admin,
   /actionButton\('Approve subscription', 'payment_review', row\.id, \{[\s\S]*planCode: row\.plan_code/,
 );
+assert.match(
+  admin,
+  /String\(row\.status \|\| ''\)\.toLowerCase\(\) === 'approved' && founderAuthorized[\s\S]*actionButton\('Mark proof invalid & cancel access', 'payment_invalidate', row\.id,[\s\S]*'danger'\)/,
+  'Only a Founder or Super Admin may see the approved-proof invalidation action.',
+);
+assert.match(admin, /if \(action === 'payment_invalidate'\) return true;/,
+  'Approved-proof invalidation must always require destructive confirmation.');
+assert.match(admin, /proofNextAction === 'payment_invalidate'[\s\S]*openAction\('payment_invalidate'/,
+  'An already-approved private proof must route to invalidation, never re-approval.');
+assert.match(admin, /'payment_review','payment_invalidate','refund_review'/,
+  'The dedicated invalidation action must use only the protected Phase 4 Admin route.');
+assert.match(admin, /\['payment_invalidate', 'subscription_change'/,
+  'Invalidation must refresh the report and operational payment caches.');
 assert.match(admin, /View recent users/);
 assert.match(admin, /function appendUserDirectoryPage\(\)/);
 assert.match(admin, /new IntersectionObserver/);
@@ -157,6 +170,8 @@ assert.match(publicPage, /assets\/phase4-experience\.js\?v=syllabus-reveal-p0-20
 assert.match(adminPage, /admin\.css\?v=[a-z0-9-]+/i);
 assert.match(adminPage, /subscription-actions-core\.js\?v=[a-z0-9-]+/i);
 assert.match(adminPage, /admin\.js\?v=[a-z0-9-]+/i);
+assert.match(adminPage, /payment-invalidation=20260901-1/,
+  'Admin must cache-bust the reviewed invalidation UI release.');
 assert.match(
   adminStyles,
   /\.gate\[hidden\]\s*\{\s*display:\s*none;\s*\}/,

@@ -7,6 +7,7 @@ const [
   html,
   forecast,
   phase4,
+  phase2,
   styles,
   loader,
   landing,
@@ -18,6 +19,7 @@ const [
   readFile(new URL('index.html', root), 'utf8'),
   readFile(new URL('assets/bar-forecast.js', root), 'utf8'),
   readFile(new URL('assets/phase4-experience.js', root), 'utf8'),
+  readFile(new URL('assets/phase2-experience.js', root), 'utf8'),
   readFile(new URL('assets/bar-forecast.css', root), 'utf8'),
   readFile(new URL('assets/feature-loader.js', root), 'utf8'),
   readFile(new URL('assets/private-beta-landing.js', root), 'utf8'),
@@ -103,6 +105,12 @@ assert.match(
   /async function ensureRequiredSetup\(routeHash = location\.hash\)[\s\S]*request\('\/access'[\s\S]*payload\?\.access[\s\S]*adoptAccess\(payload\.access[\s\S]*setupRequired\(access\)[\s\S]*openRequiredSetup\(access, routeHash\)/,
 );
 assert.match(phase4, /ensureProtectedAccess,[\s\S]*ensureRequiredSetup,/);
+assert.match(phase4, /canUseUnlimitedFeature,[\s\S]*openUnlimitedFeatureGate,/);
+assert.match(phase2, /reason !== 'unlimited_feature'[\s\S]*Subscribe to access this feature/);
+assert.doesNotMatch(
+  phase2.match(/function renderNativeView[\s\S]*?function hideNativeView/)?.[0] || '',
+  /commercial release/i,
+);
 assert.doesNotMatch(phase4, /acceptCurrentTerms/);
 assert.match(forecast, /payload\?\.consentAccepted === true/);
 assert.doesNotMatch(forecast, /Coming soon|Check admin access|Checking admin access/i);
@@ -237,12 +245,17 @@ assert.match(styles, /\.bf26-question-jump\s*\{[\s\S]*border:\s*2px solid #2f6d9
 {
   const pricingCalls = { closes: 0, opens: 0, toasts: 0, fallback: 0 };
   const pricingContext = vm.createContext({
-    state: { pricingRedirectInProgress: false },
+    state: {
+      pricingRedirectInProgress: false,
+      returnHash: '#quorum',
+      lastTrigger: null,
+    },
+    ROUTE: '#bar-forecast-2026',
     global: {
       DueDiligencePhase4: {
-        openView: (view, options) => {
+        openUnlimitedFeatureGate: (routeHash, options) => {
           pricingCalls.opens += 1;
-          pricingCalls.view = view;
+          pricingCalls.routeHash = routeHash;
           pricingCalls.options = options;
         },
       },
@@ -255,7 +268,7 @@ assert.match(styles, /\.bf26-question-jump\s*\{[\s\S]*border:\s*2px solid #2f6d9
       return true;
     },
     history: { replaceState: () => { pricingCalls.fallback += 1; } },
-    location: { pathname: '/', search: '' },
+    location: { pathname: '/', search: '', hash: '#bar-forecast-2026' },
     Event,
   });
   vm.runInContext(extractNamedFunction(forecast, 'routeToPlansAndPricing'), pricingContext);
@@ -265,9 +278,10 @@ assert.match(styles, /\.bf26-question-jump\s*\{[\s\S]*border:\s*2px solid #2f6d9
   assert.equal(pricingCalls.closeOptions.restoreRoute, false);
   assert.equal(pricingCalls.closes, 1, 'repeated access denials must close Forecast only once');
   assert.equal(pricingCalls.opens, 1, 'repeated access denials must open Plans & Pricing only once');
-  assert.equal(pricingCalls.view, 'pricing');
-  assert.equal(pricingCalls.options.returnToQuorum, true);
-  assert.equal(pricingCalls.toasts, 1);
+  assert.equal(pricingCalls.routeHash, '#bar-forecast-2026');
+  assert.equal(pricingCalls.options.featureId, 'bar-forecast');
+  assert.equal(pricingCalls.options.backgroundHash, '#quorum');
+  assert.equal(pricingCalls.toasts, 0);
   assert.equal(pricingCalls.fallback, 0);
 }
 
@@ -334,10 +348,11 @@ for (const source of [build, serviceWorker]) {
 assert.match(build, /'flag\.svg'/);
 assert.match(html, /assets\/feature-loader\.js[^"\n]*forecast=access-flow-20260902-1/);
 assert.match(html, /assets\/feature-loader\.js[^"\n]*coaching=report-20260901-1/);
-assert.match(serviceWorker, /duediligence-shell-access-flow-20260902-1/);
+assert.match(serviceWorker, /duediligence-shell-unlimited-access-20260902-1/);
 assert.match(serviceWorker, /assets\/feature-loader\.js[^'\n]*forecast=access-flow-20260902-1/);
 assert.match(serviceWorker, /assets\/feature-loader\.js[^'\n]*coaching=report-20260901-1/);
 assert.match(serviceWorker, /assets\/bar-forecast\.js\?v=access-flow-20260902-1/);
+assert.match(serviceWorker, /assets\/bar-forecast\.js[^'\n]*unlimited=feature-access-20260902-1/);
 assert.match(serviceWorker, /assets\/bar-forecast\.css\?v=access-flow-20260902-1/);
 assert.doesNotMatch(serviceWorker, /assets\/bar-forecast\.(?:js|css)\?v=exam-tools-20260901-[45]/);
 assert.match(serviceWorker, /assets\/icons\/navigation\/flag\.svg/);
@@ -376,8 +391,8 @@ function extractNamedFunction(source, name) {
     'repeated authorization events must not open duplicate pricing views');
   assert.match(pricingRouteSource, /closeForecast\([\s\S]*restoreRoute:\s*false/,
     'pricing navigation must close the protected Forecast surface without restoring its route');
-  assert.match(pricingRouteSource, /openView\(\s*['"]pricing['"]/,
-    'the exact unpaid denial must open the existing Plans & Pricing view');
+  assert.match(pricingRouteSource, /openUnlimitedFeatureGate\(ROUTE/,
+    'the exact unpaid denial must open the shared unlimited-feature subscription flow');
 }
 
 async function runLandingForecastFlow(authenticated) {
@@ -406,6 +421,7 @@ async function runLandingForecastFlow(authenticated) {
           observations.genericProtectedChecks += 1;
           return true;
         },
+        ensureUnlimitedFeatureAccess: async () => true,
       },
     },
     currentSession: () => (authenticated ? { access_token: 'test-session' } : null),

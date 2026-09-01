@@ -13,6 +13,18 @@
     'bar-feels',
     'verdict',
   ]);
+  const UNLIMITED_FEATURES = Object.freeze({
+    'bar-feels': Object.freeze({
+      featureId: 'bar-feels',
+      featureLabel: 'Bar Exam Simulation',
+      targetHash: '#bar-feels',
+    }),
+    'bar-forecast': Object.freeze({
+      featureId: 'bar-forecast',
+      featureLabel: '2026 Bar Forecast',
+      targetHash: '#bar-forecast-2026',
+    }),
+  });
   const ACCESS_AUTH_RETRY_COOLDOWN_MS = 5_000;
   const ROUTINE_SESSION_REFRESH_REASONS = new Set(['refresh', 'TOKEN_REFRESHED']);
 
@@ -30,6 +42,7 @@
     lastRefreshAt: 0,
     accessAuthRetryBlockedUntil: 0,
     subjectReviewAccessGate: null,
+    unlimitedFeatureGate: '',
     lastFocusRefreshAt: 0,
   };
 
@@ -234,6 +247,67 @@
       state.gateNoticeShown = true;
       global.toast?.(accessMessage(access), 'warn');
     }
+  }
+
+  function canUseUnlimitedFeature(access = state.access) {
+    return access?.allowed === true
+      && access?.unlimited === true
+      && !setupRequired(access);
+  }
+
+  function unlimitedFeatureDefinition(routeHash = '', options = {}) {
+    const requestedId = String(options.featureId || '').trim().toLowerCase();
+    const requestedHash = String(routeHash || options.targetHash || '').trim().toLowerCase();
+    return UNLIMITED_FEATURES[requestedId]
+      || Object.values(UNLIMITED_FEATURES).find((feature) => feature.targetHash === requestedHash)
+      || null;
+  }
+
+  function unlimitedFeatureBackgroundHash(feature, options = {}) {
+    const requested = String(options.backgroundHash || '').trim();
+    const current = String(location.hash || '').trim();
+    const candidate = requested || current || '#quorum';
+    if (!candidate.startsWith('#')
+        || candidate === feature.targetHash
+        || candidate === '#pricing'
+        || candidate === '#bar-forecast-2026'
+        || candidate === '#bar-feels') return '#quorum';
+    return candidate;
+  }
+
+  function openUnlimitedFeatureGate(routeHash = '', options = {}) {
+    const feature = unlimitedFeatureDefinition(routeHash, options);
+    if (!feature) return false;
+    if (state.unlimitedFeatureGate === feature.featureId && overlayOpen('dd2-native-view')) return true;
+
+    const backgroundHash = unlimitedFeatureBackgroundHash(feature, options);
+    if (location.hash !== backgroundHash) {
+      history.replaceState(
+        { ...(history.state || {}) },
+        '',
+        `${location.pathname}${location.search}${backgroundHash}`,
+      );
+    }
+
+    state.unlimitedFeatureGate = feature.featureId;
+    state.paymentGate = true;
+    legacy.openView?.('pricing', {
+      mode: 'action',
+      actionId: `unlimited-feature-${feature.featureId}-${randomId(8)}`,
+      focusOrigin: options.focusOrigin || document.activeElement,
+      returnFocus: options.returnFocus || options.focusOrigin || document.activeElement,
+      context: {
+        reason: 'unlimited_feature',
+        featureId: feature.featureId,
+        featureLabel: feature.featureLabel,
+        targetHash: feature.targetHash,
+        backgroundHash,
+      },
+      onClose: () => {
+        if (state.unlimitedFeatureGate === feature.featureId) state.unlimitedFeatureGate = '';
+      },
+    });
+    return true;
   }
 
   function subjectReviewReturnFocus(options = {}) {
@@ -480,6 +554,23 @@
     if (access?.allowed === true) return true;
     if (paymentRequired(access)) openPaymentGate(access, routeHash);
     else global.toast?.(accessMessage(access), 'warn');
+    return false;
+  }
+
+  async function ensureUnlimitedFeatureAccess(routeHash, options = {}) {
+    if (!requireAuthentication()) return false;
+    const access = await refreshAccess({
+      enforce: false,
+      force: true,
+      routeHash,
+    });
+    if (typeof options.isCurrent === 'function' && options.isCurrent() === false) return false;
+    if (setupRequired(access)) {
+      openRequiredSetup(access, routeHash);
+      return false;
+    }
+    if (canUseUnlimitedFeature(access)) return true;
+    openUnlimitedFeatureGate(routeHash, options);
     return false;
   }
 
@@ -751,7 +842,10 @@
     refreshAccess,
     adoptAccess,
     ensureProtectedAccess,
+    ensureUnlimitedFeatureAccess,
     ensureRequiredSetup,
+    canUseUnlimitedFeature,
+    openUnlimitedFeatureGate,
     canRevealSubjectReview: subjectReviewRevealAllowed,
     isSubjectReviewAccessError,
     openSubjectReviewAccessGate,

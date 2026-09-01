@@ -165,6 +165,7 @@ import {
   normalizeExaminationCommand,
   normalizeExaminationQuery,
   normalizeUploadRequest,
+  requireBarFeelsUnlimitedAccess,
   sanitizeSubjectMatterCatalog,
   sanitizeSubjectMatterSelection,
 } from './examinations-core.mjs';
@@ -7214,13 +7215,14 @@ async function processExaminationAiJob(env, user, gradingPackage, commercialRese
 }
 
 async function authorizeExaminationAccess(env, userId, options = {}) {
-  return examinationRpc(env, 'examination_authorize_access', {
+  const authorization = await examinationRpc(env, 'examination_authorize_access', {
     p_user_id: userId,
     p_track: options.track || null,
     p_version_id: options.versionId || null,
     p_attempt_id: options.attemptId || null,
     p_allow_historical: options.allowHistorical === true,
   });
+  return requireBarFeelsUnlimitedAccess(authorization, options.track);
 }
 
 const SUBJECT_MATTER_RELEASE_POLICY_VERSION = 'subject-review-unlimited-v1-2026-08-26';

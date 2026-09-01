@@ -49,7 +49,6 @@ export const BAR_FORECAST_APPROVED_SET_IDS = Object.freeze({
 
 const BAR_FORECAST_SUBJECT_SET = new Set(BAR_FORECAST_SUBJECTS);
 const BAR_FORECAST_ADMIN_ROLE_SET = new Set(BAR_FORECAST_ADMIN_ROLES);
-const BAR_FORECAST_MEMBER_BASIS_SET = new Set(BAR_FORECAST_MEMBER_BASES);
 const BAR_FORECAST_PAID_SUBSCRIPTION_SOURCE_SET = new Set(
   BAR_FORECAST_PAID_SUBSCRIPTION_SOURCES,
 );
@@ -236,15 +235,16 @@ export function requireBarForecastAccess(context) {
   if (entitlement?.administrator === true) {
     return Object.freeze({ authorized: true, kind: 'administrator', role, basis });
   }
-  const foundingBeta = entitlement?.foundingBeta === true && basis === 'founding_beta';
-  const paidMember = entitlement?.paidSubscription === true
-    && ['early_access', 'paid_subscription'].includes(basis);
   if (access?.allowed === true
       && access?.unlimited === true
-      && BAR_FORECAST_MEMBER_BASIS_SET.has(basis)
-      && (foundingBeta || paidMember)
-      && access?.termsRequired !== true
-      && access?.paidSubscriptionExpired !== true) {
+      && Boolean(role)
+      && Boolean(basis)
+      && access?.termsRequired === false
+      && access?.reauthenticationRequired === false
+      && access?.profileCompleted === true
+      && access?.tokenAcknowledgementRequired === false
+      && access?.paidSubscriptionExpired !== true
+      && basis !== 'paid_subscription_expired') {
     return Object.freeze({ authorized: true, kind: 'member', role, basis });
   }
   throw new BarForecastError(
@@ -268,8 +268,27 @@ export function barForecastEntitlementEvidence(context) {
   const paidSubscriptionEntitlement = subscriptionStatus === 'active'
     && BAR_FORECAST_PAID_SUBSCRIPTION_SOURCE_SET.has(subscriptionSource)
     && access?.paidSubscriptionExpired !== true;
-  if (!administratorEntitlement && !foundingBetaEntitlement && !paidSubscriptionEntitlement) {
+  const currentUnlimitedEntitlement = access?.allowed === true
+    && access?.unlimited === true
+    && access?.paidSubscriptionExpired !== true
+    && String(access?.basis || '').trim().toLowerCase() !== 'paid_subscription_expired';
+  if (!administratorEntitlement
+      && !foundingBetaEntitlement
+      && !paidSubscriptionEntitlement
+      && !currentUnlimitedEntitlement) {
     return null;
+  }
+  if (!administratorEntitlement
+      && !foundingBetaEntitlement
+      && !paidSubscriptionEntitlement) {
+    return Object.freeze({
+      administrator: false,
+      foundingBeta: false,
+      paidSubscription: false,
+      currentUnlimited: true,
+      role: accessRole,
+      subscriptionSource: null,
+    });
   }
   return Object.freeze({
     administrator: administratorEntitlement,

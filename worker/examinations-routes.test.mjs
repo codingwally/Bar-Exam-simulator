@@ -118,6 +118,43 @@ test('authenticated examination catalog reaches only the allowlisted RPC', async
   });
 });
 
+test('Bar Simulation catalog rejects a current non-unlimited member before content access', async () => {
+  let contentQueries = 0;
+  await withFetchMock(async (url, options) => {
+    const auth = authResponse(url);
+    if (auth) return auth;
+    const target = String(url);
+    if (target === `${supabaseUrl}/rest/v1/rpc/examination_authorize_access`) {
+      assert.deepEqual(JSON.parse(options.body), {
+        p_user_id: userId,
+        p_track: 'bar_feels',
+        p_version_id: null,
+        p_attempt_id: null,
+        p_allow_historical: false,
+      });
+      return Response.json({
+        allowed: true,
+        basis: 'introductory_tokens',
+        track: 'bar_feels',
+        unlimited: false,
+      });
+    }
+    if (target === `${supabaseUrl}/rest/v1/rpc/examination_query`) contentQueries += 1;
+    throw new Error(`Unexpected request: ${target}`);
+  }, async () => {
+    const response = await worker.fetch(request('/examinations/query', {
+      operation: 'catalog',
+      track: 'bar_feels',
+    }), env);
+    const body = await response.json();
+    assert.equal(response.status, 403);
+    assert.equal(body.ok, false);
+    assert.equal(body.error.code, 'EXAM_PREMIUM_REQUIRED');
+    assert.equal(body.error.message, 'Subscribe to access this feature.');
+    assert.equal(contentQueries, 0);
+  });
+});
+
 test('Bar Simulation history is owner-authorized and read from the track-filtered RPC', async () => {
   await withFetchMock(async (url, options = {}) => {
     const auth = authResponse(url);
@@ -642,7 +679,12 @@ test(`${track} AI completion suppresses email without calling a provider or fail
         p_attempt_id: attemptId,
         p_allow_historical: false,
       });
-      return Response.json({ allowed: true, basis: 'current_owner', track });
+      return Response.json({
+        allowed: true,
+        basis: 'current_owner',
+        track,
+        ...(track === 'bar_feels' ? { unlimited: true } : {}),
+      });
     }
     if (target === `${supabaseUrl}/rest/v1/rpc/examination_command`) {
       return Response.json({
@@ -750,7 +792,12 @@ test('3-of-20 token exhaustion fails truthfully and resumes at question four aft
     const auth = authResponse(url);
     if (auth) return auth;
     if (target === `${supabaseUrl}/rest/v1/rpc/examination_authorize_access`) {
-      return Response.json({ allowed: true, basis: 'current_owner', track: 'bar_feels' });
+      return Response.json({
+        allowed: true,
+        basis: 'current_owner',
+        track: 'bar_feels',
+        unlimited: true,
+      });
     }
     if (target === `${supabaseUrl}/rest/v1/rpc/examination_command`) {
       gradingRequests += 1;
@@ -869,7 +916,12 @@ test('Human Examiner assignment returns a manual link without calling an email p
         p_attempt_id: attemptId,
         p_allow_historical: false,
       });
-      return Response.json({ allowed: true, basis: 'current_owner', track: 'bar_feels' });
+      return Response.json({
+        allowed: true,
+        basis: 'current_owner',
+        track: 'bar_feels',
+        unlimited: true,
+      });
     }
     if (target === `${supabaseUrl}/rest/v1/rpc/examination_command`) {
       const payload = JSON.parse(options.body);
@@ -989,7 +1041,7 @@ test('eligible public curated Bar Simulation destination uses the private random
     const payload = JSON.parse(options.body);
     called.push(target);
     if (target === `${supabaseUrl}/rest/v1/rpc/examination_authorize_access`) {
-      return Response.json({ allowed: true, track: 'bar_feels' });
+      return Response.json({ allowed: true, track: 'bar_feels', unlimited: true });
     }
     if (target === `${supabaseUrl}/rest/v1/rpc/examination_query`) {
       assert.deepEqual(payload, {
@@ -1072,7 +1124,7 @@ test('test-only, uploaded, system-test, and noncanonical Bar Simulation definiti
       const payload = JSON.parse(options.body);
       calls.push(target);
       if (target === `${supabaseUrl}/rest/v1/rpc/examination_authorize_access`) {
-        return Response.json({ allowed: true, track: 'bar_feels' });
+        return Response.json({ allowed: true, track: 'bar_feels', unlimited: true });
       }
       if (target === `${supabaseUrl}/rest/v1/rpc/examination_query`) {
         assert.equal(payload.p_operation, 'setup');
@@ -1139,7 +1191,7 @@ test('Simulation rollback resumes an existing private allocation but sends new s
       const payload = JSON.parse(options.body);
       calls.push(target);
       if (target === `${supabaseUrl}/rest/v1/rpc/examination_authorize_access`) {
-        return Response.json({ allowed: true, track: 'bar_feels' });
+        return Response.json({ allowed: true, track: 'bar_feels', unlimited: true });
       }
       if (target === `${supabaseUrl}/rest/v1/rpc/examination_query`) {
         return Response.json(canonicalBarSimulationSetup());
@@ -1210,7 +1262,7 @@ test('Simulation allocator failures return safe exhaustion and availability resp
       if (auth) return auth;
       const target = String(url);
       if (target === `${supabaseUrl}/rest/v1/rpc/examination_authorize_access`) {
-        return Response.json({ allowed: true, track: 'bar_feels' });
+        return Response.json({ allowed: true, track: 'bar_feels', unlimited: true });
       }
       if (target === `${supabaseUrl}/rest/v1/rpc/examination_query`) {
         return Response.json(canonicalBarSimulationSetup());

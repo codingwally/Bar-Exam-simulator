@@ -42,7 +42,7 @@
         'assets/bar-forecast.css?v=access-flow-20260902-1',
       ],
       scripts: [
-        'assets/bar-forecast.js?v=access-flow-20260902-1',
+        'assets/bar-forecast.js?v=access-flow-20260902-1&unlimited=feature-access-20260902-1',
       ],
     }),
   });
@@ -87,6 +87,10 @@
       && !unresolvedProfile;
   }
 
+  function hasResolvedUnlimitedAccess(access) {
+    return hasResolvedAllowedAccess(access) && access?.unlimited === true;
+  }
+
   async function ensureProtectedAccess(routeHash) {
     const phase4 = global.DueDiligencePhase4;
     if (!routeHash) return true;
@@ -101,6 +105,32 @@
       global.toast?.(error?.message || 'Your access could not be verified.', 'warn');
       return false;
     }
+  }
+
+  async function ensureUnlimitedFeatureAccess(routeHash, options = {}) {
+    const phase4 = global.DueDiligencePhase4;
+    if (!routeHash) return true;
+    if (typeof phase4?.ensureUnlimitedFeatureAccess !== 'function') {
+      global.toast?.('Access verification is still loading. Please try again.', 'warn');
+      return false;
+    }
+    if (hasResolvedUnlimitedAccess(phase4.getAccess?.())) return true;
+    try {
+      return await phase4.ensureUnlimitedFeatureAccess(routeHash, options);
+    } catch (error) {
+      global.toast?.(error?.message || 'Your access could not be verified.', 'warn');
+      return false;
+    }
+  }
+
+  function ensureFeatureAccess(feature, routeHash, options = {}) {
+    if (feature === 'bar-feels' || routeHash === '#bar-feels') {
+      return ensureUnlimitedFeatureAccess(routeHash, {
+        featureId: 'bar-feels',
+        focusOrigin: options.focusOrigin || document.activeElement,
+      });
+    }
+    return ensureProtectedAccess(routeHash);
   }
 
   function loadStyle(href) {
@@ -210,7 +240,7 @@
   async function loadForFeature(feature, options = {}) {
     const routeHash = protectedFeatureRoutes[feature];
     if (routeHash && options.skipAccessCheck !== true) {
-      const allowed = await ensureProtectedAccess(routeHash);
+      const allowed = await ensureFeatureAccess(feature, routeHash, options);
       if (!allowed) return false;
     }
     await loadGroup(featureGroups[feature] || feature);
@@ -234,20 +264,24 @@
     if (typeof originalShowPage !== 'function' || originalShowPage.__ddAccessGuarded === true) return;
 
     const guardedShowPage = function guardedShowPage(page, element, options = {}) {
-      const routeHash = protectedPageRoutes[String(page || '').trim().toLowerCase()];
+      const pageName = String(page || '').trim().toLowerCase();
+      const routeHash = protectedPageRoutes[pageName];
       if (!routeHash || options?.accessVerified === true) {
         return originalShowPage.call(this, page, element, options);
       }
 
       const access = global.DueDiligencePhase4?.getAccess?.();
-      if (hasResolvedAllowedAccess(access)) {
+      const accessReady = pageName === 'bar-feels'
+        ? hasResolvedUnlimitedAccess(access)
+        : hasResolvedAllowedAccess(access);
+      if (accessReady) {
         return originalShowPage.call(this, page, element, {
           ...options,
           accessVerified: true,
         });
       }
 
-      ensureProtectedAccess(routeHash).then((allowed) => {
+      ensureFeatureAccess(pageName, routeHash, { focusOrigin: element }).then((allowed) => {
         if (!allowed) return;
         originalShowPage.call(global, page, element, {
           ...options,

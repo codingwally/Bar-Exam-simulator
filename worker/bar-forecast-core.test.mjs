@@ -65,6 +65,21 @@ function completeAnswers() {
   }));
 }
 
+function currentUnlimitedAccess(overrides = {}) {
+  return {
+    allowed: true,
+    unlimited: true,
+    role: 'student',
+    basis: 'paid_subscription',
+    termsRequired: false,
+    reauthenticationRequired: false,
+    profileCompleted: true,
+    tokenAcknowledgementRequired: false,
+    paidSubscriptionExpired: false,
+    ...overrides,
+  };
+}
+
 function gradingEntry(row, overrides = {}) {
   return {
     questionId: row.id,
@@ -85,7 +100,7 @@ function gradingEntry(row, overrides = {}) {
   };
 }
 
-test('Forecast access admits administrators and verified paid or Founding Beta members only', () => {
+test('Forecast access admits administrators and every current setup-ready unlimited member', () => {
   for (const role of BAR_FORECAST_ADMIN_ROLES) {
     assert.deepEqual(requireBarForecastAccess({
       administrator: { authorized: true, role },
@@ -108,15 +123,10 @@ test('Forecast access admits administrators and verified paid or Founding Beta m
     for (const source of BAR_FORECAST_PAID_SUBSCRIPTION_SOURCES) {
       assert.deepEqual(requireBarForecastAccess({
         administrator: null,
-        access: {
-          allowed: true,
-          unlimited: true,
-          role: 'student',
+        access: currentUnlimitedAccess({
           basis,
-          termsRequired: false,
-          paidSubscriptionExpired: false,
           subscription: { status: 'active', source },
-        },
+        }),
       }), {
         authorized: true,
         kind: 'member',
@@ -127,15 +137,10 @@ test('Forecast access admits administrators and verified paid or Founding Beta m
   }
   assert.deepEqual(requireBarForecastAccess({
     administrator: null,
-    access: {
-      allowed: true,
-      unlimited: true,
-      role: 'student',
+    access: currentUnlimitedAccess({
       basis: 'founding_beta',
-      termsRequired: false,
-      paidSubscriptionExpired: false,
       freeBeta: { active: true, program: 'founding_beta_2026' },
-    },
+    }),
   }), {
     authorized: true,
     kind: 'member',
@@ -143,47 +148,63 @@ test('Forecast access admits administrators and verified paid or Founding Beta m
     basis: 'founding_beta',
   });
 
+  for (const access of [
+    currentUnlimitedAccess({ basis: 'provisional_payment' }),
+    currentUnlimitedAccess({
+      basis: 'paid_subscription',
+      subscription: { status: 'active', source: 'complimentary' },
+    }),
+    currentUnlimitedAccess({ basis: 'partner_unlimited' }),
+    currentUnlimitedAccess({
+      basis: 'founding_beta',
+      freeBeta: { active: false, program: 'other_program' },
+    }),
+  ]) {
+    assert.deepEqual(requireBarForecastAccess({ administrator: null, access }), {
+      authorized: true,
+      kind: 'member',
+      role: 'student',
+      basis: access.basis,
+    });
+  }
+
   for (const context of [
     null,
     { administrator: { authorized: false, role: 'super_admin' }, access: null },
     { administrator: { authorized: true, role: 'subscriber' }, access: null },
-    { administrator: null, access: { allowed: true, unlimited: false, basis: 'introductory_tokens' } },
-    { administrator: null, access: { allowed: true, unlimited: true, basis: 'provisional_payment' } },
+    { administrator: null, access: currentUnlimitedAccess({ unlimited: false, basis: 'introductory_tokens' }) },
+    { administrator: null, access: currentUnlimitedAccess({ allowed: false }) },
     {
       administrator: null,
-      access: {
-        allowed: true,
-        unlimited: true,
-        basis: 'paid_subscription',
-        subscription: { status: 'active', source: 'complimentary' },
-      },
+      access: currentUnlimitedAccess({ paidSubscriptionExpired: true }),
     },
     {
       administrator: null,
-      access: {
-        allowed: true,
-        unlimited: true,
-        basis: 'early_access',
-        subscription: { status: 'expired', source: 'manual_payment' },
-      },
+      access: currentUnlimitedAccess({ basis: 'paid_subscription_expired' }),
     },
     {
       administrator: null,
-      access: {
-        allowed: true,
-        unlimited: true,
-        basis: 'founding_beta',
-        freeBeta: { active: false, program: 'founding_beta_2026' },
-      },
+      access: currentUnlimitedAccess({ termsRequired: true }),
     },
     {
       administrator: null,
-      access: {
-        allowed: true,
-        unlimited: true,
-        basis: 'founding_beta',
-        freeBeta: { active: true, program: 'other_program' },
-      },
+      access: currentUnlimitedAccess({ reauthenticationRequired: true }),
+    },
+    {
+      administrator: null,
+      access: currentUnlimitedAccess({ profileCompleted: false }),
+    },
+    {
+      administrator: null,
+      access: currentUnlimitedAccess({ tokenAcknowledgementRequired: true }),
+    },
+    {
+      administrator: null,
+      access: currentUnlimitedAccess({ role: '' }),
+    },
+    {
+      administrator: null,
+      access: currentUnlimitedAccess({ basis: '' }),
     },
   ]) {
     assert.throws(
@@ -250,6 +271,18 @@ test('Forecast entitlement evidence survives setup masking without authorizing a
     foundingBeta: false,
     paidSubscription: false,
     role: 'founder_admin',
+    subscriptionSource: null,
+  });
+
+  assert.deepEqual(barForecastEntitlementEvidence({
+    administrator: null,
+    access: currentUnlimitedAccess({ basis: 'provisional_payment' }),
+  }), {
+    administrator: false,
+    foundingBeta: false,
+    paidSubscription: false,
+    currentUnlimited: true,
+    role: 'student',
     subscriptionSource: null,
   });
   assert.deepEqual(barForecastEntitlementEvidence({

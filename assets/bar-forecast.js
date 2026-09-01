@@ -637,14 +637,34 @@
     if (state.pricingRedirectInProgress) return true;
     state.pricingRedirectInProgress = true;
     const client = global.DueDiligencePhase4 || global.DueDiligencePhase2;
+    const backgroundHash = state.returnHash && state.returnHash !== ROUTE
+      ? state.returnHash
+      : '#quorum';
+    const focusOrigin = state.lastTrigger?.isConnected ? state.lastTrigger : null;
     closeForecast({ force: true, restoreRoute: false });
-    if (typeof client?.openView === 'function') {
-      client.openView('pricing', { returnToQuorum: true });
+    if (typeof client?.openUnlimitedFeatureGate === 'function') {
+      client.openUnlimitedFeatureGate(ROUTE, {
+        featureId: 'bar-forecast',
+        backgroundHash,
+        focusOrigin,
+      });
+    } else if (typeof client?.openView === 'function') {
+      history.replaceState({}, '', `${location.pathname}${location.search}${backgroundHash}`);
+      client.openView('pricing', {
+        mode: 'action',
+        focusOrigin,
+        context: {
+          reason: 'unlimited_feature',
+          featureId: 'bar-forecast',
+          featureLabel: '2026 Bar Forecast',
+          targetHash: ROUTE,
+          backgroundHash,
+        },
+      });
     } else {
       history.replaceState({ dd2View: 'pricing' }, '', `${location.pathname}${location.search}#pricing`);
       global.dispatchEvent(new Event('popstate'));
     }
-    global.toast?.('Choose a plan to unlock the 2026 Bar Forecast.', 'warn');
     return true;
   }
 

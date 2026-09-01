@@ -220,6 +220,17 @@ test('status is fail-closed and returns only the contracted fields with private 
       unlimited: true,
       freeBeta: { active: true, program: 'founding_beta_2026' },
     }),
+    completeSetupAccess({
+      role: 'student',
+      basis: 'provisional_payment',
+      unlimited: true,
+    }),
+    completeSetupAccess({
+      role: 'student',
+      basis: 'paid_subscription',
+      unlimited: true,
+      subscription: { status: 'active', source: 'complimentary' },
+    }),
   ]) {
     const member = harness({
       authorization: null,
@@ -235,12 +246,17 @@ test('status is fail-closed and returns only the contracted fields with private 
 
   for (const setupAccess of [
     completeSetupAccess({ role: 'student', basis: 'introductory_tokens', unlimited: false }),
-    completeSetupAccess({ role: 'student', basis: 'provisional_payment', unlimited: true }),
     completeSetupAccess({
       role: 'student',
       basis: 'paid_subscription',
       unlimited: true,
-      subscription: { status: 'active', source: 'complimentary' },
+      allowed: false,
+    }),
+    completeSetupAccess({
+      role: 'student',
+      basis: 'paid_subscription',
+      unlimited: true,
+      paidSubscriptionExpired: true,
     }),
   ]) {
     const blocked = harness({ authorization: null, setupAccess });
@@ -347,6 +363,43 @@ test('required account setup fails closed server-side while payment state remain
     );
     assert.equal(
       entitledSetup.calls.some((call) => call.functionName === 'dd2026_bar_forecast_consent_status'),
+      false,
+    );
+  }
+
+  for (const setupAccess of [
+    completeSetupAccess({
+      role: 'student',
+      basis: 'provisional_payment',
+      unlimited: true,
+      termsRequired: true,
+    }),
+    completeSetupAccess({
+      role: 'student',
+      basis: 'provisional_payment',
+      unlimited: true,
+      reauthenticationRequired: true,
+    }),
+    completeSetupAccess({
+      role: 'student',
+      basis: 'provisional_payment',
+      unlimited: true,
+      profileCompleted: false,
+    }),
+    completeSetupAccess({
+      role: 'student',
+      basis: 'provisional_payment',
+      unlimited: true,
+      tokenAcknowledgementRequired: true,
+    }),
+  ]) {
+    const provisionalSetup = harness({ authorization: null, setupAccess });
+    await assert.rejects(
+      provisionalSetup.handlers.handle(request({ operation: 'status' }), {}, '', ''),
+      { code: 'BAR_FORECAST_SETUP_REQUIRED', status: 403 },
+    );
+    assert.equal(
+      provisionalSetup.calls.some((call) => call.functionName === 'dd2026_bar_forecast_consent_status'),
       false,
     );
   }

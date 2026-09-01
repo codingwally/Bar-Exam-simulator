@@ -860,6 +860,11 @@
       return false;
     }
     if (feature === 'bar-forecast') {
+      const allowed = await global.DueDiligencePhase4?.ensureUnlimitedFeatureAccess?.(returnHash, {
+        featureId: 'bar-forecast',
+        focusOrigin: trigger,
+      });
+      if (allowed !== true) return false;
       const loaded = await loadFeature(feature);
       if (loaded === false) return false;
       await invokePublicOpener(
@@ -874,7 +879,7 @@
     // feature. Requiring a commercial-access round trip here can strand a valid
     // session on the initial "Verifying…" state when that unrelated request is
     // slow or temporarily unavailable.
-    if (!['retainer', 'quorum'].includes(feature)) {
+    if (!['retainer', 'quorum', 'bar-feels'].includes(feature)) {
       const allowed = await global.DueDiligencePhase4?.ensureProtectedAccess?.(returnHash);
       if (allowed !== true) return false;
     }

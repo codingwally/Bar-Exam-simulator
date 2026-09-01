@@ -20,19 +20,21 @@ assert.match(
 
 let resolveAccess;
 let openedBarFeels = 0;
-let openedPricing = 0;
 let activatedBarFeels = 0;
 let restoredBarFeels = 0;
+let unlimitedChecks = 0;
 const accessPromise = new Promise((resolve) => {
   resolveAccess = resolve;
 });
 const context = vm.createContext({
+  document: { activeElement: null },
   window: {
     DueDiligencePhase4: {
-      requireAuthentication: () => true,
-      refreshAccess: () => accessPromise,
-      openView: () => {
-        openedPricing += 1;
+      ensureUnlimitedFeatureAccess: async (routeHash, options = {}) => {
+        assert.equal(routeHash, '#bar-feels');
+        unlimitedChecks += 1;
+        await accessPromise;
+        return options.isCurrent?.() !== false;
       },
     },
     DueDiligenceExaminations: {
@@ -73,7 +75,7 @@ assert.equal(
   'A stale Premium entitlement response must not reopen Bar Feels after the user navigates away.',
 );
 assert.equal(activatedBarFeels, 0);
-assert.equal(openedPricing, 0);
+assert.equal(unlimitedChecks, 1);
 
 const restoredNavigation = context.openPremiumBarFeelsForTest({
   restoreActive: true,
@@ -83,6 +85,7 @@ await restoredNavigation;
 assert.equal(restoredBarFeels, 1, 'Premium access must be verified before restoring Bar Feels.');
 assert.equal(openedBarFeels, 0, 'A restored Bar Feels attempt must not be replaced by the catalog.');
 assert.equal(activatedBarFeels, 1);
+assert.equal(unlimitedChecks, 2);
 
 let resolveCatalog;
 let signalCatalogStarted;

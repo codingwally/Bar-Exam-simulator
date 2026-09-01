@@ -10,7 +10,7 @@ const [html, phase2, privateBetaLanding] = await Promise.all([
 
 assert.match(
   privateBetaLanding,
-  /if \(!\['retainer', 'quorum'\]\.includes\(feature\)\)[\s\S]{0,260}ensureProtectedAccess/,
+  /if \(!\['retainer', 'quorum', 'bar-feels'\]\.includes\(feature\)\)[\s\S]{0,260}ensureProtectedAccess/,
   'The signed-in Home/community route must not depend on the commercial examination-access gate.',
 );
 assert.match(

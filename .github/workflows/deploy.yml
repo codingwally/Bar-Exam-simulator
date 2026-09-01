@@ -52,6 +52,16 @@ on:
         description: "Successful Trusted staging E2E run for this exact main SHA, including 30 live Forecast journeys"
         required: true
         type: string
+      emergency_publish_before_forecast_live_test:
+        description: "Owner-approved emergency: publish after all pre-journey staging gates, then live-test Forecast after release"
+        required: true
+        default: false
+        type: boolean
+      staged_product_sha:
+        description: "Emergency mode only: exact product SHA proven by the pre-journey staging gates"
+        required: false
+        default: ""
+        type: string
       approval_reference:
         description: "Approval/change reference recorded in the release log"
         required: true
@@ -75,6 +85,8 @@ jobs:
           CONFIRM_PRODUCTION: ${{ inputs.confirm_production }}
           APPROVAL_REFERENCE: ${{ inputs.approval_reference }}
           STAGING_RUN_ID: ${{ inputs.staging_run_id }}
+          EMERGENCY_PUBLISH: ${{ inputs.emergency_publish_before_forecast_live_test }}
+          STAGED_PRODUCT_SHA: ${{ inputs.staged_product_sha }}
         run: |
           set -euo pipefail
           if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
@@ -93,14 +105,22 @@ jobs:
             echo "A numeric successful staging run id is required." >&2
             exit 1
           fi
+          if [[ "$EMERGENCY_PUBLISH" == "true" && ! "$STAGED_PRODUCT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Emergency publish requires the exact 40-hex staged product SHA." >&2
+            exit 1
+          fi
 
       - name: Checkout the exact production candidate
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Verify the exact successful staging run
         env:
           GH_TOKEN: ${{ github.token }}
           STAGING_RUN_ID: ${{ inputs.staging_run_id }}
+          EMERGENCY_PUBLISH: ${{ inputs.emergency_publish_before_forecast_live_test }}
+          STAGED_PRODUCT_SHA: ${{ inputs.staged_product_sha }}
         shell: bash
         run: |
           set -euo pipefail
@@ -108,10 +128,48 @@ jobs:
           test "$(jq -r '.event' <<<"$staging_run")" = "workflow_dispatch"
           test "$(jq -r '.path' <<<"$staging_run")" = ".github/workflows/staging-e2e-gate.yml"
           test "$(jq -r '.status' <<<"$staging_run")" = "completed"
-          test "$(jq -r '.conclusion' <<<"$staging_run")" = "success"
-          test "$(jq -r '.head_sha' <<<"$staging_run")" = "$GITHUB_SHA"
+          if [[ "$EMERGENCY_PUBLISH" != "true" ]]; then
+            test "$(jq -r '.conclusion' <<<"$staging_run")" = "success"
+            test "$(jq -r '.head_sha' <<<"$staging_run")" = "$GITHUB_SHA"
+            exit 0
+          fi
+
+          test "$(jq -r '.conclusion' <<<"$staging_run")" = "failure"
+          test "$(jq -r '.head_sha' <<<"$staging_run")" = "$STAGED_PRODUCT_SHA"
+          git merge-base --is-ancestor "$STAGED_PRODUCT_SHA" "$GITHUB_SHA"
+          git diff --quiet "$STAGED_PRODUCT_SHA" "$GITHUB_SHA" -- . \
+            ':(exclude).github/workflows/deploy.yml' \
+            ':(exclude)scripts/test-admin-bar-forecast-release-workflow.mjs'
+
+          staging_jobs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$STAGING_RUN_ID/jobs?per_page=100")"
+          require_step() {
+            local step_name="$1"
+            local expected="$2"
+            local actual
+            actual="$(jq -r --arg name "$step_name" '[.jobs[].steps[] | select(.name == $name)][0].conclusion // "missing"' <<<"$staging_jobs")"
+            if [[ "$actual" != "$expected" ]]; then
+              echo "Staging step '$step_name' was '$actual', expected '$expected'." >&2
+              exit 1
+            fi
+          }
+          require_step 'Verify greenfield release contracts before staging deploy' success
+          require_step 'Apply and probe the exact paid, Founding Beta, and admin Forecast migrations' success
+          require_step 'Import and verify the exact protected Bar Forecast content' success
+          require_step 'Deploy reviewed Worker and static artifact to staging' success
+          require_step 'Verify live Forecast signed-out and origin boundaries' success
+          require_step 'Verify public pricing and reject unauthenticated Admin pricing access' success
+          require_step 'Verify greenfield static routes and public error contracts' success
+          require_step 'Complete beta staging suite' success
+          require_step 'Due Diligence 2026 staging suite' success
+          require_step 'Examinations staging suite' success
+          require_step 'Run 30 live Forecast examiners in 15 two-browser batches' failure
+          require_step 'Publish sanitized suite summary' success
+          require_step 'Upload sanitized staging evidence' success
+          require_step 'Enforce all three staging suites' success
+          test "$(jq '[.jobs[].steps[] | select(.conclusion == "failure")] | length' <<<"$staging_jobs")" = "1"
 
       - name: Download the exact sanitized 30-journey staging evidence
+        if: inputs.emergency_publish_before_forecast_live_test != true
         uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
@@ -121,6 +179,7 @@ jobs:
           path: artifacts/release-staging-evidence
 
       - name: Enforce 30 of 30 live Forecast journeys for this exact SHA
+        if: inputs.emergency_publish_before_forecast_live_test != true
         env:
           BAR_FORECAST_EVIDENCE_FILE: artifacts/release-staging-evidence/bar-forecast-live-30.json
           BAR_FORECAST_EVIDENCE_TARGET: staging

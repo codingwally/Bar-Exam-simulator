@@ -88,6 +88,7 @@
     const assetId = text(rawAsset.assetId || rawAsset.id || source.qrAssetId, 100);
     const suppliedQrUrl = text(source.qrUrl, 2_000);
     const qrUrl = /^\/pricing\/assets\/[0-9a-f-]{36}$/i.test(suppliedQrUrl)
+      || suppliedQrUrl === '/pricing/legacy-149-qr.png'
       || /^\/assets\/payments\/[a-z0-9][a-z0-9._-]*\.(?:png|jpe?g)$/i.test(suppliedQrUrl)
       ? suppliedQrUrl
       : null;

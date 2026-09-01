@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
+import { runInNewContext } from 'node:vm';
 import { sanitizePublicPricingSnapshot } from '../worker/pricing-core.mjs';
 
 const read = (path, encoding = 'utf8') => readFile(new URL(`../${path}`, import.meta.url), encoding);
@@ -60,7 +61,34 @@ for (const copy of [
   'PHP ',
   'Transfer fees may apply',
 ]) assert.ok(renderer.includes(copy), `Approved renderer copy missing: ${copy}`);
-assert.match(experience, /Regular Subscription · ₱199 · 30 Days/u);
+assert.match(
+  experience,
+  /Regular Subscription · \$\{formatPhp\(regularPlan\.priceCentavos\)\} · \$\{regularPlan\.durationDays\} Days/u,
+);
+
+const rendererSandbox = { window: {} };
+runInNewContext(renderer, rendererSandbox);
+const normalizePricing = rendererSandbox.window.DueDiligencePricingRenderer.normalizeConfig;
+const normalizedLegacyQr = normalizePricing({
+  paymentMethods: [{
+    channelCode: 'bpi_instapay',
+    label: 'BPI InstaPay',
+    qrUrl: '/pricing/legacy-149-qr.png',
+    qrAmountMode: 'exact',
+    qrAmountCentavos: 14_900,
+    enabled: true,
+    visible: true,
+  }],
+});
+assert.equal(normalizedLegacyQr.paymentMethods[0].qrUrl, '/pricing/legacy-149-qr.png');
+const rejectedArbitraryQr = normalizePricing({
+  paymentMethods: [{
+    channelCode: 'untrusted_qr',
+    label: 'Untrusted QR',
+    qrUrl: '/pricing/not-an-approved-payment-qr.png',
+  }],
+});
+assert.equal(rejectedArbitraryQr.paymentMethods[0].qrUrl, null);
 
 assert.match(renderer, /channelCode === 'bpi_instapay'[\s\S]*qrUrl === '\/assets\/payments\/bpi-instapay-199-qr\.png'[\s\S]*qrAmountMode === 'exact'/u);
 assert.match(renderer, /data-payment-method-version-id=/u);
@@ -90,9 +118,11 @@ assert.match(phase2Css, /#dd2-payment-submit \{[\s\S]*min-height: 76px/u);
 assert.match(pricingCss, /\.dd-regular-qr-card \{[\s\S]*356px/u);
 assert.match(pricingCss, /\.dd-regular-qr-image \{[\s\S]*300px/u);
 
+const rendererAt = index.indexOf('assets/pricing-renderer.js?v=regular-checkout-r2');
 const safetyAt = index.indexOf('assets/pricing-checkout-safety.js?v=regular-checkout-r1');
 const phase2At = index.indexOf('assets/phase2-experience.js?');
-assert.ok(safetyAt > 0 && safetyAt < phase2At, 'Checkout safety must load before the checkout controller.');
+assert.ok(rendererAt > 0 && rendererAt < safetyAt, 'Pricing renderer must load before checkout safety.');
+assert.ok(safetyAt < phase2At, 'Checkout safety must load before the checkout controller.');
 assert.doesNotMatch(index, /20260914|2026-09-14/u);
 assert.doesNotMatch(serviceWorker, /20260914|2026-09-14/u);
 assert.match(serviceWorker, /pricing-checkout-safety\.js\?v=regular-checkout-r1/u);

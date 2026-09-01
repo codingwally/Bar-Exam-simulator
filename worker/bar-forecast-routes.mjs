@@ -14,6 +14,7 @@ import {
   forecastGradingBatches,
   normalizeBarForecastRequest,
   publicForecastQuestions,
+  barForecastEntitlementEvidence,
   requireBarForecastAccess,
   validateBarForecastGradingResult,
   validatedForecastRows,
@@ -66,10 +67,24 @@ function requiredSetupPending(access, authorization) {
 
 export const BAR_FORECAST_GRADING_PROVIDER_OPTIONS = Object.freeze({
   quiet: true,
-  requestTimeoutMs: 30_000,
+  requestTimeoutMs: 45_000,
+  preferredModel: 'gemini-3.6-flash',
+  fallbackModels: Object.freeze(['gemini-3.5-flash-lite']),
+  temperature: 0,
   modelLimit: 2,
   attemptsPerModel: 1,
 });
+
+function barForecastGradingProviderOptions(env) {
+  const configuredModel = typeof env?.BAR_FORECAST_MODEL === 'string'
+    ? env.BAR_FORECAST_MODEL.trim()
+    : '';
+  if (!configuredModel) return BAR_FORECAST_GRADING_PROVIDER_OPTIONS;
+  return Object.freeze({
+    ...BAR_FORECAST_GRADING_PROVIDER_OPTIONS,
+    preferredModel: configuredModel,
+  });
+}
 
 function forecastGradingProviderError(error) {
   const code = String(error?.code || '').trim().toUpperCase();
@@ -118,14 +133,23 @@ export function createBarForecastHandlers(deps) {
       authorizeAdministrator(env, user),
       requiredSetupAccess(env, user),
     ]);
-    const authorization = requireBarForecastAccess({ administrator, access: setupAccess });
-    if (requiredSetupPending(setupAccess, authorization)) {
+    const context = { administrator, access: setupAccess };
+    const entitlement = barForecastEntitlementEvidence(context);
+    if (!entitlement) {
+      throw new BarForecastError(
+        'BAR_FORECAST_ACCESS_REQUIRED',
+        'Bar Forecast access requires an active paid subscription, Founding Beta access, or an authorized administrator account.',
+        403,
+      );
+    }
+    if (requiredSetupPending(setupAccess, entitlement)) {
       throw new BarForecastError(
         'BAR_FORECAST_SETUP_REQUIRED',
         'Complete the required account setup before opening Bar Forecast.',
         403,
       );
     }
+    const authorization = requireBarForecastAccess(context);
     return { user, authorization };
   }
 
@@ -165,7 +189,7 @@ export function createBarForecastHandlers(deps) {
           buildBarForecastGradingPrompt(batch),
           BAR_FORECAST_GRADING_RESPONSE_SCHEMA,
           (value) => validateBarForecastGradingResult(value, batch),
-          BAR_FORECAST_GRADING_PROVIDER_OPTIONS,
+          barForecastGradingProviderOptions(env),
         );
         graded.push(evaluation.result);
       } catch (error) {
@@ -249,6 +273,7 @@ export function createBarForecastHandlers(deps) {
       subject: input.subject,
       totalScore: result.totalScore,
       maxScore: result.maxScore,
+      analytics: result.analytics,
       results: result.results,
     }, 200, origin, allowedOrigin);
   }

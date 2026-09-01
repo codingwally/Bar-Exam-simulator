@@ -275,6 +275,37 @@ try {
   await grantFoundingBetaAccess(actorUserId, student);
   await grantFoundingBetaAccess(actorUserId, peer);
 
+  console.log('STAGING_GATE: validating unlimited Forecast access and question delivery');
+  const forecastStatus = await workerPost(
+    '/admin/dd2026/bar-forecast',
+    { operation: 'status' },
+    student.token,
+  );
+  assert.equal(forecastStatus.body.ok, true);
+  assert.equal(forecastStatus.body.authorized, true);
+  assert.equal(forecastStatus.body.consentAccepted, false);
+  const forecastConsent = await workerPost(
+    '/admin/dd2026/bar-forecast',
+    { operation: 'accept', version: '2026-09-01' },
+    student.token,
+  );
+  assert.equal(forecastConsent.body.ok, true);
+  assert.equal(forecastConsent.body.consentAccepted, true);
+  const forecastStart = await workerPost(
+    '/admin/dd2026/bar-forecast',
+    {
+      operation: 'start',
+      subject: 'Civil Law and Land Titles and Deeds',
+    },
+    student.token,
+  );
+  assert.equal(forecastStart.body.ok, true);
+  assert.equal(forecastStart.body.authorized, true);
+  assert.equal(forecastStart.body.questions.length, 20);
+  assert.ok(forecastStart.body.questions.every((question) => (
+    question && typeof question.id === 'string' && typeof question.prompt === 'string'
+  )));
+
   console.log('STAGING_GATE: validating the 1,890-placement Subject Matter catalog');
   const catalog = await examinationQuery(student, 'subject_catalog');
   assert.equal(catalog.body.ok, true);

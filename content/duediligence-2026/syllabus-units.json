@@ -1,0 +1,1324 @@
+{
+  "schema_version": "1.0",
+  "source": {
+    "title": "2026 Bar Forecast top-level syllabus allocation",
+    "bar_year": "2026",
+    "official_syllabus_authority": "Supreme Court of the Philippines",
+    "official_syllabus_url": "https://sc.judiciary.gov.ph/wp-content/uploads/2025/10/2026-BAR-Bar-Bulletin-No.-1-October-16-2025.pdf",
+    "examinable_cutoff": "2025-06-30",
+    "questions_per_subject": 20,
+    "allocation_rule": "Every subject must match its top-level targets exactly. The headings follow the official 2026 Bar syllabus structure; the numeric targets are Forecast coverage guardrails, not official Supreme Court question weights.",
+    "leb_curriculum_authority": "Legal Education Board Memorandum Order No. 24, Series of 2021",
+    "leb_curriculum_url": "https://leb.gov.ph/wp-content/uploads/2021/07/LEBMO-No.-24.pdf",
+    "leb_curriculum_table_confirmation_url": "https://leb.gov.ph/wp-content/uploads/2023/06/MEMORANDUM-No.-2023-013-1.pdf",
+    "leb_prior_definition": "An independent within-subject course-exposure prior equal to the published credit units of the directly mapped LEB model-curriculum course or courses. It is never calculated from target_questions. When several official syllabus headings fall within one LEB course, they honestly share that course exposure rather than receiving invented sub-course weights. It is pedagogical evidence, not a probability of appearing in the Bar.",
+    "syllabus_centrality_definition": "Every listed official top-level 2026 syllabus heading receives a value of 1 while an allocated slot remains open. No forecast quota or past-question count is reused in this component; exact target_questions separately enforce breadth and concentration limits."
+  },
+  "safeguards": {
+    "exact_subject_total": 20,
+    "exact_unit_targets_required": true,
+    "one_controlling_doctrine_per_question": true,
+    "maximum_questions_per_controlling_doctrine_per_subject": 1,
+    "maximum_questions_per_primary_authority_per_subject": 1,
+    "cross_labeled_question_counting_rule": "Count a question against every applicable concentration cap, but assign it to exactly one primary syllabus unit. A question may not evade a cap by using a different primary label.",
+    "political_election_context_cap": 1,
+    "political_election_context_definition": "Any question centered on elections, candidacy, suffrage, COMELEC, electoral tribunals, election protests, election offenses, or election remedies counts toward the Election Law cap even when another constitutional doctrine is the primary issue.",
+    "unallocated_unit_rule": "Do not publish a question outside the listed allocation. A proposed exception requires a versioned allocation change, written source-backed justification, and rerun of all distribution and parity validators."
+  },
+  "count": 54,
+  "rows": [
+    {
+      "id": "POL-I",
+      "subject": "Political and Public International Law",
+      "roman": "I",
+      "heading": "Basic Concepts",
+      "target_questions": 1,
+      "leb_prior_weight": 7,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "constitution",
+        "state immunity",
+        "separation of powers",
+        "delegation of powers",
+        "fundamental powers of the state"
+      ],
+      "question_bank_subject": "Political and Public International Law",
+      "leb_course_basis": [
+        {
+          "course": "Constitutional Law I",
+          "units": 4
+        },
+        {
+          "course": "Constitutional Law II",
+          "units": 3
+        }
+      ]
+    },
+    {
+      "id": "POL-II",
+      "subject": "Political and Public International Law",
+      "roman": "II",
+      "heading": "National Territory",
+      "target_questions": 1,
+      "leb_prior_weight": 7,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "national territory",
+        "archipelagic doctrine",
+        "maritime zones",
+        "territorial sea"
+      ],
+      "question_bank_subject": "Political and Public International Law",
+      "leb_course_basis": [
+        {
+          "course": "Constitutional Law I",
+          "units": 4
+        },
+        {
+          "course": "Constitutional Law II",
+          "units": 3
+        }
+      ]
+    },
+    {
+      "id": "POL-III",
+      "subject": "Political and Public International Law",
+      "roman": "III",
+      "heading": "Citizenship",
+      "target_questions": 1,
+      "leb_prior_weight": 7,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "citizenship",
+        "naturalization",
+        "dual citizenship",
+        "reacquisition of citizenship"
+      ],
+      "question_bank_subject": "Political and Public International Law",
+      "leb_course_basis": [
+        {
+          "course": "Constitutional Law I",
+          "units": 4
+        },
+        {
+          "course": "Constitutional Law II",
+          "units": 3
+        }
+      ]
+    },
+    {
+      "id": "POL-IV",
+      "subject": "Political and Public International Law",
+      "roman": "IV",
+      "heading": "Legislative Department",
+      "target_questions": 1,
+      "leb_prior_weight": 7,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "Congress",
+        "legislative power",
+        "inquiries in aid of legislation",
+        "appropriations",
+        "party-list"
+      ],
+      "question_bank_subject": "Political and Public International Law",
+      "leb_course_basis": [
+        {
+          "course": "Constitutional Law I",
+          "units": 4
+        },
+        {
+          "course": "Constitutional Law II",
+          "units": 3
+        }
+      ]
+    },
+    {
+      "id": "POL-V",
+      "subject": "Political and Public International Law",
+      "roman": "V",
+      "heading": "Executive Department",
+      "target_questions": 2,
+      "leb_prior_weight": 7,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "President",
+        "executive power",
+        "commander-in-chief",
+        "executive privilege",
+        "qualified political agency"
+      ],
+      "question_bank_subject": "Political and Public International Law",
+      "leb_course_basis": [
+        {
+          "course": "Constitutional Law I",
+          "units": 4
+        },
+        {
+          "course": "Constitutional Law II",
+          "units": 3
+        }
+      ]
+    },
+    {
+      "id": "POL-VI",
+      "subject": "Political and Public International Law",
+      "roman": "VI",
+      "heading": "Judicial Department",
+      "target_questions": 1,
+      "leb_prior_weight": 7,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "judicial power",
+        "judicial review",
+        "actual case or controversy",
+        "grave abuse of discretion"
+      ],
+      "question_bank_subject": "Political and Public International Law",
+      "leb_course_basis": [
+        {
+          "course": "Constitutional Law I",
+          "units": 4
+        },
+        {
+          "course": "Constitutional Law II",
+          "units": 3
+        }
+      ]
+    },
+    {
+      "id": "POL-VII",
+      "subject": "Political and Public International Law",
+      "roman": "VII",
+      "heading": "Constitutional Commissions",
+      "target_questions": 1,
+      "leb_prior_weight": 7,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "Constitutional Commissions",
+        "Civil Service Commission",
+        "Commission on Audit",
+        "Commission on Elections"
+      ],
+      "question_bank_subject": "Political and Public International Law",
+      "leb_course_basis": [
+        {
+          "course": "Constitutional Law I",
+          "units": 4
+        },
+        {
+          "course": "Constitutional Law II",
+          "units": 3
+        }
+      ]
+    },
+    {
+      "id": "POL-VIII",
+      "subject": "Political and Public International Law",
+      "roman": "VIII",
+      "heading": "Constitutional Rights",
+      "target_questions": 3,
+      "leb_prior_weight": 7,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "Bill of Rights",
+        "due process",
+        "equal protection",
+        "search and seizure",
+        "privacy",
+        "freedom of expression"
+      ],
+      "question_bank_subject": "Political and Public International Law",
+      "leb_course_basis": [
+        {
+          "course": "Constitutional Law I",
+          "units": 4
+        },
+        {
+          "course": "Constitutional Law II",
+          "units": 3
+        }
+      ]
+    },
+    {
+      "id": "POL-IX",
+      "subject": "Political and Public International Law",
+      "roman": "IX",
+      "heading": "National Economy and Patrimony",
+      "target_questions": 1,
+      "leb_prior_weight": 7,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "national economy",
+        "national patrimony",
+        "Regalian doctrine",
+        "public utilities",
+        "natural resources"
+      ],
+      "question_bank_subject": "Political and Public International Law",
+      "leb_course_basis": [
+        {
+          "course": "Constitutional Law I",
+          "units": 4
+        },
+        {
+          "course": "Constitutional Law II",
+          "units": 3
+        }
+      ]
+    },
+    {
+      "id": "POL-X",
+      "subject": "Political and Public International Law",
+      "roman": "X",
+      "heading": "Administrative Law",
+      "target_questions": 1,
+      "leb_prior_weight": 2,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "administrative agency",
+        "administrative due process",
+        "quasi-judicial",
+        "exhaustion of administrative remedies"
+      ],
+      "question_bank_subject": "Political and Public International Law",
+      "leb_course_basis": [
+        {
+          "course": "Administrative Law and Law on Public Officers",
+          "units": 2
+        }
+      ]
+    },
+    {
+      "id": "POL-XI",
+      "subject": "Political and Public International Law",
+      "roman": "XI",
+      "heading": "Law of Public Officers",
+      "target_questions": 1,
+      "leb_prior_weight": 2,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "public office",
+        "public officer",
+        "appointments",
+        "accountability of public officers",
+        "impeachment"
+      ],
+      "question_bank_subject": "Political and Public International Law",
+      "leb_course_basis": [
+        {
+          "course": "Administrative Law and Law on Public Officers",
+          "units": 2
+        }
+      ]
+    },
+    {
+      "id": "POL-XII",
+      "subject": "Political and Public International Law",
+      "roman": "XII",
+      "heading": "Election Law",
+      "target_questions": 1,
+      "leb_prior_weight": 1,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "election law",
+        "COMELEC",
+        "candidacy",
+        "suffrage",
+        "election protest",
+        "election offense"
+      ],
+      "question_bank_subject": "Political and Public International Law",
+      "leb_course_basis": [
+        {
+          "course": "Election Laws",
+          "units": 1
+        }
+      ]
+    },
+    {
+      "id": "POL-XIII",
+      "subject": "Political and Public International Law",
+      "roman": "XIII",
+      "heading": "Local Governments",
+      "target_questions": 2,
+      "leb_prior_weight": 2,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "local government",
+        "local autonomy",
+        "local ordinance",
+        "boundary dispute",
+        "vacancy and succession"
+      ],
+      "question_bank_subject": "Political and Public International Law",
+      "leb_course_basis": [
+        {
+          "course": "Laws on Local Government",
+          "units": 2
+        }
+      ]
+    },
+    {
+      "id": "POL-XIV",
+      "subject": "Political and Public International Law",
+      "roman": "XIV",
+      "heading": "Public International Law",
+      "target_questions": 3,
+      "leb_prior_weight": 3,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "public international law",
+        "treaty",
+        "state responsibility",
+        "international humanitarian law",
+        "law of the sea"
+      ],
+      "question_bank_subject": "Political and Public International Law",
+      "leb_course_basis": [
+        {
+          "course": "Public International Law",
+          "units": 3
+        }
+      ]
+    },
+    {
+      "id": "COM-I",
+      "subject": "Commercial and Taxation Laws",
+      "roman": "I",
+      "heading": "Business Organizations",
+      "target_questions": 4,
+      "leb_prior_weight": 5,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "corporation",
+        "partnership",
+        "corporate personality",
+        "directors and trustees",
+        "stockholder suits"
+      ],
+      "question_bank_subject": "Commercial Law",
+      "leb_course_basis": [
+        {
+          "course": "Corporation and Basic Securities Law",
+          "units": 3
+        },
+        {
+          "course": "Agency, Trust and Partnership Law",
+          "units": 2
+        }
+      ]
+    },
+    {
+      "id": "COM-II",
+      "subject": "Commercial and Taxation Laws",
+      "roman": "II",
+      "heading": "Insurance",
+      "target_questions": 1,
+      "leb_prior_weight": 3,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "insurance",
+        "insurable interest",
+        "concealment",
+        "insurance policy",
+        "subrogation"
+      ],
+      "question_bank_subject": "Commercial Law",
+      "leb_course_basis": [
+        {
+          "course": "Commercial Laws I",
+          "units": 3
+        }
+      ]
+    },
+    {
+      "id": "COM-III",
+      "subject": "Commercial and Taxation Laws",
+      "roman": "III",
+      "heading": "Transportation",
+      "target_questions": 1,
+      "leb_prior_weight": 3,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "transportation",
+        "common carrier",
+        "extraordinary diligence",
+        "bill of lading",
+        "Carriage of Goods by Sea Act"
+      ],
+      "question_bank_subject": "Commercial Law",
+      "leb_course_basis": [
+        {
+          "course": "Commercial Laws I",
+          "units": 3
+        }
+      ]
+    },
+    {
+      "id": "COM-IV",
+      "subject": "Commercial and Taxation Laws",
+      "roman": "IV",
+      "heading": "Banking",
+      "target_questions": 2,
+      "leb_prior_weight": 3,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "banking",
+        "bank deposits",
+        "bank secrecy",
+        "Anti-Money Laundering Act",
+        "fiduciary diligence"
+      ],
+      "question_bank_subject": "Commercial Law",
+      "leb_course_basis": [
+        {
+          "course": "Commercial Laws I",
+          "units": 3
+        }
+      ]
+    },
+    {
+      "id": "COM-V",
+      "subject": "Commercial and Taxation Laws",
+      "roman": "V",
+      "heading": "Intellectual Property",
+      "target_questions": 1,
+      "leb_prior_weight": 3,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "intellectual property",
+        "trademark",
+        "patent",
+        "copyright",
+        "unfair competition"
+      ],
+      "question_bank_subject": "Commercial Law",
+      "leb_course_basis": [
+        {
+          "course": "Commercial Laws I",
+          "units": 3
+        }
+      ]
+    },
+    {
+      "id": "COM-VI",
+      "subject": "Commercial and Taxation Laws",
+      "roman": "VI",
+      "heading": "Special Commercial Laws",
+      "target_questions": 2,
+      "leb_prior_weight": 3,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "financial rehabilitation",
+        "insolvency",
+        "electronic commerce",
+        "public service",
+        "competition law"
+      ],
+      "question_bank_subject": "Commercial Law",
+      "leb_course_basis": [
+        {
+          "course": "Commercial Laws I",
+          "units": 3
+        }
+      ]
+    },
+    {
+      "id": "COM-VIII",
+      "subject": "Commercial and Taxation Laws",
+      "roman": "VIII",
+      "heading": "Taxation Law",
+      "target_questions": 9,
+      "leb_prior_weight": 3,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "taxation",
+        "income tax",
+        "value-added tax",
+        "tax assessment",
+        "tax remedies",
+        "local taxation"
+      ],
+      "question_bank_subject": "Taxation Law",
+      "leb_course_basis": [
+        {
+          "course": "Basic Taxation Law",
+          "units": 3
+        }
+      ]
+    },
+    {
+      "id": "CIV-I",
+      "subject": "Civil Law and Land Titles and Deeds",
+      "roman": "I",
+      "heading": "Effect and Application of Laws",
+      "target_questions": 1,
+      "leb_prior_weight": 2,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "effect of laws",
+        "application of laws",
+        "retroactivity",
+        "waiver",
+        "conflict of laws"
+      ],
+      "question_bank_subject": "Civil Law",
+      "leb_course_basis": [
+        {
+          "course": "Statutory Construction",
+          "units": 2
+        }
+      ]
+    },
+    {
+      "id": "CIV-II",
+      "subject": "Civil Law and Land Titles and Deeds",
+      "roman": "II",
+      "heading": "Persons",
+      "target_questions": 1,
+      "leb_prior_weight": 3,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "persons",
+        "civil personality",
+        "capacity",
+        "domicile",
+        "absence"
+      ],
+      "question_bank_subject": "Civil Law",
+      "leb_course_basis": [
+        {
+          "course": "Persons and Family Law",
+          "units": 3
+        }
+      ]
+    },
+    {
+      "id": "CIV-III",
+      "subject": "Civil Law and Land Titles and Deeds",
+      "roman": "III",
+      "heading": "Family Relations",
+      "target_questions": 2,
+      "leb_prior_weight": 3,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "family relations",
+        "marriage",
+        "psychological incapacity",
+        "property relations between spouses",
+        "foreign divorce"
+      ],
+      "question_bank_subject": "Civil Law",
+      "leb_course_basis": [
+        {
+          "course": "Persons and Family Law",
+          "units": 3
+        }
+      ]
+    },
+    {
+      "id": "CIV-IV",
+      "subject": "Civil Law and Land Titles and Deeds",
+      "roman": "IV",
+      "heading": "Paternity and Filiation",
+      "target_questions": 1,
+      "leb_prior_weight": 3,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "paternity",
+        "filiation",
+        "legitimacy",
+        "adoption",
+        "support"
+      ],
+      "question_bank_subject": "Civil Law",
+      "leb_course_basis": [
+        {
+          "course": "Persons and Family Law",
+          "units": 3
+        }
+      ]
+    },
+    {
+      "id": "CIV-V",
+      "subject": "Civil Law and Land Titles and Deeds",
+      "roman": "V",
+      "heading": "Property, Ownership, and Its Modifications",
+      "target_questions": 2,
+      "leb_prior_weight": 4,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "property",
+        "ownership",
+        "possession",
+        "co-ownership",
+        "easement",
+        "prescription"
+      ],
+      "question_bank_subject": "Civil Law",
+      "leb_course_basis": [
+        {
+          "course": "Property and Land Law",
+          "units": 4
+        }
+      ]
+    },
+    {
+      "id": "CIV-VI",
+      "subject": "Civil Law and Land Titles and Deeds",
+      "roman": "VI",
+      "heading": "Land Titles and Deeds",
+      "target_questions": 2,
+      "leb_prior_weight": 4,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "land registration",
+        "Torrens system",
+        "certificate of title",
+        "confirmation of imperfect title",
+        "innocent purchaser for value"
+      ],
+      "question_bank_subject": "Civil Law",
+      "leb_course_basis": [
+        {
+          "course": "Property and Land Law",
+          "units": 4
+        }
+      ]
+    },
+    {
+      "id": "CIV-VII",
+      "subject": "Civil Law and Land Titles and Deeds",
+      "roman": "VII",
+      "heading": "Succession",
+      "target_questions": 3,
+      "leb_prior_weight": 2,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "succession",
+        "intestate succession",
+        "wills",
+        "preterition",
+        "disinheritance",
+        "representation"
+      ],
+      "question_bank_subject": "Civil Law",
+      "leb_course_basis": [
+        {
+          "course": "Basic Succession Law",
+          "units": 2
+        }
+      ]
+    },
+    {
+      "id": "CIV-VIII",
+      "subject": "Civil Law and Land Titles and Deeds",
+      "roman": "VIII",
+      "heading": "Obligations and Contracts",
+      "target_questions": 3,
+      "leb_prior_weight": 5,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "obligations",
+        "contracts",
+        "novation",
+        "breach",
+        "solidary liability",
+        "extinguishment"
+      ],
+      "question_bank_subject": "Civil Law",
+      "leb_course_basis": [
+        {
+          "course": "Obligations and Contracts",
+          "units": 5
+        }
+      ]
+    },
+    {
+      "id": "CIV-IX",
+      "subject": "Civil Law and Land Titles and Deeds",
+      "roman": "IX",
+      "heading": "Special Contracts",
+      "target_questions": 2,
+      "leb_prior_weight": 2,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "sales",
+        "lease",
+        "agency",
+        "credit transactions",
+        "partnership"
+      ],
+      "question_bank_subject": "Civil Law",
+      "leb_course_basis": [
+        {
+          "course": "Agency, Trust and Partnership Law",
+          "units": 2
+        }
+      ]
+    },
+    {
+      "id": "CIV-X",
+      "subject": "Civil Law and Land Titles and Deeds",
+      "roman": "X",
+      "heading": "Quasi-Contracts",
+      "target_questions": 1,
+      "leb_prior_weight": 5,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "quasi-contract",
+        "solutio indebiti",
+        "negotiorum gestio",
+        "unjust enrichment"
+      ],
+      "question_bank_subject": "Civil Law",
+      "leb_course_basis": [
+        {
+          "course": "Obligations and Contracts",
+          "units": 5
+        }
+      ]
+    },
+    {
+      "id": "CIV-XI",
+      "subject": "Civil Law and Land Titles and Deeds",
+      "roman": "XI",
+      "heading": "Torts and Quasi-Delicts",
+      "target_questions": 1,
+      "leb_prior_weight": 5,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "tort",
+        "quasi-delict",
+        "negligence",
+        "vicarious liability",
+        "Article 2180"
+      ],
+      "question_bank_subject": "Civil Law",
+      "leb_course_basis": [
+        {
+          "course": "Obligations and Contracts",
+          "units": 5
+        }
+      ]
+    },
+    {
+      "id": "CIV-XII",
+      "subject": "Civil Law and Land Titles and Deeds",
+      "roman": "XII",
+      "heading": "Damages",
+      "target_questions": 1,
+      "leb_prior_weight": 5,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "damages",
+        "actual damages",
+        "moral damages",
+        "exemplary damages",
+        "legal interest"
+      ],
+      "question_bank_subject": "Civil Law",
+      "leb_course_basis": [
+        {
+          "course": "Obligations and Contracts",
+          "units": 5
+        }
+      ]
+    },
+    {
+      "id": "LAB-I",
+      "subject": "Labor Law and Social Legislation",
+      "roman": "I",
+      "heading": "Basic Principles",
+      "target_questions": 1,
+      "leb_prior_weight": 4,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "labor protection",
+        "social justice",
+        "construction in favor of labor",
+        "management prerogative"
+      ],
+      "question_bank_subject": "Labor Law",
+      "leb_course_basis": [
+        {
+          "course": "Labor Law and Social Legislation",
+          "units": 4
+        }
+      ]
+    },
+    {
+      "id": "LAB-II",
+      "subject": "Labor Law and Social Legislation",
+      "roman": "II",
+      "heading": "Recruitment and Placement",
+      "target_questions": 2,
+      "leb_prior_weight": 4,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "recruitment",
+        "illegal recruitment",
+        "overseas employment",
+        "migrant workers",
+        "solidary liability"
+      ],
+      "question_bank_subject": "Labor Law",
+      "leb_course_basis": [
+        {
+          "course": "Labor Law and Social Legislation",
+          "units": 4
+        }
+      ]
+    },
+    {
+      "id": "LAB-III",
+      "subject": "Labor Law and Social Legislation",
+      "roman": "III",
+      "heading": "Employment Relationship",
+      "target_questions": 2,
+      "leb_prior_weight": 4,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "employer-employee relationship",
+        "control test",
+        "four-fold test",
+        "kinds of employment",
+        "labor-only contracting"
+      ],
+      "question_bank_subject": "Labor Law",
+      "leb_course_basis": [
+        {
+          "course": "Labor Law and Social Legislation",
+          "units": 4
+        }
+      ]
+    },
+    {
+      "id": "LAB-IV",
+      "subject": "Labor Law and Social Legislation",
+      "roman": "IV",
+      "heading": "Labor Standards",
+      "target_questions": 3,
+      "leb_prior_weight": 4,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "labor standards",
+        "wages",
+        "hours of work",
+        "leave",
+        "wage distortion",
+        "telecommuting"
+      ],
+      "question_bank_subject": "Labor Law",
+      "leb_course_basis": [
+        {
+          "course": "Labor Law and Social Legislation",
+          "units": 4
+        }
+      ]
+    },
+    {
+      "id": "LAB-V",
+      "subject": "Labor Law and Social Legislation",
+      "roman": "V",
+      "heading": "Labor Relations",
+      "target_questions": 4,
+      "leb_prior_weight": 4,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "labor relations",
+        "collective bargaining",
+        "unfair labor practice",
+        "union security",
+        "strike",
+        "certification election"
+      ],
+      "question_bank_subject": "Labor Law",
+      "leb_course_basis": [
+        {
+          "course": "Labor Law and Social Legislation",
+          "units": 4
+        }
+      ]
+    },
+    {
+      "id": "LAB-VI",
+      "subject": "Labor Law and Social Legislation",
+      "roman": "VI",
+      "heading": "Suspension and Termination of Employment",
+      "target_questions": 4,
+      "leb_prior_weight": 4,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "termination",
+        "just cause",
+        "authorized cause",
+        "constructive dismissal",
+        "due process",
+        "illegal dismissal"
+      ],
+      "question_bank_subject": "Labor Law",
+      "leb_course_basis": [
+        {
+          "course": "Labor Law and Social Legislation",
+          "units": 4
+        }
+      ]
+    },
+    {
+      "id": "LAB-VII",
+      "subject": "Labor Law and Social Legislation",
+      "roman": "VII",
+      "heading": "Social Legislation",
+      "target_questions": 2,
+      "leb_prior_weight": 4,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "social legislation",
+        "Social Security System",
+        "employees' compensation",
+        "seafarer disability",
+        "retirement pay"
+      ],
+      "question_bank_subject": "Labor Law",
+      "leb_course_basis": [
+        {
+          "course": "Labor Law and Social Legislation",
+          "units": 4
+        }
+      ]
+    },
+    {
+      "id": "LAB-VIII",
+      "subject": "Labor Law and Social Legislation",
+      "roman": "VIII",
+      "heading": "Labor Adjudication: Jurisdiction and Remedies",
+      "target_questions": 2,
+      "leb_prior_weight": 4,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "labor adjudication",
+        "Labor Arbiter",
+        "National Labor Relations Commission",
+        "Department of Labor and Employment",
+        "certiorari"
+      ],
+      "question_bank_subject": "Labor Law",
+      "leb_course_basis": [
+        {
+          "course": "Labor Law and Social Legislation",
+          "units": 4
+        }
+      ]
+    },
+    {
+      "id": "CRIM-I",
+      "subject": "Criminal Law",
+      "roman": "I",
+      "heading": "Fundamental Principles",
+      "target_questions": 2,
+      "leb_prior_weight": 3,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "fundamental principles",
+        "pro reo",
+        "rule of lenity",
+        "mala in se",
+        "mala prohibita",
+        "territoriality"
+      ],
+      "question_bank_subject": "Criminal Law",
+      "leb_course_basis": [
+        {
+          "course": "Criminal Law I",
+          "units": 3
+        }
+      ]
+    },
+    {
+      "id": "CRIM-II",
+      "subject": "Criminal Law",
+      "roman": "II",
+      "heading": "Felonies and Criminal Liability: RPC Book 1 and Related Laws",
+      "target_questions": 7,
+      "leb_prior_weight": 3,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "felony",
+        "criminal liability",
+        "stages of execution",
+        "conspiracy",
+        "circumstances affecting liability",
+        "penalties"
+      ],
+      "question_bank_subject": "Criminal Law",
+      "leb_course_basis": [
+        {
+          "course": "Criminal Law I",
+          "units": 3
+        }
+      ]
+    },
+    {
+      "id": "CRIM-III",
+      "subject": "Criminal Law",
+      "roman": "III",
+      "heading": "Crimes and Their Penalties: RPC Book 2 and Related Special Laws",
+      "target_questions": 11,
+      "leb_prior_weight": 4,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "crimes and penalties",
+        "crimes against persons",
+        "crimes against property",
+        "crimes by public officers",
+        "special penal laws",
+        "cybercrime"
+      ],
+      "question_bank_subject": "Criminal Law",
+      "leb_course_basis": [
+        {
+          "course": "Criminal Law II",
+          "units": 4
+        }
+      ]
+    },
+    {
+      "id": "REM-I",
+      "subject": "Remedial Law, Legal and Judicial Ethics, with Practical Exercises",
+      "roman": "I",
+      "heading": "General Principles",
+      "target_questions": 1,
+      "leb_prior_weight": 3,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "remedial law",
+        "rules of procedure",
+        "liberal construction",
+        "substantive and procedural law"
+      ],
+      "question_bank_subject": "Remedial Law",
+      "leb_course_basis": [
+        {
+          "course": "Civil Procedure I",
+          "units": 3
+        }
+      ]
+    },
+    {
+      "id": "REM-II",
+      "subject": "Remedial Law, Legal and Judicial Ethics, with Practical Exercises",
+      "roman": "II",
+      "heading": "Jurisdiction",
+      "target_questions": 1,
+      "leb_prior_weight": 3,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "jurisdiction",
+        "subject-matter jurisdiction",
+        "court jurisdiction",
+        "hierarchy of courts"
+      ],
+      "question_bank_subject": "Remedial Law",
+      "leb_course_basis": [
+        {
+          "course": "Civil Procedure I",
+          "units": 3
+        }
+      ]
+    },
+    {
+      "id": "REM-III",
+      "subject": "Remedial Law, Legal and Judicial Ethics, with Practical Exercises",
+      "roman": "III",
+      "heading": "Civil Procedure",
+      "target_questions": 3,
+      "leb_prior_weight": 6,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "civil procedure",
+        "pleadings",
+        "parties",
+        "summons",
+        "judgment",
+        "appeal"
+      ],
+      "question_bank_subject": "Remedial Law",
+      "leb_course_basis": [
+        {
+          "course": "Civil Procedure I",
+          "units": 3
+        },
+        {
+          "course": "Civil Procedure II",
+          "units": 3
+        }
+      ]
+    },
+    {
+      "id": "REM-IV",
+      "subject": "Remedial Law, Legal and Judicial Ethics, with Practical Exercises",
+      "roman": "IV",
+      "heading": "Provisional Remedies",
+      "target_questions": 1,
+      "leb_prior_weight": 3,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "provisional remedies",
+        "preliminary attachment",
+        "preliminary injunction",
+        "receivership",
+        "replevin"
+      ],
+      "question_bank_subject": "Remedial Law",
+      "leb_course_basis": [
+        {
+          "course": "Civil Procedure II",
+          "units": 3
+        }
+      ]
+    },
+    {
+      "id": "REM-V",
+      "subject": "Remedial Law, Legal and Judicial Ethics, with Practical Exercises",
+      "roman": "V",
+      "heading": "Special Civil Actions",
+      "target_questions": 1,
+      "leb_prior_weight": 3,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "special civil actions",
+        "certiorari",
+        "prohibition",
+        "mandamus",
+        "ejectment"
+      ],
+      "question_bank_subject": "Remedial Law",
+      "leb_course_basis": [
+        {
+          "course": "Civil Procedure II",
+          "units": 3
+        }
+      ]
+    },
+    {
+      "id": "REM-VI",
+      "subject": "Remedial Law, Legal and Judicial Ethics, with Practical Exercises",
+      "roman": "VI",
+      "heading": "Special Proceedings and Writs",
+      "target_questions": 2,
+      "leb_prior_weight": 3,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "special proceedings",
+        "settlement of estate",
+        "habeas corpus",
+        "writ of amparo",
+        "writ of habeas data"
+      ],
+      "question_bank_subject": "Remedial Law",
+      "leb_course_basis": [
+        {
+          "course": "Special Rules and Proceedings",
+          "units": 3
+        }
+      ]
+    },
+    {
+      "id": "REM-VII",
+      "subject": "Remedial Law, Legal and Judicial Ethics, with Practical Exercises",
+      "roman": "VII",
+      "heading": "Criminal Procedure",
+      "target_questions": 3,
+      "leb_prior_weight": 3,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "criminal procedure",
+        "complaint and information",
+        "arrest",
+        "bail",
+        "search warrant",
+        "double jeopardy"
+      ],
+      "question_bank_subject": "Remedial Law",
+      "leb_course_basis": [
+        {
+          "course": "Criminal Procedure",
+          "units": 3
+        }
+      ]
+    },
+    {
+      "id": "REM-VIII",
+      "subject": "Remedial Law, Legal and Judicial Ethics, with Practical Exercises",
+      "roman": "VIII",
+      "heading": "Evidence",
+      "target_questions": 3,
+      "leb_prior_weight": 3,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "evidence",
+        "admissibility",
+        "hearsay",
+        "documentary evidence",
+        "electronic evidence",
+        "authentication"
+      ],
+      "question_bank_subject": "Remedial Law",
+      "leb_course_basis": [
+        {
+          "course": "Evidence",
+          "units": 3
+        }
+      ]
+    },
+    {
+      "id": "REM-IX",
+      "subject": "Remedial Law, Legal and Judicial Ethics, with Practical Exercises",
+      "roman": "IX",
+      "heading": "Legal and Judicial Ethics",
+      "target_questions": 3,
+      "leb_prior_weight": 3,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "legal ethics",
+        "judicial ethics",
+        "Code of Professional Responsibility and Accountability",
+        "notarial practice",
+        "discipline"
+      ],
+      "question_bank_subject": "Legal and Judicial Ethics",
+      "leb_course_basis": [
+        {
+          "course": "Basic Legal and Judicial Ethics",
+          "units": 3
+        }
+      ]
+    },
+    {
+      "id": "REM-X",
+      "subject": "Remedial Law, Legal and Judicial Ethics, with Practical Exercises",
+      "roman": "X",
+      "heading": "Practical Exercises",
+      "target_questions": 2,
+      "leb_prior_weight": 2,
+      "syllabus_centrality": 1,
+      "historical_terms": [
+        "practical exercise",
+        "pleading",
+        "verification",
+        "certification against forum shopping",
+        "information",
+        "legal form"
+      ],
+      "question_bank_subject": "Legal and Judicial Ethics",
+      "leb_course_basis": [
+        {
+          "course": "Clinical Legal Education",
+          "units": 2
+        }
+      ]
+    }
+  ]
+}

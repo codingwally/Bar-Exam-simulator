@@ -10,6 +10,7 @@ import {
   normalizeExaminationQuery,
   normalizeUploadRequest,
   normalizedScore,
+  requireBarFeelsUnlimitedAccess,
   safeUploadFileName,
   sanitizeSubjectMatterCatalog,
   sanitizeSubjectMatterSelection,
@@ -32,6 +33,63 @@ function throwsCode(callback, code) {
 test('examination limits enforce twenty-question and 1.5 MB boundaries', () => {
   assert.equal(EXAMINATION_LIMITS.maximumExamQuestions, 20);
   assert.equal(EXAMINATION_LIMITS.maximumUploadBytes, 1_500_000);
+});
+
+test('Bar Exam Simulation current access requires an unlimited authorization', () => {
+  const unlimited = {
+    track: 'bar_feels',
+    basis: 'paid_subscription',
+    unlimited: true,
+  };
+  assert.equal(requireBarFeelsUnlimitedAccess(unlimited), unlimited);
+
+  assert.throws(
+    () => requireBarFeelsUnlimitedAccess({
+      track: 'bar_feels',
+      basis: 'introductory_token',
+      unlimited: false,
+    }),
+    (error) => {
+      assert.equal(error instanceof ExaminationValidationError, true);
+      assert.equal(error.code, 'EXAM_PREMIUM_REQUIRED');
+      assert.equal(error.status, 403);
+      assert.equal(error.message, 'Subscribe to access this feature.');
+      return true;
+    },
+  );
+});
+
+test('Bar Exam Simulation keeps historical owner recovery and leaves other tracks unchanged', () => {
+  const historical = {
+    track: 'bar_feels',
+    basis: 'historical_owner',
+    unlimited: false,
+  };
+  assert.equal(requireBarFeelsUnlimitedAccess(historical), historical);
+
+  const subjectAccess = {
+    track: 'per_subject',
+    basis: 'introductory_token',
+    unlimited: false,
+  };
+  assert.equal(requireBarFeelsUnlimitedAccess(subjectAccess), subjectAccess);
+
+  assert.throws(
+    () => requireBarFeelsUnlimitedAccess({ basis: 'introductory_token', unlimited: false }, 'bar_feels'),
+    (error) => error instanceof ExaminationValidationError
+      && error.code === 'EXAM_PREMIUM_REQUIRED'
+      && error.status === 403,
+  );
+
+  assert.throws(
+    () => requireBarFeelsUnlimitedAccess({
+      track: 'per_subject',
+      basis: 'introductory_token',
+      unlimited: false,
+    }, 'bar_feels'),
+    (error) => error instanceof ExaminationValidationError
+      && error.code === 'EXAM_PREMIUM_REQUIRED',
+  );
 });
 
 test('query operations normalize catalog and private assignment tokens', () => {

@@ -128,6 +128,7 @@ on:
       - 'scripts/test-staging-artifact.mjs'
       - 'scripts/test-staging-e2e-workflow.mjs'
       - 'scripts/run-staging-e2e-suite.mjs'
+      - 'scripts/test-complete-beta-staging.mjs'
       - 'scripts/test-maintenance-lock.mjs'
       - 'scripts/test-paid-subscription-expiry-database.mjs'
       - 'scripts/test-lifetime-grade-ui.mjs'
@@ -181,9 +182,16 @@ on:
       - 'supabase/migrations/20260818143000_free_trial_five_daily_choice.sql'
       - '.github/workflows/deploy-worker.yml'
       - '.github/workflows/deploy.yml'
+      - '.github/workflows/release-unlimited-feature-access.yml'
       - '.github/workflows/staging-e2e-gate.yml'
       - '.github/workflows/bootstrap-examination-room-key-pepper.yml'
       - '.github/workflows/validate-mandatory-early-access.yml'
+      - 'scripts/test-unlimited-feature-access-live.mjs'
+      - 'scripts/test-unlimited-feature-access.mjs'
+      - 'scripts/test-unlimited-feature-access-release-workflow.mjs'
+      - 'scripts/verify-unlimited-feature-access-live.mjs'
+      - 'supabase/migrations/20260902090000_unlimited_forecast_access.sql'
+      - 'worker/bar-forecast-database-policy.test.mjs'
 
 permissions:
   contents: read
@@ -282,6 +290,9 @@ jobs:
           node scripts/test-examination-room-release-workflows.mjs
           node scripts/test-admin-analytics-release-bundle.mjs
           node scripts/test-feature-decommission-boundary.mjs
+          node --test scripts/test-unlimited-feature-access-live.mjs
+          node scripts/test-unlimited-feature-access.mjs
+          node scripts/test-unlimited-feature-access-release-workflow.mjs
           node scripts/test-pages-artifact.mjs
 
       - name: Build and verify sanitized Pages artifact

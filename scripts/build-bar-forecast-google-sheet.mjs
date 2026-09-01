@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 
+import { legalBasisAuthorityLabel } from './project-bar-forecast-to-question-bank.mjs';
+
 export const FORECAST_SHEET_TITLE = '2026 Bar Forecast';
 export const FORECAST_SHEET_ID = 20260831;
 
@@ -33,7 +35,8 @@ const sourceUrl = new URL('../content/duediligence-2026/bar-forecast.json', impo
 
 function noteFor(row) {
   return [
-    'AI-prepared beta; owner legal review required before publication.',
+    'Approved for verification; not yet verified.',
+    'AI-prepared beta Forecast question approved for protected Q&A publication; final independent legal review remains required.',
     '2025 Bar standard: one yes-or-no question, one controlling doctrine, responsive ALAC, and reasoned conclusion.',
     `Editorial reference: ${row.editorial_ref}.`,
     `Forecast source ID: ${row.id}.`,
@@ -46,24 +49,24 @@ export function forecastRows(source) {
   assert.equal(source?.count, 120, 'Forecast source must declare exactly 120 questions.');
   assert.equal(source?.rows?.length, 120, 'Forecast source must contain exactly 120 questions.');
   return source.rows.map((row) => [
-    row.editorial_ref,
-    row.subject,
+    row.question_bank_id,
+    row.question_bank_subject,
     row.syllabus_topic,
     2026,
     row.rank_within_subject,
     row.prompt,
     row.suggested_answer,
-    row.legal_basis,
+    `${row.legal_basis}\n\n${legalBasisAuthorityLabel(row.legal_basis_source_url)}: ${row.legal_basis_source_url}`,
     row.controlling_doctrine,
     row.jurisprudence,
     row.citation,
     row.source_links.join('\n'),
     row.difficulty,
-    'For Review',
+    'Approved',
     row.version,
     'Wally Esteban',
-    '',
-    'No',
+    row.editorially_revised_on,
+    'Yes',
     noteFor(row),
     0,
     0,

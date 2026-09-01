@@ -69,6 +69,19 @@ export class ExaminationValidationError extends Error {
   }
 }
 
+export function requireBarFeelsUnlimitedAccess(authorization, requestedTrack = null) {
+  const authorizationTrack = examinationText(authorization?.track, 40);
+  const expectedTrack = examinationText(requestedTrack, 40);
+  if (authorizationTrack !== 'bar_feels' && expectedTrack !== 'bar_feels') return authorization;
+  if (authorization?.basis === 'historical_owner') return authorization;
+  if (authorization?.unlimited === true) return authorization;
+  throw new ExaminationValidationError(
+    'EXAM_PREMIUM_REQUIRED',
+    'Subscribe to access this feature.',
+    403,
+  );
+}
+
 export function examinationText(value, maximum = 2_000) {
   return String(value ?? '')
     .replace(/\u0000/g, '')
@@ -876,7 +889,7 @@ export function examinationDatabaseError(error) {
   const publicMessages = {
     EXAM_BETA_ACCESS_REQUIRED: 'This examination beta is limited to authorized test accounts.',
     EXAM_ACCESS_REQUIRED: 'Your current access does not include this examination.',
-    EXAM_PREMIUM_REQUIRED: 'Your current access does not include Bar Exam Simulation.',
+    EXAM_PREMIUM_REQUIRED: 'Subscribe to access this feature.',
     EXAM_NOT_AVAILABLE: 'This examination is not currently available.',
     EXAM_VERSION_NOT_FOUND: 'The examination version could not be found.',
     EXAM_VERSION_IMMUTABLE: 'A published examination version cannot be changed.',

@@ -15,6 +15,15 @@
     Object.freeze({ id: 'blue', label: 'Blue' }),
     Object.freeze({ id: 'pink', label: 'Pink' }),
   ]);
+  const GRAMMAR_CORRECTION_GUIDANCE = Object.freeze({
+    punctuation: Object.freeze({ label: 'Punctuation', guidance: 'Review punctuation in this exact excerpt.' }),
+    capitalization: Object.freeze({ label: 'Capitalization', guidance: 'Review capitalization in this exact excerpt.' }),
+    agreement: Object.freeze({ label: 'Agreement', guidance: 'Check subject–verb or pronoun agreement in this exact excerpt.' }),
+    spelling: Object.freeze({ label: 'Spelling', guidance: 'Review spelling in this exact excerpt.' }),
+    sentence_structure: Object.freeze({ label: 'Sentence structure', guidance: 'Review sentence boundaries and structure without changing the legal meaning.' }),
+    wordiness: Object.freeze({ label: 'Wordiness', guidance: 'Shorten this excerpt while preserving every legal proposition.' }),
+    professional_tone: Object.freeze({ label: 'Professional tone', guidance: 'Use formal legal phrasing without changing the substance.' }),
+  });
 
   const SUBJECTS = Object.freeze([
     Object.freeze({
@@ -56,6 +65,7 @@
     page: null,
     viewNode: null,
     statusNode: null,
+    closeButton: null,
     lastTrigger: null,
     returnHash: '#quorum',
     isolation: [],
@@ -63,12 +73,16 @@
     routeWasPushed: false,
     routeRecovery: false,
     requestController: null,
+    submissionTimer: null,
+    submissionStartedAt: 0,
+    submissionElapsedNode: null,
     isOpen: false,
-    view: 'preview',
+    view: 'access',
     ownerId: '',
     authorizationOwnerId: '',
     authorizationRetryRequested: false,
     authorizationRetryInProgress: false,
+    pricingRedirectInProgress: false,
     consentAccepted: false,
     subject: '',
     schedule: null,
@@ -383,7 +397,8 @@
     state.root = root;
     state.page = root.querySelector('.bf26-page');
     state.viewNode = root.querySelector('[data-bf26-view]');
-    root.querySelector('.bf26-close')?.addEventListener('click', () => closeForecast());
+    state.closeButton = root.querySelector('.bf26-close');
+    state.closeButton?.addEventListener('click', () => closeForecast());
     root.addEventListener('keydown', handlePageKeyboard);
     return root;
   }
@@ -391,6 +406,10 @@
   function handlePageKeyboard(event) {
     if (event.key === 'Escape') {
       event.preventDefault();
+      if (state.view === 'submitting') {
+        setStatus('Grading is still in progress. Keep this window open; Exit becomes available when the report is ready.');
+        return;
+      }
       closeForecast();
       return;
     }
@@ -453,6 +472,7 @@
   }
 
   function resetProtectedState() {
+    stopSubmittingProgress();
     state.ownerId = '';
     state.authorizationOwnerId = '';
     state.consentAccepted = false;
@@ -502,7 +522,17 @@
   }
 
   function replaceView(node, viewName) {
+    if (viewName !== 'submitting') stopSubmittingProgress();
     state.view = viewName;
+    if (state.closeButton) {
+      const grading = viewName === 'submitting';
+      state.closeButton.disabled = grading;
+      state.closeButton.textContent = grading ? 'Grading in progress' : 'Exit forecast';
+      state.closeButton.setAttribute(
+        'aria-label',
+        grading ? 'Exit unavailable while grading is in progress' : 'Exit 2026 Bar Forecast',
+      );
+    }
     state.examRefs = null;
     state.viewNode.replaceChildren(node);
     state.statusNode = node.querySelector?.('[data-bf26-status]') || null;
@@ -517,6 +547,13 @@
     });
   }
 
+  function stopSubmittingProgress() {
+    if (state.submissionTimer !== null) global.clearInterval(state.submissionTimer);
+    state.submissionTimer = null;
+    state.submissionStartedAt = 0;
+    state.submissionElapsedNode = null;
+  }
+
   function setStatus(message = '', kind = '') {
     if (!state.statusNode) return;
     state.statusNode.textContent = message;
@@ -524,58 +561,127 @@
     else delete state.statusNode.dataset.kind;
   }
 
-  function renderPreview(options = {}) {
+  function renderAccessProgress(message = 'Confirming your Forecast access…') {
     resetProtectedState();
     const centered = element('div', 'bf26-centered');
-    const grid = element('div', 'bf26-preview-grid');
-    const figure = element('figure', 'bf26-preview-figure');
-    const image = element('img');
-    image.src = 'assets/bar-forecast/forecast-workspace-preview.webp';
-    image.alt = 'Preview of the 2026 Bar Forecast writing workspace with a twenty-question navigator and blank answer editor.';
-    image.width = 1672;
-    image.height = 939;
-    image.decoding = 'async';
-    const caption = element(
-      'figcaption',
-      '',
-      'Interface preview only. Forecast questions and suggested answers are never included in this public preview.',
-    );
-    figure.append(image, caption);
-
     const copy = element('section', 'bf26-copy');
     copy.append(
-      element('p', 'bf26-badge', 'Coming soon'),
-      element('h2', '', 'A focused forecast workspace is being prepared.'),
+      element('p', 'bf26-badge', '2026 Bar Forecast'),
+      element('h2', '', 'Opening your forecast…'),
       element(
         'p',
         '',
-        'Bar Forecast is available to active paid members, Founding Beta members, and authorized Due Diligence administrators. The public preview does not contain forecast questions, answers, scoring methods, or internal prediction data.',
+        'We are checking this signed-in account securely. Eligible members continue automatically.',
       ),
     );
-    const actions = element('div', 'bf26-actions');
-    const check = makeButton(
-      options.checking ? 'Checking admin access…' : 'Check admin access',
-      'bf26-button bf26-button--primary',
-    );
-    check.disabled = options.checking === true;
-    check.addEventListener('click', () => checkAuthorization());
-    const home = makeButton('Return to Home');
-    home.addEventListener('click', () => closeForecast({ force: true }));
-    actions.append(check, home);
-    const status = element('p', 'bf26-status');
+    const spinner = element('div', 'bf26-spinner');
+    spinner.setAttribute('aria-hidden', 'true');
+    const status = element('p', 'bf26-status', message);
     status.dataset.bf26Status = '';
     status.setAttribute('role', 'status');
     status.setAttribute('aria-live', 'polite');
-    status.textContent = options.message || (
-      options.checking
-        ? 'Verifying this signed-in account without exposing protected material…'
-        : 'Sign in through Due Diligence to check your Bar Forecast access.'
+    copy.append(spinner, status);
+    centered.append(copy);
+    replaceView(centered, 'access');
+  }
+
+  function renderAccessError(message = 'Bar Forecast could not be opened just now. Please try again.') {
+    resetProtectedState();
+    const centered = element('div', 'bf26-centered');
+    const copy = element('section', 'bf26-copy');
+    copy.append(
+      element('p', 'bf26-badge', '2026 Bar Forecast'),
+      element('h2', '', 'We could not open Forecast yet.'),
+      element('p', '', 'Your protected Forecast content remains closed. You can retry without losing account access.'),
     );
+    const actions = element('div', 'bf26-actions');
+    const retry = makeButton('Try again', 'bf26-button bf26-button--primary');
+    retry.addEventListener('click', () => checkAuthorization());
+    const home = makeButton('Return to Home');
+    home.addEventListener('click', () => closeForecast({ force: true }));
+    actions.append(retry, home);
+    const status = element('p', 'bf26-status', message);
+    status.dataset.bf26Status = '';
+    status.dataset.kind = 'error';
+    status.setAttribute('role', 'alert');
     copy.append(actions, status);
-    grid.append(figure, copy);
-    centered.append(grid);
-    replaceView(centered, 'preview');
-    if (options.kind) setStatus(status.textContent, options.kind);
+    centered.append(copy);
+    replaceView(centered, 'access-error');
+  }
+
+  function isForecastAccessRequired(error) {
+    return Number(error?.status) === 403
+      && String(error?.code || '').trim().toUpperCase() === 'BAR_FORECAST_ACCESS_REQUIRED';
+  }
+
+  function isForecastAuthenticationRequired(error) {
+    return Number(error?.status) === 401
+      || ['AUTHENTICATION_REQUIRED', 'INVALID_SESSION'].includes(
+        String(error?.code || '').trim().toUpperCase(),
+      );
+  }
+
+  function openForecastSignIn() {
+    const client = global.DueDiligencePhase4 || global.DueDiligencePhase2;
+    client?.openSignIn?.({
+      allowDismiss: true,
+      routeBound: true,
+      returnHash: ROUTE,
+      title: 'Continue to 2026 Bar Forecast',
+      copy: 'Use Google to continue. Eligible paid, Founding Beta, and administrator accounts open Forecast automatically.',
+    });
+    return true;
+  }
+
+  function routeToPlansAndPricing() {
+    if (state.pricingRedirectInProgress) return true;
+    state.pricingRedirectInProgress = true;
+    const client = global.DueDiligencePhase4 || global.DueDiligencePhase2;
+    const backgroundHash = state.returnHash && state.returnHash !== ROUTE
+      ? state.returnHash
+      : '#quorum';
+    const focusOrigin = state.lastTrigger?.isConnected ? state.lastTrigger : null;
+    closeForecast({ force: true, restoreRoute: false });
+    if (typeof client?.openUnlimitedFeatureGate === 'function') {
+      client.openUnlimitedFeatureGate(ROUTE, {
+        featureId: 'bar-forecast',
+        backgroundHash,
+        focusOrigin,
+      });
+    } else if (typeof client?.openView === 'function') {
+      history.replaceState({}, '', `${location.pathname}${location.search}${backgroundHash}`);
+      client.openView('pricing', {
+        mode: 'action',
+        focusOrigin,
+        context: {
+          reason: 'unlimited_feature',
+          featureId: 'bar-forecast',
+          featureLabel: '2026 Bar Forecast',
+          targetHash: ROUTE,
+          backgroundHash,
+        },
+      });
+    } else {
+      history.replaceState({ dd2View: 'pricing' }, '', `${location.pathname}${location.search}#pricing`);
+      global.dispatchEvent(new Event('popstate'));
+    }
+    return true;
+  }
+
+  function handleForecastAccessInterruption(error) {
+    if (isForecastAccessRequired(error)) return routeToPlansAndPricing();
+    if (isForecastAuthenticationRequired(error)) {
+      closeForecast({ force: true, restoreRoute: false });
+      return openForecastSignIn();
+    }
+    if (String(error?.code || '').trim().toUpperCase() === 'BAR_FORECAST_SETUP_REQUIRED') {
+      closeForecast({ force: true, restoreRoute: false });
+      Promise.resolve(global.DueDiligencePhase4?.ensureRequiredSetup?.(ROUTE)).catch(() => {
+        global.toast?.('Complete the required account setup before opening Bar Forecast.', 'warn');
+      });
+      return true;
+    }
+    return false;
   }
 
   function renderDisclaimer(message = '') {
@@ -628,7 +734,7 @@
         const payload = await requestForecast({ operation: 'accept', version: CONSENT_VERSION });
         if (!state.isOpen || ownerId !== runtimeOwnerId()) return;
         if (payload?.authorized !== true || payload?.consentAccepted !== true) {
-          renderPreview({ message: 'Bar Forecast access could not be confirmed.', kind: 'error' });
+          renderAccessError('Bar Forecast access could not be confirmed.');
           return;
         }
         state.ownerId = ownerId;
@@ -636,10 +742,8 @@
         renderSubjectPicker();
       } catch (error) {
         if (error?.name === 'AbortError') return;
-        if ([401, 403].includes(Number(error?.status))) {
-          renderPreview({ message: 'This account does not currently have Bar Forecast access.', kind: 'error' });
-          return;
-        }
+        if (!state.isOpen || ownerId !== runtimeOwnerId()) return;
+        if (handleForecastAccessInterruption(error)) return;
         decline.disabled = false;
         accept.disabled = false;
         accept.setAttribute('aria-busy', 'false');
@@ -739,7 +843,8 @@
     if (!SUBJECT_NAMES.has(subjectName) || !state.consentAccepted) return;
     const ownerId = runtimeOwnerId();
     if (!ownerId || ownerId !== state.ownerId) {
-      renderPreview({ message: 'Bar Forecast access must be confirmed again.', kind: 'error' });
+      closeForecast({ force: true, restoreRoute: false });
+      openForecastSignIn();
       return;
     }
     const buttons = [...state.viewNode.querySelectorAll('[data-subject]')];
@@ -768,10 +873,8 @@
       renderExam();
     } catch (error) {
       if (error?.name === 'AbortError') return;
-      if ([401, 403].includes(Number(error?.status))) {
-        renderPreview({ message: 'Bar Forecast access expired or was not confirmed.', kind: 'error' });
-        return;
-      }
+      if (!state.isOpen || ownerId !== runtimeOwnerId()) return;
+      if (handleForecastAccessInterruption(error)) return;
       renderSubjectPicker(error?.message || 'The forecast could not be opened. Please try again.');
       setStatus(state.statusNode?.textContent || '', 'error');
     }
@@ -1151,26 +1254,77 @@
   }
 
   function renderSubmitting() {
+    stopSubmittingProgress();
     const centered = element('div', 'bf26-centered');
     centered.append(
       element('div', 'bf26-spinner'),
-      element('h2', '', 'Submitting all 20 answers…'),
+      element('h2', '', 'Building your Mock Bar coaching report…'),
       element(
         'p',
         'bf26-status',
-        'Keep this window open while your Bar Forecast is graded.',
+        'Analyzing legal accuracy, issue spotting, grammar, and coaching. A detailed report may take up to about 8 minutes; keep this window open.',
       ),
+      element(
+        'p',
+        'bf26-submitting-note',
+        'Your answers remain available if the grading service asks you to retry.',
+      ),
+      element('p', 'bf26-submitting-elapsed', 'Elapsed time: 0:00'),
     );
     centered.querySelector('.bf26-spinner').setAttribute('aria-hidden', 'true');
     replaceView(centered, 'submitting');
     state.statusNode = centered.querySelector('.bf26-status');
     state.statusNode.setAttribute('role', 'status');
+    state.statusNode.setAttribute('aria-live', 'polite');
+    state.submissionElapsedNode = centered.querySelector('.bf26-submitting-elapsed');
+    state.submissionElapsedNode.setAttribute('aria-hidden', 'true');
+    state.submissionStartedAt = Date.now();
+    state.submissionTimer = global.setInterval(() => {
+      if (state.view !== 'submitting' || !state.submissionElapsedNode) {
+        stopSubmittingProgress();
+        return;
+      }
+      const elapsedSeconds = Math.max(0, Math.floor((Date.now() - state.submissionStartedAt) / 1000));
+      const minutes = Math.floor(elapsedSeconds / 60);
+      const seconds = String(elapsedSeconds % 60).padStart(2, '0');
+      state.submissionElapsedNode.textContent = `Elapsed time: ${minutes}:${seconds}`;
+    }, 10_000);
   }
 
   function normalizeResults(payload) {
-    const maxScore = Number(payload?.maxScore);
-    const totalScore = Number(payload?.totalScore);
-    if (maxScore !== 100 || !Number.isFinite(totalScore) || totalScore < 0 || totalScore > maxScore) {
+    const requiredText = (value) => {
+      if (typeof value !== 'string' || !value.trim()) {
+        throw new Error('A forecast coaching field failed its integrity check.');
+      }
+      return value.trim();
+    };
+    const diagnosticScore = (value) => {
+      if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 5
+          || Math.abs(value * 10 - Math.round(value * 10)) > 1e-9) {
+        throw new Error('A forecast diagnostic score failed its integrity check.');
+      }
+      return value;
+    };
+    const diagnosticList = (value, allowedSources) => {
+      if (!Array.isArray(value) || value.length > 5) {
+        throw new Error('A forecast diagnostic list failed its integrity check.');
+      }
+      const entries = value.map(requiredText);
+      if (new Set(entries.map((entry) => entry.toLowerCase())).size !== entries.length
+          || !Array.isArray(allowedSources)
+          || entries.some((entry) => entry.length < 8 || !allowedSources.some((source) => (
+            typeof source === 'string' && source.includes(entry)
+          )))) {
+        throw new Error('A forecast diagnostic list failed its curated-source integrity check.');
+      }
+      return Object.freeze(entries);
+    };
+    const maxScore = payload?.maxScore;
+    const totalScore = payload?.totalScore;
+    if (typeof maxScore !== 'number' || maxScore !== 100
+        || typeof totalScore !== 'number' || !Number.isFinite(totalScore)
+        || totalScore < 0 || totalScore > maxScore
+        || Math.abs(totalScore * 10 - Math.round(totalScore * 10)) > 1e-9) {
       throw new Error('The forecast grade response failed its integrity check.');
     }
     if (!Array.isArray(payload.results) || payload.results.length !== REQUIRED_QUESTION_COUNT) {
@@ -1179,27 +1333,82 @@
     const byId = new Map();
     for (const result of payload.results) {
       const questionId = String(result?.questionId || '').trim();
-      const number = Number(result?.number);
-      const score = Number(result?.score);
-      const resultMax = Number(result?.maxScore);
+      const number = result?.number;
+      const score = result?.score;
+      const resultMax = result?.maxScore;
+      const coaching = result?.mockBarCoaching;
+      const grammar = result?.grammar;
+      const issueSpotting = result?.issueSpotting;
       if (!questionId || byId.has(questionId) || !state.answers.has(questionId)
-          || !Number.isInteger(number) || number < 1 || number > REQUIRED_QUESTION_COUNT
-          || !Number.isFinite(score) || score < 0 || score > 5 || resultMax !== 5
-          || typeof result?.feedback !== 'string'
-          || typeof result?.userAnswer !== 'string'
-          || typeof result?.suggestedAnswer !== 'string'
-          || typeof result?.explanation !== 'string') {
+          || typeof number !== 'number' || !Number.isInteger(number)
+          || number < 1 || number > REQUIRED_QUESTION_COUNT
+          || typeof score !== 'number' || !Number.isFinite(score)
+          || score < 0 || score > 5 || typeof resultMax !== 'number' || resultMax !== 5
+          || Math.abs(score * 10 - Math.round(score * 10)) > 1e-9
+          || !coaching || typeof coaching !== 'object' || Array.isArray(coaching)
+          || !grammar || typeof grammar !== 'object' || Array.isArray(grammar)
+          || !issueSpotting || typeof issueSpotting !== 'object' || Array.isArray(issueSpotting)
+          || typeof grammar.maxScore !== 'number' || grammar.maxScore !== 5
+          || typeof issueSpotting.maxScore !== 'number' || issueSpotting.maxScore !== 5
+          || !Array.isArray(grammar.corrections) || grammar.corrections.length > 5) {
         throw new Error('A forecast result failed its integrity check.');
+      }
+      const userAnswer = requiredText(result.userAnswer);
+      if (userAnswer !== String(state.answers.get(questionId) || '').trim()) {
+        throw new Error('The returned answer did not match the submitted answer.');
+      }
+      const suggestedAnswer = requiredText(result.suggestedAnswer);
+      const question = state.questions.find((candidate) => candidate.id === questionId);
+      const issueSources = [question?.prompt || '', suggestedAnswer];
+      const corrections = grammar.corrections.map((correction) => {
+        if (!correction || typeof correction !== 'object' || Array.isArray(correction)) {
+          throw new Error('A grammar correction failed its integrity check.');
+        }
+        const original = requiredText(correction.original);
+        const category = String(correction.category || '').trim();
+        const categoryConfig = GRAMMAR_CORRECTION_GUIDANCE[category];
+        if (!userAnswer.includes(original) || !categoryConfig
+            || correction.guidance !== categoryConfig.guidance) {
+          throw new Error('A grammar correction did not match the submitted answer.');
+        }
+        return Object.freeze({
+          original,
+          category,
+          guidance: categoryConfig.guidance,
+        });
+      });
+      const identifiedIssues = diagnosticList(issueSpotting.identified, issueSources);
+      const missedIssues = diagnosticList(issueSpotting.missed, issueSources);
+      const identifiedKeys = new Set(identifiedIssues.map((item) => item.toLowerCase()));
+      if (missedIssues.some((item) => identifiedKeys.has(item.toLowerCase()))) {
+        throw new Error('An issue cannot be both identified and missed.');
       }
       byId.set(questionId, Object.freeze({
         questionId,
         number,
         score,
         maxScore: resultMax,
-        feedback: result.feedback.trim(),
-        userAnswer: result.userAnswer.trim(),
-        suggestedAnswer: result.suggestedAnswer.trim(),
-        explanation: result.explanation.trim(),
+        feedback: requiredText(result.feedback),
+        userAnswer,
+        suggestedAnswer,
+        explanation: requiredText(result.explanation),
+        mockBarCoaching: Object.freeze({
+          strength: requiredText(coaching.strength),
+          priorityImprovement: requiredText(coaching.priorityImprovement),
+          nextStep: requiredText(coaching.nextStep),
+        }),
+        grammar: Object.freeze({
+          score: diagnosticScore(grammar.score),
+          maxScore: 5,
+          corrections: Object.freeze(corrections),
+        }),
+        issueSpotting: Object.freeze({
+          score: diagnosticScore(issueSpotting.score),
+          maxScore: 5,
+          identified: identifiedIssues,
+          missed: missedIssues,
+          coaching: requiredText(issueSpotting.coaching),
+        }),
       }));
     }
     const results = state.questions.map((question) => {
@@ -1209,14 +1418,56 @@
       }
       return result;
     });
-    return Object.freeze({ totalScore, maxScore, results: Object.freeze(results) });
+    const roundOne = (value) => Number(value.toFixed(1));
+    const average = (read) => roundOne(results.reduce((sum, result) => sum + read(result), 0)
+      / results.length);
+    const computedTotal = roundOne(results.reduce((sum, result) => sum + result.score, 0));
+    const analytics = Object.freeze({
+      questionCount: results.length,
+      averageScore: average((result) => result.score),
+      issueSpottingAverage: average((result) => result.issueSpotting.score),
+      grammarAverage: average((result) => result.grammar.score),
+      diagnosticMaxScore: 5,
+      performanceBands: Object.freeze({
+        strong: results.filter((result) => result.score >= 4).length,
+        developing: results.filter((result) => result.score >= 2.5 && result.score < 4).length,
+        needsFocus: results.filter((result) => result.score < 2.5).length,
+      }),
+    });
+    const suppliedAnalytics = payload?.analytics;
+    if (computedTotal !== totalScore
+        || !suppliedAnalytics || typeof suppliedAnalytics !== 'object'
+        || typeof suppliedAnalytics.questionCount !== 'number'
+        || suppliedAnalytics.questionCount !== analytics.questionCount
+        || typeof suppliedAnalytics.averageScore !== 'number'
+        || suppliedAnalytics.averageScore !== analytics.averageScore
+        || typeof suppliedAnalytics.issueSpottingAverage !== 'number'
+        || suppliedAnalytics.issueSpottingAverage !== analytics.issueSpottingAverage
+        || typeof suppliedAnalytics.grammarAverage !== 'number'
+        || suppliedAnalytics.grammarAverage !== analytics.grammarAverage
+        || typeof suppliedAnalytics.diagnosticMaxScore !== 'number'
+        || suppliedAnalytics.diagnosticMaxScore !== analytics.diagnosticMaxScore
+        || typeof suppliedAnalytics.performanceBands?.strong !== 'number'
+        || suppliedAnalytics.performanceBands.strong !== analytics.performanceBands.strong
+        || typeof suppliedAnalytics.performanceBands?.developing !== 'number'
+        || suppliedAnalytics.performanceBands.developing !== analytics.performanceBands.developing
+        || typeof suppliedAnalytics.performanceBands?.needsFocus !== 'number'
+        || suppliedAnalytics.performanceBands.needsFocus !== analytics.performanceBands.needsFocus) {
+      throw new Error('The forecast analytics failed its integrity check.');
+    }
+    return Object.freeze({
+      totalScore,
+      maxScore,
+      analytics,
+      results: Object.freeze(results),
+    });
   }
 
   async function submitForecast() {
     if (!allAnswersComplete() || state.view !== 'exam') return;
     sanitizeEditorDom(state.examRefs?.editor);
     if (!allAnswersComplete()) return;
-    if (!global.confirm('Submit all 20 answers for final grading? Answers cannot be edited after submission.')) return;
+    if (!global.confirm('Submit all 20 answers for final grading? The detailed coaching report may take several minutes, and answers cannot be edited after submission.')) return;
     const ownerId = runtimeOwnerId();
     const submittedSubject = state.subject;
     const submittedAnswers = state.questions.map((question) => Object.freeze({
@@ -1236,10 +1487,8 @@
       renderResults();
     } catch (error) {
       if (error?.name === 'AbortError') return;
-      if ([401, 403].includes(Number(error?.status))) {
-        renderPreview({ message: 'Bar Forecast access expired before grading completed.', kind: 'error' });
-        return;
-      }
+      if (!state.isOpen || ownerId !== runtimeOwnerId() || submittedSubject !== state.subject) return;
+      if (handleForecastAccessInterruption(error)) return;
       renderExam();
       setStatus(error?.message || 'The answers were not submitted. Review them and try again.', 'error');
     }
@@ -1254,41 +1503,209 @@
     parent.append(section);
   }
 
+  function metricCard(label, value, note = '') {
+    const card = element('div', 'bf26-metric-card');
+    card.append(
+      element('span', 'bf26-metric-label', label),
+      element('strong', 'bf26-metric-value', value),
+    );
+    if (note) card.append(element('p', 'bf26-metric-note', note));
+    return card;
+  }
+
+  function appendMockBarCoaching(parent, result) {
+    const section = element('section', 'bf26-result-section bf26-coaching-section');
+    section.append(
+      element('h4', '', 'Mock Bar coaching'),
+      element('p', 'bf26-coaching-summary', result.feedback),
+    );
+    const coaching = element('dl', 'bf26-coaching-grid');
+    for (const [label, value] of [
+      ['Strength', result.mockBarCoaching.strength],
+      ['Priority improvement', result.mockBarCoaching.priorityImprovement],
+      ['Next timed-answer step', result.mockBarCoaching.nextStep],
+    ]) {
+      const item = element('div', 'bf26-coaching-item');
+      item.append(element('dt', '', label), element('dd', '', value));
+      coaching.append(item);
+    }
+    section.append(coaching);
+    parent.append(section);
+  }
+
+  function appendDiagnosticList(parent, heading, items, emptyMessage, kind = '') {
+    const block = element('div', `bf26-diagnostic-list${kind ? ` bf26-diagnostic-list--${kind}` : ''}`);
+    block.append(element('h5', '', heading));
+    if (!items.length) {
+      block.append(element('p', '', emptyMessage));
+    } else {
+      const list = element('ul');
+      for (const item of items) list.append(element('li', '', item));
+      block.append(list);
+    }
+    parent.append(block);
+  }
+
+  function appendIssueSpotting(parent, result) {
+    const diagnostic = result.issueSpotting;
+    const section = element('section', 'bf26-result-section bf26-diagnostic-section');
+    const heading = element('div', 'bf26-section-heading');
+    heading.append(
+      element('h4', '', 'Issue spotting'),
+      element('span', 'bf26-score-chip', `${diagnostic.score} / ${diagnostic.maxScore} diagnostic`),
+    );
+    section.append(heading);
+    const lists = element('div', 'bf26-diagnostic-columns');
+    appendDiagnosticList(lists, 'Issues identified', diagnostic.identified, 'No material issue was clearly identified.', 'identified');
+    appendDiagnosticList(lists, 'Issues missed', diagnostic.missed, 'No material issue omission was identified.', 'missed');
+    section.append(lists, element('p', 'bf26-diagnostic-coaching', diagnostic.coaching));
+    parent.append(section);
+  }
+
+  function appendGrammarReview(parent, result) {
+    const diagnostic = result.grammar;
+    const section = element('section', 'bf26-result-section bf26-diagnostic-section');
+    const heading = element('div', 'bf26-section-heading');
+    heading.append(
+      element('h4', '', 'Grammar and clarity'),
+      element('span', 'bf26-score-chip', `${diagnostic.score} / ${diagnostic.maxScore} diagnostic`),
+    );
+    section.append(heading);
+    if (!diagnostic.corrections.length) {
+      section.append(element('p', 'bf26-no-corrections', 'No material grammar correction was identified.'));
+    } else {
+      const list = element('ol', 'bf26-correction-list');
+      for (const correction of diagnostic.corrections) {
+        const item = element('li', 'bf26-correction');
+        const original = element('p');
+        original.append(element('strong', '', 'Review this excerpt: '), element('q', '', correction.original));
+        const focus = element('p');
+        focus.append(
+          element('strong', '', 'Correction focus: '),
+          document.createTextNode(GRAMMAR_CORRECTION_GUIDANCE[correction.category].label),
+        );
+        const guidance = element('p');
+        guidance.append(element('strong', '', 'How to revise: '), document.createTextNode(correction.guidance));
+        item.append(original, focus, guidance);
+        list.append(item);
+      }
+      section.append(list);
+    }
+    parent.append(section);
+  }
+
+  function practiceBand(averageScore) {
+    if (averageScore >= 4) return 'Strong practice performance';
+    if (averageScore >= 2.5) return 'Developing practice performance';
+    return 'Priority coaching recommended';
+  }
+
   function renderResults() {
     const resultSet = state.results;
     if (!resultSet) return;
     const results = element('section', 'bf26-results');
+    results.setAttribute('aria-labelledby', 'bf26-report-title');
+    const title = element('h2', '', `${state.subject} results`);
+    title.id = 'bf26-report-title';
     results.append(
-      element('p', 'bf26-badge', 'Grading complete'),
-      element('h2', '', `${state.subject} results`),
+      element('p', 'bf26-badge', 'Grading complete · Mock Bar coaching report'),
+      title,
       element(
         'p',
-        '',
-        'Open a question to review its score, feedback, your submitted answer, the suggested answer, and the accompanying explanation.',
+        'bf26-report-disclaimer',
+        'This is an educational practice diagnostic, not an official Bar grade or a prediction of examination performance.',
       ),
     );
+    const overview = element('section', 'bf26-report-overview');
+    overview.setAttribute('aria-label', 'Forecast score overview');
     const grade = element('div', 'bf26-grade');
     grade.append(
-      element('span', '', 'Total grade'),
+      element('span', '', 'Mock Bar practice score'),
       element('strong', '', `${resultSet.totalScore} / ${resultSet.maxScore}`),
+      element('p', '', practiceBand(resultSet.analytics.averageScore)),
     );
-    results.append(grade);
+    const metrics = element('div', 'bf26-metric-grid');
+    metrics.append(
+      metricCard('Average answer', `${resultSet.analytics.averageScore} / 5`, 'Holistic legal-response score'),
+      metricCard('Issue spotting', `${resultSet.analytics.issueSpottingAverage} / 5`, 'Non-scoring diagnostic'),
+      metricCard('Grammar', `${resultSet.analytics.grammarAverage} / 5`, 'Non-scoring diagnostic'),
+      metricCard('Priority review', String(resultSet.analytics.performanceBands.needsFocus), `of ${resultSet.analytics.questionCount} answers`),
+    );
+    overview.append(grade, metrics);
+    results.append(overview);
+
+    const analytics = element('section', 'bf26-analytics');
+    analytics.append(
+      element('h3', '', 'Performance analytics'),
+      element('p', '', 'Issue spotting and grammar help diagnose writing habits; they do not change the 100-point practice score.'),
+    );
+    const bands = element('div', 'bf26-band-grid');
+    bands.append(
+      metricCard('Strong answers', String(resultSet.analytics.performanceBands.strong), '4.0–5.0 per answer'),
+      metricCard('Developing answers', String(resultSet.analytics.performanceBands.developing), '2.5–3.9 per answer'),
+      metricCard('Needs focus', String(resultSet.analytics.performanceBands.needsFocus), 'Below 2.5 per answer'),
+    );
+    analytics.append(bands);
+    results.append(analytics);
+
+    const strongest = [...resultSet.results].sort((left, right) => right.score - left.score)[0];
+    const priority = [...resultSet.results].sort((left, right) => left.score - right.score)[0];
+    const verdict = element('section', 'bf26-coach-verdict');
+    verdict.append(element('h3', '', 'Mock Bar coach’s verdict'));
+    const verdictGrid = element('dl', 'bf26-coaching-grid bf26-coaching-grid--report');
+    for (const [label, value, questionNumber] of [
+      ['Strongest demonstrated habit', strongest.mockBarCoaching.strength, strongest.number],
+      ['Priority improvement', priority.mockBarCoaching.priorityImprovement, priority.number],
+      ['Next practice action', priority.mockBarCoaching.nextStep, priority.number],
+    ]) {
+      const item = element('div', 'bf26-coaching-item');
+      const description = element('dd');
+      description.append(
+        document.createTextNode(value),
+        element('span', 'bf26-question-reference', `From question ${questionNumber}`),
+      );
+      item.append(
+        element('dt', '', label),
+        description,
+      );
+      verdictGrid.append(item);
+    }
+    verdict.append(verdictGrid);
+    results.append(verdict);
+
+    const reviewHeading = element('h3', 'bf26-review-heading', 'Question-by-question review');
+    results.append(
+      reviewHeading,
+      element('p', 'bf26-review-intro', 'Open a question to review your answer, targeted coaching, issue spotting, grammar corrections, the curated suggested answer, and the score rationale.'),
+    );
 
     const list = element('div', 'bf26-result-list');
     resultSet.results.forEach((result, index) => {
       const item = element('details', 'bf26-result');
       if (index === 0) item.open = true;
       const summary = element('summary');
-      summary.append(
-        element('span', '', `Question ${result.number}`),
-        element('span', '', `${result.score} / ${result.maxScore}`),
+      const summaryTitle = element('span', 'bf26-result-summary-title', `Question ${result.number}`);
+      if (result.score < 2.5) summaryTitle.append(element('span', 'bf26-priority-label', 'Priority review'));
+      const summaryScores = element('span', 'bf26-result-summary-scores');
+      summaryScores.append(
+        element('span', '', `${result.score} / ${result.maxScore} score`),
+        element('span', '', `${result.issueSpotting.score} / 5 issues`),
+        element('span', '', `${result.grammar.score} / 5 grammar`),
       );
+      const summaryRow = element('span', 'bf26-result-summary-row');
+      summaryRow.append(
+        summaryTitle,
+        summaryScores,
+      );
+      summary.append(summaryRow);
       const body = element('div', 'bf26-result-body');
       appendResultSection(body, 'Question', state.questions[index]?.prompt || 'Question unavailable.');
-      appendResultSection(body, 'Feedback', result.feedback);
       appendResultSection(body, 'Your answer', result.userAnswer, state.answerMarkup.get(result.questionId));
+      appendMockBarCoaching(body, result);
+      appendIssueSpotting(body, result);
+      appendGrammarReview(body, result);
       appendResultSection(body, 'Suggested answer', result.suggestedAnswer);
-      appendResultSection(body, 'Explanation', result.explanation);
+      appendResultSection(body, 'Score rationale', result.explanation);
       item.append(summary, body);
       list.append(item);
     });
@@ -1322,12 +1739,11 @@
     if (!state.isOpen) return false;
     const ownerId = runtimeOwnerId();
     if (!ownerId || !runtimeSession()?.access_token) {
-      renderPreview({
-        message: 'Bar Forecast access is not available for this signed-out or unresolved session.',
-      });
+      closeForecast({ force: true, restoreRoute: false });
+      openForecastSignIn();
       return true;
     }
-    renderPreview({ checking: true });
+    renderAccessProgress();
     // Session restoration can emit another same-user event while this request is
     // pending. Claim the owner before awaiting so that event cannot abort and
     // replace the consent view underneath an agreement click.
@@ -1340,15 +1756,14 @@
       const setupReady = await ensureRequiredSetup(ROUTE);
       if (!state.isOpen || ownerId !== runtimeOwnerId()) return false;
       if (setupReady !== true) {
-        renderPreview({
-          message: 'Complete the required account setup before opening Bar Forecast.',
-        });
+        closeForecast({ force: true, restoreRoute: false });
+        global.toast?.('Complete the required account setup before opening Bar Forecast.', 'warn');
         return true;
       }
       const payload = await requestForecast({ operation: 'status' });
       if (!state.isOpen || ownerId !== runtimeOwnerId()) return false;
       if (payload?.authorized !== true) {
-        renderPreview({ message: 'This account does not currently have Bar Forecast access.' });
+        routeToPlansAndPricing();
         return true;
       }
       state.ownerId = ownerId;
@@ -1358,21 +1773,28 @@
       return true;
     } catch (error) {
       if (error?.name === 'AbortError') return false;
-      renderPreview({
-        message: [401, 403].includes(Number(error?.status))
-          ? 'This account does not currently have Bar Forecast access.'
-          : 'Bar Forecast access could not be confirmed. The protected forecast remains closed.',
-        kind: error?.status ? '' : 'error',
-      });
+      if (!state.isOpen || ownerId !== runtimeOwnerId()) return false;
+      if (handleForecastAccessInterruption(error)) return true;
+      renderAccessError(
+        error?.message || 'Bar Forecast access could not be confirmed. The protected forecast remains closed.',
+      );
+      // renderAccessError clears protected state. Reclaim this still-current
+      // authorization owner so only this invocation may consume its retry flag
+      // in finally; a stale account's completion must never touch a new owner.
+      if (state.isOpen && ownerId === runtimeOwnerId()) state.authorizationOwnerId = ownerId;
       return true;
     } finally {
-      const shouldRetry = state.authorizationRetryRequested
+      const ownsAuthorization = state.authorizationOwnerId === ownerId;
+      const shouldRetry = ownsAuthorization
+        && state.authorizationRetryRequested
         && state.authorizationRetryInProgress !== true
         && state.isOpen
         && !state.ownerId
         && ownerId === runtimeOwnerId();
-      state.authorizationRetryRequested = false;
-      if (state.authorizationOwnerId === ownerId) state.authorizationOwnerId = '';
+      if (ownsAuthorization) {
+        state.authorizationRetryRequested = false;
+        state.authorizationOwnerId = '';
+      }
       if (shouldRetry) {
         Promise.resolve().then(async () => {
           if (!state.isOpen || state.ownerId || state.authorizationOwnerId
@@ -1391,20 +1813,6 @@
   function hasDraftAnswers() {
     return state.view === 'exam'
       && [...state.answers.values()].some((answer) => String(answer || '').trim());
-  }
-
-  function recoverAuthorizationAfterAuthReady() {
-    const whenAuthReady = global.DueDiligencePhase2?.whenAuthReady;
-    if (typeof whenAuthReady !== 'function') return;
-    Promise.resolve()
-      .then(() => whenAuthReady())
-      .then(() => {
-        const ownerId = runtimeOwnerId();
-        if (state.isOpen && ownerId && !state.ownerId && !state.authorizationOwnerId) {
-          checkAuthorization();
-        }
-      })
-      .catch(() => {});
   }
 
   function closeForecast(options = {}) {
@@ -1429,6 +1837,10 @@
 
   async function openForecast(trigger = null) {
     ensureRoot();
+    if (!runtimeOwnerId() || !runtimeSession()?.access_token) {
+      openForecastSignIn();
+      return true;
+    }
     if (state.isOpen) {
       const ownerId = runtimeOwnerId();
       if (ownerId && ownerId !== state.ownerId && ownerId !== state.authorizationOwnerId) {
@@ -1437,18 +1849,13 @@
       return true;
     }
     state.lastTrigger = trigger instanceof Element ? trigger : document.activeElement;
+    state.pricingRedirectInProgress = false;
     state.isOpen = true;
     setForecastRoute();
     isolatePage(true);
     state.root.hidden = false;
-    renderPreview({
-      message: runtimeOwnerId()
-        ? 'Checking whether this signed-in account is authorized…'
-        : 'Bar Forecast access is not available for this signed-out or unresolved session.',
-      checking: Boolean(runtimeOwnerId()),
-    });
-    if (runtimeOwnerId()) await checkAuthorization();
-    else recoverAuthorizationAfterAuthReady();
+    renderAccessProgress();
+    await checkAuthorization();
     return true;
   }
 
@@ -1463,13 +1870,13 @@
     state.authorizationRetryRequested = false;
     state.authorizationRetryInProgress = false;
     resetProtectedState();
-    renderPreview({
-      message: nextOwnerId
-        ? 'The signed-in account changed. Checking Bar Forecast access again…'
-        : 'Bar Forecast access is not available for this signed-out session.',
-      checking: Boolean(nextOwnerId),
-    });
-    if (nextOwnerId) checkAuthorization();
+    if (nextOwnerId) {
+      renderAccessProgress('The signed-in account changed. Checking Forecast access again…');
+      checkAuthorization();
+    } else {
+      closeForecast({ force: true, restoreRoute: false });
+      openForecastSignIn();
+    }
   }
 
   global.addEventListener('duediligence:session', handleForecastSessionChange);

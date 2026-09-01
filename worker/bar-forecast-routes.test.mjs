@@ -140,6 +140,24 @@ function harness(overrides = {}) {
             score: 4,
             feedback: `Concrete feedback for ${row.number}.`,
             explanation: `Holistic comparison for ${row.number}.`,
+            mockBarCoaching: {
+              strength: 'The answer gives a direct conclusion.',
+              priorityImprovement: 'Tie each decisive fact to the rule.',
+              nextStep: 'State the issue first and apply the rule fact by fact.',
+            },
+            grammar: {
+              score: 4.5,
+              corrections: [{
+                original: `Yes. Answer ${row.number}`,
+                category: 'punctuation',
+              }],
+            },
+            issueSpotting: {
+              score: 3.5,
+              identified: [row.prompt],
+              missed: [row.suggestedAnswer],
+              coaching: 'Frame the precise issue before stating the rule.',
+            },
             rubric: { forbidden: true },
           })),
         }),
@@ -202,6 +220,17 @@ test('status is fail-closed and returns only the contracted fields with private 
       unlimited: true,
       freeBeta: { active: true, program: 'founding_beta_2026' },
     }),
+    completeSetupAccess({
+      role: 'student',
+      basis: 'provisional_payment',
+      unlimited: true,
+    }),
+    completeSetupAccess({
+      role: 'student',
+      basis: 'paid_subscription',
+      unlimited: true,
+      subscription: { status: 'active', source: 'complimentary' },
+    }),
   ]) {
     const member = harness({
       authorization: null,
@@ -217,12 +246,17 @@ test('status is fail-closed and returns only the contracted fields with private 
 
   for (const setupAccess of [
     completeSetupAccess({ role: 'student', basis: 'introductory_tokens', unlimited: false }),
-    completeSetupAccess({ role: 'student', basis: 'provisional_payment', unlimited: true }),
     completeSetupAccess({
       role: 'student',
       basis: 'paid_subscription',
       unlimited: true,
-      subscription: { status: 'active', source: 'complimentary' },
+      allowed: false,
+    }),
+    completeSetupAccess({
+      role: 'student',
+      basis: 'paid_subscription',
+      unlimited: true,
+      paidSubscriptionExpired: true,
     }),
   ]) {
     const blocked = harness({ authorization: null, setupAccess });
@@ -291,6 +325,108 @@ test('required account setup fails closed server-side while payment state remain
     assert.equal(
       blocked.calls.some((call) => call.functionName === 'dd2026_bar_forecast_consent_status'),
       false,
+    );
+  }
+
+  const paidSetupMasks = [
+    completeSetupAccess({
+      allowed: false,
+      unlimited: false,
+      role: 'student',
+      basis: 'legal_acceptance_required',
+      termsRequired: true,
+      subscription: { status: 'active', source: 'manual_payment' },
+    }),
+    completeSetupAccess({
+      allowed: false,
+      unlimited: false,
+      role: 'student',
+      basis: 'profile_required',
+      profileCompleted: false,
+      tokenAcknowledgementRequired: true,
+      subscription: { status: 'active', source: 'admin_adjustment' },
+    }),
+    completeSetupAccess({
+      allowed: false,
+      unlimited: false,
+      role: 'student',
+      basis: 'reauthentication_required',
+      reauthenticationRequired: true,
+      subscription: { status: 'active', source: 'migration' },
+    }),
+  ];
+  for (const setupAccess of paidSetupMasks) {
+    const entitledSetup = harness({ authorization: null, setupAccess });
+    await assert.rejects(
+      entitledSetup.handlers.handle(request({ operation: 'status' }), {}, '', ''),
+      { code: 'BAR_FORECAST_SETUP_REQUIRED', status: 403 },
+    );
+    assert.equal(
+      entitledSetup.calls.some((call) => call.functionName === 'dd2026_bar_forecast_consent_status'),
+      false,
+    );
+  }
+
+  for (const setupAccess of [
+    completeSetupAccess({
+      role: 'student',
+      basis: 'provisional_payment',
+      unlimited: true,
+      termsRequired: true,
+    }),
+    completeSetupAccess({
+      role: 'student',
+      basis: 'provisional_payment',
+      unlimited: true,
+      reauthenticationRequired: true,
+    }),
+    completeSetupAccess({
+      role: 'student',
+      basis: 'provisional_payment',
+      unlimited: true,
+      profileCompleted: false,
+    }),
+    completeSetupAccess({
+      role: 'student',
+      basis: 'provisional_payment',
+      unlimited: true,
+      tokenAcknowledgementRequired: true,
+    }),
+  ]) {
+    const provisionalSetup = harness({ authorization: null, setupAccess });
+    await assert.rejects(
+      provisionalSetup.handlers.handle(request({ operation: 'status' }), {}, '', ''),
+      { code: 'BAR_FORECAST_SETUP_REQUIRED', status: 403 },
+    );
+    assert.equal(
+      provisionalSetup.calls.some((call) => call.functionName === 'dd2026_bar_forecast_consent_status'),
+      false,
+    );
+  }
+
+  const betaTermsSetup = harness({
+    authorization: null,
+    setupAccess: completeSetupAccess({
+      allowed: false,
+      unlimited: false,
+      role: 'student',
+      basis: 'legal_acceptance_required',
+      termsRequired: true,
+      freeBeta: { active: true, program: 'founding_beta_2026' },
+    }),
+  });
+  await assert.rejects(
+    betaTermsSetup.handlers.handle(request({ operation: 'status' }), {}, '', ''),
+    { code: 'BAR_FORECAST_SETUP_REQUIRED', status: 403 },
+  );
+
+  for (const setupAccess of paidSetupMasks) {
+    const unpaidAccess = { ...setupAccess };
+    delete unpaidAccess.subscription;
+    const unpaidSetup = harness({ authorization: null, setupAccess: unpaidAccess });
+    await assert.rejects(
+      unpaidSetup.handlers.handle(request({ operation: 'status' }), {}, '', ''),
+      { code: 'BAR_FORECAST_ACCESS_REQUIRED', status: 403 },
     );
   }
 
@@ -393,7 +529,7 @@ test('start requires persisted consent and exposes exactly 20 sanitized question
   }
 });
 
-test('submit grades five bounded batches and returns only the public holistic result contract', async () => {
+test('submit grades five bounded batches and returns the expanded coaching report contract', async () => {
   const { calls, handlers } = harness();
   const response = await handlers.handle(request({
     operation: 'submit',
@@ -405,6 +541,14 @@ test('submit grades five bounded batches and returns only the public holistic re
   assert.equal(body.totalScore, 80);
   assert.equal(body.maxScore, 100);
   assert.equal(body.results.length, 20);
+  assert.deepEqual(body.analytics, {
+    questionCount: 20,
+    averageScore: 4,
+    issueSpottingAverage: 3.5,
+    grammarAverage: 4.5,
+    diagnosticMaxScore: 5,
+    performanceBands: { strong: 20, developing: 0, needsFocus: 0 },
+  });
   assert.equal(calls.filter((call) => call.functionName === 'structured_gemini').length, 5);
   assert.deepEqual(
     calls.filter((call) => call.functionName === 'structured_gemini').map((call) => call.options),
@@ -412,11 +556,28 @@ test('submit grades five bounded batches and returns only the public holistic re
   );
   assert.deepEqual(Object.keys(body.results[0]), [
     'questionId', 'number', 'score', 'maxScore', 'feedback',
-    'userAnswer', 'suggestedAnswer', 'explanation',
+    'userAnswer', 'suggestedAnswer', 'explanation', 'mockBarCoaching',
+    'grammar', 'issueSpotting',
   ]);
   assert.equal(JSON.stringify(body).includes('rubric'), false);
   assert.equal(JSON.stringify(body).includes('legalBasis'), false);
   assert.equal(JSON.stringify(body).includes('controllingDoctrine'), false);
+});
+
+test('Forecast model can be emergency-redirected without changing shared grading defaults', async () => {
+  const { calls, handlers } = harness();
+  const response = await handlers.handle(request({
+    operation: 'submit',
+    subject: SUBJECT,
+    setId: SET_ID,
+    answers: answers(),
+  }), { BAR_FORECAST_MODEL: 'emergency-forecast-model' }, '', '');
+  assert.equal(response.status, 200);
+  const providerCalls = calls.filter((call) => call.functionName === 'structured_gemini');
+  assert.equal(providerCalls.length, 5);
+  assert.ok(providerCalls.every(
+    (call) => call.options.preferredModel === 'emergency-forecast-model',
+  ));
 });
 
 test('submit returns Forecast-specific retry-safe grading failures', async () => {

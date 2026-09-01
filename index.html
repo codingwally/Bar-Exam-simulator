@@ -1001,7 +1001,7 @@
 <link rel="stylesheet" href="assets/pricing-renderer.css?v=regular-checkout-r1">
 <link rel="stylesheet" href="assets/private-beta-landing.css?v=master-experience-20260813-1&amp;release=subject-matter-gil-fixes-20260817-4">
 <link rel="stylesheet" href="assets/due-diligence-controls.css?v=subject-matter-controls-20260817-4">
-<link rel="stylesheet" href="assets/bar-forecast.css?v=exam-tools-20260901-4">
+<link rel="stylesheet" href="assets/bar-forecast.css?v=access-flow-20260902-1">
 <link rel="stylesheet" href="assets/quorum-first-shell.css?v=profile-photo-release2-20260827-1&amp;baseline=public-reliability-20260827-3">
 <link rel="stylesheet" href="assets/subscription-cta.css?v=home-subscription-cta-20260828-4">
 <link rel="stylesheet" href="assets/study-room-preview.css?v=study-room-launch-20260830-1">
@@ -2673,10 +2673,18 @@ function openSubjectMatterMenu() {
 async function openPremiumBarFeels(options = {}) {
   const navigationIntent = beginPremiumNavigationIntent();
   const accessController = window.DueDiligencePhase4;
-  if (!accessController?.requireAuthentication?.()) return;
   try {
-    await accessController.refreshAccess();
+    if (typeof accessController?.ensureUnlimitedFeatureAccess !== 'function') {
+      throw new Error('Access verification is still loading. Please try again.');
+    }
+    const allowed = await accessController.ensureUnlimitedFeatureAccess('#bar-feels', {
+      featureId: 'bar-feels',
+      focusOrigin: options.focusOrigin || document.activeElement,
+      isCurrent: () => isPremiumNavigationIntentCurrent(navigationIntent)
+        && options.isCurrent?.() !== false,
+    });
     if (!isPremiumNavigationIntentCurrent(navigationIntent)) return;
+    if (allowed !== true) return { status: 'subscription_required' };
     if (options.restoreActive === true) {
       const outcome = await window.DueDiligenceExaminations?.restoreRoute?.('bar_feels', {
         isCurrent: options.isCurrent,
@@ -3551,6 +3559,11 @@ window.addEventListener('popstate', () => {
     .find(([, routeHash]) => routeHash === hash)?.[0]
     || (hash === 'lex-forum' ? 'community' : hash ? null : 'mock');
   if (!page) return;
+  if (page === 'bar-feels') {
+    // The signed-in shell restores this route through the unlimited-access
+    // loader. Do not reveal the page before that asynchronous gate resolves.
+    return;
+  }
   if (page === 'community' && window.DueDiligenceQuorum?.restoreRoute) {
     window.DueDiligenceQuorum.restoreRoute().catch((error) => {
       window.DueDiligencePublicNavigation?.reportError?.(
@@ -4954,16 +4967,16 @@ window.addEventListener('storage', (event) => {
 <script src="assets/profile-photo.js?v=profile-photo-release2-20260827-1"></script>
 <script src="assets/pricing-renderer.js?v=regular-checkout-r2"></script>
 <script src="assets/pricing-checkout-safety.js?v=regular-checkout-r2"></script>
-<script src="assets/phase2-experience.js?v=profile-photo-release2-20260827-1&amp;baseline=syllabus-reveal-p0-20260826-2-examination-room-4&amp;profile=chambers-20260827-1&amp;access=paid-expiry-20260827-1&amp;pricing=regular-checkout-r3&amp;legal=explicit-20260901-1&amp;auth=login-loop-p0-20260901-1"></script>
-<script src="assets/phase4-experience.js?v=syllabus-reveal-p0-20260826-2&amp;access=paid-expiry-20260827-1&amp;recovery=subject-review-timeout-20260828-1&amp;forecast-setup=20260901-2&amp;auth=login-loop-p0-20260901-1"></script>
+<script src="assets/phase2-experience.js?v=profile-photo-release2-20260827-1&amp;baseline=syllabus-reveal-p0-20260826-2-examination-room-4&amp;profile=chambers-20260827-1&amp;access=paid-expiry-20260827-1&amp;pricing=regular-checkout-r3&amp;legal=explicit-20260901-1&amp;auth=login-loop-p0-20260901-1&amp;unlimited=feature-access-20260902-1"></script>
+<script src="assets/phase4-experience.js?v=syllabus-reveal-p0-20260826-2&amp;access=paid-expiry-20260827-1&amp;recovery=subject-review-timeout-20260828-1&amp;forecast-setup=20260901-2&amp;auth=login-loop-p0-20260901-1&amp;unlimited=feature-access-20260902-1"></script>
 <script src="assets/subscription-cta.js?v=home-subscription-cta-20260828-3"></script>
 <script src="assets/study-room-preview.js?v=study-room-launch-20260830-1"></script>
 <script src="assets/auxiliary-writing-diagnostics.js?v=auxiliary-writing-diagnostics-20260827-1"></script>
 <script src="assets/phase3-analytics.js?v=home-telemetry-20260828-1"></script>
 <script src="assets/private-workspace.js?v=master-experience-20260813-1"></script>
-<script src="assets/feature-loader.js?v=profile-photo-release2-20260827-1&amp;baseline=public-reliability-20260827-1&amp;feedback=offline-save-20260827-1&amp;hotfix=ian-provisional-reveal-20260828-1&amp;recovery=subject-review-timeout-20260828-1&amp;cta=home-subscription-20260828-2&amp;collapse=home-read-more-20260828-1&amp;results=history-20260828-1&amp;forecast=member-access-20260901-1"></script>
+<script src="assets/feature-loader.js?v=profile-photo-release2-20260827-1&amp;baseline=public-reliability-20260827-1&amp;feedback=offline-save-20260827-1&amp;hotfix=ian-provisional-reveal-20260828-1&amp;recovery=subject-review-timeout-20260828-1&amp;cta=home-subscription-20260828-2&amp;collapse=home-read-more-20260828-1&amp;results=history-20260828-1&amp;forecast=access-flow-20260902-1&amp;coaching=report-20260901-1&amp;unlimited=feature-access-20260902-1"></script>
 <script src="assets/quorum-first-shell.js?v=syllabus-review-20260823-1&amp;forecast=exam-tools-20260901-4"></script>
-<script src="assets/private-beta-landing.js?v=public-reliability-20260827-2&amp;feedback=quiet-navigation-20260828-1&amp;forecast=exam-tools-20260901-4&amp;auth=login-loop-p0-20260901-1"></script>
+<script src="assets/private-beta-landing.js?v=public-reliability-20260827-2&amp;feedback=quiet-navigation-20260828-1&amp;forecast=access-flow-20260902-1&amp;auth=login-loop-p0-20260901-1&amp;unlimited=feature-access-20260902-1"></script>
 <script src="assets/pedro-navigation.js?v=pedro-release2-20260827-1&amp;feedback=quiet-navigation-20260828-1"></script>
 <script>
 window.DueDiligencePedroNavigation?.restoreFromUrl?.();

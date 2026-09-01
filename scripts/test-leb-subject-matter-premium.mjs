@@ -189,7 +189,7 @@ assert.match(worker, /p_section:\s*query\.section === 'introductory_access' \? '
 assert.match(paymentCore, /\['early_access_beta', 'standard', 'premium'\]/);
 assert.match(
   publicPage,
-  /async function openPremiumBarFeels[\s\S]*refreshAccess\(\)[\s\S]*openBarFeels\(\)/,
+  /async function openPremiumBarFeels[\s\S]*ensureUnlimitedFeatureAccess\('#bar-feels'[\s\S]*openBarFeels\(\)/,
 );
 assert.match(examinationCore, /EXAM_PREMIUM_REQUIRED/);
 assert.match(examinationCore, /'quiz'/);

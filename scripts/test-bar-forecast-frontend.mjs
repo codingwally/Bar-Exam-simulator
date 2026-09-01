@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 
@@ -8,25 +7,25 @@ const [
   html,
   forecast,
   phase4,
+  phase2,
   styles,
   loader,
   landing,
   shell,
   build,
   serviceWorker,
-  preview,
   qaHarness,
 ] = await Promise.all([
   readFile(new URL('index.html', root), 'utf8'),
   readFile(new URL('assets/bar-forecast.js', root), 'utf8'),
   readFile(new URL('assets/phase4-experience.js', root), 'utf8'),
+  readFile(new URL('assets/phase2-experience.js', root), 'utf8'),
   readFile(new URL('assets/bar-forecast.css', root), 'utf8'),
   readFile(new URL('assets/feature-loader.js', root), 'utf8'),
   readFile(new URL('assets/private-beta-landing.js', root), 'utf8'),
   readFile(new URL('assets/quorum-first-shell.js', root), 'utf8'),
   readFile(new URL('scripts/build-pages-artifact.mjs', root), 'utf8'),
   readFile(new URL('service-worker.js', root), 'utf8'),
-  readFile(new URL('assets/bar-forecast/forecast-workspace-preview.webp', root)),
   readFile(new URL('docs/evidence/bar-forecast-examplify-audit-20260901/local-preview.html', root), 'utf8'),
 ]);
 
@@ -44,16 +43,19 @@ for (const markup of [rail, drawer]) {
 assert.match(drawer, /id="spa-bar-forecast"[\s\S]*id="spa-bar-easy"/);
 
 assert.match(loader, /forecast:\s*Object\.freeze\([\s\S]*assets\/bar-forecast\.css[\s\S]*assets\/bar-forecast\.js/);
-assert.match(loader, /assets\/bar-forecast\.js\?v=exam-tools-20260901-5/);
-assert.doesNotMatch(loader, /assets\/bar-forecast\.js\?v=exam-tools-20260901-4/);
+assert.match(loader, /assets\/bar-forecast\.js\?v=access-flow-20260902-1/);
+assert.match(loader, /assets\/bar-forecast\.css\?v=access-flow-20260902-1/);
+assert.doesNotMatch(loader, /assets\/bar-forecast\.(?:js|css)\?v=exam-tools-20260901-[45]/);
 assert.match(loader, /'bar-forecast': 'forecast'/);
 assert.match(loader, /global\.openBarForecast = deferredFunction\('bar-forecast', 'openBarForecast'\)/);
 assert.match(landing, /'bar-forecast-2026': Object\.freeze\(\{ feature: 'bar-forecast', opener: 'openBarForecast' \}\)/);
 assert.match(landing, /if \(feature === 'bar-forecast'\)[\s\S]*openBarForecast/);
 assert.ok(
-  landing.indexOf("if (feature === 'bar-forecast')") < landing.indexOf('await global.DueDiligencePhase2?.whenAuthReady?.();', landing.indexOf('async function openProtectedFeature')),
-  'signed-out and unresolved sessions must reach the fail-closed preview without waiting on auth',
+  landing.indexOf('await global.DueDiligencePhase2?.whenAuthReady?.();', landing.indexOf('async function openProtectedFeature'))
+    < landing.indexOf("if (feature === 'bar-forecast')"),
+  'Forecast must finish ordinary session restoration before it opens its server-authorized workspace',
 );
+assert.doesNotMatch(landing, /Check admin access|Coming soon/i);
 assert.match(shell, /'#bar-forecast-2026': 'bar-forecast'/);
 
 assert.match(forecast, /const ENDPOINT = '\/admin\/dd2026\/bar-forecast'/);
@@ -103,14 +105,22 @@ assert.match(
   /async function ensureRequiredSetup\(routeHash = location\.hash\)[\s\S]*request\('\/access'[\s\S]*payload\?\.access[\s\S]*adoptAccess\(payload\.access[\s\S]*setupRequired\(access\)[\s\S]*openRequiredSetup\(access, routeHash\)/,
 );
 assert.match(phase4, /ensureProtectedAccess,[\s\S]*ensureRequiredSetup,/);
+assert.match(phase4, /canUseUnlimitedFeature,[\s\S]*openUnlimitedFeatureGate,/);
+assert.match(phase2, /reason !== 'unlimited_feature'[\s\S]*Subscribe to access this feature/);
+assert.doesNotMatch(
+  phase2.match(/function renderNativeView[\s\S]*?function hideNativeView/)?.[0] || '',
+  /commercial release/i,
+);
 assert.doesNotMatch(phase4, /acceptCurrentTerms/);
 assert.match(forecast, /payload\?\.consentAccepted === true/);
-assert.match(forecast, /active paid members, Founding Beta members, and authorized Due Diligence administrators/);
-assert.match(forecast, /server confirms paid, Founding Beta, or administrator access/);
-assert.match(forecast, /renderPreview\(\{ checking: true \}\)/);
+assert.doesNotMatch(forecast, /Coming soon|Check admin access|Checking admin access/i);
+assert.doesNotMatch(forecast, /function renderPreview\b|forecast-workspace-preview\.webp/);
+assert.match(forecast, /function renderAccessProgress\b/);
+assert.match(forecast, /BAR_FORECAST_ACCESS_REQUIRED/);
+assert.match(forecast, /function routeToPlansAndPricing\b/);
 assert.match(
   forecast,
-  /renderPreview\(\{ checking: true \}\);[\s\S]*state\.authorizationOwnerId = ownerId;[\s\S]*requestForecast\(\{ operation: 'status' \}\)/,
+  /renderAccessProgress\([\s\S]*state\.authorizationOwnerId = ownerId;[\s\S]*requestForecast\(\{ operation: 'status' \}\)/,
   'authorization must claim the pending owner before awaiting status',
 );
 assert.match(
@@ -121,10 +131,14 @@ assert.match(
 assert.match(forecast, /async function openForecast\(trigger = null\) \{[\s\S]*ensureRoot\(\);[\s\S]*if \(state\.isOpen\) \{/);
 assert.match(
   forecast,
+  /async function openForecast\(trigger = null\) \{[\s\S]*if \(!runtimeOwnerId\(\) \|\| !runtimeSession\(\)\?\.access_token\) \{[\s\S]*openForecastSignIn\(\);[\s\S]*return true;/,
+  'a direct signed-out Forecast open must use the ordinary sign-in flow before mounting protected UI',
+);
+assert.match(
+  forecast,
   /if \(state\.isOpen\) \{[\s\S]*ownerId !== state\.ownerId[\s\S]*await checkAuthorization\(\)/,
   'an already-open Forecast must recheck a newly restored signed-in owner',
 );
-assert.match(forecast, /recoverAuthorizationAfterAuthReady\(\)/);
 assert.match(forecast, /state\.root\.hidden = true[\s\S]*trigger\.focus\(\{ preventScroll: true \}\)/);
 assert.match(forecast, /event\.key === 'Escape'/);
 assert.match(forecast, /<section class="bf26-page" aria-labelledby="bf26-page-title"/);
@@ -182,12 +196,31 @@ assert.match(forecast, /simulation may be taken anytime/i);
 
 for (const allowedResultField of [
   'Question',
-  'Total grade',
-  'Feedback',
+  'Mock Bar practice score',
+  'Mock Bar coaching',
+  'Performance analytics',
+  'Issue spotting',
+  'Grammar and clarity',
   'Your answer',
   'Suggested answer',
-  'Explanation',
+  'Score rationale',
 ]) assert.match(forecast, new RegExp(allowedResultField, 'i'));
+
+assert.match(forecast, /educational practice diagnostic, not an official Bar grade/i);
+assert.match(forecast, /Issue spotting and grammar help diagnose writing habits; they do not change the 100-point practice score/i);
+assert.match(forecast, /detailed coaching report may take several minutes/i);
+assert.match(forecast, /submissionTimer/);
+assert.match(forecast, /state\.closeButton\.disabled = grading/);
+assert.match(forecast, /Exit unavailable while grading is in progress/);
+assert.match(forecast, /submissionElapsedNode\.setAttribute\('aria-hidden', 'true'\)/);
+assert.match(forecast, /computedTotal !== totalScore/);
+assert.match(forecast, /userAnswer\.includes\(original\)/);
+assert.match(styles, /\.bf26-report-overview/);
+assert.match(styles, /\.bf26-diagnostic-columns/);
+assert.match(styles, /\.bf26-result summary::marker/);
+assert.match(styles, /\.bf26-result-summary-row[\s\S]*display:\s*flex/);
+assert.match(styles, /\.bf26-result-section p[\s\S]*overflow-wrap:\s*anywhere/);
+assert.match(styles, /@media \(max-width: 360px\)[\s\S]*\.bf26-metric-grid/);
 
 assert.match(styles, /data-public-feature="bar-forecast"/);
 assert.match(styles, /@keyframes bf26-radiate/);
@@ -208,6 +241,60 @@ assert.match(styles, /\.bf26-exam\s*\{[\s\S]*height:\s*100%[\s\S]*min-height:\s*
 assert.match(styles, /\.bf26-exam-nav\s*\{[\s\S]*background:\s*#e8f0f7/);
 assert.match(styles, /\.bf26-question-list\s*\{[\s\S]*grid-template-columns:\s*1fr/);
 assert.match(styles, /\.bf26-question-jump\s*\{[\s\S]*border:\s*2px solid #2f6d9f/);
+
+{
+  const pricingCalls = { closes: 0, opens: 0, toasts: 0, fallback: 0 };
+  const pricingContext = vm.createContext({
+    state: {
+      pricingRedirectInProgress: false,
+      returnHash: '#quorum',
+      lastTrigger: null,
+    },
+    ROUTE: '#bar-forecast-2026',
+    global: {
+      DueDiligencePhase4: {
+        openUnlimitedFeatureGate: (routeHash, options) => {
+          pricingCalls.opens += 1;
+          pricingCalls.routeHash = routeHash;
+          pricingCalls.options = options;
+        },
+      },
+      toast: () => { pricingCalls.toasts += 1; },
+      dispatchEvent: () => { pricingCalls.fallback += 1; },
+    },
+    closeForecast: (options) => {
+      pricingCalls.closes += 1;
+      pricingCalls.closeOptions = options;
+      return true;
+    },
+    history: { replaceState: () => { pricingCalls.fallback += 1; } },
+    location: { pathname: '/', search: '', hash: '#bar-forecast-2026' },
+    Event,
+  });
+  vm.runInContext(extractNamedFunction(forecast, 'routeToPlansAndPricing'), pricingContext);
+  assert.equal(vm.runInContext('routeToPlansAndPricing()', pricingContext), true);
+  assert.equal(vm.runInContext('routeToPlansAndPricing()', pricingContext), true);
+  assert.equal(pricingCalls.closeOptions.force, true);
+  assert.equal(pricingCalls.closeOptions.restoreRoute, false);
+  assert.equal(pricingCalls.closes, 1, 'repeated access denials must close Forecast only once');
+  assert.equal(pricingCalls.opens, 1, 'repeated access denials must open Plans & Pricing only once');
+  assert.equal(pricingCalls.routeHash, '#bar-forecast-2026');
+  assert.equal(pricingCalls.options.featureId, 'bar-forecast');
+  assert.equal(pricingCalls.options.backgroundHash, '#quorum');
+  assert.equal(pricingCalls.toasts, 0);
+  assert.equal(pricingCalls.fallback, 0);
+}
+
+{
+  const denialContext = vm.createContext({ Number, String });
+  vm.runInContext(extractNamedFunction(forecast, 'isForecastAccessRequired'), denialContext);
+  denialContext.exact = { status: 403, code: 'BAR_FORECAST_ACCESS_REQUIRED' };
+  denialContext.setup = { status: 403, code: 'BAR_FORECAST_SETUP_REQUIRED' };
+  denialContext.generic = { status: 403, code: 'REQUEST_FAILED' };
+  assert.equal(vm.runInContext('isForecastAccessRequired(exact)', denialContext), true);
+  assert.equal(vm.runInContext('isForecastAccessRequired(setup)', denialContext), false);
+  assert.equal(vm.runInContext('isForecastAccessRequired(generic)', denialContext), false);
+}
 assert.match(styles, /\.bf26-question-jump\[hidden\]\s*\{[\s\S]*display:\s*none !important/);
 assert.match(styles, /\.bf26-exam-workspace\s*\{[\s\S]*grid-template-rows:\s*auto minmax\(360px, 1fr\)/);
 assert.match(styles, /\.bf26-exam-main\s*\{[\s\S]*overflow:\s*hidden[\s\S]*grid-template-rows:\s*auto minmax\(0, 1fr\) auto/);
@@ -240,7 +327,11 @@ assert.match(forecast, /refs\.showAll\.hidden = lastQuestion \|\| nextIndex >= 0
 assert.match(forecast, /refs\.submit\.hidden = !lastQuestion/);
 assert.match(forecast, /state\.viewNode\?\.replaceChildren\(\)/);
 assert.match(forecast, /if \(!closeForecast\(\{ restoreRoute: false \}\)\) recoverBlockedForecastRoute\(\)/);
-assert.doesNotMatch(forecast, /closeForecast\(\{ force: true, restoreRoute: false \}\)/);
+assert.doesNotMatch(
+  extractNamedFunction(forecast, 'submitForecast'),
+  /closeForecast\(\{ force: true, restoreRoute: false \}\)/,
+  'a failed submission must never force-close a member draft',
+);
 assert.match(forecast, /global\.addEventListener\('beforeunload'[\s\S]*state\.view !== 'submitting'[\s\S]*!hasDraftAnswers\(\)/);
 assert.match(forecast, /editor\.addEventListener\('drop'[\s\S]*event\.preventDefault\(\)/);
 assert.match(forecast, /editor\.addEventListener\('blur', \(\) => sanitizeEditorDom\(editor\)\)/);
@@ -253,14 +344,17 @@ assert.match(styles, /@media \(max-width: 620px\)[\s\S]*\.bf26-question-list\s*\
 for (const source of [build, serviceWorker]) {
   assert.match(source, /assets\/bar-forecast\.css/);
   assert.match(source, /assets\/bar-forecast\.js/);
-  assert.match(source, /assets\/bar-forecast\/forecast-workspace-preview\.webp/);
 }
 assert.match(build, /'flag\.svg'/);
-assert.match(html, /assets\/feature-loader\.js[^"\n]*forecast=member-access-20260901-1/);
-assert.match(serviceWorker, /duediligence-shell-20260901-forecast-member-access-1/);
-assert.match(serviceWorker, /assets\/feature-loader\.js[^'\n]*forecast=member-access-20260901-1/);
-assert.match(serviceWorker, /assets\/bar-forecast\.js\?v=exam-tools-20260901-5/);
-assert.doesNotMatch(serviceWorker, /assets\/bar-forecast\.js\?v=exam-tools-20260901-4/);
+assert.match(html, /assets\/feature-loader\.js[^"\n]*forecast=access-flow-20260902-1/);
+assert.match(html, /assets\/feature-loader\.js[^"\n]*coaching=report-20260901-1/);
+assert.match(serviceWorker, /duediligence-shell-unlimited-access-20260902-1/);
+assert.match(serviceWorker, /assets\/feature-loader\.js[^'\n]*forecast=access-flow-20260902-1/);
+assert.match(serviceWorker, /assets\/feature-loader\.js[^'\n]*coaching=report-20260901-1/);
+assert.match(serviceWorker, /assets\/bar-forecast\.js\?v=access-flow-20260902-1/);
+assert.match(serviceWorker, /assets\/bar-forecast\.js[^'\n]*unlimited=feature-access-20260902-1/);
+assert.match(serviceWorker, /assets\/bar-forecast\.css\?v=access-flow-20260902-1/);
+assert.doesNotMatch(serviceWorker, /assets\/bar-forecast\.(?:js|css)\?v=exam-tools-20260901-[45]/);
 assert.match(serviceWorker, /assets\/icons\/navigation\/flag\.svg/);
 assert.match(qaHarness, /dataset\.ddBarForecastQa = 'synthetic'/);
 assert.match(qaHarness, /__DD_BAR_FORECAST_SYNTHETIC_QA__ = '2026-09-01'/);
@@ -280,6 +374,252 @@ function extractNamedFunction(source, name) {
     if (depth === 0) return source.slice(start, index + 1);
   }
   throw new Error(`Unbalanced function ${name}.`);
+}
+
+{
+  const accessClassifier = vm.createContext({});
+  vm.runInContext(extractNamedFunction(forecast, 'isForecastAccessRequired'), accessClassifier);
+  accessClassifier.exactDenial = { status: 403, code: 'BAR_FORECAST_ACCESS_REQUIRED' };
+  accessClassifier.otherForbidden = { status: 403, code: 'PROFILE_COMPLETION_REQUIRED' };
+  accessClassifier.outage = { status: 503, code: 'BAR_FORECAST_UNAVAILABLE' };
+  assert.equal(vm.runInContext('isForecastAccessRequired(exactDenial)', accessClassifier), true);
+  assert.equal(vm.runInContext('isForecastAccessRequired(otherForbidden)', accessClassifier), false);
+  assert.equal(vm.runInContext('isForecastAccessRequired(outage)', accessClassifier), false);
+
+  const pricingRouteSource = extractNamedFunction(forecast, 'routeToPlansAndPricing');
+  assert.match(pricingRouteSource, /if \(state\.pricingRedirectInProgress\) return true;[\s\S]*state\.pricingRedirectInProgress = true;/,
+    'repeated authorization events must not open duplicate pricing views');
+  assert.match(pricingRouteSource, /closeForecast\([\s\S]*restoreRoute:\s*false/,
+    'pricing navigation must close the protected Forecast surface without restoring its route');
+  assert.match(pricingRouteSource, /openUnlimitedFeatureGate\(ROUTE/,
+    'the exact unpaid denial must open the shared unlimited-feature subscription flow');
+}
+
+async function runLandingForecastFlow(authenticated) {
+  const observations = {
+    authReady: 0,
+    authPrompts: 0,
+    loads: 0,
+    openers: 0,
+    genericProtectedChecks: 0,
+  };
+  const state = { lastActivatedHash: '' };
+  const context = vm.createContext({
+    state,
+    global: {
+      DueDiligencePhase2: {
+        whenAuthReady: async () => { observations.authReady += 1; },
+        openSignIn: () => { observations.authPrompts += 1; },
+      },
+      DueDiligencePhase4: {
+        requireAuthentication: () => {
+          if (authenticated) return true;
+          observations.authPrompts += 1;
+          return false;
+        },
+        ensureProtectedAccess: async () => {
+          observations.genericProtectedChecks += 1;
+          return true;
+        },
+        ensureUnlimitedFeatureAccess: async () => true,
+      },
+    },
+    currentSession: () => (authenticated ? { access_token: 'test-session' } : null),
+    loadFeature: async () => { observations.loads += 1; return true; },
+    invokePublicOpener: async () => { observations.openers += 1; return true; },
+    showApplication: () => {},
+  });
+  vm.runInContext(extractNamedFunction(landing, 'openProtectedFeature'), context);
+  const result = await vm.runInContext("openProtectedFeature('bar-forecast')", context);
+  return { observations, result, state };
+}
+
+{
+  const signedOutForecast = await runLandingForecastFlow(false);
+  assert.equal(signedOutForecast.observations.authReady, 1);
+  assert.equal(signedOutForecast.observations.authPrompts, 1,
+    'signed-out Forecast navigation must invoke the ordinary sign-in flow exactly once');
+  assert.equal(signedOutForecast.observations.loads, 0,
+    'signed-out navigation must not load the protected Forecast runtime');
+  assert.equal(signedOutForecast.observations.openers, 0,
+    'signed-out navigation must not open any Forecast surface');
+  assert.equal(signedOutForecast.result, false);
+
+  const signedInForecast = await runLandingForecastFlow(true);
+  assert.equal(signedInForecast.observations.authReady, 1);
+  assert.equal(signedInForecast.observations.authPrompts, 0);
+  assert.equal(signedInForecast.observations.loads, 1);
+  assert.equal(signedInForecast.observations.openers, 1);
+  assert.equal(signedInForecast.observations.genericProtectedChecks, 0,
+    'Forecast eligibility must remain owned by its dedicated fail-closed server gate');
+  assert.equal(signedInForecast.state.lastActivatedHash, 'bar-forecast-2026');
+  assert.equal(signedInForecast.result, true);
+}
+
+const GRAMMAR_GUIDANCE_FOR_TEST = Object.freeze({
+  punctuation: Object.freeze({ label: 'Punctuation', guidance: 'Review punctuation in this exact excerpt.' }),
+  capitalization: Object.freeze({ label: 'Capitalization', guidance: 'Review capitalization in this exact excerpt.' }),
+  agreement: Object.freeze({ label: 'Agreement', guidance: 'Check subject–verb or pronoun agreement in this exact excerpt.' }),
+  spelling: Object.freeze({ label: 'Spelling', guidance: 'Review spelling in this exact excerpt.' }),
+  sentence_structure: Object.freeze({ label: 'Sentence structure', guidance: 'Review sentence boundaries and structure without changing the legal meaning.' }),
+  wordiness: Object.freeze({ label: 'Wordiness', guidance: 'Shorten this excerpt while preserving every legal proposition.' }),
+  professional_tone: Object.freeze({ label: 'Professional tone', guidance: 'Use formal legal phrasing without changing the substance.' }),
+});
+
+{
+  const questions = Array.from({ length: 20 }, (_, index) => ({
+    id: `coaching-result-${index + 1}`,
+    number: index + 1,
+    prompt: `Question ${index + 1}`,
+  }));
+  const answers = new Map(questions.map((question) => [
+    question.id,
+    `Yes. Submitted answer ${question.number} states the rule and applies every material fact carefully.`,
+  ]));
+  const payload = {
+    totalScore: 80,
+    maxScore: 100,
+    analytics: {
+      questionCount: 20,
+      averageScore: 4,
+      issueSpottingAverage: 3.5,
+      grammarAverage: 4.5,
+      diagnosticMaxScore: 5,
+      performanceBands: { strong: 20, developing: 0, needsFocus: 0 },
+    },
+    results: questions.map((question) => ({
+      questionId: question.id,
+      number: question.number,
+      score: 4,
+      maxScore: 5,
+      feedback: 'The answer is responsive and legally focused.',
+      userAnswer: answers.get(question.id),
+      suggestedAnswer: 'Yes. The curated answer states and applies the controlling doctrine.',
+      explanation: 'The answer is substantially correct with only a minor omission.',
+      mockBarCoaching: {
+        strength: 'The conclusion is direct.',
+        priorityImprovement: 'Make the factual application more explicit.',
+        nextStep: 'Connect each decisive fact to one element of the rule.',
+      },
+      grammar: {
+        score: 4.5,
+        maxScore: 5,
+        corrections: [{
+          original: `Yes. Submitted answer ${question.number}`,
+          category: 'punctuation',
+          guidance: 'Review punctuation in this exact excerpt.',
+        }],
+      },
+      issueSpotting: {
+        score: 3.5,
+        maxScore: 5,
+      identified: ['The curated answer states and applies the controlling doctrine.'],
+      missed: ['controlling doctrine'],
+        coaching: 'Frame the issue before stating the rule.',
+      },
+    })),
+  };
+  const resultContext = vm.createContext({
+    state: { questions, answers },
+    REQUIRED_QUESTION_COUNT: 20,
+    GRAMMAR_CORRECTION_GUIDANCE: GRAMMAR_GUIDANCE_FOR_TEST,
+    Object,
+    Number,
+    Set,
+    Map,
+    Error,
+  });
+  vm.runInContext(extractNamedFunction(forecast, 'normalizeResults'), resultContext);
+  resultContext.payload = payload;
+  const normalized = vm.runInContext('normalizeResults(payload)', resultContext);
+  assert.equal(normalized.totalScore, 80);
+  assert.equal(normalized.analytics.grammarAverage, 4.5);
+  assert.equal(normalized.results[0].mockBarCoaching.nextStep.includes('decisive fact'), true);
+
+  resultContext.payload = structuredClone(payload);
+  resultContext.payload.totalScore = 79;
+  assert.throws(() => vm.runInContext('normalizeResults(payload)', resultContext), /analytics failed its integrity check/i);
+
+  resultContext.payload = structuredClone(payload);
+  resultContext.payload.results[0].grammar.corrections[0].original = 'invented source wording';
+  assert.throws(() => vm.runInContext('normalizeResults(payload)', resultContext), /did not match the submitted answer/i);
+
+  resultContext.payload = structuredClone(payload);
+  resultContext.payload.totalScore = '80';
+  assert.throws(() => vm.runInContext('normalizeResults(payload)', resultContext), /grade response failed its integrity check/i);
+
+  resultContext.payload = structuredClone(payload);
+  resultContext.payload.results[0].grammar.corrections[0].category = 'change_legal_result';
+  assert.throws(() => vm.runInContext('normalizeResults(payload)', resultContext), /did not match the submitted answer/i);
+
+  resultContext.payload = structuredClone(payload);
+  resultContext.payload.results[0].grammar.corrections[0].guidance = 'Rewrite the legal conclusion.';
+  assert.throws(() => vm.runInContext('normalizeResults(payload)', resultContext), /did not match the submitted answer/i);
+
+  resultContext.payload = structuredClone(payload);
+  resultContext.payload.results[0].issueSpotting.missed = ['An invented issue absent from the curated answer.'];
+  assert.throws(() => vm.runInContext('normalizeResults(payload)', resultContext), /curated-source integrity check/i);
+
+  resultContext.payload = structuredClone(payload);
+  resultContext.payload.results[0].issueSpotting.missed = [
+    `${questions[0].prompt.slice(-8)}\n${payload.results[0].suggestedAnswer.slice(0, 8)}`,
+  ];
+  assert.throws(() => vm.runInContext('normalizeResults(payload)', resultContext), /curated-source integrity check/i);
+
+  resultContext.payload = structuredClone(payload);
+  resultContext.payload.results[0].issueSpotting.missed = [
+    resultContext.payload.results[0].issueSpotting.identified[0],
+  ];
+  assert.throws(() => vm.runInContext('normalizeResults(payload)', resultContext), /both identified and missed/i);
+
+  resultContext.payload = structuredClone(payload);
+  resultContext.payload.analytics.grammarAverage = '4.5';
+  assert.throws(() => vm.runInContext('normalizeResults(payload)', resultContext), /analytics failed its integrity check/i);
+}
+
+{
+  const questions = Array.from({ length: 20 }, (_, index) => ({
+    id: `SYNTHETIC-UI-${String(index + 1).padStart(2, '0')}`,
+    number: index + 1,
+    prompt: `Synthetic interface-test question ${index + 1} includes notice and hearing for Mock Permit ${index + 1}.`,
+  }));
+  const answers = new Map(questions.map((question) => [
+    question.id,
+    'Yes. This synthetic answer states the fictional rule, applies every decisive notice and hearing fact, and reaches a clear reasoned conclusion.',
+  ]));
+  const qaContext = vm.createContext({
+    questions,
+    consentAccepted: true,
+    delay: async () => {},
+    Map,
+    Number,
+    Object,
+  });
+  vm.runInContext(extractNamedFunction(qaHarness, 'request'), qaContext);
+  qaContext.submitOptions = {
+    body: {
+      operation: 'submit',
+      subject: 'Political and Public International Law',
+      answers: [...answers].map(([questionId, answer]) => ({ questionId, answer })),
+    },
+  };
+  const qaPayload = await vm.runInContext("request('', submitOptions)", qaContext);
+  const normalizeContext = vm.createContext({
+    state: { questions, answers },
+    REQUIRED_QUESTION_COUNT: 20,
+    GRAMMAR_CORRECTION_GUIDANCE: GRAMMAR_GUIDANCE_FOR_TEST,
+    Object,
+    Number,
+    Set,
+    Map,
+    Error,
+  });
+  vm.runInContext(extractNamedFunction(forecast, 'normalizeResults'), normalizeContext);
+  normalizeContext.payload = qaPayload;
+  const normalizedQa = vm.runInContext('normalizeResults(payload)', normalizeContext);
+  assert.equal(normalizedQa.results.length, 20);
+  assert.equal(normalizedQa.results[0].grammar.corrections[0].category, 'punctuation');
+  assert.equal(normalizedQa.results[0].issueSpotting.identified[0], 'notice and hearing');
 }
 
 // Forecast owns the background isolation while it is open. A mandatory global
@@ -384,8 +724,15 @@ function authorizationHarness(options = {}) {
     disclaimers: 0,
     pickers: 0,
     setupChecks: 0,
+    progressViews: 0,
+    pricingRoutes: 0,
+    closes: 0,
+    toasts: 0,
+    signIns: 0,
+    accessErrors: 0,
   };
   const responses = [];
+  const setupResponses = [];
   const context = vm.createContext({
     ROUTE: '#bar-forecast-2026',
     state,
@@ -393,20 +740,74 @@ function authorizationHarness(options = {}) {
       DueDiligencePhase4: {
         ensureRequiredSetup: async () => {
           observations.setupChecks += 1;
+          if (options.deferSetup === true) {
+            let resolve;
+            let reject;
+            const promise = new Promise((accept, deny) => {
+              resolve = accept;
+              reject = deny;
+            });
+            setupResponses.push({ promise, resolve, reject });
+            return promise;
+          }
           return options.setupReady !== false;
         },
       },
+      toast: () => { observations.toasts += 1; },
     },
     runtimeOwnerId: () => currentOwnerId,
     runtimeSession: () => (currentOwnerId
       ? { access_token: 'test-token', user: { id: currentOwnerId } }
       : null),
-    renderPreview: () => {},
+    renderAccessProgress: () => { observations.progressViews += 1; },
+    renderAccessError: () => { observations.accessErrors += 1; },
+    routeToPlansAndPricing: () => {
+      observations.pricingRoutes += 1;
+      state.isOpen = false;
+      state.ownerId = '';
+      state.authorizationOwnerId = '';
+      return true;
+    },
+    isForecastAccessRequired: (error) => (
+      Number(error?.status) === 403
+      && String(error?.code || '') === 'BAR_FORECAST_ACCESS_REQUIRED'
+    ),
+    openForecastSignIn: () => { observations.signIns += 1; return true; },
+    handleForecastAccessInterruption: (error) => {
+      if (Number(error?.status) === 401
+          || ['AUTHENTICATION_REQUIRED', 'INVALID_SESSION'].includes(String(error?.code || ''))) {
+        observations.closes += 1;
+        observations.signIns += 1;
+        state.isOpen = false;
+        state.ownerId = '';
+        state.authorizationOwnerId = '';
+        return true;
+      }
+      if (Number(error?.status) === 403
+          && String(error?.code || '') === 'BAR_FORECAST_ACCESS_REQUIRED') {
+        observations.pricingRoutes += 1;
+        state.isOpen = false;
+        state.ownerId = '';
+        state.authorizationOwnerId = '';
+        return true;
+      }
+      return false;
+    },
+    closeForecast: () => {
+      observations.closes += 1;
+      state.isOpen = false;
+      return true;
+    },
+    setStatus: () => {},
     requestForecast: () => {
       observations.requests += 1;
       let resolve;
-      const promise = new Promise((accept) => { resolve = accept; });
-      responses.push({ promise, resolve });
+      let reject;
+      const promise = new Promise((accept, deny) => {
+        resolve = accept;
+        reject = deny;
+      });
+      responses.push({ promise, resolve, reject });
       return promise;
     },
     renderSubjectPicker: () => { observations.pickers += 1; },
@@ -426,6 +827,7 @@ function authorizationHarness(options = {}) {
     state,
     observations,
     responses,
+    setupResponses,
     setOwner: (ownerId) => { currentOwnerId = ownerId; },
   };
 }
@@ -495,6 +897,45 @@ const readyAccessEvent = Object.freeze({
   assert.equal(setupChecks.routeHash, '#bar-forecast-2026');
 }
 
+for (const entitlement of [
+  { label: 'administrator', consentAccepted: false, expectedView: 'disclaimer' },
+  { label: 'active paid member', consentAccepted: true, expectedView: 'picker' },
+  { label: 'active founding_beta_2026 member', consentAccepted: false, expectedView: 'disclaimer' },
+]) {
+  const eligible = authorizationHarness();
+  const authorization = vm.runInContext('checkAuthorization()', eligible.context);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(eligible.observations.requests, 1,
+    `${entitlement.label} must pass through the dedicated server status gate`);
+  eligible.responses[0].resolve({
+    authorized: true,
+    consentAccepted: entitlement.consentAccepted,
+  });
+  assert.equal(await authorization, true);
+  assert.equal(eligible.observations.pricingRoutes, 0);
+  assert.equal(eligible.observations.disclaimers, entitlement.expectedView === 'disclaimer' ? 1 : 0,
+    `${entitlement.label} must receive the one-time Forecast notice when consent is missing`);
+  assert.equal(eligible.observations.pickers, entitlement.expectedView === 'picker' ? 1 : 0,
+    `${entitlement.label} must reach the subject picker when consent already exists`);
+}
+
+{
+  const unpaid = authorizationHarness();
+  const authorization = vm.runInContext('checkAuthorization()', unpaid.context);
+  await new Promise((resolve) => setImmediate(resolve));
+  const denial = Object.assign(new Error('Forecast membership required.'), {
+    status: 403,
+    code: 'BAR_FORECAST_ACCESS_REQUIRED',
+  });
+  unpaid.responses[0].reject(denial);
+  await authorization;
+  assert.equal(unpaid.observations.pricingRoutes, 1,
+    'the exact unpaid Forecast denial must route to Plans & Pricing exactly once');
+  assert.equal(unpaid.observations.disclaimers, 0);
+  assert.equal(unpaid.observations.pickers, 0,
+    'an unpaid account must never receive protected subject content');
+}
+
 const sameOwner = authorizationHarness();
 const pendingAuthorization = vm.runInContext('checkAuthorization()', sameOwner.context);
 assert.equal(sameOwner.state.authorizationOwnerId, 'admin-a');
@@ -521,40 +962,52 @@ assert.equal(
 vm.runInContext('handleForecastAccessChange({ detail: readyAccessEvent })', queuedAccess.context);
 assert.equal(queuedAccess.state.authorizationRetryRequested, true);
 assert.equal(queuedAccess.observations.requests, 1, 'the access event must not overlap the pending request');
-queuedAccess.responses[0].resolve({ authorized: false, consentAccepted: false });
+queuedAccess.responses[0].reject(Object.assign(new Error('Transient status failure.'), {
+  status: 503,
+  code: 'BAR_FORECAST_UNAVAILABLE',
+}));
 assert.equal(await firstQueuedAuthorization, true);
 await new Promise((resolve) => setImmediate(resolve));
-assert.equal(queuedAccess.observations.requests, 2, 'one setup-ready access event must queue one retry');
+assert.equal(queuedAccess.observations.requests, 2,
+  'one setup-ready access event must queue one retry after a transient status failure');
+assert.equal(queuedAccess.observations.pricingRoutes, 0,
+  'a transient failure during an access refresh must never become a pricing redirect');
 queuedAccess.responses[1].resolve({ authorized: true, consentAccepted: false });
 await new Promise((resolve) => setImmediate(resolve));
 assert.equal(queuedAccess.state.ownerId, 'admin-a');
 assert.equal(queuedAccess.observations.requests, 2, 'the queued retry must never loop');
-
-{
-  let restoredOwner = '';
-  let resolveReady;
-  let checks = 0;
-  const ready = new Promise((resolve) => { resolveReady = resolve; });
-  const authReadyContext = vm.createContext({
-    state: { isOpen: true, ownerId: '', authorizationOwnerId: '' },
-    global: { DueDiligencePhase2: { whenAuthReady: () => ready } },
-    runtimeOwnerId: () => restoredOwner,
-    checkAuthorization: () => { checks += 1; },
-  });
-  vm.runInContext(extractNamedFunction(forecast, 'recoverAuthorizationAfterAuthReady'), authReadyContext);
-  vm.runInContext('recoverAuthorizationAfterAuthReady()', authReadyContext);
-  restoredOwner = 'restored-admin';
-  resolveReady();
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(checks, 1, 'a missed session event must be recovered once auth restoration finishes');
-}
 
 const setupBlocked = authorizationHarness({ setupReady: false });
 assert.equal(await vm.runInContext('checkAuthorization()', setupBlocked.context), true);
 assert.equal(setupBlocked.observations.setupChecks, 1);
 assert.equal(setupBlocked.observations.requests, 0, 'setup-required accounts must not reach Forecast status');
 assert.equal(setupBlocked.observations.disclaimers, 0, 'Forecast consent must stay closed during setup');
+assert.equal(setupBlocked.observations.pickers, 0, 'Forecast subject content must stay closed during setup');
+assert.equal(setupBlocked.observations.pricingRoutes, 0,
+  'required account setup must not be mistaken for an unpaid subscription');
+assert.equal(setupBlocked.observations.closes, 1,
+  'the Forecast surface must close while the required setup flow owns the screen');
+assert.equal(setupBlocked.observations.toasts, 1);
 assert.equal(setupBlocked.state.ownerId, '');
+
+{
+  const unavailable = authorizationHarness();
+  const authorization = vm.runInContext('checkAuthorization()', unavailable.context);
+  await new Promise((resolve) => setImmediate(resolve));
+  const outage = Object.assign(new Error('Forecast temporarily unavailable.'), {
+    status: 503,
+    code: 'BAR_FORECAST_UNAVAILABLE',
+  });
+  unavailable.responses[0].reject(outage);
+  await authorization;
+  assert.equal(unavailable.observations.pricingRoutes, 0,
+    'a Forecast service failure must not misroute an eligible member to pricing');
+  assert.equal(unavailable.observations.disclaimers, 0);
+  assert.equal(unavailable.observations.pickers, 0,
+    'a failed authorization request must never expose protected Forecast content');
+  assert.equal(unavailable.observations.accessErrors, 1,
+    'a service failure must remain a retryable Forecast error instead of an upsell');
+}
 
 const signedOut = authorizationHarness();
 const staleSignedOutAuthorization = vm.runInContext('checkAuthorization()', signedOut.context);
@@ -563,6 +1016,8 @@ signedOut.setOwner('');
 vm.runInContext('handleForecastSessionChange()', signedOut.context);
 assert.equal(signedOut.observations.aborts, 1, 'sign-out must abort pending authorization');
 assert.equal(signedOut.observations.requests, 1, 'sign-out must not begin another status request');
+assert.equal(signedOut.observations.closes, 1, 'sign-out must close the protected Forecast surface');
+assert.equal(signedOut.observations.signIns, 1, 'sign-out must return to the ordinary sign-in flow');
 signedOut.responses[0].resolve({ authorized: true, consentAccepted: true });
 assert.equal(await staleSignedOutAuthorization, false);
 assert.equal(signedOut.state.ownerId, '', 'a stale response must not restore the signed-out owner');
@@ -584,9 +1039,49 @@ await new Promise((resolve) => setImmediate(resolve));
 assert.equal(changedOwner.state.ownerId, 'admin-b');
 assert.equal(changedOwner.observations.disclaimers, 1);
 
-assert.equal(
-  createHash('sha256').update(preview).digest('hex').toUpperCase(),
-  '8D3A68F68AD252EB88AB8DABDFF2A57DC41EF603A7948A79917EF73DE9BBD4B3',
+const changedOwnerDuringSetup = authorizationHarness({ deferSetup: true });
+const staleSetupAuthorization = vm.runInContext('checkAuthorization()', changedOwnerDuringSetup.context);
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(changedOwnerDuringSetup.setupResponses.length, 1,
+  'the first owner must be waiting on its independent setup preflight');
+assert.equal(changedOwnerDuringSetup.observations.requests, 0,
+  'Forecast status must remain closed until setup preflight completes');
+changedOwnerDuringSetup.setOwner('admin-b');
+vm.runInContext('handleForecastSessionChange()', changedOwnerDuringSetup.context);
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(changedOwnerDuringSetup.setupResponses.length, 2,
+  'an account switch during setup must start one setup check for the new owner');
+changedOwnerDuringSetup.context.readyAccessEvent = readyAccessEvent;
+vm.runInContext(
+  'handleForecastAccessChange({ detail: readyAccessEvent })',
+  changedOwnerDuringSetup.context,
 );
+assert.equal(changedOwnerDuringSetup.state.authorizationRetryRequested, true,
+  'the new owner may independently queue its setup-ready authorization retry');
+changedOwnerDuringSetup.setupResponses[0].reject(Object.assign(new Error('Old session expired.'), {
+  status: 401,
+  code: 'INVALID_SESSION',
+}));
+assert.equal(await staleSetupAuthorization, false);
+assert.equal(changedOwnerDuringSetup.state.isOpen, true,
+  'a stale setup failure must not close the new owner’s Forecast surface');
+assert.equal(changedOwnerDuringSetup.observations.closes, 0,
+  'a stale setup failure must not invoke interruption recovery for the new owner');
+assert.equal(changedOwnerDuringSetup.observations.signIns, 0,
+  'a stale setup failure must not reopen sign-in over the new owner');
+assert.equal(changedOwnerDuringSetup.state.authorizationOwnerId, 'admin-b',
+  'the stale owner’s finally block must preserve the new authorization owner');
+assert.equal(changedOwnerDuringSetup.state.authorizationRetryRequested, true,
+  'the stale owner’s finally block must preserve the new owner’s retry flag');
+changedOwnerDuringSetup.setupResponses[1].resolve(true);
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(changedOwnerDuringSetup.observations.requests, 1,
+  'only the new owner may advance from setup into Forecast status');
+changedOwnerDuringSetup.responses[0].resolve({ authorized: true, consentAccepted: false });
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(changedOwnerDuringSetup.state.ownerId, 'admin-b');
+assert.equal(changedOwnerDuringSetup.observations.disclaimers, 1);
+assert.equal(changedOwnerDuringSetup.observations.requests, 1,
+  'a successful new-owner authorization must consume, not loop, its queued retry');
 
 console.log('2026 Bar Forecast frontend contract checks passed.');

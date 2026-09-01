@@ -1771,6 +1771,31 @@
       </div>`;
   }
 
+  function unlimitedFeatureActionContext() {
+    if (state.nativeViewMode !== 'action'
+        || state.nativeViewContext?.reason !== 'unlimited_feature') return null;
+    const targetHash = String(state.nativeViewContext?.targetHash || '').trim();
+    if (!['#bar-feels', '#bar-forecast-2026'].includes(targetHash)) return null;
+    return {
+      featureId: String(state.nativeViewContext?.featureId || '').trim(),
+      featureLabel: String(state.nativeViewContext?.featureLabel || 'Feature').trim(),
+      targetHash,
+    };
+  }
+
+  function unlimitedFeatureAccessActive(access) {
+    return global.DueDiligencePhase4?.canUseUnlimitedFeature?.(access) === true;
+  }
+
+  function returnToUnlimitedFeature(reason = 'access-active') {
+    const context = unlimitedFeatureActionContext();
+    if (!context) return false;
+    hideNativeView({ reason });
+    history.replaceState({}, '', `${location.pathname}${location.search}${context.targetHash}`);
+    global.dispatchEvent(new Event('popstate'));
+    return true;
+  }
+
   function pricingContent() {
     const subjectReviewAction = state.nativeViewMode === 'action'
       && state.nativeViewContext?.reason === 'subject_reveal_review';
@@ -2066,6 +2091,7 @@
     const nativeOverlay = document.getElementById('dd2-native-view');
     const subjectReviewAction = actionMode
       && state.nativeViewContext?.reason === 'subject_reveal_review';
+    const unlimitedFeatureAction = unlimitedFeatureActionContext();
     if (nativeOverlay) {
       nativeOverlay.dataset.nativeView = view;
       nativeOverlay.dataset.nativeMode = state.nativeViewMode;
@@ -2076,10 +2102,12 @@
     }
     document.getElementById('dd2-native-kicker').textContent = subjectReviewAction
       ? 'Syllabus-Based Review'
-      : definition[0];
+      : unlimitedFeatureAction?.featureLabel || definition[0];
     document.getElementById('dd2-native-title').textContent = subjectReviewAction
       ? 'Paid access for protected review material'
-      : definition[1];
+      : unlimitedFeatureAction
+        ? 'Subscribe to access this feature'
+        : definition[1];
     const nativeMeta = document.getElementById('dd2-native-meta');
     if (nativeMeta) {
       nativeMeta.hidden = true;
@@ -2090,7 +2118,9 @@
     const backButton = document.getElementById('dd2-native-back');
     if (closeButton) closeButton.setAttribute('aria-label', subjectReviewAction
       ? 'Close paid access options and return to your answer'
-      : 'Close');
+      : unlimitedFeatureAction
+        ? 'Back'
+        : 'Close');
     if (backButton) backButton.textContent = subjectReviewAction ? 'Back to my answer' : 'Back';
     setOverlay(true, 'dd2-native-view', { focusOrigin: options.focusOrigin });
     bindNativeViewHandlers(view, viewSequence);
@@ -2531,9 +2561,12 @@
     }
     const subjectReviewAction = state.nativeViewMode === 'action'
       && state.nativeViewContext?.reason === 'subject_reveal_review';
+    const unlimitedFeatureAction = unlimitedFeatureActionContext();
     const alreadyUnlimited = subjectReviewAction
       ? global.DueDiligencePhase4?.canRevealSubjectReview?.(access) === true
-      : access?.unlimited === true;
+      : unlimitedFeatureAction
+        ? unlimitedFeatureAccessActive(access)
+        : access?.unlimited === true;
     state.pricingSnapshot = pricing;
     state.selectedPricingPlan = null;
     state.selectedPaymentMethod = null;
@@ -2556,7 +2589,9 @@
           showEntry({
             allowDismiss: true,
             routeBound: true,
-            returnHash: subjectReviewAction ? '#subject-matter' : '#pricing',
+            returnHash: subjectReviewAction
+              ? '#subject-matter'
+              : unlimitedFeatureAction?.targetHash || '#pricing',
           });
           return;
         }
@@ -2631,6 +2666,9 @@
     }
     state.selectedPricingPlan = plan;
     state.selectedPaymentMethod = method;
+    const subjectReviewAction = state.nativeViewMode === 'action'
+      && state.nativeViewContext?.reason === 'subject_reveal_review';
+    const unlimitedFeatureAction = unlimitedFeatureActionContext();
     if (embedded && !state.session?.access_token) {
       host.innerHTML = `
         <section class="dd2-payment-panel dd2-payment-panel-regular" aria-labelledby="dd2-payment-title">
@@ -2640,12 +2678,14 @@
         </section>`;
       document.getElementById('dd2-payment-sign-in')?.addEventListener('click', () => {
         hideNativeView({ reason: 'authentication-required' });
-        showEntry({ allowDismiss: true, routeBound: true, returnHash: '#pricing' });
+        showEntry({
+          allowDismiss: true,
+          routeBound: true,
+          returnHash: unlimitedFeatureAction?.targetHash || '#pricing',
+        });
       });
       return;
     }
-    const subjectReviewAction = state.nativeViewMode === 'action'
-      && state.nativeViewContext?.reason === 'subject_reveal_review';
     const planAmount = formatPhp(plan.priceCentavos, { alwaysDecimals: true });
     const rollingTerm = plan.entitlementMode === 'rolling_days';
     const termCopy = rollingTerm
@@ -2891,6 +2931,7 @@
     const viewSequence = state.nativeViewSequence;
     const subjectReviewAction = state.nativeViewMode === 'action'
       && state.nativeViewContext?.reason === 'subject_reveal_review';
+    const unlimitedFeatureAction = unlimitedFeatureActionContext();
     const submit = document.getElementById('dd2-payment-submit');
     const plan = state.selectedPricingPlan;
     const paymentMethod = state.selectedPaymentMethod;
@@ -2904,7 +2945,11 @@
     }
     if (!state.session?.access_token) {
       hideNativeView({ reason: 'authentication-required' });
-      showEntry({ allowDismiss: true, routeBound: true, returnHash: '#pricing' });
+      showEntry({
+        allowDismiss: true,
+        routeBound: true,
+        returnHash: unlimitedFeatureAction?.targetHash || '#pricing',
+      });
       return;
     }
     const proof = document.getElementById('dd2-payment-proof')?.files?.[0]
@@ -2932,6 +2977,8 @@
         submissionDraft: { planCode: plan.planCode },
       });
       const access = await global.DueDiligencePhase4?.refreshAccess?.({ force: true, enforce: false }).catch(() => null);
+      const unlimitedFeatureReady = Boolean(unlimitedFeatureAction)
+        && unlimitedFeatureAccessActive(access);
       state.selectedPaymentProof = null;
       state.paymentQrReady = false;
       if (state.nativeViewSequence !== viewSequence || state.nativeView !== 'pricing') {
@@ -2950,11 +2997,20 @@
           ${subjectReviewAction ? '<p>Provisional access lets you continue practicing while payment is reviewed; Reveal Answer unlocks only after payment is verified.</p>' : ''}
           ${access?.entitlementEndsAt && !subjectReviewAction ? `<p><strong>Provisional access through:</strong> ${escapeHtml(manilaDate(access.entitlementEndsAt, { includeTime: true }))} Philippine time</p>` : ''}
           <p>You can review the verification state in your Profile.</p>
-          <button class="dd2-button dd2-button-primary" id="dd2-payment-continue" type="button">${subjectReviewAction ? 'Return to my answer' : 'Continue to Home'}</button>
+          <button class="dd2-button dd2-button-primary" id="dd2-payment-continue" type="button">${subjectReviewAction
+    ? 'Return to my answer'
+    : unlimitedFeatureAction
+      ? unlimitedFeatureReady ? 'Open feature' : 'Back'
+      : 'Continue to Home'}</button>
         </section>`;
       document.getElementById('dd2-payment-continue')?.addEventListener('click', () => {
         if (subjectReviewAction) {
           closeNativeView('payment-success');
+          return;
+        }
+        if (unlimitedFeatureAction) {
+          if (unlimitedFeatureReady) returnToUnlimitedFeature('payment-success');
+          else closeNativeView('payment-success');
           return;
         }
         hideNativeView({ reason: 'payment-success' });
@@ -3034,10 +3090,15 @@
       global.DueDiligencePhase4?.adoptAccess?.(access, { enforce: false });
       const subjectReviewAction = state.nativeViewMode === 'action'
         && state.nativeViewContext?.reason === 'subject_reveal_review';
+      const unlimitedFeatureAction = unlimitedFeatureActionContext();
       if (subjectReviewAction
           && global.DueDiligencePhase4?.canRevealSubjectReview?.(access) === true) {
         global.toast?.('Review access is active. Choose Reveal Answer again.', 'ok');
         closeNativeView('access-active');
+        return;
+      }
+      if (unlimitedFeatureAction && unlimitedFeatureAccessActive(access)) {
+        returnToUnlimitedFeature('access-active');
         return;
       }
       renderCommercialPlanCards(plansPayload, access);

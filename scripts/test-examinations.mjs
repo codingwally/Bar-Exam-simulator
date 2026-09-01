@@ -54,12 +54,14 @@ assert.match(html, /id="spa-community"[\s\S]*<summary>Study Features<\/summary>[
 assert.match(html, /id="spa-bar-feels"[^>]*data-public-feature="bar-feels"[^>]*>Bar Exam Simulation<\/button>/);
 assert.doesNotMatch(html, /menu-premium-badge/);
 assert.match(html, /function openSubjectMatterMenu\(\)[\s\S]*openPerSubject\(\)/);
-assert.match(html, /function openPremiumBarFeels\(options = \{\}\)[\s\S]*refreshAccess\(\)[\s\S]*restoreRoute\?\.\('bar_feels'[\s\S]*openBarFeels\(\)/);
+assert.match(html, /function openPremiumBarFeels\(options = \{\}\)[\s\S]*ensureUnlimitedFeatureAccess\('#bar-feels'[\s\S]*restoreRoute\?\.\('bar_feels'[\s\S]*openBarFeels\(\)/);
 assert.doesNotMatch(
   html.match(/async function openPremiumBarFeels\(options = \{\}\) \{[\s\S]*?\n\}/)?.[0] || '',
   /planCode === 'premium'|subscription\.status === 'active'|openView\?\.\('pricing'\)/,
   'Bar Feels must use the shared commercial-access path without a retired Premium-only gate.',
 );
+assert.match(worker, /requireBarFeelsUnlimitedAccess\(authorization, options\.track\)/,
+  'The Worker must enforce unlimited Bar Feels access after database authorization.');
 assert.doesNotMatch(
   featureLoader,
   /global\.openPremiumBarFeels\s*=/,

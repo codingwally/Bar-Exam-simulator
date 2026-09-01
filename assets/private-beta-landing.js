@@ -848,17 +848,6 @@
       'anchor-cases': '#anchor-case-digests',
     };
     const returnHash = routes[feature] || '#mock-bar';
-    if (feature === 'bar-forecast') {
-      const loaded = await loadFeature(feature);
-      if (loaded === false) return false;
-      await invokePublicOpener(
-        'openBarForecast',
-        '2026 Bar Forecast could not be opened. Please try again.',
-        trigger,
-      );
-      state.lastActivatedHash = 'bar-forecast-2026';
-      return true;
-    }
     await global.DueDiligencePhase2?.whenAuthReady?.();
     if (!currentSession()?.access_token) {
       global.DueDiligencePhase2?.openSignIn?.({
@@ -870,11 +859,27 @@
       });
       return false;
     }
+    if (feature === 'bar-forecast') {
+      const allowed = await global.DueDiligencePhase4?.ensureUnlimitedFeatureAccess?.(returnHash, {
+        featureId: 'bar-forecast',
+        focusOrigin: trigger,
+      });
+      if (allowed !== true) return false;
+      const loaded = await loadFeature(feature);
+      if (loaded === false) return false;
+      await invokePublicOpener(
+        'openBarForecast',
+        '2026 Bar Forecast could not be opened. Please try again.',
+        trigger,
+      );
+      state.lastActivatedHash = 'bar-forecast-2026';
+      return true;
+    }
     // Home/community is part of the signed-in shell, not a metered examination
     // feature. Requiring a commercial-access round trip here can strand a valid
     // session on the initial "Verifying…" state when that unrelated request is
     // slow or temporarily unavailable.
-    if (!['retainer', 'quorum'].includes(feature)) {
+    if (!['retainer', 'quorum', 'bar-feels'].includes(feature)) {
       const allowed = await global.DueDiligencePhase4?.ensureProtectedAccess?.(returnHash);
       if (allowed !== true) return false;
     }

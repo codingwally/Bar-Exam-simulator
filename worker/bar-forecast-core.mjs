@@ -39,12 +39,12 @@ export const BAR_FORECAST_SUBJECTS = Object.freeze([
 ]);
 
 export const BAR_FORECAST_APPROVED_SET_IDS = Object.freeze({
-  'Political and Public International Law': 'sha256:ccf4a476a29763cbcb0f32c1e4b8fa43995625d6f4678e97aeec695cfd82c8f6',
-  'Commercial and Taxation Laws': 'sha256:a9cd8ac979b41cb849b3ce3b1d406d4e98abb8425ad2812d9bab1b1aa36636d5',
-  'Civil Law and Land Titles and Deeds': 'sha256:d5681cd399472b13d9f8975666eed4e67de96654d9db2a01e0b730cf88bbaf6c',
-  'Labor Law and Social Legislation': 'sha256:ee133d6036a65ffac27b40477b777b3558476baa86dc390943d9775a2d9bf116',
-  'Criminal Law': 'sha256:94de8d2495a9d788aaa500d80f1b279db17c7f4eb82bfd2c650ddaf1a05691e7',
-  'Remedial Law, Legal and Judicial Ethics, with Practical Exercises': 'sha256:2b23f3be657f226f1ce959875a0b04d81884a9a8234e5ad9d8272b75f51adc3c',
+  'Political and Public International Law': 'sha256:50542c135d941488e4fa3d74ee3954bc2ea04a7916ca409297bdaac8f07b4fe0',
+  'Commercial and Taxation Laws': 'sha256:38580b2e604791278914e3a6a2db1ae99ebb33bf6a2e7dd707ca1360cd1ba1d6',
+  'Civil Law and Land Titles and Deeds': 'sha256:90834e7a657214f0914df3521b1368dd6d599836ecef7467c2081de4800121cd',
+  'Labor Law and Social Legislation': 'sha256:bf9e67d56dd2e87b63378ede89f1bdb095a51a5a2995930fbcf84a26e237db28',
+  'Criminal Law': 'sha256:a7c949198bebc1a9f31e6606ea410bfca0e554e0ce04a774ec48ffa039ffb05a',
+  'Remedial Law, Legal and Judicial Ethics, with Practical Exercises': 'sha256:62a3bed86bc1eff0c42f8e0866e8b96fbbf981ccda1006a850d73ace756f2221',
 });
 
 const BAR_FORECAST_SUBJECT_SET = new Set(BAR_FORECAST_SUBJECTS);

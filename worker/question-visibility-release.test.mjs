@@ -136,7 +136,10 @@ test('hiding stops future random issuance without breaking an already-issued wor
     publicationOverlay(new Map([[hiddenId, 'No']])),
   );
 
-  const laborTotal = questionBank.records.filter((record) => record.Subject === 'Labor Law').length;
+  const laborTotal = questionBank.records.filter((record) => (
+    record.Subject === 'Labor Law'
+      && !String(record['Question ID']).startsWith('FCT-2026-')
+  )).length;
   assert.equal(protectedQuestionInventory(records)['Labor Law'].length, laborTotal);
   assert.equal(availableProtectedQuestionInventory(records)['Labor Law'].length, laborTotal - 1);
   assert.equal(
@@ -180,7 +183,8 @@ test('protected inventory keeps its safety floor while accepting uneven growth',
     });
   }
   const inventory = protectedQuestionInventory(records);
-  assert.equal(Object.values(inventory).flat().length, questionBank.records.length + 42);
+  assert.equal(Object.values(inventory).flat().length, 800 + 42,
+    'Forecast Q&A projections must remain outside the Simulator inventory');
   assert.ok(Object.values(inventory).every((questions) => questions.length >= 40));
 });
 

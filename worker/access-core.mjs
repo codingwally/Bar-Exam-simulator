@@ -24,6 +24,8 @@ const SUBJECT_ALIASES = Object.freeze({
 
 export const REQUEST_KEY_PATTERN = /^[A-Za-z0-9_-]{16,128}$/;
 export const MINIMUM_PROTECTED_QUESTIONS_PER_SUBJECT = 40;
+export const FORECAST_QA_QUESTION_ID_PATTERN = /^FCT-2026-Q(?:00[1-9]|0[1-9]\d|1[01]\d|120)$/u;
+const FORECAST_SUPERSESSION_NOTE_MARKER = 'Forecast supersedes Q&A IDs:';
 
 export const WITHHELD_MOCK_BAR_QUESTION_IDS = Object.freeze([
   'TAX-2019-Q10A',
@@ -86,6 +88,7 @@ export function publicQuestionFromRecord(record) {
   const sourceSubject = clean(record.Subject);
   const subject = SUBJECT_ALIASES[sourceSubject];
   const id = clean(record['Question ID']);
+  if (FORECAST_QA_QUESTION_ID_PATTERN.test(id)) return null;
   const prompt = preserveQuestionText(record['Essay Question']);
   if (
     !subject
@@ -109,6 +112,34 @@ export function isProtectedQuestionWithheld(questionId) {
   return WITHHELD_MOCK_BAR_QUESTION_ID_SET.has(clean(questionId).toUpperCase());
 }
 
+function forecastSimulatorPreservedQuestionIds(records) {
+  const preserved = new Set();
+  for (const record of records.values()) {
+    const forecastId = clean(record?.['Question ID']);
+    if (!FORECAST_QA_QUESTION_ID_PATTERN.test(forecastId)) continue;
+    if (questionWebsiteVisibility(record) !== 'visible') continue;
+    const notes = String(record?.Notes || '');
+    const markerIndex = notes.indexOf(FORECAST_SUPERSESSION_NOTE_MARKER);
+    if (markerIndex < 0) continue;
+    const start = markerIndex + FORECAST_SUPERSESSION_NOTE_MARKER.length;
+    const end = notes.indexOf('.', start);
+    const encodedIds = notes.slice(start, end < 0 ? undefined : end);
+    for (const id of encodedIds.split(',').map(clean).filter(Boolean)) {
+      if (/^[A-Za-z0-9][A-Za-z0-9-]{2,199}$/u.test(id)
+          && !FORECAST_QA_QUESTION_ID_PATTERN.test(id)
+          && records.has(id)) {
+        preserved.add(id);
+      }
+    }
+  }
+  return preserved;
+}
+
+function simulatorQuestionVisible(records, questionId, preservedIds) {
+  return questionWebsiteVisibility(records.get(questionId)) === 'visible'
+    || preservedIds.has(questionId);
+}
+
 export function protectedQuestionInventory(records) {
   const bySubject = Object.fromEntries(PHASE4_SUBJECTS.map((subject) => [subject, []]));
   for (const record of records.values()) {
@@ -117,8 +148,11 @@ export function protectedQuestionInventory(records) {
   }
   const recognizedCount = Object.values(bySubject)
     .reduce((total, questions) => total + questions.length, 0);
+  const simulatorRecordCount = [...records.values()].filter((record) => (
+    !FORECAST_QA_QUESTION_ID_PATTERN.test(clean(record?.['Question ID']))
+  )).length;
   for (const subject of PHASE4_SUBJECTS) {
-    if (recognizedCount !== records.size
+    if (recognizedCount !== simulatorRecordCount
         || bySubject[subject].length < MINIMUM_PROTECTED_QUESTIONS_PER_SUBJECT) {
       throw new AccessValidationError(
         'QUESTION_BANK_INVALID',
@@ -132,11 +166,12 @@ export function protectedQuestionInventory(records) {
 
 export function availableProtectedQuestionInventory(records) {
   const inventory = protectedQuestionInventory(records);
+  const preservedIds = forecastSimulatorPreservedQuestionIds(records);
   return Object.fromEntries(PHASE4_SUBJECTS.map((subject) => [
     subject,
     inventory[subject].filter((question) => (
       !isProtectedQuestionWithheld(question.id)
-      && questionWebsiteVisibility(records.get(question.id)) === 'visible'
+      && simulatorQuestionVisible(records, question.id, preservedIds)
     )),
   ]));
 }
@@ -150,6 +185,7 @@ export function selectProtectedQuestion(records, options = {}) {
   );
   const inventory = protectedQuestionInventory(records)[subject]
     .filter((question) => !isProtectedQuestionWithheld(question.id));
+  const preservedIds = forecastSimulatorPreservedQuestionIds(records);
   const requestedQuestionId = clean(options.questionId);
   if (requestedQuestionId) {
     // A visibility change stops new issuance without interrupting a paid user
@@ -165,7 +201,7 @@ export function selectProtectedQuestion(records, options = {}) {
     return exact;
   }
   const questions = inventory.filter((question) => (
-    questionWebsiteVisibility(records.get(question.id)) === 'visible'
+    simulatorQuestionVisible(records, question.id, preservedIds)
   ));
   if (!questions.length) {
     throw new AccessValidationError(

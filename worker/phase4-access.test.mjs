@@ -71,7 +71,8 @@ test('user-visible inventory permanently excludes the two withheld Tax questions
     questionBank.records.map((row) => [String(row['Question ID']).trim(), row]),
   );
   const inventory = availableProtectedQuestionInventory(records);
-  assert.equal(Object.values(inventory).flat().length, questionBank.records.length);
+  assert.equal(Object.values(inventory).flat().length, 800,
+    'Forecast Q&A projections must never enter the Simulator inventory');
   assert.equal(inventory['Taxation Law'].length, 100);
   const availableIds = new Set(Object.values(inventory).flat().map((question) => question.id));
   const certifiedIds = new Set(

@@ -138,8 +138,8 @@ export function validateRecords(records) {
         reasons.push(`Suggested Answer lacks ${heading}`);
       }
     }
-    if (!/https:\/\/elibrary\.judiciary\.gov\.ph(?:\/|(?=$))/i.test(record['Legal Basis / Provision'])) {
-      reasons.push('Legal Basis / Provision lacks an HTTPS Supreme Court E-Library link');
+    if (!/(?:https:\/\/elibrary\.judiciary\.gov\.ph(?:\/|(?=$))|https:\/\/(?:www\.)?un\.org\/depts\/los\/convention_agreements\/texts\/unclos\/part12\.htm)/i.test(record['Legal Basis / Provision'])) {
+      reasons.push('Legal Basis / Provision lacks an approved HTTPS official legal-authority link');
     }
     if (id && duplicateSet.has(id)) reasons.push('Question ID is duplicated');
 

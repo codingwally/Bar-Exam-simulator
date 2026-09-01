@@ -1,0 +1,172 @@
+{
+  "schema_version": "1.0",
+  "title": "2026 Bar Forecast accuracy-first methodology",
+  "mode": "STANDARD_ACCURACY_FIRST",
+  "bar_year": "2026",
+  "official_syllabus_authority": "Supreme Court of the Philippines",
+  "official_syllabus_url": "https://sc.judiciary.gov.ph/wp-content/uploads/2025/10/2026-BAR-Bar-Bulletin-No.-1-October-16-2025.pdf",
+  "examinable_cutoff": "2025-06-30",
+  "syllabus_unit_allocation_source": "content/duediligence-2026/syllabus-units.json",
+  "score_scale": {
+    "minimum": 0,
+    "maximum": 100,
+    "rounding": "Round only the final score to one decimal place.",
+    "interpretation": "A comparative training-priority index within a subject. It is not a probability, leak, guarantee, or representation that a topic will appear in the Bar."
+  },
+  "weights": [
+    {
+      "id": "historical_within_subject_year_normalized",
+      "label": "Historical frequency within subject, normalized by year",
+      "weight_percent": 35,
+      "raw_score_range": [0, 1],
+      "calculation": "For each available source-certified Bar year in the same question-bank discipline, divide the number of records mapped to the candidate's official syllabus unit by that discipline-year denominator. Give each available year equal weight, average the yearly shares, and normalize to the largest eligible unit share within the same Bar subject. Combine 75 percent of that unit index with 25 percent of the proportion of included years containing a retained canonical-doctrine match. Missing or incomplete years are disclosed and excluded, never treated as zero or silently extrapolated.",
+      "required_evidence": ["canonical doctrine family", "matched source-certified question IDs", "discipline-year denominators", "unit yearly shares", "doctrine year presence", "years included and missing"]
+    },
+    {
+      "id": "leb_curriculum_prior",
+      "label": "Legal Education Board curriculum prior",
+      "weight_percent": 25,
+      "raw_score_range": [0, 1],
+      "calculation": "Use the candidate unit's positive leb_prior_weight from syllabus-units.json divided by the largest independently mapped LEB course exposure in the same subject. The weight is the published credit units of directly applicable LEB model-curriculum courses and is never calculated from the Forecast quota. Shared headings honestly share a course-family exposure. This pedagogical prior may not expand the Supreme Court syllabus or override the examinability cutoff.",
+      "required_evidence": ["syllabus unit ID", "leb_course_basis", "published LEB course units", "leb_prior_weight", "within-subject maximum", "official LEB curriculum URL"]
+    },
+    {
+      "id": "official_syllabus_centrality_and_breadth",
+      "label": "Official syllabus centrality and breadth",
+      "weight_percent": 20,
+      "raw_score_range": [0, 1],
+      "calculation": "Assign raw score 1 only when the candidate maps to an official top-level 2026 syllabus heading with an unfilled target slot. All official top-level headings are treated equally here; no Forecast quota or historical frequency is recycled as centrality. Candidates outside the official syllabus or after a unit reaches its exact target are ineligible rather than merely penalized.",
+      "required_evidence": ["exact official heading", "syllabus node or path", "unit target", "slots filled before selection", "breadth eligibility"]
+    },
+    {
+      "id": "cutoff_compliant_jurisprudence",
+      "label": "Cutoff-compliant jurisprudence and authority",
+      "weight_percent": 10,
+      "raw_score_range": [0, 1],
+      "calculation": "A candidate is eligible only if every controlling authority is effective and examinable as of June 30, 2025. For a case-based doctrine, raw score is 0.5 for verified controlling status plus 0.5 times the within-subject percentile of the decision date among eligible case authorities. For a statute, rule, or constitutional provision, raw score is 1 only after official-text and amendment-status verification; otherwise it is 0 and the candidate is blocked.",
+      "required_evidence": ["official or trusted primary source URL", "complete citation", "authority date", "cutoff result", "later-treatment or amendment check"]
+    },
+    {
+      "id": "contemporary_or_technology_relevance",
+      "label": "Contemporary or technology relevance",
+      "weight_percent": 5,
+      "raw_score_range": [0, 1],
+      "calculation": "Score 1 for a direct contemporary or technology application expressly within the official syllabus, 0.5 for a documented modern application of a settled doctrine, and 0 when no such relevance exists. Novelty alone never creates eligibility or displaces a unit target.",
+      "required_evidence": ["specific contemporary application", "official syllabus nexus", "public source URL"]
+    },
+    {
+      "id": "attributable_public_educator_signal",
+      "label": "Attributable public educator signal",
+      "weight_percent": 5,
+      "raw_score_range": [0, 1],
+      "calculation": "Use min(1, independent qualifying source count divided by 2). A qualifying source must name the educator, be publicly accessible, dated before selection, identify the predicted doctrine or syllabus unit, and provide a stable URL. Anonymous claims, paid private materials, copied roundups, circular citations, rumors, and alleged leaks score zero.",
+      "required_evidence": ["educator name", "publication date", "public URL", "predicted doctrine or unit", "independence assessment"]
+    }
+  ],
+  "formula": "final_score = 35 * historical_raw + 25 * leb_prior_raw + 20 * syllabus_raw + 10 * jurisprudence_raw + 5 * contemporary_raw + 5 * educator_raw",
+  "selection_protocol": [
+    "Build one eligible candidate pool per subject from the official 2026 syllabus and cutoff-compliant primary authorities.",
+    "Assign every candidate exactly one primary syllabus-unit ID and one canonical controlling-doctrine ID before scoring.",
+    "Freeze taxonomy, source corpus, denominators, and model version before calculating scores.",
+    "Calculate every component from stored evidence; never hand-adjust a component or total after seeing the ranking.",
+    "Select in descending within-subject score while satisfying every exact unit target in syllabus-units.json.",
+    "Reject a second question using the same controlling doctrine or primary authority within a subject.",
+    "Apply the Political Law election-context definition across title, prompt, syllabus path, doctrine, case, and remedy; its cap is one regardless of primary label.",
+    "Do not use random questions or filler. If an exact unit lacks a qualified candidate, stop publication and commission a source-backed replacement.",
+    "Resolve score ties by stronger official-primary-source quality, then broader historical year coverage, then more recent cutoff-compliant authority; retain the tie-break evidence.",
+    "Run a leave-latest-complete-year-out backtest when the source metadata proves that a complete subject-year exists. Otherwise run and label a latest-available-certified-year sensitivity diagnostic, disclose top-k overlap and record recall by subject, and do not describe it as a strict complete-year backtest. Backtesting evaluates the historical ranking signal; it does not turn scores into probabilities."
+  ],
+  "statistical_audit": {
+    "artifact": "content/duediligence-2026/bar-forecast-statistical-audit.json",
+    "reproduction_command": "node scripts/audit-bar-forecast-statistics.mjs --baseline-ref=b55bb0ad192c720b7020f0eea150a5d4b0e8c809",
+    "scope": "Maps all 318 source-certified historical records to one official top-level unit, reports classification ambiguity, compares HHI and exact unit coverage before and after revision, and performs a leakage-resistant latest-available-year holdout diagnostic on the historical-frequency signal.",
+    "strict_complete_year_status": "NOT_PROVEN_BY_SOURCE_MANIFEST",
+    "interpretation": "The audit measures distribution and historical ranking stability. Neither its rankings nor Forecast scores are calibrated probabilities or guarantees of actual Bar appearance."
+  },
+  "corpus_snapshot": {
+    "snapshot_date": "2026-09-02",
+    "source_manifest": "content/question-bank/verbatim-source-manifest.json",
+    "source_certified_records": 318,
+    "overall_year_counts": {
+      "2018": 11,
+      "2019": 67,
+      "2021": 12,
+      "2022": 43,
+      "2023": 74,
+      "2024": 82,
+      "2025": 29
+    },
+    "subject_year_counts": {
+      "Political and Public International Law": {"2022": 15, "2023": 12, "2024": 13},
+      "Commercial and Taxation Laws": {"2019": 38, "2022": 2, "2023": 20, "2024": 18},
+      "Civil Law and Land Titles and Deeds": {"2023": 5, "2024": 18, "2025": 17},
+      "Labor Law and Social Legislation": {"2023": 14, "2024": 14, "2025": 12},
+      "Criminal Law": {"2021": 12, "2022": 10, "2023": 11, "2024": 7},
+      "Remedial Law, Legal and Judicial Ethics, with Practical Exercises": {"2018": 11, "2019": 29, "2022": 16, "2023": 12, "2024": 12}
+    },
+    "external_official_questionnaire_checks": [
+      {
+        "subject": "Political and Public International Law",
+        "bar_year": 2025,
+        "official_questionnaire_url": "https://sc.judiciary.gov.ph/wp-content/uploads/2025/09/IXBYUDZS3U.pdf",
+        "direct_election_law_question_count": 1,
+        "use": "Independent concentration calibration only; the unavailable local 2025 Political rows are not fabricated or added to historical frequency denominators."
+      }
+    ],
+    "known_gaps": [
+      "The certified corpus is uneven by subject and year and contains no 2020 records.",
+      "Only Civil Law and Labor Law currently contain certified 2025 questions; the snapshot has no 2025 Political, Commercial and Taxation, Criminal, or Remedial and Ethics records.",
+      "Raw record counts are not comparable across subjects or years; only within-subject, year-normalized shares may enter the historical component.",
+      "Keyword overlap is not a doctrine match. Historical matching requires a canonical doctrine-family mapping with retained question IDs and human-auditable evidence.",
+      "The 318-record snapshot is a training corpus, not a complete census of every past Bar question. Corpus additions require versioning and a full rerun.",
+      "Educator predictions may be correlated or derivative and are a small corroborating signal, not independent probability evidence.",
+      "LEB curriculum emphasis is pedagogical and cannot establish what the Supreme Court will ask.",
+      "A Bar Chairperson's authorship of a case is not itself an attributable prediction and receives no educator-signal credit."
+    ]
+  },
+  "legal_and_editorial_safeguards": {
+    "official_scope_only": true,
+    "post_cutoff_authority_allowed": false,
+    "one_question_one_controlling_doctrine": true,
+    "duplicate_doctrine_allowed": false,
+    "duplicate_primary_authority_within_subject_allowed": false,
+    "anonymous_or_leaked_prediction_signal_allowed": false,
+    "minimum_human_reviews": [
+      "One named Philippine-law reviewer approves the legal result, doctrine, application, and suggested answer.",
+      "A separate source check verifies the complete case caption or authority title, citation, date, dispositive doctrine, later treatment, official syllabus mapping, and cutoff compliance."
+    ],
+    "publication_status_rule": "A record remains HUMAN_LEGAL_REVIEW_REQUIRED until both review checks are recorded. No score or rank can waive review.",
+    "answer_standard": "One clear issue, one controlling doctrine, responsive ALAC analysis, a reasoned conclusion, and no unsupported legal proposition.",
+    "source_standard": "Prefer official Supreme Court, Official Gazette, statute, rule, or agency text. A trusted mirror requires an official cross-check when one is reasonably available."
+  },
+  "question_bank_projection_safeguards": {
+    "single_canonical_legal_text_source": true,
+    "required_projection_fields": ["question_bank_id", "question_bank_subject", "supersedes_question_ids", "legal_basis_source_url"],
+    "required_exact_parity_fields": ["prompt", "suggested_answer", "legal_basis", "controlling_doctrine", "jurisprudence", "citation", "primary_source_url", "source_links"],
+    "all_forecast_questions_must_have_question_bank_id": true,
+    "all_question_bank_ids_must_be_unique": true,
+    "atomic_publish_rule": "Forecast publication and Q&A question-bank projection must pass together. Any missing record or legal-text mismatch blocks both publications.",
+    "supersession_rule": "When a revised Forecast question replaces an existing Q&A item, retain the prior IDs in supersedes_question_ids; never silently overwrite historical identity.",
+    "post_publish_verification": "Verify all 120 current published Forecast payloads and all 120 Q&A projections by canonical checksum and exact public legal-text parity."
+  },
+  "required_per_question_audit_fields": [
+    "model_version",
+    "subject",
+    "syllabus_unit_id",
+    "syllabus_path",
+    "controlling_doctrine_id",
+    "primary_authority_id",
+    "historical_question_ids",
+    "historical_subject_year_denominators",
+    "historical_yearly_shares",
+    "component_raw_scores",
+    "component_weighted_scores",
+    "final_score",
+    "tie_break_evidence",
+    "educator_sources",
+    "official_source_urls",
+    "cutoff_result",
+    "legal_review_status",
+    "question_bank_id"
+  ]
+}

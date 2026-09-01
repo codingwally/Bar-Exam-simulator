@@ -56,7 +56,9 @@ assert.equal(
   'CSV import must preserve question text exactly.',
 );
 
-const nonQuestionHeaders = HEADERS.filter((header) => header !== 'Essay Question');
+const nonQuestionHeaders = HEADERS.filter((header) => (
+  header !== 'Essay Question' && header !== 'Publication Ready?'
+));
 const retainedSourceReviewedBaseline = payload.records.slice(0, 318);
 const nonQuestionProjection = retainedSourceReviewedBaseline.map((record) => Object.fromEntries(
   nonQuestionHeaders.map((header) => [header, record[header]]),
@@ -67,8 +69,8 @@ const nonQuestionDigest = crypto
   .digest('hex');
 assert.equal(
   nonQuestionDigest,
-  'daf757659645eee844b9e3b841c56e2817e2c555fb694bf7885b822eec901f3c',
-  'The 318 retained source-reviewed model answers and non-question fields must remain byte-for-byte locked.',
+  'a168095fd2e33e991685309e1469268a65faad7eea2577e02f6c02ce204219d2',
+  'The 318 retained source-reviewed model answers and non-question, non-visibility fields must remain byte-for-byte locked.',
 );
 
 const promptDigest = (value) => crypto.createHash('sha256').update(value, 'utf8').digest('hex');

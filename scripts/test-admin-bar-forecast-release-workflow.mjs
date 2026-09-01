@@ -196,6 +196,25 @@ for (const productionWorkflow of [combined, workerOnly]) {
   assert.match(productionWorkflow, /run: node scripts\/verify-bar-forecast-live-evidence\.mjs/u);
 }
 
+assert.match(
+  combined,
+  /emergency_publish_before_forecast_live_test:\s*\n\s+description: "Owner-approved emergency:[^\n]+"\s*\n\s+required: true\s*\n\s+default: false\s*\n\s+type: boolean/u,
+);
+assert.match(combined, /staged_product_sha:\s*\n\s+description: "Emergency mode only:[^\n]+"/u);
+assert.match(combined, /fetch-depth: 0/u);
+assert.match(combined, /EMERGENCY_PUBLISH: \$\{\{ inputs\.emergency_publish_before_forecast_live_test \}\}/u);
+assert.match(combined, /git merge-base --is-ancestor "\$STAGED_PRODUCT_SHA" "\$GITHUB_SHA"/u);
+assert.match(combined, /git diff --quiet "\$STAGED_PRODUCT_SHA" "\$GITHUB_SHA" -- \./u);
+assert.match(combined, /require_step 'Apply and probe the exact paid, Founding Beta, and admin Forecast migrations' success/u);
+assert.match(combined, /require_step 'Deploy reviewed Worker and static artifact to staging' success/u);
+assert.match(combined, /require_step 'Run 30 live Forecast examiners in 15 two-browser batches' failure/u);
+assert.match(combined, /select\(\.conclusion == "failure"\)\]\s*\| length/u);
+assert.equal(
+  (combined.match(/if: inputs\.emergency_publish_before_forecast_live_test != true/gu) || []).length,
+  2,
+  'Emergency publish must skip only the 30-journey download and verifier steps.',
+);
+
 assert.match(combined, /\n  deploy_pages:\s*\n\s+needs: deploy_worker/u);
 assert.match(combined, /\n  verify_production_pages:\s*\n\s+name: Verify the exact Pages SHA and approved pricing client\s*\n\s+needs: deploy_pages/u);
 const pagesDeploy = combined.indexOf('  deploy_pages:');

@@ -9,7 +9,10 @@ import {
   forecastSetId,
   validatedForecastRows,
 } from './bar-forecast-core.mjs';
-import { createBarForecastHandlers } from './bar-forecast-routes.mjs';
+import {
+  BAR_FORECAST_GRADING_PROVIDER_OPTIONS,
+  createBarForecastHandlers,
+} from './bar-forecast-routes.mjs';
 
 const SUBJECT = BAR_FORECAST_SUBJECTS[0];
 
@@ -127,8 +130,8 @@ function harness(overrides = {}) {
       }
       return { id: 'admin-user-id' };
     },
-    structuredGemini: async (_env, prompt, _schema, validate) => {
-      calls.push({ functionName: 'structured_gemini', prompt });
+    structuredGemini: async (_env, prompt, _schema, validate, options) => {
+      calls.push({ functionName: 'structured_gemini', prompt, options });
       const parsedRecords = JSON.parse(prompt.match(/CURATED FORECAST RECORDS AND UNTRUSTED ANSWERS\n([^\n]+)\n\nReturn only/)[1]);
       return {
         result: validate({
@@ -403,6 +406,10 @@ test('submit grades five bounded batches and returns only the public holistic re
   assert.equal(body.maxScore, 100);
   assert.equal(body.results.length, 20);
   assert.equal(calls.filter((call) => call.functionName === 'structured_gemini').length, 5);
+  assert.deepEqual(
+    calls.filter((call) => call.functionName === 'structured_gemini').map((call) => call.options),
+    Array.from({ length: 5 }, () => BAR_FORECAST_GRADING_PROVIDER_OPTIONS),
+  );
   assert.deepEqual(Object.keys(body.results[0]), [
     'questionId', 'number', 'score', 'maxScore', 'feedback',
     'userAnswer', 'suggestedAnswer', 'explanation',
@@ -410,6 +417,35 @@ test('submit grades five bounded batches and returns only the public holistic re
   assert.equal(JSON.stringify(body).includes('rubric'), false);
   assert.equal(JSON.stringify(body).includes('legalBasis'), false);
   assert.equal(JSON.stringify(body).includes('controllingDoctrine'), false);
+});
+
+test('submit returns Forecast-specific retry-safe grading failures', async () => {
+  const cases = [
+    ['COACH_TIMEOUT', 'BAR_FORECAST_GRADING_TIMEOUT'],
+    ['COACH_CAPACITY', 'BAR_FORECAST_GRADING_CAPACITY'],
+    ['COACH_UNAVAILABLE', 'BAR_FORECAST_GRADING_UNAVAILABLE'],
+    ['COACH_NOT_CONFIGURED', 'BAR_FORECAST_GRADING_UNAVAILABLE'],
+  ];
+  for (const [providerCode, expectedCode] of cases) {
+    const providerError = Object.assign(new Error('provider detail must not escape'), {
+      code: providerCode,
+      status: 503,
+    });
+    const { handlers } = harness({
+      dependencies: {
+        structuredGemini: async () => { throw providerError; },
+      },
+    });
+    await assert.rejects(
+      handlers.handle(request({
+        operation: 'submit',
+        subject: SUBJECT,
+        setId: SET_ID,
+        answers: answers(),
+      }), {}, '', ''),
+      { code: expectedCode, status: 503 },
+    );
+  }
 });
 
 test('submit rejects a question set that changed after start before grading', async () => {

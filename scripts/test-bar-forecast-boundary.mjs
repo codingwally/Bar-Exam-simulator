@@ -242,7 +242,11 @@ export async function main() {
 
   assert.match(core, /complete and exclusive legal source of truth/i, 'grader must be confined to curated law');
   assert.match(core, /Do not invent, supplement, update, or cite any law/i, 'grader must forbid invented law');
-  assert.match(core, /Do not produce or reveal rubric categories, component scores/i, 'rubric must remain hidden');
+  assert.match(
+    core,
+    /Return no free-form feedback, legal coaching, authority, case name, or replacement answer/i,
+    'provider-authored legal coaching must remain outside the public result contract',
+  );
   assert.match(core, /startTime: '08:00', endTime: '12:00'/, 'morning schedule times must be exact');
   assert.match(core, /startTime: '14:00', endTime: '18:00'/, 'afternoon schedule times must be exact');
   assert.match(core, /BAR_FORECAST_CONSENT_VERSION = '2026-09-01'/, 'Worker must require the current disclosure version');

@@ -277,7 +277,7 @@ assert.equal(completedProfileLoads, 1, 'Completing first-user onboarding must re
 for (const asset of ['phase2-experience.js', 'phase4-experience.js', 'private-beta-landing.js']) {
   assert.match(indexHtml, new RegExp(`${asset.replace('.', '\\.') }[^"\\n]*auth=login-loop-p0-20260901-1`));
 }
-assert.match(serviceWorker, /duediligence-shell-20260901-forecast-member-access-1/);
+assert.match(serviceWorker, /duediligence-shell-20260901-forecast-coaching-report-1/);
 assert.match(serviceWorker, /phase2-experience\.js[^'\n]*auth=login-loop-p0-20260901-1/);
 assert.match(serviceWorker, /private-beta-landing\.js[^'\n]*auth=login-loop-p0-20260901-1/);
 

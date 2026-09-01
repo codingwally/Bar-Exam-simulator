@@ -66,10 +66,24 @@ function requiredSetupPending(access, authorization) {
 
 export const BAR_FORECAST_GRADING_PROVIDER_OPTIONS = Object.freeze({
   quiet: true,
-  requestTimeoutMs: 30_000,
+  requestTimeoutMs: 45_000,
+  preferredModel: 'gemini-3.6-flash',
+  fallbackModels: Object.freeze(['gemini-3.5-flash-lite']),
+  temperature: 0,
   modelLimit: 2,
   attemptsPerModel: 1,
 });
+
+function barForecastGradingProviderOptions(env) {
+  const configuredModel = typeof env?.BAR_FORECAST_MODEL === 'string'
+    ? env.BAR_FORECAST_MODEL.trim()
+    : '';
+  if (!configuredModel) return BAR_FORECAST_GRADING_PROVIDER_OPTIONS;
+  return Object.freeze({
+    ...BAR_FORECAST_GRADING_PROVIDER_OPTIONS,
+    preferredModel: configuredModel,
+  });
+}
 
 function forecastGradingProviderError(error) {
   const code = String(error?.code || '').trim().toUpperCase();
@@ -165,7 +179,7 @@ export function createBarForecastHandlers(deps) {
           buildBarForecastGradingPrompt(batch),
           BAR_FORECAST_GRADING_RESPONSE_SCHEMA,
           (value) => validateBarForecastGradingResult(value, batch),
-          BAR_FORECAST_GRADING_PROVIDER_OPTIONS,
+          barForecastGradingProviderOptions(env),
         );
         graded.push(evaluation.result);
       } catch (error) {
@@ -249,6 +263,7 @@ export function createBarForecastHandlers(deps) {
       subject: input.subject,
       totalScore: result.totalScore,
       maxScore: result.maxScore,
+      analytics: result.analytics,
       results: result.results,
     }, 200, origin, allowedOrigin);
   }

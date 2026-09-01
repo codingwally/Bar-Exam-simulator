@@ -44,8 +44,9 @@ for (const markup of [rail, drawer]) {
 assert.match(drawer, /id="spa-bar-forecast"[\s\S]*id="spa-bar-easy"/);
 
 assert.match(loader, /forecast:\s*Object\.freeze\([\s\S]*assets\/bar-forecast\.css[\s\S]*assets\/bar-forecast\.js/);
-assert.match(loader, /assets\/bar-forecast\.js\?v=exam-tools-20260901-5/);
-assert.doesNotMatch(loader, /assets\/bar-forecast\.js\?v=exam-tools-20260901-4/);
+assert.match(loader, /assets\/bar-forecast\.js\?v=coaching-report-20260901-1/);
+assert.match(loader, /assets\/bar-forecast\.css\?v=coaching-report-20260901-1/);
+assert.doesNotMatch(loader, /assets\/bar-forecast\.(?:js|css)\?v=exam-tools-20260901-[45]/);
 assert.match(loader, /'bar-forecast': 'forecast'/);
 assert.match(loader, /global\.openBarForecast = deferredFunction\('bar-forecast', 'openBarForecast'\)/);
 assert.match(landing, /'bar-forecast-2026': Object\.freeze\(\{ feature: 'bar-forecast', opener: 'openBarForecast' \}\)/);
@@ -182,12 +183,31 @@ assert.match(forecast, /simulation may be taken anytime/i);
 
 for (const allowedResultField of [
   'Question',
-  'Total grade',
-  'Feedback',
+  'Mock Bar practice score',
+  'Mock Bar coaching',
+  'Performance analytics',
+  'Issue spotting',
+  'Grammar and clarity',
   'Your answer',
   'Suggested answer',
-  'Explanation',
+  'Score rationale',
 ]) assert.match(forecast, new RegExp(allowedResultField, 'i'));
+
+assert.match(forecast, /educational practice diagnostic, not an official Bar grade/i);
+assert.match(forecast, /Issue spotting and grammar help diagnose writing habits; they do not change the 100-point practice score/i);
+assert.match(forecast, /detailed coaching report may take several minutes/i);
+assert.match(forecast, /submissionTimer/);
+assert.match(forecast, /state\.closeButton\.disabled = grading/);
+assert.match(forecast, /Exit unavailable while grading is in progress/);
+assert.match(forecast, /submissionElapsedNode\.setAttribute\('aria-hidden', 'true'\)/);
+assert.match(forecast, /computedTotal !== totalScore/);
+assert.match(forecast, /userAnswer\.includes\(original\)/);
+assert.match(styles, /\.bf26-report-overview/);
+assert.match(styles, /\.bf26-diagnostic-columns/);
+assert.match(styles, /\.bf26-result summary::marker/);
+assert.match(styles, /\.bf26-result-summary-row[\s\S]*display:\s*flex/);
+assert.match(styles, /\.bf26-result-section p[\s\S]*overflow-wrap:\s*anywhere/);
+assert.match(styles, /@media \(max-width: 360px\)[\s\S]*\.bf26-metric-grid/);
 
 assert.match(styles, /data-public-feature="bar-forecast"/);
 assert.match(styles, /@keyframes bf26-radiate/);
@@ -257,10 +277,13 @@ for (const source of [build, serviceWorker]) {
 }
 assert.match(build, /'flag\.svg'/);
 assert.match(html, /assets\/feature-loader\.js[^"\n]*forecast=member-access-20260901-1/);
-assert.match(serviceWorker, /duediligence-shell-20260901-forecast-member-access-1/);
+assert.match(html, /assets\/feature-loader\.js[^"\n]*coaching=report-20260901-1/);
+assert.match(serviceWorker, /duediligence-shell-20260901-forecast-coaching-report-1/);
 assert.match(serviceWorker, /assets\/feature-loader\.js[^'\n]*forecast=member-access-20260901-1/);
-assert.match(serviceWorker, /assets\/bar-forecast\.js\?v=exam-tools-20260901-5/);
-assert.doesNotMatch(serviceWorker, /assets\/bar-forecast\.js\?v=exam-tools-20260901-4/);
+assert.match(serviceWorker, /assets\/feature-loader\.js[^'\n]*coaching=report-20260901-1/);
+assert.match(serviceWorker, /assets\/bar-forecast\.js\?v=coaching-report-20260901-1/);
+assert.match(serviceWorker, /assets\/bar-forecast\.css\?v=coaching-report-20260901-1/);
+assert.doesNotMatch(serviceWorker, /assets\/bar-forecast\.(?:js|css)\?v=exam-tools-20260901-[45]/);
 assert.match(serviceWorker, /assets\/icons\/navigation\/flag\.svg/);
 assert.match(qaHarness, /dataset\.ddBarForecastQa = 'synthetic'/);
 assert.match(qaHarness, /__DD_BAR_FORECAST_SYNTHETIC_QA__ = '2026-09-01'/);
@@ -280,6 +303,172 @@ function extractNamedFunction(source, name) {
     if (depth === 0) return source.slice(start, index + 1);
   }
   throw new Error(`Unbalanced function ${name}.`);
+}
+
+const GRAMMAR_GUIDANCE_FOR_TEST = Object.freeze({
+  punctuation: Object.freeze({ label: 'Punctuation', guidance: 'Review punctuation in this exact excerpt.' }),
+  capitalization: Object.freeze({ label: 'Capitalization', guidance: 'Review capitalization in this exact excerpt.' }),
+  agreement: Object.freeze({ label: 'Agreement', guidance: 'Check subject–verb or pronoun agreement in this exact excerpt.' }),
+  spelling: Object.freeze({ label: 'Spelling', guidance: 'Review spelling in this exact excerpt.' }),
+  sentence_structure: Object.freeze({ label: 'Sentence structure', guidance: 'Review sentence boundaries and structure without changing the legal meaning.' }),
+  wordiness: Object.freeze({ label: 'Wordiness', guidance: 'Shorten this excerpt while preserving every legal proposition.' }),
+  professional_tone: Object.freeze({ label: 'Professional tone', guidance: 'Use formal legal phrasing without changing the substance.' }),
+});
+
+{
+  const questions = Array.from({ length: 20 }, (_, index) => ({
+    id: `coaching-result-${index + 1}`,
+    number: index + 1,
+    prompt: `Question ${index + 1}`,
+  }));
+  const answers = new Map(questions.map((question) => [
+    question.id,
+    `Yes. Submitted answer ${question.number} states the rule and applies every material fact carefully.`,
+  ]));
+  const payload = {
+    totalScore: 80,
+    maxScore: 100,
+    analytics: {
+      questionCount: 20,
+      averageScore: 4,
+      issueSpottingAverage: 3.5,
+      grammarAverage: 4.5,
+      diagnosticMaxScore: 5,
+      performanceBands: { strong: 20, developing: 0, needsFocus: 0 },
+    },
+    results: questions.map((question) => ({
+      questionId: question.id,
+      number: question.number,
+      score: 4,
+      maxScore: 5,
+      feedback: 'The answer is responsive and legally focused.',
+      userAnswer: answers.get(question.id),
+      suggestedAnswer: 'Yes. The curated answer states and applies the controlling doctrine.',
+      explanation: 'The answer is substantially correct with only a minor omission.',
+      mockBarCoaching: {
+        strength: 'The conclusion is direct.',
+        priorityImprovement: 'Make the factual application more explicit.',
+        nextStep: 'Connect each decisive fact to one element of the rule.',
+      },
+      grammar: {
+        score: 4.5,
+        maxScore: 5,
+        corrections: [{
+          original: `Yes. Submitted answer ${question.number}`,
+          category: 'punctuation',
+          guidance: 'Review punctuation in this exact excerpt.',
+        }],
+      },
+      issueSpotting: {
+        score: 3.5,
+        maxScore: 5,
+      identified: ['The curated answer states and applies the controlling doctrine.'],
+      missed: ['controlling doctrine'],
+        coaching: 'Frame the issue before stating the rule.',
+      },
+    })),
+  };
+  const resultContext = vm.createContext({
+    state: { questions, answers },
+    REQUIRED_QUESTION_COUNT: 20,
+    GRAMMAR_CORRECTION_GUIDANCE: GRAMMAR_GUIDANCE_FOR_TEST,
+    Object,
+    Number,
+    Set,
+    Map,
+    Error,
+  });
+  vm.runInContext(extractNamedFunction(forecast, 'normalizeResults'), resultContext);
+  resultContext.payload = payload;
+  const normalized = vm.runInContext('normalizeResults(payload)', resultContext);
+  assert.equal(normalized.totalScore, 80);
+  assert.equal(normalized.analytics.grammarAverage, 4.5);
+  assert.equal(normalized.results[0].mockBarCoaching.nextStep.includes('decisive fact'), true);
+
+  resultContext.payload = structuredClone(payload);
+  resultContext.payload.totalScore = 79;
+  assert.throws(() => vm.runInContext('normalizeResults(payload)', resultContext), /analytics failed its integrity check/i);
+
+  resultContext.payload = structuredClone(payload);
+  resultContext.payload.results[0].grammar.corrections[0].original = 'invented source wording';
+  assert.throws(() => vm.runInContext('normalizeResults(payload)', resultContext), /did not match the submitted answer/i);
+
+  resultContext.payload = structuredClone(payload);
+  resultContext.payload.totalScore = '80';
+  assert.throws(() => vm.runInContext('normalizeResults(payload)', resultContext), /grade response failed its integrity check/i);
+
+  resultContext.payload = structuredClone(payload);
+  resultContext.payload.results[0].grammar.corrections[0].category = 'change_legal_result';
+  assert.throws(() => vm.runInContext('normalizeResults(payload)', resultContext), /did not match the submitted answer/i);
+
+  resultContext.payload = structuredClone(payload);
+  resultContext.payload.results[0].grammar.corrections[0].guidance = 'Rewrite the legal conclusion.';
+  assert.throws(() => vm.runInContext('normalizeResults(payload)', resultContext), /did not match the submitted answer/i);
+
+  resultContext.payload = structuredClone(payload);
+  resultContext.payload.results[0].issueSpotting.missed = ['An invented issue absent from the curated answer.'];
+  assert.throws(() => vm.runInContext('normalizeResults(payload)', resultContext), /curated-source integrity check/i);
+
+  resultContext.payload = structuredClone(payload);
+  resultContext.payload.results[0].issueSpotting.missed = [
+    `${questions[0].prompt.slice(-8)}\n${payload.results[0].suggestedAnswer.slice(0, 8)}`,
+  ];
+  assert.throws(() => vm.runInContext('normalizeResults(payload)', resultContext), /curated-source integrity check/i);
+
+  resultContext.payload = structuredClone(payload);
+  resultContext.payload.results[0].issueSpotting.missed = [
+    resultContext.payload.results[0].issueSpotting.identified[0],
+  ];
+  assert.throws(() => vm.runInContext('normalizeResults(payload)', resultContext), /both identified and missed/i);
+
+  resultContext.payload = structuredClone(payload);
+  resultContext.payload.analytics.grammarAverage = '4.5';
+  assert.throws(() => vm.runInContext('normalizeResults(payload)', resultContext), /analytics failed its integrity check/i);
+}
+
+{
+  const questions = Array.from({ length: 20 }, (_, index) => ({
+    id: `SYNTHETIC-UI-${String(index + 1).padStart(2, '0')}`,
+    number: index + 1,
+    prompt: `Synthetic interface-test question ${index + 1} includes notice and hearing for Mock Permit ${index + 1}.`,
+  }));
+  const answers = new Map(questions.map((question) => [
+    question.id,
+    'Yes. This synthetic answer states the fictional rule, applies every decisive notice and hearing fact, and reaches a clear reasoned conclusion.',
+  ]));
+  const qaContext = vm.createContext({
+    questions,
+    consentAccepted: true,
+    delay: async () => {},
+    Map,
+    Number,
+    Object,
+  });
+  vm.runInContext(extractNamedFunction(qaHarness, 'request'), qaContext);
+  qaContext.submitOptions = {
+    body: {
+      operation: 'submit',
+      subject: 'Political and Public International Law',
+      answers: [...answers].map(([questionId, answer]) => ({ questionId, answer })),
+    },
+  };
+  const qaPayload = await vm.runInContext("request('', submitOptions)", qaContext);
+  const normalizeContext = vm.createContext({
+    state: { questions, answers },
+    REQUIRED_QUESTION_COUNT: 20,
+    GRAMMAR_CORRECTION_GUIDANCE: GRAMMAR_GUIDANCE_FOR_TEST,
+    Object,
+    Number,
+    Set,
+    Map,
+    Error,
+  });
+  vm.runInContext(extractNamedFunction(forecast, 'normalizeResults'), normalizeContext);
+  normalizeContext.payload = qaPayload;
+  const normalizedQa = vm.runInContext('normalizeResults(payload)', normalizeContext);
+  assert.equal(normalizedQa.results.length, 20);
+  assert.equal(normalizedQa.results[0].grammar.corrections[0].category, 'punctuation');
+  assert.equal(normalizedQa.results[0].issueSpotting.identified[0], 'notice and hearing');
 }
 
 // Forecast owns the background isolation while it is open. A mandatory global

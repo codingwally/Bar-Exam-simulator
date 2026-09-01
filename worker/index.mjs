@@ -6123,6 +6123,19 @@ async function callGemini(env, prompt, groundingEnabled) {
 
 async function callGeminiStructured(env, prompt, responseSchema, validateResult, options = {}) {
   const quiet = options?.quiet === true;
+  const preferredModel = typeof options?.preferredModel === 'string'
+    ? options.preferredModel.trim()
+    : '';
+  const fallbackModels = Array.isArray(options?.fallbackModels)
+    ? [...new Set(options.fallbackModels
+      .filter((model) => typeof model === 'string')
+      .map((model) => model.trim())
+      .filter(Boolean))]
+    : null;
+  const temperature = typeof options?.temperature === 'number'
+      && Number.isFinite(options.temperature)
+    ? Math.min(Math.max(options.temperature, 0), 2)
+    : null;
   const requestTimeoutMs = Number.isInteger(options?.requestTimeoutMs)
     ? Math.min(Math.max(options.requestTimeoutMs, SUBJECT_MATTER_TEACHING_TIMEOUT_MS), GEMINI_TIMEOUT_MS)
     : SUBJECT_MATTER_TEACHING_TIMEOUT_MS;
@@ -6142,9 +6155,12 @@ async function callGeminiStructured(env, prompt, responseSchema, validateResult,
   let quotaSeen = false;
   let timeoutSeen = false;
   let providerFailureSeen = false;
+  const modelOrder = fallbackModels
+    ? [...new Set([preferredModel || env.GEMINI_MODEL || DEFAULT_MODEL, ...fallbackModels])]
+    : orderedModels(preferredModel || env.GEMINI_MODEL);
   // Quick coaching retains the original one-model repair budget. Larger internal
   // callers may opt into bounded timeout and fallback-model limits explicitly.
-  for (const model of orderedModels(env.GEMINI_MODEL).slice(0, modelLimit)) {
+  for (const model of modelOrder.slice(0, modelLimit)) {
     let unsupported = false;
     for (let attempt = 0; attempt < attemptsPerModel; attempt += 1) {
       const retryAvailable = attempt + 1 < attemptsPerModel;
@@ -6169,6 +6185,7 @@ async function callGeminiStructured(env, prompt, responseSchema, validateResult,
               generationConfig: {
                 responseMimeType: 'application/json',
                 responseSchema,
+                ...(temperature === null ? {} : { temperature }),
               },
             }),
             signal: controller.signal,

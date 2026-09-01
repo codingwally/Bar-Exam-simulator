@@ -122,9 +122,10 @@
 
       const delay = (milliseconds = 90) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
-      async function request(_endpoint, options = {}) {
-        await delay();
+      async function request(_endpoint, options) {
+        options = options || {};
         const body = options.body || {};
+        await delay(body.operation === 'submit' ? 1200 : 90);
 
         if (body.operation === 'status') {
           return { authorized: true, consentAccepted };
@@ -150,23 +151,66 @@
         if (body.operation === 'submit') {
           const answers = new Map((body.answers || []).map((entry) => [entry.questionId, entry.answer]));
           const results = questions.map((question, index) => {
-            const score = index % 5 === 0 ? 5 : 4;
+            const score = [5, 4, 3, 2][index % 4];
+            const issueScore = [4.5, 4, 3, 2][index % 4];
+            const grammarScore = [4, 3.5, 3, 2.5][index % 4];
+            const userAnswer = answers.get(question.id) || '';
             return {
               questionId: question.id,
               number: question.number,
               score,
               maxScore: 5,
               feedback: `Synthetic coaching for interface test ${question.number}: the response reached the minimum and used a direct yes-or-no opening.`,
-              userAnswer: answers.get(question.id) || '',
+              userAnswer,
               suggestedAnswer: `Yes. Under Fictional Rule ${question.number}, a mock permit issued after the stated notice and hearing is treated as valid for this interface test. Thus, Mock Permit ${question.number} is valid for this synthetic exercise.`,
               explanation: 'This is deterministic mock output for visual and interaction testing only; it is not legal content or legal advice.',
+              mockBarCoaching: {
+                strength: 'The answer gives a direct conclusion and stays responsive to the stated facts.',
+                priorityImprovement: score < 4
+                  ? 'State the complete fictional rule before applying each decisive fact.'
+                  : 'Make the transition from rule to application more explicit.',
+                nextStep: 'Use one sentence for the issue, one for the rule, two for application, and one for the conclusion.',
+              },
+              grammar: {
+                score: grammarScore,
+                maxScore: 5,
+                corrections: userAnswer.includes('This synthetic answer')
+                  ? [{
+                    original: 'Yes. This synthetic answer',
+                    category: 'punctuation',
+                    guidance: 'Review punctuation in this exact excerpt.',
+                  }]
+                  : [],
+              },
+              issueSpotting: {
+                score: issueScore,
+                maxScore: 5,
+                identified: ['notice and hearing'],
+                missed: score < 4 ? [`Fictional Rule ${question.number}`] : [],
+                coaching: 'Frame the issue as a precise validity question tied to the decisive procedural facts.',
+              },
             };
           });
+          const average = (selector) => Number((
+            results.reduce((total, result) => total + selector(result), 0) / results.length
+          ).toFixed(1));
           return {
             authorized: true,
             subject: body.subject,
             totalScore: results.reduce((total, result) => total + result.score, 0),
             maxScore: 100,
+            analytics: {
+              questionCount: results.length,
+              averageScore: average((result) => result.score),
+              issueSpottingAverage: average((result) => result.issueSpotting.score),
+              grammarAverage: average((result) => result.grammar.score),
+              diagnosticMaxScore: 5,
+              performanceBands: {
+                strong: results.filter((result) => result.score >= 4).length,
+                developing: results.filter((result) => result.score >= 2.5 && result.score < 4).length,
+                needsFocus: results.filter((result) => result.score < 2.5).length,
+              },
+            },
             results,
           };
         }
@@ -177,6 +221,7 @@
       window.confirm = () => true;
       window.DueDiligencePhase4 = Object.freeze({
         getSession: () => session,
+        ensureRequiredSetup: async () => true,
         request,
       });
 

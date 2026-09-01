@@ -99,11 +99,25 @@ const embedded = experience.slice(
   experience.indexOf('const methodOptions =', experience.indexOf('if (embedded) {')),
 );
 assert.equal((embedded.match(/<input\b/gu) || []).length, 1, 'Regular checkout must expose one customer input.');
-assert.match(embedded, /id="dd2-payment-proof" type="file"/u);
+assert.match(embedded, /id="dd2-payment-proof" type="file"[^>]*required/u);
 assert.doesNotMatch(embedded, /type="date"|Transaction reference|dd2-payment-reference|dd2-payment-note/u);
 assert.match(embedded, /id="dd2-payment-submit" type="submit" disabled/u);
-assert.match(experience, /if \(!isRegularSubscriptionPlan\(plan\)\) \{[\s\S]*form\.set\('paymentDate'/u);
-assert.match(experience, /state\.regularPaymentQrReady !== true/u);
+const legacyProofOnly = experience.slice(
+  experience.indexOf('const methodOptions ='),
+  experience.indexOf('host.scrollIntoView', experience.indexOf('const methodOptions =')),
+);
+assert.equal((legacyProofOnly.match(/<input\b/gu) || []).length, 1, 'Legacy checkout must expose one customer input.');
+assert.match(legacyProofOnly, /id="dd2-payment-proof" type="file"[^>]*required/u);
+assert.doesNotMatch(legacyProofOnly, /type="date"|Payment date|Transaction reference|dd2-payment-reference|dd2-payment-note|<textarea\b/u);
+assert.match(legacyProofOnly, /id="dd2-payment-submit" type="submit" disabled/u);
+assert.doesNotMatch(experience, /form\.set\('paymentDate'|form\.set\('transactionReference'|form\.set\('note'/u);
+assert.match(experience, /state\.paymentQrReady !== true/u);
+const legacyQrGate = experience.slice(
+  experience.indexOf('host.scrollIntoView'),
+  experience.indexOf('function attachCommercialProofDropzone'),
+);
+assert.match(legacyQrGate, /document\.getElementById\('dd2-payment-qr'\)[\s\S]*pricingCheckoutSafety\?\.imageReady\(qrImage\)/u);
+assert.match(legacyQrGate, /state\.paymentQrReady = false;[\s\S]*addEventListener\('load', markQrReady[\s\S]*addEventListener\('error'/u);
 assert.match(experience, /captureProof\([\s\S]*reconcileProof\(/u);
 assert.match(experience, /Pricing changed\. Select the payment proof again/u);
 assert.match(experience, /scheduleOneShotRefresh\([\s\S]*onPayload:[\s\S]*loadCommercialPricing\(viewSequence, \{ plansPayload: payload \}\)/u);
@@ -126,6 +140,7 @@ assert.ok(safetyAt < phase2At, 'Checkout safety must load before the checkout co
 assert.doesNotMatch(index, /20260914|2026-09-14/u);
 assert.doesNotMatch(serviceWorker, /20260914|2026-09-14/u);
 assert.match(serviceWorker, /pricing-checkout-safety\.js\?v=regular-checkout-r1/u);
+assert.match(serviceWorker, /phase2-experience\.js[^'\n]*pricing=regular-checkout-r2/u);
 
 assert.match(pagesBuilder, /assets\/payments\/bpi-instapay-199-qr\.png/u);
 assert.match(pagesBuilder, /assets\/pricing-checkout-safety\.js/u);

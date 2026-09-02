@@ -154,6 +154,7 @@ jobs:
             scripts/verify-admin-bar-forecast-deployment.mjs \
             service-worker.js \
             supabase/migrations/20260902090000_unlimited_forecast_access.sql \
+            supabase/migrations/20260902093000_fix_unlimited_forecast_entitlement_readonly.sql \
             worker/access-core.mjs \
             worker/bar-forecast-core.mjs \
             worker/bar-forecast-database-policy.test.mjs \

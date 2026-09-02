@@ -191,6 +191,7 @@ on:
       - 'scripts/test-unlimited-feature-access-release-workflow.mjs'
       - 'scripts/verify-unlimited-feature-access-live.mjs'
       - 'supabase/migrations/20260902090000_unlimited_forecast_access.sql'
+      - 'supabase/migrations/20260902093000_fix_unlimited_forecast_entitlement_readonly.sql'
       - 'worker/bar-forecast-database-policy.test.mjs'
 
 permissions:

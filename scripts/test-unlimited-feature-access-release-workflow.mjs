@@ -48,6 +48,7 @@ for (const required of [
   'assets/examinations.js',
   'assets/phase2-experience.js',
   'assets/phase4-experience.js',
+  'supabase/migrations/20260902093000_fix_unlimited_forecast_entitlement_readonly.sql',
 ]) {
   assert.ok(workflow.includes(required), `Missing unlimited-feature release contract: ${required}`);
 }

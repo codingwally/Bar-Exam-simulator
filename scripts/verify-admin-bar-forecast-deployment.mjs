@@ -74,7 +74,7 @@ export async function verifyAdminBarForecastDeployment({
   });
   const unauthenticatedPayload = await unauthenticated.json();
   assert.equal(unauthenticated.status, 401, 'The live Forecast must reject signed-out users.');
-  assertExactDeniedPayload(unauthenticatedPayload, 'ADMIN_SIGN_IN_REQUIRED');
+  assertExactDeniedPayload(unauthenticatedPayload, 'AUTHENTICATION_REQUIRED');
   assert.match(unauthenticated.headers.get('cache-control') || '', /private/iu);
   assert.match(unauthenticated.headers.get('cache-control') || '', /no-store/iu);
   assert.equal(unauthenticated.headers.get('pragma'), 'no-cache');

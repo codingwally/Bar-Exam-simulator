@@ -143,6 +143,7 @@ jobs:
             scripts/test-premium-navigation-race.mjs \
             scripts/test-private-beta-landing.mjs \
             scripts/test-private-beta-auth-regression.mjs \
+            scripts/test-admin-bar-forecast-deployment-smoke.mjs \
             scripts/test-syllabus-review-reveal-contract.mjs \
             scripts/test-unlimited-feature-access-live.mjs \
             scripts/test-unlimited-feature-access.mjs \
@@ -150,6 +151,7 @@ jobs:
             scripts/test-website-question-bank.mjs \
             scripts/validate-duediligence-2026-content.mjs \
             scripts/verify-unlimited-feature-access-live.mjs \
+            scripts/verify-admin-bar-forecast-deployment.mjs \
             service-worker.js \
             supabase/migrations/20260902090000_unlimited_forecast_access.sql \
             worker/access-core.mjs \

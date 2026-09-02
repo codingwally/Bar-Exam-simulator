@@ -41,7 +41,7 @@ function happyFetch(calls) {
     }
     return jsonResponse(401, {
       ok: false,
-      error: { code: 'ADMIN_SIGN_IN_REQUIRED', message: 'Administrator sign-in is required.' },
+      error: { code: 'AUTHENTICATION_REQUIRED', message: 'Sign in with Google before opening or submitting an examination.' },
     }, {
       'access-control-allow-origin': STAGING_URL,
       'x-content-type-options': 'nosniff',
@@ -75,7 +75,7 @@ test('live Forecast smoke fails closed if a signed-out response leaks Forecast q
         if (call !== 2) return fetchImpl(...args);
         return jsonResponse(401, {
           ok: false,
-          error: { code: 'ADMIN_SIGN_IN_REQUIRED' },
+          error: { code: 'AUTHENTICATION_REQUIRED' },
           questions: [{ id: 'must-not-leak' }],
         }, {
           'access-control-allow-origin': STAGING_URL,
@@ -100,8 +100,8 @@ test('live Forecast smoke fails closed on any unexpected denial-response field',
         return jsonResponse(401, {
           ok: false,
           error: {
-            code: 'ADMIN_SIGN_IN_REQUIRED',
-            message: 'Administrator sign-in is required.',
+            code: 'AUTHENTICATION_REQUIRED',
+            message: 'Sign in with Google before opening or submitting an examination.',
           },
           requestMetadata: 'must-not-be-added',
         }, {

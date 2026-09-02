@@ -129,6 +129,7 @@ on:
       - 'scripts/test-staging-e2e-workflow.mjs'
       - 'scripts/run-staging-e2e-suite.mjs'
       - 'scripts/test-complete-beta-staging.mjs'
+      - 'scripts/test-examinations-staging.mjs'
       - 'scripts/test-maintenance-lock.mjs'
       - 'scripts/test-paid-subscription-expiry-database.mjs'
       - 'scripts/test-lifetime-grade-ui.mjs'

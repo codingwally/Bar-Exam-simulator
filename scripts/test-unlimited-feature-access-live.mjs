@@ -101,6 +101,59 @@ test('live journey refuses any non-production target before the first request', 
   assert.equal(called, false);
 });
 
+test('live journey downloads the approved legacy PHP 149 QR from the Worker', async () => {
+  const calls = [];
+  const result = await verifyUnlimitedFeatureAccessLive({
+    ...production,
+    fetchImpl: async (input, init = {}) => {
+      const url = String(input);
+      calls.push({ url, init });
+      if (url.includes('/.well-known/duediligence-release.txt')) {
+        return new Response(`${production.releaseSha}\n`, { status: 200 });
+      }
+      if (url === `${production.siteUrl}/?release=${production.releaseSha}`) {
+        return new Response('<button id="spa-bar-forecast"></button><button id="spa-bar-feels"></button>', {
+          status: 200,
+        });
+      }
+      if (url.endsWith('/plans')) {
+        return jsonResponse(200, {
+          ok: true,
+          plans: [{ id: 'early_access_beta' }],
+          pricing: {
+            paymentMethods: [{
+              enabled: true,
+              visible: true,
+              qrUrl: '/pricing/legacy-149-qr.png',
+            }],
+          },
+        });
+      }
+      if (url === `${production.workerUrl}/pricing/legacy-149-qr.png?release=${production.releaseSha}`) {
+        return new Response('image', {
+          status: 200,
+          headers: { 'content-type': 'image/png' },
+        });
+      }
+      if (url.endsWith('/admin/dd2026/bar-forecast')) {
+        return jsonResponse(401, {
+          ok: false,
+          error: { code: 'AUTHENTICATION_REQUIRED', message: 'Sign in.' },
+        });
+      }
+      if (url.endsWith('/examinations/query')) {
+        return jsonResponse(401, {
+          ok: false,
+          error: { code: 'AUTHENTICATION_REQUIRED', message: 'Sign in.' },
+        });
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    },
+  });
+  assert.equal(result.paymentQrReachable, true);
+  assert.ok(calls.some(({ url }) => url.startsWith(`${production.workerUrl}/pricing/legacy-149-qr.png`)));
+});
+
 test('live journey fails closed if either denial leaks protected material', async () => {
   const baseFetch = successfulFetch([]);
   await assert.rejects(

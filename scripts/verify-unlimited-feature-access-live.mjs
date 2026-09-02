@@ -91,10 +91,13 @@ export async function verifyUnlimitedFeatureAccessLive({
   const qrPath = String(paymentMethod.qrUrl || `/pricing/assets/${paymentMethod.qrAsset.assetId}`);
   assert.match(
     qrPath,
-    /^\/(?:assets\/payments\/[A-Za-z0-9._-]+|pricing\/assets\/[0-9a-f-]{36})$/iu,
+    /^\/(?:assets\/payments\/[A-Za-z0-9._-]+|pricing\/assets\/[0-9a-f-]{36}|pricing\/legacy-149-qr\.png)$/iu,
     'The published QR must use an approved public path.',
   );
-  const qrBase = qrPath.startsWith('/pricing/assets/') ? worker : site;
+  const qrBase = qrPath.startsWith('/pricing/assets/')
+    || qrPath === '/pricing/legacy-149-qr.png'
+    ? worker
+    : site;
   const qrResponse = await fetchImpl(`${qrBase}${qrPath}?release=${sha}`, {
     cache: 'no-store',
     headers: { 'Cache-Control': 'no-cache', Origin: origin },

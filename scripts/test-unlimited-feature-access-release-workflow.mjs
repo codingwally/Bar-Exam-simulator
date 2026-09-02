@@ -37,6 +37,7 @@ for (const required of [
   'node scripts/run-staging-e2e-suite.mjs complete-beta',
   'Verify staging Bar Simulation access and cleanup',
   'node scripts/run-staging-e2e-suite.mjs examinations',
+  'scripts/test-examinations-staging.mjs',
   'Require exact protected production Forecast import and read-back',
   'node scripts/import-duediligence-2026-content.mjs --apply --environment production --content-type bar_forecast_question --confirm-production hbllomlijfznnuudpdvr',
   'node scripts/verify-admin-bar-forecast-content.mjs --verify --environment production --confirm-production hbllomlijfznnuudpdvr',

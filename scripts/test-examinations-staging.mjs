@@ -109,6 +109,33 @@ async function createUser(label) {
   return created;
 }
 
+async function grantFoundingBetaAccess(actorUserId, targetUser) {
+  const { body } = await jsonRequest(
+    `${SUPABASE_URL}/rest/v1/free_beta_access?on_conflict=user_id`,
+    {
+      method: 'POST',
+      headers: {
+        ...serviceHeaders,
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=merge-duplicates,return=representation',
+      },
+      body: JSON.stringify({
+        user_id: targetUser.id,
+        enabled: true,
+        expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+        reason: `Unlimited Bar Simulation staging verification ${runId}`,
+        created_by: actorUserId,
+        updated_by: actorUserId,
+        access_program: 'founding_beta_2026',
+      }),
+    },
+    [200, 201],
+  );
+  assert.equal(body.length, 1);
+  assert.equal(body[0].enabled, true);
+  assert.equal(body[0].access_program, 'founding_beta_2026');
+}
+
 async function deleteUser(userId) {
   await jsonRequest(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
     method: 'DELETE',
@@ -660,6 +687,12 @@ try {
     p_payload: { operation: 'dashboard', limit: 50, offset: 0 },
   });
   assert.ok(Array.isArray(directDashboard.definitions));
+
+  const deniedBarFeels = await query(firstStudent.token, 'catalog', { track: 'bar_feels' }, [403]);
+  assert.equal(deniedBarFeels.body.error.code, 'EXAM_PREMIUM_REQUIRED');
+  assert.equal(deniedBarFeels.body.error.message, 'Subscribe to access this feature.');
+  await grantFoundingBetaAccess(admin.id, firstStudent);
+  await grantFoundingBetaAccess(admin.id, secondStudent);
 
   const globalBetaCatalog = await query(secondStudent.token, 'catalog', {
     track: 'per_subject',

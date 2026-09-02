@@ -123,6 +123,7 @@ jobs:
             scripts/import-website-upload.mjs \
             scripts/project-bar-forecast-to-question-bank.mjs \
             scripts/test-complete-beta-staging.mjs \
+            scripts/test-examinations-staging.mjs \
             scripts/renovation-20260820/mandatory-plan-gate.test.mjs \
             scripts/revise-bar-forecast-allocation.mjs \
             scripts/revise-syllabus-priors.mjs \

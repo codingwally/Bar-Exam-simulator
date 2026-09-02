@@ -254,8 +254,8 @@ assert.match(studyRoomPage, /<title>Study Room — Due Diligence<\/title>/);
 assert.match(studyRoomPage, /Authorized testers can join open rooms/);
 assert.match(studyRoomPage, /camera and microphone remain off/i);
 assert.match(studyRoomPage, /assets\/vendor\/livekit-client\.umd\.js\?v=2\.22\.1/);
-assert.match(studyRoomPage, /study-room-backgrounds\.js\?v=study-room-optional-background-20260829-1/);
-assert.match(studyRoomPage, /study-room-live\.js\?v=study-room-meet-layout-20260831-5/);
+assert.match(studyRoomPage, /study-room-backgrounds\.js\?v=study-room-background-processor-20260902-1/);
+assert.match(studyRoomPage, /study-room-live\.js\?v=study-room-meet-layout-20260902-6/);
 assert.match(studyRoomPage, /id="sr-toggle-backdrop"[\s\S]*aria-pressed="false"/u);
 assert.match(studyRoomLive, /\/study-room\/access/);
 assert.match(studyRoomLive, /\/study-room\/rooms/);
@@ -277,7 +277,8 @@ assert.match(studyRoomLive, /function toggleBackdrop\(/u);
 assert.match(studyRoomBackgrounds, /DueDiligenceStudyRoomMandatoryBackground/);
 assert.match(studyRoomBackgrounds, /virtual-background-due-diligence-branded\.webp/);
 assert.match(studyRoomBackgrounds, /mode:\s*'virtual-background'/);
-assert.doesNotMatch(studyRoomBackgrounds, /background-blur|switchTo\(|mode:\s*'disabled'/);
+assert.match(studyRoomBackgrounds, /mode:\s*'disabled'/);
+assert.match(studyRoomBackgrounds, /processor\.switchTo\(nextMode\)/u);
 assert.match(
   studyRoomBackgrounds,
   /track = await liveKit\.createLocalVideoTrack[\s\S]*await track\.setProcessor\(processor, true\)[\s\S]*assertProcessedTrack\(track, processor\)[\s\S]*publication = await participant\.publishTrack/,
@@ -333,14 +334,26 @@ assert.ok(
     blurRadius: 100,
     backgroundDisabled: true,
   });
+  assert.equal(mandatoryProcessor.mode, 'disabled');
+  assert.equal(mandatoryProcessor.transformer.options.imagePath, undefined);
+  assert.equal(mandatoryProcessor.transformer.options.blurRadius, undefined);
+  assert.equal(mandatoryProcessor.transformer.options.backgroundDisabled, true);
+  assert.equal(mandatoryProcessor.transformer.isFirstFrame, false);
+  await mandatoryProcessor.switchTo({
+    mode: 'virtual-background',
+    imagePath: '/unapproved-background.webp',
+  });
   assert.equal(mandatoryProcessor.mode, 'virtual-background');
   assert.equal(
     mandatoryProcessor.transformer.options.imagePath,
     '/assets/study-room/virtual-background-due-diligence-branded.webp',
   );
-  assert.equal(mandatoryProcessor.transformer.options.blurRadius, undefined);
-  assert.equal(mandatoryProcessor.transformer.options.backgroundDisabled, undefined);
-  assert.equal(mandatoryProcessor.transformer.isFirstFrame, false);
+  await mandatoryProcessor.switchTo({ mode: 'background-blur', blurRadius: 12 });
+  assert.equal(mandatoryProcessor.mode, 'background-blur');
+  assert.equal(mandatoryProcessor.transformer.options.blurRadius, 12);
+  await mandatoryProcessor.switchTo({ mode: 'disabled' });
+  assert.equal(mandatoryProcessor.mode, 'disabled');
+  assert.equal(mandatoryProcessor.transformer.options.backgroundDisabled, true);
   mandatoryProcessor.transformer.isFirstFrame = true;
   const invalidFrame = { closed: false, close() { this.closed = true; } };
   await mandatoryProcessor.transformer.transform(invalidFrame, { enqueue() {} });

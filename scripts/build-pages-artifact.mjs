@@ -304,17 +304,65 @@ async function buildStudyRoomBackgroundRuntime() {
 
         function BackgroundProcessor(options = {}, name) {
           const {
-            mode: _requestedMode,
+            mode: _requestedMode = 'disabled',
             imagePath: _requestedImagePath,
             blurRadius: _requestedBlurRadius,
             backgroundDisabled: _requestedDisabled,
             ...processorOptions
           } = options;
-          const processor = LiveKitBackgroundProcessor({
-            ...processorOptions,
-            mode: 'virtual-background',
-            imagePath: MANDATORY_IMAGE_PATH,
-          }, name);
+          const mode = _requestedDisabled === true
+            ? 'disabled'
+            : _requestedMode === 'virtual-background'
+            ? 'virtual-background'
+            : _requestedMode === 'background-blur'
+            ? 'background-blur'
+            : 'disabled';
+          const processorOptionsWithMode = mode === 'virtual-background'
+            ? {
+                ...processorOptions,
+                imagePath: MANDATORY_IMAGE_PATH,
+                blurRadius: undefined,
+                backgroundDisabled: false,
+              }
+            : mode === 'background-blur'
+            ? {
+                ...processorOptions,
+                imagePath: undefined,
+                ...(typeof _requestedBlurRadius === 'number' ? { blurRadius: _requestedBlurRadius } : {}),
+                backgroundDisabled: false,
+              }
+            : { ...processorOptions, imagePath: undefined, blurRadius: undefined, backgroundDisabled: true };
+          const processor = LiveKitBackgroundProcessor(processorOptionsWithMode, name);
+
+          // The 0.7.2 factory intentionally represents its disabled variant as
+          // a pass-through transformer with no image/blur options. Preserve the
+          // public mode contract while keeping that pass-through behavior.
+          let activeMode = mode;
+          if (mode === 'disabled' && processor.transformer?.options) {
+            processor.transformer.options = {
+              ...processor.transformer.options,
+              imagePath: undefined,
+              blurRadius: undefined,
+              backgroundDisabled: true,
+            };
+          }
+          const nativeSwitchTo = processor.switchTo?.bind(processor);
+          if (typeof nativeSwitchTo === 'function') {
+            processor.switchTo = async (nextOptions = {}) => {
+              const safeOptions = nextOptions.mode === 'virtual-background'
+                ? { ...nextOptions, imagePath: MANDATORY_IMAGE_PATH }
+                : nextOptions;
+              await nativeSwitchTo(safeOptions);
+              if (['disabled', 'background-blur', 'virtual-background'].includes(safeOptions.mode)) {
+                activeMode = safeOptions.mode;
+              }
+            };
+          }
+          Object.defineProperty(processor, 'mode', {
+            configurable: true,
+            enumerable: true,
+            get: () => activeMode,
+          });
 
           // @livekit/track-processors 0.7.2 normally emits an unsegmented
           // first-frame preview. It is useful for general UX but violates the

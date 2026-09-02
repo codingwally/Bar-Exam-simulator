@@ -1,5 +1,5 @@
--- Keep the Forecast database boundary aligned with the server-authoritative
--- unlimited-access entitlement sources used by the Worker and signed-in client.
+-- Repair the Forecast entitlement helper without invoking the mutating access
+-- snapshot from a read-only PostgREST RPC.
 
 begin;
 
@@ -22,9 +22,9 @@ begin
     return true;
   end if;
 
-  -- Keep this helper genuinely STABLE.  phase4_access_snapshot is deliberately
-  -- VOLATILE because it may lazily create introductory-token ledger rows; a
-  -- read-only PostgREST RPC cannot invoke it and would return HTTP 405.
+  -- This function is intentionally STABLE. phase4_access_snapshot is
+  -- VOLATILE because it may lazily create introductory-token ledger rows;
+  -- invoking it here makes PostgREST reject the Forecast status RPC with 405.
   if exists (
     select 1
     from public.free_beta_access beta_access
@@ -55,9 +55,9 @@ begin
     return true;
   end if;
 
-  -- A payment with an active provisional window is an unlimited entitlement
-  -- while the owner reviews the proof.  Setup/terms are still enforced by the
-  -- Worker before any Forecast RPC is reached.
+  -- A payment with an active provisional window is unlimited while the owner
+  -- reviews the proof. The Worker enforces terms/profile setup before it calls
+  -- any Forecast RPC.
   return exists (
     select 1
     from public.payment_requests payment_request
@@ -76,6 +76,6 @@ grant execute on function public.dd2026_bar_forecast_access_allowed(uuid)
   to service_role;
 
 comment on function public.dd2026_bar_forecast_access_allowed(uuid)
-is 'Worker-only Forecast entitlement boundary: administrators and every current server-authoritative allowed plus unlimited account.';
+is 'Worker-only Forecast entitlement boundary: administrators and every current paid, Founding Beta, or provisional unlimited account.';
 
 commit;

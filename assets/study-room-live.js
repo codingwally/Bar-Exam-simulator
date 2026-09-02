@@ -20,7 +20,7 @@
   const MAX_NICKNAME_LENGTH = 32;
   const MAX_ROOMS = 5;
   const ROOM_REFRESH_INTERVAL_MS = 15_000;
-  const MEDIA_RELIABILITY_VERSION = 'study-room-meet-layout-20260831-5';
+  const MEDIA_RELIABILITY_VERSION = 'study-room-meet-layout-20260902-6';
   const LAYOUT_STORAGE_KEY = 'duediligence.study-room.layout.v1';
   const MICROPHONE_STATS_INTERVAL_MS = 400;
   const MICROPHONE_STATS_ATTEMPTS = 10;
@@ -708,14 +708,6 @@
   function setJoinOption(kind, enabled) {
     const isMicrophone = kind === 'microphone';
     if (isMicrophone && selectedRoom()?.microphoneAllowed === false) enabled = false;
-    if (!isMicrophone && enabled && state.backdropEnabled) {
-      try {
-        if (ensureBackgroundController().capabilities().supported !== true) enabled = false;
-      } catch (error) {
-        enabled = false;
-        setStatus('sr-prejoin-status', deviceErrorMessage('camera', error), 'error');
-      }
-    }
     if (isMicrophone) state.joinWithMicrophone = enabled;
     else state.joinWithCamera = enabled;
     const button = byId(isMicrophone ? 'sr-join-microphone' : 'sr-join-camera');
@@ -1128,18 +1120,120 @@
     byId('sr-audio-bin')?.replaceChildren();
   }
 
+  function videoTrackIsRenderable(track) {
+    if (!track || typeof track.attach !== 'function' || track.isStopped === true) return false;
+    const mediaStreamTrack = track.mediaStreamTrack;
+    if (!mediaStreamTrack) return false;
+    if (String(mediaStreamTrack.readyState || '').toLowerCase() !== 'live') return false;
+    if (mediaStreamTrack.enabled === false) return false;
+    if (track.isUpstreamPaused === true) return false;
+    return true;
+  }
+
+  function findVideoFallback(container) {
+    return [...(container?.children || [])].find((child) => child?.dataset?.srVideoFallback === 'true') || null;
+  }
+
+  function showVideoFallback(container) {
+    if (!container) return;
+    let fallback = findVideoFallback(container);
+    if (!fallback) {
+      fallback = document.createElement('div');
+      fallback.className = 'sr-tile-placeholder';
+      fallback.dataset.srVideoFallback = 'true';
+      const copy = document.createElement('span');
+      copy.textContent = 'Video unavailable — reconnecting';
+      fallback.append(copy);
+      container.append(fallback);
+    }
+    fallback.hidden = false;
+    container.dataset.videoState = 'unavailable';
+  }
+
+  function hideVideoFallback(container) {
+    const fallback = findVideoFallback(container);
+    if (fallback) fallback.hidden = true;
+    if (container) container.dataset.videoState = 'live';
+  }
+
+  function markVideoElementUnavailable(entry) {
+    if (!entry || entry.kind !== 'video' || !state.attachedTracks.includes(entry)) return;
+    entry.videoState = 'unavailable';
+    if (entry.element) entry.element.hidden = true;
+    showVideoFallback(entry.container);
+    const tileView = state.tileViews.get(entry.key);
+    if (tileView?.tile === entry.container && tileView.track === entry.track) {
+      // The next LiveKit track/stream event will retry the same stable key.
+      tileView.mediaVisible = false;
+    }
+  }
+
+  function markVideoElementPlaying(entry) {
+    if (!entry || entry.kind !== 'video' || !state.attachedTracks.includes(entry)) return;
+    entry.videoState = 'playing';
+    if (entry.element) entry.element.hidden = false;
+    hideVideoFallback(entry.container);
+    const tileView = state.tileViews.get(entry.key);
+    if (tileView?.tile === entry.container && tileView.track === entry.track) {
+      tileView.mediaVisible = true;
+    }
+  }
+
+  function requestVideoPlayback(entry) {
+    if (!entry?.element || entry.kind !== 'video' || typeof entry.element.play !== 'function') return;
+    try {
+      const playback = entry.element.play();
+      if (playback && typeof playback.catch === 'function') {
+        Promise.resolve(playback).then(
+          () => markVideoElementPlaying(entry),
+          () => markVideoElementUnavailable(entry),
+        );
+      }
+    } catch {
+      markVideoElementUnavailable(entry);
+    }
+  }
+
   function attachTrack(track, container, kind, isLocal = false, key = '') {
-    if (!track || !container) return null;
-    const element = track.attach();
+    if (!track || !container || typeof track.attach !== 'function') return null;
+    let element;
+    try {
+      element = track.attach();
+    } catch {
+      return null;
+    }
+    if (!element) return null;
     element.autoplay = true;
     if (kind === 'video') {
       element.playsInline = true;
-      element.muted = isLocal;
+      // Audio is published as a separate LiveKit track. Muting video elements
+      // keeps autoplay deterministic for both local and remote participants.
+      element.muted = true;
     } else if (kind === 'audio') {
       element.muted = false;
     }
-    container.append(element);
-    state.attachedTracks.push({ track, element, kind, key });
+    try {
+      container.append(element);
+    } catch {
+      try {
+        track.detach?.(element);
+      } catch {
+        // The element was never attached to the room UI; there is nothing else to clean up.
+      }
+      return null;
+    }
+    const entry = { track, element, container, kind, key, videoState: kind === 'video' ? 'starting' : '' };
+    state.attachedTracks.push(entry);
+    if (kind === 'video') {
+      const markUnavailable = () => markVideoElementUnavailable(entry);
+      const markPlaying = () => markVideoElementPlaying(entry);
+      element.addEventListener?.('error', markUnavailable);
+      element.addEventListener?.('stalled', markUnavailable);
+      element.addEventListener?.('emptied', markUnavailable);
+      element.addEventListener?.('loadeddata', markPlaying);
+      element.addEventListener?.('playing', markPlaying);
+      requestVideoPlayback(entry);
+    }
     if (kind === 'audio' && typeof element.play === 'function') {
       try {
         Promise.resolve(element.play())
@@ -1244,9 +1338,24 @@
 
   function tileViewState(view) {
     const localCameraProtected = localViewIsAllowed(view);
-    const mediaVisible = Boolean(view.track && !view.publication?.isMuted && localCameraProtected);
-    const streamPaused = String(view.publication?.streamState || '').toLowerCase().includes('paused');
-    return { localCameraProtected, mediaVisible, streamPaused };
+    const streamPaused = String(view.publication?.streamState || '').toLowerCase().includes('paused')
+      || view.publication?.isUpstreamPaused === true
+      || view.track?.isUpstreamPaused === true;
+    const trackReady = videoTrackIsRenderable(view.track);
+    const mediaVisible = Boolean(
+      view.track
+      && !view.publication?.isMuted
+      && localCameraProtected
+      && trackReady,
+    );
+    const mediaUnavailable = Boolean(
+      view.track
+      && !view.publication?.isMuted
+      && localCameraProtected
+      && !trackReady
+      && !streamPaused,
+    );
+    return { localCameraProtected, mediaVisible, mediaUnavailable, streamPaused };
   }
 
   function syncTile(tile, view, renderedState) {
@@ -1290,8 +1399,21 @@
     if (participant.isLocal && view.track && !view.publication?.isMuted && !renderedState.localCameraProtected) {
       scheduleLocalCameraGuard(state.room);
     }
+    let attachedElement = null;
     if (renderedState.mediaVisible && !renderedState.streamPaused) {
-      attachTrack(view.track, tile, 'video', participant.isLocal, view.key);
+      const fallback = document.createElement('div');
+      fallback.className = 'sr-tile-placeholder';
+      fallback.dataset.srVideoFallback = 'true';
+      fallback.hidden = true;
+      const avatar = document.createElement('span');
+      avatar.className = 'sr-avatar';
+      avatar.textContent = initials(displayName(participant));
+      const copy = document.createElement('span');
+      copy.textContent = 'Video unavailable — reconnecting';
+      fallback.append(avatar, copy);
+      tile.append(fallback);
+      attachedElement = attachTrack(view.track, tile, 'video', participant.isLocal, view.key);
+      if (!attachedElement) fallback.hidden = false;
     } else {
       const placeholder = document.createElement('div');
       placeholder.className = 'sr-tile-placeholder';
@@ -1299,7 +1421,11 @@
       avatar.className = 'sr-avatar';
       avatar.textContent = initials(displayName(participant));
       const copy = document.createElement('span');
-      copy.textContent = renderedState.streamPaused ? 'Video paused to save bandwidth' : 'Camera off';
+      copy.textContent = renderedState.streamPaused
+        ? 'Video paused to save bandwidth'
+        : renderedState.mediaUnavailable
+        ? 'Video unavailable — reconnecting'
+        : 'Camera off';
       placeholder.append(avatar, copy);
       tile.append(placeholder);
     }
@@ -1352,11 +1478,15 @@
     tile.__srMediaState = mediaState;
     tile.__srPin = pin;
     tile.__srHand = hand;
-    syncTile(tile, view, renderedState);
+    const attachedState = {
+      ...renderedState,
+      mediaVisible: Boolean(attachedElement && renderedState.mediaVisible),
+    };
+    syncTile(tile, view, attachedState);
     state.tileViews.set(view.key, {
       tile,
       track: view.track,
-      mediaVisible: renderedState.mediaVisible,
+      mediaVisible: attachedState.mediaVisible,
       streamPaused: renderedState.streamPaused,
       source: view.source,
     });
@@ -1628,7 +1758,11 @@
     grid.dataset.presenting = String(presenting);
     grid.dataset.pinned = state.pinnedTrackKey || state.pinnedParticipantIdentity ? 'true' : 'false';
     grid.dataset.layoutMode = state.layoutMode;
-    grid.replaceChildren(...mediaViews.map(reconcileTile));
+    const nextTiles = mediaViews.map(reconcileTile);
+    const currentTiles = [...(grid.children || [])];
+    const tileOrderUnchanged = currentTiles.length === nextTiles.length
+      && currentTiles.every((tile, index) => tile === nextTiles[index]);
+    if (!tileOrderUnchanged) grid.replaceChildren(...nextTiles);
     attachRemoteAudio(participants);
     renderPeople(participants);
     const countCopy = `${participants.length} ${participants.length === 1 ? 'studying' : 'studying'}`;
@@ -2332,39 +2466,20 @@
 
   function isMandatoryProcessedCameraTrack(track) {
     try {
-      const effects = global.LivekitTrackProcessors;
       const processor = track?.getProcessor?.();
       const processedTrack = processor?.processedTrack;
-      const processorOptions = processor?.transformer?.options;
-      const strictProductionVerification = Boolean(
-        effects?.POLICY === MANDATORY_BACKGROUND_POLICY
-        && typeof effects.MANDATORY_IMAGE_PATH === 'string'
-        && effects.MANDATORY_IMAGE_PATH.length > 0
-        && processor
-        && processor.mode === 'virtual-background'
-        && processorOptions?.imagePath === effects.MANDATORY_IMAGE_PATH
-        && processorOptions.backgroundDisabled !== true
-        && typeof processorOptions.blurRadius === 'undefined'
+      const mode = String(processor?.mode || '').toLowerCase();
+      const supportedMode = mode === 'disabled'
+        || mode === 'background-blur'
+        || mode === 'virtual-background';
+      return Boolean(
+        processor
+        && supportedMode
         && processedTrack
-        && processedTrack.readyState === 'live'
+        && String(processedTrack.readyState || '').toLowerCase() === 'live'
         && processedTrack.enabled !== false
         && track.mediaStreamTrack === processedTrack
         && track.getProcessor?.() === processor
-      );
-      if (strictProductionVerification) return true;
-
-      // The controller contract is also tracked after enableCamera returns.
-      // This fallback supports isolated controller test doubles only when the
-      // production processor bundle is absent; production always takes the
-      // stronger identity/processedTrack verification above.
-      return Boolean(
-        !effects
-        && state.controllerProtectedCameraTracks.has(track)
-        && processor?.mode === 'virtual-background'
-        && (processor?.imagePath || processorOptions?.imagePath)
-          === '/assets/study-room/virtual-background-due-diligence-branded.webp'
-        && track?.mediaStreamTrack?.readyState === 'live'
-        && track.mediaStreamTrack.enabled !== false
       );
     } catch {
       return false;
@@ -2525,13 +2640,17 @@
     const title = byId('sr-branded-backdrop-title');
     const copy = byId('sr-branded-backdrop-copy');
     const backdropButton = byId('sr-toggle-backdrop');
+    const effectsUnavailable = snapshot.supported === false;
     if (backdropButton) {
       backdropButton.setAttribute('aria-pressed', String(state.backdropEnabled));
       backdropButton.setAttribute(
         'aria-label',
         state.backdropEnabled ? 'Remove the Due Diligence backdrop' : 'Apply the Due Diligence backdrop',
       );
-      backdropButton.title = state.backdropEnabled ? 'Remove backdrop' : 'Apply backdrop';
+      backdropButton.disabled = state.cameraOperationBusy || effectsUnavailable;
+      backdropButton.title = effectsUnavailable
+        ? 'Background effects are unavailable; your camera remains available.'
+        : state.backdropEnabled ? 'Remove backdrop' : 'Apply backdrop';
       const label = backdropButton.querySelector('span');
       if (label) label.textContent = state.backdropEnabled ? 'Remove backdrop' : 'Apply backdrop';
     }
@@ -2539,14 +2658,15 @@
     if (!state.backdropEnabled) {
       if (node) node.dataset.backdropState = 'off';
       if (title) title.textContent = 'Backdrop off';
-      if (copy) copy.textContent = 'Your real background is visible. Turn the Due Diligence backdrop on whenever you want it.';
+      if (copy) copy.textContent = effectsUnavailable
+        ? 'Background effects are unavailable in this browser. Your camera remains available without them.'
+        : 'Your real background is visible. Turn the Due Diligence backdrop on whenever you want it.';
       for (const id of ['sr-join-camera', 'sr-toggle-camera']) {
         const button = byId(id);
         if (!button) continue;
         button.disabled = state.cameraOperationBusy;
         if (!state.cameraOperationBusy) button.removeAttribute?.('title');
       }
-      if (backdropButton) backdropButton.disabled = state.cameraOperationBusy;
       return;
     }
 
@@ -2569,28 +2689,23 @@
           ? 'The protected camera has been closed.'
         : 'Off by default for smoother video. Apply it whenever you want the Due Diligence backdrop.';
     }
-    const unavailable = snapshot.supported === false || status === 'unavailable';
     for (const id of ['sr-join-camera', 'sr-toggle-camera']) {
       const button = byId(id);
       if (!button) continue;
-      if (unavailable) {
-        button.disabled = true;
-        button.title = 'This browser cannot safely apply the required Due Diligence backdrop.';
-      } else if (status === 'preparing' || state.cameraOperationBusy) {
+      if (status === 'preparing' || state.cameraOperationBusy) {
         button.disabled = true;
       } else {
         button.disabled = false;
         button.removeAttribute?.('title');
       }
     }
-    if (backdropButton) backdropButton.disabled = state.cameraOperationBusy;
   }
 
   function ensureBackgroundController() {
     if (state.backgroundController) return state.backgroundController;
     const createController = global.DueDiligenceStudyRoomMandatoryBackground?.createController;
     if (typeof createController !== 'function') {
-      const error = new Error('The required Due Diligence backdrop could not load, so video remains off.');
+      const error = new Error('Background effects could not load. Your camera remains available without them.');
       error.code = 'STUDY_ROOM_BACKGROUND_LIBRARY_UNAVAILABLE';
       syncBrandedBackdropState({ status: 'unavailable', supported: false, error: error.message });
       throw error;
@@ -2607,7 +2722,7 @@
       ...capabilities,
       error: capabilities.supported
         ? ''
-        : 'This browser cannot safely apply the required Due Diligence backdrop, so video remains off.',
+        : 'Background effects are unavailable in this browser. Your camera remains available without them.',
     });
     return state.backgroundController;
   }
@@ -2633,7 +2748,7 @@
         ...capabilities,
         error: capabilities.supported
           ? ''
-          : 'This browser cannot safely apply the required Due Diligence backdrop, so video remains off.',
+          : 'Background effects are unavailable in this browser. Your camera remains available without them.',
       });
     }
   }
@@ -2662,8 +2777,11 @@
         captureOptions('camera', deviceId),
         cameraPublishOptions(),
       );
-      if (result?.publication?.track) state.controllerProtectedCameraTracks.add(result.publication.track);
-      assertMandatoryProcessedCameraTrack(result?.publication?.track);
+      if (result?.publication?.track) {
+        state.controllerProtectedCameraTracks.add(result.publication.track);
+        if (result.fallbackRaw) state.userApprovedRawCameraTracks.add(result.publication.track);
+      }
+      if (!result?.fallbackRaw) assertMandatoryProcessedCameraTrack(result?.publication?.track);
       if (!isLocalSourceEnabled(room.localParticipant, 'camera')) throw sourceStartError('camera');
       await syncActualInputDevice('camera', deviceId);
     } finally {
@@ -2680,8 +2798,11 @@
     state.cameraOperationBusy = true;
     try {
       const result = await ensureBackgroundController().switchCamera(captureOptions('camera', deviceId));
-      if (result?.publication?.track) state.controllerProtectedCameraTracks.add(result.publication.track);
-      assertMandatoryProcessedCameraTrack(result?.publication?.track);
+      if (result?.publication?.track) {
+        state.controllerProtectedCameraTracks.add(result.publication.track);
+        if (result.fallbackRaw) state.userApprovedRawCameraTracks.add(result.publication.track);
+      }
+      if (!result?.fallbackRaw) assertMandatoryProcessedCameraTrack(result?.publication?.track);
       if (!isLocalSourceEnabled(room.localParticipant, 'camera')) throw sourceStartError('camera');
       await syncActualInputDevice('camera', deviceId);
       return result;
@@ -2761,32 +2882,62 @@
         : 'Backdrop removed. Your real background is now visible.');
       return;
     }
-    const backdropWasEnabled = state.backdropEnabled;
-    const cameraWasOn = isLocalSourceEnabled(local, 'camera');
-    state.cameraOperationBusy = true;
-    syncBrandedBackdropState(state.backgroundController?.snapshot?.() || { status: 'idle', supported: true });
+    let controller;
     try {
-      if (backdropWasEnabled) {
-        await destroyBackgroundController();
+      controller = ensureBackgroundController();
+    } catch (error) {
+      state.backdropEnabled = false;
+      syncBrandedBackdropState({ status: 'unavailable', supported: false, error: error.message });
+      toast('Background effects are unavailable. Your camera remains available.');
+      return;
+    }
+    const capabilities = controller.capabilities?.() || { supported: false };
+    if (capabilities.supported !== true) {
+      state.backdropEnabled = false;
+      syncBrandedBackdropState({
+        status: 'unavailable',
+        ...capabilities,
+        error: 'Background effects are unavailable in this browser. Your camera remains available without them.',
+      });
+      toast('Background effects are unavailable. Your camera remains available.');
+      return;
+    }
+    const backdropEnabled = !state.backdropEnabled;
+    state.cameraOperationBusy = true;
+    state.backdropEnabled = backdropEnabled;
+    syncBrandedBackdropState({
+      ...(controller.snapshot?.() || capabilities),
+      status: 'preparing',
+    });
+    try {
+      const result = await controller.switchBackground(
+        backdropEnabled
+          ? { mode: 'virtual-background', imagePath: '/assets/study-room/virtual-background-due-diligence-branded.webp' }
+          : { mode: 'disabled' },
+      );
+      const fallbackTrack = localSourcePublication(local, 'camera')?.track;
+      if (result?.fallbackRaw && fallbackTrack) {
+        state.userApprovedRawCameraTracks.add(fallbackTrack);
         state.backdropEnabled = false;
-      } else {
-        await discardUserApprovedRawCamera(local);
-        state.backdropEnabled = true;
-      }
-      if (cameraWasOn) {
-        if (state.backdropEnabled) await setProtectedCameraEnabled(true);
-        else await setRawCameraEnabled(true);
       }
       syncSelfMediaState();
       toast(state.backdropEnabled
         ? 'Due Diligence backdrop applied.'
         : 'Backdrop removed. Your real background is now visible.');
     } catch (error) {
+      const fallbackTrack = localSourcePublication(local, 'camera')?.track;
+      const snapshot = controller.snapshot?.() || {};
+      if (snapshot.fallbackRaw && fallbackTrack) {
+        state.userApprovedRawCameraTracks.add(fallbackTrack);
+        state.backdropEnabled = false;
+      } else {
+        state.backdropEnabled = !backdropEnabled;
+      }
       syncSelfMediaState();
       toast(deviceErrorMessage('camera', error));
     } finally {
       state.cameraOperationBusy = false;
-      syncBrandedBackdropState(state.backgroundController?.snapshot?.() || {
+      syncBrandedBackdropState(controller.snapshot?.() || {
         status: state.backdropEnabled ? 'idle' : 'off',
         supported: true,
       });
@@ -2855,8 +3006,36 @@
       state.cameraOperationBusy = true;
       syncBrandedBackdropState(state.backgroundController?.snapshot?.() || { status: 'idle', supported: true });
       try {
-        if (state.backdropEnabled) await setProtectedCameraEnabled(enabled);
-        else await setRawCameraEnabled(enabled);
+        let controller = null;
+        let supported = false;
+        try {
+          controller = ensureBackgroundController();
+          supported = controller.capabilities?.().supported === true;
+        } catch (error) {
+          syncBrandedBackdropState({
+            status: 'unavailable',
+            supported: false,
+            error: error.message,
+          });
+        }
+        if (supported) {
+          try {
+            await setProtectedCameraEnabled(enabled);
+          } catch (error) {
+            // A processor failure must not strand a working camera. Fall back
+            // to the raw LiveKit camera while leaving the room connected.
+            if (enabled) {
+              state.backdropEnabled = false;
+              await setRawCameraEnabled(true);
+              toast('Background effects are unavailable. Camera is on without them.');
+            } else {
+              throw error;
+            }
+          }
+        } else {
+          state.backdropEnabled = false;
+          await setRawCameraEnabled(enabled);
+        }
       } finally {
         state.cameraOperationBusy = false;
         syncBrandedBackdropState(state.backgroundController?.snapshot?.() || {
@@ -3140,7 +3319,8 @@
       return;
     }
     if (kind === 'videoinput' && sourceWasLive) {
-      if (!state.backdropEnabled) {
+      const protectedCameraLive = isMandatoryProcessedCameraTrack(publication?.track);
+      if (!protectedCameraLive) {
         try {
           await discardUserApprovedRawCamera(local);
           rememberDeviceSelection(kind, deviceId);

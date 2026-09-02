@@ -39,6 +39,7 @@ const instrumentedLiveClient = liveClient.replace(
     toggleRaiseHand,
     toggleScreenShare,
     toggleCompactView,
+    disconnectConnectedRoom,
   };
   ${liveClientTestHooksMarker}`,
 );
@@ -445,6 +446,8 @@ function createFakeMandatoryBackground(liveKit, calls) {
       let status = 'disabled';
       let publication = null;
       let processedTrack = null;
+      let processor = null;
+      let mode = 'disabled';
 
       const notify = (nextStatus, error = '') => {
         status = nextStatus;
@@ -462,19 +465,32 @@ function createFakeMandatoryBackground(liveKit, calls) {
       };
       const createProcessedTrack = (deviceId) => {
         let activeDeviceId = deviceId;
-        const processor = Object.freeze({
-          mode: 'virtual-background',
-          imagePath: '/assets/study-room/virtual-background-due-diligence-branded.webp',
-        });
+        const mediaStreamTrack = {
+          kind: 'video',
+          readyState: 'live',
+          enabled: true,
+          muted: false,
+          getSettings: () => ({ deviceId: activeDeviceId }),
+        };
+        processor = {
+          mode: 'disabled',
+          processedTrack: mediaStreamTrack,
+          imagePath: undefined,
+          blurRadius: undefined,
+          async switchTo(nextOptions) {
+            calls.push({ operation: 'processorSwitchTo', mode: nextOptions.mode });
+            this.mode = nextOptions.mode;
+            this.imagePath = nextOptions.imagePath;
+            this.blurRadius = nextOptions.blurRadius;
+            mode = nextOptions.mode;
+          },
+          async destroy() {
+            calls.push({ operation: 'processorDestroy' });
+          },
+        };
         const track = {
           isMuted: false,
-          mediaStreamTrack: {
-            kind: 'video',
-            readyState: 'live',
-            enabled: true,
-            muted: false,
-            getSettings: () => ({ deviceId: activeDeviceId }),
-          },
+          mediaStreamTrack,
           getProcessor: () => processor,
           attach: () => new FakeHTMLElement('protected-camera-video', 'video'),
           detach(element) {
@@ -523,7 +539,16 @@ function createFakeMandatoryBackground(liveKit, calls) {
           return Object.freeze({ supported: true, modern: true });
         },
         snapshot() {
-          return Object.freeze({ status, supported: true, modern: true, enabled: status === 'enabled', error: '' });
+          return Object.freeze({
+            status,
+            supported: true,
+            modern: true,
+            enabled: status === 'enabled',
+            mode,
+            processorAttached: Boolean(processedTrack?.getProcessor?.()),
+            fallbackRaw: false,
+            error: '',
+          });
         },
         async enableCamera(captureOptions = {}, publishOptions = {}) {
           calls.push({ operation: 'enableCamera', captureOptions, publishOptions });
@@ -545,6 +570,21 @@ function createFakeMandatoryBackground(liveKit, calls) {
           notify('enabled');
           return Object.freeze({ enabled: true, publication: activePublication });
         },
+        async switchBackground(request = { mode: 'disabled' }) {
+          const nextMode = typeof request === 'string' ? request : request?.mode;
+          calls.push({ operation: 'switchBackground', mode: nextMode });
+          if (!processedTrack || !processor) {
+            mode = nextMode || 'disabled';
+            return this.snapshot();
+          }
+          await processor.switchTo({
+            mode: nextMode || 'disabled',
+            imagePath: request?.imagePath,
+            blurRadius: request?.blurRadius,
+          });
+          notify(publication && !publication.isMuted ? 'enabled' : 'disabled');
+          return this.snapshot();
+        },
         async destroy() {
           calls.push({ operation: 'destroy' });
           if (publication) await publication.mute();
@@ -554,6 +594,8 @@ function createFakeMandatoryBackground(liveKit, calls) {
           }
           publication = null;
           processedTrack = null;
+          processor = null;
+          mode = 'disabled';
           notify('destroyed');
         },
       });
@@ -1095,10 +1137,11 @@ function fakeLocalTrack(kind, deviceId) {
 
   const cameraButton = harness.document.getElementById('sr-toggle-camera');
   await cameraButton.emit('click');
-  assert.equal(rawCameraCalls.length, 1, 'Camera start must use the low-cost raw track while the optional backdrop is off.');
-  assert.equal(rawCameraCalls[0].options.deviceId.exact, 'camera-selected');
-  assert.equal(rawCameraCalls[0].publishOptions.source, liveKitSources.Camera);
-  assert.equal(publications.get(liveKitSources.Camera).track.getProcessor, undefined);
+  assert.equal(rawCameraCalls.length, 0, 'Supported browsers must start the managed camera lifecycle even with the backdrop off.');
+  const initialCameraTrack = publications.get(liveKitSources.Camera).track;
+  const initialCameraProcessor = initialCameraTrack.getProcessor();
+  assert.equal(initialCameraProcessor.mode, 'disabled');
+  assert.equal(initialCameraTrack.mediaStreamTrack, initialCameraProcessor.processedTrack);
   assert.equal(cameraButton.getAttribute('aria-pressed'), 'true');
   assert.equal(harness.document.getElementById('sr-camera-state').textContent, 'On');
   assert.equal(harness.document.getElementById('sr-branded-backdrop-status').dataset.backdropState, 'off');
@@ -1108,10 +1151,14 @@ function fakeLocalTrack(kind, deviceId) {
   await backdropButton.emit('click');
   const cameraEnableCalls = harness.backgroundCalls.filter(({ operation }) => operation === 'enableCamera');
   assert.equal(backdropButton.getAttribute('aria-pressed'), 'true');
-  assert.equal(cameraEnableCalls.length, 1, 'Applying the optional backdrop must replace the raw track with the processor.');
+  assert.equal(cameraEnableCalls.length, 1, 'Applying the backdrop must reuse the existing camera lifecycle.');
   assert.equal(cameraEnableCalls[0].captureOptions.deviceId.exact, 'camera-selected');
   assert.equal(cameraEnableCalls[0].publishOptions.source, liveKitSources.Camera);
-  assert.equal(publications.get(liveKitSources.Camera).track.getProcessor().mode, 'virtual-background');
+  assert.equal(harness.backgroundCalls.filter(({ operation }) => operation === 'switchBackground').length, 1);
+  assert.equal(harness.backgroundCalls.find(({ operation }) => operation === 'switchBackground').mode, 'virtual-background');
+  assert.equal(publications.get(liveKitSources.Camera).track, initialCameraTrack);
+  assert.equal(publications.get(liveKitSources.Camera).track.getProcessor(), initialCameraProcessor);
+  assert.equal(initialCameraProcessor.mode, 'virtual-background');
   assert.equal(cameraButton.getAttribute('aria-pressed'), 'true');
   assert.equal(harness.document.getElementById('sr-branded-backdrop-status').dataset.backdropState, 'enabled');
   assert.match(harness.document.getElementById('sr-branded-backdrop-copy').textContent, /backdrop is active/iu);
@@ -1121,21 +1168,24 @@ function fakeLocalTrack(kind, deviceId) {
   assert.equal(
     harness.backgroundCalls.filter(({ operation }) => operation === 'enableCamera').length,
     1,
-    'Removing the backdrop must not run a second processor.',
+    'Removing the backdrop must not create a second camera lifecycle.',
   );
-  assert.equal(rawCameraCalls.length, 2, 'Removing the backdrop must replace the processed track with one low-cost raw track.');
-  assert.equal(rawCameraCalls[1].options.resolution.width, 640);
-  assert.equal(rawCameraCalls[1].options.resolution.height, 360);
-  assert.equal(publications.get(liveKitSources.Camera).track.getProcessor, undefined);
+  assert.equal(rawCameraCalls.length, 0, 'Removing the backdrop must not replace the managed camera track.');
+  assert.equal(harness.backgroundCalls.filter(({ operation }) => operation === 'switchBackground').length, 2);
+  assert.equal(harness.backgroundCalls.at(-1).mode, 'disabled');
+  assert.equal(publications.get(liveKitSources.Camera).track, initialCameraTrack);
+  assert.equal(publications.get(liveKitSources.Camera).track.getProcessor(), initialCameraProcessor);
+  assert.equal(initialCameraProcessor.mode, 'disabled');
   assert.equal(cameraButton.getAttribute('aria-pressed'), 'true');
 
   await cameraButton.emit('click');
   assert.equal(
     harness.backgroundCalls.filter(({ operation }) => operation === 'destroy').length,
-    1,
-    'Removing the optional backdrop must fully destroy the processor.',
+    0,
+    'Turning the camera off must mute the publication without destroying its processor.',
   );
-  assert.equal(rawCameraCalls.length, 2);
+  assert.equal(harness.backgroundCalls.filter(({ operation }) => operation === 'disableCamera').length, 1);
+  assert.equal(rawCameraCalls.length, 0);
   assert.equal(cameraButton.getAttribute('aria-pressed'), 'false');
   assert.equal(harness.document.getElementById('sr-camera-state').textContent, 'Off');
   assert.equal(harness.document.getElementById('sr-branded-backdrop-status').dataset.backdropState, 'off');
@@ -1887,6 +1937,13 @@ class FakeMediaStream {
   harness.hooks.state.userApprovedRawCameraTracks.add(cameraTrack);
 
   harness.hooks.renderParticipants();
+  const participantGrid = harness.document.getElementById('sr-participant-grid');
+  let gridReplaceChildrenCount = 0;
+  const originalReplaceChildren = participantGrid.replaceChildren.bind(participantGrid);
+  participantGrid.replaceChildren = (...children) => {
+    gridReplaceChildrenCount += 1;
+    return originalReplaceChildren(...children);
+  };
   let tiles = harness.document.getElementById('sr-participant-grid').children;
   assert.equal(tiles.length, 1, 'The local camera must create one self-view tile.');
   assert.equal(tiles[0].dataset.trackSource, liveKitSources.Camera);
@@ -1896,6 +1953,7 @@ class FakeMediaStream {
   localParticipant.name = 'Participant 506';
   harness.hooks.renderParticipants();
   tiles = harness.document.getElementById('sr-participant-grid').children;
+  assert.equal(gridReplaceChildrenCount, 0, 'A metadata-only rerender must not replace the stable tile DOM tree.');
   assert.equal(cameraAttachCount, 1, 'A metadata-only rerender must preserve the attached local video element.');
   assert.equal(cameraDetachCount, 0, 'A metadata-only rerender must not detach the local video element.');
 
@@ -2007,6 +2065,241 @@ class FakeMediaStream {
     assert.ok(layout.columns * layout.rows >= 4);
     assert.ok(layout.size >= 88, `Square layout failed at ${viewport.join('x')}.`);
   }
+}
+
+{
+  let endedAttachCount = 0;
+  const endedTrack = {
+    mediaStreamTrack: {
+      kind: 'video',
+      readyState: 'ended',
+      enabled: true,
+      muted: false,
+    },
+    attach() {
+      endedAttachCount += 1;
+      return new FakeHTMLElement('ended-video', 'video');
+    },
+    detach() {},
+  };
+  const remotePublication = {
+    source: liveKitSources.Camera,
+    isMuted: false,
+    track: endedTrack,
+  };
+  const remoteParticipant = {
+    identity: 'remote-ended-track',
+    name: 'Remote ended track',
+    isLocal: false,
+    attributes: {},
+    trackPublications: new Map([[liveKitSources.Camera, remotePublication]]),
+    getTrackPublication: (source) => source === liveKitSources.Camera ? remotePublication : null,
+  };
+  const localParticipant = {
+    identity: 'local-ended-track',
+    name: 'Local participant',
+    isLocal: true,
+    attributes: {},
+    trackPublications: new Map(),
+    getTrackPublication: () => null,
+  };
+  const harness = createLiveHarness({
+    fetch: async () => authorizedResponse(),
+    enumerateDevices: async () => labeledDevices,
+    getUserMedia: async () => { throw new Error('Automatic permission should not be needed for labeled devices.'); },
+    liveKit: { Track: { Source: liveKitSources } },
+  });
+  await waitForAuthorizedPrejoin(harness);
+  harness.hooks.state.room = {
+    localParticipant,
+    remoteParticipants: new Map([[remoteParticipant.identity, remoteParticipant]]),
+    state: 'connected',
+    canPlaybackAudio: true,
+  };
+  harness.hooks.renderParticipants();
+  const tile = harness.document.getElementById('sr-participant-grid').children.find(
+    (candidate) => candidate.dataset.participantIdentity === remoteParticipant.identity,
+  );
+  assert.equal(endedAttachCount, 0, 'An ended remote video track must not be attached to the DOM.');
+  assert.equal(tile?.dataset.mediaVisible, 'false', 'An ended remote video track must render as unavailable.');
+  assert.equal(
+    tile?.children.some((child) => child.tagName === 'VIDEO'),
+    false,
+    'An ended remote video track must show a placeholder instead of a stale video element.',
+  );
+}
+
+{
+  let attachErrorCount = 0;
+  let playErrorCount = 0;
+  const makeParticipant = (identity, track) => {
+    const publication = {
+      source: liveKitSources.Camera,
+      isMuted: false,
+      track,
+    };
+    return {
+      identity,
+      name: identity,
+      isLocal: false,
+      attributes: {},
+      trackPublications: new Map([[liveKitSources.Camera, publication]]),
+      getTrackPublication: (source) => source === liveKitSources.Camera ? publication : null,
+    };
+  };
+  const attachErrorTrack = {
+    mediaStreamTrack: { kind: 'video', readyState: 'live', enabled: true },
+    attach() {
+      attachErrorCount += 1;
+      throw new Error('video element could not be created');
+    },
+    detach() {},
+  };
+  const playErrorTrack = {
+    mediaStreamTrack: { kind: 'video', readyState: 'live', enabled: true },
+    attach() {
+      const element = new FakeHTMLElement('play-error-video', 'video');
+      element.play = async () => {
+        playErrorCount += 1;
+        throw new Error('video playback failed');
+      };
+      return element;
+    },
+    detach(element) {
+      element?.remove?.();
+    },
+  };
+  const attachErrorParticipant = makeParticipant('remote-attach-error', attachErrorTrack);
+  const playErrorParticipant = makeParticipant('remote-play-error', playErrorTrack);
+  const localParticipant = {
+    identity: 'local-video-errors',
+    name: 'Local participant',
+    isLocal: true,
+    attributes: {},
+    trackPublications: new Map(),
+    getTrackPublication: () => null,
+  };
+  const harness = createLiveHarness({
+    fetch: async () => authorizedResponse(),
+    enumerateDevices: async () => labeledDevices,
+    getUserMedia: async () => { throw new Error('Automatic permission should not be needed for labeled devices.'); },
+    liveKit: { Track: { Source: liveKitSources } },
+  });
+  await waitForAuthorizedPrejoin(harness);
+  harness.hooks.state.room = {
+    localParticipant,
+    remoteParticipants: new Map([
+      [attachErrorParticipant.identity, attachErrorParticipant],
+      [playErrorParticipant.identity, playErrorParticipant],
+    ]),
+    state: 'connected',
+    canPlaybackAudio: true,
+  };
+  assert.doesNotThrow(() => harness.hooks.renderParticipants(), 'A video attach exception must not break participant rendering.');
+  const attachErrorTile = harness.document.getElementById('sr-participant-grid').children.find(
+    (candidate) => candidate.dataset.participantIdentity === attachErrorParticipant.identity,
+  );
+  assert.equal(attachErrorCount, 1);
+  assert.equal(attachErrorTile?.dataset.mediaVisible, 'false');
+  assert.equal(
+    descendants(attachErrorTile).some((child) => child.textContent === 'Video unavailable — reconnecting'),
+    true,
+    'A video attach exception must show a recoverable placeholder.',
+  );
+
+  const playErrorTile = harness.document.getElementById('sr-participant-grid').children.find(
+    (candidate) => candidate.dataset.participantIdentity === playErrorParticipant.identity,
+  );
+  const playErrorVideo = descendants(playErrorTile).find((child) => child.tagName === 'VIDEO');
+  await eventually(() => playErrorCount === 1 && playErrorTile?.dataset.videoState === 'unavailable', 'A rejected video play promise did not expose the recovery state.');
+  assert.equal(playErrorVideo.hidden, true);
+  const fallback = descendants(playErrorTile).find((child) => child.dataset.srVideoFallback === 'true');
+  assert.equal(fallback.hidden, false);
+
+  playErrorVideo.play = async () => {};
+  await playErrorVideo.emit('playing');
+  assert.equal(playErrorVideo.hidden, false, 'A later playing event must restore the video element.');
+  assert.equal(fallback.hidden, true, 'A recovered video must hide its fallback placeholder.');
+  assert.equal(playErrorTile.dataset.videoState, 'live');
+}
+
+{
+  let disconnectCalls = 0;
+  const harness = createLiveHarness({
+    fetch: async () => authorizedResponse(),
+    enumerateDevices: async () => labeledDevices,
+    getUserMedia: async () => { throw new Error('Automatic permission should not be needed for labeled devices.'); },
+    liveKit: { Track: { Source: liveKitSources } },
+  });
+  await waitForAuthorizedPrejoin(harness);
+  harness.hooks.state.room = {
+    localParticipant: {
+      identity: 'local-background-click',
+      name: 'Local participant',
+      isLocal: true,
+      trackPublications: new Map(),
+      getTrackPublication: () => null,
+    },
+    remoteParticipants: new Map(),
+    state: 'connected',
+    disconnect() {
+      disconnectCalls += 1;
+    },
+  };
+  harness.document.emit('click', { target: harness.document.body });
+  assert.equal(disconnectCalls, 0, 'Clicking the live-room background must not disconnect the room.');
+  assert.equal(harness.hooks.state.room !== null, true, 'Clicking the live-room background must keep the room active.');
+}
+
+{
+  let detachCalls = 0;
+  let disconnectCalls = 0;
+  const localVideoTrack = {
+    mediaStreamTrack: { kind: 'video', readyState: 'live', enabled: true },
+    attach: () => new FakeHTMLElement('leave-video', 'video'),
+    detach() {
+      detachCalls += 1;
+    },
+  };
+  const harness = createLiveHarness({
+    fetch: async () => authorizedResponse(),
+    enumerateDevices: async () => labeledDevices,
+    getUserMedia: async () => { throw new Error('Automatic permission should not be needed for labeled devices.'); },
+    liveKit: { Track: { Source: liveKitSources } },
+  });
+  await waitForAuthorizedPrejoin(harness);
+  const localParticipant = {
+    identity: 'local-explicit-leave',
+    name: 'Local participant',
+    isLocal: true,
+    trackPublications: new Map(),
+    getTrackPublication: () => null,
+  };
+  const room = {
+    localParticipant,
+    remoteParticipants: new Map(),
+    state: 'connected',
+    async disconnect() {
+      disconnectCalls += 1;
+    },
+  };
+  harness.hooks.state.room = room;
+  harness.hooks.attachTrack(
+    localVideoTrack,
+    harness.document.getElementById('sr-participant-grid'),
+    'video',
+    true,
+    'local-explicit-leave:camera',
+  );
+  harness.hooks.state.currentRoomKey = '1';
+  harness.hooks.state.currentRoomMicrophoneAllowed = false;
+  harness.document.body.classList.add('sr-in-call');
+  await harness.hooks.disconnectConnectedRoom();
+  assert.equal(detachCalls, 1, 'Explicit room teardown must detach attached video elements.');
+  assert.equal(disconnectCalls, 1, 'Explicit room teardown must disconnect the LiveKit room exactly once.');
+  assert.equal(harness.hooks.state.room, null, 'Explicit room teardown must clear the active room state.');
+  assert.equal(harness.hooks.state.attachedTracks.length, 0, 'Explicit room teardown must clear attached media bookkeeping.');
+  assert.equal(harness.document.body.classList.contains('sr-in-call'), false, 'Explicit room teardown must leave the call UI.');
 }
 
 console.log('Study Room admin-window, device, microphone, and local-control behavioral tests passed.');

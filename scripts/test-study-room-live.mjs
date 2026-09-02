@@ -63,8 +63,8 @@ assert.match(page, /Due Diligence backdrop/u);
 assert.doesNotMatch(page, /Virtual backgrounds|Coming after the quality test/iu);
 assert.match(page, /assets\/vendor\/livekit-client\.umd\.js\?v=2\.22\.1/);
 assert.match(page, /assets\/vendor\/livekit-track-processors\.iife\.js\?v=0\.7\.2/);
-assert.match(page, /study-room-backgrounds\.js\?v=study-room-optional-background-20260829-1/);
-assert.match(page, /study-room-live\.js\?v=study-room-meet-layout-20260831-5/);
+assert.match(page, /study-room-backgrounds\.js\?v=study-room-background-processor-20260902-1/);
+assert.match(page, /study-room-live\.js\?v=study-room-meet-layout-20260902-6/);
 assert.match(page, /study-room-live\.css\?v=study-room-meet-layout-20260831-5/);
 assert.doesNotMatch(page, /facebook|fb\.com|recording is on|Recording enabled/i);
 
@@ -78,7 +78,7 @@ assert.match(client, /Authorization: `Bearer \$\{token\}`/);
 assert.match(client, /cache: 'no-store'/);
 assert.match(client, /new LiveKit\.Room/);
 assert.match(client, /bindRoomEvents\(room\);[\s\S]*await room\.connect/);
-assert.match(client, /const MEDIA_RELIABILITY_VERSION = 'study-room-meet-layout-20260831-5'/);
+assert.match(client, /const MEDIA_RELIABILITY_VERSION = 'study-room-meet-layout-20260902-6'/);
 assert.match(client, /adaptiveStream:\s*\{[\s\S]*pixelDensity:\s*1[\s\S]*pauseVideoInBackground:\s*true/);
 assert.match(client, /dynacast: true/);
 assert.match(client, /width:\s*640,[\s\S]*height:\s*360,[\s\S]*frameRate:\s*15/);
@@ -172,6 +172,13 @@ assert.match(
 );
 assert.match(client, /await ensureBackgroundController\(\)\.switchCamera\(captureOptions\('camera', deviceId\)\)/);
 assert.match(client, /function toggleBackdrop\(\)[\s\S]*state\.backdropEnabled = false/);
+const toggleBackdropStart = client.indexOf('async function toggleBackdrop()');
+const captureOptionsStart = client.indexOf('function captureOptions(', toggleBackdropStart);
+assert.ok(toggleBackdropStart >= 0 && captureOptionsStart > toggleBackdropStart);
+const toggleBackdropSource = client.slice(toggleBackdropStart, captureOptionsStart);
+assert.match(toggleBackdropSource, /controller\.switchBackground\(/u);
+assert.doesNotMatch(toggleBackdropSource, /destroyBackgroundController\(/u,
+  'backdrop mode changes must not destroy and recreate the camera processor');
 assert.match(client, /function setRawCameraEnabled\([\s\S]*rawCameraPublishAuthorized = true/);
 assert.match(client, /userApprovedRawCameraTracks/);
 assert.match(client, /isUserApprovedRawCameraTrack\(view\.track\)/);
@@ -191,12 +198,16 @@ assert.match(client, /document\.body\.classList\.add\('sr-in-call'\)/);
 
 assert.match(backgroundClient, /const REQUIRED_EFFECTS_POLICY = 'due-diligence-mandatory-virtual-background-no-raw-first-frame'/);
 assert.match(backgroundClient, /virtual-background-due-diligence-branded\.webp/);
+assert.match(backgroundClient, /mode:\s*'disabled'/u);
 assert.match(backgroundClient, /await track\.setProcessor\(processor, true\)/);
+assert.match(backgroundClient, /processor\.switchTo\(nextMode\)/u);
 const processedBeforePublish = backgroundClient.indexOf('await track.setProcessor(processor, true)');
 const publishProtectedTrack = backgroundClient.indexOf('publication = await participant.publishTrack(track', processedBeforePublish);
 assert.ok(processedBeforePublish >= 0 && publishProtectedTrack > processedBeforePublish,
   'The camera track must be processed before it can be published.');
 assert.match(backgroundClient, /assertProcessedTrack\(track, processor\);[\s\S]*participant\.publishTrack/);
+assert.doesNotMatch(backgroundClient, /BackgroundProcessor\(\{\s*mode:\s*['"]virtual-background['"]/u,
+  'camera startup must attach a disabled processor before any effect is selected');
 assert.match(backgroundClient, /global\.DueDiligenceStudyRoomMandatoryBackground = Object\.freeze/);
 
 const openRoom = previewClient.indexOf('popup = global.open(');

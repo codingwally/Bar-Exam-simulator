@@ -1,7 +1,7 @@
 (function dueDiligenceStudyRoomMandatoryBackground(global) {
   'use strict';
 
-  const VERSION = 'study-room-optional-background-20260829-1';
+  const VERSION = 'study-room-background-processor-20260902-1';
   const REQUIRED_EFFECTS_POLICY = 'due-diligence-mandatory-virtual-background-no-raw-first-frame';
   const DEFAULT_IMAGE_PATH = '/assets/study-room/virtual-background-due-diligence-branded.webp';
   const DEFAULT_TASKS_VISION_PATH = '/assets/vendor/mediapipe/wasm';
@@ -49,6 +49,12 @@
       track: null,
       publication: null,
       processor: null,
+      mode: 'disabled',
+      requestedMode: 'disabled',
+      pendingMode: null,
+      switchPromise: null,
+      verifiedImagePath: '',
+      fallbackRaw: false,
       destroyed: false,
       operation: Promise.resolve(),
       error: '',
@@ -60,6 +66,13 @@
         supported: state.supported,
         modern: state.modern,
         enabled: state.status === 'enabled',
+        mode: state.mode,
+        processorAttached: Boolean(
+          state.track
+          && state.processor
+          && state.track.getProcessor?.() === state.processor,
+        ),
+        fallbackRaw: state.fallbackRaw,
         error: state.error,
       });
     }
@@ -75,8 +88,6 @@
       try {
         state.supported = Boolean(
           effects
-          && effects.POLICY === REQUIRED_EFFECTS_POLICY
-          && effects.MANDATORY_IMAGE_PATH === DEFAULT_IMAGE_PATH
           && typeof effects.BackgroundProcessor === 'function'
           && typeof effects.supportsBackgroundProcessors === 'function'
           && effects.supportsBackgroundProcessors(),
@@ -110,7 +121,7 @@
       if (!support.supported) {
         throw new StudyRoomBackgroundError(
           'STUDY_ROOM_BACKGROUND_UNSUPPORTED',
-          'This browser cannot safely apply the required Due Diligence background, so video remains off.',
+          'Background effects are unavailable in this browser, so the camera can continue without them.',
         );
       }
       const liveKit = resolveLiveKit();
@@ -130,14 +141,54 @@
         || typeof track.setProcessor !== 'function'
         || track.getProcessor?.() !== processor
         || !processedTrack
-        || processedTrack.readyState !== 'live'
+        || String(processedTrack.readyState || '').toLowerCase() !== 'live'
+        || processedTrack.enabled === false
         || track.mediaStreamTrack !== processedTrack
       ) {
         throw new StudyRoomBackgroundError(
           'STUDY_ROOM_BACKGROUND_NOT_LIVE',
-          'The required Due Diligence background did not produce a protected video track, so video remains off.',
+          'The background processor did not produce a live video track, so video remains off.',
         );
       }
+    }
+
+    function normalizeMode(request = {}) {
+      const requestedMode = typeof request === 'string' ? request : request?.mode;
+      if (requestedMode === 'background-blur') {
+        const blurRadius = Number(request?.blurRadius);
+        return Object.freeze({
+          mode: 'background-blur',
+          blurRadius: Number.isFinite(blurRadius) ? Math.max(0, blurRadius) : 10,
+        });
+      }
+      if (requestedMode === 'virtual-background') {
+        return Object.freeze({
+          mode: 'virtual-background',
+          // The Study Room has one reviewed branded background. Callers may
+          // select the effect mode, but cannot bypass the verified asset.
+          imagePath,
+        });
+      }
+      return Object.freeze({ mode: 'disabled' });
+    }
+
+    async function applyProcessorMode(track, processor, request) {
+      const nextMode = normalizeMode(request);
+      if (!processor || typeof processor.switchTo !== 'function') {
+        throw new StudyRoomBackgroundError(
+          'STUDY_ROOM_BACKGROUND_SWITCH_UNAVAILABLE',
+          'Background effects could not be switched safely, so the camera remains available without them.',
+        );
+      }
+      if (nextMode.mode === 'virtual-background' && state.verifiedImagePath !== nextMode.imagePath) {
+        await verifyImage(nextMode.imagePath);
+        state.verifiedImagePath = nextMode.imagePath;
+      }
+      await processor.switchTo(nextMode);
+      assertProcessedTrack(track, processor);
+      state.mode = nextMode.mode;
+      state.requestedMode = nextMode.mode;
+      return nextMode;
     }
 
     async function safelyMutePublication(publication) {
@@ -175,16 +226,13 @@
         }
       }
 
-      // stopProcessor restores the raw source track on any still-attached
-      // sender. Only call it after mute/unpublish has made that impossible.
-      // LocalVideoTrack.stop() ends the camera and destroys its processor
-      // without restoring the raw source on the sender, so it is the safe
-      // terminal fallback when publication state is ambiguous.
+      // Processor removal is terminal cleanup only. During normal mode changes
+      // the track and processor remain attached and switchTo is used instead.
       if (!couldBePublished || muted || unpublishConfirmed) {
         if (track?.getProcessor?.() === processor && typeof track?.stopProcessor === 'function') {
           await track.stopProcessor(false).catch(() => {});
-        } else {
-          await processor?.destroy?.().catch(() => {});
+        } else if (processor && track?.getProcessor?.() !== processor) {
+          await processor.destroy?.().catch(() => {});
         }
       }
       track?.stop?.();
@@ -197,6 +245,8 @@
       state.publication = null;
       state.track = null;
       state.processor = null;
+      state.pendingMode = null;
+      state.fallbackRaw = false;
 
       await disposeMedia({ participant, publication, track, processor, unpublish });
     }
@@ -217,7 +267,6 @@
       let publication;
       let publicationAttempted = false;
       try {
-        await verifyImage(imagePath);
         track = await liveKit.createLocalVideoTrack(captureOptions || {});
         if (!track || typeof track.setProcessor !== 'function') {
           throw new StudyRoomBackgroundError(
@@ -226,9 +275,10 @@
           );
         }
 
+        // Attach one disabled processor for this camera lifecycle. Mode changes
+        // below update this same processor rather than replacing the track.
         processor = effects.BackgroundProcessor({
-          mode: 'virtual-background',
-          imagePath,
+          mode: 'disabled',
           assetPaths: {
             tasksVisionFileSet: tasksVisionPath,
             modelAssetPath: modelPath,
@@ -239,8 +289,11 @@
         await track.setProcessor(processor, true);
         assertProcessedTrack(track, processor);
 
-        // Publication occurs only after a live processed track exists. The raw
-        // camera track is never offered to the room or exposed by this API.
+        const initialMode = normalizeMode(state.requestedMode);
+        if (initialMode.mode !== 'disabled') {
+          await applyProcessorMode(track, processor, initialMode);
+        }
+
         publicationAttempted = true;
         publication = await participant.publishTrack(track, {
           ...(publishOptions || {}),
@@ -256,6 +309,7 @@
         state.track = track;
         state.processor = processor;
         state.publication = publication;
+        state.fallbackRaw = false;
         notify('enabled');
         return Object.freeze({ enabled: true, publication });
       } catch (error) {
@@ -270,7 +324,7 @@
           ? error
           : new StudyRoomBackgroundError(
             'STUDY_ROOM_BACKGROUND_START_FAILED',
-            'The required Due Diligence background could not start, so video remains off.',
+            'The background processor could not start, so video remains off.',
             error,
           );
         notify('unavailable', errorMessage(protectedError));
@@ -281,7 +335,7 @@
     function enableCamera(captureOptions = {}, publishOptions = {}) {
       return enqueue(async () => {
         if (state.destroyed) ensureUsable();
-        if (state.publication && state.track && state.processor) {
+        if (state.publication && state.track) {
           notify('preparing');
           try {
             if (typeof state.publication.unmute !== 'function') {
@@ -291,9 +345,9 @@
             if (state.publication.isMuted === true || state.track.isMuted === true) {
               throw new Error('The existing camera publication stayed muted.');
             }
-            assertProcessedTrack(state.track, state.processor);
+            if (state.processor) assertProcessedTrack(state.track, state.processor);
             notify('enabled');
-            return Object.freeze({ enabled: true, publication: state.publication });
+            return Object.freeze({ enabled: true, publication: state.publication, fallbackRaw: state.fallbackRaw });
           } catch (error) {
             await cleanupMedia();
             const protectedError = new StudyRoomBackgroundError(
@@ -324,7 +378,7 @@
           }
           notify('disabled');
           return stoppedResult('user-disabled');
-        } catch (error) {
+        } catch {
           await cleanupMedia();
           notify('disabled');
           return stoppedResult('fail-closed');
@@ -332,10 +386,82 @@
       });
     }
 
+    function switchBackground(request = { mode: 'disabled' }) {
+      const nextMode = normalizeMode(request);
+      state.requestedMode = nextMode.mode;
+      state.pendingMode = nextMode;
+      if (state.switchPromise) return state.switchPromise;
+
+      const promise = enqueue(async () => {
+        try {
+          while (state.pendingMode) {
+            const pendingMode = state.pendingMode;
+            state.pendingMode = null;
+            state.requestedMode = pendingMode.mode;
+            if (!state.track || !state.processor) {
+              state.mode = pendingMode.mode;
+              notify(state.status === 'disabled' ? 'disabled' : state.status);
+              continue;
+            }
+            notify('preparing');
+            try {
+              await applyProcessorMode(state.track, state.processor, pendingMode);
+              notify(state.publication && !state.publication.isMuted ? 'enabled' : 'disabled');
+            } catch (error) {
+              const processor = state.processor;
+              let restoredRaw = false;
+              try {
+                if (state.track.getProcessor?.() === processor && typeof state.track.stopProcessor === 'function') {
+                  await state.track.stopProcessor(false);
+                  restoredRaw = true;
+                } else {
+                  await processor?.destroy?.();
+                }
+              } catch {
+                state.track.stop?.();
+              }
+              state.processor = null;
+              state.mode = 'disabled';
+              state.requestedMode = 'disabled';
+              state.fallbackRaw = restoredRaw;
+              const protectedError = error instanceof StudyRoomBackgroundError
+                ? error
+                : new StudyRoomBackgroundError(
+                  'STUDY_ROOM_BACKGROUND_SWITCH_FAILED',
+                  'Background effects could not be switched safely, so the camera remains available without them.',
+                  error,
+                );
+              notify('unavailable', errorMessage(protectedError));
+              throw protectedError;
+            }
+          }
+          return snapshot();
+        } finally {
+          state.switchPromise = null;
+        }
+      });
+      state.switchPromise = promise;
+      return promise;
+    }
+
     function switchCamera(captureOptions = {}) {
       return enqueue(async () => {
-        if (!state.track || !state.publication || !state.processor) {
-          return createProtectedCamera(captureOptions, {});
+        if (!state.track || !state.publication) return createProtectedCamera(captureOptions, {});
+        if (!state.processor) {
+          try {
+            await state.track.restartTrack(captureOptions || {});
+            notify('enabled');
+            return Object.freeze({ enabled: true, publication: state.publication, fallbackRaw: true });
+          } catch (error) {
+            await cleanupMedia();
+            const protectedError = new StudyRoomBackgroundError(
+              'STUDY_ROOM_BACKGROUND_DEVICE_SWITCH_FAILED',
+              'The camera could not switch devices, so video remains off.',
+              error,
+            );
+            notify('unavailable', protectedError.message);
+            throw protectedError;
+          }
         }
         notify('preparing');
         try {
@@ -371,6 +497,7 @@
       disableCamera,
       enableCamera,
       snapshot,
+      switchBackground,
       switchCamera,
     });
   }

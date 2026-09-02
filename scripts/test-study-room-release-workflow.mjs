@@ -177,7 +177,8 @@ assert.ok(
 );
 const stagingAssetChecks = workflow.slice(stagingSmoke, stagingPositiveSmoke);
 for (const requiredStagingMarker of [
-  "study-room-meet-layout-20260831-5",
+  "study-room-meet-layout-20260902-6",
+  "study-room-background-processor-20260902-1",
   "workerRequest('/study-room/rooms'",
   "workerRequest('/study-room/join'",
   "registerTextStreamHandler",
@@ -329,7 +330,7 @@ assert.match(
 );
 assert.match(
   workflow.slice(pagesVerificationJob),
-  /study-room-meet-layout-20260831-5/u,
+  /study-room-meet-layout-20260902-6/u,
 );
 assert.match(
   home,
@@ -342,7 +343,7 @@ assert.match(
 );
 assert.match(
   workflow.slice(pagesVerificationJob),
-  /study-room-optional-background-20260829-1/u,
+  /study-room-background-processor-20260902-1/u,
 );
 for (const requiredProductionAsset of [
   "workerRequest('/study-room/rooms'",
@@ -374,10 +375,10 @@ for (const requiredProductionAsset of [
     `Pages-only production verification must check ${requiredProductionAsset}.`,
   );
 }
-assert.match(pagesOnlyWorkflow, /study-room-meet-layout-20260831-5/u);
+assert.match(pagesOnlyWorkflow, /study-room-meet-layout-20260902-6/u);
 assert.match(
   pagesOnlyWorkflow,
-  /study-room-optional-background-20260829-1/u,
+  /study-room-background-processor-20260902-1/u,
 );
 assert.match(
   workflow.slice(pagesVerificationJob),

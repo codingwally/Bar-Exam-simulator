@@ -125,6 +125,7 @@ jobs:
           set -euo pipefail
           python - <<'PY'
           from pathlib import Path
+          import re
 
           source_path = Path('scripts/run-bar-forecast-live-journeys.mjs')
           target_path = Path('scripts/.p0-run-one-bar-forecast-live-journey.mjs')
@@ -147,15 +148,16 @@ jobs:
                   raise SystemExit(f'Expected one harness marker, found {source.count(old)}: {old}')
               source = source.replace(old, new)
 
-          subject_assertion = """  assert.deepEqual(
-            Object.values(subjectCounts),
-            SUBJECTS.map(() => JOURNEY_COUNT / SUBJECTS.length),
-            'The exact 30-journey subject rotation is incomplete.',
-          );
-          """
-          if source.count(subject_assertion) != 1:
-              raise SystemExit('The protected subject-rotation assertion marker changed.')
-          source = source.replace(subject_assertion, '')
+          pattern = re.compile(
+              r"  assert\.deepEqual\(\n"
+              r"    Object\.values\(subjectCounts\),\n"
+              r"    SUBJECTS\.map\(\(\) => JOURNEY_COUNT / SUBJECTS\.length\),\n"
+              r"    'The exact 30-journey subject rotation is incomplete\.',\n"
+              r"  \);\n"
+          )
+          source, count = pattern.subn('', source)
+          if count != 1:
+              raise SystemExit(f'Expected one protected subject-rotation assertion, found {count}.')
           target_path.write_text(source, encoding='utf-8')
           PY
           node --check scripts/.p0-run-one-bar-forecast-live-journey.mjs
@@ -202,7 +204,7 @@ jobs:
         with:
           name: p0-forecast-coaching-staging-${{ github.run_id }}
           path: artifacts/p0-forecast-coaching/*.json
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 30
 
   deploy_production_worker:

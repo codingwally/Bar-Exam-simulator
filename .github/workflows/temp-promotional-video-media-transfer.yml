@@ -1,0 +1,35 @@
+name: Temporary promotional video media transfer
+
+on:
+  push:
+    branches:
+      - temp/promotional-video-media-transfer
+    paths:
+      - .github/workflows/temp-promotional-video-media-transfer.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NARRATION_URL: https://storage.googleapis.com/adm--audio-playback--7d--public/mcp-preview/6ed989a7-81e5-4465-bfdd-73c431b740f7.mp3
+
+jobs:
+  fetch-narration:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download narration
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --location --fail --retry 3 --output due-diligence-crisp-voice.mp3 "$NARRATION_URL"
+          test -s due-diligence-crisp-voice.mp3
+          file due-diligence-crisp-voice.mp3
+
+      - name: Upload narration artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: due-diligence-crisp-voice
+          path: due-diligence-crisp-voice.mp3
+          if-no-files-found: error
+          retention-days: 1

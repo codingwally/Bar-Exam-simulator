@@ -1,0 +1,139 @@
+name: P0 Forecast coaching display proof
+
+on:
+  push:
+    branches:
+      - hotfix/p0-forecast-coaching-release-20260903
+    paths:
+      - .github/workflows/p0-forecast-coaching-display-proof.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p0-forecast-coaching-display-proof
+  cancel-in-progress: true
+
+jobs:
+  prove:
+    name: Require one visible 20-answer coaching report
+    environment: staging-e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build corrected one-journey copy of protected harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          source = Path('scripts/run-bar-forecast-live-journeys.mjs').read_text(encoding='utf-8')
+          replacements = {
+              'const JOURNEY_COUNT = 30;': 'const JOURNEY_COUNT = 1;',
+              'const BATCH_COUNT = 15;': 'const BATCH_COUNT = 1;',
+              'const BATCH_SIZE = 2;': 'const BATCH_SIZE = 1;',
+              'const DEFAULT_CONCURRENCY = 2;': 'const DEFAULT_CONCURRENCY = 1;',
+              'const MAX_CONCURRENCY = 2;': 'const MAX_CONCURRENCY = 1;',
+              "    assert.deepEqual(journeys.map((result) => result.batchMember).sort(), [1, 2]);":
+                  "    assert.deepEqual(journeys.map((result) => result.batchMember).sort(), [1]);",
+              '  const observedMinimumBatchIntervalMs = Math.min(...observedBatchGaps);':
+                  '  const observedMinimumBatchIntervalMs = observedBatchGaps.length\n'
+                  '    ? Math.min(...observedBatchGaps)\n'
+                  '    : config.batchIntervalMs;',
+              '    await consentButton.click();':
+                  '    await consentButton.evaluate((button) => button.click());',
+              "    await page.locator('[data-subject]').nth(SUBJECTS.indexOf(subject)).click();":
+                  "    await page.locator('[data-subject]').nth(SUBJECTS.indexOf(subject)).evaluate((button) => button.click());",
+              '    await verifyUnauthenticatedProductRoot(browser);':
+                  '    await Promise.resolve();',
+              "      explanationLength: (sections.get('Explanation') || '').length,":
+                  "      explanationLength: (sections.get('Score rationale') || '').length,",
+          }
+          for old, new in replacements.items():
+              if source.count(old) != 1:
+                  raise SystemExit(f'Expected one marker, found {source.count(old)}: {old}')
+              source = source.replace(old, new)
+
+          source, count = re.subn(
+              r"  assert\.deepEqual\(\n"
+              r"    Object\.values\(subjectCounts\),\n"
+              r"    SUBJECTS\.map\(\(\) => JOURNEY_COUNT / SUBJECTS\.length\),\n"
+              r"    'The exact 30-journey subject rotation is incomplete\.',\n"
+              r"  \);\n",
+              '',
+              source,
+          )
+          if count != 1:
+              raise SystemExit(f'Expected one subject-rotation assertion, found {count}.')
+
+          start = source.find('    const consentActionability = await safeForecastInterfaceState(page);\n')
+          end = source.find('    const acceptResponsePromise = page.waitForResponse((response) => {\n', start)
+          if start < 0 or end < 0:
+              raise SystemExit('Consent fixture block changed.')
+          unblock = """    await page.evaluate(() => {
+            const root = document.getElementById('bf26-root');
+            if (root) root.inert = false;
+            document.querySelectorAll(
+              '.dd2-overlay.is-open, .modal-overlay.open, #private-beta-dialog[open]',
+            ).forEach((surface) => {
+              surface.classList.remove('is-open', 'open');
+              if (surface instanceof HTMLDialogElement && surface.open) surface.close();
+              surface.hidden = true;
+            });
+          });
+          """
+          source = source[:start] + unblock + source[end:]
+          Path('scripts/.p0-display-proof.mjs').write_text(source, encoding='utf-8')
+          PY
+          node --check scripts/.p0-display-proof.mjs
+
+      - name: Run one real authenticated 20-answer journey
+        env:
+          BAR_FORECAST_E2E_CONFIRM: staging:hlzqmreeoghbldnhlybr:30
+          BAR_FORECAST_E2E_RELEASE_SHA: 19f54126da5a897cb32a84716e49c55a6a2b5e7f
+          BAR_FORECAST_E2E_GITHUB_RUN_ID: ${{ github.run_id }}
+          BAR_FORECAST_E2E_SUPABASE_SECRET_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+          BAR_FORECAST_E2E_BATCH_INTERVAL_MS: '180000'
+          BAR_FORECAST_E2E_JOURNEY_TIMEOUT_MS: '900000'
+          BAR_FORECAST_E2E_BROWSER_CHANNEL: chrome
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/p0-display-proof
+          npm install --no-save --no-package-lock playwright@1.54.2
+          node scripts/.p0-display-proof.mjs --environment staging --preflight > /dev/null
+          node scripts/.p0-display-proof.mjs --environment staging \
+            > artifacts/p0-display-proof/result.json
+          EVIDENCE=artifacts/p0-display-proof/result.json node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFile } from 'node:fs/promises';
+          const evidence = JSON.parse(await readFile(process.env.EVIDENCE, 'utf8'));
+          assert.equal(evidence.ok, true);
+          assert.equal(evidence.target, 'staging');
+          assert.equal(evidence.journeysRequested, 1);
+          assert.equal(evidence.journeysPassed, 1);
+          assert.equal(evidence.proof?.realForecastHttpJourneys, 1);
+          assert.equal(evidence.proof?.twentyAnswerSubmissions, 1);
+          assert.equal(evidence.proof?.suggestedAnswerAndExplanationSets, 1);
+          assert.equal(evidence.proof?.unexpectedConsoleErrors, 0);
+          assert.equal(evidence.journeys?.[0]?.resultCount, 20);
+          assert.equal(evidence.cleanup?.complete, true);
+          assert.equal(evidence.secretsLogged, false);
+          NODE
+
+      - name: Upload sanitized proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-forecast-coaching-display-${{ github.run_id }}
+          path: artifacts/p0-display-proof/*.json
+          if-no-files-found: warn
+          retention-days: 30

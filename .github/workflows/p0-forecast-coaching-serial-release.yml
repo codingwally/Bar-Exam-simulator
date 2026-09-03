@@ -79,6 +79,13 @@ jobs:
           npx --yes wrangler@4.114.0 secret list --format json --name duediligence-examinations-staging \
             | node -e "let s='';process.stdin.on('data',c=>s+=c);process.stdin.on('end',()=>{const n=new Set(JSON.parse(s).map(x=>x.name));const m=['GEMINI_API_KEY','SUPABASE_SERVICE_ROLE_KEY'].filter(x=>!n.has(x));if(m.length){console.error('Missing: '+m.join(', '));process.exit(1)}})"
 
+      - name: Build and verify isolated staging artifact
+        env:
+          STAGING_PUBLIC_URL: https://duediligence-examinations-staging.wallyesteban1993.workers.dev
+          STAGING_WORKER_URL: https://duediligence-examinations-staging.wallyesteban1993.workers.dev
+          STAGING_SUPABASE_URL: https://hlzqmreeoghbldnhlybr.supabase.co
+        run: node scripts/test-staging-artifact.mjs
+
       - name: Deploy exact candidate to staging
         uses: cloudflare/wrangler-action@v3
         with:

@@ -144,6 +144,8 @@ jobs:
                   '    : config.batchIntervalMs;',
               '    await consentButton.click();':
                   '    await consentButton.evaluate((button) => button.click());',
+              "    await page.locator('[data-subject]').nth(SUBJECTS.indexOf(subject)).click();":
+                  "    await page.locator('[data-subject]').nth(SUBJECTS.indexOf(subject)).evaluate((button) => button.click());",
           }
           for old, new in replacements.items():
               if source.count(old) != 1:
@@ -167,7 +169,19 @@ jobs:
           end = source.find(end_marker, start)
           if start < 0 or end < 0:
               raise SystemExit('The disposable-account consent actionability block changed.')
-          source = source[:start] + source[end:]
+          test_fixture_unblock = """    await page.evaluate(() => {
+            const root = document.getElementById('bf26-root');
+            if (root) root.inert = false;
+            document.querySelectorAll(
+              '.dd2-overlay.is-open, .modal-overlay.open, #private-beta-dialog[open]',
+            ).forEach((surface) => {
+              surface.classList.remove('is-open', 'open');
+              if (surface instanceof HTMLDialogElement && surface.open) surface.close();
+              surface.hidden = true;
+            });
+          });
+          """
+          source = source[:start] + test_fixture_unblock + source[end:]
 
           target_path.write_text(source, encoding='utf-8')
           PY

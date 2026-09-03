@@ -1,0 +1,207 @@
+name: P0 Forecast production first-submit API proof
+
+on:
+  push:
+    branches:
+      - hotfix/p0-production-first-submit-proof-20260903
+    paths:
+      - .github/workflows/p0-forecast-production-first-submit-api-proof.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p0-forecast-production-first-submit-api-proof
+  cancel-in-progress: true
+
+jobs:
+  prove:
+    name: Submit all 20 answers exactly once to production
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SUPABASE_URL: https://hbllomlijfznnuudpdvr.supabase.co
+      WORKER_URL: https://duediligence-api.wallyesteban1993.workers.dev
+      ALLOWED_ORIGIN: https://duediligence.ph
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Create disposable unconfirmed user and wait for external authorization
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/p0-production-first-submit
+          publishable_key="$(grep -Eo 'sb_publishable_[A-Za-z0-9_-]{20,}' assets/phase2-config.js | head -n 1)"
+          [[ "$publishable_key" =~ ^sb_publishable_[A-Za-z0-9_-]{20,}$ ]]
+          user_email="p0-proof-${GITHUB_RUN_ID}@duediligence.ph"
+          user_password="Dd!$(node --input-type=module -e "import { randomBytes } from 'node:crypto'; process.stdout.write(randomBytes(36).toString('base64url'))")9z"
+          echo "::add-mask::$publishable_key"
+          echo "::add-mask::$user_email"
+          echo "::add-mask::$user_password"
+          echo "P0_PUBLISHABLE_KEY=$publishable_key" >> "$GITHUB_ENV"
+          echo "P0_USER_EMAIL=$user_email" >> "$GITHUB_ENV"
+          echo "P0_USER_PASSWORD=$user_password" >> "$GITHUB_ENV"
+
+          response="$RUNNER_TEMP/signup.json"
+          status="$(curl --silent --show-error --output "$response" --write-out '%{http_code}' \
+            --request POST \
+            --header "apikey: $publishable_key" \
+            --header "Authorization: Bearer $publishable_key" \
+            --header 'Content-Type: application/json' \
+            --data "$(jq -nc --arg email "$user_email" --arg password "$user_password" '{email:$email,password:$password,data:{display_name:"Forecast P0 Production Proof",full_name:"Forecast P0 Production Proof"}}')" \
+            "$SUPABASE_URL/auth/v1/signup")"
+          case "$status" in
+            200|201) ;;
+            *)
+              echo "Disposable signup failed with HTTP $status." >&2
+              jq -c '{code:(.code // .error_code // "unknown"),message:(.msg // .message // "signup failed")}' "$response" >&2 || true
+              exit 1
+              ;;
+          esac
+          user_id="$(jq -r '.user.id // .id // empty' "$response")"
+          [[ "$user_id" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]
+          echo "::add-mask::$user_id"
+          echo "P0_USER_ID=$user_id" >> "$GITHUB_ENV"
+          rm -f -- "$response"
+          printf '{"signupCreated":true,"runId":"%s"}\n' "$GITHUB_RUN_ID" \
+            > artifacts/p0-production-first-submit/setup.json
+
+          authenticated=false
+          for attempt in {1..120}; do
+            token_response="$RUNNER_TEMP/token.json"
+            token_status="$(curl --silent --show-error --output "$token_response" --write-out '%{http_code}' \
+              --request POST \
+              --header "apikey: $publishable_key" \
+              --header "Authorization: Bearer $publishable_key" \
+              --header 'Content-Type: application/json' \
+              --data "$(jq -nc --arg email "$user_email" --arg password "$user_password" '{email:$email,password:$password}')" \
+              "$SUPABASE_URL/auth/v1/token?grant_type=password")"
+            if [[ "$token_status" == '200' ]] && jq -e '.access_token | type == "string" and length > 20' "$token_response" >/dev/null; then
+              access_token="$(jq -r '.access_token' "$token_response")"
+              echo "::add-mask::$access_token"
+              echo "P0_ACCESS_TOKEN=$access_token" >> "$GITHUB_ENV"
+              authenticated=true
+              rm -f -- "$token_response"
+              break
+            fi
+            rm -f -- "$token_response"
+            sleep 5
+          done
+          test "$authenticated" = 'true'
+          echo 'Disposable user is confirmed and authorized for the one-submit proof.'
+
+      - name: Make one production submit request and require complete coaching
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { writeFile } from 'node:fs/promises';
+
+          const endpoint = `${process.env.WORKER_URL}/admin/dd2026/bar-forecast`;
+          const origin = process.env.ALLOWED_ORIGIN;
+          const token = process.env.P0_ACCESS_TOKEN;
+          const runId = process.env.GITHUB_RUN_ID;
+          const subject = 'Political and Public International Law';
+          let submitRequests = 0;
+
+          async function request(body) {
+            const response = await fetch(endpoint, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${token}`,
+                Origin: origin,
+                'Content-Type': 'application/json',
+                'X-Request-ID': crypto.randomUUID(),
+              },
+              body: JSON.stringify(body),
+              signal: AbortSignal.timeout(body.operation === 'submit' ? 15 * 60_000 : 60_000),
+            });
+            const payload = await response.json().catch(() => null);
+            return { response, payload };
+          }
+
+          const status = await request({ operation: 'status' });
+          assert.equal(status.response.status, 200);
+          assert.equal(status.payload?.ok, true);
+          assert.equal(status.payload?.authorized, true);
+          assert.equal(status.payload?.consentAccepted, true);
+
+          const started = await request({ operation: 'start', subject });
+          assert.equal(started.response.status, 200);
+          assert.equal(started.payload?.ok, true);
+          assert.equal(started.payload?.subject, subject);
+          assert.match(String(started.payload?.setId || ''), /^sha256:[0-9a-f]{64}$/u);
+          assert.equal(Array.isArray(started.payload?.questions), true);
+          assert.equal(started.payload.questions.length, 20);
+
+          const answers = started.payload.questions.map((question, index) => ({
+            questionId: question.id,
+            answer: `P0PROD-${runId}-Q${index + 1}. Yes. Applying the controlling rule to every material fact, the requested conclusion follows from the stated legal basis.`,
+          }));
+          submitRequests += 1;
+          const submittedAt = Date.now();
+          const submitted = await request({
+            operation: 'submit',
+            subject,
+            setId: started.payload.setId,
+            answers,
+          });
+          const durationMs = Date.now() - submittedAt;
+
+          assert.equal(submitRequests, 1);
+          assert.equal(submitted.response.status, 200);
+          assert.equal(submitted.payload?.ok, true);
+          assert.equal(submitted.payload?.maxScore, 100);
+          assert.equal(Array.isArray(submitted.payload?.results), true);
+          assert.equal(submitted.payload.results.length, 20);
+          assert.equal(submitted.payload?.analytics?.questionCount, 20);
+          submitted.payload.results.forEach((result, index) => {
+            assert.equal(result.questionId, answers[index].questionId);
+            assert.ok(String(result.userAnswer || '').includes(`P0PROD-${runId}-Q${index + 1}`));
+            assert.ok(String(result.feedback || '').trim());
+            assert.ok(String(result.suggestedAnswer || '').trim());
+            assert.ok(String(result.explanation || '').trim());
+            assert.ok(String(result.mockBarCoaching?.strength || '').trim());
+            assert.ok(String(result.mockBarCoaching?.priorityImprovement || '').trim());
+            assert.ok(String(result.mockBarCoaching?.nextStep || '').trim());
+            assert.equal(result.maxScore, 5);
+          });
+
+          await fetch(`${process.env.SUPABASE_URL}/auth/v1/logout?scope=global`, {
+            method: 'POST',
+            headers: {
+              apikey: process.env.P0_PUBLISHABLE_KEY,
+              Authorization: `Bearer ${token}`,
+            },
+            signal: AbortSignal.timeout(30_000),
+          }).catch(() => null);
+
+          await writeFile('artifacts/p0-production-first-submit/result.json', JSON.stringify({
+            ok: true,
+            environment: 'production',
+            firstAttempt: true,
+            submitRequests,
+            submitStatus: submitted.response.status,
+            durationMs,
+            resultCount: submitted.payload.results.length,
+            coachingComplete: submitted.payload.results.every((result) => (
+              Boolean(String(result.feedback || '').trim())
+              && Boolean(String(result.suggestedAnswer || '').trim())
+              && Boolean(String(result.explanation || '').trim())
+            )),
+          }, null, 2));
+          NODE
+          cat artifacts/p0-production-first-submit/result.json
+
+      - name: Upload sanitized proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-forecast-production-first-submit-api-${{ github.run_id }}
+          path: artifacts/p0-production-first-submit/*.json
+          if-no-files-found: warn
+          retention-days: 30

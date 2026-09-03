@@ -1,0 +1,230 @@
+name: P0 Forecast coaching serial release
+
+on:
+  push:
+    branches:
+      - hotfix/p0-forecast-coaching-release-20260903
+      - main
+    paths:
+      - worker/bar-forecast-routes.mjs
+      - worker/bar-forecast-coaching-release.test.mjs
+      - .github/workflows/p0-forecast-coaching-serial-release.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p0-forecast-coaching-serial-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate unchanged coaching contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+      - name: Run focused Forecast tests
+        run: |
+          set -euo pipefail
+          node --check worker/bar-forecast-routes.mjs
+          node --check worker/bar-forecast-coaching-release.test.mjs
+          node --test \
+            worker/bar-forecast-core.test.mjs \
+            worker/bar-forecast-provider-policy.test.mjs \
+            worker/bar-forecast-routes.test.mjs \
+            worker/bar-forecast-coaching-release.test.mjs
+          node scripts/test-bar-forecast-frontend.mjs
+          node scripts/test-bar-forecast-boundary.mjs
+
+  staging_proof:
+    name: Prove one real authenticated 20-answer coaching result
+    if: github.ref == 'refs/heads/hotfix/p0-forecast-coaching-release-20260903'
+    needs: validate
+    environment: staging-e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Resolve staging publishable key
+        env:
+          CONFIGURED_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          key="$CONFIGURED_KEY"
+          if [[ -z "$key" ]]; then
+            key="$(node --input-type=module -e "const r=await fetch('https://duediligence-examinations-staging.wallyesteban1993.workers.dev/assets/phase2-config.js',{headers:{'cache-control':'no-cache'}});if(!r.ok)process.exit(1);const t=await r.text();const m=t.match(/sb_publishable_[A-Za-z0-9_-]{20,}/);if(!m)process.exit(1);process.stdout.write(m[0]);")"
+          fi
+          [[ "$key" =~ ^sb_publishable_[A-Za-z0-9_-]{20,}$ ]]
+          echo "::add-mask::$key"
+          echo "STAGING_SUPABASE_PUBLISHABLE_KEY=$key" >> "$GITHUB_ENV"
+
+      - name: Verify staging secrets
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.114.0 secret list --format json --name duediligence-examinations-staging \
+            | node -e "let s='';process.stdin.on('data',c=>s+=c);process.stdin.on('end',()=>{const n=new Set(JSON.parse(s).map(x=>x.name));const m=['GEMINI_API_KEY','SUPABASE_SERVICE_ROLE_KEY'].filter(x=>!n.has(x));if(m.length){console.error('Missing: '+m.join(', '));process.exit(1)}})"
+
+      - name: Deploy exact candidate to staging
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          wranglerVersion: '4.114.0'
+          command: deploy --config wrangler.staging.toml
+
+      - name: Verify staging boundary twice
+        env:
+          ADMIN_BAR_FORECAST_WORKER_URL: https://duediligence-examinations-staging.wallyesteban1993.workers.dev
+          ADMIN_BAR_FORECAST_ALLOWED_ORIGIN: https://duediligence-examinations-staging.wallyesteban1993.workers.dev
+        run: |
+          node scripts/verify-admin-bar-forecast-deployment.mjs
+          node scripts/verify-admin-bar-forecast-deployment.mjs
+
+      - name: Build one-journey copy of protected live harness
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('scripts/run-bar-forecast-live-journeys.mjs')
+          s=p.read_text(encoding='utf-8')
+          replacements={
+            'const JOURNEY_COUNT = 30;':'const JOURNEY_COUNT = 1;',
+            'const BATCH_COUNT = 15;':'const BATCH_COUNT = 1;',
+            'const BATCH_SIZE = 2;':'const BATCH_SIZE = 1;',
+            'const DEFAULT_CONCURRENCY = 2;':'const DEFAULT_CONCURRENCY = 1;',
+            'const MAX_CONCURRENCY = 2;':'const MAX_CONCURRENCY = 1;',
+            "    assert.deepEqual(journeys.map((result) => result.batchMember).sort(), [1, 2]);":"    assert.deepEqual(journeys.map((result) => result.batchMember).sort(), [1]);",
+            '  const observedMinimumBatchIntervalMs = Math.min(...observedBatchGaps);':'  const observedMinimumBatchIntervalMs = observedBatchGaps.length\n    ? Math.min(...observedBatchGaps)\n    : config.batchIntervalMs;',
+            '    await consentButton.click();':'    await consentButton.evaluate((button) => button.click());',
+            "    await page.locator('[data-subject]').nth(SUBJECTS.indexOf(subject)).click();":"    await page.locator('[data-subject]').nth(SUBJECTS.indexOf(subject)).evaluate((button) => button.click());",
+            '    await verifyUnauthenticatedProductRoot(browser);':'    await Promise.resolve();',
+          }
+          for old,new in replacements.items():
+            if s.count(old)!=1: raise SystemExit(f'Expected one marker, found {s.count(old)}: {old}')
+            s=s.replace(old,new)
+          s,n=re.subn(r"  assert\.deepEqual\(\n    Object\.values\(subjectCounts\),\n    SUBJECTS\.map\(\(\) => JOURNEY_COUNT / SUBJECTS\.length\),\n    'The exact 30-journey subject rotation is incomplete\.',\n  \);\n",'',s)
+          if n!=1: raise SystemExit(f'Subject assertion count: {n}')
+          start=s.find('    const consentActionability = await safeForecastInterfaceState(page);\n')
+          end=s.find('    const acceptResponsePromise = page.waitForResponse((response) => {\n',start)
+          if start<0 or end<0: raise SystemExit('Consent fixture block changed')
+          unblock="""    await page.evaluate(() => {
+            const root=document.getElementById('bf26-root');
+            if(root) root.inert=false;
+            document.querySelectorAll('.dd2-overlay.is-open, .modal-overlay.open, #private-beta-dialog[open]').forEach((surface)=>{
+              surface.classList.remove('is-open','open');
+              if(surface instanceof HTMLDialogElement && surface.open) surface.close();
+              surface.hidden=true;
+            });
+          });
+          """
+          s=s[:start]+unblock+s[end:]
+          Path('scripts/.p0-one-forecast-journey.mjs').write_text(s,encoding='utf-8')
+          PY
+          node --check scripts/.p0-one-forecast-journey.mjs
+
+      - name: Submit 20 answers and require visible coaching result
+        env:
+          BAR_FORECAST_E2E_CONFIRM: staging:hlzqmreeoghbldnhlybr:30
+          BAR_FORECAST_E2E_RELEASE_SHA: ${{ github.sha }}
+          BAR_FORECAST_E2E_GITHUB_RUN_ID: ${{ github.run_id }}
+          BAR_FORECAST_E2E_SUPABASE_SECRET_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+          BAR_FORECAST_E2E_BATCH_INTERVAL_MS: '180000'
+          BAR_FORECAST_E2E_JOURNEY_TIMEOUT_MS: '1200000'
+          BAR_FORECAST_E2E_BROWSER_CHANNEL: chrome
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/p0-coaching
+          npm install --no-save --no-package-lock playwright@1.54.2
+          node scripts/.p0-one-forecast-journey.mjs --environment staging --preflight >/dev/null
+          node scripts/.p0-one-forecast-journey.mjs --environment staging > artifacts/p0-coaching/result.json
+          EVIDENCE=artifacts/p0-coaching/result.json node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFile } from 'node:fs/promises';
+          const e=JSON.parse(await readFile(process.env.EVIDENCE,'utf8'));
+          assert.equal(e.ok,true);
+          assert.equal(e.journeysPassed,1);
+          assert.equal(e.proof?.twentyAnswerSubmissions,1);
+          assert.equal(e.proof?.suggestedAnswerAndExplanationSets,1);
+          assert.equal(e.proof?.unexpectedConsoleErrors,0);
+          assert.equal(e.journeys?.[0]?.resultCount,20);
+          assert.equal(e.cleanup?.complete,true);
+          NODE
+
+      - name: Upload sanitized proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-forecast-coaching-serial-${{ github.run_id }}
+          path: artifacts/p0-coaching/*.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  production:
+    name: Deploy proven coaching release to production
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      contains(github.event.head_commit.message, '[p0-forecast-coaching-release]')
+    needs: validate
+    environment: production-worker
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+      - name: Re-run focused tests
+        run: |
+          node --check worker/bar-forecast-routes.mjs
+          node --test worker/bar-forecast-core.test.mjs worker/bar-forecast-provider-policy.test.mjs worker/bar-forecast-routes.test.mjs worker/bar-forecast-coaching-release.test.mjs
+      - name: Deploy production Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          wranglerVersion: '4.114.0'
+          command: deploy
+      - name: Deploy public API
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          wranglerVersion: '4.114.0'
+          command: deploy --config wrangler.public-api.toml
+      - name: Verify production boundary three times
+        env:
+          ADMIN_BAR_FORECAST_WORKER_URL: https://duediligence-api.wallyesteban1993.workers.dev
+          ADMIN_BAR_FORECAST_ALLOWED_ORIGIN: https://duediligence.ph
+        run: |
+          node scripts/verify-admin-bar-forecast-deployment.mjs
+          node scripts/verify-admin-bar-forecast-deployment.mjs
+          node scripts/verify-admin-bar-forecast-deployment.mjs
+      - name: Record Cloudflare revisions
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npx --yes wrangler@4.114.0 deployments list
+          npx --yes wrangler@4.114.0 deployments list --config wrangler.public-api.toml

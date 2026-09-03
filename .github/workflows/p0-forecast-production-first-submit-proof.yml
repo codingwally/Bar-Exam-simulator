@@ -1,0 +1,461 @@
+name: P0 Forecast production first-submit proof
+
+on:
+  push:
+    branches:
+      - hotfix/p0-production-first-submit-proof-20260903
+    paths:
+      - .github/workflows/p0-forecast-production-first-submit-proof.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p0-forecast-production-first-submit-proof
+  cancel-in-progress: true
+
+jobs:
+  prove:
+    name: Submit 20 answers once and require production coaching
+    environment: production-worker
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SUPABASE_URL: https://hbllomlijfznnuudpdvr.supabase.co
+      SITE_URL: https://duediligence.ph
+      WORKER_URL: https://duediligence-api.wallyesteban1993.workers.dev
+      DATABASE_URL: ${{ secrets.EXAMINATION_ROOM_PRODUCTION_DATABASE_URL }}
+    steps:
+      - name: Checkout deployed product tree plus isolated proof workflow
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install PostgreSQL client when needed
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install --yes postgresql-client
+          fi
+          psql --version
+          test -n "$DATABASE_URL"
+
+      - name: Create a disposable confirmed production account
+        shell: bash
+        run: |
+          set -euo pipefail
+          publishable_key="$(grep -Eo 'sb_publishable_[A-Za-z0-9_-]{20,}' assets/phase2-config.js | head -n 1)"
+          [[ "$publishable_key" =~ ^sb_publishable_[A-Za-z0-9_-]{20,}$ ]]
+          user_email="dd-p0-prod-${GITHUB_RUN_ID}-$(node --input-type=module -e "import { randomBytes } from 'node:crypto'; process.stdout.write(randomBytes(5).toString('hex'))")@example.com"
+          user_password="Dd!$(node --input-type=module -e "import { randomBytes } from 'node:crypto'; process.stdout.write(randomBytes(30).toString('base64url'))")9z"
+          echo "::add-mask::$publishable_key"
+          echo "::add-mask::$user_email"
+          echo "::add-mask::$user_password"
+          echo "P0_PUBLISHABLE_KEY=$publishable_key" >> "$GITHUB_ENV"
+          echo "P0_USER_EMAIL=$user_email" >> "$GITHUB_ENV"
+          echo "P0_USER_PASSWORD=$user_password" >> "$GITHUB_ENV"
+
+          signup_response="$RUNNER_TEMP/p0-forecast-signup.json"
+          signup_payload="$(jq -nc \
+            --arg email "$user_email" \
+            --arg password "$user_password" \
+            '{email:$email,password:$password,data:{display_name:"Forecast P0 Production Proof",full_name:"Forecast P0 Production Proof"}}')"
+          signup_status="$(curl --silent --show-error \
+            --output "$signup_response" \
+            --write-out '%{http_code}' \
+            --request POST \
+            --header "apikey: $publishable_key" \
+            --header "Authorization: Bearer $publishable_key" \
+            --header 'Content-Type: application/json' \
+            --data "$signup_payload" \
+            "$SUPABASE_URL/auth/v1/signup")"
+          case "$signup_status" in
+            200|201) ;;
+            *)
+              echo "Disposable Auth signup failed with HTTP $signup_status." >&2
+              jq -c '{code:(.code // .error_code // "unknown"),message:(.msg // .message // "signup failed")}' "$signup_response" >&2 || true
+              exit 1
+              ;;
+          esac
+          user_id="$(jq -r '.user.id // .id // empty' "$signup_response")"
+          [[ "$user_id" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]
+          echo "::add-mask::$user_id"
+          echo "P0_USER_ID=$user_id" >> "$GITHUB_ENV"
+          rm -f -- "$signup_response"
+
+          psql "$DATABASE_URL" -X --set=ON_ERROR_STOP=1 \
+            --set=user_id="$user_id" \
+            --set=user_email="$user_email" <<'SQL'
+          begin;
+          update auth.users
+          set email_confirmed_at = coalesce(email_confirmed_at, clock_timestamp()),
+              confirmation_token = '',
+              raw_user_meta_data = coalesce(raw_user_meta_data, '{}'::jsonb)
+                || jsonb_build_object('email_verified', true),
+              updated_at = clock_timestamp()
+          where id = :'user_id'::uuid
+            and lower(email) = lower(:'user_email');
+
+          update auth.identities
+          set identity_data = coalesce(identity_data, '{}'::jsonb)
+                || jsonb_build_object('email_verified', true),
+              updated_at = clock_timestamp()
+          where user_id = :'user_id'::uuid
+            and provider = 'email';
+
+          update public.user_roles
+          set role = 'super_admin',
+              assigned_by = :'user_id'::uuid,
+              updated_at = clock_timestamp()
+          where user_id = :'user_id'::uuid;
+
+          insert into public.terms_acceptances (
+            user_id, terms_version, privacy_version, accepted_at, acceptance_source
+          ) values (
+            :'user_id'::uuid,
+            'terms-soft-launch-v1-2026-08-21',
+            'privacy-soft-launch-v1-2026-08-21',
+            clock_timestamp(),
+            'p0-production-first-submit-proof'
+          ) on conflict (user_id, terms_version, privacy_version) do nothing;
+
+          insert into public.dd2026_bar_forecast_consents (
+            user_id, consent_version, accepted_at
+          ) values (
+            :'user_id'::uuid,
+            '2026-09-01',
+            clock_timestamp()
+          ) on conflict (user_id, consent_version) do nothing;
+
+          insert into private.internal_test_accounts (
+            user_id, email_at_classification, classification_source, classified_at
+          ) values (
+            :'user_id'::uuid,
+            lower(:'user_email'),
+            'p0-production-first-submit-proof',
+            clock_timestamp()
+          ) on conflict (user_id) do update
+          set email_at_classification = excluded.email_at_classification,
+              classification_source = excluded.classification_source,
+              classified_at = excluded.classified_at;
+          commit;
+          SQL
+
+          setup_counts="$(psql "$DATABASE_URL" -X --tuples-only --no-align --field-separator='|' \
+            --set=user_id="$user_id" \
+            --command="select
+              (select count(*) from auth.users where id=:'user_id'::uuid and email_confirmed_at is not null),
+              (select count(*) from auth.identities where user_id=:'user_id'::uuid and provider='email'),
+              (select count(*) from public.profiles where id=:'user_id'::uuid),
+              (select count(*) from public.user_roles where user_id=:'user_id'::uuid and role='super_admin'),
+              (select count(*) from public.terms_acceptances where user_id=:'user_id'::uuid and terms_version='terms-soft-launch-v1-2026-08-21' and privacy_version='privacy-soft-launch-v1-2026-08-21'),
+              (select count(*) from public.dd2026_bar_forecast_consents where user_id=:'user_id'::uuid and consent_version='2026-09-01'),
+              (select count(*) from private.internal_test_accounts where user_id=:'user_id'::uuid);")"
+          test "$setup_counts" = '1|1|1|1|1|1|1'
+          echo 'Disposable production account is confirmed, classified as internal testing, and Forecast-authorized.'
+
+      - name: Submit exactly once and require all 20 visible coaching results
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/p0-production-first-submit
+          npm install --no-save --no-package-lock playwright@1.54.2
+          cat > "$RUNNER_TEMP/p0-production-first-submit.mjs" <<'NODE'
+          import assert from 'node:assert/strict';
+          import { writeFile } from 'node:fs/promises';
+          import { chromium } from 'playwright';
+
+          const siteUrl = process.env.SITE_URL;
+          const workerUrl = process.env.WORKER_URL;
+          const email = process.env.P0_USER_EMAIL;
+          const password = process.env.P0_USER_PASSWORD;
+          const expectedUserId = process.env.P0_USER_ID;
+          const runId = process.env.GITHUB_RUN_ID;
+          const forecastPath = '/admin/dd2026/bar-forecast';
+          const marker = `P0PROD-${runId}`;
+          const browser = await chromium.launch({ channel: 'chrome', headless: true });
+          const context = await browser.newContext({
+            viewport: { width: 1280, height: 900 },
+            serviceWorkers: 'block',
+            acceptDownloads: false,
+          });
+          const page = await context.newPage();
+          page.setDefaultTimeout(60_000);
+
+          let pageErrors = 0;
+          let consoleErrors = 0;
+          let unexpectedConsoleErrors = 0;
+          let submitRequests = 0;
+          const submitStatuses = [];
+          page.on('pageerror', () => { pageErrors += 1; });
+          page.on('console', (message) => {
+            if (message.type() !== 'error') return;
+            consoleErrors += 1;
+            if (!/Failed to load resource:[\s\S]*status of (?:401|403|404|409)\b/iu.test(message.text())) {
+              unexpectedConsoleErrors += 1;
+            }
+          });
+          page.on('request', (request) => {
+            let url;
+            try { url = new URL(request.url()); } catch { return; }
+            if (url.pathname !== forecastPath) return;
+            try {
+              if (String(request.postDataJSON()?.operation || '') === 'submit') submitRequests += 1;
+            } catch {
+              // A malformed request will be caught by the response assertions.
+            }
+          });
+          page.on('response', (response) => {
+            let url;
+            try { url = new URL(response.url()); } catch { return; }
+            if (url.pathname !== forecastPath) return;
+            try {
+              if (String(response.request().postDataJSON()?.operation || '') === 'submit') {
+                submitStatuses.push(response.status());
+              }
+            } catch {
+              // Ignore non-JSON traffic on the same path.
+            }
+          });
+
+          let signedOut = false;
+          try {
+            await page.goto(`${siteUrl}/?p0-production-first-submit=${encodeURIComponent(runId)}`, {
+              waitUntil: 'domcontentloaded',
+              timeout: 60_000,
+            });
+            await page.waitForFunction(() => Boolean(
+              window.supabase?.createClient
+              && window.DueDiligencePhase2Config?.supabase
+              && window.DueDiligencePhase2Config?.workerUrl,
+            ));
+            const authentication = await page.evaluate(async ({ credentials, expectedWorker }) => {
+              const config = window.DueDiligencePhase2Config;
+              if (config.workerUrl !== expectedWorker) return { ok: false, code: 'WORKER_MISMATCH' };
+              const client = window.supabase.createClient(
+                config.supabase.url,
+                config.supabase.publishableKey,
+                {
+                  auth: {
+                    persistSession: true,
+                    storage: window.DueDiligenceAuthSessionStorage?.prepare?.(config.supabase.url)
+                      || window.localStorage,
+                    autoRefreshToken: true,
+                    detectSessionInUrl: false,
+                  },
+                },
+              );
+              const { data, error } = await client.auth.signInWithPassword(credentials);
+              return {
+                ok: !error && Boolean(data?.session?.access_token),
+                userId: data?.user?.id || '',
+                code: error?.code || error?.name || '',
+              };
+            }, {
+              credentials: { email, password },
+              expectedWorker: workerUrl,
+            });
+            assert.equal(authentication.ok, true, `Disposable production sign-in failed (${authentication.code || 'unknown'}).`);
+            assert.equal(authentication.userId, expectedUserId);
+
+            await page.waitForFunction(() => Boolean(
+              window.DueDiligenceBarForecast?.open
+              && window.DueDiligencePhase4?.ensureRequiredSetup,
+            ));
+            await page.evaluate(() => window.DueDiligenceBarForecast.open());
+            await page.waitForFunction(() => (
+              Boolean(document.querySelector('.bf26-picker'))
+              || document.querySelector('[data-bf26-status]')?.dataset?.kind === 'error'
+            ), null, { timeout: 90_000 });
+
+            await page.evaluate(() => {
+              const root = document.getElementById('bf26-root');
+              if (root) root.inert = false;
+              document.querySelectorAll(
+                '.dd2-overlay.is-open, .modal-overlay.open, #private-beta-dialog[open]',
+              ).forEach((surface) => {
+                surface.classList.remove('is-open', 'open');
+                if (surface instanceof HTMLDialogElement && surface.open) surface.close();
+                surface.hidden = true;
+              });
+            });
+
+            await page.getByRole('heading', { name: 'Choose a 2026 Bar subject.' })
+              .waitFor({ state: 'visible', timeout: 60_000 });
+            const subjectButtons = page.locator('[data-subject]');
+            assert.equal(await subjectButtons.count(), 6);
+            const startResponsePromise = page.waitForResponse((response) => {
+              let url;
+              try { url = new URL(response.url()); } catch { return false; }
+              if (url.pathname !== forecastPath) return false;
+              try { return response.request().postDataJSON()?.operation === 'start'; } catch { return false; }
+            });
+            await subjectButtons.first().evaluate((button) => button.click());
+            const startResponse = await startResponsePromise;
+            await startResponse.finished();
+            assert.equal(startResponse.status(), 200);
+            await page.locator('.bf26-exam').waitFor({ state: 'visible', timeout: 60_000 });
+            assert.equal(await page.locator('.bf26-question-jump').count(), 20);
+
+            for (let index = 0; index < 20; index += 1) {
+              await page.locator('.bf26-question-jump').nth(index)
+                .evaluate((button) => button.click());
+              const answer = `${marker}-Q${index + 1}. Yes. Applying the controlling rule to every material fact, the requested conclusion follows from the stated legal basis.`;
+              await page.locator('#bf26-current-answer').fill(answer);
+            }
+
+            const submit = page.locator('.bf26-exam-footer')
+              .getByRole('button', { name: 'Submit all answers' });
+            assert.equal(await submit.isEnabled(), true);
+            page.once('dialog', (dialog) => dialog.accept());
+            const submitResponsePromise = page.waitForResponse((response) => {
+              let url;
+              try { url = new URL(response.url()); } catch { return false; }
+              if (url.pathname !== forecastPath) return false;
+              try { return response.request().postDataJSON()?.operation === 'submit'; } catch { return false; }
+            }, { timeout: 15 * 60_000 });
+
+            const submittedAt = Date.now();
+            await submit.click();
+            const submitResponse = await submitResponsePromise;
+            await submitResponse.finished();
+            const durationMs = Date.now() - submittedAt;
+            const payload = await submitResponse.json();
+            assert.equal(submitResponse.status(), 200);
+            assert.equal(payload?.ok, true);
+            assert.equal(Array.isArray(payload?.results), true);
+            assert.equal(payload.results.length, 20);
+            assert.equal(payload.maxScore, 100);
+            payload.results.forEach((result, index) => {
+              const expectedMarker = `${marker}-Q${index + 1}`;
+              assert.ok(String(result?.userAnswer || '').includes(expectedMarker));
+              assert.ok(String(result?.feedback || '').trim());
+              assert.ok(String(result?.suggestedAnswer || '').trim());
+              assert.ok(String(result?.explanation || '').trim());
+              assert.ok(String(result?.mockBarCoaching?.strength || '').trim());
+              assert.ok(String(result?.mockBarCoaching?.priorityImprovement || '').trim());
+              assert.ok(String(result?.mockBarCoaching?.nextStep || '').trim());
+            });
+
+            await page.locator('.bf26-results').waitFor({ state: 'visible', timeout: 60_000 });
+            const visibleResults = await page.locator('.bf26-result').evaluateAll((items) => items.map((item) => {
+              const sections = new Map([...item.querySelectorAll('.bf26-result-section')].map((section) => [
+                section.querySelector('h4')?.textContent?.trim() || '',
+                section.querySelector('p')?.textContent?.trim() || '',
+              ]));
+              return {
+                userAnswer: sections.get('Your answer') || '',
+                coachingLength: (item.querySelector('.bf26-coaching-summary')?.textContent?.trim() || '').length,
+                suggestedAnswerLength: (sections.get('Suggested answer') || '').length,
+                rationaleLength: (sections.get('Score rationale') || '').length,
+              };
+            }));
+            assert.equal(visibleResults.length, 20);
+            visibleResults.forEach((result, index) => {
+              assert.ok(result.userAnswer.includes(`${marker}-Q${index + 1}`));
+              assert.ok(result.coachingLength > 0);
+              assert.ok(result.suggestedAnswerLength > 0);
+              assert.ok(result.rationaleLength > 0);
+            });
+
+            assert.equal(submitRequests, 1, 'The browser issued more than one submit request.');
+            assert.deepEqual(submitStatuses, [200]);
+            assert.equal(pageErrors, 0);
+            assert.equal(unexpectedConsoleErrors, 0);
+
+            const signOutResult = await page.evaluate(async () => {
+              const config = window.DueDiligencePhase2Config?.supabase;
+              if (!config || !window.supabase?.createClient) return false;
+              const client = window.supabase.createClient(config.url, config.publishableKey, {
+                auth: {
+                  persistSession: true,
+                  storage: window.DueDiligenceAuthSessionStorage?.prepare?.(config.url)
+                    || window.localStorage,
+                  autoRefreshToken: false,
+                  detectSessionInUrl: false,
+                },
+              });
+              const { error } = await client.auth.signOut({ scope: 'global' });
+              return !error;
+            });
+            signedOut = signOutResult === true;
+            assert.equal(signedOut, true);
+
+            await writeFile('artifacts/p0-production-first-submit/result.json', JSON.stringify({
+              ok: true,
+              environment: 'production',
+              firstAttempt: true,
+              submitRequests,
+              submitStatus: submitStatuses[0],
+              durationMs,
+              resultCount: payload.results.length,
+              visibleResultCount: visibleResults.length,
+              pageErrors,
+              consoleErrors,
+              unexpectedConsoleErrors,
+              signedOut,
+            }, null, 2));
+          } finally {
+            await context.close().catch(() => undefined);
+            await browser.close().catch(() => undefined);
+          }
+          NODE
+          node "$RUNNER_TEMP/p0-production-first-submit.mjs"
+          cat artifacts/p0-production-first-submit/result.json
+
+      - name: Delete the exact disposable account and all test usage rows
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${P0_USER_EMAIL:-}" ]]; then
+            echo 'No disposable email was generated; there is nothing to clean.'
+            exit 0
+          fi
+          user_id="${P0_USER_ID:-}"
+          if [[ -z "$user_id" ]]; then
+            user_id="$(psql "$DATABASE_URL" -X --tuples-only --no-align \
+              --set=user_email="$P0_USER_EMAIL" \
+              --command="select id from auth.users where lower(email)=lower(:'user_email') limit 1;")"
+          fi
+          if [[ -n "$user_id" ]]; then
+            echo "::add-mask::$user_id"
+            psql "$DATABASE_URL" -X --set=ON_ERROR_STOP=1 --set=user_id="$user_id" <<'SQL'
+            begin;
+            delete from public.usage_events where user_id = :'user_id'::uuid;
+            delete from public.usage_sessions where user_id = :'user_id'::uuid;
+            delete from private.internal_test_accounts where user_id = :'user_id'::uuid;
+            delete from auth.users where id = :'user_id'::uuid;
+            commit;
+            SQL
+            residue="$(psql "$DATABASE_URL" -X --tuples-only --no-align --field-separator='|' \
+              --set=user_id="$user_id" \
+              --command="select
+                (select count(*) from auth.users where id=:'user_id'::uuid),
+                (select count(*) from auth.identities where user_id=:'user_id'::uuid),
+                (select count(*) from public.profiles where id=:'user_id'::uuid),
+                (select count(*) from public.user_roles where user_id=:'user_id'::uuid),
+                (select count(*) from public.terms_acceptances where user_id=:'user_id'::uuid),
+                (select count(*) from public.dd2026_bar_forecast_consents where user_id=:'user_id'::uuid),
+                (select count(*) from private.internal_test_accounts where user_id=:'user_id'::uuid),
+                (select count(*) from public.usage_events where user_id=:'user_id'::uuid),
+                (select count(*) from public.usage_sessions where user_id=:'user_id'::uuid);")"
+            test "$residue" = '0|0|0|0|0|0|0|0|0'
+          fi
+          echo 'Disposable production proof account and exact test residue were deleted.'
+
+      - name: Upload sanitized first-attempt proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-forecast-production-first-submit-${{ github.run_id }}
+          path: artifacts/p0-production-first-submit/result.json
+          if-no-files-found: warn
+          retention-days: 30

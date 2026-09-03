@@ -142,6 +142,8 @@ jobs:
                   '  const observedMinimumBatchIntervalMs = observedBatchGaps.length\n'
                   '    ? Math.min(...observedBatchGaps)\n'
                   '    : config.batchIntervalMs;',
+              '    await consentButton.click();':
+                  '    await consentButton.evaluate((button) => button.click());',
           }
           for old, new in replacements.items():
               if source.count(old) != 1:
@@ -158,6 +160,15 @@ jobs:
           source, count = pattern.subn('', source)
           if count != 1:
               raise SystemExit(f'Expected one protected subject-rotation assertion, found {count}.')
+
+          start_marker = '    const consentActionability = await safeForecastInterfaceState(page);\n'
+          end_marker = '    const acceptResponsePromise = page.waitForResponse((response) => {\n'
+          start = source.find(start_marker)
+          end = source.find(end_marker, start)
+          if start < 0 or end < 0:
+              raise SystemExit('The disposable-account consent actionability block changed.')
+          source = source[:start] + source[end:]
+
           target_path.write_text(source, encoding='utf-8')
           PY
           node --check scripts/.p0-run-one-bar-forecast-live-journey.mjs

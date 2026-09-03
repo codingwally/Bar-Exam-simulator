@@ -86,6 +86,13 @@ function barForecastGradingProviderOptions(env) {
   });
 }
 
+// A Forecast submission contains five independent four-answer batches. Running
+// them sequentially can keep one HTTP request open for several minutes and can
+// exceed edge/client timeouts before the existing coaching response is returned.
+// The provider, rubric, prompts, response schema, and deterministic coaching are
+// unchanged; only the independent batch scheduling is concurrent.
+export const BAR_FORECAST_GRADING_CONCURRENCY = 5;
+
 function forecastGradingProviderError(error) {
   const code = String(error?.code || '').trim().toUpperCase();
   if (code === 'COACH_TIMEOUT') {
@@ -180,22 +187,38 @@ export function createBarForecastHandlers(deps) {
     return validatedForecastRows(result, subject);
   }
 
-  async function gradeForecast(env, rowsWithAnswers) {
-    const graded = [];
-    for (const batch of forecastGradingBatches(rowsWithAnswers)) {
-      try {
-        const evaluation = await structuredGemini(
-          env,
-          buildBarForecastGradingPrompt(batch),
-          BAR_FORECAST_GRADING_RESPONSE_SCHEMA,
-          (value) => validateBarForecastGradingResult(value, batch),
-          barForecastGradingProviderOptions(env),
-        );
-        graded.push(evaluation.result);
-      } catch (error) {
-        throw forecastGradingProviderError(error);
-      }
+  async function gradeForecastBatch(env, batch) {
+    try {
+      const evaluation = await structuredGemini(
+        env,
+        buildBarForecastGradingPrompt(batch),
+        BAR_FORECAST_GRADING_RESPONSE_SCHEMA,
+        (value) => validateBarForecastGradingResult(value, batch),
+        barForecastGradingProviderOptions(env),
+      );
+      return evaluation.result;
+    } catch (error) {
+      throw forecastGradingProviderError(error);
     }
+  }
+
+  async function gradeForecast(env, rowsWithAnswers) {
+    const batches = forecastGradingBatches(rowsWithAnswers);
+    // Preserve batch order for completeBarForecastResult while allowing the
+    // independent provider requests to finish in any order.
+    const graded = new Array(batches.length);
+    let nextBatchIndex = 0;
+    const gradeNextBatch = async () => {
+      while (nextBatchIndex < batches.length) {
+        const batchIndex = nextBatchIndex;
+        nextBatchIndex += 1;
+        graded[batchIndex] = await gradeForecastBatch(env, batches[batchIndex]);
+      }
+    };
+    await Promise.all(Array.from(
+      { length: Math.min(BAR_FORECAST_GRADING_CONCURRENCY, batches.length) },
+      () => gradeNextBatch(),
+    ));
     return completeBarForecastResult(rowsWithAnswers, graded);
   }
 

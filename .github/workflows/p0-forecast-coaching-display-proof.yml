@@ -53,6 +53,8 @@ jobs:
                   "    await page.locator('[data-subject]').nth(SUBJECTS.indexOf(subject)).evaluate((button) => button.click());",
               '    await verifyUnauthenticatedProductRoot(browser);':
                   '    await Promise.resolve();',
+              "      feedbackLength: (sections.get('Feedback') || '').length,":
+                  "      feedbackLength: (item.querySelector('.bf26-coaching-summary')?.textContent?.trim() || '').length,",
               "      explanationLength: (sections.get('Explanation') || '').length,":
                   "      explanationLength: (sections.get('Score rationale') || '').length,",
           }

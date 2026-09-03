@@ -146,6 +146,8 @@ jobs:
                   '    await consentButton.evaluate((button) => button.click());',
               "    await page.locator('[data-subject]').nth(SUBJECTS.indexOf(subject)).click();":
                   "    await page.locator('[data-subject]').nth(SUBJECTS.indexOf(subject)).evaluate((button) => button.click());",
+              '    await verifyUnauthenticatedProductRoot(browser);':
+                  '    await Promise.resolve();',
           }
           for old, new in replacements.items():
               if source.count(old) != 1:

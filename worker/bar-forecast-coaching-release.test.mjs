@@ -9,6 +9,7 @@ import {
   validatedForecastRows,
 } from './bar-forecast-core.mjs';
 import {
+  BAR_FORECAST_CAPACITY_RETRY_DELAYS_MS,
   BAR_FORECAST_GRADING_CONCURRENCY,
   createBarForecastHandlers,
 } from './bar-forecast-routes.mjs';
@@ -73,26 +74,35 @@ function recordsFromPrompt(prompt) {
   return JSON.parse(prompt.slice(jsonStart, jsonEnd));
 }
 
-function timeoutAfter(milliseconds) {
-  return new Promise((_, reject) => {
-    setTimeout(() => {
-      reject(new Error('Forecast grading batches did not start concurrently.'));
-    }, milliseconds);
-  });
+function successfulProviderResult(prompt, validate) {
+  const records = recordsFromPrompt(prompt);
+  return {
+    result: validate({
+      results: records.map((row) => ({
+        questionId: row.questionId,
+        score: 4,
+        grammar: {
+          score: 4,
+          corrections: [],
+        },
+        issueSpotting: {
+          score: 4,
+          identified: [],
+          missed: [],
+        },
+      })),
+    }),
+  };
 }
 
-test('20-answer coaching release starts all five independent grading batches concurrently', async () => {
-  assert.equal(BAR_FORECAST_GRADING_CONCURRENCY, 5);
+function capacityFailure() {
+  const error = new Error('Temporary provider capacity.');
+  error.code = 'COACH_CAPACITY';
+  return error;
+}
 
-  let started = 0;
-  let inFlight = 0;
-  let maximumInFlight = 0;
-  let releaseAll;
-  const allStarted = new Promise((resolve) => {
-    releaseAll = resolve;
-  });
-
-  const handlers = createBarForecastHandlers({
+function handlerDeps({ structuredGemini, wait = async () => {} }) {
+  return {
     authorizeAdministrator: async () => ({ authorized: true, role: 'super_admin' }),
     barForecastRpc: async (_env, functionName) => {
       if (functionName === 'dd2026_bar_forecast_consent_status') {
@@ -120,51 +130,21 @@ test('20-answer coaching release starts all five independent grading batches con
     }),
     requireAuthenticatedUser: async () => ({ id: 'test-admin-user' }),
     approvedSetIds: { [SUBJECT]: SET_ID },
-    structuredGemini: async (_env, prompt, _schema, validate) => {
-      started += 1;
-      inFlight += 1;
-      maximumInFlight = Math.max(maximumInFlight, inFlight);
-      if (started === 5) releaseAll();
-      await allStarted;
-      try {
-        const records = recordsFromPrompt(prompt);
-        return {
-          result: validate({
-            results: records.map((row) => ({
-              questionId: row.questionId,
-              score: 4,
-              grammar: {
-                score: 4,
-                corrections: [],
-              },
-              issueSpotting: {
-                score: 4,
-                identified: [],
-                missed: [],
-              },
-            })),
-          }),
-        };
-      } finally {
-        inFlight -= 1;
-      }
-    },
-  });
+    structuredGemini,
+    wait,
+  };
+}
 
-  const response = await Promise.race([
-    handlers.handle(request({
-      operation: 'submit',
-      subject: SUBJECT,
-      setId: SET_ID,
-      answers: answers(),
-    }), {}, '', ''),
-    timeoutAfter(1_000),
-  ]);
+function submit(handlers) {
+  return handlers.handle(request({
+    operation: 'submit',
+    subject: SUBJECT,
+    setId: SET_ID,
+    answers: answers(),
+  }), {}, '', '');
+}
 
-  assert.equal(response.status, 200);
-  const body = await response.json();
-  assert.equal(started, 5);
-  assert.equal(maximumInFlight, 5);
+function assertCompleteCoaching(body) {
   assert.equal(body.totalScore, 80);
   assert.equal(body.maxScore, 100);
   assert.equal(body.results.length, 20);
@@ -176,4 +156,76 @@ test('20-answer coaching release starts all five independent grading batches con
     body.results.map((entry) => entry.userAnswer),
     answers().map((entry) => entry.answer),
   );
+}
+
+test('20-answer coaching release grades all five batches serially and returns every result in order', async () => {
+  assert.equal(BAR_FORECAST_GRADING_CONCURRENCY, 1);
+
+  let providerCalls = 0;
+  let inFlight = 0;
+  let maximumInFlight = 0;
+  const handlers = createBarForecastHandlers(handlerDeps({
+    structuredGemini: async (_env, prompt, _schema, validate) => {
+      providerCalls += 1;
+      inFlight += 1;
+      maximumInFlight = Math.max(maximumInFlight, inFlight);
+      try {
+        await Promise.resolve();
+        return successfulProviderResult(prompt, validate);
+      } finally {
+        inFlight -= 1;
+      }
+    },
+  }));
+
+  const response = await submit(handlers);
+  assert.equal(response.status, 200);
+  assert.equal(providerCalls, 5);
+  assert.equal(maximumInFlight, 1);
+  assertCompleteCoaching(await response.json());
+});
+
+test('temporary provider capacity retries the same batch with bounded backoff and still releases 20 results', async () => {
+  assert.deepEqual(BAR_FORECAST_CAPACITY_RETRY_DELAYS_MS, [5_000, 20_000, 45_000]);
+
+  let providerCalls = 0;
+  const observedDelays = [];
+  const handlers = createBarForecastHandlers(handlerDeps({
+    structuredGemini: async (_env, prompt, _schema, validate) => {
+      providerCalls += 1;
+      if (providerCalls <= 2) throw capacityFailure();
+      return successfulProviderResult(prompt, validate);
+    },
+    wait: async (milliseconds) => {
+      observedDelays.push(milliseconds);
+    },
+  }));
+
+  const response = await submit(handlers);
+  assert.equal(response.status, 200);
+  assert.equal(providerCalls, 7);
+  assert.deepEqual(observedDelays, [5_000, 20_000]);
+  assertCompleteCoaching(await response.json());
+});
+
+test('persistent provider capacity stops after the bounded retry schedule', async () => {
+  let providerCalls = 0;
+  const observedDelays = [];
+  const handlers = createBarForecastHandlers(handlerDeps({
+    structuredGemini: async () => {
+      providerCalls += 1;
+      throw capacityFailure();
+    },
+    wait: async (milliseconds) => {
+      observedDelays.push(milliseconds);
+    },
+  }));
+
+  await assert.rejects(
+    submit(handlers),
+    (error) => error?.code === 'BAR_FORECAST_GRADING_CAPACITY'
+      && error?.status === 503,
+  );
+  assert.equal(providerCalls, 4);
+  assert.deepEqual(observedDelays, [5_000, 20_000, 45_000]);
 });

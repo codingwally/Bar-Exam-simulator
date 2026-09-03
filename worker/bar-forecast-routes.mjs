@@ -86,12 +86,15 @@ function barForecastGradingProviderOptions(env) {
   });
 }
 
-// A Forecast submission contains five independent four-answer batches. Running
-// them sequentially can keep one HTTP request open for several minutes and can
-// exceed edge/client timeouts before the existing coaching response is returned.
-// The provider, rubric, prompts, response schema, and deterministic coaching are
-// unchanged; only the independent batch scheduling is concurrent.
-export const BAR_FORECAST_GRADING_CONCURRENCY = 5;
+// Five simultaneous Gemini calls exceeded the real staging project's grading
+// capacity. Keep one provider request in flight so a completed 20-answer exam
+// can progress through every existing four-question grading batch reliably.
+export const BAR_FORECAST_GRADING_CONCURRENCY = 1;
+export const BAR_FORECAST_CAPACITY_RETRY_DELAYS_MS = Object.freeze([
+  5_000,
+  20_000,
+  45_000,
+]);
 
 function forecastGradingProviderError(error) {
   const code = String(error?.code || '').trim().toUpperCase();
@@ -119,6 +122,14 @@ function forecastGradingProviderError(error) {
   return error;
 }
 
+function capacityError(error) {
+  return String(error?.code || '').trim().toUpperCase() === 'COACH_CAPACITY';
+}
+
+function defaultWait(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
 export function createBarForecastHandlers(deps) {
   const {
     authorizeAdministrator,
@@ -130,6 +141,7 @@ export function createBarForecastHandlers(deps) {
     requireAuthenticatedUser,
     structuredGemini,
     approvedSetIds = BAR_FORECAST_APPROVED_SET_IDS,
+    wait = defaultWait,
   } = deps;
 
   async function authorizedContext(request, env) {
@@ -188,37 +200,37 @@ export function createBarForecastHandlers(deps) {
   }
 
   async function gradeForecastBatch(env, batch) {
-    try {
-      const evaluation = await structuredGemini(
-        env,
-        buildBarForecastGradingPrompt(batch),
-        BAR_FORECAST_GRADING_RESPONSE_SCHEMA,
-        (value) => validateBarForecastGradingResult(value, batch),
-        barForecastGradingProviderOptions(env),
-      );
-      return evaluation.result;
-    } catch (error) {
-      throw forecastGradingProviderError(error);
+    for (let attempt = 0; attempt <= BAR_FORECAST_CAPACITY_RETRY_DELAYS_MS.length; attempt += 1) {
+      try {
+        const evaluation = await structuredGemini(
+          env,
+          buildBarForecastGradingPrompt(batch),
+          BAR_FORECAST_GRADING_RESPONSE_SCHEMA,
+          (value) => validateBarForecastGradingResult(value, batch),
+          barForecastGradingProviderOptions(env),
+        );
+        return evaluation.result;
+      } catch (error) {
+        const retryDelay = BAR_FORECAST_CAPACITY_RETRY_DELAYS_MS[attempt];
+        if (!capacityError(error) || retryDelay == null) {
+          throw forecastGradingProviderError(error);
+        }
+        await wait(retryDelay);
+      }
     }
+    throw new BarForecastError(
+      'BAR_FORECAST_GRADING_CAPACITY',
+      'Forecast grading has reached temporary capacity. Your answers remain available; please try again shortly.',
+      503,
+    );
   }
 
   async function gradeForecast(env, rowsWithAnswers) {
     const batches = forecastGradingBatches(rowsWithAnswers);
-    // Preserve batch order for completeBarForecastResult while allowing the
-    // independent provider requests to finish in any order.
-    const graded = new Array(batches.length);
-    let nextBatchIndex = 0;
-    const gradeNextBatch = async () => {
-      while (nextBatchIndex < batches.length) {
-        const batchIndex = nextBatchIndex;
-        nextBatchIndex += 1;
-        graded[batchIndex] = await gradeForecastBatch(env, batches[batchIndex]);
-      }
-    };
-    await Promise.all(Array.from(
-      { length: Math.min(BAR_FORECAST_GRADING_CONCURRENCY, batches.length) },
-      () => gradeNextBatch(),
-    ));
+    const graded = [];
+    for (const batch of batches) {
+      graded.push(await gradeForecastBatch(env, batch));
+    }
     return completeBarForecastResult(rowsWithAnswers, graded);
   }
 

@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
-  BAR_FORECAST_CONSENT_VERSION,
   BAR_FORECAST_CONTENT_TYPE,
   BAR_FORECAST_SOURCE_VERSION,
   BAR_FORECAST_SUBJECTS,
@@ -76,10 +75,9 @@ function recordsFromPrompt(prompt) {
 
 function timeoutAfter(milliseconds) {
   return new Promise((_, reject) => {
-    const timer = setTimeout(() => {
+    setTimeout(() => {
       reject(new Error('Forecast grading batches did not start concurrently.'));
     }, milliseconds);
-    timer.unref?.();
   });
 }
 

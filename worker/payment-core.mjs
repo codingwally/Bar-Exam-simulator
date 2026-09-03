@@ -265,7 +265,7 @@ export function normalizePhase4AdminRequest(payload) {
 export function normalizePhase4AdminAction(payload) {
   const action = String(payload?.action || '').trim();
   const allowed = new Set([
-    'payment_review', 'refund_review', 'subscription_change',
+    'payment_review', 'payment_invalidate', 'refund_review', 'subscription_change',
     'free_beta_change', 'partnership_update', 'provider_incident_clear',
     'role_change', 'discount_assign', 'subscription_audit_view',
   ]);
@@ -286,7 +286,12 @@ export function normalizePhase4AdminAction(payload) {
     && !Array.isArray(payload.payload) ? payload.payload : {};
   let actionPayload = rawActionPayload;
 
-  if (action === 'payment_review') {
+  if (action === 'payment_invalidate') {
+    // The server derives the affected user and subscription exclusively from
+    // the locked approved payment. Presentation fields from Admin are never
+    // accepted as mutation authority.
+    actionPayload = {};
+  } else if (action === 'payment_review') {
     const status = String(rawActionPayload.status || '').trim().toLowerCase();
     if (!['needs_information', 'approved', 'rejected'].includes(status)) {
       throw new PaymentValidationError('INVALID_ADMIN_ACTION', 'Select a valid payment decision.');

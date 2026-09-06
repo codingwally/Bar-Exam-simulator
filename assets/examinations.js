@@ -3211,6 +3211,21 @@
     </div>`;
   }
 
+  // simulation-submitted-answer-20260906-r1: display the saved answer from this result, never the active editor or AI text.
+  function simulationSubmittedAnswerMarkup(result = {}) {
+    const answer = result.answerText;
+    const available = typeof answer === 'string';
+    const text = available && answer.trim()
+      ? answer
+      : available
+        ? 'No answer was submitted for this question.'
+        : 'The saved answer is unavailable for this question.';
+    return `<section class="assessment-section dd-simulation-submitted-response" aria-label="Your submitted answer" data-submitted-answer-section>
+      <h4>Your answer</h4>
+      <div class="dd-model-answer dd-simulation-submitted-answer" data-submitted-answer>${escapeHtml(text)}</div>
+    </section>`;
+  }
+
   function assessmentCard(result, options = {}) {
     result = sanitizeSubjectReviewValue(result);
     const assessment = result.aiAssessment || result.assessment || {};
@@ -3243,7 +3258,7 @@
       </div>
       <div class="assessment-body">
         ${prompt && !(isSubjectMatter && options.compactSubject) ? `<section class="assessment-section"><h4>Question</h4><div class="dd-question-prompt">${escapeHtml(prompt)}</div></section>` : ''}
-        ${options.answerText && !(isSubjectMatter && options.compactSubject) ? `<section class="assessment-section"><h4>Your answer</h4><div class="dd-model-answer">${escapeHtml(options.answerText)}</div></section>` : ''}
+        ${track === 'bar_feels' ? simulationSubmittedAnswerMarkup(result) : options.answerText && !(isSubjectMatter && options.compactSubject) ? `<section class="assessment-section"><h4>Your answer</h4><div class="dd-model-answer">${escapeHtml(options.answerText)}</div></section>` : ''}
         <h4 class="panel-title">${isSubjectMatter ? 'Why this response received its score' : 'Why this score'}</h4>
         <p class="assessment-rationale">${escapeHtml(assessment.rationale || 'The assessment record does not include a written rationale.')}</p>
         ${isSubjectMatter ? '' : `<section class="assessment-section"><h4>Governing rule and authority</h4>

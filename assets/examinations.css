@@ -4078,3 +4078,14 @@ details[open] > summary .dd-subject-chevron {
   .dd-simulation-total-stats { gap: 18px 24px; margin-top: 18px; }
   .dd-simulation-total-stats dd { font-size: 25px; }
 }
+
+/* simulation-submitted-answer-20260906-r1: reuse the existing cream-and-gold answer panel. */
+.dd-simulation-submitted-response {
+  margin-bottom: 24px;
+}
+.dd-simulation-submitted-answer {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  user-select: text;
+}

@@ -1,0 +1,133 @@
+name: P0 Bar Simulation advisory timer and review release
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/p0-bar-simulation-timer-review-release.yml']
+permissions:
+  actions: read
+  contents: write
+  pages: write
+  id-token: write
+concurrency:
+  group: examination-room-production-cutover
+  cancel-in-progress: false
+jobs:
+  release:
+    if: github.repository == 'codingwally/Bar-Exam-simulator' && github.event.head_commit.message == 'release: deploy owner-approved Bar Simulation timer and review hotfix'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SITE_URL: https://duediligence.ph
+      APPROVAL_REFERENCE: owner-20260906-continue-review-submit-after-expiry
+      HOTFIX_MARKER: simulation-timer-review-20260906-r2
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Identify and preserve the exact currently deployed Pages source
+        id: base
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          deployments="$(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=30")"
+          base=""
+          while read -r deployment sha; do
+            status="$(gh api "repos/$GITHUB_REPOSITORY/deployments/$deployment/statuses" --jq '.[0].state')"
+            if [[ "$status" == success ]]; then base="$sha"; break; fi
+          done < <(jq -r '.[] | "\(.id) \(.sha)"' <<< "$deployments")
+          test "${#base}" = 40
+          git cat-file -e "$base^{commit}" || git fetch origin "$base"
+          live="$RUNNER_TEMP/dd-simulation-live"
+          git worktree add --detach "$live" "$base"
+          curl -fsS "$SITE_URL/assets/examinations.js?verify=$GITHUB_SHA" -o "$RUNNER_TEMP/live-examinations.js"
+          echo "Deployed source: $base"
+          echo "Live and source examination asset hashes:"
+          sha256sum "$RUNNER_TEMP/live-examinations.js" "$live/assets/examinations.js" assets/examinations.js
+          cmp "$RUNNER_TEMP/live-examinations.js" "$live/assets/examinations.js"
+          cmp assets/examinations.js "$live/assets/examinations.js"
+          echo "sha=$base" >> "$GITHUB_OUTPUT"
+          echo "live=$live" >> "$GITHUB_OUTPUT"
+      - name: Apply only the reviewed browser hotfix and run behavioral tests
+        env:
+          LIVE: ${{ steps.base.outputs.live }}
+        run: |
+          set -euo pipefail
+          node scripts/apply-bar-simulation-timer-ui-hotfix.mjs "$LIVE"
+          node --check "$LIVE/assets/examinations.js"
+          node --check "$LIVE/assets/feature-loader.js"
+          node --check "$LIVE/service-worker.js"
+          node scripts/test-bar-simulation-timer-ui-hotfix.mjs "$LIVE"
+          unexpected="$(git -C "$LIVE" diff --name-only | grep -Ev '^(assets/examinations.js|assets/feature-loader.js|index.html|service-worker.js)$' || true)"
+          test -z "$unexpected"
+          git -C "$LIVE" diff --stat
+          git -C "$LIVE" diff > "$RUNNER_TEMP/simulation-hotfix.patch"
+      - name: Build the existing sanitized artifact without changing other product features
+        env:
+          LIVE: ${{ steps.base.outputs.live }}
+        run: |
+          set -euo pipefail
+          npm ci --prefix "$LIVE/worker" --ignore-scripts --no-audit --no-fund
+          cd "$LIVE"
+          node scripts/test-pages-artifact.mjs
+          cmp assets/examinations.js .pages-dist/assets/examinations.js
+      - name: Record the tested source fix on main without overwriting concurrent changes
+        env:
+          LIVE: ${{ steps.base.outputs.live }}
+        run: |
+          set -euo pipefail
+          node scripts/apply-bar-simulation-timer-ui-hotfix.mjs .
+          node scripts/test-bar-simulation-timer-ui-hotfix.mjs .
+          cmp assets/examinations.js "$LIVE/assets/examinations.js"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add assets/examinations.js assets/feature-loader.js index.html service-worker.js
+          git commit -m 'fix(bar-simulation): advisory expiry, immediate review, preserve and synchronize every answer'
+          git push origin HEAD:main
+          echo "Recorded source fix: $(git rev-parse HEAD)"
+      - uses: actions/configure-pages@v4
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ steps.base.outputs.live }}/.pages-dist
+      - name: Deploy the isolated tested hotfix to production
+        id: deployment
+        uses: actions/deploy-pages@v4
+      - name: Verify live code and cache-busted entry points
+        shell: bash
+        env:
+          LIVE: ${{ steps.base.outputs.live }}
+          BASE_SHA: ${{ steps.base.outputs.sha }}
+        run: |
+          set -euo pipefail
+          verified=false
+          for attempt in $(seq 1 30); do
+            if curl -fsS "$SITE_URL/assets/examinations.js?simulation=$HOTFIX_MARKER" -o "$RUNNER_TEMP/verified-examinations.js" \
+              && cmp -s "$RUNNER_TEMP/verified-examinations.js" "$LIVE/.pages-dist/assets/examinations.js" \
+              && curl -fsS "$SITE_URL/?simulation=$HOTFIX_MARKER" | grep -q "$HOTFIX_MARKER" \
+              && curl -fsS "$SITE_URL/assets/feature-loader.js?simulation=$HOTFIX_MARKER" | grep -q "$HOTFIX_MARKER"; then
+              verified=true; break
+            fi
+            sleep 4
+          done
+          test "$verified" = true
+          mkdir -p "$RUNNER_TEMP/live-proof/assets"
+          cp "$RUNNER_TEMP/verified-examinations.js" "$RUNNER_TEMP/live-proof/assets/examinations.js"
+          curl -fsS "$SITE_URL/?simulation=$HOTFIX_MARKER" > "$RUNNER_TEMP/live-proof/index.html"
+          curl -fsS "$SITE_URL/assets/feature-loader.js?simulation=$HOTFIX_MARKER" > "$RUNNER_TEMP/live-proof/assets/feature-loader.js"
+          curl -fsS "$SITE_URL/service-worker.js?simulation=$HOTFIX_MARKER" > "$RUNNER_TEMP/live-proof/service-worker.js"
+          node scripts/test-bar-simulation-timer-ui-hotfix.mjs "$RUNNER_TEMP/live-proof"
+          {
+            echo '## P0 Bar Simulation hotfix: LIVE VERIFIED'
+            echo "Approval: $APPROVAL_REFERENCE"
+            echo "Preserved deployed base: $BASE_SHA"
+            echo "Release marker: $HOTFIX_MARKER"
+            echo 'Verified live asset equality and 9 behavioral checks against code fetched from production.'
+            echo 'No real customer answers were submitted by the release tests.'
+          } >> "$GITHUB_STEP_SUMMARY"

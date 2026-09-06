@@ -1,0 +1,159 @@
+name: Release Bar Simulation cumulative score summary
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/release-bar-simulation-cumulative-score.yml']
+
+permissions:
+  actions: read
+  contents: write
+  deployments: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: examination-room-production-cutover
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: >-
+      github.repository == 'codingwally/Bar-Exam-simulator' &&
+      github.ref == 'refs/heads/main' &&
+      github.event.head_commit.message == 'release: deploy owner-approved cumulative Bar Simulation score'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SITE_URL: https://duediligence.ph
+      BASE_RUN: '34027214173'
+      BASE_DEPLOYMENT_SHA: d3a967cbbeb62b7d18a21afaae0a042efee297d9
+      SCORE_MARKER: simulation-cumulative-score-20260906-r1
+      APPROVAL_REFERENCE: owner-20260906-cumulative-total-above-individual-answers
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify exact live baseline and retrieve its sanitized Pages artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          cat > "$RUNNER_TEMP/assert-score-baseline.sh" <<'SH'
+          set -euo pipefail
+          deployments="$(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=30")"
+          found=""
+          while read -r deployment sha; do
+            status="$(gh api "repos/$GITHUB_REPOSITORY/deployments/$deployment/statuses" --jq '.[0].state')"
+            if [[ "$status" == success ]]; then found="$sha"; break; fi
+          done < <(jq -r '.[] | "\(.id) \(.sha)"' <<< "$deployments")
+          test "$found" = "$BASE_DEPLOYMENT_SHA"
+          SH
+          bash "$RUNNER_TEMP/assert-score-baseline.sh"
+          baseline="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$BASE_RUN")"
+          test "$(jq -r '.conclusion' <<< "$baseline")" = success
+          test "$(jq -r '.head_sha' <<< "$baseline")" = "$BASE_DEPLOYMENT_SHA"
+          gh run download "$BASE_RUN" --repo "$GITHUB_REPOSITORY" --name github-pages --dir "$RUNNER_TEMP/score-baseline-download"
+          python - <<'PY'
+          import os, pathlib, tarfile, hashlib, json
+          root = pathlib.Path(os.environ['RUNNER_TEMP'])
+          site = root / 'score-site'
+          site.mkdir()
+          with tarfile.open(root / 'score-baseline-download/artifact.tar') as archive:
+              archive.extractall(site, filter='data')
+          hashes = {str(p.relative_to(site)): hashlib.sha256(p.read_bytes()).hexdigest() for p in site.rglob('*') if p.is_file()}
+          (root / 'score-baseline-hashes.json').write_text(json.dumps(hashes))
+          PY
+          for file in assets/examinations.js assets/examinations.css assets/feature-loader.js index.html service-worker.js; do
+            curl -fsS --max-time 20 "$SITE_URL/$file?scoreBaseline=$GITHUB_RUN_ID" -o "$RUNNER_TEMP/score-baseline-check"
+            cmp "$RUNNER_TEMP/score-baseline-check" "$RUNNER_TEMP/score-site/$file"
+            cmp "$file" "$RUNNER_TEMP/score-site/$file"
+          done
+      - name: Apply display-only summary and verify score and timer behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/apply-bar-simulation-cumulative-score.mjs "$RUNNER_TEMP/score-site"
+          node --check "$RUNNER_TEMP/score-site/assets/examinations.js"
+          node --check "$RUNNER_TEMP/score-site/assets/feature-loader.js"
+          node --check "$RUNNER_TEMP/score-site/service-worker.js"
+          node scripts/test-bar-simulation-cumulative-score.mjs "$RUNNER_TEMP/score-site"
+          node scripts/test-bar-simulation-timer-ui-hotfix.mjs "$RUNNER_TEMP/score-site"
+          python - <<'PY'
+          import os, pathlib, hashlib, json
+          root = pathlib.Path(os.environ['RUNNER_TEMP'])
+          site = root / 'score-site'
+          before = json.loads((root / 'score-baseline-hashes.json').read_text())
+          after = {str(p.relative_to(site)): hashlib.sha256(p.read_bytes()).hexdigest() for p in site.rglob('*') if p.is_file()}
+          allowed = {'assets/examinations.js','assets/examinations.css','assets/feature-loader.js','index.html','service-worker.js'}
+          assert before.keys() == after.keys(), 'Unexpected artifact files added or removed'
+          changed = {name for name in before if before[name] != after[name]}
+          assert changed == allowed, f'Unexpected runtime changes: {changed}'
+          print('PASS exact five-file display boundary; every other deployed file remains byte-identical')
+          PY
+      - name: Record tested source without overwriting concurrent changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/apply-bar-simulation-cumulative-score.mjs .
+          node scripts/test-bar-simulation-cumulative-score.mjs .
+          node scripts/test-bar-simulation-timer-ui-hotfix.mjs .
+          for file in assets/examinations.js assets/examinations.css assets/feature-loader.js index.html service-worker.js; do
+            cmp "$file" "$RUNNER_TEMP/score-site/$file"
+          done
+          unexpected="$(git diff --name-only | grep -Ev '^(assets/examinations\.(js|css)|assets/feature-loader\.js|index\.html|service-worker\.js)$' || true)"
+          test -z "$unexpected"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add assets/examinations.js assets/examinations.css assets/feature-loader.js index.html service-worker.js
+          git commit -m 'feat(bar-simulation): show cumulative points and percentage before individual answers'
+          git push origin HEAD:main
+          source_sha="$(git rev-parse HEAD)"
+          echo "Recorded source: $source_sha"
+          echo "$source_sha" > "$RUNNER_TEMP/score-site/.well-known/duediligence-release.txt"
+          echo "SCORE_SOURCE_SHA=$source_sha" >> "$GITHUB_ENV"
+          bash "$RUNNER_TEMP/assert-score-baseline.sh"
+      - uses: actions/configure-pages@v4
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ runner.temp }}/score-site
+      - name: Deploy cumulative score summary to production
+        id: deployment
+        uses: actions/deploy-pages@v4
+      - name: Verify actual live files and rerun score and timer checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          proof="$RUNNER_TEMP/score-live-proof"
+          mkdir -p "$proof/assets" "$proof/.well-known"
+          verified=false
+          for attempt in $(seq 1 30); do
+            matched=true
+            for file in assets/examinations.js assets/examinations.css assets/feature-loader.js index.html service-worker.js .well-known/duediligence-release.txt; do
+              if ! curl -fsS --max-time 20 "$SITE_URL/$file?totals=$SCORE_MARKER&verify=$GITHUB_RUN_ID" -o "$proof/$file" || ! cmp -s "$proof/$file" "$RUNNER_TEMP/score-site/$file"; then
+                matched=false
+                break
+              fi
+            done
+            if [[ "$matched" == true ]]; then verified=true; break; fi
+            sleep 4
+          done
+          test "$verified" = true
+          node scripts/test-bar-simulation-cumulative-score.mjs "$proof"
+          node scripts/test-bar-simulation-timer-ui-hotfix.mjs "$proof"
+          {
+            echo '## Cumulative Bar Simulation score: LIVE VERIFIED'
+            echo "Approval: $APPROVAL_REFERENCE"
+            echo "Source commit: $SCORE_SOURCE_SHA"
+            echo "Preserved deployed artifact: run $BASE_RUN"
+            echo '14 cumulative-score checks and 9 timer/review/submission regression checks passed against code fetched from production.'
+            echo 'The total and percentage precede individual answers. Missing grades remain pending. AI and human totals stay separate.'
+            echo 'No database, scoring rubric, authentication, answer content, or examination submission was modified.'
+          } >> "$GITHUB_STEP_SUMMARY"

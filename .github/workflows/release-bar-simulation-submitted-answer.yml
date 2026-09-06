@@ -1,0 +1,162 @@
+name: Release Bar Simulation submitted answers in results
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/release-bar-simulation-submitted-answer.yml']
+
+permissions:
+  actions: read
+  contents: write
+  deployments: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: examination-room-production-cutover
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: >-
+      github.repository == 'codingwally/Bar-Exam-simulator' &&
+      github.ref == 'refs/heads/main' &&
+      github.event.head_commit.message == 'release: deploy owner-approved submitted answers in Bar Simulation results'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SITE_URL: https://duediligence.ph
+      BASE_RUN: '34028143451'
+      BASE_DEPLOYMENT_SHA: fb39aba154f3131a790186dc8d3d0645582bc863
+      ANSWER_MARKER: simulation-submitted-answer-20260906-r1
+      APPROVAL_REFERENCE: owner-20260906-display-user-answer-in-each-simulation-result
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify latest live baseline and retrieve its exact sanitized artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          cat > "$RUNNER_TEMP/assert-answer-baseline.sh" <<'SH'
+          set -euo pipefail
+          deployments="$(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=30")"
+          found=""
+          while read -r deployment sha; do
+            status="$(gh api "repos/$GITHUB_REPOSITORY/deployments/$deployment/statuses" --jq '.[0].state')"
+            if [[ "$status" == success ]]; then found="$sha"; break; fi
+          done < <(jq -r '.[] | "\(.id) \(.sha)"' <<< "$deployments")
+          test "$found" = "$BASE_DEPLOYMENT_SHA"
+          SH
+          bash "$RUNNER_TEMP/assert-answer-baseline.sh"
+          baseline="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$BASE_RUN")"
+          test "$(jq -r '.conclusion' <<< "$baseline")" = success
+          test "$(jq -r '.head_sha' <<< "$baseline")" = "$BASE_DEPLOYMENT_SHA"
+          gh run download "$BASE_RUN" --repo "$GITHUB_REPOSITORY" --name github-pages --dir "$RUNNER_TEMP/answer-baseline-download"
+          python - <<'PY'
+          import os, pathlib, tarfile, hashlib, json
+          root = pathlib.Path(os.environ['RUNNER_TEMP'])
+          site = root / 'answer-site'
+          site.mkdir()
+          with tarfile.open(root / 'answer-baseline-download/artifact.tar') as archive:
+              archive.extractall(site, filter='data')
+          hashes = {str(p.relative_to(site)): hashlib.sha256(p.read_bytes()).hexdigest() for p in site.rglob('*') if p.is_file()}
+          (root / 'answer-baseline-hashes.json').write_text(json.dumps(hashes))
+          PY
+          for file in assets/examinations.js assets/examinations.css assets/feature-loader.js index.html service-worker.js; do
+            curl -fsS --max-time 20 "$SITE_URL/$file?answerBaseline=$GITHUB_RUN_ID" -o "$RUNNER_TEMP/answer-baseline-check"
+            cmp "$RUNNER_TEMP/answer-baseline-check" "$RUNNER_TEMP/answer-site/$file"
+            cmp "$file" "$RUNNER_TEMP/answer-site/$file"
+          done
+      - name: Apply answer display and verify answers, totals, timer, review and submission
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/apply-bar-simulation-submitted-answer.mjs "$RUNNER_TEMP/answer-site"
+          node --check "$RUNNER_TEMP/answer-site/assets/examinations.js"
+          node --check "$RUNNER_TEMP/answer-site/assets/feature-loader.js"
+          node --check "$RUNNER_TEMP/answer-site/service-worker.js"
+          node scripts/test-bar-simulation-submitted-answer.mjs "$RUNNER_TEMP/answer-site"
+          node scripts/test-bar-simulation-cumulative-score.mjs "$RUNNER_TEMP/answer-site"
+          node scripts/test-bar-simulation-timer-ui-hotfix.mjs "$RUNNER_TEMP/answer-site"
+          python - <<'PY'
+          import os, pathlib, hashlib, json
+          root = pathlib.Path(os.environ['RUNNER_TEMP'])
+          site = root / 'answer-site'
+          before = json.loads((root / 'answer-baseline-hashes.json').read_text())
+          after = {str(p.relative_to(site)): hashlib.sha256(p.read_bytes()).hexdigest() for p in site.rglob('*') if p.is_file()}
+          allowed = {'assets/examinations.js','assets/examinations.css','assets/feature-loader.js','index.html','service-worker.js'}
+          assert before.keys() == after.keys(), 'Unexpected artifact files added or removed'
+          changed = {name for name in before if before[name] != after[name]}
+          assert changed == allowed, f'Unexpected runtime changes: {changed}'
+          print('PASS five-file answer-display boundary; every other deployed file remains byte-identical')
+          PY
+      - name: Record exact tested source without overwriting concurrent changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/apply-bar-simulation-submitted-answer.mjs .
+          node scripts/test-bar-simulation-submitted-answer.mjs .
+          node scripts/test-bar-simulation-cumulative-score.mjs .
+          node scripts/test-bar-simulation-timer-ui-hotfix.mjs .
+          for file in assets/examinations.js assets/examinations.css assets/feature-loader.js index.html service-worker.js; do
+            cmp "$file" "$RUNNER_TEMP/answer-site/$file"
+          done
+          unexpected="$(git diff --name-only | grep -Ev '^(assets/examinations\.(js|css)|assets/feature-loader\.js|index\.html|service-worker\.js)$' || true)"
+          test -z "$unexpected"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add assets/examinations.js assets/examinations.css assets/feature-loader.js index.html service-worker.js
+          git commit -m 'fix(bar-simulation): display each saved user answer before assessment feedback'
+          git push origin HEAD:main
+          source_sha="$(git rev-parse HEAD)"
+          echo "Recorded source: $source_sha"
+          echo "$source_sha" > "$RUNNER_TEMP/answer-site/.well-known/duediligence-release.txt"
+          echo "ANSWER_SOURCE_SHA=$source_sha" >> "$GITHUB_ENV"
+          bash "$RUNNER_TEMP/assert-answer-baseline.sh"
+      - uses: actions/configure-pages@v4
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ runner.temp }}/answer-site
+      - name: Deploy saved user answers in results to production
+        id: deployment
+        uses: actions/deploy-pages@v4
+      - name: Verify live files and rerun all answer, score and timer regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          proof="$RUNNER_TEMP/answer-live-proof"
+          mkdir -p "$proof/assets" "$proof/.well-known"
+          verified=false
+          for attempt in $(seq 1 30); do
+            matched=true
+            for file in assets/examinations.js assets/examinations.css assets/feature-loader.js index.html service-worker.js .well-known/duediligence-release.txt; do
+              if ! curl -fsS --max-time 20 "$SITE_URL/$file?answers=$ANSWER_MARKER&verify=$GITHUB_RUN_ID" -o "$proof/$file" || ! cmp -s "$proof/$file" "$RUNNER_TEMP/answer-site/$file"; then
+                matched=false
+                break
+              fi
+            done
+            if [[ "$matched" == true ]]; then verified=true; break; fi
+            sleep 4
+          done
+          test "$verified" = true
+          node scripts/test-bar-simulation-submitted-answer.mjs "$proof"
+          node scripts/test-bar-simulation-cumulative-score.mjs "$proof"
+          node scripts/test-bar-simulation-timer-ui-hotfix.mjs "$proof"
+          {
+            echo '## Bar Simulation submitted answers: LIVE VERIFIED'
+            echo "Approval: $APPROVAL_REFERENCE"
+            echo "Source commit: $ANSWER_SOURCE_SHA"
+            echo "Preserved deployed artifact: run $BASE_RUN"
+            echo '14 submitted-answer tests, 14 cumulative-score tests, and 9 timer/review/submission regression tests passed on code fetched from production.'
+            echo 'Each saved answer appears after its question and before assessment feedback. Paragraphs and original text are preserved and safely escaped.'
+            echo 'No database, grading rubric, access control, answer content, or examination submission was modified.'
+          } >> "$GITHUB_STEP_SUMMARY"

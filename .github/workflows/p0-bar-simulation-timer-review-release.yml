@@ -6,6 +6,7 @@ on:
 permissions:
   actions: read
   contents: write
+  deployments: read
   pages: write
   id-token: write
 concurrency:
@@ -13,7 +14,9 @@ concurrency:
   cancel-in-progress: false
 jobs:
   release:
-    if: github.repository == 'codingwally/Bar-Exam-simulator' && github.event.head_commit.message == 'release: deploy owner-approved Bar Simulation timer and review hotfix'
+    if: >-
+      github.repository == 'codingwally/Bar-Exam-simulator' &&
+      github.event.head_commit.message == 'release: deploy owner-approved Bar Simulation timer and review hotfix'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -49,13 +52,12 @@ jobs:
           git worktree add --detach "$live" "$base"
           curl -fsS "$SITE_URL/assets/examinations.js?verify=$GITHUB_SHA" -o "$RUNNER_TEMP/live-examinations.js"
           echo "Deployed source: $base"
-          echo "Live and source examination asset hashes:"
           sha256sum "$RUNNER_TEMP/live-examinations.js" "$live/assets/examinations.js" assets/examinations.js
           cmp "$RUNNER_TEMP/live-examinations.js" "$live/assets/examinations.js"
           cmp assets/examinations.js "$live/assets/examinations.js"
           echo "sha=$base" >> "$GITHUB_OUTPUT"
           echo "live=$live" >> "$GITHUB_OUTPUT"
-      - name: Apply only the reviewed browser hotfix and run behavioral tests
+      - name: Apply reviewed patch and run behavioral tests
         env:
           LIVE: ${{ steps.base.outputs.live }}
         run: |
@@ -68,8 +70,7 @@ jobs:
           unexpected="$(git -C "$LIVE" diff --name-only | grep -Ev '^(assets/examinations.js|assets/feature-loader.js|index.html|service-worker.js)$' || true)"
           test -z "$unexpected"
           git -C "$LIVE" diff --stat
-          git -C "$LIVE" diff > "$RUNNER_TEMP/simulation-hotfix.patch"
-      - name: Build the existing sanitized artifact without changing other product features
+      - name: Build the existing sanitized artifact
         env:
           LIVE: ${{ steps.base.outputs.live }}
         run: |
@@ -78,7 +79,7 @@ jobs:
           cd "$LIVE"
           node scripts/test-pages-artifact.mjs
           cmp assets/examinations.js .pages-dist/assets/examinations.js
-      - name: Record the tested source fix on main without overwriting concurrent changes
+      - name: Record tested source without overwriting concurrent changes
         env:
           LIVE: ${{ steps.base.outputs.live }}
         run: |
@@ -96,7 +97,7 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: ${{ steps.base.outputs.live }}/.pages-dist
-      - name: Deploy the isolated tested hotfix to production
+      - name: Deploy isolated tested hotfix to production
         id: deployment
         uses: actions/deploy-pages@v4
       - name: Verify live code and cache-busted entry points

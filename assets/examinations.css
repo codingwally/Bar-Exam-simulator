@@ -3992,3 +3992,89 @@ details[open] > summary .dd-subject-chevron {
     width: 100%;
   }
 }
+
+/* simulation-cumulative-score-20260906-r1: scoped to the multi-question verdict. */
+.dd-simulation-total {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(220px, .8fr);
+  gap: 24px 36px;
+  margin: 28px 0 36px;
+  padding: 30px 32px 22px;
+  border: 1px solid var(--dd-exam-gold);
+  border-radius: 18px;
+  background: linear-gradient(125deg, var(--dd-exam-navy), var(--dd-exam-navy-2));
+  color: var(--dd-exam-paper);
+  box-shadow: 0 10px 28px rgba(6, 26, 53, .10);
+}
+.dd-simulation-total.is-secondary { margin-top: -16px; }
+.dd-simulation-total-main, .dd-simulation-total-detail { min-width: 0; }
+.dd-simulation-total-kicker {
+  margin: 0 0 10px;
+  color: #e6c786;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+.dd-simulation-total h2.dd-simulation-total-title {
+  margin: 0;
+  color: var(--dd-exam-paper);
+  font: 700 clamp(23px, 3vw, 30px)/1.2 "Playfair Display", Georgia, serif;
+  letter-spacing: -.015em;
+}
+.dd-simulation-total-score {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin: 16px 0 4px;
+  color: var(--dd-exam-paper);
+  font-variant-numeric: tabular-nums;
+}
+.dd-simulation-total-score strong {
+  font: 700 clamp(42px, 5vw, 64px)/1.05 "Playfair Display", Georgia, serif;
+  letter-spacing: -.03em;
+}
+.dd-simulation-total-score > span { color: #e6c786; font-size: 26px; }
+.dd-simulation-total-caption { margin: 8px 0 0; color: #d1dbea; font-size: 13px; }
+.dd-simulation-total-detail {
+  align-self: center;
+  padding-left: 28px;
+  border-left: 1px solid rgba(197, 160, 89, .38);
+}
+.dd-simulation-total-badge {
+  display: inline-block;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 7px 11px;
+  border: 1px solid rgba(197, 160, 89, .55);
+  border-radius: 999px;
+  color: #f0d79f;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.dd-simulation-total-stats { display: flex; flex-wrap: wrap; gap: 22px 28px; margin: 22px 0 0; }
+.dd-simulation-total-stats dt { margin: 0 0 8px; color: #d1dbea; font-size: 12px; line-height: 1.4; }
+.dd-simulation-total-stats dd { margin: 0; color: var(--dd-exam-paper); font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.dd-simulation-total-stats dd span { color: #d1dbea; font-size: 16px; font-weight: 400; }
+.dd-simulation-total-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding-top: 16px;
+  border-top: 1px solid rgba(197, 160, 89, .3);
+  color: #d1dbea;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.dd-verdict-screen .dd-verdict-section-title {
+  margin: 0 0 12px;
+  color: var(--dd-exam-navy);
+  font: 700 clamp(24px, 3vw, 32px)/1.2 "Playfair Display", Georgia, serif;
+}
+@media (max-width: 640px) {
+  .dd-simulation-total { grid-template-columns: minmax(0, 1fr); gap: 20px; padding: 24px 20px 20px; border-radius: 14px; }
+  .dd-simulation-total-detail { padding: 18px 0 0; border-left: 0; border-top: 1px solid rgba(197, 160, 89, .38); }
+  .dd-simulation-total-stats { gap: 18px 24px; margin-top: 18px; }
+  .dd-simulation-total-stats dd { font-size: 25px; }
+}

@@ -3286,6 +3286,85 @@
     </article>`;
   }
 
+  // simulation-cumulative-score-20260906-r1: display-only totals of saved scores.
+  function simulationScoreValue(value) {
+    if ((typeof value !== 'number' && typeof value !== 'string')
+        || (typeof value === 'string' && !value.trim())) return null;
+    const score = Number(value);
+    return Number.isFinite(score) && score >= 0 && score <= 5 ? score : null;
+  }
+
+  function simulationCumulativeScores(verdict = {}) {
+    const rows = Array.isArray(verdict?.results) ? verdict.results : [];
+    const questions = new Map();
+    rows.forEach((row, index) => {
+      if (!row || typeof row !== 'object') return;
+      const key = row.questionId ? `id:${row.questionId}`
+        : Number.isInteger(Number(row.ordinal)) && Number(row.ordinal) > 0
+          ? `ordinal:${row.ordinal}` : `row:${index}`;
+      const entry = questions.get(key) || { aiScore: null, humanScore: null, conflicts: new Set() };
+      for (const field of ['aiScore', 'humanScore']) {
+        const score = simulationScoreValue(row[field]);
+        if (score === null || entry.conflicts.has(field)) continue;
+        if (entry[field] !== null && entry[field] !== score) {
+          entry[field] = null;
+          entry.conflicts.add(field);
+        } else entry[field] = score;
+      }
+      questions.set(key, entry);
+    });
+    const declared = Number(verdict?.attempt?.counts?.total);
+    const questionCount = Math.max(questions.size,
+      Number.isInteger(declared) && declared > 0 ? declared : 0);
+    const maximum = questionCount * 5;
+    const totalFor = (field, label) => {
+      const scores = [...questions.values()].map((row) => row[field]).filter((score) => score !== null);
+      // Stored scores use one decimal place, matching the individual question cards.
+      const total = scores.reduce((sum, score) => sum + Math.round(score * 10), 0) / 10;
+      const complete = questionCount > 0 && scores.length === questionCount;
+      return { label, total, maximum, questionCount, gradedCount: scores.length, complete,
+        percentage: complete ? Math.round(total / maximum * 1000) / 10 : null };
+    };
+    const ai = totalFor('aiScore', 'AI assessment');
+    const human = totalFor('humanScore', 'Human examiner');
+    return ai.gradedCount > 0 || human.gradedCount === 0
+      ? [ai, ...(human.gradedCount > 0 ? [human] : [])] : [human];
+  }
+
+  function simulationCumulativeScoreMarkup(verdict = {}) {
+    const summaries = simulationCumulativeScores(verdict);
+    return summaries.map((summary, index) => {
+      const pending = Math.max(0, summary.questionCount - summary.gradedCount);
+      const heading = summary.complete ? 'Cumulative total'
+        : summary.gradedCount > 0 ? 'Cumulative total so far' : 'Cumulative total';
+      const score = summary.gradedCount > 0 ? summary.total.toFixed(1) : '—';
+      const percentage = summary.percentage === null ? 'Pending' : `${summary.percentage.toFixed(1)}%`;
+      const status = summary.complete ? 'Assessment complete'
+        : summary.gradedCount > 0 ? 'Partial assessment' : 'Awaiting assessment';
+      const note = summary.complete
+        ? 'Sum of the individual scores below. This is a practice result, not an official Bar grade.'
+        : summary.questionCount > 0
+          ? `${pending} ${pending === 1 ? 'question is' : 'questions are'} awaiting a score. Ungraded answers are pending, not zero; the final percentage appears when all questions are graded.`
+          : 'Your cumulative score will appear here once question scores are available.';
+      return `<section class="dd-simulation-total${index > 0 ? ' is-secondary' : ''}" aria-label="${escapeAttribute(summary.label)} cumulative score" data-simulation-total>
+        <div class="dd-simulation-total-main">
+          <p class="dd-simulation-total-kicker">${escapeHtml(summary.label)}</p>
+          <h2 class="dd-simulation-total-title">${heading}</h2>
+          <p class="dd-simulation-total-score"><strong data-cumulative-points>${score}</strong>${summary.maximum > 0 ? `<span> / ${summary.maximum}</span>` : ''}</p>
+          <p class="dd-simulation-total-caption">${summary.complete ? 'Total points earned' : 'Points earned so far'}</p>
+        </div>
+        <div class="dd-simulation-total-detail">
+          <span class="dd-simulation-total-badge">${status}</span>
+          <dl class="dd-simulation-total-stats">
+            <div><dt>Overall percentage</dt><dd data-cumulative-percentage>${percentage}</dd></div>
+            <div><dt>Questions graded</dt><dd>${summary.gradedCount}<span> / ${summary.questionCount || '—'}</span></dd></div>
+          </dl>
+        </div>
+        <p class="dd-simulation-total-note">${note}</p>
+      </section>`;
+    }).join('');
+  }
+
   async function openVerdict(attemptId) {
     const track = state.active?.examination?.track || state.track;
     state.screen = 'verdict';
@@ -3333,11 +3412,11 @@
       }
       root.innerHTML = `<div class="dd-exam-page ${track === 'per_subject' ? 'dd-subject-review-page' : ''}"><section class="dd-verdict-screen">
         <p class="dd-exam-kicker">${track === 'per_subject' ? 'Syllabus-Based Review' : 'Multi-question assessment'}</p>
-        <h1>${track === 'per_subject' ? 'Review and retain.' : 'Individual ALAC assessments.'}</h1>
-        <p class="dd-exam-description">${track === 'per_subject'
-          ? 'Understand the evaluation, then reveal the legal basis, discussion, suggested answer, and verified sources at your own pace.'
-          : 'No cumulative percentage, class rank, pass/fail claim, or unsupported average is calculated.'}</p>
-        ${verdict.results.map((result) => `<div class="dd-verdict-question">
+        <h1>${track === 'per_subject' ? 'Review and retain.' : 'Examination results.'}</h1>
+        ${track === 'bar_feels' ? simulationCumulativeScoreMarkup(verdict) : ''}
+        <h2 class="dd-verdict-section-title">Individual ALAC assessments.</h2>
+        <p class="dd-exam-description">Review each question's score and coaching below.</p>
+        ${(Array.isArray(verdict.results) ? verdict.results : []).map((result) => `<div class="dd-verdict-question">
           <p class="dd-question-label">Question ${Number(result.ordinal)}</p>
           ${result.humanScore != null ? `<div class="dd-score-five">Human ${Number(result.humanScore).toFixed(1)} / 5.0</div>` : ''}
           ${assessmentCard(result, { track })}

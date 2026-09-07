@@ -42,6 +42,7 @@ function harness({ deferredSetup = false } = {}) {
   const reset = () => vm.runInContext('resetProtectedState()', context);
   context = vm.createContext({
     AbortController,
+    Event,
     Element: class Element {},
     document: { activeElement: null },
     FORECAST_ACCESS_TIMEOUT_MS: 12_000,
@@ -49,6 +50,7 @@ function harness({ deferredSetup = false } = {}) {
     ENDPOINT: '/admin/dd2026/bar-forecast',
     state,
     global: {
+      dispatchEvent: () => true,
       DueDiligencePhase4: {
         ensureRequiredSetup: (_route, options) => {
           const pending = deferred();

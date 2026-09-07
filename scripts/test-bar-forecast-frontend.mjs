@@ -142,10 +142,10 @@ assert.match(
   /nextOwnerId === state\.ownerId[\s\S]*nextOwnerId === state\.authorizationOwnerId/,
   'same-owner session refreshes must preserve both settled and pending authorization',
 );
-assert.match(forecast, /async function openForecast\(trigger = null\) \{[\s\S]*ensureRoot\(\);[\s\S]*if \(state\.isOpen\) \{/);
+assert.match(forecast, /async function openForecast\(trigger = null, options = \{\}\) \{[\s\S]*ensureRoot\(\);[\s\S]*if \(state\.isOpen\) \{/);
 assert.match(
   forecast,
-  /async function openForecast\(trigger = null\) \{[\s\S]*if \(!runtimeOwnerId\(\) \|\| !runtimeSession\(\)\?\.access_token\) \{[\s\S]*openForecastSignIn\(\);[\s\S]*return true;/,
+  /async function openForecast\(trigger = null, options = \{\}\) \{[\s\S]*if \(!runtimeOwnerId\(\) \|\| !runtimeSession\(\)\?\.access_token\) \{[\s\S]*openForecastSignIn\(\);[\s\S]*return true;/,
   'a direct signed-out Forecast open must use the ordinary sign-in flow before mounting protected UI',
 );
 assert.match(
@@ -368,7 +368,7 @@ assert.match(html, /assets\/feature-loader\.js[^"\n]*coaching=report-20260901-1/
 assert.match(html, /assets\/feature-loader\.js[^"\n]*forecast-loop=astra-20260907-1/);
 assert.match(html, /assets\/private-beta-landing\.js[^"\n]*forecast-loop=astra-20260907-1/);
 assert.match(html, /assets\/phase4-experience\.js[^"\n]*forecast-loop=astra-20260907-1/);
-assert.match(serviceWorker, /duediligence-shell-astra-durable-payments-20260907-r1/);
+assert.match(serviceWorker, /duediligence-shell-astra-forecast-entry-20260907-r2/);
 assert.match(serviceWorker, /assets\/feature-loader\.js[^'\n]*forecast=access-flow-20260902-1/);
 assert.match(serviceWorker, /assets\/feature-loader\.js[^'\n]*coaching=report-20260901-1/);
 assert.match(serviceWorker, /assets\/feature-loader\.js[^'\n]*forecast-loop=astra-20260907-1/);
@@ -390,7 +390,7 @@ function extractNamedFunction(source, name) {
   const match = new RegExp(`(?:async\\s+)?function\\s+${name}\\s*\\(`, 'u').exec(source);
   assert.ok(match, `Missing function ${name}.`);
   const start = match.index;
-  const openingBrace = source.indexOf('{', start);
+  const openingBrace = source.indexOf('{', source.indexOf(')', start));
   let depth = 0;
   for (let index = openingBrace; index < source.length; index += 1) {
     if (source[index] === '{') depth += 1;
@@ -429,7 +429,7 @@ async function runLandingForecastFlow(authenticated) {
     unlimitedChecks: 0,
     loadOptions: null,
   };
-  const state = { lastActivatedHash: '' };
+  const state = { lastActivatedHash: '', forecastEntryVersion: 0, sessionOwnerVersion: 0 };
   const context = vm.createContext({
     state,
     global: {
@@ -454,6 +454,8 @@ async function runLandingForecastFlow(authenticated) {
       },
     },
     currentSession: () => (authenticated ? { access_token: 'test-session' } : null),
+    normalizedHash: () => 'bar-forecast-2026',
+    requestedApplicationRoute: () => 'bar-forecast-2026',
     loadFeature: async (_feature, options) => {
       observations.loads += 1;
       observations.loadOptions = options;

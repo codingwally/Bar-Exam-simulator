@@ -3054,16 +3054,22 @@
   }
 
   async function activate(options = {}) {
+    const isCurrent = () => options.isCurrent?.() !== false;
+    if (!isCurrent()) return false;
     state.active = true;
     setAuthView(true);
     try {
       await loadBootstrap();
+      if (!isCurrent()) return false;
       await loadSidebar();
+      if (!isCurrent()) return false;
       telemetry('quorum_opened');
       const restored = options.forceHome === true
         ? await setView('home', { route: false })
         : await restoreRoute({ loadChrome: false });
+      if (!isCurrent()) return false;
       if (restored !== true) await setView('home', { route: false });
+      if (!isCurrent()) return false;
       if (state.view === 'home'
           && global.DueDiligenceSubscriptionCta?.shouldShow?.()
           && !$('#dd2-subscription-team-post')) {
@@ -3071,6 +3077,7 @@
       }
       return true;
     } catch (error) {
+      if (!isCurrent()) return false;
       handleError(error);
       return false;
     }
@@ -3130,6 +3137,8 @@
   }
 
   async function open(trigger = null, options = {}) {
+    const isCurrent = () => options.isCurrent?.() !== false;
+    if (!isCurrent()) return false;
     state.trigger = trigger || state.trigger || $('#spa-community');
     const params = new URLSearchParams(location.search);
     state.directEntryId = params.get('quorumEntry') || state.directEntryId;
@@ -3141,7 +3150,8 @@
     }
     setAuthView(true);
     if (global.showPage?.('community', state.trigger, { history: false }) !== true) return false;
-    const opened = await activate({ forceHome });
+    const opened = await activate({ forceHome, isCurrent });
+    if (!isCurrent()) return false;
     if (opened && forceHome) setStableLocation(null, { replace: false });
     return opened;
   }

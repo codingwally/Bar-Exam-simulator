@@ -81,7 +81,7 @@ assert.match(shellCss, /#quorum-practice-menu > summary[\s\S]*icons\/navigation\
 assert.match(shellCss, /#header-account-control[\s\S]*icons\/navigation\/circle-user-round\.svg/,
   'The Profile drawer entry must include a real navigation icon.');
 
-assert.match(landingJs, /function openQuorumHome\(trigger = null\)[\s\S]*openProtectedFeature\('quorum', trigger\)/,
+assert.match(landingJs, /function openQuorumHome\(trigger = null, options = \{\}\)[\s\S]*openProtectedFeature\('quorum', trigger, options\)/,
   'Authenticated Home must resolve through the protected Quorum route.');
 assert.match(landingJs, /const publicHomepageHashes = new Set\(\[[\s\S]*'quorum'[\s\S]*'lex-forum'/,
   'Both canonical and legacy Home hashes must initialize Quorum instead of stalling in route verification.');

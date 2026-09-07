@@ -40,10 +40,14 @@
     policyPromise: null,
     lastActivatedHash: '',
     routeActivationVersion: 0,
+    forecastEntryVersion: 0,
+    sessionOwnerVersion: 0,
+    sessionOwnerId: String(currentSession()?.user?.id || '').trim(),
     quorumHomePromise: null,
     signInIntroInitialized: false,
     publicNavigationVersion: 0,
     publicNavigationBusy: false,
+    publicNavigationFeature: '',
     navigationStatusTimer: null,
   };
 
@@ -246,8 +250,12 @@
       return;
     }
     const activationVersion = ++state.routeActivationVersion;
+    const ownerVersion = state.sessionOwnerVersion;
+    const forecastEntryVersion = state.forecastEntryVersion;
     const ownerUserId = String(currentSession()?.user?.id || '').trim();
     const isCurrent = () => activationVersion === state.routeActivationVersion
+      && ownerVersion === state.sessionOwnerVersion
+      && (route !== 'bar-forecast-2026' || forecastEntryVersion === state.forecastEntryVersion)
       && requestedApplicationRoute() === route
       && String(currentSession()?.user?.id || '').trim() === ownerUserId;
     const contentRoute = contentRoutes[route];
@@ -258,7 +266,9 @@
       if (typeof opener !== 'function') {
         throw new Error('This study feature could not be restored. Please refresh and try again.');
       }
-      const opened = await opener();
+      const opened = route === 'bar-forecast-2026'
+        ? await opener(null, { isCurrent })
+        : await opener();
       if (!isCurrent() || opened !== true) return;
       state.lastActivatedHash = route;
       return;
@@ -332,10 +342,13 @@
     }
   }
 
-  function openQuorumHome(trigger = null) {
+  function openQuorumHome(trigger = null, options = {}) {
     if (state.quorumHomePromise) return state.quorumHomePromise;
-    state.quorumHomePromise = openProtectedFeature('quorum', trigger)
-      .finally(() => { state.quorumHomePromise = null; });
+    const pending = openProtectedFeature('quorum', trigger, options)
+      .finally(() => {
+        if (state.quorumHomePromise === pending) state.quorumHomePromise = null;
+      });
+    state.quorumHomePromise = pending;
     return state.quorumHomePromise;
   }
 
@@ -682,7 +695,15 @@
 
   function handleLandingSessionChange(event) {
     const detail = event.detail || {};
-    if (routineSessionRefreshReasons.has(detail.reason)) return;
+    const ownerId = String(currentSession()?.user?.id || '').trim();
+    const ownerChanged = ownerId !== state.sessionOwnerId;
+    if (ownerChanged) {
+      state.sessionOwnerId = ownerId;
+      state.sessionOwnerVersion += 1;
+      invalidateForecastEntry();
+      cancelPublicNavigation();
+    }
+    if (!ownerChanged && routineSessionRefreshReasons.has(detail.reason)) return;
     syncAuthenticatedState(detail);
   }
 
@@ -833,7 +854,32 @@
     return outcome;
   }
 
-  async function openProtectedFeature(feature, trigger = null) {
+  function cancelPublicNavigation() {
+    state.publicNavigationVersion += 1;
+    state.publicNavigationBusy = false;
+    state.publicNavigationFeature = '';
+    state.quorumHomePromise = null;
+    setPublicNavigationBusy('', false);
+    clearNavigationStatus();
+  }
+
+  function invalidateForecastEntry() {
+    // Closing an already-visible Forecast must also cancel cold-start work
+    // still waiting for auth/assets outside the Forecast runtime.
+    state.forecastEntryVersion += 1;
+    state.routeActivationVersion += 1;
+    if (state.lastActivatedHash === 'bar-forecast-2026') state.lastActivatedHash = '';
+    if (state.publicNavigationFeature === 'bar-forecast') cancelPublicNavigation();
+  }
+
+  function reconcileForecastNavigationIntent() {
+    if (requestedApplicationRoute() !== 'bar-forecast-2026') invalidateForecastEntry();
+    else if (state.publicNavigationBusy && state.publicNavigationFeature !== 'bar-forecast') {
+      cancelPublicNavigation();
+    }
+  }
+
+  async function openProtectedFeature(feature, trigger = null, options = {}) {
     const routes = {
       mock: '#mock-bar',
       'subject-matter': '#subject-matter',
@@ -848,7 +894,19 @@
       'anchor-cases': '#anchor-case-digests',
     };
     const returnHash = routes[feature] || '#mock-bar';
+    const entryVersion = state.forecastEntryVersion;
+    const ownerVersion = state.sessionOwnerVersion;
+    const originHash = feature === 'bar-forecast' ? normalizedHash() : '';
+    let ownerUserId = String(currentSession()?.user?.id || '').trim();
+    const isCurrent = (allowDestination = false) => options.isCurrent?.() !== false
+      && ownerVersion === state.sessionOwnerVersion
+      && (!ownerUserId || ownerUserId === String(currentSession()?.user?.id || '').trim())
+      && (feature !== 'bar-forecast' || (entryVersion === state.forecastEntryVersion
+        && (normalizedHash() === originHash
+          || (allowDestination && requestedApplicationRoute() === 'bar-forecast-2026'))));
     await global.DueDiligencePhase2?.whenAuthReady?.();
+    if (!isCurrent()) return false;
+    ownerUserId = String(currentSession()?.user?.id || '').trim();
     if (!currentSession()?.access_token) {
       global.DueDiligencePhase2?.openSignIn?.({
         allowDismiss: true,
@@ -864,12 +922,14 @@
       // assets load. A separate landing-page access round trip could wait
       // forever before Forecast's timeout and recoverable error UI existed.
       const loaded = await loadFeature(feature, { skipAccessCheck: true });
-      if (loaded === false) return false;
+      if (loaded === false || !isCurrent()) return false;
       await invokePublicOpener(
         'openBarForecast',
         '2026 Bar Forecast could not be opened. Please try again.',
         trigger,
+        { isCurrent: () => isCurrent(true) },
       );
+      if (!isCurrent(true)) return false;
       state.lastActivatedHash = 'bar-forecast-2026';
       return true;
     }
@@ -879,18 +939,19 @@
     // slow or temporarily unavailable.
     if (!['retainer', 'quorum', 'bar-feels'].includes(feature)) {
       const allowed = await global.DueDiligencePhase4?.ensureProtectedAccess?.(returnHash);
-      if (allowed !== true) return false;
+      if (allowed !== true || !isCurrent()) return false;
     }
     const loaded = feature === 'mock' || feature === 'retainer'
       ? true
       : await loadFeature(feature);
-    if (loaded === false) return false;
+    if (loaded === false || !isCurrent()) return false;
     showApplication({ activateRoute: false });
     if (feature === 'quorum') {
       const opened = await global.DueDiligenceQuorum?.open?.(
         document.getElementById('spa-community'),
-        { forceHome: true },
+        { forceHome: true, isCurrent },
       );
+      if (!isCurrent()) return false;
       if (opened !== true) throw new Error('Home could not be opened. Please refresh and try again.');
       return true;
     }
@@ -933,14 +994,18 @@
   async function runPublicNavigation(feature, trigger = null) {
     if (state.publicNavigationBusy) return false;
     state.publicNavigationBusy = true;
+    state.publicNavigationFeature = feature;
     const navigationVersion = ++state.publicNavigationVersion;
+    const ownerVersion = state.sessionOwnerVersion;
+    const options = { isCurrent: () => navigationVersion === state.publicNavigationVersion
+      && ownerVersion === state.sessionOwnerVersion };
     const label = featureLabels[feature] || 'This feature';
     setPublicNavigationBusy(feature, true);
     showNavigationStatus(`Opening ${label}…`);
     try {
       const opened = feature === 'quorum'
-        ? await openQuorumHome(trigger)
-        : await openProtectedFeature(feature, trigger);
+        ? await openQuorumHome(trigger, options)
+        : await openProtectedFeature(feature, trigger, options);
       if (navigationVersion !== state.publicNavigationVersion) return false;
       if (opened !== true) {
         if (!currentSession()?.access_token) {
@@ -970,8 +1035,11 @@
       );
       return false;
     } finally {
-      state.publicNavigationBusy = false;
-      setPublicNavigationBusy(feature, false);
+      if (navigationVersion === state.publicNavigationVersion) {
+        state.publicNavigationBusy = false;
+        state.publicNavigationFeature = '';
+        setPublicNavigationBusy(feature, false);
+      }
     }
   }
 
@@ -1114,7 +1182,9 @@
       closeAdmission();
     });
     global.addEventListener('duediligence:session', handleLandingSessionChange);
+    global.addEventListener('duediligence:bar-forecast-closed', invalidateForecastEntry);
     global.addEventListener('popstate', () => {
+      reconcileForecastNavigationIntent();
       closePublicMenus();
       if (requestedApplicationRoute() === 'bar-forecast-2026') {
         runPublicNavigation('bar-forecast');
@@ -1134,6 +1204,7 @@
       }
     });
     global.addEventListener('hashchange', () => {
+      reconcileForecastNavigationIntent();
       closePublicMenus();
       if (requestedApplicationRoute() === 'bar-forecast-2026') {
         runPublicNavigation('bar-forecast');

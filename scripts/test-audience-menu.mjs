@@ -86,8 +86,8 @@ assert.match(shellJs, /qfs-menu-scrim/);
 assert.match(shellJs, /document\.getElementById\('spa-mock'\)\?\.click\(\)/);
 assert.match(shellJs, /refs\.brand\.setAttribute\('href', '#quorum'\)/);
 
-assert.match(landingJs, /function openQuorumHome\(trigger = null\)/);
-assert.match(landingJs, /openProtectedFeature\('quorum', trigger\)/);
+assert.match(landingJs, /function openQuorumHome\(trigger = null, options = \{\}\)/);
+assert.match(landingJs, /openProtectedFeature\('quorum', trigger, options\)/);
 assert.match(experience, /signInButton\.textContent = 'Profile';/);
 assert.match(experience, /function renderHeaderAccountControl[\s\S]*control\.textContent = 'Sign in'[\s\S]*qfs-profile-avatar/);
 assert.match(experience, /if \(headerAccount\) \{[\s\S]*renderHeaderAccountControl\(\)/);

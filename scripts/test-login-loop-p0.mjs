@@ -142,6 +142,10 @@ const handleLandingSessionChange = vm.runInNewContext(
   `(${extractNamedFunction(landing, 'handleLandingSessionChange')})`,
   {
     routineSessionRefreshReasons: routineReasons,
+    state: { sessionOwnerId: 'fixture-user', sessionOwnerVersion: 0 },
+    currentSession: () => ({ user: { id: 'fixture-user' } }),
+    invalidateForecastEntry() { assert.fail('Same-owner refresh must retain the current entry intent.'); },
+    cancelPublicNavigation() { assert.fail('Same-owner refresh must not cancel navigation.'); },
     syncAuthenticatedState() { landingSyncs += 1; },
   },
 );
@@ -277,7 +281,7 @@ assert.equal(completedProfileLoads, 1, 'Completing first-user onboarding must re
 for (const asset of ['phase2-experience.js', 'phase4-experience.js', 'private-beta-landing.js']) {
   assert.match(indexHtml, new RegExp(`${asset.replace('.', '\\.') }[^"\\n]*auth=login-loop-p0-20260901-1`));
 }
-assert.match(serviceWorker, /duediligence-shell-astra-durable-payments-20260907-r1/);
+assert.match(serviceWorker, /duediligence-shell-astra-forecast-entry-20260907-r2/);
 assert.match(serviceWorker, /phase2-experience\.js[^'\n]*auth=login-loop-p0-20260901-1/);
 assert.match(serviceWorker, /private-beta-landing\.js[^'\n]*auth=login-loop-p0-20260901-1/);
 

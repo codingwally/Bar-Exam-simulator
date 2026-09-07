@@ -222,6 +222,7 @@ jobs:
             scripts/test-forecast-poll-rate-contract.mjs \
             scripts/test-worker-cpu-limit-contract.mjs \
             scripts/test-astra-forecast-entry-cleanup-evidence.mjs \
+            scripts/test-astra-forecast-entry-registration.mjs \
             scripts/test-forecast-cold-entry-cancellation.mjs \
             scripts/test-quorum-navigation-intent.mjs \
             scripts/test-public-release1-reliability.mjs \
@@ -293,6 +294,7 @@ jobs:
             worker/package-lock.json \
             worker/package.json \
             worker/payment-core.mjs \
+            worker/pricing-conflict.test.mjs \
             worker/subscription-receipt.mjs \
             worker/subscription-receipt.test.mjs \
             worker/astra-subscription-receipt-policy.test.mjs \
@@ -365,6 +367,7 @@ jobs:
           node scripts/test-forecast-poll-rate-contract.mjs
           node scripts/test-worker-cpu-limit-contract.mjs
           node scripts/test-astra-forecast-entry-cleanup-evidence.mjs
+          node scripts/test-astra-forecast-entry-registration.mjs
           node scripts/test-forecast-cold-entry-cancellation.mjs
           node scripts/test-quorum-navigation-intent.mjs
           node scripts/astra-release-database-contract.mjs --self-test

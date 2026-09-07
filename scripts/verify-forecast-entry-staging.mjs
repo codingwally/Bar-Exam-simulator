@@ -8,15 +8,25 @@ import path from 'node:path';
 import { completeMandatoryCommercialProfile } from './staging-commercial-user.mjs';
 
 // ASTRA_ENTRY_CLEANUP_HELPERS_BEGIN
-export function entryCleanupManifest({ fixtureUserIds = [], creationState, sourceSha, readback = {} }) {
+export function entryCleanupManifest({ fixtureUserIds = [], creationState, sourceSha, readback = {}, fixture = null, registrationState = 'not_requested' }) {
   assert.ok(['not_requested', 'requested', 'recorded'].includes(creationState));
   assert.ok(Array.isArray(fixtureUserIds));
   for (const id of fixtureUserIds) assert.match(id, /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+  assert.ok(['not_requested', 'requested', 'confirmed'].includes(registrationState));
+  if (fixture) {
+    assert.match(fixture.prefix, /^astra-durable-[0-9]{13}-[a-f0-9]{8}$/);
+    assert.equal(fixture.prefix, fixture.prefix.trim());
+    assert.equal(fixture.kind, 'member');
+    assert.equal(fixture.purpose, 'forecast-entry-smoke');
+  }
   const status = value => ['not_checked', 'absent', 'present', 'unavailable'].includes(value) ? value : 'not_checked';
   return {
     schemaVersion: 'astra-entry-cleanup-v1', target: 'staging-only', projectRef: 'hlzqmreeoghbldnhlybr',
     sourceSha: /^[0-9a-f]{40}$/i.test(sourceSha || '') ? sourceSha : null,
     fixtureUserIds: [...new Set(fixtureUserIds)], creationState,
+    fixturePurpose: 'forecast-entry-smoke',
+    fixtureRegistration: { state: registrationState, prefix: fixture?.prefix || null, kind: fixture?.kind || null,
+      version: 'astra-staging-forecast-v1', authority: 'existing-service-only-registry-rpc' },
     cleanupReadback: Object.fromEntries(['authUser', 'profile', 'forecastAttempts', 'usageEvents', 'usageSessions'].map(name => [name, status(readback[name])])),
     authSessions: 'limited_no_existing_auth_schema_read_transport',
     pulseFixtureRows: 'not_independently_checked',
@@ -49,6 +59,36 @@ export function entryCleanupReadbackComplete({ userId, creationState, readback }
 }
 // ASTRA_ENTRY_CLEANUP_HELPERS_END
 
+// ASTRA_ENTRY_REGISTRATION_HELPERS_BEGIN
+export function entryFixtureIdentity(runPrefix) {
+  assert.match(runPrefix, /^astra-entry-[0-9]{13}-[a-f0-9]{8}$/);
+  assert.equal(runPrefix, runPrefix.trim());
+  // Reuse the deployed infrastructure namespace, not its three-journey test.
+  // This fixture remains explicitly labelled as a single entry/editor smoke.
+  const prefix = runPrefix.replace(/^astra-entry-/, 'astra-durable-');
+  return Object.freeze({ prefix, kind: 'member', purpose: 'forecast-entry-smoke', email: `${prefix}-member@example.com` });
+}
+
+export async function preflightEntryFixtureRegistration(service) {
+  // Invalid input is rejected before Auth reads or registry writes. Fail before
+  // creating an account when the existing optional staging RPC is unavailable.
+  const denied = await service('/rest/v1/rpc/astra_register_staging_forecast_fixture', { method: 'POST',
+    body: JSON.stringify({ p_user_id: null, p_fixture_prefix: null, p_fixture_kind: null }) }, [400]);
+  assert.equal(denied?.code, 'P0001');
+  assert.equal(denied.message, 'Staging fixture identity is invalid');
+}
+
+export async function registerEntryFixture(userId, fixture, service) {
+  const registration = await service('/rest/v1/rpc/astra_register_staging_forecast_fixture', { method: 'POST',
+    body: JSON.stringify({ p_user_id: userId, p_fixture_prefix: fixture.prefix, p_fixture_kind: fixture.kind }) });
+  assert.equal(registration?.registered, true);
+  assert.equal(registration.fixtureUserId, userId);
+  assert.equal(registration.dataScope, 'internal_test');
+  assert.equal(registration.registrationVersion, 'astra-staging-forecast-v1');
+  assert.equal(typeof registration.replayed, 'boolean');
+}
+// ASTRA_ENTRY_REGISTRATION_HELPERS_END
+
 // This runner never accepts a production target or uses customer accounts.
 const site = 'https://duediligence-examinations-staging.wallyesteban1993.workers.dev';
 const ref = 'hlzqmreeoghbldnhlybr';
@@ -57,6 +97,7 @@ const key = process.env.STAGING_SUPABASE_SERVICE_ROLE_KEY;
 assert.ok(key?.length > 30, 'Protected staging service credentials are required');
 const run = promisify(execFile);
 const prefix = `astra-entry-${Date.now()}-${randomBytes(4).toString('hex')}`;
+const fixture = entryFixtureIdentity(prefix);
 const privateDir = await mkdtemp(path.join(tmpdir(), 'dd-astra-entry-'));
 const evidenceDir = path.resolve('artifacts/astra-forecast-entry');
 await mkdir(evidenceDir, { recursive: true });
@@ -64,6 +105,7 @@ const statePath = path.join(privateDir, 'auth-state.json');
 const checks = [];
 let userId;
 let creationState = 'not_requested';
+let registrationState = 'not_requested';
 let cleanupReadback = {};
 let cleanupComplete = false;
 let verificationComplete = false;
@@ -71,6 +113,7 @@ let browserSessionClosed = false;
 let privateAuthStateRemoved = false;
 const persistCleanupManifest = () => writeFile(path.join(evidenceDir, 'cleanup-manifest.json'), JSON.stringify(entryCleanupManifest({
   fixtureUserIds: userId ? [userId] : [], creationState, sourceSha: process.env.GITHUB_SHA, readback: cleanupReadback,
+  fixture, registrationState,
 }), null, 2), { mode: 0o600 });
 await persistCleanupManifest();
 
@@ -115,15 +158,24 @@ try {
   assert.ok(config.includes(ref) && !config.includes('hbllomlijfznnuudpdvr'));
   const publishable = config.match(/sb_publishable_[A-Za-z0-9_-]{20,}/)?.[0];
   assert.ok(publishable);
-  const email = `${prefix}@example.com`;
+  const email = fixture.email;
   const password = `Dd!${randomBytes(32).toString('base64url')}`;
+  await preflightEntryFixtureRegistration(service);
   creationState = 'requested';
   await persistCleanupManifest();
-  const created = await service('/auth/v1/admin/users', { method: 'POST', body: JSON.stringify({ email, password, email_confirm: true, user_metadata: { full_name: 'Astra isolated staging verification', internal_test: true } }) }, [200, 201]);
+  const created = await service('/auth/v1/admin/users', { method: 'POST', body: JSON.stringify({ email, password, email_confirm: true,
+    app_metadata: { astra_staging_fixture: { version: 1, prefix: fixture.prefix, kind: fixture.kind } },
+    user_metadata: { full_name: 'Astra isolated staging entry verification', internal_test: true,
+      astra_fixture_prefix: fixture.prefix, astra_fixture_purpose: fixture.purpose } }) }, [200, 201]);
   assert.match(created?.id || '', /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
   userId = created.id;
   creationState = 'recorded';
   await persistCleanupManifest(); // Before login or any other fixture side effect.
+  registrationState = 'requested';
+  await persistCleanupManifest();
+  await registerEntryFixture(userId, fixture, service);
+  registrationState = 'confirmed';
+  await persistCleanupManifest(); // Confirmed authoritative classification precedes normal sign-in.
   const session = await request(`${db}/auth/v1/token?grant_type=password`, { method: 'POST', headers: { apikey: publishable, 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
   assert.equal(session.user.id, userId);
   const settings = await service('/rest/v1/platform_access_settings?singleton=eq.true&select=current_terms_version,current_privacy_version');
@@ -197,6 +249,7 @@ try {
         cleanupComplete = cleanupComplete && browserSessionClosed && privateAuthStateRemoved && cleanupManifestSaved;
         await writeFile(path.join(evidenceDir, 'summary.json'), JSON.stringify({ target: 'staging-only', sourceSha: process.env.GITHUB_SHA || null,
           verificationComplete, checks, cleanupComplete, cleanupManifest: 'cleanup-manifest.json', cleanupManifestSaved, cleanupReadback,
+          fixturePurpose: fixture.purpose, fixtureRegistrationState: registrationState,
           browserSessionClosed, privateAuthStateRemoved, independentCleanupVerificationComplete: false,
           cleanupVerificationLimitations: ['auth_sessions_not_exposed_by_existing_service_transport', 'pulse_fixture_rows_not_independently_checked'],
           note: 'Entry/editor smoke. Controlled failure is injected. Cleanup readback covers Auth user, profile, Forecast attempts and usage rows; Auth sessions and Pulse fixtures remain explicitly limited. No grading or production claim.' }, null, 2), { mode: 0o600 });

@@ -100,6 +100,7 @@ on:
       - 'scripts/test-forecast-cold-entry-cancellation.mjs'
       - 'scripts/test-quorum-navigation-intent.mjs'
       - 'scripts/test-astra-forecast-entry-cleanup-evidence.mjs'
+      - 'scripts/test-astra-forecast-entry-registration.mjs'
       - 'scripts/test-master-experience-release.mjs'
       - 'scripts/test-quorum-navigation-state.mjs'
       - 'scripts/test-subject-matter-skip-flag.mjs'
@@ -275,6 +276,7 @@ jobs:
           node scripts/test-forecast-poll-rate-contract.mjs
           node scripts/test-worker-cpu-limit-contract.mjs
           node scripts/test-astra-forecast-entry-cleanup-evidence.mjs
+          node scripts/test-astra-forecast-entry-registration.mjs
           node scripts/test-forecast-cold-entry-cancellation.mjs
           node scripts/test-quorum-navigation-intent.mjs
           node scripts/test-examinations-staging-ui-contract.mjs

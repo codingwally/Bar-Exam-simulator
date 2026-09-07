@@ -774,6 +774,36 @@ export function analyzeStudentAnswer(studentAnswer, context = {}) {
   };
 }
 
+function hasAffirmativeWrongRuleFinding(finding) {
+  // Keep each finding/contrast independent: a correct first rule must not hide
+  // an expressly incorrect second rule, nor turn "not wrong" into a penalty.
+  const clauses = String(finding || '').replace(/[’]/g, "'")
+    .split(/[;\n]|\b(?:but|however|yet)\b/i);
+  return clauses.some((clause) => {
+    const candidates = clause.matchAll(/\b(?:incorrect|wrong|irrelevant|unrelated|inapplicable)\s+(?:legal\s+basis|article|section|rule|statute|doctrine|authority)\b|\b(?:legal\s+basis|article|section|rule|statute|doctrine|authority)\b[\s\S]{0,80}?\b(?:incorrect|wrong|irrelevant|unrelated|inapplicable)\b/gi);
+    for (const candidate of candidates) {
+      const adjective = /\b(?:incorrect|wrong|irrelevant|unrelated|inapplicable)\b/i.exec(candidate[0]);
+      const beforeAdjective = clause.slice(0, candidate.index + adjective.index);
+      const negated = /\b(?:not|no|neither|nor|never|isn't|wasn't|aren't|weren't|doesn't|didn't)\s+(?:(?:materially|legally|substantially|necessarily|clearly|actually|an?|the)\s+)*(?:(?:shown|found|proved|established|demonstrated)\s+to\s+be\s+)?$/i.test(beforeAdjective);
+      if (!negated) return true;
+    }
+    return false;
+  });
+}
+
+function affirmativelyReliesOnIntentAlone(studentAnswer) {
+  // This is a narrow high-confidence rule finding, not a new grading tier.
+  // Quotations/rejections are not the student's adopted legal proposition.
+  return String(studentAnswer || '').split(/[.!?;\n]/).some((sentence) => {
+    if (/["“”`]/.test(sentence)) return false;
+    if (/(?:^|[\s,(])['‘][^'’]*\b(?:bad|criminal|evil|wrongful)\s+intent\s+alone\b/i.test(sentence)) return false;
+    if (/\b(?:not\s+(?:true|correct)|incorrect|wrong|false|mistaken|reject(?:s|ed)?|den(?:y|ies|ied)|disagree(?:s|d)?|refut(?:e|es|ed))\b/i.test(sentence)) return false;
+    if (/\b(?:argued|claimed|contended|asserted|alleged|said)\b/i.test(sentence)) return false;
+    return /\b(?:bad|criminal|evil|wrongful)\s+intent\s+alone\s+(?:makes?|renders?|establishes?|creates?|suffices?\s+to|is\s+sufficient\s+to)\b[^.!?;\n]{0,100}\b(?:liable|liability)\b/i.test(sentence)
+      && !/\b(?:not|never|cannot|can't|doesn't|does\s+not|isn't|is\s+not)\b/i.test(sentence);
+  });
+}
+
 export function applyDeterministicScoreCap(assessment, studentAnswer, context = {}) {
   const analysis = analyzeStudentAnswer(studentAnswer, context);
   let cap = 5;
@@ -843,7 +873,11 @@ export function applyDeterministicScoreCap(assessment, studentAnswer, context = 
   const majorityOfAllMembers = /\b(?:absolute\s+majority|majority[\s\S]{0,48}\ball(?:\s+the)?\s+members)\b/i;
   const outcomeDeterminativeVotingThresholdGap = majorityOfAllMembers.test(referenceAnswer)
     && !majorityOfAllMembers.test(normalizedStudentAnswer);
-  const explicitWrongRuleFinding = /(?:incorrect|wrong|irrelevant|unrelated|inapplicable)\s+(?:legal\s+basis|article|section|rule|statute|doctrine|authority)|(?:legal\s+basis|article|section|rule|statute|doctrine|authority)[\s\S]{0,80}(?:incorrect|wrong|irrelevant|unrelated|inapplicable)/i.test(examinerFindings);
+  const explicitWrongRuleFinding = [
+    cleanText(assessment?.rationale, 2_000),
+    cleanText(assessment?.legalExplanation, 2_000),
+    ...examinerErrors,
+  ].some(hasAffirmativeWrongRuleFinding);
   const centralRuleInsufficiencyFinding = /(?:legal\s+basis|governing\s+rule|doctrine|legal\s+reasoning)[\s\S]{0,140}(?:overly simplistic|(?:excessively|extremely|overly) broad|legally insufficient|faulty|vague|reduced to|misstat(?:ed|es)|rests? (?:only|solely)|rel(?:y|ies|ying) (?:only|solely|merely)|based (?:only|solely|purely))/i.test(examinerFindings)
     || /(?:rel(?:y|ies|ying)|rests?) on[\s\S]{0,100}(?:alone|only|solely|merely)[\s\S]{0,100}(?:legal\s+basis|governing\s+rule|doctrine|legal\s+reasoning)/i.test(examinerFindings)
     || /(?:rel(?:y|ies|ying) on (?:a )?vague (?:notion|rule|principle)|no correct legal basis|faulty intent-only reasoning|based liability solely on ['"]?bad intent)/i.test(examinerFindings);
@@ -851,7 +885,10 @@ export function applyDeterministicScoreCap(assessment, studentAnswer, context = 
     && Number(assessment?.rubricBreakdown?.application) <= 2.5;
   const materiallyWrongRuleFinding = assessment?.authorityStatus === 'materially_incorrect_or_irrelevant'
     || explicitWrongRuleFinding
-    || (rubricShowsCentralRuleFailure && centralRuleInsufficiencyFinding);
+    || (rubricShowsCentralRuleFailure && (
+      centralRuleInsufficiencyFinding
+      || affirmativelyReliesOnIntentAlone(normalizedStudentAnswer)
+    ));
   const effectiveAuthorityStatus = confirmedFabricationFinding
     ? 'confirmed_fabricated'
     : assessment?.authorityStatus;

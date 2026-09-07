@@ -207,6 +207,9 @@ import {
 import { createDD2026Handlers } from './duediligence-2026-routes.mjs';
 import { BarForecastError } from './bar-forecast-core.mjs';
 import { createBarForecastHandlers } from './bar-forecast-routes.mjs';
+import { FORECAST_ATTEMPT_RPC_NAMES } from './forecast-attempt-store.mjs';
+import { FORECAST_RESULT_EXPORT_RPC_NAMES } from './forecast-result-export.mjs';
+import { sendForecastResultEmail, resolveForecastEmailUser, assertForecastResultEmailAvailable } from './forecast-email-adapter.mjs';
 import { createAuxiliaryWritingDiagnosticsHandlers } from './auxiliary-writing-diagnostics-routes.mjs';
 import { StudyRoomError } from './study-room-core.mjs';
 import { createStudyRoomHandlers } from './study-room-routes.mjs';
@@ -3373,6 +3376,8 @@ async function dd2026Rpc(env, functionName, body) {
 }
 
 const BAR_FORECAST_RPC_FUNCTIONS = new Set([
+  ...FORECAST_ATTEMPT_RPC_NAMES,
+  ...FORECAST_RESULT_EXPORT_RPC_NAMES,
   'dd2026_bar_forecast_consent_status',
   'dd2026_bar_forecast_accept_consent',
   'dd2026_bar_forecast_admin_list',
@@ -6117,7 +6122,7 @@ async function callGemini(env, prompt, groundingEnabled) {
   }
   throw new ExaminerError(
     'UNSUPPORTED_MODEL',
-    `No supported Gemini examiner model is currently available${lastUnsupported ? '.' : '.'}`,
+    'The assessment service is currently unavailable. Please try again later.',
     503,
   );
 }
@@ -6689,12 +6694,10 @@ async function handleForumReport(request, env, origin, allowedOrigin) {
     subject: 'Due Diligence Community report',
     text: [
       'A Community report was submitted.',
-      `Reporter: ${user.email || 'Signed-in member'}`,
-      `Target: ${report.targetType} ${report.targetId}`,
+      `Target type: ${report.targetType}`,
       `Category: ${report.category}`,
-      `Explanation: ${report.explanation || 'None provided'}`,
+      'Reporter identity, explanation, and reported content remain in the protected moderation queue.',
     ].join('\n'),
-    replyTo: user.email,
     adminPath: '/admin/',
   });
   return jsonResponse({ ok: true, report: result }, 201, origin, allowedOrigin);
@@ -6954,12 +6957,10 @@ async function handleQuorumCommand(request, env, origin, allowedOrigin, executio
       subject: 'Due Diligence Community report',
       text: [
         'A Community report was submitted.',
-        `Reporter: ${user.email || 'Signed-in member'}`,
-        `Target: ${command.payload.targetType} ${command.payload.targetId}`,
+        `Target type: ${command.payload.targetType}`,
         `Category: ${command.payload.category}`,
-        `Explanation: ${command.payload.explanation || 'None provided'}`,
+        'Reporter identity, explanation, and reported content remain in the protected moderation queue.',
       ].join('\n'),
-      replyTo: user.email,
       adminPath: '/admin/',
     });
   }
@@ -8430,21 +8431,11 @@ async function handleCorrection(request, env, origin, allowedOrigin) {
     subject: 'Due Diligence answer correction report',
     text: [
       'An answer correction report was submitted.',
-      `Reporter: ${correctionUser?.email || 'Signed-in member'}`,
       `Question: ${correction.questionId}`,
       `Subject: ${correction.subject}`,
       `Report type: ${correction.correctionType}`,
-      '',
-      'Proposed correction:',
-      correction.proposedCorrection,
-      '',
-      'Explanation:',
-      correction.explanation,
-      '',
-      'Supporting sources:',
-      correction.sourceUrls.length ? correction.sourceUrls.join('\n') : 'None provided',
+      'Reporter identity, proposed answer, explanation, and sources remain in the protected corrections queue.',
     ].join('\n'),
-    replyTo: correctionUser?.email,
     adminPath: '/admin/',
   });
 
@@ -8512,14 +8503,9 @@ async function handleSupport(request, env, origin, allowedOrigin, executionConte
     subject: 'Due Diligence Support request',
     text: [
       'A Support request was submitted.',
-      `Account: ${supportUser?.email || 'Signed-in member'}`,
       `Category: ${supportRequest.category}`,
-      `Reply email: ${supportRequest.replyEmail || supportUser?.email || 'Not provided'}`,
-      '',
-      'Message:',
-      supportRequest.message,
+      'Member identity, contact information, and message remain in the protected Support queue.',
     ].join('\n'),
-    replyTo: supportRequest.replyEmail || supportUser?.email,
     adminPath: '/admin/',
   });
   return jsonResponse({
@@ -9899,14 +9885,71 @@ async function handlePhase4AdminAction(request, env, origin, allowedOrigin, exec
   const user = await requireAdministrator(request, env);
   const action = normalizePhase4AdminAction(await parseBoundedJson(request, 16_000));
   let result;
-  if (action.action === 'payment_review') {
-    result = await protectedSupabaseRpc(env, 'phase4_admin_review_payment', {
-      p_actor_user_id: user.id,
-      p_payment_request_id: action.targetId,
-      p_payload: action.payload,
-      p_reason: action.reason,
-      p_request_key: action.requestKey,
+  if (action.action === 'payment_review' || action.action === 'payment_invalidate') {
+    // Keep payment decisions distinguishable from generic admin-read failures.
+    // A lost response must be retried with the same idempotency key.
+    const invalidation = action.action === 'payment_invalidate';
+    const rpcName = invalidation ? 'phase4_admin_invalidate_payment' : 'phase4_admin_review_payment';
+    const response = await fetch(new URL(`/rest/v1/rpc/${rpcName}`, configuredSupabaseUrl(env)), {
+      method: 'POST',
+      headers: {
+        apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        p_actor_user_id: user.id,
+        p_payment_request_id: action.targetId,
+        ...(!invalidation ? { p_payload: action.payload.status === 'approved' ? action.payload : { status: action.payload.status } } : {}),
+        p_reason: action.reason,
+        p_request_key: action.requestKey,
+      }),
     });
+    result = await response.json().catch(() => null);
+    if (!response.ok) {
+      const message = String(result?.message || '');
+      let code = 'PAYMENT_REVIEW_UNCONFIRMED';
+      let safeMessage = 'The payment decision could not be confirmed. Retry the same action; do not submit a different decision until the queue is refreshed.';
+      let status = 503;
+      if (response.status === 401 || response.status === 403 || /founder access required|administrator.*required|authorization|not authorized/i.test(message)) {
+        code = 'ADMIN_FORBIDDEN'; status = 403;
+        safeMessage = 'You are not authorized to review this payment.';
+      } else if (isAuthoritativeRpcRejectionStatus(response.status)) {
+        status = 409;
+        if (invalidation && /currently being delivered/i.test(message)) {
+          code = 'PAYMENT_RECEIPT_IN_FLIGHT';
+          safeMessage = 'The subscriber receipt is being delivered. Wait for delivery to finish, then retry. Nothing changed.';
+        } else if (invalidation && /active refund workflow/i.test(message)) {
+          code = 'PAYMENT_REFUND_IN_PROGRESS';
+          safeMessage = 'Resolve the active refund workflow before invalidating this payment. Nothing changed.';
+        } else if (invalidation && /only an approved payment|payment request not found/i.test(message)) {
+          code = 'PAYMENT_INVALIDATION_CONFLICT';
+          safeMessage = 'This payment is no longer approved. Refresh Payments before retrying. Nothing changed.';
+        } else if (invalidation && /linkage|another approved payment|subscription is unavailable|legacy approved payment|prior-access snapshot|subscription (?:was )?changed|prior subscription changed/i.test(message)) {
+          code = 'PAYMENT_INVALIDATION_UNSAFE';
+          safeMessage = 'Access history changed or is ambiguous. Review Subscription history before manual recovery. Nothing changed.';
+        } else if (/PAYMENT_EXISTING_ENTITLEMENT_REQUIRES_REVIEW/.test(message)) {
+          code = 'PAYMENT_EXISTING_ENTITLEMENT_REQUIRES_REVIEW';
+          safeMessage = 'This account has a future-dated or inactive non-expiring subscription. Resolve that access record before approving; the payment and existing access were preserved.';
+        } else if (/no longer reviewable|not found/i.test(message)) {
+          code = 'PAYMENT_REVIEW_STALE';
+          safeMessage = 'This payment is no longer awaiting this review. Refresh the payment queue.';
+        } else if (/request key|already in progress/i.test(message)) {
+          code = 'PAYMENT_REVIEW_CONFLICT';
+          safeMessage = 'This review was already submitted. Retry the original decision or refresh the queue before making another change.';
+        } else if (/verifiedPaidAt|review reason/i.test(message)) {
+          code = 'INVALID_PAYMENT_REVIEW'; status = 400;
+          safeMessage = 'Check the review reason and any payment timestamp. Use only the time shown on the proof, never a future time or a time after proof submission.';
+        } else if (/captured payment plan|pricing evidence|trusted payment plan|rolling 149 term|fixed legacy entitlement|exact 30-day term/i.test(message)) {
+          code = 'PAYMENT_TERM_REQUIRES_REVIEW';
+          safeMessage = 'The stored payment terms need administrator review before this payment can be approved. No payment decision was changed.';
+        } else {
+          code = 'INVALID_PAYMENT_REVIEW'; status = 400;
+          safeMessage = 'The payment review did not pass secure validation. Refresh the queue and check the selected decision and reason.';
+        }
+      }
+      throw markRpcOutcome(new PaymentValidationError(code, safeMessage, status), response.status);
+    }
   } else if (action.action === 'subscription_audit_view') {
     result = await protectedSupabaseRpc(env, 'phase4_admin_subscription_audit', {
       p_actor_user_id: user.id,
@@ -10047,6 +10090,9 @@ const dd2026Handlers = createDD2026Handlers({
 });
 
 const barForecastHandlers = createBarForecastHandlers({
+  assertForecastResultEmailAvailable,
+  sendForecastResultEmail,
+  resolveForecastEmailUser: (env, user) => resolveForecastEmailUser(env, user, configuredSupabaseUrl(env)),
   authorizeAdministrator: (env, user) => protectedSupabaseRpc(
     env,
     'admin_authorization_context',
@@ -10677,7 +10723,13 @@ export default {
       });
       return { status: 'failed' };
     });
-    const maintenance = Promise.all([recovery, avatarCleanup, adminPulse])
+    const forecast = barForecastHandlers.drain(runtimeEnv, { maxBatches: 1 }).catch((error) => {
+      console.error('Scheduled Forecast assessment drain failed', {
+        code: String(error?.code || 'BAR_FORECAST_DRAIN_FAILED').slice(0, 80),
+      });
+      return { status: 'failed' };
+    });
+    const maintenance = Promise.all([recovery, avatarCleanup, adminPulse, forecast])
       .then(([recoveryResult]) => recoveryResult);
     if (typeof ctx?.waitUntil === 'function') {
       ctx.waitUntil(maintenance);

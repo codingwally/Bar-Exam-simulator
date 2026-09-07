@@ -93,12 +93,12 @@ assert.match(
 );
 assert.match(
   frontend,
-  /const payload = await phase4\.request\(path, \{ body, signal: options\.signal \}\);[\s\S]*!privateRequestIdentityIsCurrent\(identity\)[\s\S]*STALE_IDENTITY[\s\S]*return payload\.data/,
+  /payload = await phase4\.request\(path, \{ body, signal: controller\?\.signal \|\| options\.signal \}\);[\s\S]*!privateRequestIdentityIsCurrent\(identity\)[\s\S]*STALE_IDENTITY[\s\S]*return payload\.data/,
   'Late responses from a previous signed-in identity must be rejected before private data reaches a renderer.',
 );
 for (const privateRenderer of ['openVerdict', 'renderSubjectPerformance', 'loadCatalog']) {
   const renderer = frontend.match(new RegExp(`async function ${privateRenderer}\\([\\s\\S]*?(?=\\n  (?:async )?function |\\n  global\\.)`))?.[0] || '';
-  assert.match(renderer, /isStaleIdentityError\(error\)\) return(?: false)?;/,
+  assert.match(renderer, /isStaleIdentityError\(error\)(?: \|\| !verdictIsCurrent\(\))?\) return(?: false)?;/,
     `${privateRenderer} must silently discard an identity-stale response.`);
 }
 assert.match(frontend, /data-exam-setup=[\s\S]*Review &amp; Begin/);

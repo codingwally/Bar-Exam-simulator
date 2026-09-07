@@ -9,6 +9,10 @@
   const REQUIRED_QUESTION_COUNT = 20;
   const MINIMUM_WORDS = 10;
   const MAX_ANSWER_CHARACTERS = 6000;
+  // astra-forecast-durable-20260907-r1: owner-scoped drafts and canonical saved reports.
+  const FORECAST_POLL_LIMIT = 60;
+  const FORECAST_POLL_INTERVAL_MS = 5000;
+  const FORECAST_REQUEST_TIMEOUT_MS = 25_000;
   // Access verification is an interactive preflight, not a grading job. Keep
   // it within the same bounded session budget used by the sign-in surface so a
   // stalled auth/entitlement request always reaches a recoverable terminal UI.
@@ -102,7 +106,115 @@
     currentIndex: 0,
     results: null,
     examRefs: null,
+    clientAttemptId: '',
+    acceptedAttempt: null,
+    submissionSnapshot: null,
+    draftTimer: null,
+    storageError: false,
+    pollTimer: null,
+    pollResolve: null,
+    pollGeneration: 0,
+    workspaceGeneration: 0,
+    historySubject: '',
+    historyCompleteOnly: false,
+    historyFrom: '',
+    historyTo: '',
+    historyItems: [],
+    historyCursor: null,
+    historyAnalytics: null,
   };
+
+  function draftStorageKey() {
+    const ownerId = runtimeOwnerId();
+    return ownerId ? `duediligence.private.${encodeURIComponent(ownerId)}.bar-forecast.drafts.v1` : '';
+  }
+
+  function readForecastDrafts() {
+    try {
+      const stored = JSON.parse(global.localStorage?.getItem(draftStorageKey()) || 'null');
+      return stored?.version === 1 && stored.ownerId === runtimeOwnerId()
+        && stored.drafts && typeof stored.drafts === 'object' && !Array.isArray(stored.drafts)
+        ? stored.drafts : {};
+    } catch { return {}; }
+  }
+
+  function persistForecastDraft() {
+    if (state.draftTimer !== null) global.clearTimeout(state.draftTimer);
+    state.draftTimer = null;
+    const ownerId = runtimeOwnerId();
+    if (!ownerId || ownerId !== state.ownerId || !state.clientAttemptId || !state.questions.length) return false;
+    try {
+      if (!global.localStorage) throw new Error('Private draft storage unavailable');
+      const drafts = readForecastDrafts();
+      drafts[state.clientAttemptId] = {
+        ownerId, clientAttemptId: state.clientAttemptId, subject: state.subject, setId: state.setId,
+        questions: state.questions, answers: [...state.answers], markup: [...state.answerMarkup],
+        flags: [...state.flaggedQuestions], highlights: [...state.questionHighlights],
+        currentIndex: state.currentIndex, savedAt: Date.now(),
+        submission: state.submissionSnapshot,
+        attemptId: state.acceptedAttempt?.id || null,
+      };
+      global.localStorage.setItem(draftStorageKey(), JSON.stringify({ version: 1, ownerId, drafts }));
+      state.storageError = false;
+      return true;
+    } catch {
+      state.storageError = true;
+      return false;
+    }
+  }
+
+  function scheduleForecastDraftSave() {
+    if (state.draftTimer !== null) global.clearTimeout(state.draftTimer);
+    state.draftTimer = global.setTimeout(() => {
+      if (!persistForecastDraft()) setStatus('This device could not save your draft. Keep this page open and retry before submitting.', 'error');
+    }, 200);
+  }
+
+  function removeCompletedLocalDraft(clientAttemptId) {
+    try {
+      const drafts = readForecastDrafts();
+      delete drafts[clientAttemptId];
+      global.localStorage?.setItem(draftStorageKey(), JSON.stringify({ version: 1, ownerId: runtimeOwnerId(), drafts }));
+    } catch { /* The canonical completed report is already stored on the server. */ }
+  }
+
+  function newClientAttemptId() {
+    if (typeof global.crypto?.randomUUID === 'function') return global.crypto.randomUUID();
+    const bytes = global.crypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 15) | 64; bytes[8] = (bytes[8] & 63) | 128;
+    const value = [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+    return `${value.slice(0, 8)}-${value.slice(8, 12)}-${value.slice(12, 16)}-${value.slice(16, 20)}-${value.slice(20)}`;
+  }
+
+  function stopForecastPolling() {
+    state.pollGeneration = (state.pollGeneration || 0) + 1;
+    if (state.pollTimer !== null) global.clearTimeout(state.pollTimer);
+    state.pollTimer = null;
+    state.pollResolve?.();
+    state.pollResolve = null;
+  }
+
+  function forecastRequestIsCurrent(ownerId, generation) {
+    return state.isOpen && state.ownerId === ownerId && runtimeOwnerId() === ownerId
+      && state.workspaceGeneration === generation && location.hash === ROUTE;
+  }
+
+  function forecastTabs(selected) {
+    const nav = element('nav', 'bf26-workspace-tabs');
+    nav.setAttribute('aria-label', 'Forecast workspace');
+    for (const [id, label] of [['new', 'New forecast'], ['history', 'Saved attempts'], ['analytics', 'Analytics']]) {
+      const button = makeButton(label, `bf26-button${selected === id ? ' bf26-button--primary' : ''}`);
+      button.setAttribute('aria-current', selected === id ? 'page' : 'false');
+      button.addEventListener('click', () => {
+        stopForecastPolling(); abortRequest();
+        state.workspaceGeneration = (state.workspaceGeneration || 0) + 1;
+        if (id === 'new') renderSubjectPicker();
+        else loadForecastHistory(id);
+      });
+      nav.append(button);
+    }
+    return nav;
+  }
 
   function element(tag, className = '', text = '') {
     const node = document.createElement(tag);
@@ -180,6 +292,7 @@
     state.answers.set(question.id, plain);
     state.answerMarkup.set(question.id, sanitizeAnswerMarkup(refs.editor.innerHTML));
     syncExamCompletion();
+    scheduleForecastDraftSave();
   }
 
   function selectedAnswerLength(editor) {
@@ -384,10 +497,6 @@
   function handlePageKeyboard(event) {
     if (event.key === 'Escape') {
       event.preventDefault();
-      if (state.view === 'submitting') {
-        setStatus('Grading is still in progress. Keep this window open; Exit becomes available when the report is ready.');
-        return;
-      }
       closeForecast();
       return;
     }
@@ -450,6 +559,10 @@
   }
 
   function resetProtectedState() {
+    stopForecastPolling();
+    if (state.draftTimer !== null) global.clearTimeout(state.draftTimer);
+    state.draftTimer = null;
+    state.workspaceGeneration = (state.workspaceGeneration || 0) + 1;
     stopSubmittingProgress();
     state.ownerId = '';
     state.authorizationOwnerId = '';
@@ -468,6 +581,16 @@
     state.currentIndex = 0;
     state.results = null;
     state.examRefs = null;
+    state.clientAttemptId = '';
+    state.acceptedAttempt = null;
+    state.submissionSnapshot = null;
+    state.historyItems = [];
+    state.historyCursor = null;
+    state.historyAnalytics = null;
+    state.historySubject = '';
+    state.historyCompleteOnly = false;
+    state.historyFrom = '';
+    state.historyTo = '';
   }
 
   function abortRequest() {
@@ -524,13 +647,33 @@
       throw error;
     }
     const controller = options.signal ? null : beginRequest();
+    let deadline;
+    let rejectAborted;
     try {
-      return await client.request(ENDPOINT, {
+      const pending = client.request(ENDPOINT, {
         body,
         signal: options.signal || controller?.signal,
         recoverAccess: false,
       });
+      // Entry keeps its dedicated controller/12-second guard. Saved-work requests
+      // have a separate finite transport deadline; timeout never means not accepted.
+      const payload = controller ? await Promise.race([pending, new Promise((_, reject) => {
+        rejectAborted = () => { const error = new Error('This Forecast request was cancelled.'); error.name = 'AbortError'; reject(error); };
+        controller.signal.addEventListener('abort', rejectAborted, { once: true });
+      }), new Promise((_, reject) => {
+        deadline = global.setTimeout(() => {
+          const error = new Error('The saved Forecast request took too long. You can safely retry.');
+          error.code = 'BAR_FORECAST_REQUEST_TIMEOUT';
+          reject(error); controller.abort();
+        }, FORECAST_REQUEST_TIMEOUT_MS);
+      })]) : await pending;
+      if (controller && (state.requestController !== controller || controller.signal.aborted)) {
+        const error = new Error('This Forecast request is no longer current.'); error.name = 'AbortError'; throw error;
+      }
+      return payload;
     } finally {
+      if (deadline !== undefined) global.clearTimeout(deadline);
+      if (rejectAborted) controller?.signal.removeEventListener('abort', rejectAborted);
       if (controller && state.requestController === controller) state.requestController = null;
     }
   }
@@ -539,13 +682,9 @@
     if (viewName !== 'submitting') stopSubmittingProgress();
     state.view = viewName;
     if (state.closeButton) {
-      const grading = viewName === 'submitting';
-      state.closeButton.disabled = grading;
-      state.closeButton.textContent = grading ? 'Grading in progress' : 'Exit forecast';
-      state.closeButton.setAttribute(
-        'aria-label',
-        grading ? 'Exit unavailable while grading is in progress' : 'Exit 2026 Bar Forecast',
-      );
+      state.closeButton.disabled = false;
+      state.closeButton.textContent = 'Exit forecast';
+      state.closeButton.setAttribute('aria-label', 'Exit 2026 Bar Forecast');
     }
     state.examRefs = null;
     state.viewNode.replaceChildren(node);
@@ -753,7 +892,7 @@
         }
         state.ownerId = ownerId;
         state.consentAccepted = true;
-        renderSubjectPicker();
+        renderSubjectPicker('', true);
       } catch (error) {
         if (error?.name === 'AbortError') return;
         if (!state.isOpen || ownerId !== runtimeOwnerId()) return;
@@ -776,8 +915,25 @@
     replaceView(centered, 'consent');
   }
 
-  function renderSubjectPicker(message = '') {
+  function openForecastAttemptLink() {
+    if (!state.isOpen || !state.consentAccepted || !state.ownerId || state.ownerId !== runtimeOwnerId()
+        || location.hash !== ROUTE || !location.search) return false;
+    const attempts = new URLSearchParams(location.search).getAll('forecastAttempt');
+    if (!attempts.length) return false;
+    if (attempts.length !== 1 || !/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/iu.test(attempts[0])) {
+      renderSubjectPicker('This saved-report link is invalid. Open Saved attempts to find your report.');
+      return true;
+    }
+    // The URL is only an opaque locator, never authorization. The existing
+    // owner-gated request and generation fencing control every saved report.
+    openSavedForecast(attempts[0].toLowerCase());
+    return true;
+  }
+
+  function renderSubjectPicker(message = '', openLinkedAttempt = false) {
+    if (openLinkedAttempt && openForecastAttemptLink()) return;
     const picker = element('section', 'bf26-picker');
+    picker.append(forecastTabs('new'));
     picker.append(
       element('p', 'bf26-badge', 'Forecast access confirmed'),
       element('h2', '', 'Choose a 2026 Bar subject.'),
@@ -794,6 +950,17 @@
     );
 
     const grid = element('div', 'bf26-subject-grid');
+    const drafts = Object.values(readForecastDrafts()).filter((draft) => draft.ownerId === state.ownerId && SUBJECT_NAMES.has(draft.subject));
+    if (drafts.length) {
+      const saved = element('section', 'bf26-local-drafts');
+      saved.append(element('h3', '', 'Continue on this device'));
+      for (const draft of drafts.sort((a, b) => b.savedAt - a.savedAt)) {
+        const button = makeButton(`${draft.subject} · ${draft.attemptId ? 'Saved submission' : draft.submission ? 'Check submission' : 'Draft'}`);
+        button.addEventListener('click', () => restoreForecastDraft(draft.clientAttemptId));
+        saved.append(button);
+      }
+      picker.append(saved);
+    }
     for (const subject of SUBJECTS) {
       const card = element('article', 'bf26-subject-card');
       card.append(
@@ -856,6 +1023,7 @@
   async function startSubject(subjectName, trigger) {
     if (!SUBJECT_NAMES.has(subjectName) || !state.consentAccepted) return;
     const ownerId = runtimeOwnerId();
+    const generation = state.workspaceGeneration;
     if (!ownerId || ownerId !== state.ownerId) {
       closeForecast({ force: true, restoreRoute: false });
       openForecastSignIn();
@@ -867,7 +1035,7 @@
     setStatus(`Opening ${subjectName}…`);
     try {
       const payload = await requestForecast({ operation: 'start', subject: subjectName });
-      if (!state.isOpen || ownerId !== runtimeOwnerId()) return;
+      if (!forecastRequestIsCurrent(ownerId, generation)) return;
       const setId = String(payload?.setId || '').trim().toLowerCase();
       if (!/^sha256:[0-9a-f]{64}$/u.test(setId)) {
         throw new Error('The forecast question-set identity failed verification.');
@@ -876,6 +1044,9 @@
       state.subject = subjectName;
       state.schedule = payload.schedule || null;
       state.setId = setId;
+      state.clientAttemptId = newClientAttemptId();
+      state.acceptedAttempt = null;
+      state.submissionSnapshot = null;
       state.answers = new Map(state.questions.map((question) => [question.id, '']));
       state.answerMarkup = new Map();
       state.flaggedQuestions = new Set();
@@ -884,10 +1055,11 @@
       state.lastPromptSelection = null;
       state.currentIndex = 0;
       state.results = null;
+      persistForecastDraft();
       renderExam();
     } catch (error) {
       if (error?.name === 'AbortError') return;
-      if (!state.isOpen || ownerId !== runtimeOwnerId()) return;
+      if (!forecastRequestIsCurrent(ownerId, generation)) return;
       if (handleForecastAccessInterruption(error)) return;
       renderSubjectPicker(error?.message || 'The forecast could not be opened. Please try again.');
       setStatus(state.statusNode?.textContent || '', 'error');
@@ -897,6 +1069,306 @@
   function allAnswersComplete() {
     return state.questions.length === REQUIRED_QUESTION_COUNT
       && state.questions.every((question) => wordCount(state.answers.get(question.id)) >= MINIMUM_WORDS);
+  }
+
+  function freezeSubmission(snapshot) {
+    return Object.freeze({ operation: 'submit_attempt', subject: snapshot.subject, setId: snapshot.setId,
+      clientAttemptId: snapshot.clientAttemptId,
+      answers: Object.freeze(snapshot.answers.map((row) => Object.freeze({ questionId: row.questionId, answer: row.answer }))),
+    });
+  }
+
+  function restoreForecastDraft(clientAttemptId) {
+    const draft = readForecastDrafts()[clientAttemptId];
+    if (!draft || draft.ownerId !== state.ownerId || runtimeOwnerId() !== state.ownerId) return;
+    if (draft.attemptId) { openSavedForecast(draft.attemptId); return; }
+    try {
+      state.questions = normalizeQuestions({ subject: draft.subject, sourceVersion: SOURCE_VERSION,
+        contentType: CONTENT_TYPE, questions: draft.questions }, draft.subject);
+      if (!SUBJECT_NAMES.has(draft.subject) || !/^sha256:[0-9a-f]{64}$/u.test(draft.setId)
+          || !/^[0-9a-f-]{36}$/u.test(draft.clientAttemptId) || !Array.isArray(draft.answers)) throw new Error('The saved draft is incomplete.');
+      state.subject = draft.subject; state.schedule = subjectSchedule(draft.subject); state.setId = draft.setId;
+      state.clientAttemptId = draft.clientAttemptId; state.acceptedAttempt = null; state.results = null;
+      state.answers = new Map(draft.answers.filter((row) => Array.isArray(row) && typeof row[1] === 'string'));
+      state.answerMarkup = new Map(Array.isArray(draft.markup) ? draft.markup : []);
+      state.flaggedQuestions = new Set(Array.isArray(draft.flags) ? draft.flags : []);
+      state.questionHighlights = new Map(Array.isArray(draft.highlights) ? draft.highlights : []);
+      state.currentIndex = Math.max(0, Math.min(19, Number(draft.currentIndex) || 0));
+      state.submissionSnapshot = draft.submission ? freezeSubmission(draft.submission) : null;
+      if (state.submissionSnapshot) renderSubmissionUnconfirmed();
+      else renderExam();
+    } catch (error) { setStatus(error.message || 'This saved draft could not be restored.', 'error'); }
+  }
+
+  function normalizedSavedAttempt(attempt) {
+    if (!attempt || !/^[0-9a-f-]{36}$/u.test(attempt.id) || !/^[0-9a-f-]{36}$/u.test(attempt.clientAttemptId) || !SUBJECT_NAMES.has(attempt.subject)
+        || !/^sha256:[0-9a-f]{64}$/u.test(attempt.setId) || attempt.questionCount !== 20
+        || !['pending', 'processing', 'retryable_failed', 'failed', 'complete'].includes(attempt.status)
+        || !Array.isArray(attempt.questions) || attempt.questions.length !== 20
+        || !Array.isArray(attempt.answers) || attempt.answers.length !== 20) {
+      throw new Error('The saved Forecast response is incomplete. Your stored answers have not been changed.');
+    }
+    const questions = [...attempt.questions].sort((a, b) => a.number - b.number);
+    const answers = new Map(attempt.answers.map((row) => [row.questionId, row.answer]));
+    if (new Set(questions.map((row) => row.id)).size !== 20 || answers.size !== 20
+        || questions.some((row, index) => !row.id || row.number !== index + 1 || typeof row.prompt !== 'string'
+          || !row.prompt.trim() || typeof answers.get(row.id) !== 'string')) {
+      throw new Error('The saved questions and answers do not match.');
+    }
+    return Object.freeze({ ...attempt, questions: Object.freeze(questions.map((row) => Object.freeze({ ...row }))),
+      answers: Object.freeze(attempt.answers.map((row) => Object.freeze({ ...row }))) });
+  }
+
+  function adoptSavedAttempt(value, expectedId = null) {
+    const attempt = normalizedSavedAttempt(value);
+    if (expectedId && attempt.id !== expectedId) throw new Error('The saved attempt identity did not match your selection.');
+    if (state.acceptedAttempt?.id === attempt.id) {
+      if (state.acceptedAttempt.status === 'complete' && attempt.status !== 'complete') return state.acceptedAttempt;
+      if (Date.parse(attempt.updatedAt) < Date.parse(state.acceptedAttempt.updatedAt)) return state.acceptedAttempt;
+    }
+    const answers = new Map(attempt.answers.map((row) => [row.questionId, row.answer]));
+    let verifiedResults = null;
+    if (attempt.status === 'complete') {
+      const report = attempt.result;
+      if (report?.complete !== true || report?.attemptId !== attempt.id || report.ownerId !== state.ownerId
+          || report.questionCount !== 20 || report.completedQuestionCount !== 20
+          || report.subject !== attempt.subject || report.setId !== attempt.setId) {
+        throw new Error('The completed saved report did not pass its identity check.');
+      }
+      verifiedResults = normalizeResults(report, { questions: attempt.questions, answers });
+    }
+    state.acceptedAttempt = attempt;
+    state.clientAttemptId = attempt.clientAttemptId;
+    state.subject = attempt.subject; state.setId = attempt.setId; state.schedule = subjectSchedule(attempt.subject);
+    state.questions = attempt.questions;
+    state.answers = answers;
+    // Saved reports always display canonical server answer text, never another draft's markup.
+    state.answerMarkup = new Map(); state.flaggedQuestions = new Set(); state.questionHighlights = new Map();
+    state.submissionSnapshot = freezeSubmission({ ...attempt, answers: attempt.answers });
+    if (attempt.status === 'complete') {
+      state.results = verifiedResults;
+      removeCompletedLocalDraft(attempt.clientAttemptId);
+    } else {
+      state.results = null;
+      persistForecastDraft();
+    }
+    return attempt;
+  }
+
+  function renderSubmissionUnconfirmed(message = '') {
+    const panel = element('section', 'bf26-picker');
+    panel.append(forecastTabs('history'), element('h2', '', 'Submission not yet confirmed.'),
+      element('p', '', message || 'Your answers are retained on this device. Retrying uses the same submission ID and cannot create a second attempt.'),
+      element('p', '', 'Check Saved attempts on any signed-in device if the server already accepted it.'));
+    const retry = makeButton('Retry saved submission', 'bf26-button bf26-button--primary');
+    retry.addEventListener('click', () => sendForecastSubmission()); panel.append(retry);
+    replaceView(panel, 'unconfirmed');
+  }
+
+  function renderSavedForecastStatus(message = '', allowPolling = true) {
+    const attempt = state.acceptedAttempt;
+    if (!attempt) return;
+    if (attempt.status === 'complete') { renderResults(); return; }
+    if (allowPolling && ['pending', 'processing', 'retryable_failed'].includes(attempt.status)) {
+      renderSubmitting(); return;
+    }
+    const panel = element('section', 'bf26-picker');
+    panel.append(forecastTabs('history'), element('h2', '', attempt.status === 'failed' ? 'Assessment needs attention.' : 'Your answers are saved.'),
+      element('p', '', message || 'The report is not complete. No final score is available yet.'),
+      element('p', '', 'You can close this page and return to Saved attempts.'));
+    const check = makeButton('Check progress', 'bf26-button bf26-button--primary');
+    check.addEventListener('click', () => openSavedForecast(attempt.id)); panel.append(check);
+    if (attempt.status === 'failed' && attempt.retryAllowed === true) {
+      const retry = makeButton('Retry assessment');
+      retry.addEventListener('click', () => retrySavedForecast(attempt.id)); panel.append(retry);
+    }
+    replaceView(panel, 'saved-status');
+  }
+
+  async function pollSavedForecast(attemptId) {
+    stopForecastPolling();
+    const pollGeneration = state.pollGeneration;
+    const ownerId = state.ownerId; const generation = state.workspaceGeneration;
+    const current = () => forecastRequestIsCurrent(ownerId, generation) && state.pollGeneration === pollGeneration
+      && state.acceptedAttempt?.id === attemptId && state.view === 'submitting';
+    for (let count = 0; count < FORECAST_POLL_LIMIT; count++) {
+      let finishDelay;
+      await new Promise((resolve) => {
+        finishDelay = resolve;
+        state.pollResolve = finishDelay;
+        state.pollTimer = global.setTimeout(finishDelay, FORECAST_POLL_INTERVAL_MS);
+      });
+      if (state.pollResolve === finishDelay) { state.pollTimer = null; state.pollResolve = null; }
+      if (!current()) return;
+      try {
+        const payload = await requestForecast({ operation: 'attempt', attemptId });
+        if (!current()) return;
+        const attempt = adoptSavedAttempt(payload?.attempt, attemptId);
+        if (attempt.status === 'complete' || attempt.status === 'failed') {
+          stopForecastPolling(); renderSavedForecastStatus(); return;
+        }
+        const progress = Number.isInteger(attempt.completedQuestionCount) ? attempt.completedQuestionCount : null;
+        setStatus(progress === null ? 'Your saved assessment is still processing.' : `${progress} of 20 answers assessed. No final score until all 20 are complete.`);
+      } catch (error) {
+        if (!current() || error?.name === 'AbortError') return;
+        if (handleForecastAccessInterruption(error)) return;
+        stopForecastPolling(); renderSavedForecastStatus('Progress could not be checked. Your saved work remains available; retry when ready.', false); return;
+      }
+    }
+    if (current()) { stopForecastPolling(); renderSavedForecastStatus('Automatic checking has paused. Assessment can continue on the server; check progress when ready.', false); }
+  }
+
+  async function openSavedForecast(attemptId) {
+    stopForecastPolling(); abortRequest(); state.workspaceGeneration = (state.workspaceGeneration || 0) + 1;
+    const ownerId = state.ownerId; const generation = state.workspaceGeneration;
+    const loading = element('section', 'bf26-picker'); loading.append(forecastTabs('history'), element('h2', '', 'Opening saved attempt…'));
+    replaceView(loading, 'saved-loading');
+    try {
+      const payload = await requestForecast({ operation: 'attempt', attemptId });
+      if (!forecastRequestIsCurrent(ownerId, generation)) return;
+      const attempt = adoptSavedAttempt(payload?.attempt, attemptId);
+      renderSavedForecastStatus();
+      if (!['complete', 'failed'].includes(attempt.status)) pollSavedForecast(attempt.id);
+    } catch (error) {
+      if (!forecastRequestIsCurrent(ownerId, generation) || error?.name === 'AbortError') return;
+      if (handleForecastAccessInterruption(error)) return;
+      const panel = element('section', 'bf26-picker'); panel.append(forecastTabs('history'), element('h2', '', 'Saved attempt unavailable.'), element('p', '', error.message));
+      const retry = makeButton('Try again'); retry.addEventListener('click', () => openSavedForecast(attemptId)); panel.append(retry); replaceView(panel, 'saved-error');
+    }
+  }
+
+  async function retrySavedForecast(attemptId) {
+    const ownerId = state.ownerId; const generation = state.workspaceGeneration;
+    stopForecastPolling();
+    try {
+      const payload = await requestForecast({ operation: 'retry_attempt', attemptId });
+      if (!forecastRequestIsCurrent(ownerId, generation)) return;
+      const attempt = adoptSavedAttempt(payload?.attempt, attemptId); renderSavedForecastStatus();
+      if (!['complete', 'failed'].includes(attempt.status)) pollSavedForecast(attempt.id);
+    } catch (error) {
+      if (!forecastRequestIsCurrent(ownerId, generation) || error?.name === 'AbortError') return;
+      if (handleForecastAccessInterruption(error)) return;
+      renderSavedForecastStatus(error.message || 'Retry could not be confirmed. Check the saved attempt.', false);
+    }
+  }
+
+  function forecastDate(value) {
+    if (!value) return 'Date unavailable';
+    const date = new Date(value);
+    return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat('en-PH', {
+      dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Manila',
+    }).format(date) : 'Date unavailable';
+  }
+
+  function nullableMetric(value, suffix = '') {
+    return typeof value === 'number' && Number.isFinite(value) ? `${value}${suffix}` : '—';
+  }
+
+  function appendForecastAnalytics(panel, analytics) {
+    if (analytics?.completeOnly !== true || !Number.isInteger(analytics.completedAttempts)
+        || !Array.isArray(analytics.bySubject)) {
+      panel.append(element('p', '', 'Analytics are unavailable. No scores have been estimated.')); return;
+    }
+    panel.append(element('p', '', 'All completed saved attempts · before pagination. Pending or failed assessments are excluded from scores.'));
+    const metrics = element('div', 'bf26-metric-grid');
+    metrics.append(metricCard('Completed attempts', String(analytics.completedAttempts)),
+      metricCard('Average score', nullableMetric(analytics.averagePercentage, '%')),
+      metricCard('Grammar', nullableMetric(analytics.averageGrammarScore, ' / 5')),
+      metricCard('Issue spotting', nullableMetric(analytics.averageIssueSpottingScore, ' / 5')));
+    panel.append(metrics);
+    if (!analytics.completedAttempts) { panel.append(element('p', '', 'Complete an assessment to see your progress.')); return; }
+    const bars = element('div', 'bf26-subject-analytics');
+    for (const row of analytics.bySubject) {
+      if (!SUBJECT_NAMES.has(row.subject)) continue;
+      const item = element('div', 'bf26-history-row');
+      item.append(element('h3', '', row.subject), element('p', '', `${nullableMetric(row.averagePercentage, '%')} · ${row.completedAttempts} completed`));
+      if (typeof row.averagePercentage === 'number' && row.averagePercentage >= 0 && row.averagePercentage <= 100) {
+        const meter = element('meter'); meter.min = 0; meter.max = 100; meter.value = row.averagePercentage;
+        meter.setAttribute('aria-label', `${row.subject} average score`); item.append(meter);
+      }
+      bars.append(item);
+    }
+    panel.append(bars);
+    const trend = Array.isArray(analytics.trend) ? analytics.trend.filter((row) => typeof row.percentage === 'number'
+      && Number.isFinite(row.percentage) && row.percentage >= 0 && row.percentage <= 100).slice(-12) : [];
+    if (trend.length > 1) {
+      panel.append(element('h3', '', 'Recent completed attempts'));
+      const chart = element('div', 'bf26-score-trend'); chart.setAttribute('aria-label', 'Latest completed Forecast percentages, oldest to newest');
+      for (const row of trend) {
+        const column = element('div', 'bf26-score-column');
+        const bar = element('span', 'bf26-score-bar'); bar.style.height = `${row.percentage}%`; bar.setAttribute('aria-hidden', 'true');
+        column.title = `${row.subject} · ${forecastDate(row.completedAt)} · ${row.percentage}%`;
+        column.append(bar, element('span', 'bf26-score-value', `${row.percentage}%`));
+        column.setAttribute('aria-label', column.title); chart.append(column);
+      }
+      panel.append(chart, element('p', '', 'Oldest → newest · saved complete scores only.'));
+    }
+  }
+
+  function renderForecastHistory(tab = 'history', message = '') {
+    const panel = element('section', 'bf26-picker'); panel.append(forecastTabs(tab), element('h2', '', tab === 'analytics' ? 'Your Forecast analytics' : 'Saved attempts'));
+    const filters = element('div', 'bf26-history-filters');
+    const subject = element('select'); subject.setAttribute('aria-label', 'Filter Forecast subject');
+    const all = element('option', '', 'All subjects'); all.value = ''; subject.append(all);
+    for (const item of SUBJECTS) { const option = element('option', '', item.name); option.value = item.name; subject.append(option); }
+    subject.value = state.historySubject;
+    subject.addEventListener('change', () => { state.historySubject = subject.value; loadForecastHistory(tab); }); filters.append(subject);
+    for (const [field, labelText] of [['historyFrom', 'From'], ['historyTo', 'Through']]) {
+      const label = element('label', 'bf26-history-date', labelText);
+      const input = element('input'); input.type = 'date'; input.value = state[field];
+      input.setAttribute('aria-label', `${labelText} date, Philippine time`);
+      input.addEventListener('change', () => { state[field] = input.value; loadForecastHistory(tab); });
+      label.append(input); filters.append(label);
+    }
+    if (tab === 'history') {
+      const label = element('label', 'bf26-history-complete'); const checkbox = element('input'); checkbox.type = 'checkbox'; checkbox.checked = state.historyCompleteOnly;
+      checkbox.addEventListener('change', () => { state.historyCompleteOnly = checkbox.checked; loadForecastHistory(tab); });
+      label.append(checkbox, document.createTextNode('Completed only')); filters.append(label);
+    }
+    panel.append(filters);
+    if (message) panel.append(element('p', 'bf26-status', message));
+    if (tab === 'analytics') appendForecastAnalytics(panel, state.historyAnalytics);
+    else {
+      if (!state.historyItems.length && !message) panel.append(element('p', '', 'No saved attempts yet. Submit a forecast to save it securely.'));
+      for (const attempt of state.historyItems) {
+        const row = element('article', 'bf26-history-row');
+        const score = attempt.status === 'complete' ? nullableMetric(attempt.summary?.percentage, '%') : 'No final score';
+        const label = ({ pending: 'Queued', processing: 'Assessing', retryable_failed: 'Retry scheduled', failed: 'Needs attention', complete: 'Complete' })[attempt.status] || 'Status unavailable';
+        row.append(element('h3', '', attempt.subject), element('p', '', `${forecastDate(attempt.acceptedAt)} · ${label} · ${score}`));
+        const open = makeButton(attempt.status === 'complete' ? 'Open report' : 'Open saved attempt'); open.addEventListener('click', () => openSavedForecast(attempt.id)); row.append(open); panel.append(row);
+      }
+      if (state.historyCursor) {
+        const more = makeButton('Load more'); more.addEventListener('click', () => loadForecastHistory(tab, true)); panel.append(more);
+      }
+    }
+    const refresh = makeButton('Refresh'); refresh.addEventListener('click', () => loadForecastHistory(tab)); panel.append(refresh);
+    replaceView(panel, tab);
+  }
+
+  async function loadForecastHistory(tab = 'history', more = false) {
+    stopForecastPolling(); abortRequest(); state.workspaceGeneration = (state.workspaceGeneration || 0) + 1;
+    const ownerId = state.ownerId; const generation = state.workspaceGeneration;
+    const before = more ? state.historyCursor : null;
+    if (!more) { state.historyItems = []; state.historyCursor = null; state.historyAnalytics = null; }
+    renderForecastHistory(tab, 'Loading saved attempts…');
+    try {
+      const from = state.historyFrom ? new Date(`${state.historyFrom}T00:00:00+08:00`).toISOString() : null;
+      const to = state.historyTo ? new Date(Date.parse(`${state.historyTo}T00:00:00+08:00`) + 86400000).toISOString() : null;
+      if (from && to && from >= to) throw new Error('Choose an end date on or after the start date.');
+      const payload = await requestForecast({ operation: 'history', limit: 20,
+        ...(before ? { before } : {}), ...(state.historySubject ? { subject: state.historySubject } : {}),
+        ...(from ? { from } : {}), ...(to ? { to } : {}),
+        completeOnly: tab === 'analytics' || state.historyCompleteOnly });
+      if (!forecastRequestIsCurrent(ownerId, generation)) return;
+      if (!Array.isArray(payload?.attempts)) throw new Error('Saved history is unavailable.');
+      state.historyItems = [...new Map([...state.historyItems, ...payload.attempts].map((attempt) => [attempt.id, attempt])).values()];
+      state.historyCursor = payload.nextCursor || null; state.historyAnalytics = payload.analytics || null;
+      renderForecastHistory(tab);
+    } catch (error) {
+      if (!forecastRequestIsCurrent(ownerId, generation) || error?.name === 'AbortError') return;
+      if (handleForecastAccessInterruption(error)) return;
+      renderForecastHistory(tab, error.message || 'History could not be loaded. Your saved attempts remain unchanged.');
+    }
   }
 
   function completedAnswerCount() {
@@ -1272,20 +1744,23 @@
     const centered = element('div', 'bf26-centered');
     centered.append(
       element('div', 'bf26-spinner'),
-      element('h2', '', 'Building your Mock Bar coaching report…'),
+      element('h2', '', state.acceptedAttempt ? 'Your answers are saved.' : 'Saving your answers…'),
       element(
         'p',
         'bf26-status',
-        'Analyzing legal accuracy, issue spotting, grammar, and coaching. A detailed report may take up to about 8 minutes; keep this window open.',
+        state.acceptedAttempt
+          ? 'Your coaching report is being prepared. You can close this page; return to Saved attempts from any signed-in device.'
+          : 'Waiting for the server to confirm this submission. Your exact answers are retained on this device.',
       ),
       element(
         'p',
         'bf26-submitting-note',
-        'Your answers remain available if the grading service asks you to retry.',
+        'No final score is shown until all 20 answers have complete, validated assessments.',
       ),
       element('p', 'bf26-submitting-elapsed', 'Elapsed time: 0:00'),
     );
     centered.querySelector('.bf26-spinner').setAttribute('aria-hidden', 'true');
+    centered.append(forecastTabs('history'));
     replaceView(centered, 'submitting');
     state.statusNode = centered.querySelector('.bf26-status');
     state.statusNode.setAttribute('role', 'status');
@@ -1305,7 +1780,7 @@
     }, 10_000);
   }
 
-  function normalizeResults(payload) {
+  function normalizeResults(payload, workspace = state) {
     const requiredText = (value) => {
       if (typeof value !== 'string' || !value.trim()) {
         throw new Error('A forecast coaching field failed its integrity check.');
@@ -1353,7 +1828,7 @@
       const coaching = result?.mockBarCoaching;
       const grammar = result?.grammar;
       const issueSpotting = result?.issueSpotting;
-      if (!questionId || byId.has(questionId) || !state.answers.has(questionId)
+      if (!questionId || byId.has(questionId) || !workspace.answers.has(questionId)
           || typeof number !== 'number' || !Number.isInteger(number)
           || number < 1 || number > REQUIRED_QUESTION_COUNT
           || typeof score !== 'number' || !Number.isFinite(score)
@@ -1368,11 +1843,11 @@
         throw new Error('A forecast result failed its integrity check.');
       }
       const userAnswer = requiredText(result.userAnswer);
-      if (userAnswer !== String(state.answers.get(questionId) || '').trim()) {
+      if (userAnswer !== String(workspace.answers.get(questionId) || '').trim()) {
         throw new Error('The returned answer did not match the submitted answer.');
       }
       const suggestedAnswer = requiredText(result.suggestedAnswer);
-      const question = state.questions.find((candidate) => candidate.id === questionId);
+      const question = workspace.questions.find((candidate) => candidate.id === questionId);
       const issueSources = [question?.prompt || '', suggestedAnswer];
       const corrections = grammar.corrections.map((correction) => {
         if (!correction || typeof correction !== 'object' || Array.isArray(correction)) {
@@ -1425,17 +1900,16 @@
         }),
       }));
     }
-    const results = state.questions.map((question) => {
+    const results = workspace.questions.map((question) => {
       const result = byId.get(question.id);
       if (!result || result.number !== question.number) {
         throw new Error('The forecast results did not match the submitted questions.');
       }
       return result;
     });
-    const roundOne = (value) => Number(value.toFixed(1));
-    const average = (read) => roundOne(results.reduce((sum, result) => sum + read(result), 0)
-      / results.length);
-    const computedTotal = roundOne(results.reduce((sum, result) => sum + result.score, 0));
+    const tenths = (read) => results.reduce((sum, result) => sum + Math.round(read(result) * 10), 0);
+    const average = (read) => Math.round(tenths(read) / results.length) / 10;
+    const computedTotal = tenths((result) => result.score) / 10;
     const analytics = Object.freeze({
       questionCount: results.length,
       averageScore: average((result) => result.score),
@@ -1478,33 +1952,46 @@
   }
 
   async function submitForecast() {
-    if (!allAnswersComplete() || state.view !== 'exam') return;
+    if (state.view !== 'exam') return;
+    // Capture the final editor value BEFORE checking completeness, including
+    // composition/paste updates that have not yet emitted their input event.
     sanitizeEditorDom(state.examRefs?.editor);
-    if (!allAnswersComplete()) return;
-    if (!global.confirm('Submit all 20 answers for final grading? The detailed coaching report may take several minutes, and answers cannot be edited after submission.')) return;
-    const ownerId = runtimeOwnerId();
+    if (!allAnswersComplete()) { setStatus('Complete all 20 answers before submitting.', 'error'); return; }
+    if (!global.confirm('Submit all 20 answers for assessment? Your saved answers cannot be edited after acceptance.')) return;
     const submittedSubject = state.subject;
     const submittedAnswers = state.questions.map((question) => Object.freeze({
       questionId: question.id,
       answer: state.answers.get(question.id) || '',
     }));
+    if (!state.clientAttemptId) state.clientAttemptId = newClientAttemptId();
+    state.submissionSnapshot = freezeSubmission({ subject: submittedSubject, setId: state.setId,
+      answers: submittedAnswers, clientAttemptId: state.clientAttemptId });
+    if (!persistForecastDraft()) {
+      state.submissionSnapshot = null;
+      setStatus('Your draft could not be safely saved on this device. Keep this page open and retry; nothing was submitted.', 'error');
+      return;
+    }
+    await sendForecastSubmission();
+  }
+
+  async function sendForecastSubmission() {
+    const ownerId = runtimeOwnerId(); const generation = state.workspaceGeneration;
+    const snapshot = state.submissionSnapshot;
+    if (!snapshot || ownerId !== state.ownerId || !state.isOpen) return;
+    if (!persistForecastDraft()) { renderSubmissionUnconfirmed('Your draft could not be saved on this device. Nothing new was sent. Keep this page open and retry.'); return; }
     renderSubmitting();
     try {
-      const payload = await requestForecast({
-        operation: 'submit',
-        subject: submittedSubject,
-        setId: state.setId,
-        answers: submittedAnswers,
-      });
-      if (!state.isOpen || ownerId !== runtimeOwnerId() || submittedSubject !== state.subject) return;
-      state.results = normalizeResults(payload);
-      renderResults();
+      const payload = await requestForecast(snapshot);
+      if (!forecastRequestIsCurrent(ownerId, generation) || state.submissionSnapshot !== snapshot) return;
+      if (payload?.attempt?.clientAttemptId !== snapshot.clientAttemptId) throw new Error('The saved submission identity could not be confirmed.');
+      const attempt = adoptSavedAttempt(payload.attempt);
+      renderSavedForecastStatus();
+      if (!['complete', 'failed'].includes(attempt.status)) pollSavedForecast(attempt.id);
     } catch (error) {
       if (error?.name === 'AbortError') return;
-      if (!state.isOpen || ownerId !== runtimeOwnerId() || submittedSubject !== state.subject) return;
+      if (!forecastRequestIsCurrent(ownerId, generation)) return;
       if (handleForecastAccessInterruption(error)) return;
-      renderExam();
-      setStatus(error?.message || 'The answers were not submitted. Review them and try again.', 'error');
+      renderSubmissionUnconfirmed(error?.message || 'The server has not confirmed acceptance. Your answers and submission ID are retained for a safe retry.');
     }
   }
 
@@ -1614,10 +2101,80 @@
     return 'Priority coaching recommended';
   }
 
+  async function downloadSavedForecast(trigger, status) {
+    const attempt = state.acceptedAttempt;
+    if (attempt?.status !== 'complete') return;
+    const ownerId = state.ownerId; const generation = state.workspaceGeneration;
+    const session = runtimeSession();
+    if (!session?.access_token || runtimeOwnerId() !== ownerId) return;
+    const workerUrl = global.DueDiligencePhase2Config?.workerUrl;
+    if (!workerUrl) { status.textContent = 'Download is unavailable. Your saved report remains accessible here.'; return; }
+    trigger.disabled = true;
+    const controller = beginRequest();
+    const timeout = global.setTimeout(() => controller.abort(), FORECAST_REQUEST_TIMEOUT_MS);
+    try {
+      const response = await global.fetch(`${String(workerUrl).replace(/\/$/u, '')}${ENDPOINT}`, {
+        method: 'POST', signal: controller.signal,
+        headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operation: 'result_pdf', attemptId: attempt.id }),
+      });
+      if (!forecastRequestIsCurrent(ownerId, generation) || controller.signal.aborted) return;
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        const error = new Error(payload?.error?.message || 'The saved PDF could not be downloaded. Please try again.');
+        error.code = payload?.error?.code; error.status = response.status;
+        throw error;
+      }
+      if (!String(response.headers.get('Content-Type')).includes('application/pdf')) {
+        throw new Error('The saved PDF could not be downloaded. Please try again.');
+      }
+      const blob = await response.blob();
+      if (!forecastRequestIsCurrent(ownerId, generation) || controller.signal.aborted) return;
+      if (!blob.size || blob.size > 20_000_000) throw new Error('The saved PDF response could not be verified.');
+      const url = global.URL.createObjectURL(blob);
+      const link = document.createElement('a'); link.href = url; link.download = `Due-Diligence-Forecast-${attempt.id}.pdf`;
+      document.body.append(link); link.click(); link.remove();
+      global.setTimeout(() => global.URL.revokeObjectURL(url), 1000);
+      status.textContent = 'Saved report downloaded.';
+    } catch (error) {
+      if (!forecastRequestIsCurrent(ownerId, generation)) return;
+      if (handleForecastAccessInterruption(error)) return;
+      status.textContent = error?.name === 'AbortError' ? 'Download timed out. Your saved report is unchanged; retry when ready.' : error.message;
+    } finally {
+      global.clearTimeout(timeout);
+      if (state.requestController === controller) state.requestController = null;
+      trigger.disabled = false;
+    }
+  }
+
+  async function emailSavedForecast(trigger, status) {
+    const attempt = state.acceptedAttempt;
+    if (attempt?.status !== 'complete') return;
+    const ownerId = state.ownerId; const generation = state.workspaceGeneration;
+    trigger.disabled = true;
+    try {
+      const payload = await requestForecast({ operation: 'email_result', attemptId: attempt.id });
+      if (!forecastRequestIsCurrent(ownerId, generation)) return;
+      const emailStatus = payload?.email?.status;
+      status.textContent = emailStatus === 'provider_accepted'
+        ? 'Email accepted by the provider. Delivery to your verified account address is not yet confirmed.'
+        : emailStatus === 'processing' ? 'The email request is processing. Check your inbox shortly.'
+          : emailStatus === 'uncertain' ? 'Email delivery is not confirmed. Check your inbox before requesting again.'
+            : 'Email could not be confirmed. Your report remains saved here.';
+      trigger.disabled = ['provider_accepted', 'processing', 'uncertain'].includes(emailStatus);
+    } catch (error) {
+      if (!forecastRequestIsCurrent(ownerId, generation) || error?.name === 'AbortError') return;
+      if (handleForecastAccessInterruption(error)) return;
+      status.textContent = 'The email request could not be confirmed. Check your inbox before retrying.';
+      trigger.disabled = false;
+    }
+  }
+
   function renderResults() {
     const resultSet = state.results;
     if (!resultSet) return;
     const results = element('section', 'bf26-results');
+    results.append(forecastTabs('history'));
     results.setAttribute('aria-labelledby', 'bf26-report-title');
     const title = element('h2', '', `${state.subject} results`);
     title.id = 'bf26-report-title';
@@ -1726,6 +2283,12 @@
     results.append(list);
 
     const actions = element('div', 'bf26-actions');
+    if (state.acceptedAttempt?.status === 'complete') {
+      const delivery = element('p', 'bf26-status'); delivery.setAttribute('role', 'status'); delivery.setAttribute('aria-live', 'polite');
+      const download = makeButton('Download PDF'); download.addEventListener('click', () => downloadSavedForecast(download, delivery));
+      const email = makeButton('Email to me'); email.addEventListener('click', () => emailSavedForecast(email, delivery));
+      actions.append(download, email); results.append(delivery);
+    }
     const another = makeButton('Choose another subject', 'bf26-button bf26-button--primary');
     another.addEventListener('click', () => {
       state.subject = '';
@@ -1740,6 +2303,9 @@
       state.lastPromptSelection = null;
       state.results = null;
       state.currentIndex = 0;
+      state.clientAttemptId = '';
+      state.acceptedAttempt = null;
+      state.submissionSnapshot = null;
       renderSubjectPicker();
     });
     const close = makeButton('Close forecast');
@@ -1793,7 +2359,7 @@
       }
       state.ownerId = ownerId;
       state.consentAccepted = payload?.consentAccepted === true;
-      if (state.consentAccepted) renderSubjectPicker();
+      if (state.consentAccepted) renderSubjectPicker('', true);
       else renderDisclaimer();
       return true;
     } catch (error) {
@@ -1826,9 +2392,13 @@
 
   function closeForecast(options = {}) {
     if (!state.isOpen) return true;
-    if (state.view === 'submitting' && options.force !== true) return false;
-    if (hasDraftAnswers() && options.force !== true
-        && !global.confirm('Close the forecast and discard all unsubmitted answers?')) return false;
+    if (state.view === 'exam') captureAnswerFromEditor();
+    if (state.questions.length && !state.results) {
+      const saved = persistForecastDraft();
+      if (!saved && !state.acceptedAttempt && options.force !== true
+          && !global.confirm('This device could not save the draft. Leave this page anyway?')) return false;
+    }
+    stopForecastPolling();
     abortRequest();
     abortAuthorization();
     const trigger = state.lastTrigger;
@@ -1889,9 +2459,18 @@
 
   global.addEventListener('duediligence:session', handleForecastSessionChange);
 
-  function handleForecastAccessChange() {
+  function handleForecastAccessChange(event) {
     if (!state.isOpen) return;
     const ownerId = runtimeOwnerId();
+    const access = event?.detail;
+    if (ownerId && ownerId === state.ownerId && access && typeof access.allowed === 'boolean'
+        && access.basis && !['admin', 'founder_admin', 'super_admin'].includes(access.role)
+        && (access.allowed === false || access.unlimited === false)) {
+      if (state.view === 'exam') captureAnswerFromEditor();
+      persistForecastDraft();
+      stopForecastPolling(); abortRequest();
+      routeToPlansAndPricing(); return;
+    }
     if (!ownerId || ownerId === state.ownerId
         || (state.view === 'access-error' && ownerId === state.authorizationErrorOwnerId)) return;
     // ensureRequiredSetup() itself refreshes access. Ignore the event emitted by
@@ -1932,9 +2511,11 @@
     }
   });
   global.addEventListener('beforeunload', (event) => {
-    if (!state.isOpen || (state.view !== 'submitting' && !hasDraftAnswers())) return;
-    event.preventDefault();
-    event.returnValue = '';
+    if (!state.isOpen) return;
+    if (state.view === 'exam') captureAnswerFromEditor();
+    if (state.questions.length && !state.results && !persistForecastDraft() && !state.acceptedAttempt) {
+      event.preventDefault(); event.returnValue = '';
+    }
   });
 
   global.openBarForecast = openForecast;

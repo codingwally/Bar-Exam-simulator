@@ -195,6 +195,16 @@ on:
       - 'supabase/migrations/20260902090000_unlimited_forecast_access.sql'
       - 'supabase/migrations/20260902093000_fix_unlimited_forecast_entitlement_readonly.sql'
       - 'worker/bar-forecast-database-policy.test.mjs'
+      - 'worker/forecast-*.mjs'
+      - 'worker/astra-*.test.mjs'
+      - 'worker/package.json'
+      - 'worker/package-lock.json'
+      - 'scripts/*astra*'
+      - 'scripts/test-forecast-durable-api.mjs'
+      - 'scripts/forecast-attempt-test-fixture.mjs'
+      - 'scripts/staging-e2e-diagnostics.mjs'
+      - 'scripts/test-auth-session-persistence.mjs'
+      - 'supabase/migrations/*_astra_*.sql'
 
 permissions:
   contents: read
@@ -203,6 +213,9 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      PGLITE_MODULE_PATH: ${{ github.workspace }}/worker/node_modules/@electric-sql/pglite/dist/index.js
+      ASTRA_PGLITE_MODULE: ${{ github.workspace }}/worker/node_modules/@electric-sql/pglite
     steps:
       - uses: actions/checkout@v4
 
@@ -212,6 +225,18 @@ jobs:
 
       - name: Install reviewed Worker dependencies
         run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Verify durable Forecast, actual SQL payments, and scoped Simulator access
+        run: |
+          node --input-type=module -e "await import(process.env.PGLITE_MODULE_PATH)"
+          node --test --test-concurrency=1 worker/forecast-attempt-store.test.mjs worker/forecast-result-export.test.mjs worker/forecast-email-adapter.test.mjs worker/forecast-finalization-reliability.test.mjs scripts/test-forecast-durable-api.mjs scripts/test-astra-forecast-durable-frontend.mjs scripts/test-astra-simulator-access.mjs
+          node scripts/test-astra-payment-lifecycle.mjs
+          node scripts/test-astra-payment-cohort-repair.mjs
+          node scripts/test-astra-payment-presentation.mjs
+          node scripts/test-astra-staging-diagnostics.mjs
+          node scripts/test-astra-simulator-staging-contract.mjs
+          node scripts/astra-release-database-contract.mjs --self-test
+          node scripts/verify-astra-forecast-staging.mjs --self-test
 
       - name: Verify maintenance, token access, and payment-notification contracts
         run: |
@@ -237,7 +262,7 @@ jobs:
           node --check worker/public-api-alias.mjs
           node --test examination-room/*.test.cjs
           node --test admin/examination-room-admin.test.cjs
-          node --test worker/*.test.mjs
+          node --test --test-concurrency=1 worker/*.test.mjs
           node scripts/test-examination-room-database.mjs
           node scripts/test-examination-room-key-reliability-migration.mjs
           node scripts/test-examination-room-lifecycle-migration.mjs

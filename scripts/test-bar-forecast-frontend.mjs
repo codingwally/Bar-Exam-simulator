@@ -99,8 +99,8 @@ assert.ok(
 );
 assert.match(
   forecast,
-  /async function submitForecast\(\) \{[\s\S]*const submittedSubject = state\.subject;[\s\S]*const payload = await requestForecast\(\{\s*operation: 'submit',\s*subject: submittedSubject,\s*setId: state\.setId,\s*answers: submittedAnswers,/,
-  'submission must send the setId issued for the active start response',
+  /async function submitForecast\(\) \{[\s\S]*const submittedSubject = state\.subject;[\s\S]*state\.submissionSnapshot = freezeSubmission\(\{ subject: submittedSubject, setId: state\.setId,[\s\S]*answers: submittedAnswers, clientAttemptId: state\.clientAttemptId[\s\S]*persistForecastDraft\(\)[\s\S]*await sendForecastSubmission\(\)/,
+  'submission must persist its immutable answers, setId, and retry identity before transport',
 );
 assert.match(forecast, /refs\.submit\.disabled = !allAnswersComplete\(\)/);
 assert.match(forecast, /payload\?\.authorized !== true/);
@@ -162,7 +162,8 @@ assert.match(forecast, /document\.body\.classList\.add\('bf26-page-open'\)/);
 assert.match(forecast, /entry\.node\.dataset\.bf26PageInert = 'true'/);
 assert.match(forecast, /global\.syncModalIsolation\?\.\(\)/);
 assert.match(html, /child\.dataset\.bf26PageInert === 'true'/);
-assert.doesNotMatch(forecast, /localStorage|sessionStorage/);
+assert.match(forecast, /localStorage/, 'authorized owner-scoped draft recovery must survive reload');
+assert.match(forecast, /function draftStorageKey\(\)[\s\S]*encodeURIComponent\(ownerId\)/, 'draft storage must use its owner-specific key');
 assert.doesNotMatch(forecast, /\bALAC\b|legal[_ ]basis|controlling[_ ]doctrine|prediction score|transparent rubric/i);
 assert.doesNotMatch(forecast, /wallyesteban1993\.workers\.dev|supabase\.co/i);
 assert.doesNotMatch(forecast, /AI-assisted|editorial indicators/i);
@@ -222,10 +223,11 @@ for (const allowedResultField of [
 
 assert.match(forecast, /educational practice diagnostic, not an official Bar grade/i);
 assert.match(forecast, /Issue spotting and grammar help diagnose writing habits; they do not change the 100-point practice score/i);
-assert.match(forecast, /detailed coaching report may take several minutes/i);
+assert.match(forecast, /coaching report is being prepared[\s\S]*Saved attempts from any signed-in device/i);
 assert.match(forecast, /submissionTimer/);
-assert.match(forecast, /state\.closeButton\.disabled = grading/);
-assert.match(forecast, /Exit unavailable while grading is in progress/);
+assert.match(forecast, /state\.closeButton\.disabled = false/);
+assert.doesNotMatch(forecast, /Exit unavailable while grading is in progress/,
+  'accepted durable assessments must not trap a student on the page');
 assert.match(forecast, /submissionElapsedNode\.setAttribute\('aria-hidden', 'true'\)/);
 assert.match(forecast, /computedTotal !== totalScore/);
 assert.match(forecast, /userAnswer\.includes\(original\)/);
@@ -346,7 +348,8 @@ assert.doesNotMatch(
   /closeForecast\(\{ force: true, restoreRoute: false \}\)/,
   'a failed submission must never force-close a member draft',
 );
-assert.match(forecast, /global\.addEventListener\('beforeunload'[\s\S]*state\.view !== 'submitting'[\s\S]*!hasDraftAnswers\(\)/);
+assert.match(forecast, /global\.addEventListener\('beforeunload'[\s\S]*captureAnswerFromEditor\(\)[\s\S]*!persistForecastDraft\(\) && !state\.acceptedAttempt[\s\S]*event\.preventDefault\(\)/,
+  'unload warns only if unaccepted answers could not be saved; accepted assessment may finish offline');
 assert.match(forecast, /editor\.addEventListener\('drop'[\s\S]*event\.preventDefault\(\)/);
 assert.match(forecast, /editor\.addEventListener\('blur', \(\) => sanitizeEditorDom\(editor\)\)/);
 assert.match(forecast, /appendResultSection\(body, 'Your answer', result\.userAnswer, state\.answerMarkup\.get\(result\.questionId\)\)/);
@@ -365,7 +368,7 @@ assert.match(html, /assets\/feature-loader\.js[^"\n]*coaching=report-20260901-1/
 assert.match(html, /assets\/feature-loader\.js[^"\n]*forecast-loop=astra-20260907-1/);
 assert.match(html, /assets\/private-beta-landing\.js[^"\n]*forecast-loop=astra-20260907-1/);
 assert.match(html, /assets\/phase4-experience\.js[^"\n]*forecast-loop=astra-20260907-1/);
-assert.match(serviceWorker, /duediligence-shell-astra-forecast-entry-20260907-1/);
+assert.match(serviceWorker, /duediligence-shell-astra-durable-payments-20260907-r1/);
 assert.match(serviceWorker, /assets\/feature-loader\.js[^'\n]*forecast=access-flow-20260902-1/);
 assert.match(serviceWorker, /assets\/feature-loader\.js[^'\n]*coaching=report-20260901-1/);
 assert.match(serviceWorker, /assets\/feature-loader\.js[^'\n]*forecast-loop=astra-20260907-1/);

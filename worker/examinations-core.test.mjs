@@ -37,6 +37,7 @@ test('examination limits enforce twenty-question and 1.5 MB boundaries', () => {
 
 test('Bar Exam Simulation current access requires an unlimited authorization', () => {
   const unlimited = {
+    allowed: true,
     track: 'bar_feels',
     basis: 'paid_subscription',
     unlimited: true,
@@ -59,13 +60,13 @@ test('Bar Exam Simulation current access requires an unlimited authorization', (
   );
 });
 
-test('Bar Exam Simulation keeps historical owner recovery and leaves other tracks unchanged', () => {
+test('Bar Exam Simulation denies historical-only access and leaves other tracks unchanged', () => {
   const historical = {
     track: 'bar_feels',
     basis: 'historical_owner',
     unlimited: false,
   };
-  assert.equal(requireBarFeelsUnlimitedAccess(historical), historical);
+  throwsCode(() => requireBarFeelsUnlimitedAccess(historical), 'EXAM_PREMIUM_REQUIRED');
 
   const subjectAccess = {
     track: 'per_subject',
@@ -90,6 +91,23 @@ test('Bar Exam Simulation keeps historical owner recovery and leaves other track
     (error) => error instanceof ExaminationValidationError
       && error.code === 'EXAM_PREMIUM_REQUIRED',
   );
+});
+
+test('Simulator admits only resolved current paid, beta, admin, or unexpired provisional access', () => {
+  for (const basis of ['admin', 'super_admin', 'founder_admin', 'paid_subscription', 'early_access', 'founding_beta']) {
+    const access = { allowed: true, unlimited: true, basis, track: 'bar_feels' };
+    assert.equal(requireBarFeelsUnlimitedAccess(access), access);
+    throwsCode(() => requireBarFeelsUnlimitedAccess({ ...access, allowed: false }), 'EXAM_PREMIUM_REQUIRED');
+  }
+  for (const basis of ['historical_owner', 'trial', 'free_beta', 'global_beta_all_access', undefined]) {
+    throwsCode(() => requireBarFeelsUnlimitedAccess({ allowed: true, unlimited: true, basis, track: 'bar_feels' }), 'EXAM_PREMIUM_REQUIRED');
+  }
+  const pending = { allowed: true, unlimited: true, basis: 'provisional_payment', track: 'bar_feels',
+    entitlementEndsAt: new Date(Date.now() + 60_000).toISOString() };
+  assert.equal(requireBarFeelsUnlimitedAccess(pending), pending);
+  for (const entitlementEndsAt of [null, 'invalid', new Date(Date.now() - 1).toISOString()]) {
+    throwsCode(() => requireBarFeelsUnlimitedAccess({ ...pending, entitlementEndsAt }), 'EXAM_PREMIUM_REQUIRED');
+  }
 });
 
 test('query operations normalize catalog and private assignment tokens', () => {

@@ -235,11 +235,12 @@ function exerciseAuthDestinationRestore(storedReturn) {
   const restoreAuthDestination = vm.runInNewContext(
     `(() => {
       ${extractNamedFunction(phase2, 'safeReturnHash')}
+      ${extractNamedFunction(phase2, 'forecastAuthReturnSearch')}
       ${restoreAuthDestinationSource}
       return restoreAuthDestination;
     })()`,
     {
-      URL,
+      URL, URLSearchParams,
       state: restoreState,
       location,
       history,

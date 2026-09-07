@@ -4,7 +4,10 @@ import { spawn } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildStagingFailureDiagnostic } from './staging-e2e-diagnostics.mjs';
+import {
+  buildPublishableStagingFailureDiagnostic as buildStagingFailureDiagnostic,
+  buildStagingChildEvidence,
+} from './staging-e2e-diagnostics.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const evidenceDir = path.join(root, 'artifacts', 'staging-e2e');
@@ -117,10 +120,10 @@ function runChild(script, environment) {
 
 function safeRunIds(output) {
   const values = new Set();
-  for (const match of output.matchAll(/"runId"\s*:\s*"([a-z0-9-]{8,80})"/gi)) {
+  for (const match of output.matchAll(/"runId"\s*:\s*"((?:ui-)?[a-z0-9]{8,12}-[a-f0-9]{8})"/gi)) {
     values.add(match[1]);
   }
-  for (const match of output.matchAll(/synthetic_cleanup=true\s+run_id=([a-z0-9-]{8,80})/gi)) {
+  for (const match of output.matchAll(/synthetic_cleanup=true\s+run_id=((?:ui-)?[a-z0-9]{8,12}-[a-f0-9]{8})\b/gi)) {
     values.add(match[1]);
   }
   return [...values].sort();
@@ -131,7 +134,8 @@ function lastSafeCheckpoint(output) {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter((line) => /^(STAGING_GATE|DD2026_STAGING|EXAMINATIONS_STAGING): [A-Za-z0-9 ,.'()/-]+$/.test(line));
-  return checkpoints.at(-1) || null;
+  // Only the fixed checkpoint family is publishable, never its free-form text.
+  return checkpoints.at(-1)?.split(':')[0] || null;
 }
 
 async function writeEvidence(suite, result, serviceRoleKey) {
@@ -140,9 +144,10 @@ async function writeEvidence(suite, result, serviceRoleKey) {
     ? /EXAMINATIONS_STAGING: synthetic_cleanup=true/.test(result.output)
       && /EXAMINATIONS_UI_STAGING: synthetic_cleanup=true/.test(result.output)
     : /synthetic_cleanup=true/.test(result.output);
-  const passed = result.code === 0 && cleanupComplete && !secretEchoed;
+  const passed = result.code === 0 && cleanupComplete && !secretEchoed
+    && (result.children || []).every((child) => child.status === 'PASS');
   const evidence = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     suite,
     status: passed ? 'PASS' : 'FAIL',
     projectRef: expected.projectRef,
@@ -154,7 +159,9 @@ async function writeEvidence(suite, result, serviceRoleKey) {
     lastSafeCheckpoint: lastSafeCheckpoint(result.output),
     outputDigest: createHash('sha256').update(result.output).digest('hex'),
     secretEchoDetected: secretEchoed,
-    failure: passed ? null : buildStagingFailureDiagnostic(result.output, result.code, serviceRoleKey),
+    children: result.children || [],
+    failure: passed ? null : result.children?.find((child) => child.status === 'FAIL')?.failure
+      || buildStagingFailureDiagnostic(result.output, result.code, serviceRoleKey),
   };
   await mkdir(evidenceDir, { recursive: true });
   await writeFile(
@@ -163,6 +170,7 @@ async function writeEvidence(suite, result, serviceRoleKey) {
     'utf8',
   );
   console.log(`${suite}: ${evidence.status}`);
+  if (!passed) console.log(`STAGING_FAILURE ${JSON.stringify(evidence.failure)}`);
   if (!passed) process.exitCode = 1;
 }
 
@@ -230,14 +238,24 @@ async function main() {
     NO_COLOR: '1',
   };
   const childResults = [];
+  const childEvidence = [];
   for (const script of suites[argument]) {
     const childResult = await runChild(script, environment);
     childResults.push(childResult);
-    if (childResult.code !== 0) break;
+    const safeEvidence = buildStagingChildEvidence(script, childResult, serviceRoleKey);
+    childEvidence.push(safeEvidence);
+    console.log(`STAGING_CHILD ${JSON.stringify(safeEvidence)}`);
+    if (safeEvidence.status !== 'PASS') break;
+  }
+  for (const script of suites[argument].slice(childResults.length)) {
+    const notRun = buildStagingChildEvidence(script, null);
+    childEvidence.push(notRun);
+    console.log(`STAGING_CHILD ${JSON.stringify(notRun)}`);
   }
   const result = {
-    code: childResults.every((childResult) => childResult.code === 0) ? 0 : 1,
+    code: childEvidence.every((child) => child.status === 'PASS') ? 0 : 1,
     output: childResults.map((childResult) => childResult.output).join('\n'),
+    children: childEvidence,
   };
   await writeEvidence(argument, result, serviceRoleKey);
 }
@@ -249,7 +267,7 @@ main().catch(async (error) => {
     await writeFile(
       path.join(evidenceDir, `${suite}.json`),
       `${JSON.stringify({
-        schemaVersion: 2,
+        schemaVersion: 3,
         suite,
         status: 'FAIL',
         projectRef: expected.projectRef,
@@ -261,6 +279,7 @@ main().catch(async (error) => {
         lastSafeCheckpoint: null,
         outputDigest: createHash('sha256').update(String(error?.name || 'gate_error')).digest('hex'),
         secretEchoDetected: false,
+        children: [],
         failure: buildStagingFailureDiagnostic(
           `${error?.name || 'Error'}: ${error?.message || 'the staging gate could not complete safely.'}\n${error?.stack || ''}`,
           1,
@@ -270,5 +289,9 @@ main().catch(async (error) => {
       'utf8',
     );
   }
-  stop(error instanceof assert.AssertionError ? error.message : 'the staging gate could not complete safely.');
+  console.log(`STAGING_FAILURE ${JSON.stringify(buildStagingFailureDiagnostic(
+    `${error?.name || 'Error'}: ${error?.message || ''}\n${error?.stack || ''}`,1,
+    String(process.env.STAGING_SUPABASE_SERVICE_ROLE_KEY || ''),
+  ))}`);
+  stop('the staging gate could not complete safely; review the sanitized diagnostic.');
 });

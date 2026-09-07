@@ -993,6 +993,9 @@ test('scheduled Quorum profile photo reconciliation deletes queued private objec
     if (url.endsWith('/rest/v1/rpc/examination_room_v1_claim_recovery_snapshot')) {
       return Response.json({ ok: true, job: null });
     }
+    if (url.endsWith('/rest/v1/rpc/dd2026_forecast_attempt_claim')) {
+      return Response.json({ ok: true, claimed: false });
+    }
     if (url.includes('/rest/v1/forum_profile_avatar_cleanup_jobs?')
         && (options.method || 'GET') === 'GET') {
       assert.match(url, /select=object_path/);
@@ -1029,9 +1032,12 @@ test('scheduled Quorum profile photo reconciliation deletes queued private objec
       calls.some(({ url }) => url.endsWith('/rest/v1/rpc/examination_room_v1_claim_recovery_snapshot')),
       'the combined maintenance schedule must retain Examination Room recovery',
     );
+    assert.equal(calls.filter(({ url }) => url.endsWith('/rest/v1/rpc/dd2026_forecast_attempt_claim')).length, 1,
+      'the combined schedule independently checks one durable Forecast batch');
     assert.deepEqual(
       calls
         .filter(({ url }) => !url.endsWith('/rest/v1/rpc/examination_room_v1_claim_recovery_snapshot'))
+        .filter(({ url }) => !url.endsWith('/rest/v1/rpc/dd2026_forecast_attempt_claim'))
         .map(({ method }) => method),
       ['GET', 'POST', 'DELETE', 'DELETE'],
     );

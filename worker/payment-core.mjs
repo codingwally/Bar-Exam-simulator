@@ -265,7 +265,7 @@ export function normalizePhase4AdminRequest(payload) {
 export function normalizePhase4AdminAction(payload) {
   const action = String(payload?.action || '').trim();
   const allowed = new Set([
-    'payment_review', 'refund_review', 'subscription_change',
+    'payment_review', 'payment_invalidate', 'refund_review', 'subscription_change',
     'free_beta_change', 'partnership_update', 'provider_incident_clear',
     'role_change', 'discount_assign', 'subscription_audit_view',
   ]);
@@ -286,13 +286,17 @@ export function normalizePhase4AdminAction(payload) {
     && !Array.isArray(payload.payload) ? payload.payload : {};
   let actionPayload = rawActionPayload;
 
-  if (action === 'payment_review') {
+  if (action === 'payment_invalidate') {
+    // The locked approved payment, never browser-supplied account/access data,
+    // is the sole authority for the reversal target.
+    actionPayload = {};
+  } else if (action === 'payment_review') {
     const status = String(rawActionPayload.status || '').trim().toLowerCase();
     if (!['needs_information', 'approved', 'rejected'].includes(status)) {
       throw new PaymentValidationError('INVALID_ADMIN_ACTION', 'Select a valid payment decision.');
     }
-    let verifiedPaidAt = null;
-    if (rawActionPayload.verifiedPaidAt) {
+    actionPayload = { status };
+    if (status === 'approved' && rawActionPayload.verifiedPaidAt) {
       const date = new Date(String(rawActionPayload.verifiedPaidAt));
       if (!Number.isFinite(date.getTime())) {
         throw new PaymentValidationError(
@@ -300,9 +304,8 @@ export function normalizePhase4AdminAction(payload) {
           'Enter the exact payment date and time shown on the private proof.',
         );
       }
-      verifiedPaidAt = date.toISOString();
+      actionPayload.verifiedPaidAt = date.toISOString();
     }
-    actionPayload = { status, verifiedPaidAt };
   } else if (action === 'subscription_change') {
     const operation = String(rawActionPayload.operation || '').trim().toLowerCase();
     const allowedOperations = new Set([

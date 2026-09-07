@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createForecastMemoryStoreForTest } from '../scripts/forecast-attempt-test-fixture.mjs';
 
 import {
   BAR_FORECAST_CONTENT_TYPE,
@@ -103,6 +104,7 @@ function capacityFailure() {
 
 function handlerDeps({ structuredGemini, wait = async () => {} }) {
   return {
+    attemptStore: createForecastMemoryStoreForTest(),
     authorizeAdministrator: async () => ({ authorized: true, role: 'super_admin' }),
     barForecastRpc: async (_env, functionName) => {
       if (functionName === 'dd2026_bar_forecast_consent_status') {
@@ -128,7 +130,7 @@ function handlerDeps({ structuredGemini, wait = async () => {} }) {
       paidSubscriptionExpired: false,
       commercialLaunchEnabled: true,
     }),
-    requireAuthenticatedUser: async () => ({ id: 'test-admin-user' }),
+    requireAuthenticatedUser: async () => ({ id: '11111111-1111-4111-8111-111111111111' }),
     approvedSetIds: { [SUBJECT]: SET_ID },
     structuredGemini,
     wait,

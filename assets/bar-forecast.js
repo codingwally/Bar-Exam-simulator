@@ -2459,7 +2459,7 @@
 
   global.addEventListener('duediligence:session', handleForecastSessionChange);
 
-  function handleForecastAccessChange() {
+  function handleForecastAccessChange(event) {
     if (!state.isOpen) return;
     const ownerId = runtimeOwnerId();
     const access = event?.detail;

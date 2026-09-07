@@ -20,7 +20,7 @@
   const MAX_NICKNAME_LENGTH = 32;
   const MAX_ROOMS = 5;
   const ROOM_REFRESH_INTERVAL_MS = 15_000;
-  const MEDIA_RELIABILITY_VERSION = 'study-room-meet-layout-20260902-6';
+  const MEDIA_RELIABILITY_VERSION = 'study-room-camera-fallback-20260908-1';
   const LAYOUT_STORAGE_KEY = 'duediligence.study-room.layout.v1';
   const MICROPHONE_STATS_INTERVAL_MS = 400;
   const MICROPHONE_STATS_ATTEMPTS = 10;
@@ -245,6 +245,9 @@
     }
     if (error?.code === 'MEDIA_TRACK_NOT_LIVE') {
       return `The ${label} did not produce a live signal. Choose another device and try again.`;
+    }
+    if (kind === 'camera' && error?.code === 'MEDIA_TRACK_STOP_UNCONFIRMED') {
+      return 'The camera could not be confirmed off. Leave the room to stop sharing video.';
     }
     if (isPermissionError(error)) {
       return `${label === 'microphone' ? 'Microphone' : 'Camera'} access is blocked. Allow it for duediligence.ph in your browser site permissions, then try again.`;
@@ -2828,13 +2831,46 @@
     } catch {
       // Unpublishing and stopping below are the definitive cleanup path.
     }
+    let unpublished = false;
     try {
-      await local.unpublishTrack?.(track, true);
+      if (typeof local.unpublishTrack === 'function') {
+        await local.unpublishTrack(track, true);
+        unpublished = localSourcePublication(local, 'camera')?.track !== track;
+      }
     } catch {
       // A stopped local track cannot continue sending even if disconnect cleanup races.
     }
-    state.userApprovedRawCameraTracks.delete(track);
-    track.stop?.();
+    try {
+      track.stop?.();
+    } catch {
+      // A confirmed mute or unpublish can still establish that sharing stopped.
+    }
+    if (!unpublished && !cameraPublicationIsQuiet(publication)) throw cameraStopError();
+    // A muted publication may survive failed unpublish/stop operations. Keep
+    // its ownership so the next enable reuses it instead of publishing twice.
+    if (unpublished) state.userApprovedRawCameraTracks.delete(track);
+  }
+
+  function cameraPublicationIsQuiet(publication) {
+    const track = publication?.track;
+    const mediaTrack = track?.mediaStreamTrack;
+    return !publication
+      || publication.isMuted === true
+      || track?.isMuted === true
+      || mediaTrack?.readyState === 'ended'
+      || mediaTrack?.enabled === false;
+  }
+
+  function cameraStopError() {
+    const error = new Error('The camera could not be confirmed off. Leave the room to stop sharing video.');
+    error.name = 'TrackStopError';
+    error.code = 'MEDIA_TRACK_STOP_UNCONFIRMED';
+    return error;
+  }
+
+  function assertCameraQuiet(local) {
+    // Inspect the real publication, not the controller status or raw allowlist.
+    if (!cameraPublicationIsQuiet(localSourcePublication(local, 'camera'))) throw cameraStopError();
   }
 
   async function setRawCameraEnabled(enabled, requestedDeviceId = selectedDeviceId('videoinput')) {
@@ -3006,6 +3042,18 @@
       state.cameraOperationBusy = true;
       syncBrandedBackdropState(state.backgroundController?.snapshot?.() || { status: 'idle', supported: true });
       try {
+        const cameraTrack = localSourcePublication(local, 'camera')?.track;
+        if (cameraTrack && state.userApprovedRawCameraTracks.has(cameraTrack)) {
+          // Startup fallback can publish raw video outside an empty controller.
+          // Reuse a surviving publication before considering a new processor.
+          state.backdropEnabled = false;
+          await setRawCameraEnabled(enabled);
+          if (!enabled) {
+            await destroyBackgroundController();
+            assertCameraQuiet(local);
+          }
+          return;
+        }
         let controller = null;
         let supported = false;
         try {
@@ -3036,6 +3084,7 @@
           state.backdropEnabled = false;
           await setRawCameraEnabled(enabled);
         }
+        if (!enabled) assertCameraQuiet(local);
       } finally {
         state.cameraOperationBusy = false;
         syncBrandedBackdropState(state.backgroundController?.snapshot?.() || {

@@ -209,6 +209,10 @@ on:
       - 'scripts/test-forecast-durable-api.mjs'
       - 'scripts/test-forecast-poll-rate-contract.mjs'
       - 'scripts/test-worker-cpu-limit-contract.mjs'
+      - 'assets/study-room-live.js'
+      - 'assets/study-room-backgrounds.js'
+      - 'study-room/index.html'
+      - 'scripts/test-study-room-*.mjs'
       - 'scripts/forecast-attempt-test-fixture.mjs'
       - 'scripts/staging-e2e-diagnostics.mjs'
       - 'scripts/test-examinations-staging-ui-contract.mjs'
@@ -252,6 +256,10 @@ jobs:
           node scripts/test-astra-forecast-entry-diagnostics.mjs
           node scripts/test-forecast-poll-rate-contract.mjs
           node scripts/test-worker-cpu-limit-contract.mjs
+          node scripts/test-study-room-camera-fallback.mjs
+          node scripts/test-study-room-backgrounds.mjs
+          node scripts/test-study-room-live.mjs
+          node scripts/test-study-room-release-workflow.mjs
           node scripts/test-astra-forecast-entry-cleanup-evidence.mjs
           node scripts/test-forecast-cold-entry-cancellation.mjs
           node scripts/test-quorum-navigation-intent.mjs

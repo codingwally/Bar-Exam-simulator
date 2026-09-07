@@ -82,6 +82,7 @@ export const STAGING_UI_FAILURE_MARKER = 'EXAMINATIONS_UI_INNER_FAILURE ';
 const uiStages = new Set([
   'unknown', 'initialization', 'authentication', 'beta-access',
   'subject-catalog', 'subject-locked-layout', 'subject-reveal',
+  'subject-course-selection', 'subject-room-entry',
   'subject-revealed-layout', 'subject-draft-recovery', 'subject-grading',
   'subject-result-assertions', 'subject-graded-layout', 'simulator-fixture',
   'simulator-catalog', 'simulator-setup', 'simulator-answer-save',
@@ -110,6 +111,20 @@ function safePublicScalar(value) {
   return undefined;
 }
 
+function safeSubjectStartObservation(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const counters = ['nextRequests', 'nextResponses', 'startRequests', 'startResponses', 'failedRequests'];
+  const statuses = ['nextStatus', 'startStatus'];
+  const keys = [...counters, ...statuses, 'focus', 'screen', 'startBusy', 'dialogOpen'];
+  if (Object.keys(value).length !== keys.length || Object.keys(value).some((key) => !keys.includes(key))) return null;
+  if (counters.some((key) => !Number.isInteger(value[key]) || value[key] < 0 || value[key] > 99)) return null;
+  if (statuses.some((key) => !Number.isInteger(value[key]) || (value[key] !== 0 && (value[key] < 100 || value[key] > 599)))) return null;
+  if (!['start', 'heading', 'other', 'unknown'].includes(value.focus)
+      || !['catalog', 'room', 'other', 'unknown'].includes(value.screen)
+      || typeof value.startBusy !== 'boolean' || typeof value.dialogOpen !== 'boolean') return null;
+  return Object.freeze(Object.fromEntries(keys.map((key) => [key, value[key]])));
+}
+
 // This marker crosses two process boundaries. Revalidate every field rather than
 // trusting child JSON or carrying free-form messages/paths into published artifacts.
 export function readStagingUiFailureDiagnostic(output) {
@@ -121,7 +136,7 @@ export function readStagingUiFailureDiagnostic(output) {
   catch { return null; }
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const allowedKeys = new Set(['schemaVersion', 'script', 'stage', 'category', 'errorClass',
-    'errorCode', 'message', 'location', 'exitCode', 'httpStatus', 'actual', 'expected', 'assertionOperator']);
+    'errorCode', 'message', 'location', 'exitCode', 'httpStatus', 'actual', 'expected', 'assertionOperator', 'subjectStart']);
   if (Object.keys(value).some((key) => !allowedKeys.has(key))
       || value.schemaVersion !== 1 || value.script !== 'verify-examinations-staging-ui.mjs'
       || !uiStages.has(value.stage) || !safeErrorClasses.has(value.errorClass)
@@ -133,6 +148,8 @@ export function readStagingUiFailureDiagnostic(output) {
   if (Object.hasOwn(value, 'httpStatus')
       && (!Number.isInteger(value.httpStatus) || value.httpStatus < 100 || value.httpStatus > 599)) return null;
   if (Object.hasOwn(value, 'assertionOperator') && !safeAssertionOperators.has(value.assertionOperator)) return null;
+  if (Object.hasOwn(value, 'subjectStart')
+      && (value.stage !== 'subject-room-entry' || !safeSubjectStartObservation(value.subjectStart))) return null;
   for (const key of ['actual', 'expected']) {
     if (!Object.hasOwn(value, key)) continue;
     if (typeof value[key] !== 'string') return null;
@@ -162,6 +179,8 @@ export function buildStagingUiFailureDiagnostic(error, stage = 'unknown', secret
     }
     if (safeErrorCodes.has(error?.code)) result.errorCode = error.code;
     if (safeAssertionOperators.has(error?.operator)) result.assertionOperator = error.operator;
+    const subjectStart = result.stage === 'subject-room-entry' && safeSubjectStartObservation(error?.stagingSubjectStart);
+    if (subjectStart) result.subjectStart = subjectStart;
   }
   return Object.freeze(result);
 }

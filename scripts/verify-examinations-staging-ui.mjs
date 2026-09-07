@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { randomUUID } from 'node:crypto';
+import { buildStagingUiFailureDiagnostic, STAGING_UI_FAILURE_MARKER } from './staging-e2e-diagnostics.mjs';
 
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
@@ -17,6 +18,7 @@ const requestedRunId = String(process.env.STAGING_UI_RUN_ID || '').trim();
 const runId = requestedRunId || `ui-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
 assert.match(runId, /^ui-[a-z0-9-]{8,80}$/);
 const createdExamIds = [];
+let currentUiStage = 'initialization';
 const results = {
   runId,
   examinations: [],
@@ -67,6 +69,7 @@ async function waitForSaved(page) {
 }
 
 async function runAccessibilityAudit(page, label) {
+  currentUiStage = 'accessibility';
   if (!await page.evaluate(() => Boolean(window.axe))) {
     await page.addScriptTag({
       url: 'https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.10.3/axe.min.js',
@@ -651,6 +654,7 @@ async function waitForSubjectReviewOutcome(page) {
 }
 
 async function completeSubjectMatter(page) {
+  currentUiStage = 'subject-catalog';
   await completeOnboardingIfShown(page);
   await completeTermsAcceptanceIfShown(page);
   await openCatalog(page, 'per_subject');
@@ -710,6 +714,7 @@ async function completeSubjectMatter(page) {
   );
   assert.match(attemptId, /^[0-9a-f-]{36}$/i);
 
+  currentUiStage = 'subject-locked-layout';
   await verifySubjectWorkspaceLayout(page, 'subject-locked', [
     { width: 1_366, height: 768 },
     { width: 1_440, height: 900 },
@@ -719,6 +724,7 @@ async function completeSubjectMatter(page) {
   ]);
   await page.setViewportSize({ width: 1_440, height: 900 });
 
+  currentUiStage = 'subject-reveal';
   const revealControls = practiceRoom.locator('[data-subject-review-reveal]');
   assert.equal(await revealControls.count(), 1,
     'The locked review must expose exactly one Reveal Answer control.');
@@ -774,12 +780,14 @@ async function completeSubjectMatter(page) {
   assert.ok(await completeReview.locator('a[href^="https://"]').count() >= 1,
     'Subject Matter must reveal at least one linked official source.');
 
+  currentUiStage = 'subject-revealed-layout';
   await verifySubjectWorkspaceLayout(page, 'subject-revealed', [
     { width: 1_366, height: 768 },
     { width: 375, height: 812 },
   ]);
   await page.setViewportSize({ width: 1_440, height: 900 });
 
+  currentUiStage = 'subject-draft-recovery';
   await page.locator('#dd-answer-editor').fill(subjectMatterAnswer);
   await waitForSaved(page);
   await verifyTwentyTabSwitches(
@@ -788,10 +796,12 @@ async function completeSubjectMatter(page) {
     'subjectMatter',
     subjectMatterAnswer,
   );
+  currentUiStage = 'subject-grading';
   await page.locator('[data-submit-current]').click();
   const subjectResult = page.locator('#dd-per-subject-app .dd-subject-editorial.is-result');
   await subjectResult.waitFor({ state: 'visible', timeout: 150_000 });
 
+  currentUiStage = 'subject-result-assertions';
   const scores = await subjectResult.locator('.score-medallion strong').allTextContents();
   assert.equal(scores.length, 1);
   scores.forEach((score) => assert.match(score, /^[0-5]\.\d \/ 5$/));
@@ -821,6 +831,7 @@ async function completeSubjectMatter(page) {
   assert.doesNotMatch(verdictText, /Question\s+\d+\s+of\s+\d+|\b\d+\s+questions?\b/i);
   assert.doesNotMatch(verdictText, /\b\d{1,3}\s*\/\s*100\b/);
 
+  currentUiStage = 'subject-graded-layout';
   await verifySubjectWorkspaceLayout(page, 'subject-graded', [
     { width: 1_366, height: 768 },
     { width: 375, height: 812 },
@@ -830,7 +841,48 @@ async function completeSubjectMatter(page) {
   return { track: 'per_subject', attemptId, scores };
 }
 
+function examinationVerdictHeading(page, rootSelector) {
+  return page.locator(`${rootSelector} .dd-verdict-screen`).getByRole('heading', {
+    name: 'Individual ALAC assessments.', exact: true,
+  });
+}
+
+async function verifySimulationVerdict(page, rootSelector, expectedAnswers, scores) {
+  assert.equal(expectedAnswers.length, 3, 'The controlled Simulator fixture must retain three answers.');
+  assert.equal(scores.length, expectedAnswers.length);
+  const savedScores = scores.map((score) => Number(String(score).split('/')[0].trim()));
+  savedScores.forEach((score) => assert.ok(Number.isFinite(score) && score >= 0 && score <= 5));
+  const total = savedScores.reduce((sum, score) => sum + Math.round(score * 10), 0) / 10;
+  const maximum = expectedAnswers.length * 5;
+  const percentage = Math.round(total / maximum * 1000) / 10;
+  const verdict = page.locator(`${rootSelector} .dd-verdict-screen`);
+  const cumulative = verdict.locator('[data-simulation-total]');
+  assert.equal(await cumulative.count(), 1, 'The AI-only fixture must show exactly one cumulative total.');
+  assert.equal(await cumulative.locator('[data-cumulative-points]').innerText(), total.toFixed(1));
+  assert.equal((await cumulative.locator('.dd-simulation-total-score').innerText()).replace(/\s+/g, ' ').trim(),
+    `${total.toFixed(1)} / ${maximum}`);
+  assert.equal(await cumulative.locator('[data-cumulative-percentage]').innerText(), `${percentage.toFixed(1)}%`);
+  assert.equal(await cumulative.locator('.dd-simulation-total-badge').innerText(), 'Assessment complete');
+  const heading = examinationVerdictHeading(page, rootSelector);
+  assert.equal(await heading.count(), 1, 'The result must contain exactly one individual-assessment heading.');
+  assert.equal(await heading.evaluate((node) => {
+    const totalNode = node.closest('.dd-verdict-screen')?.querySelector('[data-simulation-total]');
+    return Boolean(totalNode && (totalNode.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING));
+  }), true, 'The cumulative total must precede the individual-assessment section.');
+  const questions = verdict.locator('.dd-verdict-question');
+  assert.equal(await questions.count(), expectedAnswers.length);
+  for (let index = 0; index < expectedAnswers.length; index += 1) {
+    const question = questions.nth(index);
+    assert.equal(await question.locator('.dd-question-label').innerText(), `Question ${index + 1}`);
+    assert.equal(await question.locator('[data-submitted-answer]').count(), 1);
+    assert.equal(normalizeEditorText(await question.locator('[data-submitted-answer]').innerText()),
+      normalizeEditorText(expectedAnswers[index]), `Question ${index + 1} did not preserve its exact submitted answer.`);
+  }
+  return { total, maximum, percentage, savedAnswersVerified: true };
+}
+
 async function completeExamination(page, fixture) {
+  currentUiStage = 'simulator-catalog';
   await completeOnboardingIfShown(page);
   await openCatalog(page, fixture.track);
   const rootSelector = fixture.track === 'bar_feels'
@@ -844,6 +896,7 @@ async function completeExamination(page, fixture) {
   const title = page.getByText(fixture.title, { exact: true });
   await title.waitFor({ state: 'visible', timeout: 15_000 });
   const card = title.locator('xpath=ancestor::article[1]');
+  currentUiStage = 'simulator-setup';
   const setupButton = card.locator(`[data-exam-setup="${fixture.versionId}"]`);
   await setupButton.click();
   const dialog = page.locator('#dd-exam-setup-dialog[open]');
@@ -865,14 +918,17 @@ async function completeExamination(page, fixture) {
   );
   assert.match(attemptId, /^[0-9a-f-]{36}$/i);
 
+  const submittedAnswers = [...completeAnswers];
   for (let index = 0; index < completeAnswers.length; index += 1) {
+    currentUiStage = 'simulator-answer-save';
     const editorSelector = fixture.track === 'bar_feels'
       ? '#dd-answer-rich-editor'
       : '#dd-answer-editor';
     await page.locator(editorSelector).fill(completeAnswers[index]);
     await waitForSaved(page);
     if (index === 0 && fixture.track === 'bar_feels') {
-      await verifyTwentyTabSwitches(
+      currentUiStage = 'simulator-draft-recovery';
+      submittedAnswers[index] = await verifyTwentyTabSwitches(
         page,
         editorSelector,
         'barFeels',
@@ -891,6 +947,7 @@ async function completeExamination(page, fixture) {
     }
   }
 
+  currentUiStage = 'simulator-review';
   await page.locator('[data-review-all]').click();
   await page.waitForFunction(
     () => window.DueDiligenceExaminations?.getState?.().screen === 'review',
@@ -901,6 +958,7 @@ async function completeExamination(page, fixture) {
   assert.match(reviewText, /3\s+ANSWERED/i);
   assert.match(reviewText, /0\s+UNANSWERED/i);
 
+  currentUiStage = 'simulator-submit';
   await page.locator('[data-submit-exam]').click();
   await page.waitForFunction(
     () => window.DueDiligenceExaminations?.getState?.().screen === 'receipt',
@@ -911,14 +969,13 @@ async function completeExamination(page, fixture) {
   assert.match(receiptText, /Your examination is preserved/i);
   assert.match(receiptText, /3\s+ANSWERED/i);
 
-  const verdictHeading = page.locator(`${rootSelector} .dd-verdict-screen h1`).filter({
-    hasText: 'Individual ALAC assessments.',
-  });
+  const verdictHeading = examinationVerdictHeading(page, rootSelector);
   const incompleteAssessment = page.getByText(
     'The examiner returned an incomplete ALAC assessment.',
     { exact: true },
   );
   let assessmentComplete = false;
+  currentUiStage = 'simulator-grading';
   for (let assessmentAttempt = 1; assessmentAttempt <= 2; assessmentAttempt += 1) {
     await page.locator('[data-request-ai]').click();
     const outcome = await Promise.race([
@@ -937,6 +994,7 @@ async function completeExamination(page, fixture) {
       + `network errors: ${JSON.stringify(results.networkErrors)}; console errors: ${JSON.stringify(results.consoleErrors)}`,
     );
   }
+  currentUiStage = 'simulator-result-assertions';
   const scores = await page.locator(`${rootSelector} .score-medallion strong`).allTextContents();
   assert.equal(scores.length, 3);
   scores.forEach((score) => assert.match(score, /^[0-5]\.\d \/ 5$/));
@@ -944,8 +1002,9 @@ async function completeExamination(page, fixture) {
   assert.match(verdictText, /Approved Model Answer/i);
   assert.match(verdictText, /Individual Question Assessment/i);
   assert.doesNotMatch(verdictText, /\b\d{1,3}\s*\/\s*100\b/);
+  const savedResult = await verifySimulationVerdict(page, rootSelector, submittedAnswers, scores);
 
-  return { track: fixture.track, attemptId, scores };
+  return { track: fixture.track, attemptId, scores, savedResult };
 }
 
 const browser = await chromium.launch({ headless: true, channel: 'chrome' });
@@ -967,7 +1026,9 @@ try {
   });
   page.on('pageerror', (error) => results.pageErrors.push(String(error)));
 
+  currentUiStage = 'authentication';
   await authenticate(page);
+  currentUiStage = 'beta-access';
   await adminOperation(page, 'set_beta_access', {
     userId: await page.evaluate(() => window.DueDiligencePhase4.getSession().user.id),
     enabled: true,
@@ -975,6 +1036,7 @@ try {
   });
 
   results.examinations.push(await completeSubjectMatter(page));
+  currentUiStage = 'simulator-fixture';
   const barFeelsFixture = await publishFixture(page, {
     track: 'bar_feels',
     assessmentKind: 'curated',
@@ -999,6 +1061,7 @@ try {
   for (const viewport of viewportChecks) {
     await page.setViewportSize(viewport);
     for (const catalog of catalogChecks) {
+      currentUiStage = 'catalog-responsive';
       await openCatalog(page, catalog.track);
       const label = `${catalog.label}-${viewport.width}`;
       const layout = await page.evaluate(() => {
@@ -1113,6 +1176,7 @@ try {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 1_024, height: 768 });
   for (const catalog of catalogChecks) {
+    currentUiStage = 'reduced-motion';
     await openCatalog(page, catalog.track);
     const motion = await page.evaluate(() => {
       const animated = [...document.querySelectorAll('body *')]
@@ -1141,6 +1205,7 @@ try {
   const cdp = await context.newCDPSession(page);
   await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 2 });
   for (const catalog of catalogChecks) {
+    currentUiStage = 'high-zoom';
     await openCatalog(page, catalog.track);
     const zoom = await page.evaluate(() => ({
       scale: visualViewport?.scale || 1,
@@ -1162,12 +1227,20 @@ try {
   }
   await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 1 });
   await page.emulateMedia({ reducedMotion: 'no-preference' });
+  currentUiStage = 'final-error-checks';
   assert.deepEqual(results.consoleErrors, []);
   assert.deepEqual(results.networkErrors, []);
   assert.deepEqual(results.pageErrors, []);
   results.ok = true;
   results.createdExamIds = createdExamIds;
   console.log(JSON.stringify(results, null, 2));
+} catch (error) {
+  // Emit only fixed stages, an allowlisted source location and safe scalars.
+  // Raw Playwright errors may contain rendered questions, answers or credentials.
+  console.error(`${STAGING_UI_FAILURE_MARKER}${JSON.stringify(
+    buildStagingUiFailureDiagnostic(error, currentUiStage),
+  )}`);
+  process.exitCode = 1;
 } finally {
   await browser.close();
 }

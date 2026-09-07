@@ -203,6 +203,9 @@ on:
       - 'scripts/test-forecast-durable-api.mjs'
       - 'scripts/forecast-attempt-test-fixture.mjs'
       - 'scripts/staging-e2e-diagnostics.mjs'
+      - 'scripts/test-examinations-staging-ui-contract.mjs'
+      - 'scripts/test-examinations-staging-ui.mjs'
+      - 'scripts/test-astra-staging-diagnostics.mjs'
       - 'scripts/test-auth-session-persistence.mjs'
       - 'supabase/migrations/*_astra_*.sql'
 
@@ -234,6 +237,7 @@ jobs:
           node scripts/test-astra-payment-cohort-repair.mjs
           node scripts/test-astra-payment-presentation.mjs
           node scripts/test-astra-staging-diagnostics.mjs
+          node scripts/test-examinations-staging-ui-contract.mjs
           node scripts/test-astra-simulator-staging-contract.mjs
           node scripts/astra-release-database-contract.mjs --self-test
           node scripts/verify-astra-forecast-staging.mjs --self-test

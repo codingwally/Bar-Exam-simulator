@@ -3,7 +3,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { sanitizeStagingDiagnostic } from './staging-e2e-diagnostics.mjs';
+import { buildStagingUiFailureDiagnostic, readStagingUiFailureDiagnostic, STAGING_UI_FAILURE_MARKER } from './staging-e2e-diagnostics.mjs';
 import { completeMandatoryCommercialProfile } from './staging-commercial-user.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -261,9 +261,11 @@ try {
   await prepareDisposableCommercialProfile();
   verifier = await runVerifier();
   if (verifier.code !== 0) {
-    verifierFailure = sanitizeStagingDiagnostic(verifier.output, SERVICE_ROLE_KEY)
-      .replaceAll(password, '[credential]')
-      .replaceAll(email, '[email]');
+    // Preserve the inner error's safe structure before any text truncation.
+    // Never publish raw child output, even when it contains an assertion diff.
+    verifierFailure = readStagingUiFailureDiagnostic(verifier.output)
+      || buildStagingUiFailureDiagnostic(verifier.output, 'unknown', SERVICE_ROLE_KEY);
+    console.log(`${STAGING_UI_FAILURE_MARKER}${JSON.stringify(verifierFailure)}`);
   }
 } finally {
   const cleanupErrors = [];
@@ -283,7 +285,9 @@ try {
   console.log(`EXAMINATIONS_UI_STAGING: synthetic_cleanup=true run_id=${runId}`);
 }
 
-assert.equal(verifier?.code, 0, verifierFailure || 'The staging UI verifier did not complete.');
+assert.equal(verifier?.code, 0, verifierFailure
+  ? 'The staging UI verifier failed. Review the structured inner diagnostic.'
+  : 'The staging UI verifier did not complete.');
 const parsed = JSON.parse(verifier.output);
 assert.equal(parsed.ok, true);
 assert.deepEqual(parsed.consoleErrors, []);

@@ -78,11 +78,101 @@ const safeErrorCodes = new Set([
   'REVIEW_CONFIRMATION_REQUIRED', 'BAR_FORECAST_SUBSCRIPTION_REQUIRED',
 ]);
 
+export const STAGING_UI_FAILURE_MARKER = 'EXAMINATIONS_UI_INNER_FAILURE ';
+const uiStages = new Set([
+  'unknown', 'initialization', 'authentication', 'beta-access',
+  'subject-catalog', 'subject-locked-layout', 'subject-reveal',
+  'subject-revealed-layout', 'subject-draft-recovery', 'subject-grading',
+  'subject-result-assertions', 'subject-graded-layout', 'simulator-fixture',
+  'simulator-catalog', 'simulator-setup', 'simulator-answer-save',
+  'simulator-draft-recovery', 'simulator-review', 'simulator-submit',
+  'simulator-grading', 'simulator-result-assertions', 'catalog-responsive',
+  'accessibility', 'reduced-motion', 'high-zoom', 'final-error-checks',
+]);
+const publicFailureMessages = Object.freeze({
+  request: 'The staging HTTP response did not match the expected status.',
+  assertion: 'A staging assertion failed. Review the script location and safe scalar comparison.',
+  timeout: 'The staging operation timed out. Review the script location.',
+  configuration: 'The staging configuration check failed. Review the script location.',
+  runtime: 'The staging child process failed. Free-form details are withheld.',
+});
+const safeErrorClasses = new Set([
+  'AssertionError', 'AggregateError', 'TypeError', 'RangeError', 'ReferenceError',
+  'SyntaxError', 'TimeoutError', 'AbortError', 'Error',
+]);
+const safeAssertionOperators = new Set([
+  'strictEqual', 'deepStrictEqual', 'equal', 'deepEqual', 'ok', 'match', 'doesNotMatch', 'fail',
+]);
+function safePublicScalar(value) {
+  if (value === null || typeof value === 'boolean') return String(value);
+  if (typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= 100000
+      && /^-?[0-9]{1,6}(?:\.[0-9]{1,8})?$/.test(String(value))) return String(value);
+  return undefined;
+}
+
+// This marker crosses two process boundaries. Revalidate every field rather than
+// trusting child JSON or carrying free-form messages/paths into published artifacts.
+export function readStagingUiFailureDiagnostic(output) {
+  const lines = String(output || '').split(/\r?\n/)
+    .filter((line) => line.startsWith(STAGING_UI_FAILURE_MARKER));
+  if (lines.length !== 1 || lines[0].length > 2048) return null;
+  let value;
+  try { value = JSON.parse(lines[0].slice(STAGING_UI_FAILURE_MARKER.length)); }
+  catch { return null; }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const allowedKeys = new Set(['schemaVersion', 'script', 'stage', 'category', 'errorClass',
+    'errorCode', 'message', 'location', 'exitCode', 'httpStatus', 'actual', 'expected', 'assertionOperator']);
+  if (Object.keys(value).some((key) => !allowedKeys.has(key))
+      || value.schemaVersion !== 1 || value.script !== 'verify-examinations-staging-ui.mjs'
+      || !uiStages.has(value.stage) || !safeErrorClasses.has(value.errorClass)
+      || !Object.hasOwn(publicFailureMessages, value.category)
+      || value.message !== publicFailureMessages[value.category]
+      || (value.errorCode !== null && !safeErrorCodes.has(value.errorCode))
+      || !Number.isInteger(value.exitCode) || value.exitCode < 1 || value.exitCode > 255
+      || (value.location !== null && !/^verify-examinations-staging-ui\.mjs:[1-9][0-9]{0,5}:[1-9][0-9]{0,4}$/.test(value.location))) return null;
+  if (Object.hasOwn(value, 'httpStatus')
+      && (!Number.isInteger(value.httpStatus) || value.httpStatus < 100 || value.httpStatus > 599)) return null;
+  if (Object.hasOwn(value, 'assertionOperator') && !safeAssertionOperators.has(value.assertionOperator)) return null;
+  for (const key of ['actual', 'expected']) {
+    if (!Object.hasOwn(value, key)) continue;
+    if (typeof value[key] !== 'string') return null;
+    const scalar = value[key] === 'true' ? true : value[key] === 'false' ? false
+      : value[key] === 'null' ? null : Number(value[key]);
+    if (safePublicScalar(scalar) !== value[key]) return null;
+  }
+  return Object.freeze({ ...value });
+}
+
+export function buildStagingUiFailureDiagnostic(error, stage = 'unknown', secret = '') {
+  const source = typeof error === 'string' ? error : String(error?.stack || error?.name || 'Error');
+  const base = buildPublishableStagingFailureDiagnostic(source, 1, secret);
+  const errorClass = typeof error !== 'string' && safeErrorClasses.has(error?.name) ? error.name : base.errorClass;
+  const category = base.httpStatus ? 'request' : errorClass === 'AssertionError' ? 'assertion'
+    : ['TimeoutError', 'AbortError'].includes(errorClass) ? 'timeout' : base.category;
+  const result = { schemaVersion: 1, script: 'verify-examinations-staging-ui.mjs',
+    ...base, errorClass, category, message: publicFailureMessages[category],
+    stage: uiStages.has(stage) ? stage : 'unknown',
+    location: /^verify-examinations-staging-ui\.mjs:[1-9][0-9]{0,5}:[1-9][0-9]{0,4}$/.test(base.location || '')
+      ? base.location : null };
+  if (typeof error !== 'string') {
+    for (const key of ['actual', 'expected']) {
+      if (!Object.hasOwn(error || {}, key)) continue;
+      const value = safePublicScalar(error[key]);
+      if (value !== undefined) result[key] = value;
+    }
+    if (safeErrorCodes.has(error?.code)) result.errorCode = error.code;
+    if (safeAssertionOperators.has(error?.operator)) result.assertionOperator = error.operator;
+  }
+  return Object.freeze(result);
+}
+
 // Public diagnostics deliberately do not echo free-form exception messages,
 // quoted assertion operands, URLs, source excerpts, or customer answer text.
 // The existing text sanitizer remains available for the private UI wrapper.
 export function buildPublishableStagingFailureDiagnostic(output, exitCode, secret = '') {
   const source = String(output || '');
+  const innerUiFailure = readStagingUiFailureDiagnostic(source);
+  if (innerUiFailure) return innerUiFailure;
   const original = buildStagingFailureDiagnostic(source, exitCode, secret);
   const errorClass = source.match(/\b(AssertionError|AggregateError|TypeError|RangeError|ReferenceError|SyntaxError|TimeoutError|AbortError|Error)(?:\s+\[[A-Z_]+\])?:/)?.[1] || 'Error';
   const assertion = errorClass === 'AssertionError';
@@ -90,17 +180,10 @@ export function buildPublishableStagingFailureDiagnostic(output, exitCode, secre
   const category = httpStatus ? 'request' : assertion ? 'assertion'
     : ['TimeoutError','AbortError'].includes(errorClass) ? 'timeout'
       : original.category === 'configuration' ? 'configuration' : 'runtime';
-  const messages = {
-    request: 'The staging HTTP response did not match the expected status.',
-    assertion: 'A staging assertion failed. Review the script location and safe scalar comparison.',
-    timeout: 'The staging operation timed out. Review the script location.',
-    configuration: 'The staging configuration check failed. Review the script location.',
-    runtime: 'The staging child process failed. Free-form details are withheld.',
-  };
   const rawCode = source.match(/\bcode:\s*['"]([A-Z][A-Z0-9_]{2,64})['"]/)?.[1]
     || source.match(/\b(?:AssertionError|Error)\s+\[([A-Z][A-Z0-9_]{2,64})\]/)?.[1];
   const result = { category, errorClass, errorCode: safeErrorCodes.has(rawCode) ? rawCode : null,
-    message: messages[category], location: original.location, exitCode: original.exitCode };
+    message: publicFailureMessages[category], location: original.location, exitCode: original.exitCode };
   if (httpStatus) result.httpStatus = httpStatus;
   for (const key of ['actual','expected']) {
     if (/^(?:true|false|null)$/.test(String(original[key] ?? ''))
@@ -109,7 +192,7 @@ export function buildPublishableStagingFailureDiagnostic(output, exitCode, secre
       result[key] = original[key];
   }
   const operator = source.match(/\boperator:\s*['"]([A-Za-z]+)['"]/)?.[1];
-  if (['strictEqual','deepStrictEqual','equal','deepEqual','ok','match','doesNotMatch','fail'].includes(operator))
+  if (safeAssertionOperators.has(operator))
     result.assertionOperator = operator;
   return Object.freeze(result);
 }
@@ -125,11 +208,12 @@ export function buildStagingChildEvidence(script, result, secret = '') {
       : name === 'test-duediligence-2026-staging.mjs' ? 'DD2026_STAGING' : 'STAGING_GATE';
   const cleanup = new RegExp(`(?:^|\\n)${cleanupMarker}: synthetic_cleanup=true\\b`).test(output);
   const secretEcho = Boolean(secret) && output.includes(secret);
-  const passed = result.code === 0 && cleanup && !secretEcho;
+  const hasInnerFailureMarker = output.split(/\r?\n/).some((line) => line.startsWith(STAGING_UI_FAILURE_MARKER));
+  const passed = result.code === 0 && cleanup && !secretEcho && !hasInnerFailureMarker;
   return Object.freeze({ script: name, status: passed ? 'PASS' : 'FAIL',
     exitCode: Number.isInteger(result.code) ? result.code : 1,
     cleanup: cleanup ? 'completed' : 'not-confirmed',
     failureReason: passed ? null : secretEcho ? 'credential-output-detected'
-      : result.code !== 0 ? 'child-exit' : 'cleanup-unconfirmed',
+      : result.code !== 0 ? 'child-exit' : hasInnerFailureMarker ? 'inner-verifier-failed' : 'cleanup-unconfirmed',
     failure: passed ? null : buildPublishableStagingFailureDiagnostic(output,result.code,secret) });
 }

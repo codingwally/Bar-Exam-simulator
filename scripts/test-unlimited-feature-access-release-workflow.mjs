@@ -33,6 +33,8 @@ assert.deepEqual(actualMigrations, expectedMigrations, 'Exactly the eleven revie
 assert.deepEqual(actualMigrations, [...actualMigrations].sort());
 
 const newReviewedPaths = [
+  'assets/bar-forecast.js',
+  'assets/bar-forecast.css',
   'browser/forecast-result-pdf-worker.mjs',
   'scripts/build-forecast-pdf-browser-worker.mjs',
   'scripts/build-pages-artifact.mjs',

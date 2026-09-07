@@ -7,6 +7,7 @@ import vm from 'node:vm';
 import test from 'node:test';
 
 const runtime = readFileSync(new URL('../assets/examinations.js', import.meta.url), 'utf8');
+const stylesheet = readFileSync(new URL('../assets/examinations.css', import.meta.url), 'utf8');
 const verifier = readFileSync(new URL('./verify-examinations-staging-ui.mjs', import.meta.url), 'utf8');
 const answers = ['First synthetic answer.\n\nLatest saved draft after tab switching.',
   'Second synthetic answer: ₱149; café; <not markup>.', 'Third synthetic answer.\n\nFinal paragraph retained.'];
@@ -45,7 +46,7 @@ async function actualResultMarkup() {
   await window.DueDiligenceExaminations.openVerdict('synthetic-contract');
   assert.equal(JSON.stringify(verdict),before,'Rendering must not change canonical saved data.');
   assert.equal(requests.length,1);assert.equal(requests[0].body.operation,'verdict');
-  return `<style>.dd-simulation-submitted-answer{white-space:pre-wrap}</style><div id="dd-bar-feels-app">${root.innerHTML}</div>`;
+  return `<style>${stylesheet}</style><div id="dd-bar-feels-app">${root.innerHTML}</div>`;
 }
 const markup = await actualResultMarkup();
 
@@ -91,6 +92,8 @@ if (process.argv.includes('--browser')) {
     try {
       await t.test('current h2 succeeds and retains canonical three-score total/answers',async()=>{
         await page.setContent(markup);
+        assert.equal(await page.locator('.dd-verdict-question .dd-question-label').first().innerText(),'QUESTION 1');
+        assert.equal(await page.locator('.dd-verdict-question .dd-question-label').first().textContent(),'Question 1');
         assert.equal(await helpers.examinationVerdictHeading(page,'#dd-bar-feels-app').count(),1);
         assert.equal(await page.locator('#dd-bar-feels-app .dd-verdict-screen h1').filter({hasText:'Individual ALAC assessments.'}).count(),0);
         assert.deepEqual(JSON.parse(JSON.stringify(await verify())),{total:10.7,maximum:15,percentage:71.3,savedAnswersVerified:true});

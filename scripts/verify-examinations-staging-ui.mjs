@@ -873,7 +873,9 @@ async function verifySimulationVerdict(page, rootSelector, expectedAnswers, scor
   assert.equal(await questions.count(), expectedAnswers.length);
   for (let index = 0; index < expectedAnswers.length; index += 1) {
     const question = questions.nth(index);
-    assert.equal(await question.locator('.dd-question-label').innerText(), `Question ${index + 1}`);
+    // CSS deliberately uppercases the visible label; compare the saved ordinal,
+    // not the typography applied by innerText.
+    assert.equal((await question.locator('.dd-question-label').textContent()).trim(), `Question ${index + 1}`);
     assert.equal(await question.locator('[data-submitted-answer]').count(), 1);
     assert.equal(normalizeEditorText(await question.locator('[data-submitted-answer]').innerText()),
       normalizeEditorText(expectedAnswers[index]), `Question ${index + 1} did not preserve its exact submitted answer.`);

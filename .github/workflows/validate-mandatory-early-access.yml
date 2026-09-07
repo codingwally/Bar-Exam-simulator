@@ -237,6 +237,7 @@ jobs:
           node scripts/test-astra-payment-cohort-repair.mjs
           node scripts/test-astra-payment-presentation.mjs
           node scripts/test-astra-staging-diagnostics.mjs
+          node scripts/test-astra-forecast-entry-diagnostics.mjs
           node scripts/test-examinations-staging-ui-contract.mjs
           node scripts/test-astra-simulator-staging-contract.mjs
           node scripts/astra-release-database-contract.mjs --self-test

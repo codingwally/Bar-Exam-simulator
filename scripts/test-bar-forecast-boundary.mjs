@@ -196,14 +196,16 @@ export async function main() {
   );
   assert.match(
     workerIndex,
-    /barForecastNetworkRateWindows,[\s\S]*?transientRateKey\(request, env, 'bar-forecast-network'\),[\s\S]*?MAX_BAR_FORECAST_NETWORK_REQUESTS_PER_WINDOW/,
+    /: barForecastNetworkRateWindows;[\s\S]*?transientRateKey\(request, env, 'bar-forecast-network'\);[\s\S]*?: MAX_BAR_FORECAST_NETWORK_REQUESTS_PER_WINDOW;/,
     'Forecast network rate limiting must use its own bounded scope',
   );
   assert.match(
     workerIndex,
-    /barForecastUserRateWindows,[\s\S]*?`bar-forecast-user\\0\$\{user\.id\}`,[\s\S]*?MAX_BAR_FORECAST_USER_REQUESTS_PER_WINDOW/,
+    /read \? barForecastUserReadRateWindows : barForecastUserRateWindows[\s\S]*?`bar-forecast-user\\0\$\{user\.id\}`\)[\s\S]*?read \? MAX_BAR_FORECAST_USER_READ_REQUESTS_PER_WINDOW : MAX_BAR_FORECAST_USER_REQUESTS_PER_WINDOW/,
     'Forecast signed-in traffic must be limited by verified user id, not shared IP or raw token',
   );
+  assert.match(workerIndex, /BAR_FORECAST_READ_OPERATIONS = new Set\(\['status', 'attempt', 'history'\]\)/,
+    'Only non-grading status/history reads may use the separate read budget; all mutations retain their original ceiling');
   assert.match(
     workerIndex,
     /const MAX_BAR_FORECAST_NETWORK_REQUESTS_PER_WINDOW = 180;[\s\S]*const MAX_BAR_FORECAST_USER_REQUESTS_PER_WINDOW = 30;/,

@@ -10,8 +10,9 @@
   const MINIMUM_WORDS = 10;
   const MAX_ANSWER_CHARACTERS = 6000;
   // astra-forecast-durable-20260907-r1: owner-scoped drafts and canonical saved reports.
-  const FORECAST_POLL_LIMIT = 60;
-  const FORECAST_POLL_INTERVAL_MS = 5000;
+  const FORECAST_POLL_LIMIT = 120;
+  const FORECAST_POLL_INTERVAL_MS = 10000;
+  const FORECAST_POLL_WINDOW_MS = 20 * 60 * 1000;
   const FORECAST_REQUEST_TIMEOUT_MS = 25_000;
   // Access verification is an interactive preflight, not a grading job. Keep
   // it within the same bounded session budget used by the sign-in surface so a
@@ -1185,24 +1186,37 @@
     replaceView(panel, 'saved-status');
   }
 
+  function forecastReadRetryDelay(error) {
+    if (error?.status !== 429 && error?.code !== 'RATE_LIMITED') return null;
+    const delays = [error.retryAfterMs, Number.isSafeInteger(error.retryAfterSeconds) ? error.retryAfterSeconds * 1000 : null]
+      .filter((value) => typeof value === 'number' && Number.isFinite(value) && value >= 0);
+    return delays.length ? Math.max(1000, ...delays) : 60000;
+  }
+
   async function pollSavedForecast(attemptId) {
     stopForecastPolling();
     const pollGeneration = state.pollGeneration;
     const ownerId = state.ownerId; const generation = state.workspaceGeneration;
     const current = () => forecastRequestIsCurrent(ownerId, generation) && state.pollGeneration === pollGeneration
       && state.acceptedAttempt?.id === attemptId && state.view === 'submitting';
+    const deadline = Date.now() + FORECAST_POLL_WINDOW_MS;
+    let nextDelay = FORECAST_POLL_INTERVAL_MS;
     for (let count = 0; count < FORECAST_POLL_LIMIT; count++) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) break;
       let finishDelay;
       await new Promise((resolve) => {
         finishDelay = resolve;
         state.pollResolve = finishDelay;
-        state.pollTimer = global.setTimeout(finishDelay, FORECAST_POLL_INTERVAL_MS);
+        state.pollTimer = global.setTimeout(finishDelay, Math.min(nextDelay, remaining));
       });
       if (state.pollResolve === finishDelay) { state.pollTimer = null; state.pollResolve = null; }
       if (!current()) return;
+      if (Date.now() >= deadline) break;
       try {
         const payload = await requestForecast({ operation: 'attempt', attemptId });
         if (!current()) return;
+        nextDelay = FORECAST_POLL_INTERVAL_MS;
         const attempt = adoptSavedAttempt(payload?.attempt, attemptId);
         if (attempt.status === 'complete' || attempt.status === 'failed') {
           stopForecastPolling(); renderSavedForecastStatus(); return;
@@ -1212,6 +1226,12 @@
       } catch (error) {
         if (!current() || error?.name === 'AbortError') return;
         if (handleForecastAccessInterruption(error)) return;
+        const retryDelay = forecastReadRetryDelay(error);
+        if (retryDelay !== null) {
+          nextDelay = Math.max(FORECAST_POLL_INTERVAL_MS, retryDelay);
+          setStatus('Your answers are saved. Progress checking will resume automatically.');
+          continue;
+        }
         stopForecastPolling(); renderSavedForecastStatus('Progress could not be checked. Your saved work remains available; retry when ready.', false); return;
       }
     }

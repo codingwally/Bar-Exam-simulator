@@ -42,7 +42,7 @@ const DIAGNOSTIC_ERROR_CODES = Object.freeze([
   'BAR_FORECAST_GRADING_CAPACITY', 'BAR_FORECAST_GRADING_INVALID', 'BAR_FORECAST_GRADING_TIMEOUT',
   'BAR_FORECAST_GRADING_UNAVAILABLE', 'BAR_FORECAST_PERSISTENCE_UNAVAILABLE', 'BAR_FORECAST_PROCESSING_FAILED',
   'BAR_FORECAST_PROCESSING_PENDING', 'BAR_FORECAST_ATTEMPT_CONFLICT', 'BAR_FORECAST_REQUEST_TIMEOUT',
-  'BAR_FORECAST_REQUEST_SHAPE_INVALID', 'INVALID_JSON', 'UNRECOGNIZED',
+  'BAR_FORECAST_REQUEST_SHAPE_INVALID', 'INVALID_JSON', 'RATE_LIMITED', 'UNRECOGNIZED',
 ]);
 const READY_FORECAST_LAUNCHER = '.qfs-practice-rail [data-public-feature="bar-forecast"]:not(:disabled)';
 const isolatedBrowserEnv = () => Object.fromEntries(Object.entries(process.env).filter(([name]) => /^(?:path|pathext|systemroot|windir|comspec|home|userprofile|localappdata|appdata|temp|tmp|tmpdir|user|logname|ci|display|xdg_runtime_dir|xdg_cache_home|lang|lc_all|ld_library_path)$/iu.test(name)));
@@ -178,6 +178,57 @@ export function canCaptureForecastFixtureScreenshot(raw) {
   const safe = sanitizeForecastBrowserDiagnostics(raw);
   return safe.expectedOriginMatch === true && safe.runtimeOwnerMatchesExpected === true
     && safe.sessionPresent === true && safe.route === 'forecast' && safe.rootVisible === true;
+}
+
+export function forecastReadCooldown(response, body, now = Date.now()) {
+  const header = response?.headers?.get('Retry-After');
+  const headerMs = typeof header === 'string' && /^\d+$/u.test(header.trim())
+    ? Number(header) * 1000 : typeof header === 'string' ? Date.parse(header) - now : NaN;
+  const seconds = body?.error?.retryAfterSeconds;
+  const values = [headerMs, Number.isSafeInteger(seconds) && seconds > 0 ? seconds * 1000 : NaN]
+    .filter((value) => Number.isFinite(value) && value >= 0);
+  // Existing production windows are ten minutes; never invent an earlier reset
+  // when an older response omits timing. The new Worker provides exact timing.
+  return values.length ? Math.max(1000, ...values) : 10 * 60 * 1000;
+}
+
+export function forecastCleanupScope() {
+  return {
+    cleanupScope: 'supported-api-owned-fixture-rows',
+    pulseFixtureRows: 'not_independently_checked',
+    authSessions: 'not_directly_exposed',
+    independentDatabaseReadbackRequired: true,
+    zeroResidueVerified: false,
+  };
+}
+
+export async function retryForecastRead({ operation, request, deadline, now = Date.now, sleep = delay,
+  checkDeadline = () => {}, onRateLimited = () => {} }) {
+  assert.ok(['status', 'attempt', 'history'].includes(operation), 'Only read operations may be retried automatically');
+  const remaining = deadline - now();
+  assert.ok(Number.isFinite(remaining) && remaining > 0 && remaining <= 35 * 60 * 1000);
+  const timedOut = () => Object.assign(new Error('The bounded saved-read verification window ended.'), { code: 'ASTRA_FORECAST_READ_TIMEOUT' });
+  let stopped = false; let timeout;
+  const hardDeadline = new Promise((_, reject) => { timeout = setTimeout(() => { stopped = true; reject(timedOut()); }, remaining); });
+  const observe = async () => {
+    for (let retry = 0; retry < 4 && !stopped; retry++) {
+      checkDeadline(); if (now() >= deadline) throw timedOut();
+      const result = await request();
+      if (stopped) return;
+      if (result.response.status !== 429) return result;
+      const milliseconds = forecastReadCooldown(result.response, result.body, now());
+      if (retry === 3 || milliseconds >= deadline - now()) throw timedOut();
+      onRateLimited({ operation, httpStatus: 429, retryAfterSeconds: Math.ceil(milliseconds / 1000) });
+      const retryAt = now() + milliseconds;
+      while (!stopped && now() < retryAt) {
+        checkDeadline(); if (now() >= deadline) throw timedOut();
+        await sleep(Math.min(30000, retryAt - now(), deadline - now()));
+      }
+    }
+    if (!stopped) throw timedOut();
+  };
+  try { return await Promise.race([observe(), hardDeadline]); }
+  finally { stopped = true; clearTimeout(timeout); }
 }
 
 // agent-browser0.36.0 --state navigates to '/' before filling localStorage.
@@ -568,7 +619,7 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
     fixturePrefix: prefix, verificationComplete: false, cleanupComplete: false,
     nativeBrowserZoomVerified: false, zoomEvidence: 'CLI has no native zoom command; separately labelled CSS 200% zoom stress test only.',
     gradingEvidence: 'One scheduled real-provider journey; two explicitly controlled SQL checkpoint journeys. No mail sent.',
-    bootstrapCheckpoints: [], checks, journeys, geometry };
+    bootstrapCheckpoints: [], readRateLimitRecoveries: [], checks, journeys, geometry };
   let stage = 'preflight'; let browserSession = null; let browserAccount = null; let launcher; let member; let publishable;
   const deadline = Date.now() + 35 * 60 * 1000;
   let stopRequested = false;
@@ -585,10 +636,15 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
   };
   const serviceHeaders = { apikey: key, 'Content-Type': 'application/json', ...(key.startsWith('eyJ') ? { Authorization: `Bearer ${key}` } : {}) };
   const service = async (route, options = {}, statuses = [200]) => (await safeRequest(`${TARGET.supabase}${route}`, { ...options, headers: { ...serviceHeaders, ...options.headers } }, statuses)).body;
-  const api = (account, body, statuses = [200]) => safeRequest(`${TARGET.site}${ENDPOINT}`, {
-    method: 'POST', headers: { Authorization: `Bearer ${account.session.access_token}`, Origin: TARGET.site,
-      'Content-Type': 'application/json', 'X-Request-ID': randomUUID() }, body: JSON.stringify(body),
-  }, statuses);
+  const api = (account, body, statuses = [200]) => {
+    const read = ['status', 'attempt', 'history'].includes(body.operation);
+    const request = () => safeRequest(`${TARGET.site}${ENDPOINT}`, {
+      method: 'POST', headers: { Authorization: `Bearer ${account.session.access_token}`, Origin: TARGET.site,
+        'Content-Type': 'application/json', 'X-Request-ID': randomUUID() }, body: JSON.stringify(body),
+    }, read ? [...new Set([...statuses, 429])] : statuses);
+    return read ? retryForecastRead({ operation: body.operation, request, deadline, checkDeadline,
+      onRateLimited: observation => summary.readRateLimitRecoveries.push(observation) }) : request();
+  };
   const persistManifest = () => writeFile(manifestPath, JSON.stringify({ schemaVersion: 1, target: TARGET.ref, prefix,
     fixtures: fixtures.map(({ id, email, kind, attemptIds = [] }) => ({ id, email, kind, attemptIds })) }, null, 2), { mode: 0o600 });
   const browserEnv = isolatedBrowserEnv();
@@ -791,7 +847,7 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
         lastProgress = attempt.completedQuestionCount;
         process.stdout.write(`ASTRA_FORECAST_STAGING: real-provider progress ${lastProgress}/20\n`);
       }
-      await delay(10000);
+      await delay(30000);
     }
     throw new Error('Real-provider completion exceeded the bounded staging window');
   }
@@ -1000,6 +1056,10 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
       try { await cleanupAccount(account); } catch { cleanupErrors.push(account.kind); }
     }
     summary.cleanupComplete = cleanupErrors.length === 0 && summary.browserSessionClosed;
+    // Auth deletion and supported API readbacks cannot prove private Auth
+    // sessions or protected Pulse events absent. A separate exact-manifest DB
+    // audit remains a release gate; never equate this cleanup flag with zero.
+    summary.cleanupVerification = forecastCleanupScope();
     summary.cleanupFailedFixtureKinds = cleanupErrors;
     try {
       const resolved = assertPrivateTemp(privateDir);
@@ -1262,7 +1322,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
     try {
       const summary = await verifyStaging({ preflightOnly: args[0] === '--preflight', cleanupManifestPath: args[0] === '--cleanup-manifest' ? args[1] : null });
       console.log(JSON.stringify({ target: summary.target, mode: summary.mode, verificationComplete: summary.verificationComplete,
-        cleanupComplete: summary.cleanupComplete, journeyCount: summary.journeys.length, failureStage: summary.failureStage || null }));
+        cleanupComplete: summary.cleanupComplete, cleanupVerification: summary.cleanupVerification,
+        journeyCount: summary.journeys.length, failureStage: summary.failureStage || null }));
       const verified = args[0] === '--preflight' ? summary.preflightComplete : args[0] === '--cleanup-manifest' ? true : summary.verificationComplete;
       if (!verified || !summary.cleanupComplete) process.exitCode = 1;
     } catch { console.error('ASTRA_FORECAST_STAGING: safe preflight/setup failure; no sensitive details emitted'); process.exitCode = 1; }

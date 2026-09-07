@@ -14,7 +14,7 @@ const AUTH_ENV = Object.freeze({
   SUPABASE_URL: 'https://test.supabase.co',
 });
 
-function request(pathname, ip, token = '') {
+function request(pathname, ip, token = '', body = { operation: 'status' }) {
   return new Request(`${ORIGIN}${pathname}`, {
     method: 'POST',
     headers: {
@@ -23,7 +23,7 @@ function request(pathname, ip, token = '') {
       Origin: ORIGIN,
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify({ operation: 'status' }),
+    body: JSON.stringify(body),
   });
 }
 
@@ -101,7 +101,7 @@ test('Forecast enforces a separate 180-request signed-out network ceiling', asyn
   }
 });
 
-test('Forecast enforces 30 requests per verified user across networks without consuming another user capacity', async () => {
+test('Forecast isolates 120 owner reads from unchanged 30 writes across networks and returns usable retry timing', async () => {
   const originalDateNow = Date.now;
   const originalFetch = globalThis.fetch;
   const startedAt = Date.parse('2026-09-01T01:00:00.000Z');
@@ -144,7 +144,7 @@ test('Forecast enforces 30 requests per verified user across networks without co
 
   try {
     const forecastIp = '203.0.113.12';
-    for (let count = 1; count <= 30; count += 1) {
+    for (let count = 1; count <= 120; count += 1) {
       const response = await worker.fetch(
         request('/admin/dd2026/bar-forecast', forecastIp, 'first-user-token'),
         AUTH_ENV,
@@ -158,8 +158,23 @@ test('Forecast enforces 30 requests per verified user across networks without co
       AUTH_ENV,
       {},
     );
-    assert.equal(firstUserLimited.status, 429, 'The verified user must be limited on request 31.');
-    assert.equal(await responseCode(firstUserLimited), 'RATE_LIMITED');
+    assert.equal(firstUserLimited.status, 429, 'The verified user must be limited on read request 121.');
+    const limitedBody = await firstUserLimited.json();
+    assert.equal(limitedBody.error.code, 'RATE_LIMITED');
+    assert.equal(limitedBody.error.retryAfterSeconds, 600);
+    assert.equal(firstUserLimited.headers.get('Retry-After'), '600');
+    assert.match(firstUserLimited.headers.get('Access-Control-Expose-Headers'), /(?:^|,\s*)Retry-After(?:,|$)/iu);
+
+    for (let count = 1; count <= 30; count += 1) {
+      const response = await worker.fetch(request('/admin/dd2026/bar-forecast', forecastIp,
+        'first-user-token', { operation: 'start', subject: 'Political and Public International Law' }), AUTH_ENV, {});
+      assert.equal(response.status, 409, `Write ${count} must reach the unchanged consent gate despite exhausted reads.`);
+      assert.equal(await responseCode(response), 'BAR_FORECAST_CONSENT_REQUIRED');
+    }
+    const writeLimited = await worker.fetch(request('/admin/dd2026/bar-forecast', '203.0.113.14',
+      'first-user-token', { operation: 'start', subject: 'Political and Public International Law' }), AUTH_ENV, {});
+    assert.equal(writeLimited.status, 429, 'Writes remain limited on request 31 across networks.');
+    assert.equal((await writeLimited.json()).error.retryAfterSeconds, 600);
 
     const secondUserStillAvailable = await worker.fetch(
       request('/admin/dd2026/bar-forecast', forecastIp, 'second-user-token'),
@@ -171,6 +186,18 @@ test('Forecast enforces 30 requests per verified user across networks without co
       200,
       'One verified user exhausting capacity must not consume another verified user capacity.',
     );
+
+    for (let count = 1; count <= 30; count += 1) {
+      const invalid = await worker.fetch(request('/admin/dd2026/bar-forecast', '203.0.113.15',
+        'second-user-token', { operation: 'submit', answers: [] }), AUTH_ENV, {});
+      assert.equal(invalid.status, 400, `Malformed write ${count} must still consume the original owner budget.`);
+    }
+    const malformedLimited = await worker.fetch(request('/admin/dd2026/bar-forecast', '203.0.113.16',
+      'second-user-token', { operation: 'submit', answers: [] }), AUTH_ENV, {});
+    assert.equal(malformedLimited.status, 429, 'Malformed writes may not bypass owner throttling through network rotation.');
+    const readAfterMalformed = await worker.fetch(request('/admin/dd2026/bar-forecast', '203.0.113.16',
+      'second-user-token'), AUTH_ENV, {});
+    assert.equal(readAfterMalformed.status, 200, 'Malformed write exhaustion must not consume saved-result reads.');
   } finally {
     globalThis.fetch = originalFetch;
     Date.now = originalDateNow;

@@ -192,7 +192,18 @@ export function createBarForecastHandlers(deps) {
   async function authorizedContext(request, env) {
     await enforceBarForecastRateLimit(request, env);
     const user = await requireAuthenticatedUser(request, env);
-    await enforceBarForecastRateLimit(request, env, user);
+    let input;
+    try {
+      input = normalizeBarForecastRequest(
+        await parseBoundedJson(request, BAR_FORECAST_LIMITS.requestBytes),
+      );
+    } catch (error) {
+      // Invalid/oversized authenticated payloads retain the original owner write
+      // budget; malformed requests must not gain the higher polling allowance.
+      await enforceBarForecastRateLimit(request, env, user);
+      throw error;
+    }
+    await enforceBarForecastRateLimit(request, env, user, input.operation);
     const [administrator, setupAccess] = await Promise.all([
       authorizeAdministrator(env, user),
       requiredSetupAccess(env, user),
@@ -214,7 +225,7 @@ export function createBarForecastHandlers(deps) {
       );
     }
     const authorization = requireBarForecastAccess(context);
-    return { user, authorization };
+    return { user, authorization, input };
   }
 
   async function consentStatus(env, userId) {
@@ -325,10 +336,7 @@ export function createBarForecastHandlers(deps) {
   }
 
   async function handle(request, env, origin, allowedOrigin) {
-    const { user } = await authorizedContext(request, env);
-    const input = normalizeBarForecastRequest(
-      await parseBoundedJson(request, BAR_FORECAST_LIMITS.requestBytes),
-    );
+    const { user, input } = await authorizedContext(request, env);
 
     if (input.operation === 'status') {
       return privateJson(jsonResponse, {

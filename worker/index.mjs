@@ -254,6 +254,8 @@ const MAX_CORRECTIONS_PER_WINDOW = 5;
 const MAX_SUPPORT_REQUESTS_PER_WINDOW = 4;
 const MAX_BAR_FORECAST_NETWORK_REQUESTS_PER_WINDOW = 180;
 const MAX_BAR_FORECAST_USER_REQUESTS_PER_WINDOW = 30;
+const MAX_BAR_FORECAST_USER_READ_REQUESTS_PER_WINDOW = 120;
+const BAR_FORECAST_READ_OPERATIONS = new Set(['status', 'attempt', 'history']);
 const DUPLICATE_TTL_MS = 20 * 1000;
 const GEMINI_TIMEOUT_MS = 45 * 1000;
 const SUBJECT_MATTER_TEACHING_TIMEOUT_MS = 8 * 1000;
@@ -285,6 +287,7 @@ const analyticsRateWindows = new Map();
 const adminRateWindows = new Map();
 const barForecastNetworkRateWindows = new Map();
 const barForecastUserRateWindows = new Map();
+const barForecastUserReadRateWindows = new Map();
 const studyRoomAccessRateWindows = new Map();
 const studyRoomRoomsRateWindows = new Map();
 const studyRoomJoinRateWindows = new Map();
@@ -415,25 +418,27 @@ async function enforceAdminRateLimit(request, env) {
   );
 }
 
-async function enforceBarForecastRateLimit(request, env, user = null) {
-  if (user?.id) {
-    enforceWindow(
-      barForecastUserRateWindows,
-      await hmacHex(
-        env.GUEST_USAGE_HMAC_KEY || 'local-transient-rate-key',
-        `bar-forecast-user\0${user.id}`,
-      ),
-      MAX_BAR_FORECAST_USER_REQUESTS_PER_WINDOW,
-      'Too many Bar Forecast requests for this account. Please wait and try again.',
-    );
-    return;
+async function enforceBarForecastRateLimit(request, env, user = null, operation = null) {
+  const read = Boolean(user?.id) && BAR_FORECAST_READ_OPERATIONS.has(operation);
+  const windows = user?.id
+    ? (read ? barForecastUserReadRateWindows : barForecastUserRateWindows)
+    : barForecastNetworkRateWindows;
+  const key = user?.id
+    ? await hmacHex(env.GUEST_USAGE_HMAC_KEY || 'local-transient-rate-key', `bar-forecast-user\0${user.id}`)
+    : await transientRateKey(request, env, 'bar-forecast-network');
+  const maximum = user?.id
+    ? (read ? MAX_BAR_FORECAST_USER_READ_REQUESTS_PER_WINDOW : MAX_BAR_FORECAST_USER_REQUESTS_PER_WINDOW)
+    : MAX_BAR_FORECAST_NETWORK_REQUESTS_PER_WINDOW;
+  try {
+    enforceWindow(windows, key, maximum, user?.id
+      ? 'Too many Bar Forecast requests for this account. Please wait and try again.'
+      : 'Too many Bar Forecast requests from this network. Please wait and try again.');
+  } catch (error) {
+    if (error?.code === 'RATE_LIMITED') {
+      error.retryAfterSeconds = Math.max(1, Math.ceil(((windows.get(key)?.startedAt ?? Date.now()) + WINDOW_MS - Date.now()) / 1000));
+    }
+    throw error;
   }
-  enforceWindow(
-    barForecastNetworkRateWindows,
-    await transientRateKey(request, env, 'bar-forecast-network'),
-    MAX_BAR_FORECAST_NETWORK_REQUESTS_PER_WINDOW,
-    'Too many Bar Forecast requests from this network. Please wait and try again.',
-  );
 }
 
 async function enforceForumRateLimit(request, env, mutation = false) {

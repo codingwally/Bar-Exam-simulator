@@ -183,6 +183,7 @@ jobs:
             worker/bar-forecast-database-policy.test.mjs \
             worker/bar-forecast-core.test.mjs \
             worker/bar-forecast-provider-policy.test.mjs \
+            worker/bar-forecast-rate-limit.test.mjs \
             worker/bar-forecast-routes.mjs \
             worker/bar-forecast-routes.test.mjs \
             worker/examinations-core.mjs \
@@ -209,6 +210,7 @@ jobs:
             scripts/test-approved-renovation-shell.mjs \
             scripts/test-astra-forecast-durable-frontend.mjs \
             scripts/test-astra-forecast-entry-diagnostics.mjs \
+            scripts/test-forecast-poll-rate-contract.mjs \
             scripts/test-astra-forecast-entry-cleanup-evidence.mjs \
             scripts/test-forecast-cold-entry-cancellation.mjs \
             scripts/test-quorum-navigation-intent.mjs \
@@ -249,6 +251,7 @@ jobs:
             worker/astra-rubric-reconciliation.test.mjs \
             worker/astra-support-privacy.test.mjs \
             worker/bar-forecast-coaching-release.test.mjs \
+            worker/bar-forecast-rate-limit.test.mjs \
             worker/bar-forecast-core.mjs \
             worker/bar-forecast-routes.mjs \
             worker/bar-forecast-routes.test.mjs \
@@ -337,6 +340,7 @@ jobs:
           node scripts/test-astra-payment-cohort-repair.mjs
           node scripts/test-astra-payment-presentation.mjs
           node scripts/test-astra-forecast-entry-diagnostics.mjs
+          node scripts/test-forecast-poll-rate-contract.mjs
           node scripts/test-astra-forecast-entry-cleanup-evidence.mjs
           node scripts/test-forecast-cold-entry-cancellation.mjs
           node scripts/test-quorum-navigation-intent.mjs

@@ -26,6 +26,8 @@ for (const required of [
   'test "$PRODUCTION_DATABASE_VERIFIED" = "true"',
   'node scripts/astra-release-database-contract.mjs --verify-attestation',
   'node scripts/test-astra-149-binding-compatibility.mjs',
+  'node scripts/test-forecast-poll-rate-contract.mjs',
+  'worker/bar-forecast-rate-limit.test.mjs',
   'scripts/test-astra-149-binding-compatibility.mjs',
   'supabase/migrations/20260907133129_astra_149_binding_compatibility.sql',
   'node scripts/verify-astra-forecast-staging.mjs --execute-staging',
@@ -116,6 +118,9 @@ const secondJourney = workflow.indexOf('Run post-publish live access journey 2 o
 assert.ok(exactPages > verify && firstJourney > exactPages && secondJourney > firstJourney);
 
 for (const validationContract of [
+  "- 'worker/bar-forecast-rate-limit.test.mjs'",
+  "- 'scripts/test-forecast-poll-rate-contract.mjs'",
+  'node scripts/test-forecast-poll-rate-contract.mjs',
   "- '.github/workflows/release-unlimited-feature-access.yml'",
   "- 'scripts/test-unlimited-feature-access-live.mjs'",
   "- 'scripts/test-unlimited-feature-access.mjs'",

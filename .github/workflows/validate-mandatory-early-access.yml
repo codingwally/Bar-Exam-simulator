@@ -208,6 +208,7 @@ on:
       - 'scripts/*astra*'
       - 'scripts/test-forecast-durable-api.mjs'
       - 'scripts/test-forecast-poll-rate-contract.mjs'
+      - 'scripts/test-worker-cpu-limit-contract.mjs'
       - 'scripts/forecast-attempt-test-fixture.mjs'
       - 'scripts/staging-e2e-diagnostics.mjs'
       - 'scripts/test-examinations-staging-ui-contract.mjs'
@@ -250,6 +251,7 @@ jobs:
           node scripts/test-astra-staging-diagnostics.mjs
           node scripts/test-astra-forecast-entry-diagnostics.mjs
           node scripts/test-forecast-poll-rate-contract.mjs
+          node scripts/test-worker-cpu-limit-contract.mjs
           node scripts/test-astra-forecast-entry-cleanup-evidence.mjs
           node scripts/test-forecast-cold-entry-cancellation.mjs
           node scripts/test-quorum-navigation-intent.mjs

@@ -10,6 +10,7 @@ import {
 import { forecastSetId, BAR_FORECAST_SUBJECTS } from './bar-forecast-core.mjs';
 
 const migration = await readFile(new URL('../supabase/migrations/20260907060650_astra_forecast_attempts.sql', import.meta.url), 'utf8');
+const preparedNoteMigration = await readFile(new URL('../supabase/migrations/20260907173112_astra_browser_pdf_prepared_note.sql', import.meta.url), 'utf8');
 const OWNER = '11111111-1111-4111-8111-111111111111';
 const OTHER = '22222222-2222-4222-8222-222222222222';
 const SUBJECT = BAR_FORECAST_SUBJECTS[0];
@@ -62,7 +63,10 @@ test('new tables and every privileged function remain service-only with pinned s
   assert.doesNotMatch(migration, /security definer/iu);
   assert.match(migration, /revoke all on function %s from public,anon,authenticated/u);
   assert.match(migration, /grant execute on function %s to service_role/u);
-  for (const name of FORECAST_ATTEMPT_RPC_NAMES) assert.ok(migration.includes(`create function public.${name}(`));
+  assert.doesNotMatch(preparedNoteMigration, /security definer/iu);
+  assert.match(preparedNoteMigration, /from public,anon,authenticated/u);
+  assert.match(preparedNoteMigration, /to service_role/u);
+  for (const name of FORECAST_ATTEMPT_RPC_NAMES) assert.ok((migration + preparedNoteMigration).includes(`create function public.${name}(`));
   assert.equal(FORECAST_ATTEMPT_POLICY.leaseSeconds, 600);
 });
 

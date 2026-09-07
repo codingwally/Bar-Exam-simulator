@@ -128,6 +128,10 @@ jobs:
             assets/phase4-experience.js \
             assets/private-beta-landing.js \
             assets/lex-forum.js \
+            browser/forecast-result-pdf-worker.mjs \
+            scripts/build-forecast-pdf-browser-worker.mjs \
+            scripts/build-pages-artifact.mjs \
+            scripts/test-forecast-browser-pdf.mjs \
             scripts/test-audience-menu.mjs \
             content/duediligence-2026/bar-forecast-methodology.json \
             content/duediligence-2026/bar-forecast-statistical-audit.json \
@@ -249,6 +253,10 @@ jobs:
             supabase/migrations/20260907120200_astra_payment_invalidation.sql \
             supabase/migrations/20260907130000_astra_simulator_access.sql \
             supabase/migrations/20260907133129_astra_149_binding_compatibility.sql \
+            supabase/migrations/20260907172508_astra_forecast_summary_email.sql \
+            supabase/migrations/20260907173112_astra_browser_pdf_prepared_note.sql \
+            supabase/migrations/20260907181748_astra_admin_role_fail_closed.sql \
+            worker/astra-admin-role-fail-closed.test.mjs \
             worker/astra-rubric-reconciliation.test.mjs \
             worker/astra-support-privacy.test.mjs \
             worker/bar-forecast-coaching-release.test.mjs \
@@ -263,6 +271,7 @@ jobs:
             worker/examiner-core.mjs \
             worker/forecast-attempt-store.mjs \
             worker/forecast-attempt-store.test.mjs \
+            worker/forecast-browser-pdf-prepared.test.mjs \
             worker/forecast-email-adapter.mjs \
             worker/forecast-email-adapter.test.mjs \
             worker/forecast-email-presentation.test.mjs \
@@ -270,6 +279,10 @@ jobs:
             worker/forecast-result-export.mjs \
             worker/forecast-result-export.test.mjs \
             worker/forecast-result-layout.test.mjs \
+            worker/forecast-result-layout-fixture.mjs \
+            worker/forecast-result-pdf.mjs \
+            worker/forecast-summary-email.test.mjs \
+            worker/fixtures/forecast-analytics-email-claim.sql \
             worker/forum-core.test.mjs \
             worker/index.mjs \
             worker/package-lock.json \
@@ -386,6 +399,13 @@ jobs:
       - name: Install reviewed Worker dependencies
         run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
 
+      - name: Verify credential-free Linux Forecast browser and PDF parity
+        run: |
+          set -euo pipefail
+          npx --yes agent-browser@0.36.0 install --with-deps
+          node scripts/verify-astra-forecast-staging.mjs --self-test-browser
+          node scripts/test-forecast-browser-pdf.mjs --browser
+
       - name: Resolve approved staging browser configuration
         env:
           CONFIGURED_STAGING_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
@@ -463,10 +483,7 @@ jobs:
       - name: Verify authenticated Forecast entry and manual recovery
         env:
           STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
-        run: |
-          npx --yes agent-browser@0.36.0 install --with-deps
-          node scripts/verify-astra-forecast-staging.mjs --self-test-browser
-          node scripts/verify-forecast-entry-staging.mjs
+        run: node scripts/verify-forecast-entry-staging.mjs
 
       - name: Retain sanitized Forecast entry screenshots and checks
         if: always()
@@ -720,6 +737,17 @@ jobs:
         with:
           ref: ${{ inputs.product_sha }}
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install reviewed Worker dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Rebuild the exact sanitized Pages artifact for live byte comparison
+        run: node scripts/build-pages-artifact.mjs
+
       - name: Verify the exact Pages SHA and reviewed client bytes
         env:
           GH_TOKEN: ${{ github.token }}
@@ -759,6 +787,10 @@ jobs:
             service-worker.js
             assets/bar-forecast.css
             assets/bar-forecast.js
+            assets/forecast-result-pdf-worker.js
+            assets/vendor/forecast-pdf/pdf-lib.LICENSE.txt
+            assets/vendor/forecast-pdf/Noto-Sans.LICENSE.txt
+            assets/vendor/forecast-pdf/fontkit.README.txt
             assets/examinations.js
             assets/feature-loader.js
             assets/phase2-experience.js
@@ -794,7 +826,7 @@ jobs:
                 all_match=false
                 continue
               fi
-              test "$(sha256sum "$relative_path" | awk '{print $1}')" = "$(sha256sum "$live_file" | awk '{print $1}')" \
+              test "$(sha256sum ".pages-dist/$relative_path" | awk '{print $1}')" = "$(sha256sum "$live_file" | awk '{print $1}')" \
                 || all_match=false
             done
             if [[ "$all_match" == "true" ]]; then

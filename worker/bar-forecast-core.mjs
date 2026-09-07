@@ -302,7 +302,7 @@ export function barForecastEntitlementEvidence(context) {
 export function normalizeBarForecastRequest(value) {
   const input = object(value);
   const operation = String(input.operation ?? '');
-  if (!['status', 'accept', 'start', 'submit', 'submit_attempt', 'attempt', 'history', 'retry_attempt', 'result_pdf', 'email_result'].includes(operation)) {
+  if (!['status', 'accept', 'start', 'submit', 'submit_attempt', 'attempt', 'history', 'retry_attempt', 'result_pdf', 'email_result', 'result_pdf_prepared'].includes(operation)) {
     throw new BarForecastError(
       'BAR_FORECAST_OPERATION_INVALID',
       'Choose a supported Forecast action.',
@@ -328,6 +328,17 @@ export function normalizeBarForecastRequest(value) {
     }
     return value.toLowerCase();
   };
+  if (operation === 'result_pdf_prepared') {
+    exactKeys(input, ['operation', 'attemptId', 'resultRevision', 'pdfVersion',
+      ...['byteCount', 'pageCount'].filter((key) => Object.hasOwn(input, key))]);
+    if (input.resultRevision !== 1 || input.pdfVersion !== 'forecast-pdf-v1'
+        || (input.byteCount != null && (!Number.isSafeInteger(input.byteCount) || input.byteCount < 1 || input.byteCount > 10485760))
+        || (input.pageCount != null && (!Number.isSafeInteger(input.pageCount) || input.pageCount < 1 || input.pageCount > 1000))) {
+      throw new BarForecastError('BAR_FORECAST_PREPARED_NOTE_INVALID', 'The client-reported PDF preparation metadata is invalid.', 400);
+    }
+    return Object.freeze({ operation, attemptId: attemptUuid(input.attemptId), resultRevision: 1,
+      pdfVersion: 'forecast-pdf-v1', byteCount: input.byteCount ?? null, pageCount: input.pageCount ?? null });
+  }
   if (['attempt', 'retry_attempt', 'result_pdf', 'email_result'].includes(operation)) {
     exactKeys(input, ['operation', 'attemptId']);
     return Object.freeze({ operation, attemptId: attemptUuid(input.attemptId) });

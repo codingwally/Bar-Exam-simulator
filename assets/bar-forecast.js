@@ -14,6 +14,8 @@
   const FORECAST_POLL_INTERVAL_MS = 10000;
   const FORECAST_POLL_WINDOW_MS = 20 * 60 * 1000;
   const FORECAST_REQUEST_TIMEOUT_MS = 25_000;
+  const FORECAST_PDF_RENDER_TIMEOUT_MS = 60_000;
+  const FORECAST_PDF_WORKER = '/assets/forecast-result-pdf-worker.js?v=astra-browser-pdf-20260908-r1';
   // Access verification is an interactive preflight, not a grading job. Keep
   // it within the same bounded session budget used by the sign-in surface so a
   // stalled auth/entitlement request always reaches a recoverable terminal UI.
@@ -82,6 +84,8 @@
     routeWasPushed: false,
     routeRecovery: false,
     requestController: null,
+    pdfController: null,
+    pdfNoteController: null,
     authorizationController: null,
     submissionTimer: null,
     submissionStartedAt: 0,
@@ -560,6 +564,8 @@
   }
 
   function resetProtectedState() {
+    state.pdfNoteController?.abort(); state.pdfNoteController = null;
+    state.pdfController?.abort(); state.pdfController = null;
     stopForecastPolling();
     if (state.draftTimer !== null) global.clearTimeout(state.draftTimer);
     state.draftTimer = null;
@@ -595,8 +601,10 @@
   }
 
   function abortRequest() {
+    state.pdfNoteController?.abort(); state.pdfNoteController = null;
     state.requestController?.abort();
     state.requestController = null;
+    state.pdfController?.abort(); state.pdfController = null;
   }
 
   function abortAuthorization() {
@@ -2121,49 +2129,155 @@
     return 'Priority coaching recommended';
   }
 
+  function forecastPdfAbortError() {
+    const error = new Error('The PDF request was cancelled.'); error.name = 'AbortError'; return error;
+  }
+
+  function awaitForecastPdfRequest(pending, signal) {
+    return new Promise((resolve, reject) => {
+      const observed = Promise.resolve(pending);
+      if (signal.aborted) { observed.catch(() => {}); reject(forecastPdfAbortError()); return; }
+      const abort = () => { signal.removeEventListener('abort', abort); reject(forecastPdfAbortError()); };
+      signal.addEventListener('abort', abort, { once: true });
+      observed.then(value => {
+        signal.removeEventListener('abort', abort);
+        if (signal.aborted) reject(forecastPdfAbortError()); else resolve(value);
+      }, error => { signal.removeEventListener('abort', abort); reject(error); });
+    });
+  }
+
+  function renderSavedForecastPdfInBrowser(attempt, ownerId, signal) {
+    return new Promise((resolve, reject) => {
+      if (signal.aborted) { reject(forecastPdfAbortError()); return; }
+      if (typeof global.Worker !== 'function') { reject(new Error('This browser cannot prepare the PDF. Your saved report remains available.')); return; }
+      let worker; let timer; let settled = false;
+      const finish = (error, value) => {
+        if (settled) return; settled = true;
+        global.clearTimeout(timer); signal.removeEventListener('abort', abort);
+        if (worker) { worker.onmessage = null; worker.onerror = null; worker.onmessageerror = null; worker.terminate(); }
+        if (error) reject(error); else resolve(value);
+      };
+      const abort = () => finish(forecastPdfAbortError());
+      signal.addEventListener('abort', abort, { once: true });
+      timer = global.setTimeout(() => finish(new Error('PDF preparation timed out. Your saved report is unchanged.')), FORECAST_PDF_RENDER_TIMEOUT_MS);
+      try {
+        // Fixed same-origin asset; no blob worker, remote script, auth token or
+        // model request. The large renderer is downloaded only for this action.
+        const origin = String(global.location?.origin || '');
+        if (!/^https?:\/\/[^/?#]+$/u.test(origin)) throw new Error('INVALID_ORIGIN');
+        worker = new global.Worker(`${origin}${FORECAST_PDF_WORKER}`, { name: 'due-diligence-saved-pdf' });
+        worker.onmessage = ({ data }) => {
+          if (signal.aborted) { finish(forecastPdfAbortError()); return; }
+          if (data?.requestId !== 1) { finish(new Error('The PDF response could not be verified.')); return; }
+          if (data.type === 'error') {
+            const messages = {
+              BAR_FORECAST_PDF_CHARACTER_UNAVAILABLE: 'The PDF font cannot display a character in this report safely. Your complete report remains available here.',
+              BAR_FORECAST_PDF_SIZE_LIMIT: 'This report is too large to export safely. Your saved report remains available.',
+            };
+            finish(new Error(messages[data.code] || 'The saved PDF could not be prepared. Your report is unchanged.')); return;
+          }
+          const bytes = data?.bytes instanceof ArrayBuffer ? new Uint8Array(data.bytes) : null;
+          if (data.type !== 'result' || data.attemptId !== attempt.id || data.resultRevision !== attempt.resultRevision
+              || data.pdfVersion !== 'forecast-pdf-v1' || data.fileName !== `duediligence-forecast-${attempt.id}-r${attempt.resultRevision}.pdf`
+              || !bytes || bytes.length < 5 || bytes.length > 10 * 1024 * 1024
+              || String.fromCharCode(...bytes.slice(0, 5)) !== '%PDF-') {
+            finish(new Error('The PDF response could not be verified.')); return;
+          }
+          finish(null, { bytes, fileName: data.fileName });
+        };
+        worker.onerror = worker.onmessageerror = (event) => {
+          event?.preventDefault?.(); finish(new Error('The saved PDF could not be prepared. Your report is unchanged.'));
+        };
+        worker.postMessage({ type: 'render', requestId: 1, ownerId, attempt });
+      } catch { finish(new Error('The saved PDF could not be prepared. Your report is unchanged.')); }
+    });
+  }
+
+  function forecastPdfRenderingSnapshot(saved) {
+    const pick = (value, keys) => Object.fromEntries(keys.map(key => [key, value?.[key]]));
+    const result = pick(saved.result, ['ownerId', 'attemptId', 'resultRevision', 'schemaVersion', 'subject', 'setId',
+      'questionCount', 'completedQuestionCount', 'complete', 'totalScore', 'maxScore', 'percentage', 'contentVersion', 'rubricVersion']);
+    result.analytics = pick(saved.result.analytics, ['averageScore', 'grammarAverage', 'issueSpottingAverage']);
+    result.results = saved.result.results.map(row => ({
+      ...pick(row, ['questionId', 'number', 'score', 'maxScore', 'question', 'userAnswer', 'suggestedAnswer',
+        'feedback', 'explanation', 'legalBasis', 'jurisprudence', 'citation']),
+      mockBarCoaching: pick(row.mockBarCoaching, ['strength', 'priorityImprovement', 'nextStep']),
+      grammar: { score: row.grammar.score, corrections: row.grammar.corrections.map(item => pick(item, ['original', 'category', 'suggestion', 'guidance'])) },
+      issueSpotting: { score: row.issueSpotting.score, identified: [...row.issueSpotting.identified],
+        missed: [...row.issueSpotting.missed], coaching: row.issueSpotting.coaching },
+    }));
+    return { ...pick(saved, ['id', 'status', 'resultRevision', 'subject', 'setId', 'completedAt']),
+      questions: saved.questions.map(row => pick(row, ['id', 'number', 'prompt'])),
+      answers: saved.answers.map(row => pick(row, ['questionId', 'answer'])), result };
+  }
+
+  function noteBrowserPdfPrepared(attempt, byteCount, ownerId, generation) {
+    if (!forecastRequestIsCurrent(ownerId, generation)) return;
+    state.pdfNoteController?.abort();
+    const controller = new AbortController(); state.pdfNoteController = controller;
+    const deadline = global.setTimeout(() => controller.abort(), 5000);
+    // Optional observation, not server verification or proof that the user saved
+    // a file. Failure never changes the download, report, or visible access state.
+    void awaitForecastPdfRequest(requestForecast({ operation: 'result_pdf_prepared',
+      attemptId: attempt.id, resultRevision: attempt.resultRevision,
+      pdfVersion: 'forecast-pdf-v1', byteCount }, { signal: controller.signal }), controller.signal)
+      .catch(() => {}).finally(() => {
+        global.clearTimeout(deadline);
+        if (state.pdfNoteController === controller) state.pdfNoteController = null;
+      });
+  }
+
   async function downloadSavedForecast(trigger, status) {
     const attempt = state.acceptedAttempt;
     if (attempt?.status !== 'complete') return;
     const ownerId = state.ownerId; const generation = state.workspaceGeneration;
     const session = runtimeSession();
     if (!session?.access_token || runtimeOwnerId() !== ownerId) return;
-    const workerUrl = global.DueDiligencePhase2Config?.workerUrl;
-    if (!workerUrl) { status.textContent = 'Download is unavailable. Your saved report remains accessible here.'; return; }
+    abortRequest();
+    const controller = new AbortController(); state.pdfController = controller;
+    const isCurrent = () => forecastRequestIsCurrent(ownerId, generation) && !controller.signal.aborted
+      && state.pdfController === controller && state.acceptedAttempt?.id === attempt.id;
     trigger.disabled = true;
-    const controller = beginRequest();
-    const timeout = global.setTimeout(() => controller.abort(), FORECAST_REQUEST_TIMEOUT_MS);
+    status.textContent = 'Preparing saved PDF…';
+    let timeout = global.setTimeout(() => controller.abort(), FORECAST_REQUEST_TIMEOUT_MS);
     try {
-      const response = await global.fetch(`${String(workerUrl).replace(/\/$/u, '')}${ENDPOINT}`, {
-        method: 'POST', signal: controller.signal,
-        headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ operation: 'result_pdf', attemptId: attempt.id }),
-      });
-      if (!forecastRequestIsCurrent(ownerId, generation) || controller.signal.aborted) return;
-      if (!response.ok) {
-        const payload = await response.json().catch(() => null);
-        const error = new Error(payload?.error?.message || 'The saved PDF could not be downloaded. Please try again.');
-        error.code = payload?.error?.code; error.status = response.status;
-        throw error;
+      // Fresh server authorization is mandatory even when this report was
+      // already displayed. Never export a cached report after access expires.
+      const payload = await awaitForecastPdfRequest(requestForecast({ operation: 'attempt', attemptId: attempt.id }, { signal: controller.signal }), controller.signal);
+      global.clearTimeout(timeout); timeout = null;
+      if (!isCurrent()) return;
+      const saved = normalizedSavedAttempt(payload?.attempt);
+      if (saved.id !== attempt.id || saved.clientAttemptId !== attempt.clientAttemptId || saved.resultRevision !== attempt.resultRevision
+          || saved.status !== 'complete' || saved.result?.ownerId !== ownerId || saved.result?.attemptId !== saved.id
+          || saved.result?.resultRevision !== saved.resultRevision || saved.result?.complete !== true
+          || saved.result?.subject !== saved.subject || saved.result?.setId !== saved.setId) {
+        throw new Error('The saved report identity could not be verified.');
       }
-      if (!String(response.headers.get('Content-Type')).includes('application/pdf')) {
-        throw new Error('The saved PDF could not be downloaded. Please try again.');
-      }
-      const blob = await response.blob();
-      if (!forecastRequestIsCurrent(ownerId, generation) || controller.signal.aborted) return;
-      if (!blob.size || blob.size > 20_000_000) throw new Error('The saved PDF response could not be verified.');
+      normalizeResults(saved.result, { questions: saved.questions, answers: new Map(saved.answers.map(row => [row.questionId, row.answer])) });
+      // Send only the canonical rendering contract, not the session or other
+      // transport/account metadata. The shared renderer validates it again.
+      const rendering = forecastPdfRenderingSnapshot(saved);
+      const exported = await renderSavedForecastPdfInBrowser(rendering, ownerId, controller.signal);
+      if (!isCurrent()) return;
+      const blob = new Blob([exported.bytes], { type: 'application/pdf' });
       const url = global.URL.createObjectURL(blob);
-      const link = document.createElement('a'); link.href = url; link.download = `Due-Diligence-Forecast-${attempt.id}.pdf`;
+      const link = document.createElement('a'); link.href = url; link.download = exported.fileName;
       document.body.append(link); link.click(); link.remove();
       global.setTimeout(() => global.URL.revokeObjectURL(url), 1000);
-      status.textContent = 'Saved report downloaded.';
+      status.textContent = 'PDF download started.';
+      noteBrowserPdfPrepared(saved, exported.bytes.length, ownerId, generation);
     } catch (error) {
-      if (!forecastRequestIsCurrent(ownerId, generation)) return;
+      if (!forecastRequestIsCurrent(ownerId, generation) || state.pdfController !== controller) return;
       if (handleForecastAccessInterruption(error)) return;
       status.textContent = error?.name === 'AbortError' ? 'Download timed out. Your saved report is unchanged; retry when ready.' : error.message;
     } finally {
       global.clearTimeout(timeout);
-      if (state.requestController === controller) state.requestController = null;
-      trigger.disabled = false;
+      if (state.pdfController === controller) state.pdfController = null;
+      // Another report action can cancel the PDF without replacing this DOM.
+      // Release its old button only while the same owner/report is still current
+      // and no successor PDF owns the busy state.
+      if (!state.pdfController && trigger.isConnected && forecastRequestIsCurrent(ownerId, generation)
+          && state.acceptedAttempt?.id === attempt.id) trigger.disabled = false;
     }
   }
 

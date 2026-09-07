@@ -443,6 +443,7 @@ jobs:
           STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           npx --yes agent-browser@0.36.0 install --with-deps
+          node scripts/verify-astra-forecast-staging.mjs --self-test-browser
           node scripts/verify-forecast-entry-staging.mjs
 
       - name: Retain sanitized Forecast entry screenshots and checks

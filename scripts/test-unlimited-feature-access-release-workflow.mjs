@@ -76,6 +76,10 @@ assert.equal(
 );
 
 const staging = workflow.indexOf('\n  deploy_staging:');
+assert.ok(validation.includes('Verify credential-free Linux Forecast browser wiring'));
+assert.ok(validation.includes('node scripts/verify-astra-forecast-staging.mjs --self-test-browser'));
+assert.ok(workflow.indexOf('node scripts/verify-astra-forecast-staging.mjs --self-test-browser')
+  < workflow.indexOf('node scripts/verify-astra-forecast-staging.mjs --execute-staging'));
 const worker = workflow.indexOf('\n  deploy_production_worker:');
 const pages = workflow.indexOf('\n  deploy_production_pages:');
 const verify = workflow.indexOf('\n  verify_production:');

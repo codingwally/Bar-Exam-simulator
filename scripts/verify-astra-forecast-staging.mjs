@@ -31,6 +31,35 @@ const meanTenths = (scores) => Math.round(scores.reduce((sum, score) => sum + Ma
 const VIEWPORTS = Object.freeze([320, 375, 390, 600, 768, 820, 1024, 1280, 1440]);
 const isolatedBrowserEnv = () => Object.fromEntries(Object.entries(process.env).filter(([name]) => /^(?:path|pathext|systemroot|windir|comspec|home|userprofile|localappdata|appdata|temp|tmp|tmpdir|user|logname|ci|display|xdg_runtime_dir|xdg_cache_home|lang|lc_all|ld_library_path)$/iu.test(name)));
 
+// Keep daemon socket identities short on Linux without weakening per-run or
+// per-account isolation. The full fixture prefix remains in every data journal.
+export function browserIdentity(prefix, kind) {
+  assert.match(prefix, RUN_PATTERN);
+  assert.ok(['member', 'other', 'unpaid', 'local'].includes(kind));
+  return Object.freeze({ namespace: `ad-${digest(prefix).slice(0, 16)}`, session: kind });
+}
+
+export function assertBrowserSocketBudget(identity, environment, platform = process.platform) {
+  if (platform === 'win32') return null; // Pinned CLI uses TCP on Windows.
+  const base = environment.XDG_RUNTIME_DIR ? path.posix.join(environment.XDG_RUNTIME_DIR, 'agent-browser')
+    : environment.HOME ? path.posix.join(environment.HOME, '.agent-browser') : path.posix.join(environment.TMPDIR || '/tmp', 'agent-browser');
+  const bytes = Buffer.byteLength(path.posix.join(base, 'namespaces', identity.namespace, 'run', `${identity.session}.sock`));
+  // agent-browser0.36.0 connection.rs rejects more than103bytes before spawning.
+  assert.ok(bytes <= 103, 'The isolated browser socket exceeds the pinned Linux CLI path limit.');
+  return bytes;
+}
+
+export function safeBrowserFailure(error, action) {
+  const source = `${error?.stdout || ''}\n${error?.stderr || ''}\n${error?.message || ''}`;
+  const category = /(?:socket|address|path|session name).{0,100}(?:too long|length)|sun_path/isu.test(source) ? 'SOCKET_PATH_LENGTH'
+    : /executable.{0,80}(?:missing|does not exist|not found)|browser.{0,80}not installed/isu.test(source) ? 'BROWSER_NOT_INSTALLED'
+      : /daemon.{0,80}(?:failed|start|connect)/isu.test(source) ? 'DAEMON_START_OR_CONNECTION'
+        : error?.killed === true ? 'BROWSER_COMMAND_TIMEOUT' : 'BROWSER_COMMAND_FAILED';
+  return Object.freeze({ action: ['open', 'close', 'eval', 'snapshot', 'click', 'find', 'set', 'screenshot', 'reload'].includes(action) ? action : 'open',
+    category, exitCode: Number.isInteger(error?.code) && error.code >= 0 && error.code <= 255 ? error.code : null,
+    killed: error?.killed === true, outputSha256: digest(source) });
+}
+
 export function assertPrivateEvidenceDir(directory) {
   const resolved = path.resolve(directory);
   for (const published of ['assets', 'public', 'dist', 'build']) {
@@ -314,7 +343,7 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
     try {
       const script = args[0] === 'eval' ? args[1] : null;
       const cliArgs = script === null ? args : ['eval', '--stdin'];
-      const pending = runCommand(launcher.command, [...launcher.prefix, '--namespace', prefix, '--session', browserSession,
+      const pending = runCommand(launcher.command, [...launcher.prefix, '--namespace', browserIdentity(prefix, 'local').namespace, '--session', browserSession,
         '--config', configPath, '--restore-save', 'never', '--json', ...cliArgs],
       { timeout: 60000, maxBuffer: 1000000, windowsHide: true, env: { ...browserEnv, AGENT_BROWSER_DEFAULT_TIMEOUT: '30000' } });
       if (script !== null) {
@@ -323,7 +352,12 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
       }
       const result = await pending;
       return result.stdout;
-    } catch { throw new Error(`Isolated staging browser action failed: ${args[0]}`); }
+    } catch (error) {
+      const failure = new Error('An isolated staging browser command failed.');
+      failure.code = 'ASTRA_BROWSER_COMMAND_FAILED';
+      failure.browserDiagnostic = safeBrowserFailure(error, args[0]);
+      throw failure;
+    }
   };
   const evaluate = async (source) => parseBrowserResult(await browser('eval', source));
   const browserWait = async (predicate, timeout = 35000) => {
@@ -392,8 +426,9 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
   }
 
   async function startBrowser(account) {
+    stage = `browser-start-${account.kind}`;
     if (browserSession) await browser('close');
-    browserSession = `${prefix}-${account.kind}`;
+    browserSession = browserIdentity(prefix, account.kind).session;
     await writeFile(statePath, JSON.stringify({ cookies: [], origins: [{ origin: TARGET.site,
       localStorage: [{ name: `sb-${TARGET.ref}-auth-token`, value: JSON.stringify(account.session) }] }] }), { mode: 0o600 });
     await browser('--state', statePath, '--init-script', initPath, 'open', `${TARGET.site}/#bar-forecast-2026`);
@@ -617,6 +652,7 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
     checks.push('pinned-staging-config-durable-assets-and-schema');
     if (preflightOnly) { summary.preflightComplete = true; return summary; }
     launcher = await browserLauncher();
+    for (const kind of ['member', 'other', 'unpaid']) assertBrowserSocketBudget(browserIdentity(prefix, kind), browserEnv);
     await writeFile(configPath, '{"headed":false}', { mode: 0o600 }); await writeFile(initPath, probeSource(), { mode: 0o600 });
     stage = 'fixture-provisioning'; member = await createFixture('member', true);
     const other = await createFixture('other', true); const unpaid = await createFixture('unpaid', false);
@@ -659,6 +695,9 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
     summary.failureStage = stage; // Never emit API bodies, fixture answers, tokens, or browser stdout.
     const code = typeof error?.code === 'string' ? error.code : '';
     summary.failureCode = /^[A-Z][A-Z0-9_]{0,79}$/u.test(code) ? code : 'VERIFICATION_ASSERTION_OR_TRANSPORT';
+    if (error?.browserDiagnostic) summary.browserFailure = error.browserDiagnostic;
+    const location = String(error?.stack || '').match(/(?:^|[\\/])(verify-astra-forecast-staging\.mjs:[1-9][0-9]{0,5}:[1-9][0-9]{0,4})(?:\)|\s|$)/mu)?.[1];
+    if (location) summary.failureLocation = location;
   } finally {
     stopRequested = false;
     summary.browserSessionClosed = !browserSession;
@@ -691,6 +730,26 @@ export async function selfTest() {
   assert.equal(parseBrowserResult('{"success":true,"data":{"result":"true"}}'), true); count++;
   assert.throws(() => parseBrowserResult('{"success":false,"error":"redacted"}')); count++;
   const prefix = 'astra-durable-1788750000000-deadbeef'; const record = { id: '11111111-1111-4111-8111-111111111111', email: `${prefix}-member@example.com`, kind: 'member' };
+  const identity = browserIdentity(prefix, 'member');
+  assert.match(identity.namespace, /^ad-[a-f0-9]{16}$/u); count++;
+  assert.equal(identity.session, 'member'); count++;
+  assert.notEqual(identity.namespace, browserIdentity(prefix.replace('deadbeef', 'feedbeef'), 'member').namespace); count++;
+  assert.notEqual(identity.session, browserIdentity(prefix, 'other').session); count++;
+  assert.equal(identity.namespace, browserIdentity(prefix, 'other').namespace); count++;
+  assert.throws(() => browserIdentity('customer-name', 'member')); count++;
+  assert.throws(() => browserIdentity(prefix, '../customer')); count++;
+  assert.ok(assertBrowserSocketBudget(identity, { HOME: '/home/runner' }, 'linux') <= 103); count++;
+  assert.ok(assertBrowserSocketBudget(identity, { XDG_RUNTIME_DIR: '/run/user/1001' }, 'linux') <= 103); count++;
+  assert.ok(assertBrowserSocketBudget(identity, {}, 'linux') <= 103); count++;
+  assert.throws(() => assertBrowserSocketBudget({ namespace: prefix, session: `${prefix}-member` }, { HOME: '/home/runner' }, 'linux')); count++;
+  assert.equal(assertBrowserSocketBudget(identity, { HOME: '/home/runner' }, 'win32'), null); count++;
+  const privateValue = 'Bearer credential@example.com /private/customer-answer.txt secret-session-value';
+  for (const [message, category] of [['socket path too long', 'SOCKET_PATH_LENGTH'], ['Session name synthetic is too long. Socket path would be 128 bytes (max 103).', 'SOCKET_PATH_LENGTH'], ['browser executable does not exist', 'BROWSER_NOT_INSTALLED'], ['daemon failed to start', 'DAEMON_START_OR_CONNECTION'], ['unknown', 'BROWSER_COMMAND_FAILED']]) {
+    const safe = safeBrowserFailure({ stdout: `${message} ${privateValue}`, code: 1 }, '--state');
+    assert.equal(safe.category, category); assert.equal(safe.action, 'open'); assert.equal(safe.exitCode, 1);
+    assert.doesNotMatch(JSON.stringify(safe), /credential|example\.com|customer-answer|secret-session-value/u); count++;
+  }
+  assert.equal(safeBrowserFailure({ killed: true, code: 'TOKEN_MUST_NOT_ESCAPE' }, privateValue).category, 'BROWSER_COMMAND_TIMEOUT'); count++;
   assertFixtureRecord(record, prefix); count++;
   assert.throws(() => assertFixtureRecord({ ...record, email: 'customer@example.com' }, prefix)); count++;
   assert.throws(() => assertFixtureRecord({ ...record, id: 'invalid' }, prefix)); count++;
@@ -848,7 +907,8 @@ export async function selfTestBrowser() {
     try {
       const script = args[0] === 'eval' ? args[1] : null;
       const cliArgs = script === null ? args : ['eval', '--stdin'];
-      const pending = runCommand(launcher.command, [...launcher.prefix, '--namespace', prefix, '--session', prefix,
+      const identity = browserIdentity(prefix, 'local');
+      const pending = runCommand(launcher.command, [...launcher.prefix, '--namespace', identity.namespace, '--session', identity.session,
         '--config', config, '--restore-save', 'never', '--json', ...cliArgs],
       { timeout: 60000, maxBuffer: 1000000, windowsHide: true, env: isolatedBrowserEnv() });
       if (script !== null) {
@@ -866,8 +926,19 @@ export async function selfTestBrowser() {
   };
   try {
     launcher = await browserLauncher();
+    assertBrowserSocketBudget(browserIdentity(prefix, 'local'), isolatedBrowserEnv());
     await writeFile(config, '{"headed":false}', { mode: 0o600 }); await writeFile(init, probeSource(), { mode: 0o600 });
     await writeFile(state, JSON.stringify({ cookies: [], origins: [{ origin: url, localStorage: [{ name: 'astra-local-fixture', value: 'local-only' }] }] }), { mode: 0o600 });
+    let linuxOriginalIdentityRejected = null;
+    if (process.platform === 'linux') {
+      // Actual pinned CLI negative control: fail before daemon launch. No account,
+      // credentials or remote origin is involved in this loopback-only check.
+      await assert.rejects(runCommand(launcher.command, [...launcher.prefix, '--namespace', prefix, '--session', `${prefix}-member`,
+        '--config', config, '--restore-save', 'never', '--json', 'open', url],
+      { timeout: 60000, maxBuffer: 1000000, windowsHide: true, env: isolatedBrowserEnv() }),
+      (error) => safeBrowserFailure(error, 'open').category === 'SOCKET_PATH_LENGTH');
+      linuxOriginalIdentityRejected = true;
+    }
     launched = true; await browser('--state', state, '--init-script', init, 'open', url);
     assert.equal(await browser('eval', "localStorage.getItem('astra-local-fixture')"), 'local-only');
     const probe = await browser('eval', `(async()=>{
@@ -884,7 +955,8 @@ export async function selfTestBrowser() {
     await browser('eval', "document.documentElement.style.zoom='2'");
     for (const surface of ['editor', 'report']) assertGeometry(await browser('eval', geometrySource(surface)));
     await browser('close'); closed = true;
-    return { ok: true, test: 'loopback-only CLI wiring, not application evidence', checks: 10, localHttpRequests,
+    return { ok: true, test: 'loopback-only CLI wiring, not application evidence', checks: process.platform === 'linux' ? 11 : 10, localHttpRequests,
+      linuxOriginalIdentityRejected,
       browserSessions: 1, externalApplicationRequests: 0, providerRequests: 0, remoteWrites: 0, privateStateRemoved: true };
   } finally {
     if (launched && !closed && launcher) { await browser('close').catch(() => {}); }

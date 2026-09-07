@@ -5,6 +5,7 @@ import { promisify } from 'node:util';
 import { mkdir, mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { completeMandatoryCommercialProfile } from './staging-commercial-user.mjs';
 
 // This runner never accepts a production target or uses customer accounts.
 const site = 'https://duediligence-examinations-staging.wallyesteban1993.workers.dev';
@@ -21,6 +22,7 @@ const statePath = path.join(privateDir, 'auth-state.json');
 const checks = [];
 let userId;
 let cleanupComplete = false;
+let verificationComplete = false;
 
 async function request(url, options = {}, expected = [200]) {
   const response = await fetch(url, { ...options, signal: AbortSignal.timeout(30000) });
@@ -28,7 +30,7 @@ async function request(url, options = {}, expected = [200]) {
   assert.ok(expected.includes(response.status), `Staging ${options.method || 'GET'} ${new URL(url).pathname} returned ${response.status}`);
   return body;
 }
-const serviceHeaders = { apikey: key, 'Content-Type': 'application/json' };
+const serviceHeaders = { apikey: key, 'Content-Type': 'application/json', ...(/^eyJ/.test(key) ? { Authorization: `Bearer ${key}` } : {}) };
 const service = (route, options = {}, expected) => request(`${db}${route}`, { ...options, headers: { ...serviceHeaders, ...options.headers } }, expected);
 async function browser(...args) {
   try {
@@ -64,6 +66,7 @@ try {
   const settings = await service('/rest/v1/platform_access_settings?singleton=eq.true&select=current_terms_version,current_privacy_version');
   assert.equal(settings.length, 1);
   await request(`${db}/rest/v1/rpc/accept_terms`, { method: 'POST', headers: { apikey: publishable, Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_terms_version: settings[0].current_terms_version, p_privacy_version: settings[0].current_privacy_version, p_acceptance_source: 'astra_staging_entry_verification' }) }, [200, 204]);
+  await completeMandatoryCommercialProfile({ supabaseUrl: db, publishableKey: publishable, workerUrl: site, token: session.access_token, displayName: 'Astra isolated staging verification', termsVersion: settings[0].current_terms_version, privacyVersion: settings[0].current_privacy_version });
   await service('/rest/v1/free_beta_access?on_conflict=user_id', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates' }, body: JSON.stringify({ user_id: userId, enabled: true, expires_at: new Date(Date.now() + 3600000).toISOString(), reason: prefix, created_by: userId, updated_by: userId, access_program: 'founding_beta_2026' }) }, [200, 201, 204]);
   await service('/rest/v1/dd2026_bar_forecast_consents', { method: 'POST', body: JSON.stringify({ user_id: userId, consent_version: '2026-09-01', accepted_at: new Date().toISOString() }) }, [200, 201]);
   await writeFile(statePath, JSON.stringify({ cookies: [], origins: [{ origin: site, localStorage: [{ name: `sb-${ref}-auth-token`, value: JSON.stringify(session) }] }] }), { mode: 0o600 });
@@ -92,16 +95,20 @@ try {
   checks.push('manual-retry-restores-real-server-picker');
   const errors = await browser('errors');
   assert.doesNotMatch(errors, /TypeError|ReferenceError|SyntaxError/);
+  verificationComplete = true;
 } finally {
   await browser('close').catch(() => {});
-  if (userId) {
-    await service(`/auth/v1/admin/users/${userId}`, { method: 'DELETE' }, [200, 204]);
-    const remaining = await service(`/rest/v1/profiles?id=eq.${userId}&select=id`);
-    cleanupComplete = remaining.length === 0;
-    assert.equal(cleanupComplete, true, 'Disposable staging profile cleanup must complete');
-  } else cleanupComplete = true;
-  // Exact private directory was created by this test, never a user workspace.
-  await rm(privateDir, { recursive: true, force: true });
-  await writeFile(path.join(evidenceDir, 'summary.json'), JSON.stringify({ target: 'staging-only', sourceSha: process.env.GITHUB_SHA || null, checks, cleanupComplete, note: 'Entry/editor smoke. Controlled failure is injected. No grading or production claim.' }, null, 2));
+  try {
+    if (userId) {
+      await service(`/auth/v1/admin/users/${userId}`, { method: 'DELETE' }, [200, 204]);
+      const remaining = await service(`/rest/v1/profiles?id=eq.${userId}&select=id`);
+      cleanupComplete = remaining.length === 0;
+      assert.equal(cleanupComplete, true, 'Disposable staging profile cleanup must complete');
+    } else cleanupComplete = true;
+  } finally {
+    // Exact private directory was created by this test, never a user workspace.
+    await rm(privateDir, { recursive: true, force: true });
+    await writeFile(path.join(evidenceDir, 'summary.json'), JSON.stringify({ target: 'staging-only', sourceSha: process.env.GITHUB_SHA || null, verificationComplete, checks, cleanupComplete, note: 'Entry/editor smoke. Controlled failure is injected. No grading or production claim.' }, null, 2));
+  }
 }
 console.log(`ASTRA_FORECAST_ENTRY: ${checks.length} checks passed; synthetic_cleanup=${cleanupComplete}`);

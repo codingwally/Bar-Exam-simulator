@@ -45,7 +45,48 @@ const DIAGNOSTIC_ERROR_CODES = Object.freeze([
   'BAR_FORECAST_REQUEST_SHAPE_INVALID', 'INVALID_JSON', 'RATE_LIMITED', 'UNRECOGNIZED',
 ]);
 const READY_FORECAST_LAUNCHER = '.qfs-practice-rail [data-public-feature="bar-forecast"]:not(:disabled)';
+const NODE_FORECAST_ERROR_CODES = Object.freeze([...DIAGNOSTIC_ERROR_CODES,
+  'BAR_FORECAST_EXPORT_NOT_READY', 'BAR_FORECAST_EXPORT_INVALID', 'BAR_FORECAST_EXPORT_STORAGE_UNAVAILABLE',
+  'BAR_FORECAST_EXPORT_CONFLICT', 'BAR_FORECAST_PDF_CHARACTER_UNAVAILABLE', 'BAR_FORECAST_PDF_SIZE_LIMIT',
+  'INTERNAL_ERROR', 'ADMIN_DATA_UNAVAILABLE',
+]);
 const isolatedBrowserEnv = () => Object.fromEntries(Object.entries(process.env).filter(([name]) => /^(?:path|pathext|systemroot|windir|comspec|home|userprofile|localappdata|appdata|temp|tmp|tmpdir|user|logname|ci|display|xdg_runtime_dir|xdg_cache_home|lang|lc_all|ld_library_path)$/iu.test(name)));
+
+// Unexpected Node API responses need the same closed-schema evidence as the
+// browser. Raw bodies are inspected only for fixed platform error signatures;
+// they, URLs, request payloads and provider error strings are never returned.
+export function sanitizeForecastNodeDiagnostic(raw) {
+  const value = raw && typeof raw === 'object' ? raw : {};
+  return {
+    schemaVersion: 'astra-forecast-node-diagnostics-v1',
+    operation: DIAGNOSTIC_OPERATIONS.includes(value.operation) ? value.operation : 'unrecognized',
+    endpoint: value.endpoint === 'forecast' ? 'forecast' : 'unrecognized',
+    httpStatus: Number.isInteger(value.httpStatus) && value.httpStatus >= 100 && value.httpStatus <= 599 ? value.httpStatus : null,
+    errorCode: NODE_FORECAST_ERROR_CODES.includes(value.errorCode) ? value.errorCode : 'UNRECOGNIZED',
+    contentType: ['json', 'pdf', 'html', 'text', 'other', 'missing'].includes(value.contentType) ? value.contentType : 'other',
+    platformError: ['cloudflare_1102', 'cloudflare_unclassified', 'not_identified'].includes(value.platformError) ? value.platformError : 'not_identified',
+  };
+}
+
+export function forecastUnexpectedNodeResponse({ operation, pathname, response, body, text, statuses = [200] }) {
+  if (statuses.includes(response.status)) return null;
+  const mediaType = String(response.headers?.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
+  const contentType = ({ 'application/json': 'json', 'application/pdf': 'pdf', 'text/html': 'html', 'text/plain': 'text' })[mediaType]
+    || (mediaType ? 'other' : 'missing');
+  const cloudflareFailure = response.status >= 500 && response.status <= 599
+    && String(response.headers?.get('Server') || '').toLowerCase() === 'cloudflare';
+  const resourceLimit = cloudflareFailure && ['html', 'text'].includes(contentType) && body === null
+    && typeof text === 'string' && /(?:^|\s|>)error\s+(?:code\s*:\s*)?1102(?:\s|<|$)/iu.test(text.slice(0, 65536));
+  return sanitizeForecastNodeDiagnostic({ operation, endpoint: pathname === ENDPOINT ? 'forecast' : 'unrecognized',
+    httpStatus: response.status, errorCode: body?.error?.code,
+    contentType, platformError: resourceLimit ? 'cloudflare_1102' : cloudflareFailure ? 'cloudflare_unclassified' : 'not_identified' });
+}
+
+export async function captureForecastNodeFailure(diagnostic, saveDiagnostics) {
+  const safe = sanitizeForecastNodeDiagnostic(diagnostic);
+  await saveDiagnostics(safe);
+  return safe;
+}
 
 // Project a closed schema at both browser and Node boundaries. Never persist
 // arbitrary error strings, operation names, response bodies, DOM text or IDs.
@@ -626,11 +667,17 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
   const stop = () => { stopRequested = true; };
   process.once('SIGINT', stop); process.once('SIGTERM', stop);
   const checkDeadline = () => assert.ok(!stopRequested && Date.now() < deadline, 'The bounded staging verification window ended');
-  const safeRequest = async (url, options = {}, statuses = [200]) => {
+  const safeRequest = async (url, options = {}, statuses = [200], forecastOperation = null) => {
     const target = assertStagingUrl(url);
     const response = await fetch(target, { ...options, redirect: 'error', signal: AbortSignal.timeout(30000) });
     const bytes = new Uint8Array(await response.arrayBuffer());
-    let body = null; try { body = JSON.parse(new TextDecoder().decode(bytes)); } catch {}
+    const responseText = new TextDecoder().decode(bytes);
+    let body = null; try { body = JSON.parse(responseText); } catch {}
+    if (forecastOperation !== null) {
+      const diagnostic = forecastUnexpectedNodeResponse({ operation: forecastOperation, pathname: target.pathname,
+        response, body, text: responseText, statuses });
+      if (diagnostic) summary.nodeFailure = diagnostic;
+    }
     assert.ok(statuses.includes(response.status), `Staging ${options.method || 'GET'} ${target.pathname} returned ${response.status}`);
     return { response, body, bytes };
   };
@@ -641,7 +688,7 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
     const request = () => safeRequest(`${TARGET.site}${ENDPOINT}`, {
       method: 'POST', headers: { Authorization: `Bearer ${account.session.access_token}`, Origin: TARGET.site,
         'Content-Type': 'application/json', 'X-Request-ID': randomUUID() }, body: JSON.stringify(body),
-    }, read ? [...new Set([...statuses, 429])] : statuses);
+    }, read ? [...new Set([...statuses, 429])] : statuses, body.operation);
     return read ? retryForecastRead({ operation: body.operation, request, deadline, checkDeadline,
       onRateLimited: observation => summary.readRateLimitRecoveries.push(observation) }) : request();
   };
@@ -1028,6 +1075,13 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
     if (error?.browserDiagnostic) summary.browserFailure = error.browserDiagnostic;
     const location = String(error?.stack || '').match(/(?:^|[\\/])(verify-astra-forecast-staging\.mjs:[1-9][0-9]{0,5}:[1-9][0-9]{0,4})(?:\)|\s|$)/mu)?.[1];
     if (location) summary.failureLocation = location;
+    if (summary.nodeFailure) {
+      try {
+        summary.nodeFailure = await captureForecastNodeFailure(summary.nodeFailure,
+          safe => writeFile(path.join(evidenceDir, 'failure-node-diagnostics.json'), JSON.stringify(safe, null, 2), { mode: 0o600 }));
+        summary.nodeFailureCapture = 'saved-before-cleanup';
+      } catch { summary.nodeFailureCapture = 'unavailable'; }
+    }
     if (browserSession && launcher) {
       collectingFailureDiagnostics = true;
       try {

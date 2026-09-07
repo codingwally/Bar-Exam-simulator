@@ -507,6 +507,7 @@ jobs:
           path: |
             artifacts/astra-forecast-staging/**/summary.json
             artifacts/astra-forecast-staging/**/failure-browser-diagnostics.json
+            artifacts/astra-forecast-staging/**/failure-node-diagnostics.json
             artifacts/astra-forecast-staging/**/cleanup-manifest.json
             artifacts/astra-forecast-staging/**/*.png
           if-no-files-found: ignore

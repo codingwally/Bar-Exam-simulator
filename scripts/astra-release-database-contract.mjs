@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 
 // Only the reviewed forward schema changes belong in this release. The private
-// six-payment repair is deliberately separate and is never executed by CI.
+// customer repair is deliberately separate and is never executed by CI.
 export const ASTRA_MIGRATIONS = Object.freeze([
   '20260907060650_astra_forecast_attempts.sql',
   '20260907064532_astra_forecast_result_exports.sql',
@@ -12,6 +12,7 @@ export const ASTRA_MIGRATIONS = Object.freeze([
   '20260907120100_astra_payment_proof_evidence.sql',
   '20260907120200_astra_payment_invalidation.sql',
   '20260907130000_astra_simulator_access.sql',
+  '20260907133129_astra_149_binding_compatibility.sql',
 ]);
 export const normalizedSql = (source) => source.replace(/\r\n?/gu, '\n').trim() + '\n';
 const digest = (source) => createHash('sha256').update(source).digest('hex');
@@ -31,7 +32,7 @@ else if (mode === '--verify-attestation') {
     'Apply and read back this exact schema bundle and run its rollback probes on the target environment before deploying the Worker.');
   console.log('ASTRA_EXACT_DATABASE_BUNDLE_ATTESTED');
 } else if (mode === '--self-test') {
-  assert.equal(new Set(ASTRA_MIGRATIONS).size, 7);
+  assert.equal(new Set(ASTRA_MIGRATIONS).size, 8);
   assert.deepEqual(ASTRA_MIGRATIONS, [...ASTRA_MIGRATIONS].sort());
   assert.equal(normalizedSql('begin;\r\ncommit;\r\n\r\n'), 'begin;\ncommit;\n');
   assert.match(attestation, /^sha256:[a-f0-9]{64}$/u);

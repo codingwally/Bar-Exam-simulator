@@ -143,6 +143,8 @@ on:
       - 'scripts/test-design-correction-release.mjs'
       - 'scripts/test-phase2-contract.mjs'
       - 'scripts/test-pricing-*.mjs'
+      - 'scripts/test-astra-149-binding-compatibility.mjs'
+      - 'supabase/migrations/20260907133129_astra_149_binding_compatibility.sql'
       - 'scripts/test-admin-pricing-*.mjs'
       - 'scripts/probe-admin-pricing-release.sql'
       - 'scripts/test-phase4-release4.mjs'
@@ -224,6 +226,9 @@ jobs:
       ASTRA_PGLITE_MODULE: ${{ github.workspace }}/worker/node_modules/@electric-sql/pglite
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Cached-client compatibility tests read the exact production source.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -237,6 +242,7 @@ jobs:
           node --input-type=module -e "await import(process.env.PGLITE_MODULE_PATH)"
           node --test --test-concurrency=1 worker/forecast-attempt-store.test.mjs worker/forecast-result-export.test.mjs worker/forecast-email-adapter.test.mjs worker/forecast-finalization-reliability.test.mjs scripts/test-forecast-durable-api.mjs scripts/test-astra-forecast-durable-frontend.mjs scripts/test-astra-simulator-access.mjs
           node scripts/test-astra-payment-lifecycle.mjs
+          node scripts/test-astra-149-binding-compatibility.mjs
           node scripts/test-astra-payment-cohort-repair.mjs
           node scripts/test-astra-payment-presentation.mjs
           node scripts/test-astra-staging-diagnostics.mjs

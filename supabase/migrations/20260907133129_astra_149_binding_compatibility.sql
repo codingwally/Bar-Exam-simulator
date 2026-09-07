@@ -2,8 +2,13 @@
 -- Astra publication. This is NOT historical-price grace or proof review intake.
 -- Original pricing/payment evidence stays immutable; the 720-hour activation
 -- amendment is projected separately and recorded in each new submission audit.
--- Release boundary: publish activation/evidence/this bridge atomically so no
--- externally visible clone-only interval can clear cached checkout selections.
+-- First production publication requires two phases: install the compatible
+-- functions before publishing the Astra clone, then drain pre-installation
+-- queries/open transactions before an atomic publication plus binding assertion.
+-- A single combined install/publication is not sufficient for an already
+-- running old intake body that waits for the publication transaction to commit.
+-- Existing staging publication may receive this bridge directly after its
+-- active test journeys finish; that does not prove first-publication ordering.
 -- Later historical-proof v4/window SQL must be reconciled with this authorized
 -- source-binding interval before integration; its old clone-time cutoff is not
 -- valid for payments collected through this bridge. No grace is introduced here.

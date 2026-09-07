@@ -25,6 +25,9 @@ for (const required of [
   'if: ${{ !inputs.stage_only }}',
   'test "$PRODUCTION_DATABASE_VERIFIED" = "true"',
   'node scripts/astra-release-database-contract.mjs --verify-attestation',
+  'node scripts/test-astra-149-binding-compatibility.mjs',
+  'scripts/test-astra-149-binding-compatibility.mjs',
+  'supabase/migrations/20260907133129_astra_149_binding_compatibility.sql',
   'node scripts/verify-astra-forecast-staging.mjs --execute-staging',
   'artifacts/staging-e2e/*.json',
   'artifacts/astra-forecast-staging/**/summary.json',
@@ -76,6 +79,8 @@ assert.equal(
 );
 
 const staging = workflow.indexOf('\n  deploy_staging:');
+assert.match(validation, /uses: actions\/checkout@v4\s+with:\s+# Cached-client compatibility tests read the exact production source\.\s+fetch-depth: 0/);
+assert.match(workflow.slice(0, staging), /uses: actions\/checkout@v4[\s\S]*?fetch-depth: 0/);
 assert.ok(validation.includes('Verify credential-free Linux Forecast browser wiring'));
 assert.ok(validation.includes('node scripts/verify-astra-forecast-staging.mjs --self-test-browser'));
 assert.ok(workflow.indexOf('node scripts/verify-astra-forecast-staging.mjs --self-test-browser')
@@ -119,6 +124,9 @@ for (const validationContract of [
   'node --test scripts/test-unlimited-feature-access-live.mjs',
   'node scripts/test-unlimited-feature-access.mjs',
   'node scripts/test-unlimited-feature-access-release-workflow.mjs',
+  "- 'scripts/test-astra-149-binding-compatibility.mjs'",
+  "- 'supabase/migrations/20260907133129_astra_149_binding_compatibility.sql'",
+  'node scripts/test-astra-149-binding-compatibility.mjs',
 ]) {
   assert.ok(validation.includes(validationContract), `Required validation wiring is missing: ${validationContract}`);
 }

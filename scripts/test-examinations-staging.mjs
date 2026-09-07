@@ -566,9 +566,9 @@ async function cycleCuratedBarFeels(admin, student) {
   };
 }
 
-async function cycleStrictExpiration(admin, student) {
+async function cycleBarFeelsAdvisoryDeadline(admin, student) {
   const exam = await publishControlledExam(admin, {
-    title: `[SYNTHETIC ${runId}] One-Minute Expiration`,
+    title: `[SYNTHETIC ${runId}] One-Minute Advisory Deadline`,
     subject: 'Criminal Law I',
     track: 'bar_feels',
     assessmentKind: 'system_test',
@@ -587,29 +587,129 @@ async function cycleStrictExpiration(admin, student) {
   const started = await command(student.token, 'start_attempt', {
     versionId: exam.versionId,
     timerMode: 'strict',
-    requestKey: requestKey('expiration_start'),
+    requestKey: requestKey('advisory_start'),
     tabToken: activeTab,
   }, [201]);
+  const attemptId = started.body.data.attempt.attemptId;
+  assert.equal(started.body.data.examination.track, 'bar_feels');
+  assert.equal(started.body.data.questions.length, 1);
   const question = started.body.data.questions[0];
-  await command(student.token, 'save_response', {
-    attemptId: started.body.data.attempt.attemptId,
+  const originalAnswer = completeAlacAnswer(1);
+  const saved = await command(student.token, 'save_response', {
+    attemptId,
     questionId: question.questionId,
     tabToken: activeTab,
-    answerText: completeAlacAnswer(1),
+    answerText: originalAnswer,
     expectedRevision: 0,
     flagged: false,
   });
-  await new Promise((resolve) => setTimeout(resolve, 61_500));
-  const expired = await command(student.token, 'heartbeat', {
-    attemptId: started.body.data.attempt.attemptId,
+  assert.equal(saved.body.data.answerText, originalAnswer);
+  assert.equal(saved.body.data.revision, 1);
+  const before = await command(student.token, 'heartbeat', {
+    attemptId,
     tabToken: activeTab,
     takeover: false,
   });
-  assert.equal(expired.body.data.expired, true);
-  assert.equal(expired.body.data.status, 'expired');
+  assert.equal(before.body.data.attemptId, attemptId);
+  assert.equal(before.body.data.status, 'in_progress');
+  assert.equal(before.body.data.timerMode, 'strict');
+  assert.ok(before.body.data.remainingSeconds > 0);
+  const deadline = Date.parse(before.body.data.deadlineAt);
+  assert.ok(Number.isFinite(deadline) && deadline > Date.now());
+
+  // Real staging time: no backdated database write or simulated server clock.
+  // Split the 61.5-second wait so no individual sleep exceeds one minute.
+  await new Promise((resolve) => setTimeout(resolve, 60_000));
+  await new Promise((resolve) => setTimeout(resolve, 1_500));
+  assert.ok(Date.now() >= deadline, 'The real advisory deadline must have passed.');
+  const after = await command(student.token, 'heartbeat', {
+    attemptId,
+    tabToken: activeTab,
+    takeover: false,
+  });
+  assert.equal(after.body.data.attemptId, attemptId);
+  assert.notEqual(after.body.data.expired, true);
+  assert.equal(after.body.data.status, 'in_progress');
+  assert.equal(after.body.data.remainingSeconds, 0);
+  assert.equal(after.body.data.deadlineAt, before.body.data.deadlineAt);
+  assert.equal(after.body.data.submittedAt, null);
+
+  const retained = await query(student.token, 'resume', { attemptId });
+  assert.equal(retained.body.data.attempt.attemptId, attemptId);
+  assert.equal(retained.body.data.attempt.status, 'in_progress');
+  assert.equal(retained.body.data.questions.length, 1);
+  assert.equal(retained.body.data.questions[0].questionId, question.questionId);
+  assert.equal(retained.body.data.questions[0].answerText, originalAnswer);
+  assert.equal(retained.body.data.questions[0].revision, 1);
+
+  const editedAnswer = `${originalAnswer}\n\nPost-deadline revision: the complete saved answer remains available.`;
+  const edited = await command(student.token, 'save_response', {
+    attemptId,
+    questionId: question.questionId,
+    tabToken: activeTab,
+    answerText: editedAnswer,
+    expectedRevision: 1,
+    flagged: false,
+  });
+  assert.equal(edited.body.data.answerText, editedAnswer);
+  assert.equal(edited.body.data.revision, 2);
+  assert.equal(edited.body.data.remainingSeconds, 0);
+  const flagged = await command(student.token, 'flag_response', {
+    attemptId,
+    questionId: question.questionId,
+    tabToken: activeTab,
+    expectedRevision: 2,
+    flagged: true,
+  });
+  assert.equal(flagged.body.data.flagged, true);
+  assert.equal(flagged.body.data.answerText, editedAnswer);
+  assert.equal(flagged.body.data.revision, 3);
+
+  // A one-question fixture has no next question. Re-read its server snapshot
+  // twice (the same API used after reload), preserving its ordinal and flag.
+  // Actual browser navigation remains the separate staging UI journey.
+  for (let index = 0; index < 2; index += 1) {
+    const resumed = await query(student.token, 'resume', { attemptId });
+    assert.equal(resumed.body.data.attempt.attemptId, attemptId);
+    assert.equal(resumed.body.data.attempt.status, 'in_progress');
+    assert.equal(resumed.body.data.attempt.remainingSeconds, 0);
+    assert.equal(resumed.body.data.attempt.counts.answered, 1);
+    assert.equal(resumed.body.data.attempt.counts.flagged, 1);
+    assert.equal(resumed.body.data.questions.length, 1);
+    const restored = resumed.body.data.questions[0];
+    assert.equal(restored.questionId, question.questionId);
+    assert.equal(restored.ordinal, question.ordinal);
+    assert.equal(restored.answerText, editedAnswer);
+    assert.equal(restored.revision, 3);
+    assert.equal(restored.flagged, true);
+  }
+
+  const unconfirmed = await command(student.token, 'submit_attempt', {
+    attemptId,
+    tabToken: activeTab,
+    requestKey: requestKey('advisory_unconfirmed'),
+    confirmed: false,
+  }, [400]);
+  assert.equal(unconfirmed.body.error.code, 'REVIEW_CONFIRMATION_REQUIRED');
+  const submitted = await command(student.token, 'submit_attempt', {
+    attemptId,
+    tabToken: activeTab,
+    requestKey: requestKey('advisory_submit'),
+    confirmed: true,
+  });
+  assert.equal(submitted.body.data.attemptId, attemptId);
+  assert.equal(submitted.body.data.status, 'submitted');
+  assert.equal(submitted.body.data.automatic, false);
+  assert.equal(submitted.body.data.answeredCount, 1);
+  assert.equal(submitted.body.data.questionCount, 1);
+  const verdict = await completeHumanReview(student, { attemptId, started: started.body.data });
+  assert.equal(verdict.results.length, 1);
+  assert.equal(verdict.results[0].questionId, question.questionId);
+  assert.equal(verdict.results[0].answerText, editedAnswer);
+  assert.equal(verdict.results[0].humanScore, 4.2);
   return {
-    name: 'strict-server-expiration',
-    attemptId: started.body.data.attempt.attemptId,
+    name: 'bar-feels-advisory-deadline-human',
+    attemptId,
     examId: exam.examId,
   };
 }
@@ -704,7 +804,7 @@ try {
   cycles.push(await cycleSelfPaced(admin, secondStudent));
   cycles.push(await cycleCuratedBarFeels(admin, secondStudent));
   cycles.push(await cyclePrivateUpload(admin, firstStudent));
-  cycles.push(await cycleStrictExpiration(admin, secondStudent));
+  cycles.push(await cycleBarFeelsAdvisoryDeadline(admin, secondStudent));
   const crossUser = await query(secondStudent.token, 'resume', {
     attemptId: cycles[0].attemptId,
   }, [404]);

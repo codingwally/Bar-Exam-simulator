@@ -113,12 +113,68 @@ function fixtureAnswer(prefix, journey, number) {
   return number === 20 ? `${text} Final editor capture: ₱149, Señor Niño, café.` : text;
 }
 
+// A DOM click does not await its async request handler. Observe the real 202
+// retry acknowledgement before reading the committed state; keep one strict
+// timeout even if a read never resolves. This helper never retries a mutation.
+export async function waitForSavedRetry({ expectedAttempt, readAcknowledgement, readAttempt,
+  timeoutMs = 35000, pollMs = 250 }) {
+  assert.match(expectedAttempt?.id || '', UUID);
+  assert.match(expectedAttempt?.clientAttemptId || '', UUID);
+  assert.equal(expectedAttempt.status, 'failed');
+  assert.equal(expectedAttempt.questionCount, 20);
+  assert.equal(expectedAttempt.questions?.length, 20);
+  assert.equal(expectedAttempt.answers?.length, 20);
+  assert.ok(Number.isInteger(timeoutMs) && timeoutMs > 0 && timeoutMs <= 35000);
+  assert.ok(Number.isInteger(pollMs) && pollMs > 0 && pollMs <= 1000);
+  const immutableSnapshot = (attempt) => digest({ id: attempt?.id, clientAttemptId: attempt?.clientAttemptId,
+    subject: attempt?.subject, setId: attempt?.setId, questionCount: attempt?.questionCount,
+    questions: attempt?.questions, answers: attempt?.answers });
+  const expected = immutableSnapshot(expectedAttempt);
+  const activeStatuses = new Set(['pending', 'processing', 'retryable_failed', 'complete']);
+  let stopped = false; let timeout;
+  const expired = new Promise((_, reject) => {
+    timeout = setTimeout(() => { stopped = true; reject(new Error('Saved retry did not commit within the bounded staging wait')); }, timeoutMs);
+  });
+  const observe = async () => {
+    while (!stopped) {
+      const acknowledgement = await readAcknowledgement();
+      if (stopped) return;
+      if (acknowledgement) {
+        assert.equal(acknowledgement.httpStatus, 202, 'The retry must be accepted by the real API');
+        assert.equal(acknowledgement.id, expectedAttempt.id, 'Retry acknowledgement changed the saved attempt');
+        assert.equal(acknowledgement.clientAttemptId, expectedAttempt.clientAttemptId, 'Retry acknowledgement changed the submission identity');
+        assert.ok(activeStatuses.has(acknowledgement.status), 'Retry acknowledgement must be an active or complete state');
+        while (!stopped) {
+          const attempt = await readAttempt();
+          if (stopped) return;
+          assert.equal(immutableSnapshot(attempt), expected, 'Retry must preserve the same saved identity and all 20 exact answers');
+          if (activeStatuses.has(attempt.status)) return attempt;
+          assert.equal(attempt.status, 'failed', 'Unexpected saved retry state');
+          await delay(pollMs);
+        }
+      }
+      await delay(pollMs);
+    }
+  };
+  try { return await Promise.race([observe(), expired]); }
+  finally { stopped = true; clearTimeout(timeout); }
+}
+
+export function assertControlledCoverage(result, { requireFailure = false, requireSlow = false } = {}) {
+  assert.equal(result?.attempt?.status, 'complete', 'The controlled journey still requires a complete saved report');
+  assert.ok(Number.isInteger(result.controlledBatches) && result.controlledBatches >= 0 && result.controlledBatches <= 5);
+  if (requireFailure || requireSlow) assert.ok(result.controlledBatches > 0, 'The scheduler completed before the required controlled scenario ran');
+  if (requireFailure) assert.equal(result.failureRetryExercised, true, 'The terminal failure and acknowledged retry must actually be exercised');
+  if (requireSlow) assert.equal(result.slowProgressLossExercised, true, 'The held lease and lost progress response must actually be exercised');
+  return result;
+}
+
 // Installed only in our fresh browser context. It observes real fetches and
 // optionally loses one ACCEPTED response; it never supplies a successful grade.
 export function probeSource() {
   return `(() => {
     const original = window.fetch.bind(window);
-    const probe = window.__astraForecastProbe = { counts: {}, accepted: null, acceptedResponses: 0, dropAcceptance: false, loseNextAttempt: false };
+    const probe = window.__astraForecastProbe = { counts: {}, accepted: null, acceptedResponses: 0, retry: null, dropAcceptance: false, loseNextAttempt: false };
     window.fetch = async (...args) => {
       let input;
       try { input = JSON.parse(args[1]?.body || '{}'); } catch {}
@@ -133,6 +189,11 @@ export function probeSource() {
         probe.accepted = { id: accepted.attempt?.id, clientAttemptId: accepted.attempt?.clientAttemptId, status: response.status };
         probe.acceptedResponses += 1;
         if (probe.dropAcceptance) { probe.dropAcceptance = false; throw new TypeError('Controlled staging acceptance-response loss'); }
+      }
+      if (forecast && input?.operation === 'retry_attempt') {
+        const retried = await response.clone().json();
+        probe.retry = { id: retried.attempt?.id, clientAttemptId: retried.attempt?.clientAttemptId,
+          status: retried.attempt?.status, httpStatus: response.status };
       }
       return response;
     };
@@ -425,7 +486,11 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
   }
 
   async function controlledComplete(id, failFirst = false, slow = false) {
-    let controlledBatches = 0; let observedWorkerBatches = 0;
+    const requiredCoverage = { requireFailure: failFirst, requireSlow: slow };
+    let controlledBatches = 0;
+    let failureRetryExercised = false; let slowProgressLossExercised = false;
+    const complete = (attempt) => assertControlledCoverage({ attempt, controlledBatches,
+      observedWorkerBatches: 5 - controlledBatches, failureRetryExercised, slowProgressLossExercised }, requiredCoverage);
     for (let index = 0; index < 5; index++) {
       let claim;
       const until = Math.min(deadline, Date.now() + 11 * 60 * 1000);
@@ -433,7 +498,7 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
         checkDeadline(); claim = await store.claim({}, { attemptId: id });
         if (claim.claimed || claim.readyToFinalize) break;
         const current = await ownedAttempt(member, id);
-        if (current.status === 'complete') return { attempt: current, controlledBatches, observedWorkerBatches: 5 - controlledBatches };
+        if (current.status === 'complete') return complete(current);
         assert.notEqual(current.status, 'failed', 'Unexpected terminal grading failure while waiting for a fixture lease');
         await delay(2000); // Never steal the scheduler's live lease.
       }
@@ -445,17 +510,26 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
         await store.fail({}, claim, { code: 'BAR_FORECAST_GRADING_INVALID' });
         const failed = await ownedAttempt(member, id); assert.equal(failed.status, 'failed'); assert.equal(failed.result, null);
         await openSaved(); await browserWait('document.body.textContent.includes("Assessment needs attention.")');
-        await screen('journey-3-controlled-failure-no-zero'); await clickText('Retry assessment');
-        const retry = await ownedAttempt(member, id); assert.notEqual(retry.status, 'failed');
+        await screen('journey-3-controlled-failure-no-zero');
+        await evaluate('window.__astraForecastProbe.retry=null');
+        await clickText('Retry assessment');
+        await waitForSavedRetry({ expectedAttempt: failed,
+          readAcknowledgement: () => evaluate('window.__astraForecastProbe.retry'),
+          readAttempt: () => ownedAttempt(member, id),
+          timeoutMs: Math.max(1, Math.min(35000, deadline - Date.now())),
+        });
+        failureRetryExercised = true;
         failFirst = false; index -= 1; continue;
       }
       if (slow && controlledBatches === 0) {
         await evaluate('window.__astraForecastProbe.loseNextAttempt=true');
         await delay(20000);
+        assert.equal(await evaluate('window.__astraForecastProbe.loseNextAttempt'), false, 'The controlled progress-response loss must actually occur');
         const pending = await ownedAttempt(member, id); assert.equal(pending.result, null);
         await screen('journey-2-controlled-slow-processing');
         await closeForecast(); await browser('open', `${TARGET.site}/#bar-forecast-2026`);
         await browserWait('document.querySelector(".bf26-subject-grid")'); await openSaved();
+        slowProgressLossExercised = true;
       }
       const scores = { results: claim.rows.map((row) => ({ questionId: row.id, score: 4,
         grammar: { score: 3, corrections: [] }, issueSpotting: { score: 4, identified: [], missed: [] } })) };
@@ -463,8 +537,8 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
       if (saved.readyToFinalize) break;
     }
     await store.finalize({}, id);
-    const attempt = await ownedAttempt(member, id); observedWorkerBatches = 5 - controlledBatches;
-    return { attempt, controlledBatches, observedWorkerBatches };
+    const attempt = await ownedAttempt(member, id);
+    return complete(attempt);
   }
 
   async function verifySavedSurfaces(journey, number) {
@@ -559,6 +633,8 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
       } else controlled = await controlledComplete(journey.id, number === 3, number === 2);
       journeys.push({ number, gradingMode: number === 1 ? 'real-approved-provider-via-scheduled-worker' : 'controlled-sql-checkpoint-fixture',
         controlledBatches: controlled?.controlledBatches || 0, schedulerBatches: controlled?.observedWorkerBatches ?? 5,
+        controlledFailureRetryExercised: controlled?.failureRetryExercised || false,
+        controlledSlowProgressLossExercised: controlled?.slowProgressLossExercised || false,
         finalAnswerSaved: true, acceptedVia: 'authenticated-real-browser-submit_attempt',
         ...await verifySavedSurfaces(journey, number) });
     }
@@ -669,6 +745,72 @@ export async function selfTest() {
   assert.equal(fixtureTransportCalls, 2); count++;
   await window.fetch(`${TARGET.site}${ENDPOINT}`, { body: JSON.stringify({ operation: 'attempt' }) });
   assert.equal(fixtureTransportCalls, 3); assert.equal(window.__astraForecastProbe.counts.attempt, 2); count++;
+  const retryWindow = { fetch: async () => new Response(JSON.stringify({ attempt: {
+    id: attempt.id, clientAttemptId: attempt.clientAttemptId, status: 'pending',
+  } }), { status: 202 }) };
+  vm.runInNewContext(probeSource(), { window: retryWindow, TypeError });
+  await retryWindow.fetch(`${TARGET.site}${ENDPOINT}`, { body: JSON.stringify({ operation: 'retry_attempt' }) });
+  assert.deepEqual(JSON.parse(JSON.stringify(retryWindow.__astraForecastProbe.retry)), {
+    id: attempt.id, clientAttemptId: attempt.clientAttemptId, status: 'pending', httpStatus: 202,
+  }); count++;
+  assert.equal(Object.hasOwn(retryWindow.__astraForecastProbe.retry, 'answers'), false); count++;
+
+  const failedAttempt = { ...structuredClone(attempt), status: 'failed', result: null };
+  const acknowledgement = { id: attempt.id, clientAttemptId: attempt.clientAttemptId, status: 'pending', httpStatus: 202 };
+  const pendingAttempt = { ...structuredClone(failedAttempt), status: 'pending' };
+  const retryOptions = { expectedAttempt: failedAttempt, timeoutMs: 100, pollMs: 1,
+    readAcknowledgement: async () => acknowledgement, readAttempt: async () => pendingAttempt };
+  let acknowledgementReads = 0; let attemptReads = 0;
+  const delayedRetry = await waitForSavedRetry({ ...retryOptions,
+    readAcknowledgement: async () => ++acknowledgementReads < 3 ? null : acknowledgement,
+    readAttempt: async () => {
+      assert.equal(acknowledgementReads, 3, 'Never read retry state before its acknowledgement');
+      return ++attemptReads < 3 ? failedAttempt : pendingAttempt;
+    },
+  });
+  assert.equal(delayedRetry.id, attempt.id); assert.equal(acknowledgementReads, 3); assert.equal(attemptReads, 3); count++;
+  for (const brokenAcknowledgement of [
+    { ...acknowledgement, id: randomUUID() },
+    { ...acknowledgement, clientAttemptId: randomUUID() },
+    { ...acknowledgement, httpStatus: 409 },
+    { ...acknowledgement, status: 'failed' },
+  ]) {
+    await assert.rejects(waitForSavedRetry({ ...retryOptions, readAcknowledgement: async () => brokenAcknowledgement }), { code: 'ERR_ASSERTION' }); count++;
+  }
+  for (const mutate of [
+    (value) => { value.id = randomUUID(); },
+    (value) => { value.clientAttemptId = randomUUID(); },
+    (value) => { value.answers[19].answer = 'Changed final answer'; },
+    (value) => { value.questions[19].prompt = 'Changed question'; },
+    (value) => { value.answers.pop(); },
+  ]) {
+    const broken = structuredClone(pendingAttempt); mutate(broken);
+    await assert.rejects(waitForSavedRetry({ ...retryOptions, readAttempt: async () => broken }), { code: 'ERR_ASSERTION' }); count++;
+  }
+  let laterReads = 0;
+  await assert.rejects(waitForSavedRetry({ ...retryOptions, timeoutMs: 15,
+    readAcknowledgement: () => new Promise(() => {}), readAttempt: async () => { laterReads++; return pendingAttempt; },
+  }), /bounded staging wait/u); assert.equal(laterReads, 0); count++;
+  await assert.rejects(waitForSavedRetry({ ...retryOptions, timeoutMs: 15,
+    readAttempt: () => new Promise(() => {}),
+  }), /bounded staging wait/u); count++;
+  await assert.rejects(waitForSavedRetry({ ...retryOptions, timeoutMs: 15,
+    readAttempt: async () => failedAttempt,
+  }), /bounded staging wait/u); count++;
+  assert.equal((await waitForSavedRetry({ ...retryOptions,
+    readAcknowledgement: async () => ({ ...acknowledgement, status: 'complete' }),
+    readAttempt: async () => ({ ...pendingAttempt, status: 'complete' }),
+  })).status, 'complete'); count++;
+  const completedControlled = { attempt: { status: 'complete' }, controlledBatches: 5,
+    failureRetryExercised: true, slowProgressLossExercised: true };
+  const requiredCoverage = { requireFailure: true, requireSlow: true };
+  assert.equal(assertControlledCoverage(completedControlled, requiredCoverage), completedControlled); count++;
+  for (const broken of [
+    { ...completedControlled, controlledBatches: 0 },
+    { ...completedControlled, failureRetryExercised: false },
+    { ...completedControlled, slowProgressLossExercised: false },
+    { ...completedControlled, attempt: { status: 'failed' } },
+  ]) { assert.throws(() => assertControlledCoverage(broken, requiredCoverage), { code: 'ERR_ASSERTION' }); count++; }
   assert.ok(!probeSource().includes('suggestedAnswer')); count++;
   for (let number = 1; number <= 20; number++) assert.ok(fixtureAnswer(prefix, 1, number).split(/\s/u).length >= 10); count++;
   const source = await readFile(fileURLToPath(import.meta.url), 'utf8');

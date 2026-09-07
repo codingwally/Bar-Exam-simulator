@@ -218,6 +218,8 @@ jobs:
             scripts/test-bar-forecast-frontend.mjs \
             scripts/test-design-correction-release.mjs \
             scripts/test-examinations.mjs \
+            scripts/test-examinations-staging-ui.mjs \
+            scripts/test-examinations-staging-ui-contract.mjs \
             scripts/test-forecast-authorization-generation.mjs \
             scripts/test-forecast-durable-api.mjs \
             scripts/test-login-loop-p0.mjs \
@@ -226,6 +228,7 @@ jobs:
             scripts/test-syllabus-review-reveal-contract.mjs \
             scripts/test-unlimited-feature-access.mjs \
             scripts/verify-astra-forecast-staging.mjs \
+            scripts/verify-examinations-staging-ui.mjs \
             service-worker.js \
             supabase/migrations/20260907060650_astra_forecast_attempts.sql \
             supabase/migrations/20260907064532_astra_forecast_result_exports.sql \
@@ -458,6 +461,7 @@ jobs:
         run: |
           set -euo pipefail
           npm install --no-save --no-package-lock playwright@1.54.2
+          node scripts/test-examinations-staging-ui-contract.mjs --browser
           node scripts/run-staging-e2e-suite.mjs examinations
 
       - name: Retain sanitized staging child diagnostics and cleanup results

@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
-import {buildPublishableStagingFailureDiagnostic,buildStagingChildEvidence} from './staging-e2e-diagnostics.mjs';
+import {buildPublishableStagingFailureDiagnostic,buildStagingChildEvidence,
+  buildStagingUiFailureDiagnostic,readStagingUiFailureDiagnostic,STAGING_UI_FAILURE_MARKER} from './staging-e2e-diagnostics.mjs';
 
 const secret='sb_secret_abcdefghijklmnopqrstuvwxyz0123456789';
 test('published assertion identifies source and numeric mismatch without free-form data',()=>{
@@ -68,4 +69,104 @@ test('runner records sanitized per-child results and never streams raw child out
   assert.match(source,/children: childEvidence/);assert.match(source,/schemaVersion: 3/);
   assert.match(source,/if \(safeEvidence\.status !== 'PASS'\) break/);
   assert.doesNotMatch(source,/console\.(?:log|error)\([^\n]*(?:result\.output|childResult\.output|error\.message)/);
+});
+
+function innerError(overrides = {}) {
+  return Object.assign(new Error('PRIVATE ANSWER alice@example.invalid'), {
+    name: 'AssertionError', code: 'ERR_ASSERTION', actual: 1, expected: 3, operator: 'strictEqual',
+    stack: `AssertionError [ERR_ASSERTION]: ${'PRIVATE ANSWER '.repeat(1000)} ${secret} alice@example.invalid
+    at completeExamination (file:///home/runner/work/private-repo/private-repo/scripts/verify-examinations-staging-ui.mjs:949:10)`,
+  }, overrides);
+}
+const innerMarker = (value) => `${STAGING_UI_FAILURE_MARKER}${JSON.stringify(value)}`;
+
+test('inner failure survives long private assertion text without losing its source or stage', () => {
+  const d = buildStagingUiFailureDiagnostic(innerError(), 'simulator-result-assertions', secret);
+  assert.equal(d.location, 'verify-examinations-staging-ui.mjs:949:10');
+  assert.equal(d.stage, 'simulator-result-assertions');
+  assert.equal(d.errorClass, 'AssertionError'); assert.equal(d.errorCode, 'ERR_ASSERTION');
+  assert.equal(d.actual, '1'); assert.equal(d.expected, '3');
+  assert.equal(d.assertionOperator, 'strictEqual');
+  assert.doesNotMatch(JSON.stringify(d), /PRIVATE|ANSWER|alice|sb_secret|private-repo|file:|https?:/);
+  assert.deepEqual(readStagingUiFailureDiagnostic(innerMarker(d)), d);
+});
+test('structured inner diagnostic takes priority over outer exit-code assertion', () => {
+  const inner = buildStagingUiFailureDiagnostic(innerError(), 'simulator-result-assertions');
+  const output = `${innerMarker(inner)}
+EXAMINATIONS_UI_STAGING: synthetic_cleanup=true
+AssertionError [ERR_ASSERTION]: wrapper failure
+ at /repo/scripts/test-examinations-staging-ui.mjs:291:8
+ actual: 1,
+ expected: 0,`;
+  const d = buildStagingChildEvidence('test-examinations-staging-ui.mjs', {code:1, output});
+  assert.equal(d.status, 'FAIL'); assert.equal(d.cleanup, 'completed');
+  assert.deepEqual(d.failure, inner);
+  assert.equal(d.failure.expected, '3');
+});
+test('Playwright timeout class is preserved even when stack begins with locator operation', () => {
+  const error = innerError({name:'TimeoutError', code:undefined, actual:undefined, expected:undefined,
+    operator:undefined, stack:'locator.waitFor: Timeout 300000ms exceeded. PRIVATE ANSWER\n    at /repo/scripts/verify-examinations-staging-ui.mjs:925:22'});
+  const d = buildStagingUiFailureDiagnostic(error, 'simulator-grading');
+  assert.equal(d.category, 'timeout'); assert.equal(d.errorClass, 'TimeoutError');
+  assert.equal(d.location, 'verify-examinations-staging-ui.mjs:925:22');
+  assert.equal(d.actual, undefined); assert.equal(d.expected, undefined);
+});
+test('inner diagnostics reject unknown stage, free-form operands, private paths and unsafe codes', () => {
+  const d = buildStagingUiFailureDiagnostic(innerError({actual:'Alice private answer', expected:{email:'alice@example.invalid'},
+    code:'PRIVATE_CUSTOMER_CODE', operator:'privateOperator', stack:'TypeError: secret answer\n at /tmp/alice-private.js:2:9'}),
+  'PRIVATE ANSWER alice@example.invalid');
+  assert.equal(d.stage, 'unknown'); assert.equal(d.location, null);
+  assert.equal(d.errorCode, null); assert.equal(d.actual, undefined); assert.equal(d.expected, undefined);
+  assert.equal(d.assertionOperator, undefined);
+  assert.doesNotMatch(JSON.stringify(d), /Alice|alice|PRIVATE|answer|secret|privateOperator/);
+});
+test('inner safe scalars include booleans/null but exclude large identifiers and precision overflow', () => {
+  for (const [actual, expected] of [[true,false],[null,0],[100000,-2.5]]) {
+    const d = buildStagingUiFailureDiagnostic(innerError({actual,expected}), 'simulator-review');
+    assert.equal(d.actual,String(actual)); assert.equal(d.expected,String(expected));
+    assert.deepEqual(readStagingUiFailureDiagnostic(innerMarker(d)),d);
+  }
+  const d = buildStagingUiFailureDiagnostic(innerError({actual:639123456789, expected:1.123456789}), 'simulator-review');
+  assert.equal(d.actual,undefined); assert.equal(d.expected,undefined);
+});
+test('malformed or duplicated inner markers fail closed and cannot leak fields', () => {
+  const valid = buildStagingUiFailureDiagnostic(innerError(), 'simulator-result-assertions');
+  const bad = [
+    '', 'not JSON', 'null', '[]', JSON.stringify({...valid,extra:'PRIVATE ANSWER'}),
+    JSON.stringify({...valid,stage:'alice@example.invalid'}), JSON.stringify({...valid,message:'PRIVATE ANSWER'}),
+    JSON.stringify({...valid,location:'/tmp/private.js:1:2'}), JSON.stringify({...valid,errorCode:'PRIVATE'}),
+    JSON.stringify({...valid,errorClass:'PrivateError'}), JSON.stringify({...valid,category:'private'}),
+    JSON.stringify({...valid,actual:'PRIVATE'}), JSON.stringify({...valid,actual:'01'}),
+    JSON.stringify({...valid,actual:1}), JSON.stringify({...valid,expected:'639123456789'}),
+    JSON.stringify({...valid,httpStatus:999}), JSON.stringify({...valid,exitCode:0}),
+    JSON.stringify({...valid,assertionOperator:'PRIVATE'}), ' '.repeat(2049),
+  ];
+  for (const payload of bad) {
+    const output = `${STAGING_UI_FAILURE_MARKER}${payload}`;
+    assert.equal(readStagingUiFailureDiagnostic(output), null);
+    assert.doesNotMatch(JSON.stringify(buildPublishableStagingFailureDiagnostic(output,1)), /PRIVATE|alice|private\.js|639123/);
+  }
+  assert.equal(readStagingUiFailureDiagnostic(`${innerMarker(valid)}\n${innerMarker(valid)}`), null);
+  assert.equal(readStagingUiFailureDiagnostic(`quoted ${innerMarker(valid)}`), null);
+});
+test('valid and malformed inner markers cannot turn a zero exit with cleanup into a pass', () => {
+  const valid = buildStagingUiFailureDiagnostic(innerError(), 'simulator-result-assertions');
+  for (const output of [innerMarker(valid), `${STAGING_UI_FAILURE_MARKER}invalid`]) {
+    const d=buildStagingChildEvidence('test-examinations-staging-ui.mjs', {
+      code:0, output:`EXAMINATIONS_UI_STAGING: synthetic_cleanup=true\n${output}`,
+    });
+    assert.equal(d.status,'FAIL'); assert.equal(d.failureReason,'inner-verifier-failed');
+  }
+});
+test('UI wrapper and verifier only emit structured inner failures, not raw exceptions', () => {
+  const wrapper=readFileSync(new URL('./test-examinations-staging-ui.mjs',import.meta.url),'utf8');
+  const verifier=readFileSync(new URL('./verify-examinations-staging-ui.mjs',import.meta.url),'utf8');
+  assert.match(wrapper,/readStagingUiFailureDiagnostic\(verifier\.output\)/);
+  assert.match(wrapper,/buildStagingUiFailureDiagnostic\(verifier\.output, 'unknown', SERVICE_ROLE_KEY\)/);
+  assert.doesNotMatch(wrapper,/sanitizeStagingDiagnostic\(verifier\.output/);
+  assert.match(verifier,/buildStagingUiFailureDiagnostic\(error, currentUiStage\)/);
+  assert.match(verifier,/process\.exitCode = 1/);
+  assert.match(wrapper,/assert\.equal\(verifier\?\.code, 0/);
+  assert.match(wrapper,/EXAMINATIONS_UI_STAGING: synthetic_cleanup=true/);
+  assert.doesNotMatch(wrapper+verifier,/console\.(?:log|error)\([^\n]*(?:verifier\.output|error\.stack|error\.message)/);
 });

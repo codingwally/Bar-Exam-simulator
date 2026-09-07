@@ -87,12 +87,19 @@ test('online shell, lazy loader and cache-first service worker use matching new 
     const url = html.match(new RegExp('src="(assets/' + name + '\\.js\\?[^"]+)"'))?.[1]?.replaceAll('&amp;', '&');
     assert.equal(new URL(url, 'https://fixture.invalid').searchParams.get('poll'), version.split('=')[1],
       name + ' must retain the bounded polling generation');
-    if (name === 'feature-loader') assert.ok(url.endsWith('pdf=astra-browser-pdf-20260908-r1'));
+    if (name === 'feature-loader') {
+      assert.equal(new URL(url, 'https://fixture.invalid').searchParams.get('pdf'), 'astra-browser-pdf-20260908-r1');
+      assert.ok(url.endsWith('editor=astra-forecast-multiline-20260908-r1'));
+    }
     assert.ok(serviceWorker.includes("'/" + url + "'"), name + ' cache URL must exactly match page');
   }
   const forecast = loader.match(/'(assets\/bar-forecast\.js\?[^']+)'/)?.[1];
   assert.equal(new URL(forecast, 'https://fixture.invalid').searchParams.get('poll'), version.split('=')[1]);
-  assert.ok(forecast.endsWith('pdf=astra-browser-pdf-20260908-r1'));
+  assert.equal(new URL(forecast, 'https://fixture.invalid').searchParams.get('pdf'), 'astra-browser-pdf-20260908-r1');
+  assert.ok(forecast.endsWith('editor=astra-forecast-multiline-20260908-r1'));
   assert.ok(serviceWorker.includes("'/" + forecast + "'"));
-  assert.match(serviceWorker, /const CACHE_VERSION = 'duediligence-shell-astra-browser-pdf-20260908-r1';/);
+  const forecastCss = loader.match(/'(assets\/bar-forecast\.css\?[^']+)'/)?.[1];
+  assert.ok(forecastCss.endsWith('editor=astra-forecast-multiline-20260908-r1'));
+  assert.ok(serviceWorker.includes("'/" + forecastCss + "'"));
+  assert.match(serviceWorker, /const CACHE_VERSION = 'duediligence-shell-astra-forecast-multiline-20260908-r1';/);
 });

@@ -764,6 +764,8 @@ body.bf26-page-open > :is(.dd2-overlay.is-open, .modal-overlay.open, #dd-mainten
 }
 
 .bf26-answer {
+  /* Preserve typed/pasted paragraphs and spaces through innerText capture. */
+  white-space: pre-wrap;
   width: 100%;
   min-height: 280px;
   resize: vertical;

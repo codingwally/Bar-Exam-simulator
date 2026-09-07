@@ -101,7 +101,7 @@ test('maximum journey supplies20 distinct6000-character answers within actual no
 test('actual bounded editor chunks preserve all19 input/Next steps and leave final capture to the existing submit path', () => {
   const answers = Array.from({ length: 20 }, (_, index) => fixtureAnswer('astra-durable-1788750000000-deadbeef', 3, index + 1));
   let current = 0; const saved = []; const editors = Array.from({ length: 20 }, () => ({
-    textContent: '', dispatchEvent(event) { assert.equal(event.type, 'input'); assert.equal(event.bubbles, true); saved[current] = this.textContent; },
+    innerText: '', dispatchEvent(event) { assert.equal(event.type, 'input'); assert.equal(event.bubbles, true); saved[current] = this.innerText; },
   }));
   const document = { getElementById: id => { assert.equal(id, 'bf26-current-answer'); return editors[current]; },
     querySelectorAll: selector => { assert.equal(selector, '.bf26-exam-footer button'); return [
@@ -114,7 +114,7 @@ test('actual bounded editor chunks preserve all19 input/Next steps and leave fin
     assert.deepEqual(plain(vm.runInNewContext(script, { document, Event })), { edited: chunk.length });
   }
   assert.equal(current, 19); assert.deepEqual(saved, answers.slice(0, 19));
-  assert.equal(editors[19].textContent, '', 'final draft/input and last unsignaled edit remain separate');
+  assert.equal(editors[19].innerText, '', 'final draft/input and last unsignaled edit remain separate');
   assert.throws(() => forecastEditorChunkSource(answers.slice(0, 5)));
   assert.throws(() => forecastEditorChunkSource([]));
   assert.throws(() => forecastEditorChunkSource([`${answers[0]}x`]));

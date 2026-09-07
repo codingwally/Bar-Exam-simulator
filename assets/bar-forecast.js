@@ -249,8 +249,52 @@
     return String(value || '').trim().match(/\S+/gu)?.length || 0;
   }
 
+  function answerParagraphPlaceholder(node) {
+    if (node?.tagName !== 'DIV') return false;
+    let leaf = node;
+    while (leaf.childNodes?.length === 1) {
+      leaf = leaf.firstChild;
+      if (leaf.nodeName === 'BR') return true;
+      if (!['B', 'STRONG', 'I', 'EM', 'U', 'SPAN'].includes(leaf.nodeName)) return false;
+    }
+    return false;
+  }
+
+  function answerParagraphText(parent) {
+    let text = '';
+    let hasPart = false;
+    let previousBlock = false;
+    for (const child of parent.childNodes) {
+      const block = child.nodeType === 1 && child.tagName === 'DIV';
+      const value = child.nodeType === 3 ? child.textContent
+        : child.nodeName === 'BR' ? '\n' : answerParagraphPlaceholder(child) ? '' : answerParagraphText(child);
+      if (block) {
+        if (hasPart) text += '\n';
+        text += value;
+        hasPart = true;
+        previousBlock = true;
+      } else if (value) {
+        if (previousBlock) text += '\n';
+        text += value;
+        hasPart = true;
+        previousBlock = false;
+      }
+    }
+    return text;
+  }
+
   function answerPlainText(editor) {
-    return String(editor?.innerText || '')
+    let plain = String(editor?.innerText || '');
+    // Chrome uses <div><br></div> for an empty typed/pasted paragraph.
+    // innerText counts both its block boundary and placeholder BR, inventing
+    // a newline (and potentially truncating a 6,000-character pasted answer).
+    // Read that exact ordinary-paragraph shape without touching DOM/caret/undo
+    // or rich markup. Keep the existing behavior for paragraph/list formats.
+    if (editor?.querySelectorAll && !editor.querySelector('p,ul,ol,li')
+        && [...editor.querySelectorAll('div')].some(answerParagraphPlaceholder)) {
+      plain = answerParagraphText(editor);
+    }
+    return plain
       .replace(/\u00a0/gu, ' ')
       .replace(/\r\n?/gu, '\n');
   }
@@ -291,7 +335,7 @@
     let plain = answerPlainText(refs.editor);
     if (plain.length > MAX_ANSWER_CHARACTERS) {
       plain = plain.slice(0, MAX_ANSWER_CHARACTERS);
-      refs.editor.textContent = plain;
+      refs.editor.innerText = plain;
       placeCaretAtEnd(refs.editor);
     }
     state.answers.set(question.id, plain);
@@ -305,6 +349,13 @@
     if (!selection?.rangeCount || selection.isCollapsed) return 0;
     const range = selection.getRangeAt(0);
     if (!editor.contains(range.startContainer) || !editor.contains(range.endContainer)) return 0;
+    // Range.toString omits structural newlines. Use the same ordinary-paragraph
+    // units for a detached selection so valid replacement paste is not cut short.
+    // The live range, DOM, caret and native P/list editing are left unchanged.
+    const fragment = range.cloneContents?.();
+    if (fragment && !fragment.querySelector('p,ul,ol,li')) {
+      return answerParagraphText(fragment).replace(/\r\n?/gu, '\n').length;
+    }
     return range.toString().length;
   }
 
@@ -1710,7 +1761,7 @@
     renderPromptHighlights();
     const markup = sanitizeAnswerMarkup(state.answerMarkup.get(question.id) || '');
     if (markup) refs.editor.innerHTML = markup;
-    else refs.editor.textContent = state.answers.get(question.id) || '';
+    else refs.editor.innerText = state.answers.get(question.id) || '';
     refs.editor.style.fontSize = `${state.answerFontSize}px`;
     refs.editor.setAttribute('aria-label', `Your answer to question ${question.number}`);
     state.lastPromptSelection = null;

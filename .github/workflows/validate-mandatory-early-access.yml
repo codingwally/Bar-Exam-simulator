@@ -210,6 +210,9 @@ on:
       - 'browser/forecast-result-pdf-worker.mjs'
       - 'scripts/build-forecast-pdf-browser-worker.mjs'
       - 'scripts/test-forecast-browser-pdf.mjs'
+      - 'scripts/test-forecast-multiline-editor.mjs'
+      - 'docs/astra-staging-fixture-registration.md'
+      - 'worker/astra-staging-fixture-registration.test.mjs'
       - 'supabase/migrations/20260907172508_astra_forecast_summary_email.sql'
       - 'supabase/migrations/20260907173112_astra_browser_pdf_prepared_note.sql'
       - 'supabase/migrations/20260907181748_astra_admin_role_fail_closed.sql'
@@ -279,6 +282,7 @@ jobs:
           npx --yes agent-browser@0.36.0 install --with-deps
           node scripts/verify-astra-forecast-staging.mjs --self-test-browser
           node scripts/test-forecast-browser-pdf.mjs --browser
+          node scripts/test-forecast-multiline-editor.mjs --browser
 
       - name: Verify maintenance, token access, and payment-notification contracts
         run: |

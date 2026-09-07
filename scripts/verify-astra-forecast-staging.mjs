@@ -511,7 +511,7 @@ export function forecastEditorChunkSource(answers) {
     const answers=${JSON.stringify(answers)};
     for(const answer of answers) {
       const editor=document.getElementById('bf26-current-answer'); if(!editor) throw new Error('Editor missing');
-      editor.textContent=answer; editor.dispatchEvent(new Event('input',{bubbles:true}));
+      editor.innerText=answer; editor.dispatchEvent(new Event('input',{bubbles:true}));
       const next=[...document.querySelectorAll('.bf26-exam-footer button')].find(b=>b.textContent==='Next');
       if(!next || next.disabled) throw new Error('Next question unavailable'); next.click();
     }
@@ -936,7 +936,7 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
       }
       await evaluate(`(() => {
         const editor=document.getElementById('bf26-current-answer'); if(!editor) throw new Error('Editor missing');
-        editor.textContent=${JSON.stringify(answers[19].split(' Final editor capture:')[0])};
+        editor.innerText=${JSON.stringify(answers[19].split(' Final editor capture:')[0])};
         editor.dispatchEvent(new Event('input',{bubbles:true}));
         return {edited:20};
       })()`);
@@ -945,12 +945,12 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
       const answers=${JSON.stringify(answers)};
       for(let i=0;i<19;i++) {
         const editor=document.getElementById('bf26-current-answer'); if(!editor) throw new Error('Editor missing');
-        editor.textContent=answers[i]; editor.dispatchEvent(new Event('input',{bubbles:true}));
+        editor.innerText=answers[i]; editor.dispatchEvent(new Event('input',{bubbles:true}));
         const next=[...document.querySelectorAll('.bf26-exam-footer button')].find(b=>b.textContent==='Next');
         if(!next || next.disabled) throw new Error('Next question unavailable'); next.click();
       }
       const editor=document.getElementById('bf26-current-answer');
-      editor.textContent=answers[19].split(' Final editor capture:')[0];
+      editor.innerText=answers[19].split(' Final editor capture:')[0];
       editor.dispatchEvent(new Event('input',{bubbles:true}));
       return {edited:20};
     })()`);
@@ -966,7 +966,7 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
       window.__astraForecastProbe.accepted=null;
       window.__astraForecastProbe.acceptedResponses=0;
       window.__astraForecastProbe.dropAcceptance=${dropAcceptance};
-      const editor=document.getElementById('bf26-current-answer'); editor.textContent=${JSON.stringify(answers[19])};
+      const editor=document.getElementById('bf26-current-answer'); editor.innerText=${JSON.stringify(answers[19])};
       const submit=[...document.querySelectorAll('.bf26-exam-footer button')].find(b=>b.textContent==='Submit all answers');
       if(!submit || submit.disabled) throw new Error('Final submission is not enabled');
       const previousConfirm=window.confirm; window.confirm=()=>true;

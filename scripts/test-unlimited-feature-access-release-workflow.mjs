@@ -38,6 +38,10 @@ const newReviewedPaths = [
   'scripts/build-pages-artifact.mjs',
   'scripts/test-pages-artifact.mjs',
   'scripts/test-forecast-browser-pdf.mjs',
+  'scripts/test-forecast-multiline-editor.mjs',
+  'docs/astra-staging-fixture-registration.md',
+  'supabase/migrations/20260907190944_astra_staging_fixture_registration.sql',
+  'worker/astra-staging-fixture-registration.test.mjs',
   'worker/astra-admin-role-fail-closed.test.mjs',
   'worker/forecast-browser-pdf-prepared.test.mjs',
   'worker/forecast-result-layout-fixture.mjs',
@@ -124,6 +128,9 @@ assert.equal(
 );
 
 const staging = workflow.indexOf('\n  deploy_staging:');
+const stagingBrowserGate = workflow.indexOf('Verify credential-free Linux Forecast browser and PDF parity', staging);
+assert.match(workflow.slice(staging, stagingBrowserGate), /uses: actions\/checkout@v4[\s\S]*?fetch-depth: 0/u,
+  'The staged native editor comparison requires the exact pre-fix commit, not a shallow checkout.');
 assert.match(validation, /uses: actions\/checkout@v4\s+with:\s+# Cached-client compatibility tests read the exact production source\.\s+fetch-depth: 0/);
 assert.match(workflow.slice(0, staging), /uses: actions\/checkout@v4[\s\S]*?fetch-depth: 0/);
 assert.ok(validation.includes('Verify credential-free Linux Forecast browser wiring'));
@@ -131,9 +138,12 @@ assert.ok(validation.includes('node scripts/verify-astra-forecast-staging.mjs --
 for (const source of [validation, workflow]) {
   assert.equal((source.match(/node scripts\/test-forecast-browser-pdf\.mjs --browser\s*$/gmu) || []).length, 1,
     'Require the full credential-free real-browser parity gate exactly once, not browser-only or a skipped test.');
+  assert.equal((source.match(/node scripts\/test-forecast-multiline-editor\.mjs --browser\s*$/gmu) || []).length, 1,
+    'Require native multiline answer-preservation checks before authenticated release journeys.');
   const parity = source.indexOf('node scripts/test-forecast-browser-pdf.mjs --browser');
   const parityStep = source.slice(source.lastIndexOf('      - name:', parity), source.indexOf('\n      - name:', parity));
   assert.ok(parityStep.indexOf('npx --yes agent-browser@0.36.0 install --with-deps') < parityStep.indexOf('node scripts/test-forecast-browser-pdf.mjs --browser'));
+  assert.ok(parityStep.indexOf('node scripts/test-forecast-multiline-editor.mjs --browser') > 0);
   assert.doesNotMatch(parityStep, /secrets\.|SERVICE_ROLE_KEY|--execute-staging/u,
     'Local browser parity must not run with a fixture credential or a remote journey.');
   assert.doesNotMatch(parityStep, /continue-on-error|\|\| true|--browser-only/u);

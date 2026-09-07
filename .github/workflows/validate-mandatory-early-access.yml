@@ -288,6 +288,9 @@ jobs:
           node scripts/test-admin-public-reliability.mjs
           node scripts/test-public-admin-static-stress.mjs
           node scripts/test-examinations.mjs
+          node --test scripts/test-bar-simulation-timer-ui-hotfix.mjs
+          node --test scripts/test-bar-simulation-cumulative-score.mjs
+          node --test scripts/test-bar-simulation-submitted-answer.mjs
           node scripts/test-examination-room-door-menu.mjs
           node scripts/test-examination-room-release-workflows.mjs
           node scripts/test-admin-analytics-release-bundle.mjs

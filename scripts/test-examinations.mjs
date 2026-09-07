@@ -163,7 +163,8 @@ assert.equal(
 );
 assert.match(frontend, /The examiner response was incomplete\. Retrying once safely/);
 assert.doesNotMatch(frontend, /secure browser|proctored|encrypted examination environment/i);
-assert.match(frontend, /No cumulative percentage, class rank, pass\/fail claim/);
+assert.match(frontend, /simulationCumulativeScoreMarkup\(verdict\)[\s\S]*Individual ALAC assessments/,
+  'The September 6 owner-approved cumulative score must appear before individual assessments.');
 assert.match(frontend, /PDF is not accepted in this beta/);
 assert.match(frontend, /bindRoom\(root\)/);
 assert.match(

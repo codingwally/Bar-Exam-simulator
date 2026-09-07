@@ -230,6 +230,9 @@ jobs:
           node scripts/test-bar-forecast-boundary.mjs
           node scripts/test-private-beta-landing.mjs
           node scripts/test-examinations.mjs
+          node --test scripts/test-bar-simulation-timer-ui-hotfix.mjs
+          node --test scripts/test-bar-simulation-cumulative-score.mjs
+          node --test scripts/test-bar-simulation-submitted-answer.mjs
           node scripts/validate-duediligence-2026-content.mjs
           node scripts/test-website-question-bank.mjs
           node --test scripts/test-unlimited-feature-access-live.mjs

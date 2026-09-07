@@ -242,6 +242,11 @@ jobs:
           node scripts/astra-release-database-contract.mjs --self-test
           node scripts/verify-astra-forecast-staging.mjs --self-test
 
+      - name: Verify credential-free Linux Forecast browser wiring
+        run: |
+          npx --yes agent-browser@0.36.0 install --with-deps
+          node scripts/verify-astra-forecast-staging.mjs --self-test-browser
+
       - name: Verify maintenance, token access, and payment-notification contracts
         run: |
           node --check assets/phase2-config.js

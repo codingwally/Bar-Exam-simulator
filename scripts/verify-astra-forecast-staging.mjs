@@ -10,6 +10,7 @@ import vm from 'node:vm';
 import { createServer } from 'node:http';
 import { completeMandatoryCommercialProfile } from './staging-commercial-user.mjs';
 import { createForecastAttemptStore, FORECAST_ATTEMPT_RPC_NAMES } from '../worker/forecast-attempt-store.mjs';
+import { BAR_FORECAST_LIMITS, normalizeBarForecastRequest } from '../worker/bar-forecast-core.mjs';
 
 // Deliberately no production mode, configurable target, customer session, mail,
 // runtime synthetic flag, direct model invocation, or automatic remote execution.
@@ -436,9 +437,50 @@ export function assertCanonical(attempt, ownerId, expectedAnswers) {
     resultRevision: result.resultRevision, canonicalSha256: digest(result) };
 }
 
-function fixtureAnswer(prefix, journey, number) {
+export function fixtureAnswer(prefix, journey, number) {
   const text = `${prefix} journey ${journey} answer ${number}. The controlling rule must be applied to each material fact and every required legal element before reaching a supported conclusion.`;
+  if (journey === 3) {
+    // Only the existing controlled failure/retry journey tests the supported
+    // maximum. These are synthetic prose, not a legal-calibration benchmark.
+    const passages = [
+      'I would identify the material facts before selecting the governing rule and explain why each element matters to the conclusion.',
+      'The alternative argument should be considered separately because a factual distinction may change the application of the same principle.',
+      'A clear answer states its conclusion, explains the relevant requirement, applies the evidence, and acknowledges any unresolved factual issue.',
+      'The sequence of events must be evaluated carefully, with each assertion connected to the particular fact that supports or contradicts it.',
+      'An unsupported assumption should not replace proof of a required element, and the final explanation should distinguish certainty from inference.',
+      'I would compare the available interpretations and explain which reading best accounts for the stated facts without adding facts to the problem.',
+      'The analysis should address the strongest competing position before describing how the controlling requirement resolves the disputed issue.',
+      'Each paragraph should advance the reasoning rather than merely repeat the conclusion, while preserving the distinction between rule and application.',
+    ];
+    const suffix = number === 20 ? ' Final editor capture: ₱149, Señor Niño, café.' : ' End of this synthetic answer.';
+    const budget = BAR_FORECAST_LIMITS.answerCharacters - suffix.length;
+    let answer = text; let paragraph = 0;
+    while (answer.length < budget) {
+      const words = passages[(number + paragraph) % passages.length].split(' ');
+      const offset = (number + paragraph) % words.length;
+      answer += `\n\nPoint ${++paragraph} for question ${number}: ${words.slice(offset).concat(words.slice(0, offset)).join(' ')}`;
+    }
+    return answer.slice(0, budget) + suffix;
+  }
   return number === 20 ? `${text} Final editor capture: ₱149, Señor Niño, café.` : text;
+}
+
+export function forecastEditorChunkSource(answers) {
+  assert.ok(Array.isArray(answers) && answers.length >= 1 && answers.length <= 4);
+  assert.ok(answers.every(answer => typeof answer === 'string' && Array.from(answer).length <= BAR_FORECAST_LIMITS.answerCharacters));
+  const script = `(() => {
+    const answers=${JSON.stringify(answers)};
+    for(const answer of answers) {
+      const editor=document.getElementById('bf26-current-answer'); if(!editor) throw new Error('Editor missing');
+      editor.textContent=answer; editor.dispatchEvent(new Event('input',{bubbles:true}));
+      const next=[...document.querySelectorAll('.bf26-exam-footer button')].find(b=>b.textContent==='Next');
+      if(!next || next.disabled) throw new Error('Next question unavailable'); next.click();
+    }
+    return {edited:answers.length};
+  })()`;
+  // Keep this actual CLI argument comfortably below Windows' command-line cap.
+  assert.ok(Buffer.byteLength(script, 'utf8') < 28_000);
+  return script;
 }
 
 // A DOM click does not await its async request handler. Observe the real 202
@@ -826,7 +868,20 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
     await browserWait('document.querySelector("#bf26-current-answer")');
     await browserSnapshot();
     const answers = Array.from({ length: 20 }, (_, index) => fixtureAnswer(prefix, number, index + 1));
-    const entered = await evaluate(`(() => {
+    if (number === 3) {
+      assert.equal(answers.every(answer => Array.from(answer).length === BAR_FORECAST_LIMITS.answerCharacters), true);
+      for (let index = 0; index < 19; index += 4) {
+        const chunk = answers.slice(index, Math.min(index + 4, 19));
+        assert.equal((await evaluate(forecastEditorChunkSource(chunk))).edited, chunk.length);
+      }
+      await evaluate(`(() => {
+        const editor=document.getElementById('bf26-current-answer'); if(!editor) throw new Error('Editor missing');
+        editor.textContent=${JSON.stringify(answers[19].split(' Final editor capture:')[0])};
+        editor.dispatchEvent(new Event('input',{bubbles:true}));
+        return {edited:20};
+      })()`);
+    } else {
+      const entered = await evaluate(`(() => {
       const answers=${JSON.stringify(answers)};
       for(let i=0;i<19;i++) {
         const editor=document.getElementById('bf26-current-answer'); if(!editor) throw new Error('Editor missing');
@@ -839,7 +894,8 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
       editor.dispatchEvent(new Event('input',{bubbles:true}));
       return {edited:20};
     })()`);
-    assert.equal(entered.edited, 20);
+      assert.equal(entered.edited, 20);
+    }
     if (number === 1) await verifyGeometry('editor');
     stage = `journey-${number}-acceptance`;
     await browserSnapshot();
@@ -880,7 +936,10 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
       checks.push('same-client-id-changed-answer-rejected-with-snapshot-unchanged');
     }
     await screen(`journey-${number}-answers-saved`);
-    return { id: accepted.id, answers, clientAttemptId: accepted.clientAttemptId };
+    const lengths = answers.map(answer => Array.from(answer).length);
+    return { id: accepted.id, answers, clientAttemptId: accepted.clientAttemptId,
+      answerLengthEvidence: { minimum: Math.min(...lengths), maximum: Math.max(...lengths),
+        atSupportedMaximum: lengths.filter(length => length === BAR_FORECAST_LIMITS.answerCharacters).length } };
   }
 
   async function waitForRealReport(id) {
@@ -1048,6 +1107,7 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
         controlledBatches: controlled?.controlledBatches || 0, schedulerBatches: controlled?.observedWorkerBatches ?? 5,
         controlledFailureRetryExercised: controlled?.failureRetryExercised || false,
         controlledSlowProgressLossExercised: controlled?.slowProgressLossExercised || false,
+        answerLengthEvidence: journey.answerLengthEvidence,
         finalAnswerSaved: true, acceptedVia: 'authenticated-real-browser-submit_attempt',
         ...await verifySavedSurfaces(journey, number) });
     }
@@ -1167,6 +1227,18 @@ export async function selfTest() {
     assert.throws(() => assertPrivateTemp(directory)); count++;
   }
   const answers = Array.from({ length: 20 }, (_, index) => fixtureAnswer(prefix, 1, index + 1));
+  const maximumAnswers = Array.from({ length: 20 }, (_, index) => fixtureAnswer(prefix, 3, index + 1));
+  const maximumPayload = { operation: 'submit_attempt', subject: SUBJECT, setId: `sha256:${'a'.repeat(64)}`,
+    clientAttemptId: '33333333-3333-4333-8333-333333333333',
+    answers: maximumAnswers.map((answer, index) => ({ questionId: `fixture-${index + 1}`, answer })) };
+  assert.ok(maximumAnswers.every(answer => Array.from(answer).length === BAR_FORECAST_LIMITS.answerCharacters)); count++;
+  assert.deepEqual(normalizeBarForecastRequest(maximumPayload).answers, maximumPayload.answers); count++;
+  assert.ok(Buffer.byteLength(JSON.stringify(maximumPayload), 'utf8') < BAR_FORECAST_LIMITS.requestBytes); count++;
+  assert.equal(new Set(maximumAnswers).size, 20); count++;
+  assert.ok(maximumAnswers[19].endsWith(' Final editor capture: ₱149, Señor Niño, café.')); count++;
+  for (let index = 0; index < 19; index += 4) {
+    assert.ok(Buffer.byteLength(forecastEditorChunkSource(maximumAnswers.slice(index, Math.min(index + 4, 19))), 'utf8') < 28_000);
+  } count++;
   const questions = answers.map((_, index) => ({ id: `fixture-${index + 1}`, number: index + 1, prompt: 'Explicit local fixture question' }));
   const results = answers.map((answer, index) => ({ questionId: questions[index].id, number: index + 1, score: 1, maxScore: 5,
     question: questions[index].prompt, userAnswer: answer, suggestedAnswer: 'Explicit local fixture suggested answer', explanation: 'Explicit local fixture coaching',

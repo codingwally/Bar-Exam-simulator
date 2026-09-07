@@ -116,12 +116,33 @@ export function buildForecastResultEmail(attempt, ownerId) {
 
 // The embedded, pinned Noto font and character-aware wrapping follow the
 // reviewed verdict-pdf renderer. Forecast does not invoke its legacy workflows.
+function createForecastPdfWidthMeasurer(font) {
+  // Numeric measurements only, owned by this render; never retain report text
+  // across requests. Saturation falls back to the same exact font measurement.
+  const widths = new Map();
+  let cachedCharacters = 0;
+  return (text, size) => {
+    const key = `${size}:${text}`;
+    if (widths.has(key)) return widths.get(key);
+    const measured = font.widthOfTextAtSize(text, size);
+    if (widths.size < 16_384 && cachedCharacters + key.length <= 1_048_576) {
+      widths.set(key, measured);
+      cachedCharacters += key.length;
+    }
+    return measured;
+  };
+}
+
 export async function buildForecastResultPdf({ attempt, ownerId }) {
   const result = validateSavedForecastForExport(attempt, ownerId);
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
   const fontBytes = Uint8Array.from(atob(notoSansBase64), (character) => character.charCodeAt(0));
-  const font = await pdf.embedFont(fontBytes, { subset: true });
+  // pdf-lib consumes glyph IDs/advance widths, not GPOS positions. These three
+  // pinned-font positioning tags are absent from GSUB; keep all substitutions,
+  // the font and subset unchanged. fontkit mutates features: use a fresh object.
+  const font = await pdf.embedFont(fontBytes, { subset: true, features: { kern: false, mark: false, mkmk: false } });
+  const measureWidth = createForecastPdfWidthMeasurer(font);
   const supported = new Set(font.getCharacterSet());
   const checkedText = (value) => {
     const text = safeText(value);
@@ -147,10 +168,11 @@ export async function buildForecastResultPdf({ attempt, ownerId }) {
     return checkedText(value).split('\n').flatMap((paragraph) => {
       const lines = []; let line = '';
       for (const word of paragraph.split(/\s+/u).filter(Boolean)) {
-        if (font.widthOfTextAtSize(line ? `${line} ${word}` : word, size) <= width) { line = line ? `${line} ${word}` : word; continue; }
+        if (measureWidth(line ? `${line} ${word}` : word, size) <= width) { line = line ? `${line} ${word}` : word; continue; }
         if (line) lines.push(line); line = '';
+        if (measureWidth(word, size) <= width) { line = word; continue; }
         for (const character of Array.from(word)) {
-          if (font.widthOfTextAtSize(line + character, size) > width && line) { lines.push(line); line = ''; }
+          if (measureWidth(line + character, size) > width && line) { lines.push(line); line = ''; }
           line += character;
         }
       }

@@ -2,25 +2,15 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-// Deliberately narrow release-policy validator, not a replacement TOML parser.
-// Wrangler's pinned deployment validates the complete configuration. This check
-// fails closed if the reviewed top-level limits shape changes or disappears.
-export function declaredApplicationCpuBudget(source) {
+// The protected 2026-09-07 deployment returned Cloudflare100328: this account's
+// Free plan rejects custom CPU limits. Fix report CPU consumption, not billing.
+// This is a narrow policy guard, not a replacement for Wrangler's TOML parser.
+export function assertExistingPlanCompatibleCpuConfig(source) {
   assert.equal(typeof source, 'string');
   const lines = source.split(/\r?\n/u).map(line => line.replace(/#.*$/u, '').trim());
-  const headers = lines.map((line, index) => ({ line, index })).filter(({ line }) => line.startsWith('['));
-  const limitHeaders = headers.filter(({ line }) => /\blimits\b/u.test(line));
-  assert.equal(limitHeaders.length, 1, 'Exactly one explicit top-level limits table is required.');
-  assert.equal(limitHeaders[0].line, '[limits]', 'Do not hide or override the application budget in an environment table.');
-  const start = limitHeaders[0].index;
-  const end = headers.find(({ index }) => index > start)?.index ?? lines.length;
-  const entries = lines.slice(start + 1, end).filter(Boolean);
-  assert.equal(entries.length, 1, 'Only the reviewed CPU limit may be configured; preserve other platform limits.');
-  assert.match(entries[0], /^cpu_ms\s*=\s*(?:0|[1-9](?:_?\d)*)$/u, 'CPU budget must be an explicit integer number, not a string or expression.');
-  const value = Number(entries[0].split('=')[1].trim().replaceAll('_', ''));
-  assert.ok(Number.isSafeInteger(value));
-  assert.equal(value, 30000, 'Saved Forecast reports require the reviewed bounded 30000ms CPU budget.');
-  return value;
+  assert.ok(!lines.some(line => /\bcpu_ms\b/u.test(line)
+    || (line.startsWith('[') && /\blimits\b/u.test(line))),
+  'Custom CPU settings require a separately approved supported plan; do not block deployment on an unapproved upgrade.');
 }
 
 const [staging, production, alias, mandatory, release] = await Promise.all([
@@ -28,14 +18,14 @@ const [staging, production, alias, mandatory, release] = await Promise.all([
   '../.github/workflows/validate-mandatory-early-access.yml', '../.github/workflows/release-unlimited-feature-access.yml',
 ].map(file => readFile(new URL(file, import.meta.url), 'utf8')));
 
-test('both actual application configs declare the same bounded CPU budget', () => {
-  assert.equal(declaredApplicationCpuBudget(staging), 30000);
-  assert.equal(declaredApplicationCpuBudget(production), 30000);
+test('both actual application configs remain compatible with the existing plan', () => {
+  assertExistingPlanCompatibleCpuConfig(staging);
+  assertExistingPlanCompatibleCpuConfig(production);
 });
 
-test('missing, stale, malformed, duplicate and broadened budgets fail closed', () => {
+test('explicit custom CPU settings cannot silently require a paid-plan upgrade', () => {
   for (const source of [
-    '', '# [limits]\n# cpu_ms = 30000', '[vars]\ncpu_ms = 30000',
+    '[vars]\ncpu_ms = 30000',
     '[limits]\ncpu_ms = 2000', '[limits]\ncpu_ms = 0', '[limits]\ncpu_ms = -1',
     '[limits]\ncpu_ms = NaN', '[limits]\ncpu_ms = Infinity', '[limits]\ncpu_ms = "30000"',
     '[limits]\ncpu_ms = 300000', '[limits]\ncpu_ms = 30000.0', '[limits]\ncpu_ms = 3e4',
@@ -43,8 +33,12 @@ test('missing, stale, malformed, duplicate and broadened budgets fail closed', (
     '[limits]\ncpu_ms = 30000\n[env.production.limits]\ncpu_ms = 2000',
     '[limits]\ncpu_ms = 30000\n[limits]\ncpu_ms = 30000',
     '["limits"]\ncpu_ms = 30000', '[limits]\ncpu_ms = 3__0000',
-  ]) assert.throws(() => declaredApplicationCpuBudget(source));
-  assert.equal(declaredApplicationCpuBudget('[limits] # reviewed\ncpu_ms = 30_000 # milliseconds\n[vars]\nEXAMPLE = "value"'), 30000);
+    '[limits] # custom\ncpu_ms = 30_000 # milliseconds',
+    '[env.staging.limits]\ncpu_ms = 30000',
+  ]) assert.throws(() => assertExistingPlanCompatibleCpuConfig(source));
+  for (const source of ['', '# [limits]\n# cpu_ms = 30000', '[vars]\nEXAMPLE = "value"']) {
+    assertExistingPlanCompatibleCpuConfig(source);
+  }
 });
 
 test('CPU configuration does not change grading, authorization, cron, or automatic mail controls', () => {
@@ -70,6 +64,12 @@ test('mandatory and protected release gates enforce the config contract before d
   assert.ok(release.includes('            scripts/test-worker-cpu-limit-contract.mjs \\'));
   assert.ok(release.includes(command));
   assert.ok(release.indexOf(command) < release.indexOf('\n  deploy_staging:'));
+  assert.ok(release.includes('            worker/forecast-result-layout.test.mjs \\'));
+  assert.ok(mandatory.includes("- 'worker/forecast-*.mjs'"));
+  for (const workflow of [mandatory, release]) {
+    assert.ok(workflow.includes('node --test --test-concurrency=1 worker/*.test.mjs'),
+      'Existing full Worker gate must execute the actual PDF parity regression.');
+  }
   for (const file of ['worker/wrangler.staging.toml', 'worker/wrangler.toml']) {
     assert.ok(mandatory.includes(`- '${file}'`));
     assert.ok(release.includes(`            ${file} \\`));

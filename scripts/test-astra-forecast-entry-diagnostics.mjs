@@ -7,12 +7,26 @@ import {
   openForecastFromReadyLauncher, captureForecastFailureDiagnostics, forecastBootstrapState,
   waitForForecastBootstrap, canCaptureForecastFixtureScreenshot,
   seedColdFixtureStorage, coldFixtureInitSource,
+  forecastReadCooldown, retryForecastRead, forecastCleanupScope,
 } from './verify-astra-forecast-staging.mjs';
 
 const secret = 'Bearer private-token private.person@example.invalid /proof/private-object.png 11111111-1111-4111-8111-111111111111';
 const endpoint = `${TARGET.site}/admin/dd2026/bar-forecast`;
 const plain = value => JSON.parse(JSON.stringify(value));
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
+
+test('supported API cleanup never claims protected Pulse or Auth-session absence', async () => {
+  assert.deepEqual(forecastCleanupScope(), {
+    cleanupScope: 'supported-api-owned-fixture-rows',
+    pulseFixtureRows: 'not_independently_checked',
+    authSessions: 'not_directly_exposed',
+    independentDatabaseReadbackRequired: true,
+    zeroResidueVerified: false,
+  });
+  const source = await readFile(new URL('./verify-astra-forecast-staging.mjs', import.meta.url), 'utf8');
+  assert.match(source, /summary\.cleanupVerification = forecastCleanupScope\(\)/u);
+  assert.doesNotMatch(JSON.stringify(forecastCleanupScope()), /@|Bearer|https?:|[a-f0-9]{8}-[a-f0-9]{4}-/iu);
+});
 async function until(predicate) {
   const deadline = Date.now() + 1000;
   while (!predicate() && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 5));
@@ -476,5 +490,47 @@ test('generated cold fixture script rejects service tokens, wrong owners/issuers
   }
   for (const changes of [{ expires_at: 1 }, { refresh_token: '' }, { access_token: secret }, { user: { id: differentOwner } }]) {
     assert.throws(() => coldFixtureInitSource({ ...account, session: { ...account.session, ...changes } }));
+  }
+});
+
+test('rate cooldown honors seconds or dates without guessing an early missing-header reset', () => {
+  const response = (value) => ({ headers: new Headers(value === null ? {} : { 'Retry-After': value }) });
+  assert.equal(forecastReadCooldown(response('90'), { error: { retryAfterSeconds: 120 } }), 120000);
+  assert.equal(forecastReadCooldown(response('Thu, 01 Jan 1970 00:02:00 GMT'), {}, 60000), 60000);
+  assert.equal(forecastReadCooldown(response(null), {}), 600000);
+  assert.equal(forecastReadCooldown(response('not a date'), { error: { retryAfterSeconds: 'private' } }), 600000);
+});
+
+test('rate-limited saved reads wait then return the real same-attempt response, never retrying a mutation', async () => {
+  let now = 0, calls = 0; const waits = []; const observations = [];
+  const saved = { response: { status: 200 }, body: { attempt: { id: expectedOwner, status: 'processing' } } };
+  const result = await retryForecastRead({ operation: 'attempt', deadline: 200000, now: () => now,
+    request: async () => ++calls === 1 ? { response: { status: 429, headers: new Headers({ 'Retry-After': '90' }) }, body: {} } : saved,
+    sleep: async (ms) => { waits.push(ms); now += ms; }, onRateLimited: (value) => observations.push(value) });
+  assert.equal(result, saved); assert.equal(calls, 2); assert.deepEqual(waits, [30000, 30000, 30000]);
+  assert.deepEqual(observations, [{ operation: 'attempt', httpStatus: 429, retryAfterSeconds: 90 }]);
+  for (const operation of ['submit_attempt', 'retry_attempt', 'start', 'result_pdf', 'email_result']) {
+    await assert.rejects(retryForecastRead({ operation, deadline: 100, now: () => 0, request: async () => { throw new Error('must not run'); } }));
+  }
+});
+
+test('saved-read cooldown cannot retry early beyond its deadline or continue a hung read', async () => {
+  let calls = 0;
+  await assert.rejects(retryForecastRead({ operation: 'history', deadline: 1000, now: () => 0,
+    request: async () => { calls++; return { response: { status: 429, headers: new Headers({ 'Retry-After': '2' }) }, body: {} }; },
+    sleep: async () => { throw new Error('must not wait early'); } }), { code: 'ASTRA_FORECAST_READ_TIMEOUT' });
+  assert.equal(calls, 1);
+  const read = deferred(); calls = 0;
+  await assert.rejects(retryForecastRead({ operation: 'attempt', deadline: Date.now() + 20,
+    request: async () => { calls++; return read.promise; } }), { code: 'ASTRA_FORECAST_READ_TIMEOUT' });
+  read.resolve({ response: { status: 429, headers: new Headers({ 'Retry-After': '0' }) }, body: {} });
+  await new Promise((resolve) => setTimeout(resolve, 10)); assert.equal(calls, 1);
+});
+
+test('saved reads do not reinterpret a403 or failed grading payload as a retryable quota', async () => {
+  for (const status of [403, 404, 200]) {
+    let calls = 0; const response = { response: { status }, body: { attempt: { status: 'failed' } } };
+    assert.equal(await retryForecastRead({ operation: 'attempt', deadline: 1000, now: () => 0, request: async () => { calls++; return response; } }), response);
+    assert.equal(calls, 1);
   }
 });

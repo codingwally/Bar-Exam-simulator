@@ -368,7 +368,7 @@ assert.match(html, /assets\/feature-loader\.js[^"\n]*coaching=report-20260901-1/
 assert.match(html, /assets\/feature-loader\.js[^"\n]*forecast-loop=astra-20260907-1/);
 assert.match(html, /assets\/private-beta-landing\.js[^"\n]*forecast-loop=astra-20260907-1/);
 assert.match(html, /assets\/phase4-experience\.js[^"\n]*forecast-loop=astra-20260907-1/);
-assert.match(serviceWorker, /duediligence-shell-astra-forecast-entry-20260907-r2/);
+assert.match(serviceWorker, /duediligence-shell-astra-forecast-poll-20260907-r1/);
 assert.match(serviceWorker, /assets\/feature-loader\.js[^'\n]*forecast=access-flow-20260902-1/);
 assert.match(serviceWorker, /assets\/feature-loader\.js[^'\n]*coaching=report-20260901-1/);
 assert.match(serviceWorker, /assets\/feature-loader\.js[^'\n]*forecast-loop=astra-20260907-1/);

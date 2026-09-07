@@ -183,6 +183,7 @@ jobs:
             worker/bar-forecast-database-policy.test.mjs \
             worker/bar-forecast-core.test.mjs \
             worker/bar-forecast-provider-policy.test.mjs \
+            worker/bar-forecast-rate-limit.test.mjs \
             worker/bar-forecast-routes.mjs \
             worker/bar-forecast-routes.test.mjs \
             worker/examinations-core.mjs \
@@ -209,12 +210,14 @@ jobs:
             scripts/test-approved-renovation-shell.mjs \
             scripts/test-astra-forecast-durable-frontend.mjs \
             scripts/test-astra-forecast-entry-diagnostics.mjs \
+            scripts/test-forecast-poll-rate-contract.mjs \
             scripts/test-astra-forecast-entry-cleanup-evidence.mjs \
             scripts/test-forecast-cold-entry-cancellation.mjs \
             scripts/test-quorum-navigation-intent.mjs \
             scripts/test-public-release1-reliability.mjs \
             scripts/test-astra-payment-cohort-repair.mjs \
             scripts/test-astra-payment-lifecycle.mjs \
+            scripts/test-astra-149-binding-compatibility.mjs \
             scripts/test-astra-payment-presentation.mjs \
             scripts/test-astra-simulator-access.mjs \
             scripts/test-astra-simulator-staging.sql \
@@ -244,9 +247,11 @@ jobs:
             supabase/migrations/20260907120100_astra_payment_proof_evidence.sql \
             supabase/migrations/20260907120200_astra_payment_invalidation.sql \
             supabase/migrations/20260907130000_astra_simulator_access.sql \
+            supabase/migrations/20260907133129_astra_149_binding_compatibility.sql \
             worker/astra-rubric-reconciliation.test.mjs \
             worker/astra-support-privacy.test.mjs \
             worker/bar-forecast-coaching-release.test.mjs \
+            worker/bar-forecast-rate-limit.test.mjs \
             worker/bar-forecast-core.mjs \
             worker/bar-forecast-routes.mjs \
             worker/bar-forecast-routes.test.mjs \
@@ -331,9 +336,11 @@ jobs:
           node --test --test-concurrency=1 worker/*.test.mjs
           node --test --test-concurrency=1 scripts/test-forecast-durable-api.mjs scripts/test-astra-forecast-durable-frontend.mjs scripts/test-astra-simulator-access.mjs
           node scripts/test-astra-payment-lifecycle.mjs
+          node scripts/test-astra-149-binding-compatibility.mjs
           node scripts/test-astra-payment-cohort-repair.mjs
           node scripts/test-astra-payment-presentation.mjs
           node scripts/test-astra-forecast-entry-diagnostics.mjs
+          node scripts/test-forecast-poll-rate-contract.mjs
           node scripts/test-astra-forecast-entry-cleanup-evidence.mjs
           node scripts/test-forecast-cold-entry-cancellation.mjs
           node scripts/test-quorum-navigation-intent.mjs

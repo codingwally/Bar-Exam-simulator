@@ -178,6 +178,23 @@ async function responseBody(response) {
   return JSON.parse(await response.text());
 }
 
+test('normalized read operations reach the verified-owner quota without bypassing network or entitlement checks', async () => {
+  for (const operation of ['status', 'start', 'attempt', 'history']) {
+    const observed = [];
+    const attemptId = '33333333-3333-4333-8333-333333333333';
+    const { handlers } = harness({ dependencies: {
+      enforceBarForecastRateLimit: async (_request, _env, user, selected) => observed.push({ owner: user?.id || null, operation: selected || null }),
+      attemptStore: { getOwned: async (_env, owner, id) => { assert.equal(owner, '11111111-1111-4111-8111-111111111111'); assert.equal(id, attemptId); return { ok: true, attempt: { id } }; },
+        history: async (_env, owner) => { assert.equal(owner, '11111111-1111-4111-8111-111111111111'); return { ok: true, attempts: [] }; } },
+    } });
+    const body = operation === 'start' ? { operation, subject: SUBJECT } : operation === 'attempt' ? { operation, attemptId } : { operation };
+    assert.equal((await handlers.handle(request(body), {}, '', '')).status, 200);
+    assert.deepEqual(observed, [{ owner: null, operation: null }, { owner: '11111111-1111-4111-8111-111111111111', operation }]);
+    const denied = harness({ authorization: { authorized: false, role: 'student' } });
+    await assert.rejects(denied.handlers.handle(request(body), {}, '', ''), { code: 'BAR_FORECAST_ACCESS_REQUIRED', status: 403 });
+  }
+});
+
 test('saved PDF and self-email operations retain authorization, exact shapes, and private binary export', async () => {
   const attemptId = '33333333-3333-4333-8333-333333333333';
   const calls = [];

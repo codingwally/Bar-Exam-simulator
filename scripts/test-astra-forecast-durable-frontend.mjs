@@ -79,6 +79,8 @@ function completedAttempt(overrides = {}) {
 }
 function fixture({ storage = new Map() } = {}) {
   const timers = new Map(); const intervals = new Map(); const events = new Map(); const calls = []; let timerId = 0;
+  let now = Date.now();
+  class FixtureDate extends Date { static now() { return now; } }
   const session = { access_token: 'synthetic-token', user: { id: owner } };
   const view = new TinyNode(); const body = new TinyNode('body');
   const location = { hash: '#bar-forecast-2026', pathname: '/', search: '' };
@@ -93,19 +95,19 @@ function fixture({ storage = new Map() } = {}) {
   };
   const document = { body, activeElement: null, createElement: (tag) => new TinyNode(tag), createTextNode: (text) => new TinyNode('#text', text), querySelectorAll: () => [], querySelector: () => null };
   const context = vm.createContext({ window, document, console, Node: { ELEMENT_NODE: 1 }, Element: TinyNode,
-    AbortController, Uint8Array, Intl, location, history: { back: () => {}, replaceState: () => {}, pushState: () => {} },
+    AbortController, Uint8Array, Intl, Date: FixtureDate, location, history: { back: () => {}, replaceState: () => {}, pushState: () => {} },
     requestAnimationFrame: () => {}, Event: class {}, CustomEvent: class {} });
   const end = '})(window);'; assert.equal(source.split(end).length - 1, 1);
   vm.runInContext(source.replace(end, `global.__durableTest = { state, submitForecast, sendForecastSubmission, persistForecastDraft, readForecastDrafts,
     restoreForecastDraft, adoptSavedAttempt, normalizedSavedAttempt, openSavedForecast, pollSavedForecast, stopForecastPolling,
     loadForecastHistory, renderForecastHistory, closeForecast, handleForecastAccessChange, handleForecastSessionChange,
     renderSavedForecastStatus, resetProtectedState, requestForecast, nullableMetric, retrySavedForecast,
-    downloadSavedForecast, emailSavedForecast };\n${end}`), context);
+    downloadSavedForecast, emailSavedForecast, forecastReadRetryDelay };\n${end}`), context);
   const hooks = window.__durableTest; const state = hooks.state; const attempt = savedAttempt();
   Object.assign(state, { ownerId: owner, isOpen: true, view: 'exam', viewNode: view, root: new TinyNode(), closeButton: new TinyNode('button'),
     clientAttemptId: clientId, subject, setId: attempt.setId, questions: attempt.questions, answers: new Map(attempt.answers.map((a) => [a.questionId, a.answer])), currentIndex: 19 });
   return { ...hooks, window, context, view, storage, timers, intervals, events, calls, session, location,
-    fire: (delay) => { const found = [...timers].find(([, timer]) => timer.delay === delay); assert.ok(found, `Expected ${delay}ms timer`); timers.delete(found[0]); found[1].fn(); } };
+    fire: (delay) => { const found = [...timers].find(([, timer]) => timer.delay === delay); assert.ok(found, `Expected ${delay}ms timer`); now += delay; timers.delete(found[0]); found[1].fn(); } };
 }
 
 test('final editor is captured before completeness and the frozen 20-answer draft exists before transport', async () => {
@@ -214,7 +216,7 @@ test('closing pending progress aborts the active request and retains accepted wo
   const c = fixture(); c.adoptSavedAttempt(savedAttempt()); c.renderSavedForecastStatus();
   const pending = deferred(); let signal;
   c.window.DueDiligencePhase4.request = (_route, options) => { signal = options.signal; return pending.promise; };
-  const polling = c.pollSavedForecast(attemptId); c.fire(5000); await flush();
+  const polling = c.pollSavedForecast(attemptId); c.fire(10000); await flush();
   assert.equal(c.closeForecast({ restoreRoute: false }), true); assert.equal(signal.aborted, true); await flush();
   assert.equal(c.state.isOpen, false); assert.equal(c.timers.size, 0); assert.equal(c.intervals.size, 0);
   assert.equal(c.readForecastDrafts()[clientId].attemptId, attemptId);
@@ -225,9 +227,59 @@ test('closing pending progress aborts the active request and retains accepted wo
 test('polling has a finite automatic budget and requires an explicit manual continuation', async () => {
   const c = fixture(); c.adoptSavedAttempt(savedAttempt()); c.renderSavedForecastStatus();
   const polling = c.pollSavedForecast(attemptId);
-  for (let count = 0; count < 60; count++) { c.fire(5000); await flush(); }
-  await polling; assert.equal(c.calls.length, 60); assert.equal(c.timers.size, 0);
+  for (let count = 0; count < 120; count++) { c.fire(10000); await flush(); }
+  await polling; assert.equal(c.calls.length, 119); assert.equal(c.timers.size, 0);
   assert.equal(c.state.view, 'saved-status'); assert.match(c.view.textContent, /Automatic checking has paused/);
+});
+
+test('standard assessment can complete after six minutes with all original answers and no resubmission', async () => {
+  const c = fixture(); c.adoptSavedAttempt(savedAttempt()); c.renderSavedForecastStatus();
+  let reads = 0;
+  c.window.DueDiligencePhase4.request = async (_route, { body }) => {
+    assert.deepEqual(JSON.parse(JSON.stringify(body)), { operation: 'attempt', attemptId });
+    return { attempt: ++reads === 36 ? completedAttempt() : savedAttempt({ completedQuestionCount: Math.floor(reads / 8) * 4 }) };
+  };
+  const polling = c.pollSavedForecast(attemptId);
+  for (let count = 0; count < 36; count++) { c.fire(10000); await flush(); }
+  await polling;
+  assert.equal(c.state.view, 'results'); assert.equal(c.state.results.totalScore, 80);
+  assert.equal(c.state.acceptedAttempt.answers.length, 20);
+  assert.ok(c.state.acceptedAttempt.answers.every((row) => row.answer === answer));
+  assert.equal(reads, 36); assert.equal(c.timers.size, 0);
+});
+
+test('429 waits for the server cooldown then resumes the same accepted report without declaring grading failed', async () => {
+  const c = fixture(); c.adoptSavedAttempt(savedAttempt()); c.renderSavedForecastStatus(); let reads = 0;
+  c.window.DueDiligencePhase4.request = async (_route, { body }) => {
+    assert.equal(body.operation, 'attempt'); assert.equal(body.attemptId, attemptId);
+    if (++reads === 1) throw Object.assign(new Error('rate limit'), { status: 429, code: 'RATE_LIMITED', retryAfterSeconds: 90 });
+    return { attempt: completedAttempt() };
+  };
+  const polling = c.pollSavedForecast(attemptId); c.fire(10000); await flush();
+  assert.equal(reads, 1); assert.equal(c.state.acceptedAttempt.status, 'pending');
+  assert.equal(c.state.acceptedAttempt.result, null); assert.equal(c.state.view, 'submitting');
+  c.fire(90000); await flush(); await polling;
+  assert.equal(reads, 2); assert.equal(c.state.view, 'results'); assert.equal(c.state.acceptedAttempt.id, attemptId);
+});
+
+test('cooldown remains cancelable and a delay beyond the finite window never triggers an early retry', async () => {
+  for (const close of [false, true]) {
+    const c = fixture(); c.adoptSavedAttempt(savedAttempt()); c.renderSavedForecastStatus(); let reads = 0;
+    c.window.DueDiligencePhase4.request = async () => { reads++; throw Object.assign(new Error('rate limit'), { status: 429, retryAfterMs: 60 * 60 * 1000 }); };
+    const polling = c.pollSavedForecast(attemptId); c.fire(10000); await flush();
+    if (close) c.closeForecast({ restoreRoute: false });
+    else c.fire(20 * 60 * 1000 - 10000);
+    await polling; assert.equal(reads, 1); assert.equal(c.timers.size, 0);
+    if (!close) { assert.equal(c.state.view, 'saved-status'); assert.equal(c.state.acceptedAttempt.status, 'pending'); }
+  }
+});
+
+test('read retry timing only recognizes rate limits and validates finite nonnegative delays', () => {
+  const c = fixture();
+  assert.equal(c.forecastReadRetryDelay({ status: 403, retryAfterSeconds: 30 }), null);
+  assert.equal(c.forecastReadRetryDelay({ status: 429 }), 60000);
+  assert.equal(c.forecastReadRetryDelay({ status: 429, retryAfterMs: Infinity, retryAfterSeconds: -1 }), 60000);
+  assert.equal(c.forecastReadRetryDelay({ status: 429, retryAfterMs: 40000, retryAfterSeconds: 60 }), 60000);
 });
 
 test('stopping an old poll cannot erase the newer poll cancellation handle', async () => {

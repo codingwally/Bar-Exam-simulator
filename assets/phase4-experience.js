@@ -449,6 +449,12 @@
       error.status = response.status;
       error.pendingAttemptId = payload?.error?.pendingAttemptId || null;
       error.retryAfterHours = Number(payload?.error?.retryAfterHours) || null;
+      const retrySeconds = payload?.error?.retryAfterSeconds;
+      error.retryAfterSeconds = Number.isSafeInteger(retrySeconds) && retrySeconds > 0 ? retrySeconds : null;
+      const retryHeader = response.headers.get('Retry-After');
+      const retryDelay = retryHeader && /^\d+$/u.test(retryHeader.trim())
+        ? Number(retryHeader) * 1000 : retryHeader ? Date.parse(retryHeader) - Date.now() : NaN;
+      error.retryAfterMs = Number.isFinite(retryDelay) && retryDelay >= 0 ? Math.max(1000, retryDelay) : null;
 
       const authenticationError = response.status === 401
         || ['AUTHENTICATION_REQUIRED', 'INVALID_SESSION'].includes(error.code);

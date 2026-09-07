@@ -39,6 +39,7 @@ const newReviewedPaths = [
   'scripts/test-pages-artifact.mjs',
   'scripts/test-forecast-browser-pdf.mjs',
   'scripts/test-forecast-multiline-editor.mjs',
+  'scripts/test-forecast-structured-selection.mjs',
   'docs/astra-staging-fixture-registration.md',
   'supabase/migrations/20260907190944_astra_staging_fixture_registration.sql',
   'worker/astra-staging-fixture-registration.test.mjs',
@@ -140,10 +141,13 @@ for (const source of [validation, workflow]) {
     'Require the full credential-free real-browser parity gate exactly once, not browser-only or a skipped test.');
   assert.equal((source.match(/node scripts\/test-forecast-multiline-editor\.mjs --browser\s*$/gmu) || []).length, 1,
     'Require native multiline answer-preservation checks before authenticated release journeys.');
+  assert.equal((source.match(/node scripts\/test-forecast-structured-selection\.mjs --browser\s*$/gmu) || []).length, 1,
+    'Require native paragraph/list replacement checks before authenticated release journeys.');
   const parity = source.indexOf('node scripts/test-forecast-browser-pdf.mjs --browser');
   const parityStep = source.slice(source.lastIndexOf('      - name:', parity), source.indexOf('\n      - name:', parity));
   assert.ok(parityStep.indexOf('npx --yes agent-browser@0.36.0 install --with-deps') < parityStep.indexOf('node scripts/test-forecast-browser-pdf.mjs --browser'));
   assert.ok(parityStep.indexOf('node scripts/test-forecast-multiline-editor.mjs --browser') > 0);
+  assert.ok(parityStep.indexOf('node scripts/test-forecast-structured-selection.mjs --browser') > 0);
   assert.doesNotMatch(parityStep, /secrets\.|SERVICE_ROLE_KEY|--execute-staging/u,
     'Local browser parity must not run with a fixture credential or a remote journey.');
   assert.doesNotMatch(parityStep, /continue-on-error|\|\| true|--browser-only/u);

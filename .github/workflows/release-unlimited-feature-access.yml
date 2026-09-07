@@ -133,6 +133,7 @@ jobs:
             scripts/build-pages-artifact.mjs \
             scripts/test-forecast-browser-pdf.mjs \
             scripts/test-forecast-multiline-editor.mjs \
+            scripts/test-forecast-structured-selection.mjs \
             docs/astra-staging-fixture-registration.md \
             supabase/migrations/20260907190944_astra_staging_fixture_registration.sql \
             worker/astra-staging-fixture-registration.test.mjs \
@@ -411,6 +412,7 @@ jobs:
           node scripts/verify-astra-forecast-staging.mjs --self-test-browser
           node scripts/test-forecast-browser-pdf.mjs --browser
           node scripts/test-forecast-multiline-editor.mjs --browser
+          node scripts/test-forecast-structured-selection.mjs --browser
 
       - name: Resolve approved staging browser configuration
         env:

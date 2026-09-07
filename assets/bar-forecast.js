@@ -356,6 +356,12 @@
     if (fragment && !fragment.querySelector('p,ul,ol,li')) {
       return answerParagraphText(fragment).replace(/\r\n?/gu, '\n').length;
     }
+    // A single native P/list selection includes its rendered separators;
+    // Range.toString drops them and would truncate a valid replacement paste.
+    // Never combine multiple ranges (which could include another surface).
+    if (selection.rangeCount === 1 && fragment?.querySelector('p,ul,ol,li')) {
+      return selection.toString().replace(/\r\n?/gu, '\n').length;
+    }
     return range.toString().length;
   }
 

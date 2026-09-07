@@ -1,5 +1,5 @@
 import coreWorker from './index.mjs';
-import { sendSubscriptionReceiptEmail } from './subscription-receipt.mjs';
+import { sendSubscriptionReceiptEmail, subscriptionReceiptEmailStatus } from './subscription-receipt.mjs';
 
 export const REQUIRED_PAYMENT_VERIFIER_COUNT = 5;
 
@@ -449,6 +449,10 @@ export async function drainPaymentNotificationQueue(env, limit = 5) {
 }
 
 export async function dispatchApprovedSubscriptionReceipt(env, paymentRequestId = null) {
+  // Check before the queue claim: suppression/configuration must not read a
+  // private proof, consume an attempt, or change a real pending receipt.
+  const emailStatus = subscriptionReceiptEmailStatus(env);
+  if (emailStatus !== 'enabled') return { status: emailStatus, paymentRequestId };
   const claim = await serviceRoleRpc(env, 'phase4_claim_subscription_receipt', {
     p_payment_request_id: paymentRequestId,
   });
@@ -514,6 +518,7 @@ export async function drainSubscriptionReceiptQueue(env, limit = 5) {
     const result = await dispatchApprovedSubscriptionReceipt(env);
     if (result.status === 'idle') break;
     results.push(result);
+    if (result.status === 'suppressed' || result.status === 'not_configured') break;
   }
   return results;
 }

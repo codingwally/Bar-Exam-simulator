@@ -8,6 +8,7 @@ import {
   waitForForecastBootstrap, canCaptureForecastFixtureScreenshot,
   seedColdFixtureStorage, coldFixtureInitSource,
   forecastReadCooldown, retryForecastRead, forecastCleanupScope,
+  sanitizeForecastNodeDiagnostic, forecastUnexpectedNodeResponse, captureForecastNodeFailure,
 } from './verify-astra-forecast-staging.mjs';
 
 const secret = 'Bearer private-token private.person@example.invalid /proof/private-object.png 11111111-1111-4111-8111-111111111111';
@@ -533,4 +534,67 @@ test('saved reads do not reinterpret a403 or failed grading payload as a retryab
     assert.equal(await retryForecastRead({ operation: 'attempt', deadline: 1000, now: () => 0, request: async () => { calls++; return response; } }), response);
     assert.equal(calls, 1);
   }
+});
+
+test('unexpected saved-PDF responses retain exact safe422/500/503 categories without raw data', () => {
+  for (const [status, code] of [[422, 'BAR_FORECAST_PDF_CHARACTER_UNAVAILABLE'], [500, 'INTERNAL_ERROR'],
+    [503, 'BAR_FORECAST_EXPORT_STORAGE_UNAVAILABLE'], [409, 'BAR_FORECAST_EXPORT_INVALID']]) {
+    const diagnostic = forecastUnexpectedNodeResponse({ operation: 'result_pdf', pathname: '/admin/dd2026/bar-forecast',
+      response: { status, headers: new Headers({ 'Content-Type': 'application/json; charset=utf-8' }) },
+      body: { error: { code, message: secret, stack: secret }, answers: [secret] }, text: secret });
+    assert.deepEqual(diagnostic, { schemaVersion: 'astra-forecast-node-diagnostics-v1', operation: 'result_pdf',
+      endpoint: 'forecast', httpStatus: status, errorCode: code, contentType: 'json', platformError: 'not_identified' });
+    assert.doesNotMatch(JSON.stringify(diagnostic), /Bearer|@|proof|11111111|https?:/u);
+  }
+});
+
+test('nonJSON platform1102 is classified only from a bounded Cloudflare failure signature', () => {
+  const response = (status, mediaType = 'text/html', server = 'cloudflare') => ({ status,
+    headers: new Headers({ 'Content-Type': mediaType, Server: server }) });
+  const classify = (value) => forecastUnexpectedNodeResponse({ operation: 'result_pdf', pathname: '/admin/dd2026/bar-forecast', body: null, ...value });
+  for (const text of [`<title>Error 1102</title>${secret}`, `error code: 1102\n${secret}`]) {
+    const diagnostic = classify({ response: response(500), text });
+    assert.equal(diagnostic.platformError, 'cloudflare_1102'); assert.equal(diagnostic.errorCode, 'UNRECOGNIZED');
+    assert.doesNotMatch(JSON.stringify(diagnostic), /Bearer|@|proof|11111111|https?:/u);
+  }
+  assert.equal(classify({ response: response(503), text: secret }).platformError, 'cloudflare_unclassified');
+  assert.equal(classify({ response: response(422), text: 'Error 1102' }).platformError, 'not_identified');
+  assert.equal(classify({ response: response(500, 'application/json'), body: { answer: 'Error 1102' }, text: 'Error 1102' }).platformError, 'cloudflare_unclassified');
+  assert.equal(classify({ response: response(500, 'text/plain', 'other'), text: 'Error 1102' }).platformError, 'not_identified');
+  assert.equal(classify({ response: response(500), text: `${' '.repeat(65536)}Error 1102` }).platformError, 'cloudflare_unclassified');
+});
+
+test('expected200PDF and explicit403/404/429 statuses remain unchanged without failure evidence', () => {
+  for (const [operation, status, statuses] of [['result_pdf', 200, [200]], ['attempt', 404, [404]],
+    ['status', 403, [403]], ['history', 429, [200, 429]]]) {
+    const response = { status, headers: new Headers({ 'Content-Type': 'application/pdf' }) };
+    const body = { privateValue: secret };
+    assert.equal(forecastUnexpectedNodeResponse({ operation, pathname: '/admin/dd2026/bar-forecast', response, body, text: secret, statuses }), null);
+    assert.deepEqual(body, { privateValue: secret }); assert.equal(response.status, status);
+  }
+});
+
+test('Node diagnostics reject unrecognized operations, paths, errors and malformed scalar values', () => {
+  const unsafe = Object.fromEntries(['operation', 'endpoint', 'httpStatus', 'errorCode', 'contentType', 'platformError', 'stack', 'url', 'answers'].map(key => [key, secret]));
+  assert.deepEqual(sanitizeForecastNodeDiagnostic(unsafe), { schemaVersion: 'astra-forecast-node-diagnostics-v1',
+    operation: 'unrecognized', endpoint: 'unrecognized', httpStatus: null, errorCode: 'UNRECOGNIZED', contentType: 'other', platformError: 'not_identified' });
+  const actual = forecastUnexpectedNodeResponse({ operation: secret, pathname: `/admin/dd2026/bar-forecast?owner=${secret}`,
+    response: { status: 500, headers: new Headers({ 'Content-Type': 'private/type' }) }, body: { error: { code: secret } }, text: secret });
+  assert.equal(actual.endpoint, 'unrecognized'); assert.equal(actual.contentType, 'other');
+  for (const value of [unsafe, actual]) assert.doesNotMatch(JSON.stringify(sanitizeForecastNodeDiagnostic(value)), /Bearer|@|proof|11111111|https?:/u);
+});
+
+test('Node failure persistence is awaited before cleanup and original HTTP assertion remains fail-closed', async () => {
+  const saved = deferred(); let observed;
+  const pending = captureForecastNodeFailure({ operation: 'result_pdf', endpoint: 'forecast', httpStatus: 503,
+    errorCode: 'BAR_FORECAST_EXPORT_STORAGE_UNAVAILABLE', contentType: 'json', platformError: 'not_identified', secret },
+  async value => { observed = value; await saved.promise; });
+  await until(() => Boolean(observed)); let completed = false; pending.then(() => { completed = true; });
+  await new Promise(resolve => setTimeout(resolve, 5)); assert.equal(completed, false);
+  saved.resolve(); assert.deepEqual(await pending, observed); assert.equal(Object.hasOwn(observed, 'secret'), false);
+  const source = await readFile(new URL('./verify-astra-forecast-staging.mjs', import.meta.url), 'utf8');
+  assert.match(source, /statuses, body\.operation\)/u);
+  assert.ok(source.indexOf('if (diagnostic) summary.nodeFailure = diagnostic;') < source.indexOf('assert.ok(statuses.includes(response.status)'));
+  assert.match(source, /summary\.nodeFailure = await captureForecastNodeFailure[\s\S]*failure-node-diagnostics\.json[\s\S]*saved-before-cleanup/u);
+  assert.ok(source.indexOf("summary.nodeFailureCapture = 'saved-before-cleanup'") < source.indexOf('summary.browserSessionClosed = !browserSession'));
 });

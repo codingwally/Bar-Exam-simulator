@@ -25,10 +25,11 @@ const expectedMigrations = [
   '20260907133129_astra_149_binding_compatibility.sql',
   '20260907172508_astra_forecast_summary_email.sql',
   '20260907173112_astra_browser_pdf_prepared_note.sql',
+  '20260907181748_astra_admin_role_fail_closed.sql',
 ];
 const actualMigrations = [...databaseContract.match(/ASTRA_MIGRATIONS = Object\.freeze\(\[([\s\S]*?)\]\)/u)[1]
   .matchAll(/'([^']+\.sql)'/gu)].map((match) => match[1]);
-assert.deepEqual(actualMigrations, expectedMigrations, 'Exactly the ten reviewed forward migrations must be attested.');
+assert.deepEqual(actualMigrations, expectedMigrations, 'Exactly the eleven reviewed forward migrations must be attested.');
 assert.deepEqual(actualMigrations, [...actualMigrations].sort());
 
 const newReviewedPaths = [
@@ -37,12 +38,17 @@ const newReviewedPaths = [
   'scripts/build-pages-artifact.mjs',
   'scripts/test-pages-artifact.mjs',
   'scripts/test-forecast-browser-pdf.mjs',
+  'worker/astra-admin-role-fail-closed.test.mjs',
   'worker/forecast-browser-pdf-prepared.test.mjs',
   'worker/forecast-result-layout-fixture.mjs',
   'worker/forecast-result-pdf.mjs',
   'worker/forecast-summary-email.test.mjs',
   'worker/fixtures/forecast-analytics-email-claim.sql',
-  ...expectedMigrations.slice(-2).map((name) => `supabase/migrations/${name}`),
+  // Keep each reviewed prerequisite explicit: appending another migration must
+  // never silently remove summary-email or prepared-note path coverage.
+  'supabase/migrations/20260907172508_astra_forecast_summary_email.sql',
+  'supabase/migrations/20260907173112_astra_browser_pdf_prepared_note.sql',
+  'supabase/migrations/20260907181748_astra_admin_role_fail_closed.sql',
 ];
 const approvedScope = workflow.slice(workflow.indexOf('          approved_scope='), workflow.indexOf('          actual_scope='));
 for (const file of newReviewedPaths) {
@@ -139,6 +145,8 @@ for (const file of ['worker/forecast-summary-email.test.mjs', 'worker/forecast-b
 }
 assert.match(workflow, /node --test --test-concurrency=1 worker\/\*\.test\.mjs/u,
   'Release authorization must also execute both new Worker SQL/security suites.');
+assert.match(validation, /node --test --test-concurrency=1 worker\/\*\.test\.mjs/u,
+  'Mandatory validation must execute the new administrator role SQL regression, not merely trigger on its path.');
 assert.ok(workflow.indexOf('node scripts/verify-astra-forecast-staging.mjs --self-test-browser')
   < workflow.indexOf('node scripts/verify-astra-forecast-staging.mjs --execute-staging'));
 const worker = workflow.indexOf('\n  deploy_production_worker:');

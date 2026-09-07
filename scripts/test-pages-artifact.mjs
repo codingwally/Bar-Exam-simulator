@@ -402,7 +402,9 @@ assert.match(barForecast, /const ENDPOINT = '\/admin\/dd2026\/bar-forecast'/);
 assert.match(barForecast, /operation:\s*'status'/);
 assert.match(barForecast, /operation:\s*'accept', version:\s*CONSENT_VERSION/);
 assert.match(barForecast, /operation:\s*'start', subject:\s*subjectName/);
-assert.match(barForecast, /operation:\s*'submit'[\s\S]*answers:\s*submittedAnswers/);
+assert.match(barForecast, /operation:\s*'submit_attempt'/);
+assert.match(barForecast, /answers:\s*submittedAnswers, clientAttemptId:\s*state\.clientAttemptId/);
+assert.match(barForecast, /if \(!persistForecastDraft\(\)\)[\s\S]*await sendForecastSubmission\(\)/);
 for (const exactNoticeCopy of [
   'Notice & Disclaimer',
   'This pilot program is designed to train issue-spotting skills using question sets aligned with historical exam patterns, cases associated with the 2026 Bar Chairperson, and independent legal research.',
@@ -428,7 +430,20 @@ assert.match(barForecast, /renderPromptHighlights/);
 assert.doesNotMatch(barForecast, /AI-assisted|editorial indicators/i);
 assert.match(barForecast, /appendResultSection\(body, 'Question', state\.questions\[index\]\?\.prompt/);
 assert.doesNotMatch(barForecast, /\bALAC\b|legal[_ ]basis|controlling[_ ]doctrine|prediction score|transparent rubric/i);
-assert.doesNotMatch(barForecast, /localStorage|sessionStorage/);
+// Durable private drafts intentionally use owner-scoped localStorage. Keep
+// credential/owner isolation and exact 20-answer-before-transport protections
+// by executing the real lifecycle against the built artifact below.
+assert.doesNotMatch(barForecast, /sessionStorage/);
+const forecastArtifactBehavior = execFileSync(process.execPath, [
+  '--test', '--test-reporter=tap', 'scripts/test-astra-forecast-durable-frontend.mjs',
+], {
+  cwd: root,
+  encoding: 'utf8',
+  env: { ...process.env, BAR_FORECAST_ARTIFACT_PATH: path.join(output, 'assets/bar-forecast.js') },
+});
+assert.match(forecastArtifactBehavior, /^# fail 0$/mu);
+assert.match(forecastArtifactBehavior, /^# skipped 0$/mu);
+console.log(`Shipped Forecast lifecycle: ${forecastArtifactBehavior.match(/^# pass (\d+)$/mu)?.[1]} passed; zero failed or skipped.`);
 assert.match(barForecastStyles, /@keyframes bf26-radiate/);
 assert.match(barForecastStyles, /\.bf26-page\s*\{[\s\S]*height:\s*100dvh/);
 assert.match(barForecastStyles, /\.bf26-editor-toolbar/);

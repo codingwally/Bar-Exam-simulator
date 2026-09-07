@@ -212,6 +212,7 @@ jobs:
             scripts/test-astra-simulator-staging.sql \
             scripts/test-astra-simulator-staging-contract.mjs \
             scripts/test-astra-staging-diagnostics.mjs \
+            scripts/test-pages-artifact.mjs \
             scripts/test-auth-session-persistence.mjs \
             scripts/test-bar-forecast-frontend.mjs \
             scripts/test-design-correction-release.mjs \

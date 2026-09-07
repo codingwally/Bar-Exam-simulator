@@ -5,7 +5,12 @@ import vm from 'node:vm';
 import { webcrypto } from 'node:crypto';
 import test from 'node:test';
 
-const source = await readFile(new URL('../assets/bar-forecast.js', import.meta.url), 'utf8');
+// The Pages contract runs these same behaviors against the sanitized shipped
+// artifact, so a packaging regression cannot pass by testing source only.
+const source = await readFile(
+  process.env.BAR_FORECAST_ARTIFACT_PATH || new URL('../assets/bar-forecast.js', import.meta.url),
+  'utf8',
+);
 const owner = '11111111-1111-4111-8111-111111111111';
 const attemptId = '22222222-2222-4222-8222-222222222222';
 const clientId = '33333333-3333-4333-8333-333333333333';
@@ -117,6 +122,14 @@ test('final editor is captured before completeness and the frozen 20-answer draf
     assert.equal(draft.submission.answers.length, 20); assert.equal(draft.submission.answers[19].answer, answer);
     assert.equal(body.operation, 'submit_attempt'); assert.equal(body.clientAttemptId, clientId);
     assert.equal(Object.isFrozen(body), true); assert.equal(Object.isFrozen(body.answers), true);
+    assert.equal(body.answers.length, 20);
+    assert.deepEqual(JSON.parse(JSON.stringify(body)), JSON.parse(JSON.stringify(draft.submission)),
+      'The exact persisted snapshot, not a later editor reconstruction, must be sent.');
+    body.answers.forEach((row, index) => {
+      assert.equal(Object.isFrozen(row), true);
+      assert.equal(row.questionId, c.state.questions[index].id);
+      assert.equal(row.answer, c.state.answers.get(row.questionId));
+    });
     return pending.promise;
   };
   const request = c.submitForecast(); await flush();
@@ -131,6 +144,26 @@ test('storage failure prevents unprotected submission and preserves editor answe
   const c = fixture(); c.window.localStorage.setItem = () => { throw new Error('Quota exceeded'); };
   await c.submitForecast(); assert.equal(c.calls.length, 0); assert.equal(c.state.view, 'exam');
   assert.equal(c.state.answers.size, 20); assert.equal(c.state.submissionSnapshot, null);
+});
+
+test('nineteen completed answers cannot start a submission or a grading request', async () => {
+  const c = fixture(); c.state.answers.set(c.state.questions[19].id, '');
+  await c.submitForecast();
+  assert.equal(c.calls.length, 0); assert.equal(c.state.view, 'exam');
+  assert.equal(c.state.submissionSnapshot, null); assert.equal(c.state.acceptedAttempt, null);
+  assert.equal(c.state.answers.size, 20);
+  assert.equal(c.state.answers.get(c.state.questions[0].id), answer);
+});
+
+test('private draft storage is owner-scoped and contains no session credentials', () => {
+  const c = fixture(); assert.equal(c.persistForecastDraft(), true);
+  assert.deepEqual([...c.storage.keys()], [`duediligence.private.${owner}.bar-forecast.drafts.v1`]);
+  const serialized = [...c.storage.values()][0]; const stored = JSON.parse(serialized);
+  assert.equal(stored.ownerId, owner); assert.equal(stored.drafts[clientId].answers.length, 20);
+  assert.doesNotMatch(serialized, /synthetic-token|access_token|refresh_token|Authorization|Bearer /u);
+  c.session.user.id = otherId;
+  assert.equal(c.persistForecastDraft(), false, 'A stale owner may not write into the new owner scope.');
+  assert.deepEqual([...c.storage.values()], [serialized], 'Rejected cross-owner writes preserve the original draft.');
 });
 
 test('lost acceptance acknowledgement retains one immutable id; retry and reload never create another submission', async () => {

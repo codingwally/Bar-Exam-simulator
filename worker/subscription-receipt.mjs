@@ -1,6 +1,23 @@
 const MAX_ATTACHMENT_BYTES = 6 * 1024 * 1024;
 const ALLOWED_PROOF_TYPES = new Set(['image/png', 'image/jpeg', 'application/pdf']);
 
+export function subscriptionReceiptEmailStatus(env = {}) {
+  // Receipts are an explicit transactional exception to the general outbound
+  // switch. Missing or invalid dedicated configuration must never opt in.
+  const mode = typeof env?.SUBSCRIPTION_RECEIPT_EMAIL_MODE === 'string'
+    ? env.SUBSCRIPTION_RECEIPT_EMAIL_MODE.trim().toLowerCase()
+    : '';
+  if (mode !== 'enabled') return 'suppressed';
+  const from = typeof env?.PAYMENT_NOTIFICATION_EMAIL_FROM === 'string'
+    ? env.PAYMENT_NOTIFICATION_EMAIL_FROM.trim()
+    : '';
+  const apiKey = typeof env?.RESEND_API_KEY === 'string' ? env.RESEND_API_KEY.trim() : '';
+  const fromAddress = from.match(/^(?:[^<>]+\s*)?<([^<>]+)>$/u)?.[1] || from;
+  if (!apiKey || !from || from.length > 254 || /[\u0000-\u001f\u007f]/u.test(from)
+      || !validEmail(fromAddress)) return 'not_configured';
+  return 'enabled';
+}
+
 function cleanLine(value, maximum = 240) {
   return String(value ?? '')
     .replace(/[\u0000-\u001f\u007f]+/g, ' ')
@@ -210,6 +227,8 @@ export function subscriptionReceiptContent(context = {}) {
 }
 
 export async function sendSubscriptionReceiptEmail(env, context = {}) {
+  const emailStatus = subscriptionReceiptEmailStatus(env);
+  if (emailStatus !== 'enabled') return { status: emailStatus, providerId: null };
   const from = cleanLine(env?.PAYMENT_NOTIFICATION_EMAIL_FROM, 254);
   const apiKey = String(env?.RESEND_API_KEY || '').trim();
   const recipient = validEmail(context?.user?.email);

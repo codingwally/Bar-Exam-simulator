@@ -196,6 +196,8 @@ on:
       - 'supabase/migrations/20260902093000_fix_unlimited_forecast_entitlement_readonly.sql'
       - 'worker/bar-forecast-database-policy.test.mjs'
       - 'worker/forecast-*.mjs'
+      - 'worker/subscription-receipt*.mjs'
+      - 'worker/transactional-email-template.mjs'
       - 'worker/astra-*.test.mjs'
       - 'worker/package.json'
       - 'worker/package-lock.json'
@@ -241,11 +243,19 @@ jobs:
           node scripts/test-astra-simulator-staging-contract.mjs
           node scripts/astra-release-database-contract.mjs --self-test
           node scripts/verify-astra-forecast-staging.mjs --self-test
+          node scripts/test-astra-main-forecast-analytics.mjs
 
       - name: Verify credential-free Linux Forecast browser wiring
         run: |
           npx --yes agent-browser@0.36.0 install --with-deps
           node scripts/verify-astra-forecast-staging.mjs --self-test-browser
+
+      - name: Verify future-only source presentation in actual PostgreSQL and Chrome
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+        run: |
+          npm install --no-save --no-package-lock playwright@1.54.2
+          node scripts/test-astra-simulator-source-presentation.mjs --sql --browser
 
       - name: Verify maintenance, token access, and payment-notification contracts
         run: |

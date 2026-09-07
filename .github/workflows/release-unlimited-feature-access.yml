@@ -206,10 +206,12 @@ jobs:
             scripts/staging-e2e-diagnostics.mjs \
             scripts/test-approved-renovation-shell.mjs \
             scripts/test-astra-forecast-durable-frontend.mjs \
+            scripts/test-astra-main-forecast-analytics.mjs \
             scripts/test-astra-payment-cohort-repair.mjs \
             scripts/test-astra-payment-lifecycle.mjs \
             scripts/test-astra-payment-presentation.mjs \
             scripts/test-astra-simulator-access.mjs \
+            scripts/test-astra-simulator-source-presentation.mjs \
             scripts/test-astra-simulator-staging.sql \
             scripts/test-astra-simulator-staging-contract.mjs \
             scripts/test-astra-staging-diagnostics.mjs \
@@ -233,12 +235,17 @@ jobs:
             supabase/migrations/20260907060650_astra_forecast_attempts.sql \
             supabase/migrations/20260907064532_astra_forecast_result_exports.sql \
             supabase/migrations/20260907071547_astra_payment_term_repair_journal.sql \
+            supabase/migrations/20260907091138_astra_forecast_analytics_scope_exports.sql \
             supabase/migrations/20260907120000_astra_payment_activation_terms.sql \
             supabase/migrations/20260907120100_astra_payment_proof_evidence.sql \
             supabase/migrations/20260907120200_astra_payment_invalidation.sql \
             supabase/migrations/20260907130000_astra_simulator_access.sql \
+            supabase/migrations/20260907130001_astra_simulator_verified_source_presentation.sql \
+            worker/astra-coaching-consistency.test.mjs \
             worker/astra-rubric-reconciliation.test.mjs \
+            worker/astra-subscription-receipt-policy.test.mjs \
             worker/astra-support-privacy.test.mjs \
+            worker/astra-transactional-email-template.test.mjs \
             worker/bar-forecast-coaching-release.test.mjs \
             worker/bar-forecast-core.mjs \
             worker/bar-forecast-routes.mjs \
@@ -250,6 +257,9 @@ jobs:
             worker/examiner-core.mjs \
             worker/forecast-attempt-store.mjs \
             worker/forecast-attempt-store.test.mjs \
+            worker/forecast-analytics-export.mjs \
+            worker/forecast-analytics-export.test.mjs \
+            worker/forecast-analytics-test-fixture.mjs \
             worker/forecast-email-adapter.mjs \
             worker/forecast-email-adapter.test.mjs \
             worker/forecast-email-presentation.test.mjs \
@@ -262,7 +272,9 @@ jobs:
             worker/package.json \
             worker/payment-core.mjs \
             worker/subscription-receipt.mjs \
+            worker/subscription-receipt.test.mjs \
             worker/support-notification.test.mjs \
+            worker/transactional-email-template.mjs \
             worker/wrangler.staging.toml \
             worker/wrangler.toml \
             worker/question-visibility-release.test.mjs | sort -u)"
@@ -323,6 +335,8 @@ jobs:
           node --input-type=module -e "await import(process.env.PGLITE_MODULE_PATH)"
           node --test --test-concurrency=1 worker/*.test.mjs
           node --test --test-concurrency=1 scripts/test-forecast-durable-api.mjs scripts/test-astra-forecast-durable-frontend.mjs scripts/test-astra-simulator-access.mjs
+          node scripts/test-astra-main-forecast-analytics.mjs
+          node scripts/test-astra-simulator-source-presentation.mjs --sql
           node scripts/test-astra-payment-lifecycle.mjs
           node scripts/test-astra-payment-cohort-repair.mjs
           node scripts/test-astra-payment-presentation.mjs
@@ -459,10 +473,12 @@ jobs:
         env:
           STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+          PGLITE_MODULE_PATH: ${{ github.workspace }}/worker/node_modules/@electric-sql/pglite/dist/index.js
         run: |
           set -euo pipefail
           npm install --no-save --no-package-lock playwright@1.54.2
           node scripts/test-examinations-staging-ui-contract.mjs --browser
+          node scripts/test-astra-simulator-source-presentation.mjs --sql --browser
           node scripts/run-staging-e2e-suite.mjs examinations
 
       - name: Retain sanitized staging child diagnostics and cleanup results

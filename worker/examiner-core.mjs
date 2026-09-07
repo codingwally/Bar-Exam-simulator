@@ -952,6 +952,9 @@ export function applyDeterministicScoreCap(assessment, studentAnswer, context = 
     tier: tierForScore(score),
     performanceLabel: performanceLabelForScore(score),
     authorityStatus: effectiveAuthorityStatus,
+    // The provider's pre-cap recommendation may contradict this final score.
+    // Use only the existing selected reason; preserve detailed legal coaching.
+    rationale: `Final score: ${score.toFixed(1)}/5.0. ${note}`,
     errors,
     appliedScoreCeiling,
   };

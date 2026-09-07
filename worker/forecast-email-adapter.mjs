@@ -40,7 +40,7 @@ export async function sendForecastResultEmail(env, message, fetcher = fetch) {
       || !/^[a-zA-Z0-9:_/-]{1,256}$/u.test(String(message?.idempotencyKey || ''))
       || !(attachment?.bytes instanceof Uint8Array) || !attachment.bytes.length
       || attachment.bytes.length > MAX_ATTACHMENT_BYTES || attachment.contentType !== 'application/pdf'
-      || !/^duediligence-forecast-[a-f0-9-]+-r[0-9]+\.pdf$/u.test(attachment.filename)) {
+      || !/^(?:duediligence-forecast-[a-f0-9-]+-r[0-9]+|duediligence-forecast-analytics-[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}-v1)\.pdf$/u.test(attachment.filename)) {
     return { definitelyNotAccepted: true };
   }
   const content = Buffer.from(attachment.bytes).toString('base64');

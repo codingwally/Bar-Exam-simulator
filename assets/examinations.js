@@ -1719,7 +1719,7 @@
         </aside>`}
         <main class="dd-writing-workspace">
           <p class="dd-question-label">${singleSubject ? 'Your practice question' : `Question ${state.currentIndex + 1} of ${summary.total}`}</p>
-          <div class="dd-question-prompt">${escapeHtml(question.prompt)}</div>
+          ${simulationQuestionPromptMarkup(question, state.active.examination.track)}
           ${question.localRecoveryText != null ? `<div class="dd-exam-status is-error">
             A newer local draft differs from the server revision.
             <button class="dd-exam-button" type="button" data-use-local-draft>Restore local draft</button>
@@ -3285,6 +3285,37 @@
     </div>`;
   }
 
+  // Future snapshots only: original source prompts remain the grading input.
+  function simulationQuestionPromptMarkup(question = {}, track = '') {
+    const prompt = String(question.prompt || '');
+    const original = `<div class="dd-question-prompt">${escapeHtml(prompt)}</div>`;
+    const meta = question.sourcePresentation;
+    if (track !== 'bar_feels' || !meta || meta.schemaVersion !== 1
+        || meta.revision !== 'astra-simulator-source-20260907-r1'
+        || meta.practiceMaximum !== 5 || !/^[0-9a-f]{64}$/.test(meta.originalSnapshotHash || '')) return original;
+    const reviewed = {
+      'REM-2022-II-Q01A': ['f8814d5d4a68f571f8fbefc1b226c641329ae308792c0886da3abb8a8491ad34', 'a', null, '2022 Bar · Remedial Law II · 1(a)'],
+      'REM-2022-II-Q01B': ['d4551d6a5bd1e1efff7693ba2ab478e2241f7e55486a04d44643fb0d1a2f1b5f', 'b', null, '2022 Bar · Remedial Law II · 1(b)'],
+      'REM-2019-A02B': ['b56d2181728025005447ba64229204bafe8ecd8a1833798eb1fcca3e1b4a03aa', 'b', 3, '2019 Bar · Remedial Law · A.2(b)'],
+      'ETH-2019-A05B': ['f4461b6053c1d62e69eee07ac07f935eec5d86d5dd437641f448501f155664ae', 'b', 2.5, '2019 Bar · Legal and Judicial Ethics · A.5(b)'],
+    }[meta.sourceQuestionId];
+    if (!reviewed || meta.originalPromptSha256 !== reviewed[0] || meta.selectedPart !== reviewed[1]
+        || meta.originalWeightPercent !== reviewed[2] || meta.sourceLabel !== reviewed[3]) return original;
+    const wrapper = '[This item has five questions.] ';
+    const suffix = ` (${reviewed[2]}%)`;
+    const displayPrompt = reviewed[2] == null && prompt.startsWith(wrapper) ? prompt.slice(wrapper.length)
+      : reviewed[2] != null && prompt.endsWith(suffix) ? prompt.slice(0, -suffix.length) : null;
+    const instruction = reviewed[2] == null
+      ? `Answer only part (${reviewed[1]}) shown below. The shared facts are included.` : null;
+    if (displayPrompt == null || meta.displayPrompt !== displayPrompt || meta.instruction !== instruction) return original;
+    return `<div class="dd-simulation-source-presentation" data-simulation-source-presentation>
+      <p class="dd-question-label">${escapeHtml(reviewed[3])}</p>
+      ${instruction ? `<p class="dd-exam-description" data-selected-part-instruction>${escapeHtml(instruction)}</p>` : ''}
+      <div class="dd-question-prompt">${escapeHtml(displayPrompt)}</div>
+      <p class="dd-exam-description" data-source-scoring>${reviewed[2] == null ? '' : `Original exam weight: ${reviewed[2]}%. `}Practice: 5 points.</p>
+    </div>`;
+  }
+
   // simulation-submitted-answer-20260906-r1: display the saved answer from this result, never the active editor or AI text.
   function simulationSubmittedAnswerMarkup(result = {}) {
     const answer = result.answerText;
@@ -3331,7 +3362,7 @@
         </div>
       </div>
       <div class="assessment-body">
-        ${prompt && !(isSubjectMatter && options.compactSubject) ? `<section class="assessment-section"><h4>Question</h4><div class="dd-question-prompt">${escapeHtml(prompt)}</div></section>` : ''}
+        ${prompt && !(isSubjectMatter && options.compactSubject) ? `<section class="assessment-section"><h4>Question</h4>${simulationQuestionPromptMarkup({ ...result, prompt }, track)}</section>` : ''}
         ${track === 'bar_feels' ? simulationSubmittedAnswerMarkup(result) : options.answerText && !(isSubjectMatter && options.compactSubject) ? `<section class="assessment-section"><h4>Your answer</h4><div class="dd-model-answer">${escapeHtml(options.answerText)}</div></section>` : ''}
         <h4 class="panel-title">${isSubjectMatter ? 'Why this response received its score' : 'Why this score'}</h4>
         <p class="assessment-rationale">${escapeHtml(assessment.rationale || 'The assessment record does not include a written rationale.')}</p>

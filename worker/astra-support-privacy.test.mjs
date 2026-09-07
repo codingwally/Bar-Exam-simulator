@@ -62,7 +62,9 @@ for(const route of routes)for(const scenario of ['success','storage_failure','pr
     if(scenario==='suppressed'){assert.equal(mail.length,0);return;}
     assert.deepEqual(calls.map(x=>x.kind),['storage','notification']);
     const notification=mail[0].body;assert.deepEqual(notification.to,['support@duediligence.ph']);
-    assert.deepEqual(Object.keys(notification).sort(),['from','subject','text','to']);
+    assert.deepEqual(Object.keys(notification).sort(),['from','html','subject','text','to']);
+    assert.match(notification.html, /Private internal notification/);
+    assert.match(notification.html, /href="https:\/\/duediligence\.ph\/admin\/"/);
     assert.equal(Object.hasOwn(notification,'reply_to'),false);
     assert.match(notification.text,/Authorized review: https:\/\/duediligence\.ph\/admin\//);
     const serialized=JSON.stringify(notification);

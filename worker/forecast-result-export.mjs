@@ -6,6 +6,8 @@ import { aggregateBarForecastScores, BarForecastError } from './bar-forecast-cor
 export const FORECAST_PDF_VERSION = 'forecast-pdf-v1';
 export const FORECAST_RESULT_EXPORT_RPC_NAMES = Object.freeze([
   'dd2026_forecast_result_pdf_record', 'dd2026_forecast_result_email_claim', 'dd2026_forecast_result_email_settle',
+  'dd2026_forecast_analytics_snapshot', 'dd2026_forecast_analytics_get', 'dd2026_forecast_analytics_pdf_record',
+  'dd2026_forecast_analytics_email_claim', 'dd2026_forecast_analytics_email_settle', 'dd2026_forecast_analytics_history',
 ]);
 const PAGE = { width: 595.28, height: 841.89, margin: 48 };
 const NAVY = rgb(0, 33 / 255, 71 / 255);

@@ -1,5 +1,6 @@
 import { resolveExaminationRoomActivationWindow } from './examination-room-activation-window.mjs';
 import { legacyPricingQrAvailableAt } from './legacy-pricing-qr.mjs';
+import { renderTransactionalEmailHtml } from './transactional-email-template.mjs';
 import {
   DEFAULT_MODEL,
   ExaminerError,
@@ -4154,6 +4155,11 @@ async function sendAdminDirectoryEmail(
     env.ADMIN_DIRECTORY_EMAIL_TEST_RECIPIENT || recipient || '',
   ).trim();
   if (!target) return { status: 'failed', safeErrorCode: 'recipient_missing' };
+  const text = [
+    'An authorized Founder requested the attached private user-directory export.',
+    `Rows exported: ${resultCount}.`,
+    'It contains personal information. Store it securely and do not forward it.',
+  ].join('\n');
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -4165,11 +4171,8 @@ async function sendAdminDirectoryEmail(
       from,
       to: [target],
       subject: 'Due Diligence private user-directory export',
-      text: [
-        'An authorized Founder requested the attached private user-directory export.',
-        `Rows exported: ${resultCount}.`,
-        'It contains personal information. Store it securely and do not forward it.',
-      ].join('\n'),
+      text,
+      html: renderTransactionalEmailHtml({ heading: 'Private user-directory export', text }),
       attachments: [{ filename, content: utf8Base64(csv) }],
     }),
   });
@@ -4211,6 +4214,11 @@ async function sendSupportNotification(env, { subject, text, replyTo, adminPath 
   }
 
   try {
+    const messageText = [
+      String(text || 'A new report or Support request was submitted.').trim(),
+      '',
+      `Authorized review: https://duediligence.ph${adminPath}`,
+    ].join('\n');
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -4221,11 +4229,8 @@ async function sendSupportNotification(env, { subject, text, replyTo, adminPath 
         from,
         to: [SUPPORT_NOTIFICATION_RECIPIENT],
         subject,
-        text: [
-          String(text || 'A new report or Support request was submitted.').trim(),
-          '',
-          `Authorized review: https://duediligence.ph${adminPath}`,
-        ].join('\n'),
+        text: messageText,
+        html: renderTransactionalEmailHtml({ heading: subject, text: messageText, adminPath }),
         ...(supportReplyAddress(replyTo) ? { reply_to: supportReplyAddress(replyTo) } : {}),
       }),
     });
@@ -4616,6 +4621,28 @@ async function sendSignInNotification(env, request, user, sessionDigest) {
     : 'Returning account';
   const client = summarizeSignInClient(request);
   try {
+    const text = [
+      'A user successfully signed in to Due Diligence.',
+      '',
+      `Name: ${user.displayName || 'Not provided'}`,
+      `Email: ${user.email || 'Not provided'}`,
+      `Account ID: ${user.id}`,
+      `Account status: ${accountStatus}`,
+      `Sign-in provider: ${user.provider || 'Not provided'}`,
+      `Time in the Philippines: ${new Intl.DateTimeFormat('en-PH', {
+        dateStyle: 'full',
+        timeStyle: 'long',
+        timeZone: 'Asia/Manila',
+      }).format(now)}`,
+      `UTC time: ${now.toISOString()}`,
+      `Device type: ${client.device}`,
+      `Browser: ${client.browser}`,
+      `Operating system: ${client.operatingSystem}`,
+      `Browser language: ${client.language}`,
+      `Approximate location: ${approximateSignInLocation(request)}`,
+      '',
+      'Privacy and security: This notice intentionally excludes the user’s IP address, password, session token, cookies, answers, and device fingerprint. Browser and location details are approximate and may be masked or spoofed.',
+    ].join('\n');
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -4627,28 +4654,8 @@ async function sendSignInNotification(env, request, user, sessionDigest) {
         from,
         to: [recipient],
         subject: 'Due Diligence user sign-in',
-        text: [
-          'A user successfully signed in to Due Diligence.',
-          '',
-          `Name: ${user.displayName || 'Not provided'}`,
-          `Email: ${user.email || 'Not provided'}`,
-          `Account ID: ${user.id}`,
-          `Account status: ${accountStatus}`,
-          `Sign-in provider: ${user.provider || 'Not provided'}`,
-          `Time in the Philippines: ${new Intl.DateTimeFormat('en-PH', {
-            dateStyle: 'full',
-            timeStyle: 'long',
-            timeZone: 'Asia/Manila',
-          }).format(now)}`,
-          `UTC time: ${now.toISOString()}`,
-          `Device type: ${client.device}`,
-          `Browser: ${client.browser}`,
-          `Operating system: ${client.operatingSystem}`,
-          `Browser language: ${client.language}`,
-          `Approximate location: ${approximateSignInLocation(request)}`,
-          '',
-          'Privacy and security: This notice intentionally excludes the user’s IP address, password, session token, cookies, answers, and device fingerprint. Browser and location details are approximate and may be masked or spoofed.',
-        ].join('\n'),
+        text,
+        html: renderTransactionalEmailHtml({ heading: 'User sign-in', text }),
       }),
     });
     const result = await response.json().catch(() => null);

@@ -716,10 +716,10 @@
     if (opening) requestAnimationFrame(() => menu.querySelector('[role="menuitem"]')?.focus?.());
   }
 
-  async function loadFeature(feature) {
+  async function loadFeature(feature, options = {}) {
     const loader = global.DueDiligenceFeatureLoader;
     if (!loader?.loadForFeature) return false;
-    return await loader.loadForFeature(feature);
+    return await loader.loadForFeature(feature, options);
   }
 
   const featureLabels = Object.freeze({
@@ -860,12 +860,10 @@
       return false;
     }
     if (feature === 'bar-forecast') {
-      const allowed = await global.DueDiligencePhase4?.ensureUnlimitedFeatureAccess?.(returnHash, {
-        featureId: 'bar-forecast',
-        focusOrigin: trigger,
-      });
-      if (allowed !== true) return false;
-      const loaded = await loadFeature(feature);
+      // Forecast owns one bounded server authorization flow after its public
+      // assets load. A separate landing-page access round trip could wait
+      // forever before Forecast's timeout and recoverable error UI existed.
+      const loaded = await loadFeature(feature, { skipAccessCheck: true });
       if (loaded === false) return false;
       await invokePublicOpener(
         'openBarForecast',

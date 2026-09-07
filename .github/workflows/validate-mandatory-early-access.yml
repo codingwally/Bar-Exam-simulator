@@ -288,12 +288,17 @@ jobs:
           node scripts/test-admin-public-reliability.mjs
           node scripts/test-public-admin-static-stress.mjs
           node scripts/test-examinations.mjs
+          node --test scripts/test-bar-simulation-timer-ui-hotfix.mjs
+          node --test scripts/test-bar-simulation-cumulative-score.mjs
+          node --test scripts/test-bar-simulation-submitted-answer.mjs
           node scripts/test-examination-room-door-menu.mjs
           node scripts/test-examination-room-release-workflows.mjs
           node scripts/test-admin-analytics-release-bundle.mjs
           node scripts/test-feature-decommission-boundary.mjs
           node --test scripts/test-unlimited-feature-access-live.mjs
           node scripts/test-unlimited-feature-access.mjs
+          node scripts/test-bar-forecast-frontend.mjs
+          node --test scripts/test-forecast-authorization-generation.mjs
           node scripts/test-unlimited-feature-access-release-workflow.mjs
           node scripts/test-pages-artifact.mjs
 

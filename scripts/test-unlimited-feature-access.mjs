@@ -172,13 +172,16 @@ assert.doesNotMatch(
 assert.match(landing, /\['retainer', 'quorum', 'bar-feels'\]/);
 assert.match(
   landing,
-  /feature === 'bar-forecast'[\s\S]*ensureUnlimitedFeatureAccess\?\.\(returnHash,[\s\S]*featureId: 'bar-forecast'[\s\S]*if \(allowed !== true\) return false;[\s\S]*loadFeature\(feature\)/,
+  /feature === 'bar-forecast'[\s\S]*loadFeature\(feature, \{ skipAccessCheck: true \}\)/,
 );
+assert.doesNotMatch(landing, /ensureUnlimitedFeatureAccess\?\.\(returnHash,/,
+  'Forecast owns the bounded server gate; its launcher must not wait on a duplicate preflight.');
+assert.match(namedFunction(forecast, 'checkAuthorization'), /requestForecast\(\{ operation: 'status' \}/);
 assert.match(indexBarFeels(html), /ensureUnlimitedFeatureAccess\('#bar-feels'/);
 assert.match(html, /if \(page === 'bar-feels'\)[\s\S]*Do not reveal the page before that asynchronous gate resolves/);
 assert.match(forecast, /openUnlimitedFeatureGate\(ROUTE,[\s\S]*featureId: 'bar-forecast'/);
 assert.doesNotMatch(namedFunction(forecast, 'routeToPlansAndPricing'), /toast/);
-assert.match(serviceWorker, /duediligence-shell-unlimited-access-20260902-1/);
+assert.match(serviceWorker, /duediligence-shell-astra-forecast-entry-20260907-1/);
 for (const asset of [
   'phase2-experience.js',
   'phase4-experience.js',

@@ -734,6 +734,24 @@ async function protectedSupabaseRpc(env, functionName, body, options = {}) {
   });
   const result = await response.json().catch(() => null);
   if (!response.ok) {
+    // Only this pricing RPC's known optimistic-lock rejections are recoverable
+    // editor conflicts. Never forward database text or remap another RPC.
+    if (functionName === 'phase4_admin_pricing_action'
+        && response.status === 400 && result?.code === 'P0001'
+        && [
+          'Pricing draft changed; refresh before saving',
+          'Published pricing changed; refresh before saving',
+          'Pricing draft changed; refresh before publishing',
+          'Published pricing changed; refresh before publishing',
+          'Scheduled pricing revision changed; refresh before cancelling',
+          'Published pricing changed; refresh before rollback',
+        ].includes(result?.message)) {
+      throw markRpcOutcome(new PricingValidationError(
+        'PRICING_VERSION_CONFLICT',
+        'Pricing changed while you were editing. Load the latest server draft before retrying.',
+        409,
+      ), response.status);
+    }
     const denied = response.status === 401
       || response.status === 403
       || /authorization|capability|required|not allowed/i.test(String(result?.message || ''));

@@ -64,7 +64,7 @@ test('transport and malformed responses are closed-schema unavailable, without p
 
 test('runner persists identity before login and performs bounded readback before final evidence', () => {
   assert.match(source, /creationState = 'requested';\s*await persistCleanupManifest\(\);\s*const created = await service/);
-  assert.match(source, /creationState = 'recorded';\s*await persistCleanupManifest\(\);[^\n]*\n\s*const session = await request/);
+  assert.match(source, /creationState = 'recorded';\s*await persistCleanupManifest\(\);[^\n]*\n\s*registrationState = 'requested';\s*await persistCleanupManifest\(\);\s*await registerEntryFixture\(userId, fixture, service\);\s*registrationState = 'confirmed';\s*await persistCleanupManifest\(\);[^\n]*\n\s*const session = await request/);
   assert.match(source, /authStatus:[\s\S]*?method: 'GET'[\s\S]*?AbortSignal.timeout\(30000\)/);
   assert.match(source, /let cleanupManifestSaved = false;[\s\S]*?finally \{[\s\S]*?await rm\(privateDir[\s\S]*?finally \{[\s\S]*?summary.json/);
   assert.match(source, /independentCleanupVerificationComplete: false/);

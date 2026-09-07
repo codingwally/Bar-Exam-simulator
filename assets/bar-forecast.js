@@ -9,6 +9,10 @@
   const REQUIRED_QUESTION_COUNT = 20;
   const MINIMUM_WORDS = 10;
   const MAX_ANSWER_CHARACTERS = 6000;
+  // Access verification is an interactive preflight, not a grading job. Keep
+  // it within the same bounded session budget used by the sign-in surface so a
+  // stalled auth/entitlement request always reaches a recoverable terminal UI.
+  const FORECAST_ACCESS_TIMEOUT_MS = 12_000;
   const HIGHLIGHT_COLORS = Object.freeze([
     Object.freeze({ id: 'yellow', label: 'Yellow' }),
     Object.freeze({ id: 'green', label: 'Green' }),
@@ -73,6 +77,7 @@
     routeWasPushed: false,
     routeRecovery: false,
     requestController: null,
+    authorizationController: null,
     submissionTimer: null,
     submissionStartedAt: 0,
     submissionElapsedNode: null,
@@ -80,8 +85,7 @@
     view: 'access',
     ownerId: '',
     authorizationOwnerId: '',
-    authorizationRetryRequested: false,
-    authorizationRetryInProgress: false,
+    authorizationErrorOwnerId: '',
     pricingRedirectInProgress: false,
     consentAccepted: false,
     subject: '',
@@ -122,32 +126,6 @@
   function runtimeOwnerId() {
     const session = runtimeSession();
     return session?.access_token ? String(session.user?.id || '').trim() : '';
-  }
-
-  function setupReadyFromAccessEvent(access) {
-    if (!access || typeof access !== 'object') return false;
-    for (const field of [
-      'termsRequired',
-      'reauthenticationRequired',
-      'profileCompleted',
-      'tokenAcknowledgementRequired',
-    ]) {
-      if (typeof access[field] !== 'boolean') return false;
-    }
-    const role = String(access.role || '').trim().toLowerCase();
-    const basis = String(access.basis || '').trim().toLowerCase();
-    if (!role || !basis || access.termsRequired === true || basis === 'legal_acceptance_required') {
-      return false;
-    }
-    const exempt = ['super_admin', 'founder_admin'].includes(role)
-      || ['super_admin', 'founder_admin', 'founding_beta'].includes(basis)
-      || access.freeBeta?.active === true;
-    if (exempt) return true;
-    if (access.reauthenticationRequired === true || basis === 'reauthentication_required') return false;
-    if (access.paidSubscriptionExpired === true || basis === 'paid_subscription_expired') return true;
-    return basis !== 'profile_required'
-      && access.profileCompleted === true
-      && access.tokenAcknowledgementRequired === false;
   }
 
   function wordCount(value) {
@@ -475,6 +453,7 @@
     stopSubmittingProgress();
     state.ownerId = '';
     state.authorizationOwnerId = '';
+    state.authorizationErrorOwnerId = '';
     state.consentAccepted = false;
     state.subject = '';
     state.schedule = null;
@@ -496,28 +475,63 @@
     state.requestController = null;
   }
 
+  function abortAuthorization() {
+    state.authorizationController?.abort();
+    state.authorizationController = null;
+  }
+
+  function beginAuthorizationDeadline() {
+    const controller = new AbortController();
+    let timedOut = false;
+    let timeoutReject;
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutReject = reject;
+    });
+    const timeoutId = global.setTimeout(() => {
+      timedOut = true;
+      const error = new Error(
+        'Forecast access verification took too long. Your protected Forecast content remains closed. Please try again.',
+      );
+      error.code = 'BAR_FORECAST_ACCESS_TIMEOUT';
+      error.status = 504;
+      timeoutReject(error);
+      controller.abort();
+    }, FORECAST_ACCESS_TIMEOUT_MS);
+    state.authorizationController = controller;
+    return Object.freeze({
+      controller,
+      signal: controller.signal,
+      timeoutPromise,
+      timedOut: () => timedOut,
+      clear: () => {
+        global.clearTimeout(timeoutId);
+        if (state.authorizationController === controller) state.authorizationController = null;
+      },
+    });
+  }
+
   function beginRequest() {
     abortRequest();
     state.requestController = new AbortController();
     return state.requestController;
   }
 
-  async function requestForecast(body) {
+  async function requestForecast(body, options = {}) {
     const client = global.DueDiligencePhase4 || global.DueDiligencePhase2;
     if (typeof client?.request !== 'function') {
       const error = new Error('Bar Forecast access could not be checked yet.');
       error.code = 'AUTH_UNRESOLVED';
       throw error;
     }
-    const controller = beginRequest();
+    const controller = options.signal ? null : beginRequest();
     try {
       return await client.request(ENDPOINT, {
         body,
-        signal: controller.signal,
+        signal: options.signal || controller?.signal,
         recoverAccess: false,
       });
     } finally {
-      if (state.requestController === controller) state.requestController = null;
+      if (controller && state.requestController === controller) state.requestController = null;
     }
   }
 
@@ -1743,25 +1757,36 @@
       openForecastSignIn();
       return true;
     }
+    if (state.authorizationOwnerId === ownerId && state.authorizationController) return true;
     renderAccessProgress();
     // Session restoration can emit another same-user event while this request is
     // pending. Claim the owner before awaiting so that event cannot abort and
     // replace the consent view underneath an agreement click.
     state.authorizationOwnerId = ownerId;
+    const deadline = beginAuthorizationDeadline();
+    const isCurrentAuthorization = () => state.isOpen
+      && ownerId === runtimeOwnerId()
+      && state.authorizationController === deadline.controller;
     try {
       const ensureRequiredSetup = global.DueDiligencePhase4?.ensureRequiredSetup;
       if (typeof ensureRequiredSetup !== 'function') {
         throw new Error('Required account setup could not be verified.');
       }
-      const setupReady = await ensureRequiredSetup(ROUTE);
-      if (!state.isOpen || ownerId !== runtimeOwnerId()) return false;
+      const setupReady = await Promise.race([
+        ensureRequiredSetup(ROUTE, { signal: deadline.signal }),
+        deadline.timeoutPromise,
+      ]);
+      if (!isCurrentAuthorization() || deadline.signal.aborted) return false;
       if (setupReady !== true) {
         closeForecast({ force: true, restoreRoute: false });
         global.toast?.('Complete the required account setup before opening Bar Forecast.', 'warn');
         return true;
       }
-      const payload = await requestForecast({ operation: 'status' });
-      if (!state.isOpen || ownerId !== runtimeOwnerId()) return false;
+      const payload = await Promise.race([
+        requestForecast({ operation: 'status' }, { signal: deadline.signal }),
+        deadline.timeoutPromise,
+      ]);
+      if (!isCurrentAuthorization() || deadline.signal.aborted) return false;
       if (payload?.authorized !== true) {
         routeToPlansAndPricing();
         return true;
@@ -1772,41 +1797,25 @@
       else renderDisclaimer();
       return true;
     } catch (error) {
-      if (error?.name === 'AbortError') return false;
-      if (!state.isOpen || ownerId !== runtimeOwnerId()) return false;
+      if (error?.name === 'AbortError') {
+        if (!deadline.timedOut()) return false;
+      }
+      if (!isCurrentAuthorization()) return false;
       if (handleForecastAccessInterruption(error)) return true;
       renderAccessError(
         error?.message || 'Bar Forecast access could not be confirmed. The protected forecast remains closed.',
       );
-      // renderAccessError clears protected state. Reclaim this still-current
-      // authorization owner so only this invocation may consume its retry flag
-      // in finally; a stale account's completion must never touch a new owner.
-      if (state.isOpen && ownerId === runtimeOwnerId()) state.authorizationOwnerId = ownerId;
+      // Keep a terminal-error owner marker so a late same-account session event
+      // cannot reopen the failed preflight before the user chooses Try again.
+      if (state.isOpen && ownerId === runtimeOwnerId()) {
+        state.authorizationOwnerId = ownerId;
+        state.authorizationErrorOwnerId = ownerId;
+      }
       return true;
     } finally {
-      const ownsAuthorization = state.authorizationOwnerId === ownerId;
-      const shouldRetry = ownsAuthorization
-        && state.authorizationRetryRequested
-        && state.authorizationRetryInProgress !== true
-        && state.isOpen
-        && !state.ownerId
-        && ownerId === runtimeOwnerId();
-      if (ownsAuthorization) {
-        state.authorizationRetryRequested = false;
-        state.authorizationOwnerId = '';
-      }
-      if (shouldRetry) {
-        Promise.resolve().then(async () => {
-          if (!state.isOpen || state.ownerId || state.authorizationOwnerId
-              || ownerId !== runtimeOwnerId()) return;
-          state.authorizationRetryInProgress = true;
-          try {
-            await checkAuthorization();
-          } finally {
-            state.authorizationRetryInProgress = false;
-          }
-        });
-      }
+      const ownsAuthorization = state.authorizationController === deadline.controller;
+      deadline.clear();
+      if (ownsAuthorization) state.authorizationOwnerId = '';
     }
   }
 
@@ -1821,8 +1830,7 @@
     if (hasDraftAnswers() && options.force !== true
         && !global.confirm('Close the forecast and discard all unsubmitted answers?')) return false;
     abortRequest();
-    state.authorizationRetryRequested = false;
-    state.authorizationRetryInProgress = false;
+    abortAuthorization();
     const trigger = state.lastTrigger;
     state.isOpen = false;
     state.viewNode?.replaceChildren();
@@ -1865,10 +1873,10 @@
     if (nextOwnerId && (
       nextOwnerId === state.ownerId
       || nextOwnerId === state.authorizationOwnerId
+      || (state.view === 'access-error' && nextOwnerId === state.authorizationErrorOwnerId)
     )) return;
     abortRequest();
-    state.authorizationRetryRequested = false;
-    state.authorizationRetryInProgress = false;
+    abortAuthorization();
     resetProtectedState();
     if (nextOwnerId) {
       renderAccessProgress('The signed-in account changed. Checking Forecast access again…');
@@ -1881,18 +1889,15 @@
 
   global.addEventListener('duediligence:session', handleForecastSessionChange);
 
-  function handleForecastAccessChange(event) {
+  function handleForecastAccessChange() {
     if (!state.isOpen) return;
     const ownerId = runtimeOwnerId();
-    if (!ownerId || ownerId === state.ownerId) return;
-    if (state.authorizationOwnerId) {
-      if (state.authorizationRetryInProgress !== true
-          && ownerId === state.authorizationOwnerId
-          && setupReadyFromAccessEvent(event.detail)) {
-        state.authorizationRetryRequested = true;
-      }
-      return;
-    }
+    if (!ownerId || ownerId === state.ownerId
+        || (state.view === 'access-error' && ownerId === state.authorizationErrorOwnerId)) return;
+    // ensureRequiredSetup() itself refreshes access. Ignore the event emitted by
+    // that refresh while authorization is pending. A terminal failure stays
+    // visible until the member explicitly retries or changes accounts.
+    if (state.authorizationOwnerId) return;
     checkAuthorization();
   }
 

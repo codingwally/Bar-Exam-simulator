@@ -294,6 +294,8 @@ jobs:
           node scripts/test-feature-decommission-boundary.mjs
           node --test scripts/test-unlimited-feature-access-live.mjs
           node scripts/test-unlimited-feature-access.mjs
+          node scripts/test-bar-forecast-frontend.mjs
+          node --test scripts/test-forecast-authorization-generation.mjs
           node scripts/test-unlimited-feature-access-release-workflow.mjs
           node scripts/test-pages-artifact.mjs
 

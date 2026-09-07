@@ -42,7 +42,7 @@
         'assets/bar-forecast.css?v=access-flow-20260902-1',
       ],
       scripts: [
-        'assets/bar-forecast.js?v=access-flow-20260902-1&unlimited=feature-access-20260902-1',
+        'assets/bar-forecast.js?v=access-flow-20260902-1&unlimited=feature-access-20260902-1&loop=astra-20260907-1',
       ],
     }),
   });

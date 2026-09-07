@@ -574,14 +574,16 @@
     return false;
   }
 
-  async function ensureRequiredSetup(routeHash = location.hash) {
+  async function ensureRequiredSetup(routeHash = location.hash, options = null) {
     if (!session()?.access_token) return false;
     // Forecast inspects a fresh server snapshot. Required setup remains an
     // explicit user action, while payment state is intentionally ignored.
     const payload = await request('/access', {
       requestId: false,
       recoverAccess: false,
+      signal: options?.signal,
     });
+    if (options?.signal?.aborted) return false;
     if (!payload?.access || typeof payload.access !== 'object') return false;
     for (const field of [
       'termsRequired',

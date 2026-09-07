@@ -50,6 +50,16 @@ assert.match(loader, /'bar-forecast': 'forecast'/);
 assert.match(loader, /global\.openBarForecast = deferredFunction\('bar-forecast', 'openBarForecast'\)/);
 assert.match(landing, /'bar-forecast-2026': Object\.freeze\(\{ feature: 'bar-forecast', opener: 'openBarForecast' \}\)/);
 assert.match(landing, /if \(feature === 'bar-forecast'\)[\s\S]*openBarForecast/);
+assert.match(
+  landing,
+  /if \(feature === 'bar-forecast'\) \{[\s\S]*loadFeature\(feature, \{ skipAccessCheck: true \}\)[\s\S]*openBarForecast/,
+  'Forecast must load before its one bounded authorization owner begins',
+);
+assert.doesNotMatch(
+  landing.match(/if \(feature === 'bar-forecast'\) \{[\s\S]*?return true;\s*\}/)?.[0] || '',
+  /ensureUnlimitedFeatureAccess/,
+  'the landing page must not add an unbounded authorization preflight before Forecast loads',
+);
 assert.ok(
   landing.indexOf('await global.DueDiligencePhase2?.whenAuthReady?.();', landing.indexOf('async function openProtectedFeature'))
     < landing.indexOf("if (feature === 'bar-forecast')"),
@@ -96,13 +106,13 @@ assert.match(forecast, /refs\.submit\.disabled = !allAnswersComplete\(\)/);
 assert.match(forecast, /payload\?\.authorized !== true/);
 assert.match(
   forecast,
-  /ensureRequiredSetup\(ROUTE\)[\s\S]*setupReady !== true[\s\S]*Complete the required account setup/,
+  /ensureRequiredSetup\(ROUTE,\s*\{\s*signal:\s*deadline\.signal\s*\}\)[\s\S]*setupReady !== true[\s\S]*Complete the required account setup/,
   'Forecast authorization must stop at the setup-only gate before requesting protected status',
 );
 assert.match(forecast, /global\.addEventListener\('duediligence:access', handleForecastAccessChange\)/);
 assert.match(
   phase4,
-  /async function ensureRequiredSetup\(routeHash = location\.hash\)[\s\S]*request\('\/access'[\s\S]*payload\?\.access[\s\S]*adoptAccess\(payload\.access[\s\S]*setupRequired\(access\)[\s\S]*openRequiredSetup\(access, routeHash\)/,
+  /async function ensureRequiredSetup\(routeHash = location\.hash, options = null\)[\s\S]*request\('\/access'[\s\S]*signal: options\?\.signal[\s\S]*payload\?\.access[\s\S]*adoptAccess\(payload\.access[\s\S]*setupRequired\(access\)[\s\S]*openRequiredSetup\(access, routeHash\)/,
 );
 assert.match(phase4, /ensureProtectedAccess,[\s\S]*ensureRequiredSetup,/);
 assert.match(phase4, /canUseUnlimitedFeature,[\s\S]*openUnlimitedFeatureGate,/);
@@ -117,10 +127,14 @@ assert.doesNotMatch(forecast, /Coming soon|Check admin access|Checking admin acc
 assert.doesNotMatch(forecast, /function renderPreview\b|forecast-workspace-preview\.webp/);
 assert.match(forecast, /function renderAccessProgress\b/);
 assert.match(forecast, /BAR_FORECAST_ACCESS_REQUIRED/);
+assert.match(forecast, /FORECAST_ACCESS_TIMEOUT_MS = 12_000/);
+assert.match(forecast, /beginAuthorizationDeadline/);
+assert.match(forecast, /deadline\.timeoutPromise/);
+assert.match(phase4, /signal: options\.signal/);
 assert.match(forecast, /function routeToPlansAndPricing\b/);
 assert.match(
   forecast,
-  /renderAccessProgress\([\s\S]*state\.authorizationOwnerId = ownerId;[\s\S]*requestForecast\(\{ operation: 'status' \}\)/,
+  /renderAccessProgress\([\s\S]*state\.authorizationOwnerId = ownerId;[\s\S]*requestForecast\(\{ operation: 'status' \},\s*\{\s*signal:\s*deadline\.signal\s*\}\)/,
   'authorization must claim the pending owner before awaiting status',
 );
 assert.match(
@@ -348,11 +362,18 @@ for (const source of [build, serviceWorker]) {
 assert.match(build, /'flag\.svg'/);
 assert.match(html, /assets\/feature-loader\.js[^"\n]*forecast=access-flow-20260902-1/);
 assert.match(html, /assets\/feature-loader\.js[^"\n]*coaching=report-20260901-1/);
-assert.match(serviceWorker, /duediligence-shell-unlimited-access-20260902-1/);
+assert.match(html, /assets\/feature-loader\.js[^"\n]*forecast-loop=astra-20260907-1/);
+assert.match(html, /assets\/private-beta-landing\.js[^"\n]*forecast-loop=astra-20260907-1/);
+assert.match(html, /assets\/phase4-experience\.js[^"\n]*forecast-loop=astra-20260907-1/);
+assert.match(serviceWorker, /duediligence-shell-astra-forecast-entry-20260907-1/);
 assert.match(serviceWorker, /assets\/feature-loader\.js[^'\n]*forecast=access-flow-20260902-1/);
 assert.match(serviceWorker, /assets\/feature-loader\.js[^'\n]*coaching=report-20260901-1/);
+assert.match(serviceWorker, /assets\/feature-loader\.js[^'\n]*forecast-loop=astra-20260907-1/);
+assert.match(serviceWorker, /assets\/private-beta-landing\.js[^'\n]*forecast-loop=astra-20260907-1/);
+assert.match(serviceWorker, /assets\/phase4-experience\.js[^'\n]*forecast-loop=astra-20260907-1/);
 assert.match(serviceWorker, /assets\/bar-forecast\.js\?v=access-flow-20260902-1/);
 assert.match(serviceWorker, /assets\/bar-forecast\.js[^'\n]*unlimited=feature-access-20260902-1/);
+assert.match(serviceWorker, /assets\/bar-forecast\.js[^'\n]*loop=astra-20260907-1/);
 assert.match(serviceWorker, /assets\/bar-forecast\.css\?v=access-flow-20260902-1/);
 assert.doesNotMatch(serviceWorker, /assets\/bar-forecast\.(?:js|css)\?v=exam-tools-20260901-[45]/);
 assert.match(serviceWorker, /assets\/icons\/navigation\/flag\.svg/);
@@ -402,6 +423,8 @@ async function runLandingForecastFlow(authenticated) {
     loads: 0,
     openers: 0,
     genericProtectedChecks: 0,
+    unlimitedChecks: 0,
+    loadOptions: null,
   };
   const state = { lastActivatedHash: '' };
   const context = vm.createContext({
@@ -421,11 +444,18 @@ async function runLandingForecastFlow(authenticated) {
           observations.genericProtectedChecks += 1;
           return true;
         },
-        ensureUnlimitedFeatureAccess: async () => true,
+        ensureUnlimitedFeatureAccess: async () => {
+          observations.unlimitedChecks += 1;
+          return true;
+        },
       },
     },
     currentSession: () => (authenticated ? { access_token: 'test-session' } : null),
-    loadFeature: async () => { observations.loads += 1; return true; },
+    loadFeature: async (_feature, options) => {
+      observations.loads += 1;
+      observations.loadOptions = options;
+      return true;
+    },
     invokePublicOpener: async () => { observations.openers += 1; return true; },
     showApplication: () => {},
   });
@@ -452,6 +482,9 @@ async function runLandingForecastFlow(authenticated) {
   assert.equal(signedInForecast.observations.openers, 1);
   assert.equal(signedInForecast.observations.genericProtectedChecks, 0,
     'Forecast eligibility must remain owned by its dedicated fail-closed server gate');
+  assert.equal(signedInForecast.observations.unlimitedChecks, 0,
+    'the landing page must not perform a second, unbounded Forecast authorization check');
+  assert.equal(signedInForecast.observations.loadOptions?.skipAccessCheck, true);
   assert.equal(signedInForecast.state.lastActivatedHash, 'bar-forecast-2026');
   assert.equal(signedInForecast.result, true);
 }
@@ -705,17 +738,17 @@ const GRAMMAR_GUIDANCE_FOR_TEST = Object.freeze({
   assert.equal(preexisting.inert, true);
 }
 
-// Reproduce the live failure deterministically: a same-user session event lands
-// while the first authorization status request is unresolved. It must neither
-// abort that request nor start a duplicate that can replace the consent button.
+// Reproduce the live failure deterministically: the setup refresh emits a
+// same-user access event while authorization is unresolved. It must neither
+// overlap nor replay the protected status request.
 function authorizationHarness(options = {}) {
   let currentOwnerId = 'admin-a';
   const state = {
     isOpen: true,
+    view: 'access',
     ownerId: '',
     authorizationOwnerId: '',
-    authorizationRetryRequested: false,
-    authorizationRetryInProgress: false,
+    authorizationErrorOwnerId: '',
     consentAccepted: false,
   };
   const observations = {
@@ -730,15 +763,19 @@ function authorizationHarness(options = {}) {
     toasts: 0,
     signIns: 0,
     accessErrors: 0,
+    accessEvents: 0,
+    timeoutMs: 0,
+    timeoutCallback: null,
   };
   const responses = [];
   const setupResponses = [];
+  let emitAccessChange = () => {};
   const context = vm.createContext({
     ROUTE: '#bar-forecast-2026',
     state,
     global: {
       DueDiligencePhase4: {
-        ensureRequiredSetup: async () => {
+        ensureRequiredSetup: async (_route, setupOptions = {}) => {
           observations.setupChecks += 1;
           if (options.deferSetup === true) {
             let resolve;
@@ -747,20 +784,48 @@ function authorizationHarness(options = {}) {
               resolve = accept;
               reject = deny;
             });
+            if (options.ignoreAbort !== true && setupOptions.signal?.addEventListener) {
+              setupOptions.signal.addEventListener('abort', () => {
+                const error = new Error('Authorization request aborted.');
+                error.name = 'AbortError';
+                reject(error);
+              }, { once: true });
+            }
             setupResponses.push({ promise, resolve, reject });
             return promise;
+          }
+          if (options.emitAccessDuringSetup === true) {
+            observations.accessEvents += 1;
+            emitAccessChange();
           }
           return options.setupReady !== false;
         },
       },
       toast: () => { observations.toasts += 1; },
+      setTimeout: (callback, delay) => {
+        observations.timeoutMs = delay;
+        if (options.manualTimers === true) {
+          observations.timeoutCallback = callback;
+          return 'manual-timeout';
+        }
+        return setTimeout(callback, delay);
+      },
+      clearTimeout: (timer) => {
+        if (timer !== 'manual-timeout') clearTimeout(timer);
+      },
     },
     runtimeOwnerId: () => currentOwnerId,
     runtimeSession: () => (currentOwnerId
       ? { access_token: 'test-token', user: { id: currentOwnerId } }
       : null),
-    renderAccessProgress: () => { observations.progressViews += 1; },
-    renderAccessError: () => { observations.accessErrors += 1; },
+    renderAccessProgress: () => {
+      observations.progressViews += 1;
+      state.view = 'access';
+    },
+    renderAccessError: () => {
+      observations.accessErrors += 1;
+      state.view = 'access-error';
+    },
     routeToPlansAndPricing: () => {
       observations.pricingRoutes += 1;
       state.isOpen = false;
@@ -816,12 +881,20 @@ function authorizationHarness(options = {}) {
     resetProtectedState: () => {
       state.ownerId = '';
       state.authorizationOwnerId = '';
+      state.authorizationErrorOwnerId = '';
     },
   });
+  context.AbortController = AbortController;
+  context.FORECAST_ACCESS_TIMEOUT_MS = 12_000;
+  vm.runInContext(extractNamedFunction(forecast, 'abortAuthorization'), context);
+  vm.runInContext(extractNamedFunction(forecast, 'beginAuthorizationDeadline'), context);
   vm.runInContext(extractNamedFunction(forecast, 'checkAuthorization'), context);
   vm.runInContext(extractNamedFunction(forecast, 'handleForecastSessionChange'), context);
-  vm.runInContext(extractNamedFunction(forecast, 'setupReadyFromAccessEvent'), context);
   vm.runInContext(extractNamedFunction(forecast, 'handleForecastAccessChange'), context);
+  emitAccessChange = () => vm.runInContext(
+    'handleForecastAccessChange({ detail: {} })',
+    context,
+  );
   return {
     context,
     state,
@@ -831,15 +904,6 @@ function authorizationHarness(options = {}) {
     setOwner: (ownerId) => { currentOwnerId = ownerId; },
   };
 }
-
-const readyAccessEvent = Object.freeze({
-  role: 'admin',
-  basis: 'introductory_tokens',
-  termsRequired: false,
-  reauthenticationRequired: false,
-  profileCompleted: true,
-  tokenAcknowledgementRequired: false,
-});
 
 {
   const completeAccess = (overrides = {}) => ({
@@ -939,6 +1003,8 @@ for (const entitlement of [
 const sameOwner = authorizationHarness();
 const pendingAuthorization = vm.runInContext('checkAuthorization()', sameOwner.context);
 assert.equal(sameOwner.state.authorizationOwnerId, 'admin-a');
+assert.equal(await vm.runInContext('checkAuthorization()', sameOwner.context), true,
+  'a repeated open while authorization is pending must join the existing owner');
 vm.runInContext('handleForecastSessionChange()', sameOwner.context);
 assert.equal(sameOwner.observations.aborts, 0, 'a same-owner refresh must not abort pending authorization');
 await new Promise((resolve) => setImmediate(resolve));
@@ -950,32 +1016,37 @@ assert.equal(sameOwner.state.ownerId, 'admin-a');
 assert.equal(sameOwner.state.authorizationOwnerId, '');
 assert.equal(sameOwner.observations.disclaimers, 1);
 
-const queuedAccess = authorizationHarness();
-const firstQueuedAuthorization = vm.runInContext('checkAuthorization()', queuedAccess.context);
+const emittedAccess = authorizationHarness({ emitAccessDuringSetup: true });
+const firstEmittedAuthorization = vm.runInContext('checkAuthorization()', emittedAccess.context);
 await new Promise((resolve) => setImmediate(resolve));
-queuedAccess.context.readyAccessEvent = readyAccessEvent;
-assert.equal(
-  vm.runInContext('setupReadyFromAccessEvent(readyAccessEvent)', queuedAccess.context),
-  true,
-  'a ready access event may omit payment-only policy fields',
-);
-vm.runInContext('handleForecastAccessChange({ detail: readyAccessEvent })', queuedAccess.context);
-assert.equal(queuedAccess.state.authorizationRetryRequested, true);
-assert.equal(queuedAccess.observations.requests, 1, 'the access event must not overlap the pending request');
-queuedAccess.responses[0].reject(Object.assign(new Error('Transient status failure.'), {
+assert.equal(emittedAccess.observations.accessEvents, 1,
+  'the harness must reproduce the access event emitted by the setup refresh');
+assert.equal(emittedAccess.observations.requests, 1,
+  'the setup access event must not overlap the pending status request');
+emittedAccess.responses[0].reject(Object.assign(new Error('Transient status failure.'), {
   status: 503,
   code: 'BAR_FORECAST_UNAVAILABLE',
 }));
-assert.equal(await firstQueuedAuthorization, true);
+assert.equal(await firstEmittedAuthorization, true);
 await new Promise((resolve) => setImmediate(resolve));
-assert.equal(queuedAccess.observations.requests, 2,
-  'one setup-ready access event must queue one retry after a transient status failure');
-assert.equal(queuedAccess.observations.pricingRoutes, 0,
+assert.equal(emittedAccess.observations.requests, 1,
+  'a setup access event must never replay a failed status request automatically');
+assert.equal(emittedAccess.observations.accessErrors, 1,
+  'the failed request must remain on one recoverable terminal error');
+assert.equal(emittedAccess.observations.pricingRoutes, 0,
   'a transient failure during an access refresh must never become a pricing redirect');
-queuedAccess.responses[1].resolve({ authorized: true, consentAccepted: false });
+vm.runInContext('handleForecastAccessChange({ detail: {} })', emittedAccess.context);
 await new Promise((resolve) => setImmediate(resolve));
-assert.equal(queuedAccess.state.ownerId, 'admin-a');
-assert.equal(queuedAccess.observations.requests, 2, 'the queued retry must never loop');
+assert.equal(emittedAccess.observations.requests, 1,
+  'background access events must preserve the terminal error until explicit retry');
+const explicitRetry = vm.runInContext('checkAuthorization()', emittedAccess.context);
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(emittedAccess.observations.requests, 2,
+  'Try again must start exactly one fresh authorization request');
+emittedAccess.responses[1].resolve({ authorized: true, consentAccepted: false });
+assert.equal(await explicitRetry, true);
+assert.equal(emittedAccess.state.ownerId, 'admin-a');
+assert.equal(emittedAccess.observations.disclaimers, 1);
 
 const setupBlocked = authorizationHarness({ setupReady: false });
 assert.equal(await vm.runInContext('checkAuthorization()', setupBlocked.context), true);
@@ -1051,13 +1122,12 @@ vm.runInContext('handleForecastSessionChange()', changedOwnerDuringSetup.context
 await new Promise((resolve) => setImmediate(resolve));
 assert.equal(changedOwnerDuringSetup.setupResponses.length, 2,
   'an account switch during setup must start one setup check for the new owner');
-changedOwnerDuringSetup.context.readyAccessEvent = readyAccessEvent;
 vm.runInContext(
-  'handleForecastAccessChange({ detail: readyAccessEvent })',
+  'handleForecastAccessChange({ detail: {} })',
   changedOwnerDuringSetup.context,
 );
-assert.equal(changedOwnerDuringSetup.state.authorizationRetryRequested, true,
-  'the new owner may independently queue its setup-ready authorization retry');
+assert.equal(changedOwnerDuringSetup.setupResponses.length, 2,
+  'a same-owner access event must not duplicate the new owner setup check');
 changedOwnerDuringSetup.setupResponses[0].reject(Object.assign(new Error('Old session expired.'), {
   status: 401,
   code: 'INVALID_SESSION',
@@ -1071,8 +1141,6 @@ assert.equal(changedOwnerDuringSetup.observations.signIns, 0,
   'a stale setup failure must not reopen sign-in over the new owner');
 assert.equal(changedOwnerDuringSetup.state.authorizationOwnerId, 'admin-b',
   'the stale owner’s finally block must preserve the new authorization owner');
-assert.equal(changedOwnerDuringSetup.state.authorizationRetryRequested, true,
-  'the stale owner’s finally block must preserve the new owner’s retry flag');
 changedOwnerDuringSetup.setupResponses[1].resolve(true);
 await new Promise((resolve) => setImmediate(resolve));
 assert.equal(changedOwnerDuringSetup.observations.requests, 1,
@@ -1082,6 +1150,53 @@ await new Promise((resolve) => setImmediate(resolve));
 assert.equal(changedOwnerDuringSetup.state.ownerId, 'admin-b');
 assert.equal(changedOwnerDuringSetup.observations.disclaimers, 1);
 assert.equal(changedOwnerDuringSetup.observations.requests, 1,
-  'a successful new-owner authorization must consume, not loop, its queued retry');
+  'a successful new-owner authorization must finish without a replay');
+
+// A stalled setup preflight must abort its request and expose one recoverable
+// error instead of leaving the Forecast spinner mounted forever.
+{
+  const stalledSetup = authorizationHarness({
+    deferSetup: true,
+    ignoreAbort: true,
+    manualTimers: true,
+  });
+  const authorization = vm.runInContext('checkAuthorization()', stalledSetup.context);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(stalledSetup.setupResponses.length, 1);
+  assert.equal(stalledSetup.observations.timeoutMs, 12_000);
+  assert.equal(typeof stalledSetup.observations.timeoutCallback, 'function');
+  stalledSetup.observations.timeoutCallback();
+  assert.equal(await authorization, true);
+  assert.equal(stalledSetup.observations.accessErrors, 1,
+    'a stalled setup preflight must reach the recoverable Forecast error state');
+  assert.equal(stalledSetup.observations.requests, 0,
+    'a stalled setup preflight must not expose or request Forecast content');
+  assert.equal(stalledSetup.observations.pricingRoutes, 0);
+  assert.equal(stalledSetup.state.isOpen, true);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(stalledSetup.observations.requests, 0,
+    'a timeout must not schedule an unbounded authorization retry');
+}
+
+// The same terminal behavior applies when setup succeeds but the protected
+// Forecast status request itself never settles.
+{
+  const stalledStatus = authorizationHarness({ manualTimers: true });
+  const authorization = vm.runInContext('checkAuthorization()', stalledStatus.context);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(stalledStatus.observations.requests, 1);
+  assert.equal(typeof stalledStatus.observations.timeoutCallback, 'function');
+  stalledStatus.observations.timeoutCallback();
+  assert.equal(await authorization, true);
+  assert.equal(stalledStatus.observations.accessErrors, 1,
+    'a stalled Forecast status request must reach the recoverable error state');
+  assert.equal(stalledStatus.observations.pricingRoutes, 0);
+  assert.equal(stalledStatus.state.isOpen, true);
+  vm.runInContext('handleForecastSessionChange()', stalledStatus.context);
+  vm.runInContext('handleForecastAccessChange({ detail: {} })', stalledStatus.context);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(stalledStatus.observations.requests, 1,
+    'same-owner session/access events must not reopen a timed-out Forecast check');
+}
 
 console.log('2026 Bar Forecast frontend contract checks passed.');

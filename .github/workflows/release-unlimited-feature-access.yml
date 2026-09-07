@@ -269,6 +269,7 @@ jobs:
             worker/forecast-finalization-reliability.test.mjs \
             worker/forecast-result-export.mjs \
             worker/forecast-result-export.test.mjs \
+            worker/forecast-result-layout.test.mjs \
             worker/forum-core.test.mjs \
             worker/index.mjs \
             worker/package-lock.json \

@@ -9,12 +9,77 @@ import {
   seedColdFixtureStorage, coldFixtureInitSource,
   forecastReadCooldown, retryForecastRead, forecastCleanupScope,
   sanitizeForecastNodeDiagnostic, forecastUnexpectedNodeResponse, captureForecastNodeFailure,
+  fixtureAnswer, forecastEditorChunkSource,
 } from './verify-astra-forecast-staging.mjs';
+import { BAR_FORECAST_LIMITS, normalizeBarForecastRequest } from '../worker/bar-forecast-core.mjs';
 
 const secret = 'Bearer private-token private.person@example.invalid /proof/private-object.png 11111111-1111-4111-8111-111111111111';
 const endpoint = `${TARGET.site}/admin/dd2026/bar-forecast`;
 const plain = value => JSON.parse(JSON.stringify(value));
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
+
+test('only controlled journey3 changes its answers; real-provider and lost-ack journeys stay byte-identical', () => {
+  const prefix = 'astra-durable-1788750000000-deadbeef';
+  for (const journey of [1, 2]) for (let number = 1; number <= 20; number++) {
+    const original = `${prefix} journey ${journey} answer ${number}. The controlling rule must be applied to each material fact and every required legal element before reaching a supported conclusion.`;
+    assert.equal(fixtureAnswer(prefix, journey, number), number === 20 ? `${original} Final editor capture: ₱149, Señor Niño, café.` : original);
+  }
+});
+
+test('maximum journey supplies20 distinct6000-character answers within actual normalization and UTF8 request limits', () => {
+  const prefix = 'astra-durable-1788750000000-deadbeef';
+  const answers = Array.from({ length: 20 }, (_, index) => fixtureAnswer(prefix, 3, index + 1));
+  assert.equal(new Set(answers).size, 20);
+  for (const [index, answer] of answers.entries()) {
+    assert.equal(Array.from(answer).length, BAR_FORECAST_LIMITS.answerCharacters);
+    assert.equal(answer.length, 6000, 'BMP-only fixture also fits the editor code-unit boundary');
+    assert.ok(answer.trim().split(/\s+/u).length >= BAR_FORECAST_LIMITS.minimumAnswerWords);
+    assert.equal(answer.trim(), answer);
+    assert.equal(fixtureAnswer(prefix, 3, index + 1), answer);
+  }
+  const payload = { operation: 'submit_attempt', subject: 'Civil Law and Land Titles and Deeds',
+    setId: `sha256:${'a'.repeat(64)}`, clientAttemptId: '33333333-3333-4333-8333-333333333333',
+    answers: answers.map((answer, index) => ({ questionId: `question-${String(index).padStart(71, '0')}`, answer })) };
+  assert.ok(Buffer.byteLength(JSON.stringify(payload), 'utf8') < BAR_FORECAST_LIMITS.requestBytes);
+  assert.deepEqual(normalizeBarForecastRequest(payload).answers, payload.answers);
+  assert.ok(answers[19].endsWith(' Final editor capture: ₱149, Señor Niño, café.'));
+  assert.equal(answers[19].split(' Final editor capture:')[0].length < 6000, true);
+  const tooLong = structuredClone(payload); tooLong.answers[19].answer += 'x';
+  assert.throws(() => normalizeBarForecastRequest(tooLong), { code: 'BAR_FORECAST_INVALID_REQUEST' });
+});
+
+test('actual bounded editor chunks preserve all19 input/Next steps and leave final capture to the existing submit path', () => {
+  const answers = Array.from({ length: 20 }, (_, index) => fixtureAnswer('astra-durable-1788750000000-deadbeef', 3, index + 1));
+  let current = 0; const saved = []; const editors = Array.from({ length: 20 }, () => ({
+    textContent: '', dispatchEvent(event) { assert.equal(event.type, 'input'); assert.equal(event.bubbles, true); saved[current] = this.textContent; },
+  }));
+  const document = { getElementById: id => { assert.equal(id, 'bf26-current-answer'); return editors[current]; },
+    querySelectorAll: selector => { assert.equal(selector, '.bf26-exam-footer button'); return [
+      { textContent: 'Next', disabled: current >= 19, click() { current++; } },
+    ]; } };
+  for (let index = 0; index < 19; index += 4) {
+    const chunk = answers.slice(index, Math.min(index + 4, 19));
+    const script = forecastEditorChunkSource(chunk);
+    assert.ok(Buffer.byteLength(script, 'utf8') < 28_000);
+    assert.deepEqual(plain(vm.runInNewContext(script, { document, Event })), { edited: chunk.length });
+  }
+  assert.equal(current, 19); assert.deepEqual(saved, answers.slice(0, 19));
+  assert.equal(editors[19].textContent, '', 'final draft/input and last unsignaled edit remain separate');
+  assert.throws(() => forecastEditorChunkSource(answers.slice(0, 5)));
+  assert.throws(() => forecastEditorChunkSource([]));
+  assert.throws(() => forecastEditorChunkSource([`${answers[0]}x`]));
+});
+
+test('maximum fixture preserves three journeys, six successful PDF reads, and fail-closed controlled coverage', async () => {
+  const source = await readFile(new URL('./verify-astra-forecast-staging.mjs', import.meta.url), 'utf8');
+  assert.match(source, /for \(let number = 1; number <= 3; number\+\+\)/u);
+  assert.match(source, /for \(let repeat = 0; repeat < 2; repeat\+\+\)/u);
+  assert.match(source, /if \(number === 1\)[\s\S]+await waitForRealReport\(journey\.id\)/u);
+  assert.match(source, /controlledComplete\(journey\.id, number === 3, number === 2\)/u);
+  assert.match(source, /assertControlledCoverage\([\s\S]+requiredCoverage\)/u);
+  assert.match(source, /assert\.deepEqual\(snapshot\.answers\.map\(\(row\) => row\.answer\), answers/u);
+  assert.match(source, /answerLengthEvidence: journey\.answerLengthEvidence/u);
+});
 
 test('supported API cleanup never claims protected Pulse or Auth-session absence', async () => {
   assert.deepEqual(forecastCleanupScope(), {

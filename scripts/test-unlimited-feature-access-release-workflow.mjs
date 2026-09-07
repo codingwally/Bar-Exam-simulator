@@ -13,6 +13,42 @@ const liveVerifier = await readFile(
   new URL('./verify-unlimited-feature-access-live.mjs', import.meta.url),
   'utf8',
 );
+const databaseContract = await readFile(new URL('./astra-release-database-contract.mjs', import.meta.url), 'utf8');
+const expectedMigrations = [
+  '20260907060650_astra_forecast_attempts.sql',
+  '20260907064532_astra_forecast_result_exports.sql',
+  '20260907071547_astra_payment_term_repair_journal.sql',
+  '20260907120000_astra_payment_activation_terms.sql',
+  '20260907120100_astra_payment_proof_evidence.sql',
+  '20260907120200_astra_payment_invalidation.sql',
+  '20260907130000_astra_simulator_access.sql',
+  '20260907133129_astra_149_binding_compatibility.sql',
+  '20260907172508_astra_forecast_summary_email.sql',
+  '20260907173112_astra_browser_pdf_prepared_note.sql',
+];
+const actualMigrations = [...databaseContract.match(/ASTRA_MIGRATIONS = Object\.freeze\(\[([\s\S]*?)\]\)/u)[1]
+  .matchAll(/'([^']+\.sql)'/gu)].map((match) => match[1]);
+assert.deepEqual(actualMigrations, expectedMigrations, 'Exactly the ten reviewed forward migrations must be attested.');
+assert.deepEqual(actualMigrations, [...actualMigrations].sort());
+
+const newReviewedPaths = [
+  'browser/forecast-result-pdf-worker.mjs',
+  'scripts/build-forecast-pdf-browser-worker.mjs',
+  'scripts/build-pages-artifact.mjs',
+  'scripts/test-pages-artifact.mjs',
+  'scripts/test-forecast-browser-pdf.mjs',
+  'worker/forecast-browser-pdf-prepared.test.mjs',
+  'worker/forecast-result-layout-fixture.mjs',
+  'worker/forecast-result-pdf.mjs',
+  'worker/forecast-summary-email.test.mjs',
+  'worker/fixtures/forecast-analytics-email-claim.sql',
+  ...expectedMigrations.slice(-2).map((name) => `supabase/migrations/${name}`),
+];
+const approvedScope = workflow.slice(workflow.indexOf('          approved_scope='), workflow.indexOf('          actual_scope='));
+for (const file of newReviewedPaths) {
+  assert.ok(approvedScope.includes(`            ${file} \\`), `Exact release scope is missing ${file}`);
+  assert.ok(validation.includes(`- '${file}'`), `Mandatory validation trigger is missing ${file}`);
+}
 
 for (const required of [
   'product_sha:',
@@ -86,6 +122,23 @@ assert.match(validation, /uses: actions\/checkout@v4\s+with:\s+# Cached-client c
 assert.match(workflow.slice(0, staging), /uses: actions\/checkout@v4[\s\S]*?fetch-depth: 0/);
 assert.ok(validation.includes('Verify credential-free Linux Forecast browser wiring'));
 assert.ok(validation.includes('node scripts/verify-astra-forecast-staging.mjs --self-test-browser'));
+for (const source of [validation, workflow]) {
+  assert.equal((source.match(/node scripts\/test-forecast-browser-pdf\.mjs --browser\s*$/gmu) || []).length, 1,
+    'Require the full credential-free real-browser parity gate exactly once, not browser-only or a skipped test.');
+  const parity = source.indexOf('node scripts/test-forecast-browser-pdf.mjs --browser');
+  const parityStep = source.slice(source.lastIndexOf('      - name:', parity), source.indexOf('\n      - name:', parity));
+  assert.ok(parityStep.indexOf('npx --yes agent-browser@0.36.0 install --with-deps') < parityStep.indexOf('node scripts/test-forecast-browser-pdf.mjs --browser'));
+  assert.doesNotMatch(parityStep, /secrets\.|SERVICE_ROLE_KEY|--execute-staging/u,
+    'Local browser parity must not run with a fixture credential or a remote journey.');
+  assert.doesNotMatch(parityStep, /continue-on-error|\|\| true|--browser-only/u);
+}
+assert.ok(workflow.indexOf('node scripts/test-forecast-browser-pdf.mjs --browser')
+  < workflow.indexOf('Resolve approved staging browser configuration'));
+for (const file of ['worker/forecast-summary-email.test.mjs', 'worker/forecast-browser-pdf-prepared.test.mjs']) {
+  assert.match(validation, new RegExp(`node --test --test-concurrency=1 [^\\n]*${file.replaceAll('.', '\\.')}`, 'u'));
+}
+assert.match(workflow, /node --test --test-concurrency=1 worker\/\*\.test\.mjs/u,
+  'Release authorization must also execute both new Worker SQL/security suites.');
 assert.ok(workflow.indexOf('node scripts/verify-astra-forecast-staging.mjs --self-test-browser')
   < workflow.indexOf('node scripts/verify-astra-forecast-staging.mjs --execute-staging'));
 const worker = workflow.indexOf('\n  deploy_production_worker:');
@@ -117,6 +170,19 @@ const exactPages = workflow.indexOf('Verify the exact Pages SHA and reviewed cli
 const firstJourney = workflow.indexOf('Run post-publish live access journey 1 of 2');
 const secondJourney = workflow.indexOf('Run post-publish live access journey 2 of 2');
 assert.ok(exactPages > verify && firstJourney > exactPages && secondJourney > firstJourney);
+const liveBytes = workflow.slice(exactPages, firstJourney);
+assert.ok(workflow.slice(verify, exactPages).includes('npm ci --prefix worker --ignore-scripts --no-audit --no-fund'));
+assert.ok(workflow.slice(verify, exactPages).includes('node scripts/build-pages-artifact.mjs'));
+for (const file of [
+  'assets/forecast-result-pdf-worker.js',
+  'assets/vendor/forecast-pdf/pdf-lib.LICENSE.txt',
+  'assets/vendor/forecast-pdf/Noto-Sans.LICENSE.txt',
+  'assets/vendor/forecast-pdf/fontkit.README.txt',
+]) assert.ok(liveBytes.includes(`            ${file}\n`) || liveBytes.includes(`            ${file}\r\n`),
+  `Live compiled PDF runtime or license is missing: ${file}`);
+assert.ok(liveBytes.includes('sha256sum ".pages-dist/$relative_path"'),
+  'Live runtime bytes must match the sanitized build output, including generated assets.');
+assert.doesNotMatch(liveBytes, /sha256sum "\$relative_path"/u);
 
 for (const validationContract of [
   "- 'worker/bar-forecast-rate-limit.test.mjs'",

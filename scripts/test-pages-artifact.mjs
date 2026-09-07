@@ -5,6 +5,7 @@ import { createHash, webcrypto } from 'node:crypto';
 import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
+import { buildForecastPdfBrowserWorker } from './build-forecast-pdf-browser-worker.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const expectedReleaseSha = process.env.GITHUB_SHA
@@ -75,6 +76,10 @@ for (const required of [
   'assets/feature-loader.js',
   'assets/bar-forecast.css',
   'assets/bar-forecast.js',
+  'assets/forecast-result-pdf-worker.js',
+  'assets/vendor/forecast-pdf/pdf-lib.LICENSE.txt',
+  'assets/vendor/forecast-pdf/Noto-Sans.LICENSE.txt',
+  'assets/vendor/forecast-pdf/fontkit.README.txt',
   'assets/bar-forecast/forecast-workspace-preview.webp',
   'assets/subscription-cta.css',
   'assets/subscription-cta.js',
@@ -209,6 +214,13 @@ const expectedMediaPipeRuntimeHashes = Object.freeze({
 const examinations = await readFile(path.join(output, 'assets/examinations.js'), 'utf8');
 const featureLoader = await readFile(path.join(output, 'assets/feature-loader.js'), 'utf8');
 const barForecast = await readFile(path.join(output, 'assets/bar-forecast.js'), 'utf8');
+const forecastPdfWorker = await readFile(path.join(output, 'assets/forecast-result-pdf-worker.js'));
+const forecastPdfBundle = await buildForecastPdfBrowserWorker();
+assert.deepEqual(forecastPdfWorker, Buffer.from(forecastPdfBundle.code), 'Pages must ship the same reviewed and parity-tested renderer bundle');
+assert.ok(forecastPdfWorker.length > 0 && forecastPdfWorker.length < 3_000_000);
+assert.equal(forecastPdfBundle.inputs.some(name => /fixture|\.test\.mjs|forecast-result-export\.mjs|content\//u.test(name)), false);
+assert.doesNotMatch(forecastPdfWorker.toString('utf8'), /SUPABASE_SERVICE_ROLE_KEY|RESEND_API_KEY|generativelanguage|gemini|Local synthetic resource fixture|Bearer /iu);
+assert.match(barForecast, /FORECAST_PDF_WORKER = '\/assets\/forecast-result-pdf-worker\.js\?v=astra-browser-pdf-20260908-r1'/u);
 const barForecastStyles = await readFile(path.join(output, 'assets/bar-forecast.css'), 'utf8');
 const barForecastPreview = await readFile(
   path.join(output, 'assets/bar-forecast/forecast-workspace-preview.webp'),

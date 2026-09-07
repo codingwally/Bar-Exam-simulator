@@ -27,6 +27,7 @@ const ROWS = Array.from({ length: 20 }, (_, index) => ({
 const SET_ID = await forecastSetId(ROWS);
 const migration = await readFile(new URL('../supabase/migrations/20260907060650_astra_forecast_attempts.sql', import.meta.url), 'utf8');
 const exportMigration = await readFile(new URL('../supabase/migrations/20260907064532_astra_forecast_result_exports.sql', import.meta.url), 'utf8');
+const summaryMigration = await readFile(new URL('../supabase/migrations/20260907172508_astra_forecast_summary_email.sql', import.meta.url), 'utf8');
 
 test('verified recipient ignores user-editable metadata and phone-only confirmation', () => {
   assert.equal(verifiedForecastEmail(USER), USER.email);
@@ -70,7 +71,7 @@ test('saved PDF and self-email use canonical reports with real isolated PostgreS
     grant select on public.dd2026_bar_forecast_consents to service_role;
     revoke all on auth.users from public,anon,authenticated,service_role;`);
   try {
-    await db.exec(migration); await db.exec(exportMigration);
+    await db.exec(migration); await db.exec(exportMigration); await db.exec(summaryMigration);
     let settlementUncertain = false;
     const rpc = async (_env, name, args) => {
       assert.ok([...FORECAST_ATTEMPT_RPC_NAMES, ...FORECAST_RESULT_EXPORT_RPC_NAMES].includes(name));
@@ -162,7 +163,7 @@ test('saved PDF and self-email use canonical reports with real isolated PostgreS
     const exporter = createForecastResultExporter({ attemptStore: store, rpc, sendEmail: async (_env, input) => {
       sent += 1; message = input; return { accepted: true, providerMessageId: 'local-provider-fixture' };
     } });
-    await t.test('download and email use identical saved PDF, and repeated provider acceptance is not duplicate delivery', async () => {
+    await t.test('download retains its exact PDF while summary email sends no attachment or duplicate delivery', async () => {
       const download = await exporter.pdf({}, USER, attempt.id);
       assert.deepEqual(download.bytes, bytes);
       settlementUncertain = true;
@@ -171,8 +172,8 @@ test('saved PDF and self-email use canonical reports with real isolated PostgreS
       assert.equal(first.email.deliveryConfirmed, false);
       assert.match(first.message, /Delivery is not yet confirmed/u);
       assert.equal(message.to, USER.email);
-      assert.deepEqual(message.attachment.bytes, bytes);
-      assert.equal(message.attachment.sha256, download.hash);
+      assert.equal(message.attachment, undefined);
+      assert.equal(message.deliveryKind, 'summary_link');
       assert.equal(message.idempotencyKey, `forecast-result/${attempt.id}/r1`);
       await exporter.email({}, USER, attempt.id);
       assert.equal(sent, 1, 'repeated click and settlement-response retry must not send again');

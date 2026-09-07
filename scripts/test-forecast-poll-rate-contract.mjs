@@ -85,11 +85,14 @@ test('online shell, lazy loader and cache-first service worker use matching new 
   const version = 'poll=astra-forecast-read-wait-20260907-r1';
   for (const name of ['phase4-experience', 'feature-loader']) {
     const url = html.match(new RegExp('src="(assets/' + name + '\\.js\\?[^"]+)"'))?.[1]?.replaceAll('&amp;', '&');
-    assert.ok(url?.endsWith(version), name + ' must bypass prior browser/cache-first shell bytes');
+    assert.equal(new URL(url, 'https://fixture.invalid').searchParams.get('poll'), version.split('=')[1],
+      name + ' must retain the bounded polling generation');
+    if (name === 'feature-loader') assert.ok(url.endsWith('pdf=astra-browser-pdf-20260908-r1'));
     assert.ok(serviceWorker.includes("'/" + url + "'"), name + ' cache URL must exactly match page');
   }
   const forecast = loader.match(/'(assets\/bar-forecast\.js\?[^']+)'/)?.[1];
-  assert.ok(forecast?.endsWith(version));
+  assert.equal(new URL(forecast, 'https://fixture.invalid').searchParams.get('poll'), version.split('=')[1]);
+  assert.ok(forecast.endsWith('pdf=astra-browser-pdf-20260908-r1'));
   assert.ok(serviceWorker.includes("'/" + forecast + "'"));
-  assert.match(serviceWorker, /const CACHE_VERSION = 'duediligence-shell-astra-forecast-poll-20260907-r1';/);
+  assert.match(serviceWorker, /const CACHE_VERSION = 'duediligence-shell-astra-browser-pdf-20260908-r1';/);
 });

@@ -366,6 +366,12 @@ export function createBarForecastHandlers(deps) {
     }
 
     await requireConsent(env, user.id);
+    if (input.operation === 'result_pdf_prepared') {
+      // Optional client observation only. It never renders, stores, hashes,
+      // emails, or certifies a PDF, and is not a prerequisite for a download.
+      const note = await attemptStore.noteBrowserPdfPrepared(env, user.id, input);
+      return privateJson(jsonResponse, note, 200, origin, allowedOrigin);
+    }
     if (input.operation === 'result_pdf') {
       const exported = await resultExporter.pdf(env, user, input.attemptId);
       const response = privateJson(jsonResponse, {}, 200, origin, allowedOrigin);

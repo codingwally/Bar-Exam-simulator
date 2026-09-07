@@ -10,13 +10,63 @@ import {
   forecastReadCooldown, retryForecastRead, forecastCleanupScope,
   sanitizeForecastNodeDiagnostic, forecastUnexpectedNodeResponse, captureForecastNodeFailure,
   fixtureAnswer, forecastEditorChunkSource,
+  forecastPdfDownloadPath, verifyForecastDownloadedBytes, waitForForecastPdfDownload,
 } from './verify-astra-forecast-staging.mjs';
+import path from 'node:path';
+import { tmpdir } from 'node:os';
 import { BAR_FORECAST_LIMITS, normalizeBarForecastRequest } from '../worker/bar-forecast-core.mjs';
 
 const secret = 'Bearer private-token private.person@example.invalid /proof/private-object.png 11111111-1111-4111-8111-111111111111';
 const endpoint = `${TARGET.site}/admin/dd2026/bar-forecast`;
 const plain = value => JSON.parse(JSON.stringify(value));
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
+
+test('six browser download destinations remain unique inside only the exact private fixture directory', () => {
+  const base = path.join(tmpdir(), 'dd-astra-durable-testpdf');
+  const paths = [];
+  for (let journey = 1; journey <= 3; journey++) for (let repeat = 1; repeat <= 2; repeat++) {
+    const destination = forecastPdfDownloadPath(base, journey, repeat); paths.push(destination);
+    assert.equal(path.relative(base, destination), path.join('saved-pdf-downloads', `journey-${journey}`, `repeat-${repeat}`, 'saved-report.pdf'));
+  }
+  assert.equal(new Set(paths).size, 6);
+  for (const [journey, repeat] of [[0, 1], [4, 1], [1, 0], [1, 3], ['1', 1], [1, '../escape']]) {
+    assert.throws(() => forecastPdfDownloadPath(base, journey, repeat));
+  }
+  assert.throws(() => forecastPdfDownloadPath(tmpdir(), 1, 1));
+});
+
+test('browser PDF verification requires every exact canonical byte, not only MIME, prefix or approximate score', () => {
+  const expected = Buffer.from('%PDF-1.7\nExact synthetic saved20-answer evidence.\n%%EOF');
+  const result = verifyForecastDownloadedBytes(Buffer.from(expected), expected);
+  assert.equal(result.byteLength, expected.length); assert.equal(result.canonicalBytesEqual, true); assert.match(result.sha256, /^[a-f0-9]{64}$/u);
+  for (const actual of [Buffer.from('not PDF'), expected.subarray(0, expected.length - 1),
+    Buffer.concat([expected, Buffer.from('extra')]), Buffer.from(expected.toString().replace('20-answer', '19-answer')),
+    new Uint8Array(10 * 1024 * 1024 + 1), '%PDF-string-is-not-byte-evidence']) {
+    assert.throws(() => verifyForecastDownloadedBytes(actual, expected));
+  }
+});
+
+test('native saved-file wait allows actual async download and never manufactures missing or failed file evidence', async () => {
+  let clock = 0; let reads = 0; const expected = Buffer.from('%PDF-actual-file');
+  const bytes = await waitForForecastPdfDownload({ readCandidate: async () => ++reads < 3 ? null : expected,
+    sleep: async ms => { clock += ms; }, now: () => clock, timeoutMs: 1000 });
+  assert.equal(bytes, expected); assert.equal(reads, 3);
+  await assert.rejects(waitForForecastPdfDownload({ readCandidate: async () => { throw new Error('FILE_READ_FAILED'); } }), /FILE_READ_FAILED/u);
+  clock = 0;
+  await assert.rejects(waitForForecastPdfDownload({ readCandidate: async () => null,
+    sleep: async ms => { clock += ms; }, now: () => clock, timeoutMs: 500 }), { code: 'ASTRA_FORECAST_DOWNLOAD_TIMEOUT' });
+});
+
+test('native saved-file wait hard-bounds a hung filesystem read and ignores late evidence after cancellation', async () => {
+  const pending = deferred(); let reads = 0;
+  const work = waitForForecastPdfDownload({ readCandidate: () => { reads++; return pending.promise; }, timeoutMs: 15 });
+  await assert.rejects(work, { code: 'ASTRA_FORECAST_DOWNLOAD_TIMEOUT' });
+  pending.resolve(Buffer.from('%PDF-late-file')); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(reads, 1);
+  await assert.rejects(waitForForecastPdfDownload({ readCandidate: async () => null, checkDeadline: () => { throw new Error('RUN_CANCELLED'); } }), /RUN_CANCELLED/u);
+  await assert.rejects(waitForForecastPdfDownload({ readCandidate: async () => null, evidence: 'prepared-note', timeoutMs: 10 }),
+    { code: 'ASTRA_FORECAST_PREPARED_NOTE_MISSING' });
+});
 
 test('only controlled journey3 changes its answers; real-provider and lost-ack journeys stay byte-identical', () => {
   const prefix = 'astra-durable-1788750000000-deadbeef';
@@ -76,9 +126,30 @@ test('maximum fixture preserves three journeys, six successful PDF reads, and fa
   assert.match(source, /for \(let repeat = 0; repeat < 2; repeat\+\+\)/u);
   assert.match(source, /if \(number === 1\)[\s\S]+await waitForRealReport\(journey\.id\)/u);
   assert.match(source, /controlledComplete\(journey\.id, number === 3, number === 2\)/u);
+  assert.match(source, /await browser\('click', selector\)/u);
+  assert.match(source, /--download-path', browserDownloadDir/u);
+  assert.match(source, /verifyForecastDownloadedBytes\(bytes, expectedPdf\)/u);
+  assert.match(source, /buildForecastResultPdf\(\{ attempt: reloaded, ownerId: member\.id \}\)/u);
+  assert.doesNotMatch(source, /api\(member, \{ operation: 'result_pdf'/u);
+  assert.match(source, /assert\.equal\(eventRows\.length, 1\)/u);
+  assert.match(source, /details\.serverVerifiedPdf, false/u);
+  assert.match(source, /details\.byteCount, pdfByteCount/u);
+  assert.match(source, /api\(other, preparedBody, \[404\]\)/u);
+  assert.match(source, /api\(unpaid, preparedBody, \[403\]\)/u);
   assert.match(source, /assertControlledCoverage\([\s\S]+requiredCoverage\)/u);
   assert.match(source, /assert\.deepEqual\(snapshot\.answers\.map\(\(row\) => row\.answer\), answers/u);
   assert.match(source, /answerLengthEvidence: journey\.answerLengthEvidence/u);
+});
+
+test('prepared-note ownership checks execute only in real staging, never in the inert native browser self-test', async () => {
+  const source = await readFile(new URL('./verify-astra-forecast-staging.mjs', import.meta.url), 'utf8');
+  const staging = source.slice(source.indexOf('export async function verifyStaging('), source.indexOf('export async function selfTest()'));
+  const inert = source.slice(source.indexOf('export async function selfTestBrowser()'), source.indexOf('\nif (process.argv[1]'));
+  assert.match(staging, /stage = 'ownership-boundaries'[\s\S]*const preparedBody[\s\S]*api\(other, preparedBody, \[404\]\)[\s\S]*api\(unpaid, preparedBody, \[403\]\)/u);
+  assert.doesNotMatch(inert, /\b(?:api|service)\(|preparedBody|STAGING_SUPABASE_SERVICE_ROLE_KEY|TARGET\./u);
+  assert.match(inert, /--download-path', privateDir/u);
+  assert.match(inert, /for \(let repeat = 1; repeat <= 2; repeat\+\+\)/u);
+  assert.match(inert, /await rename\(localPdfPath/u);
 });
 
 test('supported API cleanup never claims protected Pulse or Auth-session absence', async () => {
@@ -115,7 +186,8 @@ test('diagnostics project only enums, booleans, bounded counts and HTTP status',
   assert.equal(safe.operations.status.errorCode, 'BAR_FORECAST_ACCESS_REQUIRED');
   assert.equal(safe.operations.status.httpStatus, 403);
   assert.equal(safe.authReady, 'settled');
-  assert.equal(Object.keys(safe.operations).length, 9);
+  assert.deepEqual(Object.keys(safe.operations), ['status', 'start', 'submit_attempt', 'attempt', 'history', 'retry_attempt',
+    'result_pdf', 'result_pdf_prepared', 'email_result', 'accept']);
   assert.doesNotMatch(JSON.stringify(safe), /private-token|private\.person|private-object|11111111/);
   assert.deepEqual(sanitizeForecastBrowserDiagnostics(JSON.parse(JSON.stringify(safe))), safe, 'Revalidate the browser result at the Node boundary');
 });

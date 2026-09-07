@@ -36,14 +36,21 @@ async function boundedJsonFetch(fetcher, url, options) {
 export async function sendForecastResultEmail(env, message, fetcher = fetch) {
   try { assertForecastResultEmailAvailable(env); } catch { return { definitelyNotAccepted: true }; }
   const attachment = message?.attachment;
+  const deliveryKind = message?.deliveryKind ?? 'pdf_attachment';
+  const validDelivery = deliveryKind === 'summary_link' ? attachment == null
+    : deliveryKind === 'pdf_attachment' && attachment?.bytes instanceof Uint8Array && attachment.bytes.length > 0
+      && attachment.bytes.length <= MAX_ATTACHMENT_BYTES && attachment.contentType === 'application/pdf'
+      && /^duediligence-forecast-[a-f0-9-]+-r[0-9]+\.pdf$/u.test(attachment.filename);
   if (!emailPattern.test(String(message?.to || '')) || String(message.to).length > 254
       || !/^[a-zA-Z0-9:_/-]{1,256}$/u.test(String(message?.idempotencyKey || ''))
-      || !(attachment?.bytes instanceof Uint8Array) || !attachment.bytes.length
-      || attachment.bytes.length > MAX_ATTACHMENT_BYTES || attachment.contentType !== 'application/pdf'
-      || !/^duediligence-forecast-[a-f0-9-]+-r[0-9]+\.pdf$/u.test(attachment.filename)) {
+      || !validDelivery || typeof message?.subject !== 'string' || !message.subject.length
+      || message.subject.length > 200 || /[\r\n]/u.test(message.subject)
+      || typeof message?.text !== 'string' || !message.text.length || message.text.length > 32000
+      || (message.html != null && (typeof message.html !== 'string' || message.html.length > 64000))) {
     return { definitelyNotAccepted: true };
   }
-  const content = Buffer.from(attachment.bytes).toString('base64');
+  const attachments = deliveryKind === 'pdf_attachment'
+    ? [{ filename: attachment.filename, content_type: 'application/pdf', content: Buffer.from(attachment.bytes).toString('base64') }] : null;
   try {
     const { response, result } = await boundedJsonFetch(fetcher, 'https://api.resend.com/emails', {
       method: 'POST',
@@ -51,7 +58,7 @@ export async function sendForecastResultEmail(env, message, fetcher = fetch) {
         'Idempotency-Key': message.idempotencyKey },
       body: JSON.stringify({ from: env.FORECAST_RESULTS_EMAIL_FROM, to: [message.to],
         subject: message.subject, text: message.text, ...(typeof message.html === 'string' ? { html: message.html } : {}),
-        attachments: [{ filename: attachment.filename, content_type: 'application/pdf', content }] }),
+        ...(attachments ? { attachments } : {}) }),
     });
     if (response.ok && typeof result?.id === 'string' && /^[a-zA-Z0-9-]{1,180}$/u.test(result.id)) {
       return { accepted: true, providerMessageId: result.id };

@@ -36,8 +36,13 @@ async function browser(...args) {
   try {
     const result = await run('npx', ['--yes', 'agent-browser@0.36.0', '--session', prefix, ...args], { timeout: 65000, maxBuffer: 1000000, windowsHide: true });
     return result.stdout;
-  } catch {
-    // Browser output can contain session/profile data; never echo it to CI logs.
+  } catch (error) {
+    const scrub = value => String(value || '').replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, '[session]').replace(/sb_(?:secret|publishable)_[A-Za-z0-9_-]+/g, '[key]').replace(/\S+@\S+/g, '[test-account]').slice(0,5000);
+    await writeFile(path.join(evidenceDir, 'failure-action.json'), JSON.stringify({ action: args[0], arguments: args.slice(1).map(scrub), detail: scrub(error.stderr || error.stdout || error.message) }, null, 2));
+    await run('npx', ['--yes','agent-browser@0.36.0','--session',prefix,'screenshot',path.join(evidenceDir,'failure.png')], { timeout: 15000, windowsHide: true }).catch(() => {});
+    const snapshot = await run('npx', ['--yes','agent-browser@0.36.0','--session',prefix,'snapshot','-i'], { timeout:15000, windowsHide:true }).catch(() => null);
+    if (snapshot) await writeFile(path.join(evidenceDir,'failure-snapshot.txt'),scrub(snapshot.stdout));
+    // Keep credentials out of CI logs; sanitized diagnostics are private artifacts.
     throw new Error(`Authenticated staging browser action failed: ${args[0]}`);
   }
 }
@@ -100,6 +105,11 @@ try {
   await browser('close').catch(() => {});
   try {
     if (userId) {
+      // Analytics rows use SET NULL FKs but signed-in checks require an owner.
+      // Remove only this disposable fixture's activity before deleting Auth.
+      for (const table of ['usage_events', 'usage_sessions']) {
+        await service(`/rest/v1/${table}?user_id=eq.${userId}`, { method:'DELETE' }, [200,204]);
+      }
       await service(`/auth/v1/admin/users/${userId}`, { method: 'DELETE' }, [200, 204]);
       const remaining = await service(`/rest/v1/profiles?id=eq.${userId}&select=id`);
       cleanupComplete = remaining.length === 0;

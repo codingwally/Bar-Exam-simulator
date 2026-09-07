@@ -69,6 +69,7 @@ async function waitForSaved(page) {
 }
 
 async function runAccessibilityAudit(page, label) {
+  const previousUiStage = currentUiStage;
   currentUiStage = 'accessibility';
   if (!await page.evaluate(() => Boolean(window.axe))) {
     await page.addScriptTag({
@@ -92,6 +93,7 @@ async function runAccessibilityAudit(page, label) {
     const first = results.accessibility[label][0];
     assert.fail(`${label} has WCAG A/AA violations: ${first.id}; target=${JSON.stringify(first.targets[0] || [])}; ${first.summaries[0] || ''}`);
   }
+  currentUiStage = previousUiStage;
 }
 
 async function completeOnboardingIfShown(page) {
@@ -659,6 +661,7 @@ async function completeSubjectMatter(page) {
   await completeTermsAcceptanceIfShown(page);
   await openCatalog(page, 'per_subject');
   await verifySubjectChooserGeometry(page);
+  currentUiStage = 'subject-course-selection';
   const subject = 'Civil Procedure II';
   const courseChooser = page.locator('#dd-per-subject-app [data-subject-selector-open]');
   await courseChooser.scrollIntoViewIfNeeded();
@@ -672,17 +675,78 @@ async function completeSubjectMatter(page) {
   const courseChoice = subjectSelector.locator(`[data-exam-subject="${subject}"]`);
   await courseChoice.focus();
   await courseChoice.press('Enter');
-  const startButton = page.locator(`[data-subject-start="${subject}"]`);
-  await startButton.focus();
-  await startButton.press('Enter');
-  await page.waitForFunction(
-    () => (
-      window.DueDiligenceExaminations?.getState?.().screen === 'room'
-      && Boolean(document.getElementById('dd-answer-editor'))
-    ),
-    null,
-    { timeout: 15_000 },
-  );
+  // Course selection intentionally focuses its new heading in a queued frame.
+  // Observe that completed keyboard transition before starting the next one.
+  await page.waitForFunction((expectedSubject) => {
+    const root = document.getElementById('dd-per-subject-app');
+    const heading = root?.querySelector('#dd-selected-course-heading');
+    return Boolean(heading && document.activeElement === heading
+      && heading.querySelector('h2')?.textContent.trim() === expectedSubject
+      && !root.querySelector('#dd-subject-selector-dialog[open]'));
+  }, subject, { timeout: 15_000 });
+  const startButton = page.locator(`#dd-per-subject-app [data-subject-start="${subject}"]`);
+  assert.equal(await startButton.isVisible(), true);
+  assert.equal(await startButton.isEnabled(), true);
+  currentUiStage = 'subject-room-entry';
+  const startObservation = { nextRequests: 0, nextResponses: 0, nextStatus: 0,
+    startRequests: 0, startResponses: 0, startStatus: 0, failedRequests: 0 };
+  const observedRequests = new Map();
+  const onStartRequest = (request) => {
+    // Only retain enumerated operations/counters; never retain payloads or URLs.
+    try {
+      const path = new URL(request.url()).pathname;
+      const operation = request.postDataJSON()?.operation;
+      const kind = path === '/examinations/query' && operation === 'subject_next' ? 'next'
+        : path === '/examinations/command' && operation === 'start_attempt' ? 'start' : null;
+      if (!kind) return;
+      observedRequests.set(request, kind);
+      startObservation[`${kind}Requests`] = Math.min(99, startObservation[`${kind}Requests`] + 1);
+    } catch { /* Unrelated requests have no diagnostic fields. */ }
+  };
+  const onStartResponse = (response) => {
+    const kind = observedRequests.get(response.request());
+    if (!kind) return;
+    startObservation[`${kind}Responses`] = Math.min(99, startObservation[`${kind}Responses`] + 1);
+    startObservation[`${kind}Status`] = response.status();
+  };
+  const onStartFailure = (request) => {
+    if (observedRequests.has(request)) startObservation.failedRequests = Math.min(99, startObservation.failedRequests + 1);
+  };
+  page.on('request', onStartRequest);
+  page.on('response', onStartResponse);
+  page.on('requestfailed', onStartFailure);
+  try {
+    await startButton.focus();
+    await startButton.press('Enter');
+    await page.waitForFunction(
+      () => (
+        window.DueDiligenceExaminations?.getState?.().screen === 'room'
+        && Boolean(document.getElementById('dd-answer-editor'))
+      ),
+      null,
+      { timeout: 15_000 },
+    );
+  } catch (error) {
+    const ui = await page.evaluate(() => {
+      const root = document.getElementById('dd-per-subject-app');
+      const start = root?.querySelector('[data-subject-start]');
+      const screen = window.DueDiligenceExaminations?.getState?.().screen;
+      return {
+        focus: document.activeElement === start ? 'start'
+          : document.activeElement?.id === 'dd-selected-course-heading' ? 'heading' : 'other',
+        screen: ['catalog', 'room'].includes(screen) ? screen : 'other',
+        startBusy: Boolean(start?.disabled || start?.getAttribute('aria-busy') === 'true'),
+        dialogOpen: Boolean(root?.querySelector('#dd-subject-selector-dialog[open]')),
+      };
+    }).catch(() => ({ focus: 'unknown', screen: 'unknown', startBusy: false, dialogOpen: false }));
+    error.stagingSubjectStart = { ...startObservation, ...ui };
+    throw error;
+  } finally {
+    page.off('request', onStartRequest);
+    page.off('response', onStartResponse);
+    page.off('requestfailed', onStartFailure);
+    observedRequests.clear();
+  }
   assert.equal(
     await page.locator('#dd-exam-setup-dialog[open]').isVisible().catch(() => false),
     false,

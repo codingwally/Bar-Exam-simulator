@@ -170,3 +170,51 @@ test('UI wrapper and verifier only emit structured inner failures, not raw excep
   assert.match(wrapper,/EXAMINATIONS_UI_STAGING: synthetic_cleanup=true/);
   assert.doesNotMatch(wrapper+verifier,/console\.(?:log|error)\([^\n]*(?:verifier\.output|error\.stack|error\.message)/);
 });
+
+const subjectObservation = () => ({ nextRequests: 1, nextResponses: 1, nextStatus: 200,
+  startRequests: 1, startResponses: 1, startStatus: 403, failedRequests: 0,
+  focus: 'start', screen: 'catalog', startBusy: false, dialogOpen: false });
+
+test('Subject Matter entry failure retains bounded transport and UI state, not protected data', () => {
+  const error = innerError({name:'TimeoutError', stagingSubjectStart:subjectObservation()});
+  const d = buildStagingUiFailureDiagnostic(error, 'subject-room-entry');
+  assert.deepEqual(d.subjectStart, subjectObservation());
+  assert.deepEqual(readStagingUiFailureDiagnostic(innerMarker(d)), d);
+  assert.equal(buildStagingChildEvidence('test-examinations-staging-ui.mjs', {
+    code:1, output:innerMarker(d),
+  }).failure.subjectStart.startStatus, 403);
+  assert.doesNotMatch(JSON.stringify(d), /PRIVATE|ANSWER|alice|sb_secret|url|payload/);
+});
+
+test('Subject Matter diagnostic rejects unknown fields, identifiers, free text and invalid scalars', () => {
+  const good = subjectObservation();
+  const bad = [null, [], {}, {...good, extra:'PRIVATE ANSWER'}, {...good, nextRequests:100},
+    {...good, nextRequests:-1}, {...good, nextRequests:0.5}, {...good, nextResponses:'1'},
+    {...good, startResponses:639123456789}, {...good, failedRequests:Infinity},
+    {...good, nextStatus:99}, {...good, startStatus:600}, {...good, startStatus:'200'},
+    {...good, focus:'alice@example.invalid'}, {...good, screen:'PRIVATE ANSWER'},
+    {...good, startBusy:1}, {...good, dialogOpen:'false'}];
+  const valid = buildStagingUiFailureDiagnostic(innerError({stagingSubjectStart:good}), 'subject-room-entry');
+  for (const value of bad) {
+    const d = buildStagingUiFailureDiagnostic(innerError({stagingSubjectStart:value}), 'subject-room-entry');
+    assert.equal(d.subjectStart, undefined);
+    assert.equal(readStagingUiFailureDiagnostic(innerMarker({...valid,subjectStart:value})), null);
+  }
+  assert.equal(buildStagingUiFailureDiagnostic(innerError({stagingSubjectStart:good}), 'accessibility').subjectStart, undefined);
+  assert.equal(readStagingUiFailureDiagnostic(innerMarker({...valid,stage:'accessibility'})), null);
+});
+
+test('Subject Matter start observes selection completion but retains a single keyboard activation and 15s room bound', () => {
+  const source=readFileSync(new URL('./verify-examinations-staging-ui.mjs',import.meta.url),'utf8');
+  const start=source.slice(source.indexOf("currentUiStage = 'subject-course-selection'"),source.indexOf("const practiceRoom =", source.indexOf("currentUiStage = 'subject-course-selection'")));
+  assert.match(start,/document\.activeElement === heading/);
+  assert.match(start,/heading\.querySelector\('h2'\)\?\.textContent\.trim\(\) === expectedSubject/);
+  assert.match(start,/!root\.querySelector\('#dd-subject-selector-dialog\[open\]'\)/);
+  assert.equal((start.match(/startButton\.press\('Enter'\)/g)||[]).length,1);
+  assert.match(start,/getState\?\.\(\)\.screen === 'room'[\s\S]*?timeout: 15_000/);
+  assert.doesNotMatch(start,/waitForTimeout|retry|\.click\(/);
+  assert.match(start,/page\.off\('request', onStartRequest\)/);
+  assert.match(start,/page\.off\('response', onStartResponse\)/);
+  assert.match(start,/page\.off\('requestfailed', onStartFailure\)/);
+  assert.match(source,/const previousUiStage = currentUiStage;[\s\S]*currentUiStage = previousUiStage/);
+});

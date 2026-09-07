@@ -854,11 +854,30 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
     }
   }
 
+  async function preflightFixtureRegistration() {
+    // All-null input must be rejected before the SQL helper reads an Auth row.
+    // This confirms the installed RPC and service EXECUTE path without mutation.
+    const denied = await service('/rest/v1/rpc/astra_register_staging_forecast_fixture', { method: 'POST',
+      body: JSON.stringify({ p_user_id: null, p_fixture_prefix: null, p_fixture_kind: null }) }, [400]);
+    assert.equal(denied?.code, 'P0001');
+    assert.equal(denied.message, 'Staging fixture identity is invalid');
+  }
+
   async function createFixture(kind, entitled) {
     const email = `${prefix}-${kind}@example.com`; const password = `Dd!${randomBytes(32).toString('base64url')}`;
     const created = await service('/auth/v1/admin/users', { method: 'POST', body: JSON.stringify({ email, password, email_confirm: true,
+      app_metadata: { astra_staging_fixture: { version: 1, prefix, kind } },
       user_metadata: { full_name: 'Astra isolated staging verification', internal_test: true, astra_fixture_prefix: prefix } }) }, [200, 201]);
     const account = { id: created.id, email, kind, attemptIds: [] }; assertFixtureRecord(account, prefix); fixtures.push(account); await persistManifest();
+    // Persist cleanup identity before registration. Never sign in or proceed to
+    // onboarding if the authoritative pre-sign-in classification is unconfirmed.
+    const registration = await service('/rest/v1/rpc/astra_register_staging_forecast_fixture', { method: 'POST',
+      body: JSON.stringify({ p_user_id: account.id, p_fixture_prefix: prefix, p_fixture_kind: kind }) });
+    assert.equal(registration?.registered, true);
+    assert.equal(registration.fixtureUserId, account.id);
+    assert.equal(registration.dataScope, 'internal_test');
+    assert.equal(registration.registrationVersion, 'astra-staging-forecast-v1');
+    assert.equal(typeof registration.replayed, 'boolean');
     const signedIn = await safeRequest(`${TARGET.supabase}/auth/v1/token?grant_type=password`, { method: 'POST',
       headers: { apikey: publishable, 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
     account.session = signedIn.body; assert.equal(account.session.user.id, account.id);
@@ -1165,6 +1184,8 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
     assert.ok(new TextDecoder().decode(asset).includes('submit_attempt'), 'Durable frontend candidate is not deployed'); summary.forecastAssetSha256 = digest(asset);
     for (const table of ['dd2026_forecast_attempts', 'dd2026_forecast_batches', 'dd2026_forecast_result_exports']) await service(`/rest/v1/${table}?select=*&limit=0`);
     checks.push('pinned-staging-config-durable-assets-and-schema');
+    await preflightFixtureRegistration();
+    checks.push('service-only-pre-sign-in-fixture-registration-rpc');
     if (preflightOnly) { summary.preflightComplete = true; return summary; }
     launcher = await browserLauncher();
     for (const kind of ['member', 'other', 'unpaid']) assertBrowserSocketBudget(browserIdentity(prefix, kind), browserEnv);

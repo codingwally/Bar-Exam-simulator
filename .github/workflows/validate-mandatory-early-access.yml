@@ -188,6 +188,7 @@ on:
       - '.github/workflows/bootstrap-examination-room-key-pepper.yml'
       - '.github/workflows/validate-mandatory-early-access.yml'
       - 'scripts/test-unlimited-feature-access-live.mjs'
+      - 'scripts/verify-forecast-entry-staging.mjs'
       - 'scripts/test-unlimited-feature-access.mjs'
       - 'scripts/test-unlimited-feature-access-release-workflow.mjs'
       - 'scripts/verify-unlimited-feature-access-live.mjs'
@@ -299,6 +300,7 @@ jobs:
           node scripts/test-unlimited-feature-access.mjs
           node scripts/test-bar-forecast-frontend.mjs
           node --test scripts/test-forecast-authorization-generation.mjs
+          node --check scripts/verify-forecast-entry-staging.mjs
           node scripts/test-unlimited-feature-access-release-workflow.mjs
           node scripts/test-pages-artifact.mjs
 

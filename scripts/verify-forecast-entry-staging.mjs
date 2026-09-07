@@ -88,7 +88,11 @@ try {
   checks.push('reload-bounded-entry');
   await browser('find', 'role', 'button', 'click', '--name', 'Close forecast');
   await browser('network', 'route', `${site}/admin/dd2026/bar-forecast`, '--body', JSON.stringify({ ok: false, error: { code: 'BAR_FORECAST_GRADING_UNAVAILABLE', message: 'Controlled staging response failure.' } }));
-  await browser('open', `${site}/#bar-forecast-2026`);
+  // Exercise the actual user launcher. A same-document CLI `open` after Close
+  // can remain on the Home shell without invoking the application's launcher.
+  const home = await browser('snapshot', '-i');
+  assert.match(home, /button "2026 Bar Forecast"/);
+  await browser('find', 'role', 'button', 'click', '--name', '2026 Bar Forecast', '--exact');
   await browser('wait', '--text', 'Try again');
   const failed = await browser('snapshot', '-i');
   assert.match(failed, /Try again/);

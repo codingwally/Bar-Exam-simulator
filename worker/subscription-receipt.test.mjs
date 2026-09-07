@@ -88,6 +88,7 @@ test('receipt dispatch attaches the exact reviewed bytes once', async () => {
   };
   try {
     const result = await sendSubscriptionReceiptEmail({
+      SUBSCRIPTION_RECEIPT_EMAIL_MODE: 'enabled',
       PAYMENT_NOTIFICATION_EMAIL_FROM: 'Due Diligence <payments@example.test>',
       RESEND_API_KEY: 'test-only-key',
     }, fixture);
@@ -105,12 +106,14 @@ test('receipt dispatch attaches the exact reviewed bytes once', async () => {
 
 test('receipt dispatch refuses missing recipients and invalid attachments', async () => {
   const invalidRecipient = await sendSubscriptionReceiptEmail({
+    SUBSCRIPTION_RECEIPT_EMAIL_MODE: 'enabled',
     PAYMENT_NOTIFICATION_EMAIL_FROM: 'Due Diligence <payments@example.test>',
     RESEND_API_KEY: 'test-only-key',
   }, { ...fixture, user: { email: 'invalid' } });
   assert.equal(invalidRecipient.safeErrorCode, 'recipient_missing');
 
   const invalidProof = await sendSubscriptionReceiptEmail({
+    SUBSCRIPTION_RECEIPT_EMAIL_MODE: 'enabled',
     PAYMENT_NOTIFICATION_EMAIL_FROM: 'Due Diligence <payments@example.test>',
     RESEND_API_KEY: 'test-only-key',
   }, { ...fixture, proof: { name: 'proof.svg', type: 'image/svg+xml', bytes: [1] } });
@@ -165,6 +168,8 @@ test('approved payment queue reads the canonical proof and completes durably', a
   };
   try {
     const result = await dispatchApprovedSubscriptionReceipt({
+      SUBSCRIPTION_RECEIPT_EMAIL_MODE: 'enabled',
+      OUTBOUND_EMAIL_MODE: 'suppressed',
       SUPABASE_URL: 'https://project.example.test',
       SUPABASE_SERVICE_ROLE_KEY: 'service-role-test-key',
       PAYMENT_NOTIFICATION_EMAIL_FROM: 'Due Diligence <payments@example.test>',

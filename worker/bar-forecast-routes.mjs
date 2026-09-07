@@ -19,6 +19,7 @@ import {
 } from './bar-forecast-core.mjs';
 import { createForecastAttemptStore } from './forecast-attempt-store.mjs';
 import { createForecastResultExporter } from './forecast-result-export.mjs';
+import { createForecastAnalyticsExporter } from './forecast-analytics-export.mjs';
 
 export async function legacyForecastAttemptId(ownerId, input) {
   const answers = [...input.answers].map((row) => ({ questionId: row.questionId.toLowerCase(), answer: row.answer }))
@@ -186,6 +187,10 @@ export function createBarForecastHandlers(deps) {
   const attemptStore = deps.attemptStore || createForecastAttemptStore({ rpc: barForecastRpc });
   const resultExporter = deps.resultExporter || createForecastResultExporter({
     attemptStore, rpc: barForecastRpc, sendEmail: deps.sendForecastResultEmail, resolveVerifiedUser: deps.resolveForecastEmailUser,
+    assertEmailAvailable: deps.assertForecastResultEmailAvailable,
+  });
+  const analyticsExporter = deps.analyticsExporter || createForecastAnalyticsExporter({
+    rpc: barForecastRpc, sendEmail: deps.sendForecastResultEmail, resolveVerifiedUser: deps.resolveForecastEmailUser,
     assertEmailAvailable: deps.assertForecastResultEmailAvailable,
   });
 
@@ -358,6 +363,23 @@ export function createBarForecastHandlers(deps) {
     }
 
     await requireConsent(env, user.id);
+    if (input.operation === 'analytics_snapshot') {
+      return privateJson(jsonResponse, await analyticsExporter.snapshot(env, user, input), 200, origin, allowedOrigin);
+    }
+    if (input.operation === 'analytics_report') {
+      return privateJson(jsonResponse, await analyticsExporter.get(env, user, input.scopeId), 200, origin, allowedOrigin);
+    }
+    if (input.operation === 'analytics_pdf') {
+      const exported = await analyticsExporter.pdf(env, user, input.scopeId);
+      const response = privateJson(jsonResponse, {}, 200, origin, allowedOrigin);
+      response.headers.set('Content-Type', 'application/pdf');
+      response.headers.set('Content-Disposition', `attachment; filename="${exported.fileName}"`);
+      response.headers.set('X-Content-Type-Options', 'nosniff');
+      return new Response(exported.bytes, { status: 200, headers: response.headers });
+    }
+    if (input.operation === 'analytics_email') {
+      return privateJson(jsonResponse, await analyticsExporter.email(env, user, input.scopeId), 200, origin, allowedOrigin);
+    }
     if (input.operation === 'result_pdf') {
       const exported = await resultExporter.pdf(env, user, input.attemptId);
       const response = privateJson(jsonResponse, {}, 200, origin, allowedOrigin);

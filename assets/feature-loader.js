@@ -24,7 +24,7 @@
       ],
       scripts: [
         'assets/study-workspace.js?v=syllabus-reveal-p0-20260826-2&feedback=offline-save-20260827-1',
-        'assets/examinations.js?v=pedro-release2-20260827-1&baseline=public-reliability-20260827-1&hotfix=ian-provisional-reveal-20260828-1&recovery=subject-review-timeout-20260828-1&results=history-20260828-1&simulation=simulation-timer-review-20260906-r2&totals=simulation-cumulative-score-20260906-r1&answers=simulation-submitted-answer-20260906-r1&access=astra-simulator-access-20260907-r1',
+        'assets/examinations.js?v=pedro-release2-20260827-1&baseline=public-reliability-20260827-1&hotfix=ian-provisional-reveal-20260828-1&recovery=subject-review-timeout-20260828-1&results=history-20260828-1&simulation=simulation-timer-review-20260906-r2&totals=simulation-cumulative-score-20260906-r1&answers=simulation-submitted-answer-20260906-r1&access=astra-simulator-access-20260907-r1&source=astra-reviewed-parts-20260907-r1',
       ],
     }),
     content: Object.freeze({
@@ -42,7 +42,7 @@
         'assets/bar-forecast.css?v=access-flow-20260902-1&durable=astra-forecast-durable-20260907-r1',
       ],
       scripts: [
-        'assets/bar-forecast.js?v=access-flow-20260902-1&unlimited=feature-access-20260902-1&loop=astra-20260907-1&durable=astra-forecast-durable-20260907-r1',
+        'assets/bar-forecast.js?v=access-flow-20260902-1&unlimited=feature-access-20260902-1&loop=astra-20260907-1&durable=astra-forecast-durable-20260907-r1&analytics=astra-main-forecast-20260907-r1&scope=astra-forecast-analytics-export-20260907-r1',
       ],
     }),
   });

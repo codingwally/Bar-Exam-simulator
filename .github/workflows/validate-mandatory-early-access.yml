@@ -213,6 +213,7 @@ on:
       - 'supabase/migrations/20260907172508_astra_forecast_summary_email.sql'
       - 'supabase/migrations/20260907173112_astra_browser_pdf_prepared_note.sql'
       - 'supabase/migrations/20260907181748_astra_admin_role_fail_closed.sql'
+      - 'supabase/migrations/20260907190944_astra_staging_fixture_registration.sql'
       - 'worker/astra-admin-role-fail-closed.test.mjs'
       - 'worker/astra-*.test.mjs'
       - 'worker/package.json'

@@ -14,7 +14,7 @@
       ],
       scripts: [
         'assets/pedro.js?v=pedro-release2-20260827-1',
-        'assets/lex-forum.js?v=profile-photo-release2-20260827-1&baseline=public-reliability-20260827-1&profile=chambers-20260827-1&cta=home-subscription-20260828-2&collapse=home-read-more-20260828-1',
+        'assets/lex-forum.js?v=profile-photo-release2-20260827-1&baseline=public-reliability-20260827-1&profile=chambers-20260827-1&cta=home-subscription-20260828-2&collapse=home-read-more-20260828-1&entry=astra-forecast-cancel-20260907-r1',
       ],
     }),
     examinations: Object.freeze({
@@ -42,7 +42,7 @@
         'assets/bar-forecast.css?v=access-flow-20260902-1&durable=astra-forecast-durable-20260907-r1',
       ],
       scripts: [
-        'assets/bar-forecast.js?v=access-flow-20260902-1&unlimited=feature-access-20260902-1&loop=astra-20260907-1&durable=astra-forecast-durable-20260907-r1',
+        'assets/bar-forecast.js?v=access-flow-20260902-1&unlimited=feature-access-20260902-1&loop=astra-20260907-1&durable=astra-forecast-durable-20260907-r1&entry=astra-forecast-cancel-20260907-r1',
       ],
     }),
   });

@@ -92,6 +92,9 @@ on:
       - 'scripts/test-examinations.mjs'
       - 'scripts/test-gemini-examiner.mjs'
       - 'scripts/test-lex-forum.mjs'
+      - 'scripts/test-forecast-cold-entry-cancellation.mjs'
+      - 'scripts/test-quorum-navigation-intent.mjs'
+      - 'scripts/test-astra-forecast-entry-cleanup-evidence.mjs'
       - 'scripts/test-master-experience-release.mjs'
       - 'scripts/test-quorum-navigation-state.mjs'
       - 'scripts/test-subject-matter-skip-flag.mjs'
@@ -238,6 +241,9 @@ jobs:
           node scripts/test-astra-payment-presentation.mjs
           node scripts/test-astra-staging-diagnostics.mjs
           node scripts/test-astra-forecast-entry-diagnostics.mjs
+          node scripts/test-astra-forecast-entry-cleanup-evidence.mjs
+          node scripts/test-forecast-cold-entry-cancellation.mjs
+          node scripts/test-quorum-navigation-intent.mjs
           node scripts/test-examinations-staging-ui-contract.mjs
           node scripts/test-astra-simulator-staging-contract.mjs
           node scripts/astra-release-database-contract.mjs --self-test

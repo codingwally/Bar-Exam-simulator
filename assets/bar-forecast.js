@@ -2408,12 +2408,14 @@
     state.root.hidden = true;
     isolatePage(false);
     resetProtectedState();
+    global.dispatchEvent(new Event('duediligence:bar-forecast-closed'));
     if (options.restoreRoute !== false) restoreForecastRoute();
     if (trigger?.isConnected) trigger.focus({ preventScroll: true });
     return true;
   }
 
-  async function openForecast(trigger = null) {
+  async function openForecast(trigger = null, options = {}) {
+    if (options.isCurrent?.() === false) return false;
     ensureRoot();
     if (!runtimeOwnerId() || !runtimeSession()?.access_token) {
       openForecastSignIn();

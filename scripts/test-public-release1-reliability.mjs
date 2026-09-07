@@ -83,12 +83,13 @@ vm.runInContext(
 );
 await vm.runInContext("runPublicNavigation('quorum')", resetContext);
 assert.equal(resetContext.history.pushed, '/#quorum');
-assert.match(landing, /DueDiligenceQuorum\?\.open\?\.\([\s\S]*?\{ forceHome: true \}/);
+assert.match(landing, /DueDiligenceQuorum\?\.open\?\.\([\s\S]*?\{ forceHome: true, isCurrent \}/);
 assert.match(home, /const forceHome = options\.forceHome === true \|\|/);
 assert.match(home, /options\.forceHome === true[\s\S]*?setView\('home', \{ route: false \}\)/);
 assert.match(landing, /if \(opened !== true\) \{[\s\S]*?return false;[\s\S]*?feature === 'quorum'[\s\S]*?resetQuorumHomeLocation\(\)/);
 let quorumOpenOptions = null;
 const quorumHomeContext = vm.createContext({
+  state: { forecastEntryVersion: 0, sessionOwnerVersion: 0 },
   currentSession: () => ({ access_token: 'test-token' }),
   loadFeature: async () => true,
   showApplication() {},

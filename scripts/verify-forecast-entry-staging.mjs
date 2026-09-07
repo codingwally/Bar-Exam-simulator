@@ -7,6 +7,48 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { completeMandatoryCommercialProfile } from './staging-commercial-user.mjs';
 
+// ASTRA_ENTRY_CLEANUP_HELPERS_BEGIN
+export function entryCleanupManifest({ fixtureUserIds = [], creationState, sourceSha, readback = {} }) {
+  assert.ok(['not_requested', 'requested', 'recorded'].includes(creationState));
+  assert.ok(Array.isArray(fixtureUserIds));
+  for (const id of fixtureUserIds) assert.match(id, /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+  const status = value => ['not_checked', 'absent', 'present', 'unavailable'].includes(value) ? value : 'not_checked';
+  return {
+    schemaVersion: 'astra-entry-cleanup-v1', target: 'staging-only', projectRef: 'hlzqmreeoghbldnhlybr',
+    sourceSha: /^[0-9a-f]{40}$/i.test(sourceSha || '') ? sourceSha : null,
+    fixtureUserIds: [...new Set(fixtureUserIds)], creationState,
+    cleanupReadback: Object.fromEntries(['authUser', 'profile', 'forecastAttempts', 'usageEvents', 'usageSessions'].map(name => [name, status(readback[name])])),
+    authSessions: 'limited_no_existing_auth_schema_read_transport',
+    pulseFixtureRows: 'not_independently_checked',
+  };
+}
+
+export async function readEntryCleanupAbsence(userId, { authStatus, rows }) {
+  assert.match(userId, /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+  const entries = await Promise.all([
+    (async () => { try { const status = await authStatus(userId); return ['authUser', status === 404 ? 'absent' : status === 200 ? 'present' : 'unavailable']; } catch { return ['authUser', 'unavailable']; } })(),
+    ...[
+      ['profile', 'profiles', 'id'], ['forecastAttempts', 'dd2026_forecast_attempts', 'owner_id'],
+      ['usageEvents', 'usage_events', 'user_id'], ['usageSessions', 'usage_sessions', 'user_id'],
+    ].map(async ([name, table, owner]) => {
+      try {
+        const result = await rows(`/rest/v1/${table}?${owner}=eq.${userId}&select=id&limit=1`);
+        return [name, Array.isArray(result) ? result.length === 0 ? 'absent' : 'present' : 'unavailable'];
+      } catch { return [name, 'unavailable']; }
+    }),
+  ]);
+  return Object.fromEntries(entries);
+}
+
+export function entryCleanupReadbackComplete({ userId, creationState, readback }) {
+  // A timed-out create may have committed without returning an ID. Never turn
+  // that unknown outcome into the previous no-user cleanup=true shortcut.
+  if (!userId) return creationState === 'not_requested';
+  return creationState === 'recorded'
+    && ['authUser', 'profile', 'forecastAttempts', 'usageEvents', 'usageSessions'].every(name => readback[name] === 'absent');
+}
+// ASTRA_ENTRY_CLEANUP_HELPERS_END
+
 // This runner never accepts a production target or uses customer accounts.
 const site = 'https://duediligence-examinations-staging.wallyesteban1993.workers.dev';
 const ref = 'hlzqmreeoghbldnhlybr';
@@ -21,8 +63,16 @@ await mkdir(evidenceDir, { recursive: true });
 const statePath = path.join(privateDir, 'auth-state.json');
 const checks = [];
 let userId;
+let creationState = 'not_requested';
+let cleanupReadback = {};
 let cleanupComplete = false;
 let verificationComplete = false;
+let browserSessionClosed = false;
+let privateAuthStateRemoved = false;
+const persistCleanupManifest = () => writeFile(path.join(evidenceDir, 'cleanup-manifest.json'), JSON.stringify(entryCleanupManifest({
+  fixtureUserIds: userId ? [userId] : [], creationState, sourceSha: process.env.GITHUB_SHA, readback: cleanupReadback,
+}), null, 2), { mode: 0o600 });
+await persistCleanupManifest();
 
 async function request(url, options = {}, expected = [200]) {
   const response = await fetch(url, { ...options, signal: AbortSignal.timeout(30000) });
@@ -67,9 +117,13 @@ try {
   assert.ok(publishable);
   const email = `${prefix}@example.com`;
   const password = `Dd!${randomBytes(32).toString('base64url')}`;
+  creationState = 'requested';
+  await persistCleanupManifest();
   const created = await service('/auth/v1/admin/users', { method: 'POST', body: JSON.stringify({ email, password, email_confirm: true, user_metadata: { full_name: 'Astra isolated staging verification', internal_test: true } }) }, [200, 201]);
+  assert.match(created?.id || '', /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
   userId = created.id;
-  assert.match(userId, /^[0-9a-f-]{36}$/);
+  creationState = 'recorded';
+  await persistCleanupManifest(); // Before login or any other fixture side effect.
   const session = await request(`${db}/auth/v1/token?grant_type=password`, { method: 'POST', headers: { apikey: publishable, 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
   assert.equal(session.user.id, userId);
   const settings = await service('/rest/v1/platform_access_settings?singleton=eq.true&select=current_terms_version,current_privacy_version');
@@ -113,7 +167,7 @@ try {
   assert.doesNotMatch(errors, /TypeError|ReferenceError|SyntaxError/);
   verificationComplete = true;
 } finally {
-  await browser('close').catch(() => {});
+  await browser('close').then(() => { browserSessionClosed = true; }).catch(() => {});
   try {
     if (userId) {
       // Analytics rows use SET NULL FKs but signed-in checks require an owner.
@@ -122,14 +176,33 @@ try {
         await service(`/rest/v1/${table}?user_id=eq.${userId}`, { method:'DELETE' }, [200,204]);
       }
       await service(`/auth/v1/admin/users/${userId}`, { method: 'DELETE' }, [200, 204]);
-      const remaining = await service(`/rest/v1/profiles?id=eq.${userId}&select=id`);
-      cleanupComplete = remaining.length === 0;
-      assert.equal(cleanupComplete, true, 'Disposable staging profile cleanup must complete');
-    } else cleanupComplete = true;
+    }
   } finally {
-    // Exact private directory was created by this test, never a user workspace.
-    await rm(privateDir, { recursive: true, force: true });
-    await writeFile(path.join(evidenceDir, 'summary.json'), JSON.stringify({ target: 'staging-only', sourceSha: process.env.GITHUB_SHA || null, verificationComplete, checks, cleanupComplete, note: 'Entry/editor smoke. Controlled failure is injected. No grading or production claim.' }, null, 2));
+    if (userId && creationState === 'recorded') cleanupReadback = await readEntryCleanupAbsence(userId, {
+      authStatus: async id => {
+        const response = await fetch(`${db}/auth/v1/admin/users/${id}`, { method: 'GET', headers: serviceHeaders, signal: AbortSignal.timeout(30000) });
+        await response.body?.cancel(); // No Auth profile/session/token body is read or persisted.
+        return response.status;
+      },
+      rows: route => service(route),
+    });
+    cleanupComplete = entryCleanupReadbackComplete({ userId, creationState, readback: cleanupReadback });
+    let cleanupManifestSaved = false;
+    try { await persistCleanupManifest(); cleanupManifestSaved = true; } // IDs survive browser/test/cleanup failures.
+    finally {
+      // Even failed evidence persistence must not strand private Auth state.
+      // This exact private directory was created by this test, never a workspace.
+      try { await rm(privateDir, { recursive: true, force: true }); privateAuthStateRemoved = true; }
+      finally {
+        cleanupComplete = cleanupComplete && browserSessionClosed && privateAuthStateRemoved && cleanupManifestSaved;
+        await writeFile(path.join(evidenceDir, 'summary.json'), JSON.stringify({ target: 'staging-only', sourceSha: process.env.GITHUB_SHA || null,
+          verificationComplete, checks, cleanupComplete, cleanupManifest: 'cleanup-manifest.json', cleanupManifestSaved, cleanupReadback,
+          browserSessionClosed, privateAuthStateRemoved, independentCleanupVerificationComplete: false,
+          cleanupVerificationLimitations: ['auth_sessions_not_exposed_by_existing_service_transport', 'pulse_fixture_rows_not_independently_checked'],
+          note: 'Entry/editor smoke. Controlled failure is injected. Cleanup readback covers Auth user, profile, Forecast attempts and usage rows; Auth sessions and Pulse fixtures remain explicitly limited. No grading or production claim.' }, null, 2), { mode: 0o600 });
+      }
+    }
+    assert.equal(cleanupComplete, true, 'Disposable staging cleanup and supported absence checks must complete');
   }
 }
 console.log(`ASTRA_FORECAST_ENTRY: ${checks.length} checks passed; synthetic_cleanup=${cleanupComplete}`);

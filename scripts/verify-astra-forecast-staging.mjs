@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdir, mkdtemp, readFile, writeFile, rm, access } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile, rm, access, lstat, rename } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -11,6 +11,7 @@ import { createServer } from 'node:http';
 import { completeMandatoryCommercialProfile } from './staging-commercial-user.mjs';
 import { createForecastAttemptStore, FORECAST_ATTEMPT_RPC_NAMES } from '../worker/forecast-attempt-store.mjs';
 import { BAR_FORECAST_LIMITS, normalizeBarForecastRequest } from '../worker/bar-forecast-core.mjs';
+import { buildForecastResultPdf, forecastResultPdfFileName } from '../worker/forecast-result-pdf.mjs';
 
 // Deliberately no production mode, configurable target, customer session, mail,
 // runtime synthetic flag, direct model invocation, or automatic remote execution.
@@ -30,7 +31,7 @@ const digest = (value) => createHash('sha256').update(typeof value === 'string' 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const meanTenths = (scores) => Math.round(scores.reduce((sum, score) => sum + Math.round(score * 10), 0) / scores.length) / 10;
 const VIEWPORTS = Object.freeze([320, 375, 390, 600, 768, 820, 1024, 1280, 1440]);
-const DIAGNOSTIC_OPERATIONS = Object.freeze(['status', 'start', 'submit_attempt', 'attempt', 'history', 'retry_attempt', 'result_pdf', 'email_result', 'accept']);
+const DIAGNOSTIC_OPERATIONS = Object.freeze(['status', 'start', 'submit_attempt', 'attempt', 'history', 'retry_attempt', 'result_pdf', 'result_pdf_prepared', 'email_result', 'accept']);
 const AUTH_DIAGNOSTIC_OPERATIONS = Object.freeze(['token_refresh', 'token_password', 'user', 'logout']);
 const AUTH_DIAGNOSTIC_ERROR_CODES = Object.freeze(['bad_jwt', 'session_not_found', 'refresh_token_not_found',
   'refresh_token_already_used', 'user_not_found', 'invalid_credentials', 'over_request_rate_limit',
@@ -437,6 +438,44 @@ export function assertCanonical(attempt, ownerId, expectedAnswers) {
     resultRevision: result.resultRevision, canonicalSha256: digest(result) };
 }
 
+export function forecastPdfDownloadPath(privateDirectory, journeyNumber, repeatNumber) {
+  const base = assertPrivateTemp(privateDirectory);
+  assert.ok(Number.isInteger(journeyNumber) && journeyNumber >= 1 && journeyNumber <= 3);
+  assert.ok(Number.isInteger(repeatNumber) && repeatNumber >= 1 && repeatNumber <= 2);
+  return path.join(base, 'saved-pdf-downloads', `journey-${journeyNumber}`, `repeat-${repeatNumber}`, 'saved-report.pdf');
+}
+
+export function verifyForecastDownloadedBytes(bytes, expectedBytes) {
+  assert.ok(bytes instanceof Uint8Array && expectedBytes instanceof Uint8Array, 'PDF evidence must contain actual bytes');
+  assert.ok(bytes.length >= 5 && bytes.length <= 10 * 1024 * 1024, 'Downloaded PDF must meet the shared safe file budget');
+  assert.equal(Buffer.from(bytes.subarray(0, 5)).toString('ascii'), '%PDF-', 'Browser must download a real PDF');
+  assert.ok(Buffer.from(bytes).equals(Buffer.from(expectedBytes)), 'Downloaded bytes must equal the shared canonical renderer exactly');
+  return { sha256: digest(bytes), byteLength: bytes.length, canonicalBytesEqual: true };
+}
+
+export async function waitForForecastPdfDownload({ readCandidate, checkDeadline = () => {},
+  sleep = delay, now = Date.now, timeoutMs = 90000, evidence = 'download' }) {
+  assert.ok(Number.isFinite(timeoutMs) && timeoutMs > 0 && timeoutMs <= 90000);
+  assert.ok(['download', 'prepared-note'].includes(evidence));
+  const until = now() + timeoutMs; let cancelled = false; let timer;
+  const timeout = () => { const error = new Error(evidence === 'download'
+    ? 'The browser did not save the PDF within the bounded preparation window.'
+    : 'The client-reported PDF preparation note was not recorded within the bounded observation window.');
+    error.code = evidence === 'download' ? 'ASTRA_FORECAST_DOWNLOAD_TIMEOUT' : 'ASTRA_FORECAST_PREPARED_NOTE_MISSING'; return error; };
+  const work = (async () => {
+    while (!cancelled && now() < until) {
+      checkDeadline(); const result = await readCandidate();
+      if (cancelled || now() >= until) throw timeout();
+      if (result !== null) return result;
+      await sleep(Math.min(250, Math.max(1, until - now())));
+    }
+    throw timeout();
+  })();
+  try { return await Promise.race([work, new Promise((_, reject) => {
+    timer = setTimeout(() => { cancelled = true; reject(timeout()); }, timeoutMs);
+  })]); } finally { cancelled = true; clearTimeout(timer); }
+}
+
 export function fixtureAnswer(prefix, journey, number) {
   const text = `${prefix} journey ${journey} answer ${number}. The controlling rule must be applied to each material fact and every required legal element before reaching a supported conclusion.`;
   if (journey === 3) {
@@ -693,6 +732,8 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
     : path.join(process.env.ASTRA_FORECAST_EVIDENCE_DIR || path.join(root, 'artifacts/astra-forecast-staging'), prefix));
   await mkdir(evidenceDir, { recursive: true });
   const privateDir = await mkdtemp(path.join(tmpdir(), 'dd-astra-durable-'));
+  const browserDownloadDir = path.join(privateDir, 'browser-downloads');
+  await mkdir(browserDownloadDir);
   const configPath = path.join(privateDir, 'browser-config.json');
   const initPath = path.join(privateDir, 'probe.js');
   const manifestPath = path.join(evidenceDir, 'cleanup-manifest.json');
@@ -744,7 +785,7 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
       const script = args[0] === 'eval' ? args[1] : null;
       const cliArgs = script === null ? args : ['eval', '--stdin'];
       const pending = runCommand(launcher.command, [...launcher.prefix, '--namespace', browserIdentity(prefix, 'local').namespace, '--session', browserSession,
-        '--config', configPath, '--restore-save', 'never', '--json', ...cliArgs],
+        '--config', configPath, '--restore-save', 'never', '--download-path', browserDownloadDir, '--json', ...cliArgs],
       { timeout: collectingFailureDiagnostics ? 10000 : 60000, maxBuffer: 1000000, windowsHide: true, env: { ...browserEnv, AGENT_BROWSER_DEFAULT_TIMEOUT: '30000' } });
       if (script !== null) {
         pending.child.stdin.on('error', () => {}); // exec's promise reports a failed command; keep fixture cleanup reachable on EPIPE.
@@ -1026,24 +1067,61 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
     if (number === 1) await verifyGeometry('report');
     await closeAndReopenForecast(`journey-${number}-report-reopen`);
     await openSaved(); await browserWait('document.querySelector(".bf26-results")');
-    const pdfs = [];
+    const pdfs = []; let pdfByteCount = 0;
+    const preparedEvents = () => service(`/rest/v1/dd2026_forecast_attempt_events?attempt_id=eq.${journey.id}&event_type=eq.browser_pdf_prepared_client_reported&select=event_type,details`);
+    assert.equal((await preparedEvents()).length, 0, 'Opening a report must not manufacture a browser export event');
     for (let repeat = 0; repeat < 2; repeat++) {
       const reloaded = await ownedAttempt(member, journey.id); assert.equal(digest(reloaded.result), grade.canonicalSha256);
       const history = (await api(member, { operation: 'history', limit: 1, completeOnly: true })).body;
       assert.equal(history.analytics.completedAttempts, number);
       const same = history.attempts.find((row) => row.id === journey.id); assert.ok(same); assert.equal(same.summary.percentage, grade.percentage);
-      const exported = await api(member, { operation: 'result_pdf', attemptId: journey.id });
-      assert.match(exported.response.headers.get('Content-Type'), /application\/pdf/u);
-      assert.match(exported.response.headers.get('Cache-Control'), /no-store/u);
-      assert.equal(Buffer.from(exported.bytes.slice(0, 5)).toString('ascii'), '%PDF-'); pdfs.push(digest(exported.bytes));
-      if (!repeat) await writeFile(path.join(evidenceDir, `journey-${number}-saved-report.pdf`), exported.bytes, { mode: 0o600 });
+      const canonicalBefore = digest(reloaded);
+      // This is an offline expected-byte calculation, never a provider call or
+      // replacement for the actual browser download that is verified below.
+      const expectedPdf = await buildForecastResultPdf({ attempt: reloaded, ownerId: member.id });
+      assert.equal(digest(reloaded), canonicalBefore);
+      assert.match(reloaded.id, UUID);
+      const candidate = path.join(browserDownloadDir, forecastResultPdfFileName(reloaded));
+      await assert.rejects(access(candidate), error => error.code === 'ENOENT', 'A previous download must never satisfy the next click');
+      stage = `journey-${number}-browser-pdf-${repeat + 1}`;
+      const selector = '.bf26-results > .bf26-actions > button:first-child';
+      await browserWait(`(() => {const button=document.querySelector(${JSON.stringify(selector)});return Boolean(button && button.textContent==='Download PDF' && !button.disabled && button.getClientRects().length);})()`);
+      await browserSnapshot(); await browser('click', selector);
+      // Startup --download-path preserves the real suggested filename. The
+      // CLI's download command has a fixed30s limit and canonicalizes Windows
+      // paths, so observe the actual completed file within25s Auth+60s render.
+      const bytes = await waitForForecastPdfDownload({ checkDeadline, readCandidate: async () => {
+        let file; try { file = await lstat(candidate); } catch (error) { if (error.code === 'ENOENT') return null; throw error; }
+        assert.ok(file.isFile() && !file.isSymbolicLink() && file.size <= 10 * 1024 * 1024, 'Only the exact private regular PDF file may be read');
+        return new Uint8Array(await readFile(candidate));
+      } });
+      const verified = verifyForecastDownloadedBytes(bytes, expectedPdf); pdfs.push(verified.sha256); pdfByteCount = verified.byteLength;
+      const retained = forecastPdfDownloadPath(privateDir, number, repeat + 1);
+      await mkdir(path.dirname(retained), { recursive: true });
+      await assert.rejects(access(retained), error => error.code === 'ENOENT');
+      await rename(candidate, retained); // Recoverable, exact fixture-owned file only.
+      if (!repeat) await writeFile(path.join(evidenceDir, `journey-${number}-saved-report.pdf`), bytes, { mode: 0o600 });
+      assert.equal(digest((await ownedAttempt(member, journey.id)).result), grade.canonicalSha256);
     }
     assert.equal(pdfs[0], pdfs[1]); assert.deepEqual(await batches(journey.id), executionBefore);
+    const eventRows = await waitForForecastPdfDownload({ timeoutMs: 10000, evidence: 'prepared-note', checkDeadline, readCandidate: async () => {
+      const rows = await preparedEvents(); assert.ok(rows.length <= 1, 'Two downloads must not duplicate one result-revision event');
+      return rows.length ? rows : null;
+    } });
+    assert.equal(eventRows.length, 1);
+    assert.equal(eventRows[0].event_type, 'browser_pdf_prepared_client_reported');
+    assert.equal(eventRows[0].details.evidence, 'client_reported'); assert.equal(eventRows[0].details.serverVerifiedPdf, false);
+    assert.equal(eventRows[0].details.resultRevision, 1); assert.equal(eventRows[0].details.pdfVersion, 'forecast-pdf-v1');
+    assert.equal(eventRows[0].details.byteCount, pdfByteCount);
     await clickText('Analytics'); await browserWait('document.body.textContent.includes("Your Forecast analytics")');
     await screen(`journey-${number}-saved-analytics`);
     const errors = await browser('errors'); assert.doesNotMatch(errors, /TypeError|ReferenceError|SyntaxError|Maximum call stack/u);
+    assert.deepEqual(await batches(journey.id), executionBefore);
+    assert.equal(digest((await ownedAttempt(member, journey.id)).result), grade.canonicalSha256);
     checks.push(`journey-${number}-saved-result-history-pdf-reload-no-extra-grading`);
-    return { ...grade, pdfSha256: pdfs[0], gradingBatchExecutions: executionBefore.reduce((sum, batch) => sum + batch.executions, 0),
+    return { ...grade, pdfSha256: pdfs[0], pdfEvidence: { actualBrowserDownloads: 2, canonicalBytesEqual: true,
+      source: 'same-origin-browser-worker', preparedEvents: 1, eventEvidence: 'client_reported-not-server-rendered' },
+      gradingBatchExecutions: executionBefore.reduce((sum, batch) => sum + batch.executions, 0),
       physicalProviderRequestCount: null, providerCountNote: 'Batch execution counters are verified; internal provider retries are not exposed as a physical-call count.' };
   }
 
@@ -1117,6 +1195,9 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
       const denied = await api(other, { operation, attemptId: latest }, [404]);
       assert.equal(denied.response.status, 404);
     }
+    const preparedBody = { operation: 'result_pdf_prepared', attemptId: latest, resultRevision: 1, pdfVersion: 'forecast-pdf-v1' };
+    assert.equal((await api(other, preparedBody, [404])).response.status, 404);
+    assert.equal((await api(unpaid, preparedBody, [403])).body.error.code, 'BAR_FORECAST_ACCESS_REQUIRED');
     assert.equal((await api(other, { operation: 'history' })).body.attempts.length, 0);
     for (const body of [{ operation: 'status' }, { operation: 'start', subject: SUBJECT }, { operation: 'attempt', attemptId: latest }]) {
       assert.equal((await api(unpaid, body, [403])).body.error.code, 'BAR_FORECAST_ACCESS_REQUIRED');
@@ -1360,6 +1441,8 @@ export async function selfTestBrowser() {
   const config = path.join(privateDir, 'browser-config.json');
   const init = path.join(privateDir, 'probe.js');
   const state = path.join(privateDir, 'local-state.json');
+  const localPdfPath = path.join(privateDir, 'local-browser-download.pdf');
+  const localPdfBytes = '%PDF-1.7\nExplicit local CLI download wiring only.\n%%EOF';
   const id = randomUUID(); const clientAttemptId = randomUUID();
   let localHttpRequests = 0; let closed = false; let launched = false;
   const server = createServer((request, response) => {
@@ -1373,7 +1456,12 @@ export async function selfTestBrowser() {
       <style>*{box-sizing:border-box}body{margin:0;padding:8px}.bf26-page{max-width:100%;padding:8px}button{min-height:44px}#bf26-current-answer{width:100%;height:150px;border:1px solid}details{padding:16px 0}</style>
       <main class="bf26-page"><h1>Local runner wiring only</h1><div id="bf26-current-answer" contenteditable="true">Local fixture final editor.</div>
       <footer class="bf26-exam-footer"><button>Submit all answers</button></footer>
-      <section class="bf26-results"><details class="bf26-result"><summary>Local fixture final question</summary><p>Local content only.</p></details><button>Download PDF</button><button>Email to me</button></section></main>`);
+      <section class="bf26-results"><details class="bf26-result"><summary>Local fixture final question</summary><p>Local content only.</p></details><button id="local-pdf">Download PDF</button><button>Email to me</button></section></main>
+      <script>document.getElementById('local-pdf').onclick=()=>setTimeout(()=>{
+        const url=URL.createObjectURL(new Blob([${JSON.stringify(localPdfBytes)}],{type:'application/pdf'}));
+        const link=document.createElement('a');link.href=url;link.download='local-browser-download.pdf';document.body.append(link);link.click();link.remove();
+        setTimeout(()=>URL.revokeObjectURL(url),1000);
+      },500);</script>`);
   });
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
   const url = `http://127.0.0.1:${server.address().port}`;
@@ -1384,7 +1472,7 @@ export async function selfTestBrowser() {
       const cliArgs = script === null ? args : ['eval', '--stdin'];
       const identity = browserIdentity(prefix, 'local');
       const pending = runCommand(launcher.command, [...launcher.prefix, '--namespace', identity.namespace, '--session', identity.session,
-        '--config', config, '--restore-save', 'never', '--json', ...cliArgs],
+        '--config', config, '--restore-save', 'never', '--download-path', privateDir, '--json', ...cliArgs],
       { timeout: 60000, maxBuffer: 1000000, windowsHide: true, env: isolatedBrowserEnv() });
       if (script !== null) {
         pending.child.stdin.on('error', () => {});
@@ -1429,9 +1517,19 @@ export async function selfTestBrowser() {
     }
     await browser('eval', "document.documentElement.style.zoom='2'");
     for (const surface of ['editor', 'report']) assertGeometry(await browser('eval', geometrySource(surface)));
+    for (let repeat = 1; repeat <= 2; repeat++) {
+      await assert.rejects(access(localPdfPath), error => error.code === 'ENOENT');
+      await browser('click', '#local-pdf');
+      const downloaded = await waitForForecastPdfDownload({ timeoutMs: 10000, readCandidate: async () => {
+        try { return await readFile(localPdfPath, 'utf8'); } catch (error) { if (error.code === 'ENOENT') return null; throw error; }
+      } });
+      assert.equal(downloaded, localPdfBytes);
+      await rename(localPdfPath, path.join(privateDir, `verified-download-${repeat}.pdf`));
+    }
     await browser('close'); closed = true;
-    return { ok: true, test: 'loopback-only CLI wiring, not application evidence', checks: process.platform === 'linux' ? 11 : 10, localHttpRequests,
+    return { ok: true, test: 'loopback-only CLI wiring, not application evidence', checks: process.platform === 'linux' ? 13 : 12, localHttpRequests,
       linuxOriginalIdentityRejected,
+      nativeAsyncBlobDownloadVerified: true,
       browserSessions: 1, externalApplicationRequests: 0, providerRequests: 0, remoteWrites: 0, privateStateRemoved: true };
   } finally {
     if (launched && !closed && launcher) { await browser('close').catch(() => {}); }

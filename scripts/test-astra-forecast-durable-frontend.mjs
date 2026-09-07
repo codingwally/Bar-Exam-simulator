@@ -65,6 +65,7 @@ function savedAttempt(overrides = {}) {
 function completedAttempt(overrides = {}) {
   const value = savedAttempt(overrides);
   const results = value.questions.map((q) => ({ questionId: q.id, number: q.number, score: 4, maxScore: 5,
+    question: q.prompt,
     userAnswer: value.answers.find((a) => a.questionId === q.id).answer, suggestedAnswer: 'The suggested legal answer explains the applicable requirement and the facts.',
     feedback: 'The governing legal basis is applied to these facts.', explanation: 'The reasoning states the applicable rule and connects the material facts.',
     mockBarCoaching: { strength: 'States the applicable rule.', priorityImprovement: 'Connect each material fact.', nextStep: 'Rewrite the application with specific facts.' },
@@ -73,8 +74,10 @@ function completedAttempt(overrides = {}) {
   const analytics = { questionCount: 20, averageScore: 4, issueSpottingAverage: 4, grammarAverage: 4, diagnosticMaxScore: 5,
     performanceBands: { strong: 20, developing: 0, needsFocus: 0 } };
   return { ...value, status: 'complete', completedQuestionCount: 20, resultRevision: 1,
+    completedAt: '2026-09-07T02:00:00Z',
     summary: { totalScore: 80, maxScore: 100, percentage: 80 },
     result: { attemptId: value.id, ownerId: owner, subject: value.subject, setId: value.setId,
+      resultRevision: 1, schemaVersion: 'forecast-attempt-v1', percentage: 80,
       complete: true, questionCount: 20, completedQuestionCount: 20, totalScore: 80, maxScore: 100, results, analytics } };
 }
 function fixture({ storage = new Map() } = {}) {
@@ -83,7 +86,7 @@ function fixture({ storage = new Map() } = {}) {
   class FixtureDate extends Date { static now() { return now; } }
   const session = { access_token: 'synthetic-token', user: { id: owner } };
   const view = new TinyNode(); const body = new TinyNode('body');
-  const location = { hash: '#bar-forecast-2026', pathname: '/', search: '' };
+  const location = { hash: '#bar-forecast-2026', pathname: '/', search: '', origin: 'https://synthetic.example.invalid' };
   const window = {
     crypto: webcrypto, AbortController, location, confirm: () => true, addEventListener: (name, fn) => events.set(name, fn),
     setTimeout: (fn, delay) => { const id = ++timerId; timers.set(id, { fn, delay }); return id; }, clearTimeout: (id) => timers.delete(id),
@@ -95,14 +98,15 @@ function fixture({ storage = new Map() } = {}) {
   };
   const document = { body, activeElement: null, createElement: (tag) => new TinyNode(tag), createTextNode: (text) => new TinyNode('#text', text), querySelectorAll: () => [], querySelector: () => null };
   const context = vm.createContext({ window, document, console, Node: { ELEMENT_NODE: 1 }, Element: TinyNode,
-    AbortController, Uint8Array, Intl, Date: FixtureDate, location, history: { back: () => {}, replaceState: () => {}, pushState: () => {} },
+    AbortController, ArrayBuffer, Uint8Array, Blob, Intl, Date: FixtureDate, location, history: { back: () => {}, replaceState: () => {}, pushState: () => {} },
     requestAnimationFrame: () => {}, Event: class {}, CustomEvent: class {} });
   const end = '})(window);'; assert.equal(source.split(end).length - 1, 1);
   vm.runInContext(source.replace(end, `global.__durableTest = { state, submitForecast, sendForecastSubmission, persistForecastDraft, readForecastDrafts,
     restoreForecastDraft, adoptSavedAttempt, normalizedSavedAttempt, openSavedForecast, pollSavedForecast, stopForecastPolling,
     loadForecastHistory, renderForecastHistory, closeForecast, handleForecastAccessChange, handleForecastSessionChange,
     renderSavedForecastStatus, resetProtectedState, requestForecast, nullableMetric, retrySavedForecast,
-    downloadSavedForecast, emailSavedForecast, forecastReadRetryDelay };\n${end}`), context);
+    downloadSavedForecast, emailSavedForecast, forecastReadRetryDelay, abortRequest,
+    renderSavedForecastPdfInBrowser, forecastPdfRenderingSnapshot, awaitForecastPdfRequest };\n${end}`), context);
   const hooks = window.__durableTest; const state = hooks.state; const attempt = savedAttempt();
   Object.assign(state, { ownerId: owner, isOpen: true, view: 'exam', viewNode: view, root: new TinyNode(), closeButton: new TinyNode('button'),
     clientAttemptId: clientId, subject, setId: attempt.setId, questions: attempt.questions, answers: new Map(attempt.answers.map((a) => [a.questionId, a.answer])), currentIndex: 19 });
@@ -361,13 +365,166 @@ test('PDF and email are explicit completed-report actions; provider acceptance n
   const trigger = new TinyNode('button'); const status = new TinyNode();
   await c.emailSavedForecast(trigger, status); assert.equal(trigger.disabled, true);
   assert.match(status.textContent, /not yet confirmed/); assert.doesNotMatch(status.textContent, /successfully delivered/);
-  c.window.DueDiligencePhase2Config = { workerUrl: 'https://synthetic.example.invalid' };
   c.window.URL = { createObjectURL: () => 'blob:synthetic-only', revokeObjectURL: () => {} };
-  c.window.fetch = async (url, options) => {
-    assert.equal(url, 'https://synthetic.example.invalid/admin/dd2026/bar-forecast');
-    assert.equal(options.headers.Authorization, 'Bearer synthetic-token');
-    assert.deepEqual(JSON.parse(options.body), { operation: 'result_pdf', attemptId });
-    return new Response(new Blob(['%PDF-synthetic-only']), { headers: { 'Content-Type': 'application/pdf' } });
+  c.window.DueDiligencePhase4.request = async (_route, { body }) => {
+    if (body.operation === 'result_pdf_prepared') return { ok: true };
+    assert.deepEqual(JSON.parse(JSON.stringify(body)), { operation: 'attempt', attemptId });
+    return { authorized: true, consentAccepted: true, attempt: completedAttempt() };
   };
-  await c.downloadSavedForecast(trigger, status); assert.equal(status.textContent, 'Saved report downloaded.');
+  const workers = installPdfWorker(c, true);
+  await c.downloadSavedForecast(trigger, status); assert.equal(status.textContent, 'PDF download started.');
+  assert.equal(workers.length, 1); assert.equal(workers[0].terminated, true);
+});
+
+test('client-reported preparation is bounded and never blocks a successful download', async () => {
+  for (const failure of ['rejected', 'timeout', 'close']) {
+    const c = fixture(); c.adoptSavedAttempt(completedAttempt()); installPdfWorker(c, true);
+    const observed = []; let signal;
+    c.window.DueDiligencePhase4.request = async (_route, options) => {
+      observed.push(options.body);
+      if (options.body.operation === 'attempt') return { attempt: completedAttempt() };
+      signal = options.signal;
+      assert.deepEqual(JSON.parse(JSON.stringify(options.body)), { operation: 'result_pdf_prepared',
+        attemptId, resultRevision: 1, pdfVersion: 'forecast-pdf-v1', byteCount: 19 });
+      if (failure === 'rejected') throw new Error('PRIVATE_TELEMETRY_FAILURE');
+      return new Promise(() => {});
+    };
+    let blobs = 0;
+    c.window.URL = { createObjectURL: () => { blobs++; return 'blob:fixture'; }, revokeObjectURL() {} };
+    const button = new TinyNode('button'); const status = new TinyNode();
+    await c.downloadSavedForecast(button, status);
+    assert.equal(blobs, 1); assert.equal(button.disabled, false);
+    assert.equal(status.textContent, 'PDF download started.');
+    assert.deepEqual(observed.map(row => row.operation), ['attempt', 'result_pdf_prepared']);
+    if (failure === 'timeout') c.fire(5000);
+    if (failure === 'close') c.resetProtectedState();
+    await flush(); c.fire(1000);
+    assert.equal(c.state.pdfNoteController, null); assert.equal(c.timers.size, 0);
+    if (failure !== 'rejected') assert.equal(signal.aborted, true);
+    assert.equal(status.textContent, 'PDF download started.');
+  }
+});
+
+function installPdfWorker(c, respond = false) {
+  const workers = [];
+  c.window.Worker = class {
+    constructor(url) { assert.equal(url, 'https://synthetic.example.invalid/assets/forecast-result-pdf-worker.js?v=astra-browser-pdf-20260908-r1'); workers.push(this); }
+    postMessage(message) { this.message = message; if (respond) queueMicrotask(() => this.reply()); }
+    reply(changes = {}) { this.onmessage?.({ data: { type: 'result', requestId: 1, attemptId,
+      resultRevision: 1, pdfVersion: 'forecast-pdf-v1', fileName: `duediligence-forecast-${attemptId}-r1.pdf`,
+      bytes: new TextEncoder().encode('%PDF-synthetic-only').buffer, ...changes } }); }
+    terminate() { this.terminated = true; }
+  };
+  return workers;
+}
+
+test('browser PDF requires fresh server authorization and never starts for403 or another selected owner/revision', async () => {
+  for (const failure of ['forbidden', 'wrong-owner', 'wrong-attempt', 'wrong-revision', 'incomplete']) {
+    const c = fixture(); c.adoptSavedAttempt(completedAttempt()); const workers = installPdfWorker(c);
+    c.window.DueDiligencePhase4.request = async (_route, { body }) => {
+      assert.deepEqual(JSON.parse(JSON.stringify(body)), { operation: 'attempt', attemptId });
+      if (failure === 'forbidden') { const error = new Error('Access required'); error.code = 'BAR_FORECAST_ACCESS_REQUIRED'; error.status = 403; throw error; }
+      const saved = completedAttempt();
+      if (failure === 'wrong-owner') saved.result.ownerId = otherId;
+      if (failure === 'wrong-attempt') saved.id = otherId;
+      if (failure === 'wrong-revision') saved.resultRevision = 2;
+      if (failure === 'incomplete') saved.status = 'processing';
+      return { attempt: saved };
+    };
+    await c.downloadSavedForecast(new TinyNode('button'), new TinyNode());
+    assert.equal(workers.length, 0); assert.equal(c.state.pdfController, null);
+  }
+});
+
+test('owner change during fresh authorization cannot start a PDF worker or download a stale report', async () => {
+  const c = fixture(); c.adoptSavedAttempt(completedAttempt()); const workers = installPdfWorker(c); const pending = deferred();
+  c.window.DueDiligencePhase4.request = () => pending.promise;
+  const work = c.downloadSavedForecast(new TinyNode('button'), new TinyNode());
+  c.session.user.id = otherId; c.resetProtectedState(); pending.resolve({ attempt: completedAttempt() });
+  await work; assert.equal(workers.length, 0); assert.equal(c.timers.size, 0);
+});
+
+test('PDF worker receives only saved rendering fields, with no authentication or unknown metadata', () => {
+  const c = fixture(); const value = completedAttempt();
+  value.session = { access_token: 'SECRET_TOKEN' }; value.result.privateMetadata = 'SECRET_TOKEN';
+  value.result.results[0].providerTrace = 'SECRET_TOKEN'; value.result.results[0].grammar.token = 'SECRET_TOKEN';
+  const unchanged = JSON.stringify(value); const projected = c.forecastPdfRenderingSnapshot(value);
+  assert.doesNotMatch(JSON.stringify(projected), /SECRET_TOKEN|access_token|privateMetadata|providerTrace/u);
+  assert.equal(projected.result.results[19].userAnswer, value.answers[19].answer);
+  assert.equal(projected.result.totalScore, value.result.totalScore); assert.equal(JSON.stringify(value), unchanged);
+});
+
+test('closing or replacing the workspace immediately terminates an active PDF worker and ignores its late bytes', async () => {
+  for (const cancel of ['abort', 'reset']) {
+    const c = fixture(); c.adoptSavedAttempt(completedAttempt()); const workers = installPdfWorker(c);
+    c.window.DueDiligencePhase4.request = async () => ({ attempt: completedAttempt() });
+    let blobs = 0; c.window.URL = { createObjectURL: () => { blobs++; }, revokeObjectURL() {} };
+    const work = c.downloadSavedForecast(new TinyNode('button'), new TinyNode()); await flush();
+    assert.equal(workers.length, 1); const late = workers[0].onmessage;
+    if (cancel === 'abort') c.abortRequest(); else c.resetProtectedState();
+    assert.equal(workers[0].terminated, true); late({ data: { type: 'result', requestId: 1 } });
+    await work; assert.equal(blobs, 0); assert.equal(c.timers.size, 0);
+  }
+});
+
+test('PDF fetch and render each have finite deadlines even if transport ignores cancellation', async () => {
+  for (const phase of ['fetch', 'render']) {
+    const c = fixture(); c.adoptSavedAttempt(completedAttempt()); const workers = installPdfWorker(c);
+    c.window.DueDiligencePhase4.request = phase === 'fetch' ? () => new Promise(() => {}) : async () => ({ attempt: completedAttempt() });
+    const trigger = new TinyNode('button'); const status = new TinyNode();
+    const work = c.downloadSavedForecast(trigger, status); await flush(); c.fire(phase === 'fetch' ? 25000 : 60000); await work;
+    assert.equal(trigger.disabled, false); assert.equal(c.timers.size, 0); assert.match(status.textContent, /timed out/u);
+    if (phase === 'render') assert.equal(workers[0].terminated, true);
+  }
+});
+
+test('another visible report action cancels PDF, releases its button and permits an explicit successful retry', async () => {
+  const c = fixture(); c.adoptSavedAttempt(completedAttempt()); const workers = installPdfWorker(c);
+  c.window.DueDiligencePhase4.request = async (_route, { body }) => body.operation === 'attempt'
+    ? { attempt: completedAttempt() } : { ok: true, email: { status: 'provider_accepted' } };
+  let blobs = 0; c.window.URL = { createObjectURL: () => { blobs++; return 'blob:fixture'; }, revokeObjectURL() {} };
+  const button = new TinyNode('button'); const status = new TinyNode();
+  const first = c.downloadSavedForecast(button, status); await flush();
+  assert.equal(button.disabled, true);
+  await c.emailSavedForecast(new TinyNode('button'), new TinyNode()); await first;
+  assert.equal(workers[0].terminated, true); assert.equal(button.disabled, false); assert.equal(blobs, 0);
+  const retry = c.downloadSavedForecast(button, status); await flush();
+  workers[1].reply(); await retry;
+  assert.equal(button.disabled, false); assert.equal(blobs, 1); assert.equal(status.textContent, 'PDF download started.');
+});
+
+test('cancelled PDF cannot unlock a successor PDF or an old owner button', async () => {
+  for (const mode of ['successor', 'owner', 'detached']) {
+    const c = fixture(); c.adoptSavedAttempt(completedAttempt()); const workers = installPdfWorker(c);
+    c.window.DueDiligencePhase4.request = async () => ({ attempt: completedAttempt() });
+    c.window.URL = { createObjectURL: () => 'blob:fixture', revokeObjectURL() {} };
+    const button = new TinyNode('button'); const first = c.downloadSavedForecast(button, new TinyNode()); await flush();
+    let successor;
+    if (mode === 'successor') successor = c.downloadSavedForecast(button, new TinyNode());
+    else { if (mode === 'owner') c.session.user.id = otherId; else button.isConnected = false; c.abortRequest(); }
+    await first; assert.equal(button.disabled, true);
+    if (successor) { await flush(); workers[1].reply(); await successor; assert.equal(button.disabled, false); }
+  }
+});
+
+test('an already aborted PDF request still observes a pre-created rejected transport promise', async () => {
+  const c = fixture(); const controller = new AbortController(); controller.abort();
+  const pending = deferred(); let observed = false;
+  const input = { then(resolve, reject) { observed = true; return pending.promise.then(resolve, reject); } };
+  const work = c.awaitForecastPdfRequest(input, controller.signal);
+  await assert.rejects(work, error => error.name === 'AbortError');
+  pending.reject(new Error('PRIVATE_TRANSPORT_ERROR')); await flush();
+  assert.equal(observed, true);
+});
+
+test('render response identity, format and errors are fail-closed and never expose raw worker errors', async () => {
+  for (const changes of [{ attemptId: otherId }, { resultRevision: 2 }, { requestId: 2 },
+    { pdfVersion: 'unknown' }, { fileName: '../bad.pdf' }, { bytes: new Uint8Array([1, 2, 3]).buffer },
+    { type: 'error', code: 'SECRET_TOKEN <private report>' }]) {
+    const c = fixture(); const workers = installPdfWorker(c); const controller = new AbortController();
+    const work = c.renderSavedForecastPdfInBrowser(completedAttempt(), owner, controller.signal);
+    workers[0].reply(changes);
+    await assert.rejects(work, error => { assert.doesNotMatch(error.message, /SECRET_TOKEN|private report/u); return true; });
+    assert.equal(workers[0].terminated, true); assert.equal(c.timers.size, 0);
+  }
 });

@@ -11,6 +11,7 @@ import {
 } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildForecastPdfBrowserWorker } from './build-forecast-pdf-browser-worker.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outputRoot = path.join(repositoryRoot, '.pages-dist');
@@ -469,6 +470,18 @@ async function listFiles(directory, prefix = '') {
   return files.sort();
 }
 
+async function buildForecastPdfRuntime() {
+  const { code } = await buildForecastPdfBrowserWorker();
+  await writeFile(path.join(outputRoot, 'assets/forecast-result-pdf-worker.js'), code);
+  const licenses = path.join(outputRoot, 'assets/vendor/forecast-pdf');
+  await mkdir(licenses, { recursive: true });
+  await Promise.all([
+    cp(path.join(repositoryRoot, 'worker/node_modules/pdf-lib/LICENSE.md'), path.join(licenses, 'pdf-lib.LICENSE.txt')),
+    cp(path.join(repositoryRoot, 'worker/node_modules/@fontsource/noto-sans/LICENSE'), path.join(licenses, 'Noto-Sans.LICENSE.txt')),
+    cp(path.join(repositoryRoot, 'worker/node_modules/@pdf-lib/fontkit/README.md'), path.join(licenses, 'fontkit.README.txt')),
+  ]);
+}
+
 await rm(outputRoot, { recursive: true, force: true });
 await mkdir(outputRoot, { recursive: true });
 await Promise.all(publicFiles.map(copyPublicFile));
@@ -486,6 +499,7 @@ await Promise.all([
   ),
   buildStudyRoomBackgroundRuntime(),
   copyStudyRoomBackgroundAssets(),
+  buildForecastPdfRuntime(),
 ]);
 await writeFile(path.join(outputRoot, '.nojekyll'), '', 'utf8');
 

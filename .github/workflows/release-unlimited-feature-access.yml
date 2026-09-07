@@ -275,6 +275,7 @@ jobs:
             worker/package-lock.json \
             worker/package.json \
             worker/payment-core.mjs \
+            worker/pricing-conflict.test.mjs \
             worker/subscription-receipt.mjs \
             worker/support-notification.test.mjs \
             worker/wrangler.staging.toml \

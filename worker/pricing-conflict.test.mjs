@@ -25,6 +25,16 @@ const sql = readFileSync(new URL('../supabase/migrations/20260830054727_admin_pr
 const editor = readFileSync(new URL('../admin/pricing-editor.js', import.meta.url), 'utf8').replaceAll('\r\n', '\n');
 const sourceFunction = (start, end) => editor.slice(editor.indexOf(start), editor.indexOf(end));
 
+test('mandatory and protected release gates execute the pricing conflict regression', () => {
+  const release = readFileSync(new URL('../.github/workflows/release-unlimited-feature-access.yml', import.meta.url), 'utf8');
+  const mandatory = readFileSync(new URL('../.github/workflows/validate-mandatory-early-access.yml', import.meta.url), 'utf8');
+  assert.ok(release.includes('            worker/pricing-conflict.test.mjs \\'));
+  assert.ok(mandatory.includes("- 'worker/pricing-*.mjs'"));
+  for (const workflow of [release, mandatory]) {
+    assert.ok(workflow.includes('node --test --test-concurrency=1 worker/*.test.mjs'));
+  }
+});
+
 async function actualRequest({ operation = 'save_draft', path = '/admin/pricing/action',
   upstreamStatus = 400, upstreamBody = { code: 'P0001', message: conflicts[0][1] },
   role = 'founder_admin', bearer = true, success = false } = {}) {

@@ -42,6 +42,10 @@ async function browser(...args) {
     await run('npx', ['--yes','agent-browser@0.36.0','--session',prefix,'screenshot',path.join(evidenceDir,'failure.png')], { timeout: 15000, windowsHide: true }).catch(() => {});
     const snapshot = await run('npx', ['--yes','agent-browser@0.36.0','--session',prefix,'snapshot','-i'], { timeout:15000, windowsHide:true }).catch(() => null);
     if (snapshot) await writeFile(path.join(evidenceDir,'failure-snapshot.txt'),scrub(snapshot.stdout));
+    const state = await run('npx', ['--yes','agent-browser@0.36.0','--session',prefix,'eval',
+      `JSON.stringify({hash:location.hash,forecastHidden:document.getElementById('bf26-root')?.hidden,forecastText:document.querySelector('[data-bf26-view]')?.textContent?.slice(0,1500),navigation:[...document.querySelectorAll('[data-public-feature="bar-forecast"]')].map(b=>({disabled:b.disabled,busy:b.getAttribute('aria-busy')}))})`],
+      {timeout:15000,windowsHide:true}).catch(()=>null);
+    if(state) await writeFile(path.join(evidenceDir,'failure-view-state.json'),scrub(state.stdout));
     // Keep credentials out of CI logs; sanitized diagnostics are private artifacts.
     throw new Error(`Authenticated staging browser action failed: ${args[0]}`);
   }
@@ -87,6 +91,9 @@ try {
   await browser('wait', '.bf26-subject-grid');
   checks.push('reload-bounded-entry');
   await browser('find', 'role', 'button', 'click', '--name', 'Close forecast');
+  // Closing starts ordinary Home restoration, which temporarily disables all
+  // feature buttons. Observe actual readiness instead of dropping the next tap.
+  await browser('wait', '.qfs-practice-rail [data-public-feature="bar-forecast"]:not(:disabled)');
   await browser('network', 'route', `${site}/admin/dd2026/bar-forecast`, '--body', JSON.stringify({ ok: false, error: { code: 'BAR_FORECAST_GRADING_UNAVAILABLE', message: 'Controlled staging response failure.' } }));
   // Exercise the actual user launcher. A same-document CLI `open` after Close
   // can remain on the Home shell without invoking the application's launcher.

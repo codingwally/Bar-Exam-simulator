@@ -27,6 +27,7 @@ export const FORECAST_ATTEMPT_RPC_NAMES = Object.freeze([
   'dd2026_forecast_attempt_internal', 'dd2026_forecast_attempt_finalize',
   'dd2026_forecast_attempt_finalization_error',
   'dd2026_forecast_attempt_retry',
+  'dd2026_forecast_browser_pdf_prepared',
 ]);
 
 function uuid(value, label) {
@@ -216,5 +217,14 @@ export function createForecastAttemptStore({ rpc }) {
     });
   }
 
-  return Object.freeze({ accept, getOwned, getByClient, history, claim, checkpoint, fail, finalize, retry });
+  async function noteBrowserPdfPrepared(env, ownerId, input) {
+    const note = normalizeBarForecastRequest({ ...input, operation: 'result_pdf_prepared' });
+    return call(env, 'dd2026_forecast_browser_pdf_prepared', {
+      p_actor_user_id: uuid(ownerId, 'owner'), p_attempt_id: note.attemptId,
+      p_result_revision: note.resultRevision, p_pdf_version: note.pdfVersion,
+      p_byte_count: note.byteCount, p_page_count: note.pageCount,
+    });
+  }
+
+  return Object.freeze({ accept, getOwned, getByClient, history, claim, checkpoint, fail, finalize, retry, noteBrowserPdfPrepared });
 }

@@ -62,27 +62,46 @@ test('presentation cannot use another owner, incomplete report, invented totals 
   assert.doesNotMatch(buildForecastResultEmail(escaped, OWNER).html, /<img src=x/);
 });
 
-test('explicit exporter sends the canonical HTML/text with the same PDF and idempotency claim', async () => {
-  const bytes = new TextEncoder().encode('%PDF-test'); let sent = 0;
+test('explicit exporter sends canonical summary HTML/text with sender-pinned claim and zero PDF work', async () => {
+  const env = { FORECAST_RESULTS_EMAIL_FROM: 'Due Diligence Results <results@example.test>' };
+  const expected = buildForecastResultEmail(attempt, OWNER, { deliveryKind: 'summary_link' });
+  const payloadBytes = new TextEncoder().encode(JSON.stringify(['forecast-summary-link-v1', env.FORECAST_RESULTS_EMAIL_FROM,
+    expected.subject, expected.text, expected.html]));
+  const payloadHash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', payloadBytes))].map(byte => byte.toString(16).padStart(2, '0')).join('');
+  let sent = 0; const calls = [];
   const exporter = createForecastResultExporter({
     attemptStore: { getOwned: async (_env, ownerId, attemptId) => { assert.equal(ownerId, OWNER); assert.equal(attemptId, ID); return { attempt }; } },
-    renderPdf: async () => bytes,
+    renderPdf: () => assert.fail('Summary email must not render or prepare a PDF'),
     rpc: async (_env, name, args) => {
-      if (name.endsWith('_email_claim')) return { ok: true, claimed: true, leaseToken: OTHER, idempotencyKey: `forecast-result/${ID}/r1` };
-      if (name.endsWith('_email_settle')) { assert.equal(args.p_status, 'provider_accepted'); return { ok: true, email: { status: 'provider_accepted' } }; }
-      return { ok: true };
+      if (name === 'dd2026_forecast_result_summary_email_claim') {
+        calls.push('claim');
+        assert.deepEqual(args, { p_actor_user_id: OWNER, p_attempt_id: ID, p_result_revision: 1,
+          p_recipient_email: 'verified@example.test', p_result: attempt.result, p_completed_at: attempt.completedAt,
+          p_template_version: 'forecast-summary-link-v1', p_payload_hash: payloadHash });
+        return { ok: true, claimed: true, leaseToken: OTHER, idempotencyKey: `forecast-result/${ID}/r1` };
+      }
+      assert.equal(name, 'dd2026_forecast_result_email_settle', 'No PDF metadata or other RPC');
+      calls.push('settle');
+      assert.equal(args.p_status, 'provider_accepted'); assert.equal(args.p_lease_token, OTHER);
+      return { ok: true, email: { status: 'provider_accepted' } };
     },
     sendEmail: async (_env, message) => {
-      sent += 1;
-      assert.equal(message.to, 'verified@example.test'); assert.equal(message.html, buildForecastResultEmail(attempt, OWNER).html);
-      assert.equal(message.text, buildForecastResultEmail(attempt, OWNER).text);
-      assert.equal(message.attachment.bytes, bytes); assert.equal(message.idempotencyKey, `forecast-result/${ID}/r1`);
+      sent += 1; calls.push('send');
+      assert.equal(message.to, 'verified@example.test'); assert.equal(message.html, expected.html);
+      assert.equal(message.text, expected.text); assert.equal(message.subject, expected.subject);
+      assert.equal(message.deliveryKind, 'summary_link'); assert.equal(message.attachment, undefined);
+      assert.equal(message.idempotencyKey, `forecast-result/${ID}/r1`);
+      for (const text of [message.text, message.html]) {
+        for (const value of ['50 / 100', '1.2 / 5', '4.7 / 5', '20 developing']) assert.ok(text.includes(value), value);
+        assert.doesNotMatch(text, /PDF is attached|Private original|Private prompt|Private suggested|Private saved/u);
+      }
       return { accepted: true, providerMessageId: 'fixture-message' };
     },
   });
   assert.equal(sent, 0);
-  const result = await exporter.email({}, { id: OWNER, email: 'verified@example.test', email_confirmed_at: '2026-09-01T00:00:00Z' }, ID);
+  const result = await exporter.email(env, { id: OWNER, email: 'verified@example.test', email_confirmed_at: '2026-09-01T00:00:00Z' }, ID);
   assert.equal(sent, 1); assert.equal(result.email.status, 'provider_accepted'); assert.match(result.message, /Delivery is not yet confirmed/);
+  assert.deepEqual(calls, ['claim', 'send', 'settle']);
 });
 
 const phase2 = await readFile(new URL('../assets/phase2-experience.js', import.meta.url), 'utf8');

@@ -294,6 +294,8 @@ jobs:
             worker/package.json \
             worker/payment-core.mjs \
             worker/subscription-receipt.mjs \
+            worker/subscription-receipt.test.mjs \
+            worker/astra-subscription-receipt-policy.test.mjs \
             worker/support-notification.test.mjs \
             worker/wrangler.staging.toml \
             worker/wrangler.toml \

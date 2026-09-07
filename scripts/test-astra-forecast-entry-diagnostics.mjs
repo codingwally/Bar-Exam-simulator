@@ -4,7 +4,8 @@ import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
 import {
   TARGET, probeSource, sanitizeForecastBrowserDiagnostics, forecastBrowserDiagnosticsSource,
-  openForecastFromReadyLauncher, captureForecastFailureDiagnostics,
+  openForecastFromReadyLauncher, captureForecastFailureDiagnostics, forecastBootstrapState,
+  waitForForecastBootstrap, canCaptureForecastFixtureScreenshot,
 } from './verify-astra-forecast-staging.mjs';
 
 const secret = 'Bearer private-token private.person@example.invalid /proof/private-object.png 11111111-1111-4111-8111-111111111111';
@@ -18,7 +19,7 @@ async function until(predicate) {
 }
 function makeProbe(fetch, extras = {}) {
   const window = { fetch, ...extras };
-  vm.runInNewContext(probeSource(), { window, TypeError });
+  vm.runInNewContext(probeSource(), { window, TypeError, URL });
   return window;
 }
 
@@ -165,4 +166,198 @@ test('runner retains three full journeys, separates entry stages and fixes all a
   const capture = source.indexOf('summary.browserState = await captureForecastFailureDiagnostics');
   const close = source.indexOf("try { await browser('close'); summary.browserSessionClosed", capture);
   assert.ok(capture > 0 && close > capture, 'Capture and persistence precede browser cleanup');
+});
+
+const expectedOwner = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const differentOwner = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+const storageKey = `sb-${TARGET.ref}-auth-token`;
+const storedFixture = (overrides = {}) => ({ access_token: secret, refresh_token: 'private-refresh-token',
+  expires_at: Math.floor(Date.now() / 1000) + 3600, user: { id: expectedOwner, email: secret }, ...overrides });
+const goodBootstrap = (overrides = {}) => ({ probePresent: true, authReady: 'settled', expectedOriginMatch: true,
+  sdkCreateClientPresent: true, sessionPresent: true, runtimeOwnerMatchesExpected: true,
+  route: 'forecast', rootVisible: true, ...overrides });
+
+test('bootstrap storage observation returns only valid shape, origin, expiry and owner booleans', () => {
+  const stored = storedFixture();
+  const window = { location: { origin: TARGET.site }, supabase: { createClient() {} },
+    localStorage: { getItem: key => { assert.equal(key, storageKey); return JSON.stringify(stored); } },
+    DueDiligencePhase2: { getSession: () => stored } };
+  const safe = forecastBootstrapState(window, expectedOwner, TARGET.site, storageKey);
+  assert.deepEqual(safe, { sessionPresent: true, sdkCreateClientPresent: true, expectedOriginMatch: true,
+    runtimeOwnerMatchesExpected: true, authStorageReadable: true, authStoragePresent: true,
+    authStorageValidSessionShape: true, authStorageOwnerMatchesExpected: true, authStorageNotExpired: true });
+  assert.ok(Object.values(safe).every(value => typeof value === 'boolean'));
+  assert.doesNotMatch(JSON.stringify(safe), /private|aaaaaaaa|supabase|https:|sb-/);
+  stored.user.id = differentOwner;
+  const wrong = forecastBootstrapState(window, expectedOwner, TARGET.site, storageKey);
+  assert.equal(wrong.authStorageOwnerMatchesExpected, false);
+  assert.equal(wrong.runtimeOwnerMatchesExpected, false);
+});
+
+test('missing, malformed, inaccessible or expired stored sessions stay distinct without exposing values', () => {
+  for (const [value, present, valid, unexpired] of [[null, false, false, null], [secret, true, false, null],
+    [JSON.stringify(storedFixture({ refresh_token: null })), true, false, null],
+    [JSON.stringify(storedFixture({ expires_at: 1 })), true, true, false]]) {
+    const safe = forecastBootstrapState({ localStorage: { getItem: () => value } }, expectedOwner, TARGET.site, storageKey);
+    assert.equal(safe.authStoragePresent, present); assert.equal(safe.authStorageValidSessionShape, valid);
+    assert.equal(safe.authStorageNotExpired, unexpired); assert.equal(safe.sdkCreateClientPresent, false);
+    assert.doesNotMatch(JSON.stringify(safe), /private|aaaaaaaa/);
+  }
+  const safe = forecastBootstrapState({ get localStorage() { throw new Error(secret); },
+    DueDiligencePhase2: { getSession() { throw new Error(secret); } } }, expectedOwner, TARGET.site, storageKey);
+  assert.equal(safe.authStorageReadable, false); assert.equal(safe.sessionPresent, false);
+  assert.doesNotMatch(JSON.stringify(safe), /private|aaaaaaaa/);
+});
+
+test('actual browser-source diagnostic compares the expected fixture without returning its identity', () => {
+  const stored = storedFixture();
+  const window = { location: { origin: TARGET.site }, supabase: { createClient() {} },
+    localStorage: { getItem: () => JSON.stringify(stored) }, DueDiligencePhase2: { getSession: () => stored },
+    __astraForecastProbe: { authReady: 'settled', initialBootstrap: { authStoragePresent: true,
+      authStorageValidSessionShape: true, authStorageOwnerMatchesExpected: true, authStorageNotExpired: true } } };
+  const document = { getElementById: () => null, querySelector: () => null };
+  const result = plain(vm.runInNewContext(forecastBrowserDiagnosticsSource({ expectedOwnerId: expectedOwner }),
+    { window, document, location: { hash: '#bar-forecast-2026' } }));
+  assert.equal(result.runtimeOwnerMatchesExpected, true); assert.equal(result.authStorageOwnerMatchesExpected, true);
+  assert.equal(result.initialAuthStoragePresent, true); assert.equal(result.authStorageNotExpired, true);
+  assert.doesNotMatch(JSON.stringify(result), /private|aaaaaaaa|https:|sb-/);
+  assert.throws(() => forecastBrowserDiagnosticsSource({ expectedOwnerId: secret }));
+  assert.throws(() => probeSource({ expectedOwnerId: secret }));
+});
+
+test('init probe captures injected storage before application startup without storing its raw values', () => {
+  let stored = JSON.stringify(storedFixture());
+  const window = { location: { origin: TARGET.site }, localStorage: { getItem: () => stored },
+    fetch: async () => new Response('{}') };
+  vm.runInNewContext(probeSource({ expectedOwnerId: expectedOwner }), { window, TypeError, URL });
+  const initial = plain(window.__astraForecastProbe.initialBootstrap);
+  assert.equal(initial.authStoragePresent, true); assert.equal(initial.authStorageOwnerMatchesExpected, true);
+  stored = null;
+  assert.equal(window.__astraForecastProbe.initialBootstrap.authStoragePresent, true, 'Keep initial evidence after the app clears storage.');
+  assert.equal(forecastBootstrapState(window, expectedOwner, TARGET.site, storageKey).authStoragePresent, false);
+  assert.doesNotMatch(JSON.stringify(initial), /private|aaaaaaaa|https:|sb-/);
+});
+
+test('only exact pinned Auth endpoint and HTTP-method operations are observed', async () => {
+  const calls = [];
+  const window = makeProbe(async (...args) => { calls.push(args); return new Response('{}'); });
+  for (const [url, method] of [
+    [`${TARGET.supabase}/auth/v1/token?grant_type=refresh_token`, 'POST'],
+    [`${TARGET.supabase}/auth/v1/token?grant_type=password`, 'POST'],
+    [`${TARGET.supabase}/auth/v1/user`, 'GET'], [`${TARGET.supabase}/auth/v1/logout?scope=local`, 'POST'],
+    ['https://unrelated.invalid/auth/v1/user', 'GET'], [`${TARGET.supabase}/auth/v1/user`, 'PUT'],
+    [`${TARGET.supabase}/auth/v1/token?grant_type=other-private-value`, 'POST'],
+  ]) await window.fetch(url, { method, body: JSON.stringify({ refresh_token: secret }) });
+  assert.equal(calls.length, 7, 'Observation does not create or suppress any request.');
+  const safe = sanitizeForecastBrowserDiagnostics({ authOperations: window.__astraForecastProbe.authOperations });
+  assert.equal(Object.keys(safe.authOperations).length, 4);
+  assert.ok(Object.values(safe.authOperations).every(row => row.requested === 1 && row.responded === 1 && row.httpStatus === 200));
+  assert.doesNotMatch(JSON.stringify(safe), /private|unrelated|refresh_token"/);
+});
+
+test('Auth error metadata preserves original response and exposes only fixed code or transport categories', async () => {
+  for (const body of [{ error_code: 'refresh_token_already_used', msg: secret }, { code: 'bad_jwt', message: secret },
+    { code: secret }, null]) {
+    const response = new Response(body ? JSON.stringify(body) : secret, { status: 401 });
+    const window = makeProbe(async () => response);
+    assert.equal(await window.fetch(`${TARGET.supabase}/auth/v1/token?grant_type=refresh_token`, { method: 'POST' }), response);
+    await until(() => window.__astraForecastProbe.authOperations.token_refresh.errorCode !== null);
+    const safe = sanitizeForecastBrowserDiagnostics({ authOperations: window.__astraForecastProbe.authOperations });
+    assert.equal(safe.authOperations.token_refresh.httpStatus, 401);
+    assert.equal(safe.authOperations.token_refresh.errorCode,
+      body?.error_code || (body?.code === 'bad_jwt' ? 'bad_jwt' : body ? 'UNRECOGNIZED' : 'INVALID_JSON'));
+    assert.doesNotMatch(JSON.stringify(safe), /private-token|private\.person|private-object|11111111/);
+  }
+  const original = new Error(secret); original.name = 'AbortError';
+  const window = makeProbe(async () => { throw original; });
+  await assert.rejects(window.fetch(`${TARGET.supabase}/auth/v1/user`), error => error === original);
+  assert.equal(window.__astraForecastProbe.authOperations.user.transportError, 'ABORTED');
+});
+
+test('new diagnostic fields reject private strings, malformed booleans and unknown Auth metadata', () => {
+  const safe = sanitizeForecastBrowserDiagnostics({ sdkCreateClientPresent: secret, expectedOriginMatch: secret,
+    runtimeOwnerMatchesExpected: secret, authStorageReadable: secret, authStoragePresent: secret,
+    authStorageValidSessionShape: secret, authStorageOwnerMatchesExpected: secret, authStorageNotExpired: secret,
+    initialAuthStoragePresent: secret, initialAuthStorageValidSessionShape: secret,
+    initialAuthStorageOwnerMatchesExpected: secret, initialAuthStorageNotExpired: secret,
+    authOperations: { user: { requested: secret, responded: 1.5, httpStatus: '401', errorCode: secret, transportError: secret },
+      [secret]: { url: secret } } });
+  assert.equal(safe.sdkCreateClientPresent, null); assert.equal(safe.expectedOriginMatch, null);
+  assert.equal(safe.authOperations.user.errorCode, 'UNRECOGNIZED');
+  assert.equal(safe.authOperations.user.requested, null); assert.equal(safe.authOperations.user.responded, null);
+  assert.equal(safe.authOperations.user.httpStatus, null); assert.equal(safe.authOperations.user.transportError, null);
+  assert.doesNotMatch(JSON.stringify(safe), /private|11111111/);
+  assert.deepEqual(sanitizeForecastBrowserDiagnostics(safe), safe);
+});
+
+test('cold bootstrap awaits actual readiness and returns a sanitized success checkpoint', async () => {
+  let clock = 0; let reads = 0;
+  const safe = await waitForForecastBootstrap({ now: () => clock, sleep: async ms => { clock += ms; },
+    readDiagnostics: async () => ({ ...goodBootstrap({ authReady: ++reads < 3 ? 'pending' : 'settled' }), rawToken: secret }) });
+  assert.equal(reads, 3); assert.equal(clock, 500); assert.equal(safe.runtimeOwnerMatchesExpected, true);
+  assert.doesNotMatch(JSON.stringify(safe), /private/);
+});
+
+test('cold bootstrap fails precisely before picker for SDK, signed-out, owner, origin or rejected auth', async () => {
+  const cases = [
+    [{ sdkCreateClientPresent: false, sessionPresent: false }, 'SDK_UNAVAILABLE'],
+    [{ sessionPresent: false }, 'SIGNED_OUT'], [{ runtimeOwnerMatchesExpected: false }, 'OWNER_MISMATCH'],
+    [{ expectedOriginMatch: false }, 'ORIGIN_MISMATCH'], [{ authReady: 'rejected' }, 'AUTH_REJECTED'],
+  ];
+  for (const [changes, suffix] of cases) {
+    let waits = 0;
+    await assert.rejects(waitForForecastBootstrap({ readDiagnostics: async () => goodBootstrap(changes),
+      sleep: async () => { waits++; } }), error => error.code === `ASTRA_FORECAST_BOOTSTRAP_${suffix}` && !error.message.includes(secret));
+    assert.equal(waits, 0, 'A known terminal failure does not retry or wait for the picker.');
+  }
+});
+
+test('unresolved cold bootstrap has one finite timeout and cannot manufacture readiness', async () => {
+  let clock = 0; let reads = 0;
+  await assert.rejects(waitForForecastBootstrap({ timeoutMs: 1000, now: () => clock,
+    sleep: async ms => { clock += ms; }, readDiagnostics: async () => { reads++; return goodBootstrap({ authReady: 'pending' }); } }),
+  error => error.code === 'ASTRA_FORECAST_BOOTSTRAP_TIMEOUT');
+  assert.equal(reads, 4); assert.equal(clock, 1000);
+  await assert.rejects(waitForForecastBootstrap({ timeoutMs: 35001 }));
+});
+
+test('hard bootstrap timeout bounds a never-resolving read and prevents late continuation', async () => {
+  const pending = deferred(); let reads = 0; let sleeps = 0;
+  const started = Date.now();
+  await assert.rejects(waitForForecastBootstrap({ timeoutMs: 20,
+    readDiagnostics: () => { reads++; return pending.promise; }, sleep: async () => { sleeps++; } }),
+  error => error.code === 'ASTRA_FORECAST_BOOTSTRAP_TIMEOUT');
+  assert.ok(Date.now() - started < 1000, 'A stuck browser read must not override the hard timeout.');
+  pending.resolve(goodBootstrap({ authReady: 'pending' }));
+  await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal(reads, 1); assert.equal(sleeps, 0, 'Late read cannot restart the stopped polling loop.');
+});
+
+test('hard bootstrap timeout also bounds a never-resolving delay and stops late retries', async () => {
+  const pending = deferred(); let reads = 0;
+  await assert.rejects(waitForForecastBootstrap({ timeoutMs: 20,
+    readDiagnostics: async () => { reads++; return goodBootstrap({ authReady: 'pending' }); }, sleep: () => pending.promise }),
+  error => error.code === 'ASTRA_FORECAST_BOOTSTRAP_TIMEOUT');
+  pending.resolve();
+  await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal(reads, 1);
+});
+
+test('failure screenshots require the expected signed-in owner on the actual isolated Forecast surface', () => {
+  assert.equal(canCaptureForecastFixtureScreenshot(goodBootstrap()), true);
+  for (const field of ['expectedOriginMatch', 'runtimeOwnerMatchesExpected', 'sessionPresent', 'rootVisible']) {
+    for (const value of [false, null, secret]) assert.equal(canCaptureForecastFixtureScreenshot(goodBootstrap({ [field]: value })), false);
+  }
+  for (const route of ['home', 'pricing', 'other', secret]) assert.equal(canCaptureForecastFixtureScreenshot(goodBootstrap({ route })), false);
+});
+
+test('actual runner checkpoints cold auth and gates private screenshot before cleanup without warm navigation', async () => {
+  const source = await readFile(new URL('./verify-astra-forecast-staging.mjs', import.meta.url), 'utf8');
+  const start = source.slice(source.indexOf('  async function startBrowser(account)'), source.indexOf('  async function openSaved('));
+  assert.match(start, /probeSource\(\{ expectedOwnerId: account.id \}\)/);
+  assert.match(start, /await browser\('--state', statePath, '--init-script', initPath, 'open', `\$\{TARGET.site\}\/#bar-forecast-2026`\)/);
+  assert.match(start, /stage = `browser-bootstrap-\$\{account.kind\}`[\s\S]*waitForForecastBootstrap[\s\S]*summary.bootstrapCheckpoints.push/);
+  assert.equal((start.match(/await browser\([^;]*'open'/g) || []).length, 1, 'One cold navigation, no warm-up or retry.');
+  assert.match(source, /canCaptureForecastFixtureScreenshot\(summary.browserState\)[\s\S]*await screen\('failure-owned-forecast'\)/);
+  assert.match(source, /skipped-no-verified-forecast-fixture/);
 });

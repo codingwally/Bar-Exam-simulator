@@ -30,6 +30,10 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const meanTenths = (scores) => Math.round(scores.reduce((sum, score) => sum + Math.round(score * 10), 0) / scores.length) / 10;
 const VIEWPORTS = Object.freeze([320, 375, 390, 600, 768, 820, 1024, 1280, 1440]);
 const DIAGNOSTIC_OPERATIONS = Object.freeze(['status', 'start', 'submit_attempt', 'attempt', 'history', 'retry_attempt', 'result_pdf', 'email_result', 'accept']);
+const AUTH_DIAGNOSTIC_OPERATIONS = Object.freeze(['token_refresh', 'token_password', 'user', 'logout']);
+const AUTH_DIAGNOSTIC_ERROR_CODES = Object.freeze(['bad_jwt', 'session_not_found', 'refresh_token_not_found',
+  'refresh_token_already_used', 'user_not_found', 'invalid_credentials', 'over_request_rate_limit',
+  'request_timeout', 'unexpected_failure', 'UNRECOGNIZED', 'INVALID_JSON']);
 const DIAGNOSTIC_ERROR_CODES = Object.freeze([
   'AUTHENTICATION_REQUIRED', 'INVALID_SESSION', 'AUTH_UNRESOLVED',
   'BAR_FORECAST_ACCESS_REQUIRED', 'BAR_FORECAST_SETUP_REQUIRED', 'BAR_FORECAST_CONSENT_REQUIRED',
@@ -51,9 +55,20 @@ export function sanitizeForecastBrowserDiagnostics(raw) {
   const count = input => Number.isInteger(input) && input >= 0 && input <= 10000 ? input : null;
   const oneOf = (input, allowed, fallback) => allowed.includes(input) ? input : fallback;
   return {
-    schemaVersion: 'astra-forecast-browser-diagnostics-v1',
+    schemaVersion: 'astra-forecast-browser-diagnostics-v2',
     probePresent: bool(value.probePresent),
     sessionPresent: bool(value.sessionPresent),
+    sdkCreateClientPresent: bool(value.sdkCreateClientPresent),
+    expectedOriginMatch: bool(value.expectedOriginMatch),
+    runtimeOwnerMatchesExpected: bool(value.runtimeOwnerMatchesExpected),
+    authStorageReadable: bool(value.authStorageReadable), authStoragePresent: bool(value.authStoragePresent),
+    authStorageValidSessionShape: bool(value.authStorageValidSessionShape),
+    authStorageOwnerMatchesExpected: bool(value.authStorageOwnerMatchesExpected),
+    authStorageNotExpired: bool(value.authStorageNotExpired),
+    initialAuthStoragePresent: bool(value.initialAuthStoragePresent),
+    initialAuthStorageValidSessionShape: bool(value.initialAuthStorageValidSessionShape),
+    initialAuthStorageOwnerMatchesExpected: bool(value.initialAuthStorageOwnerMatchesExpected),
+    initialAuthStorageNotExpired: bool(value.initialAuthStorageNotExpired),
     authReady: oneOf(value.authReady, ['unobserved', 'pending', 'settled', 'rejected'], 'unobserved'),
     route: oneOf(value.route, ['forecast', 'home', 'pricing', 'other'], 'other'),
     rootVisible: bool(value.rootVisible), pickerPresent: bool(value.pickerPresent), editorPresent: bool(value.editorPresent),
@@ -67,25 +82,102 @@ export function sanitizeForecastBrowserDiagnostics(raw) {
         transportError: oneOf(row.transportError, ['ABORTED', 'NETWORK_ERROR'], null),
       }];
     })),
+    authOperations: Object.fromEntries(AUTH_DIAGNOSTIC_OPERATIONS.map(operation => {
+      const row = value.authOperations?.[operation] || {};
+      return [operation, {
+        requested: count(row.requested), responded: count(row.responded),
+        httpStatus: Number.isInteger(row.httpStatus) && row.httpStatus >= 100 && row.httpStatus <= 599 ? row.httpStatus : null,
+        errorCode: row.errorCode == null ? null : oneOf(row.errorCode, AUTH_DIAGNOSTIC_ERROR_CODES, 'UNRECOGNIZED'),
+        transportError: oneOf(row.transportError, ['ABORTED', 'NETWORK_ERROR'], null),
+      }];
+    })),
   };
 }
 
-export function forecastBrowserDiagnosticsSource() {
+// Reads session values only to return fixed booleans. Never returns the raw
+// stored object, token, email, user ID, storage key, URL, or exception text.
+export function forecastBootstrapState(window, expectedOwnerId, expectedOrigin, storageKey) {
+  let session = null;
+  try { session = window.DueDiligencePhase2?.getSession?.() || null; } catch {}
+  let value = null; let stored = null; let readable = false;
+  try { value = window.localStorage?.getItem(storageKey) ?? null; readable = Boolean(window.localStorage); } catch {}
+  try { stored = JSON.parse(value); } catch {}
+  const valid = Boolean(stored && typeof stored === 'object' && !Array.isArray(stored)
+    && typeof stored.access_token === 'string' && stored.access_token.length > 40
+    && typeof stored.refresh_token === 'string' && stored.refresh_token.length > 0
+    && typeof stored.expires_at === 'number' && Number.isFinite(stored.expires_at)
+    && typeof stored.user?.id === 'string' && stored.user.id.length > 0);
+  return {
+    sessionPresent: Boolean(session?.access_token),
+    sdkCreateClientPresent: typeof window.supabase?.createClient === 'function',
+    expectedOriginMatch: window.location?.origin === expectedOrigin,
+    runtimeOwnerMatchesExpected: expectedOwnerId ? session?.user?.id === expectedOwnerId : null,
+    authStorageReadable: readable, authStoragePresent: typeof value === 'string' && value.length > 0,
+    authStorageValidSessionShape: valid,
+    authStorageOwnerMatchesExpected: expectedOwnerId ? stored?.user?.id === expectedOwnerId : null,
+    authStorageNotExpired: valid ? stored.expires_at > Date.now() / 1000 : null,
+  };
+}
+
+export function forecastBrowserDiagnosticsSource({ expectedOwnerId = null } = {}) {
+  if (expectedOwnerId !== null) assert.match(expectedOwnerId, UUID);
   return `(() => {
     const probe=window.__astraForecastProbe;
     const visible=node=>Boolean(node && !node.hidden && node.getClientRects().length && !node.closest('[inert],[aria-hidden="true"]'));
-    const session=window.DueDiligencePhase2?.getSession?.();
-    const raw={probePresent:Boolean(probe),sessionPresent:Boolean(session?.access_token),authReady:probe?.authReady,
+    const bootstrap=(${forecastBootstrapState.toString()})(window,${JSON.stringify(expectedOwnerId)},${JSON.stringify(TARGET.site)},${JSON.stringify(`sb-${TARGET.ref}-auth-token`)});
+    const raw={...bootstrap,probePresent:Boolean(probe),authReady:probe?.authReady,
+      initialAuthStoragePresent:probe?.initialBootstrap?.authStoragePresent,
+      initialAuthStorageValidSessionShape:probe?.initialBootstrap?.authStorageValidSessionShape,
+      initialAuthStorageOwnerMatchesExpected:probe?.initialBootstrap?.authStorageOwnerMatchesExpected,
+      initialAuthStorageNotExpired:probe?.initialBootstrap?.authStorageNotExpired,
       route:location.hash==='#bar-forecast-2026'?'forecast':['','#quorum'].includes(location.hash)?'home':location.hash==='#pricing'?'pricing':'other',
       rootVisible:visible(document.getElementById('bf26-root')),
       pickerPresent:visible(document.querySelector('.bf26-subject-grid')),
       editorPresent:visible(document.querySelector('#bf26-current-answer')),
       errorPresent:Boolean(document.querySelector('[data-bf26-status][data-kind="error"],.bf26-view [role="alert"]')),
-      launcherReady:visible(document.querySelector(${JSON.stringify(READY_FORECAST_LAUNCHER)})),operations:probe?.operations};
+      launcherReady:visible(document.querySelector(${JSON.stringify(READY_FORECAST_LAUNCHER)})),operations:probe?.operations,authOperations:probe?.authOperations};
     const DIAGNOSTIC_OPERATIONS=${JSON.stringify(DIAGNOSTIC_OPERATIONS)};
     const DIAGNOSTIC_ERROR_CODES=${JSON.stringify(DIAGNOSTIC_ERROR_CODES)};
+    const AUTH_DIAGNOSTIC_OPERATIONS=${JSON.stringify(AUTH_DIAGNOSTIC_OPERATIONS)};
+    const AUTH_DIAGNOSTIC_ERROR_CODES=${JSON.stringify(AUTH_DIAGNOSTIC_ERROR_CODES)};
     return (${sanitizeForecastBrowserDiagnostics.toString()})(raw);
   })()`;
+}
+
+export async function waitForForecastBootstrap({ readDiagnostics, sleep = delay, now = Date.now, timeoutMs = 35000 }) {
+  assert.ok(Number.isFinite(timeoutMs) && timeoutMs > 0 && timeoutMs <= 35000);
+  const until = now() + timeoutMs;
+  const timeoutError = () => Object.assign(new Error('The isolated cold bootstrap did not settle within its bounded deadline.'), { code: 'ASTRA_FORECAST_BOOTSTRAP_TIMEOUT' });
+  let stopped = false; let timeout;
+  const expired = new Promise((_, reject) => {
+    timeout = setTimeout(() => { stopped = true; reject(timeoutError()); }, timeoutMs);
+  });
+  const observe = async () => {
+    while (!stopped && now() < until) {
+      const raw = await readDiagnostics();
+      if (stopped) return;
+      const safe = sanitizeForecastBrowserDiagnostics(raw);
+      let code = null;
+      if (safe.expectedOriginMatch === false) code = 'ASTRA_FORECAST_BOOTSTRAP_ORIGIN_MISMATCH';
+      else if (safe.sessionPresent && safe.runtimeOwnerMatchesExpected === false) code = 'ASTRA_FORECAST_BOOTSTRAP_OWNER_MISMATCH';
+      else if (safe.authReady === 'rejected') code = 'ASTRA_FORECAST_BOOTSTRAP_AUTH_REJECTED';
+      else if (safe.authReady === 'settled' && safe.sdkCreateClientPresent === false) code = 'ASTRA_FORECAST_BOOTSTRAP_SDK_UNAVAILABLE';
+      else if (safe.authReady === 'settled' && safe.sessionPresent === false) code = 'ASTRA_FORECAST_BOOTSTRAP_SIGNED_OUT';
+      if (code) throw Object.assign(new Error('The isolated cold bootstrap did not restore the expected fixture session.'), { code });
+      if (safe.probePresent && safe.expectedOriginMatch && safe.sdkCreateClientPresent
+          && safe.authReady === 'settled' && safe.sessionPresent && safe.runtimeOwnerMatchesExpected === true) return safe;
+      await sleep(250);
+    }
+    if (!stopped) throw timeoutError();
+  };
+  try { return await Promise.race([observe(), expired]); }
+  finally { stopped = true; clearTimeout(timeout); }
+}
+
+export function canCaptureForecastFixtureScreenshot(raw) {
+  const safe = sanitizeForecastBrowserDiagnostics(raw);
+  return safe.expectedOriginMatch === true && safe.runtimeOwnerMatchesExpected === true
+    && safe.sessionPresent === true && safe.route === 'forecast' && safe.rootVisible === true;
 }
 
 export async function openForecastFromReadyLauncher({ waitReady, clickLauncher, waitPicker, readRoute, setStep = () => {} }) {
@@ -270,12 +362,17 @@ export function assertControlledCoverage(result, { requireFailure = false, requi
 
 // Installed only in our fresh browser context. It observes real fetches and
 // optionally loses one ACCEPTED response; it never supplies a successful grade.
-export function probeSource() {
+export function probeSource({ expectedOwnerId = null } = {}) {
+  if (expectedOwnerId !== null) assert.match(expectedOwnerId, UUID);
   return `(() => {
     const original = window.fetch.bind(window);
     const operations=${JSON.stringify(DIAGNOSTIC_OPERATIONS)};
     const errorCodes=${JSON.stringify(DIAGNOSTIC_ERROR_CODES)};
+    const authOperations=${JSON.stringify(AUTH_DIAGNOSTIC_OPERATIONS)};
+    const authErrorCodes=${JSON.stringify(AUTH_DIAGNOSTIC_ERROR_CODES)};
     const probe = window.__astraForecastProbe = { counts: {}, operations:Object.fromEntries(operations.map(name=>[name,{requested:0,responded:0,httpStatus:null,errorCode:null,transportError:null}])),
+      authOperations:Object.fromEntries(authOperations.map(name=>[name,{requested:0,responded:0,httpStatus:null,errorCode:null,transportError:null}])),
+      initialBootstrap:(${forecastBootstrapState.toString()})(window,${JSON.stringify(expectedOwnerId)},${JSON.stringify(TARGET.site)},${JSON.stringify(`sb-${TARGET.ref}-auth-token`)}),
       authReady:'unobserved',accepted: null, acceptedResponses: 0, retry: null, dropAcceptance: false, loseNextAttempt: false };
     const observeAuth=()=>{
       if(probe.authReady!=='unobserved' || typeof window.DueDiligencePhase2?.whenAuthReady!=='function') return;
@@ -290,19 +387,40 @@ export function probeSource() {
       const forecast = String(args[0]?.url || args[0]).includes('${ENDPOINT}');
       const operation=forecast && operations.includes(input?.operation)?input.operation:null;
       const row=operation?probe.operations[operation]:null;
+      let authOperation=null;
+      try {
+        const url=new URL(String(args[0]?.url || args[0]),${JSON.stringify(TARGET.site)});
+        const method=String(args[1]?.method || args[0]?.method || 'GET').toUpperCase();
+        if(url.origin===${JSON.stringify(TARGET.supabase)}) {
+          if(url.pathname==='/auth/v1/token' && method==='POST' && url.searchParams.get('grant_type')==='refresh_token') authOperation='token_refresh';
+          else if(url.pathname==='/auth/v1/token' && method==='POST' && url.searchParams.get('grant_type')==='password') authOperation='token_password';
+          else if(url.pathname==='/auth/v1/user' && method==='GET') authOperation='user';
+          else if(url.pathname==='/auth/v1/logout' && method==='POST') authOperation='logout';
+        }
+      } catch {}
+      const authRow=authOperation?probe.authOperations[authOperation]:null;
       if (row) { probe.counts[operation] = Math.min(10000,(probe.counts[operation] || 0) + 1); row.requested=Math.min(10000,row.requested+1); }
+      if(authRow) authRow.requested=Math.min(10000,authRow.requested+1);
       if (forecast && input?.operation === 'attempt' && probe.loseNextAttempt) {
         probe.loseNextAttempt = false; throw new TypeError('Controlled staging progress-response loss');
       }
       let response;
       try { response = await original(...args); }
-      catch(error) { if(row) row.transportError=error?.name==='AbortError'?'ABORTED':'NETWORK_ERROR'; throw error; }
+      catch(error) { for(const item of [row,authRow]) if(item) item.transportError=error?.name==='AbortError'?'ABORTED':'NETWORK_ERROR'; throw error; }
       if(row) {
         row.responded=Math.min(10000,row.responded+1); row.httpStatus=response.status; row.errorCode=null; row.transportError=null;
         const responseOrdinal=row.responded;
         if(!response.ok) response.clone().json().then(payload=>{
           if(row.responded===responseOrdinal) row.errorCode=errorCodes.includes(payload?.error?.code)?payload.error.code:'UNRECOGNIZED';
         },()=>{if(row.responded===responseOrdinal) row.errorCode='INVALID_JSON';});
+      }
+      if(authRow) {
+        authRow.responded=Math.min(10000,authRow.responded+1);authRow.httpStatus=response.status;authRow.errorCode=null;authRow.transportError=null;
+        const ordinal=authRow.responded;
+        if(!response.ok) response.clone().json().then(payload=>{
+          const code=payload?.error_code || payload?.code;
+          if(authRow.responded===ordinal) authRow.errorCode=authErrorCodes.includes(code)?code:'UNRECOGNIZED';
+        },()=>{if(authRow.responded===ordinal)authRow.errorCode='INVALID_JSON';});
       }
       if (forecast && input?.operation === 'submit_attempt' && response.ok) {
         const accepted = await response.clone().json();
@@ -405,8 +523,9 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
     target: 'staging-only', mode: recovery ? 'fixture-cleanup-recovery' : preflightOnly ? 'read-only-preflight' : 'authenticated-three-journey-verification',
     fixturePrefix: prefix, verificationComplete: false, cleanupComplete: false,
     nativeBrowserZoomVerified: false, zoomEvidence: 'CLI has no native zoom command; separately labelled CSS 200% zoom stress test only.',
-    gradingEvidence: 'One scheduled real-provider journey; two explicitly controlled SQL checkpoint journeys. No mail sent.', checks, journeys, geometry };
-  let stage = 'preflight'; let browserSession = null; let launcher; let member; let publishable;
+    gradingEvidence: 'One scheduled real-provider journey; two explicitly controlled SQL checkpoint journeys. No mail sent.',
+    bootstrapCheckpoints: [], checks, journeys, geometry };
+  let stage = 'preflight'; let browserSession = null; let browserAccount = null; let launcher; let member; let publishable;
   const deadline = Date.now() + 35 * 60 * 1000;
   let stopRequested = false;
   const stop = () => { stopRequested = true; };
@@ -533,9 +652,16 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
     stage = `browser-start-${account.kind}`;
     if (browserSession) await browser('close');
     browserSession = browserIdentity(prefix, account.kind).session;
+    browserAccount = account;
     await writeFile(statePath, JSON.stringify({ cookies: [], origins: [{ origin: TARGET.site,
       localStorage: [{ name: `sb-${TARGET.ref}-auth-token`, value: JSON.stringify(account.session) }] }] }), { mode: 0o600 });
+    await writeFile(initPath, probeSource({ expectedOwnerId: account.id }), { mode: 0o600 });
     await browser('--state', statePath, '--init-script', initPath, 'open', `${TARGET.site}/#bar-forecast-2026`);
+    stage = `browser-bootstrap-${account.kind}`;
+    const checkpoint = await waitForForecastBootstrap({
+      readDiagnostics: () => evaluate(forecastBrowserDiagnosticsSource({ expectedOwnerId: account.id })),
+    });
+    summary.bootstrapCheckpoints.push({ fixtureKind: account.kind, status: 'passed', diagnostics: checkpoint });
   }
 
   async function openSaved(index = 0) {
@@ -808,10 +934,14 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
       collectingFailureDiagnostics = true;
       try {
         summary.browserState = await captureForecastFailureDiagnostics({
-          readDiagnostics: () => evaluate(forecastBrowserDiagnosticsSource()),
+          readDiagnostics: () => evaluate(forecastBrowserDiagnosticsSource({ expectedOwnerId: browserAccount?.id || null })),
           saveDiagnostics: safe => writeFile(path.join(evidenceDir, 'failure-browser-diagnostics.json'), JSON.stringify(safe, null, 2), { mode: 0o600 }),
         });
         summary.browserStateCapture = 'saved-before-close';
+        if (canCaptureForecastFixtureScreenshot(summary.browserState)) {
+          try { await screen('failure-owned-forecast'); summary.failureScreenshot = 'saved-owned-forecast-only'; }
+          catch { summary.failureScreenshot = 'unavailable'; }
+        } else summary.failureScreenshot = 'skipped-no-verified-forecast-fixture';
       } catch { summary.browserStateCapture = 'unavailable'; }
       finally { collectingFailureDiagnostics = false; }
     }

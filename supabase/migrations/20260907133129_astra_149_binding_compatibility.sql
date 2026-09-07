@@ -134,7 +134,7 @@ revoke all on function public.phase4_astra_149_binding_compatibility(timestamptz
 grant execute on function public.phase4_astra_149_binding_compatibility(timestamptz) to service_role;
 
 create or replace function public.phase4_pricing_snapshot()
-returns jsonb language plpgsql security definer set search_path = ''
+returns jsonb language plpgsql stable security definer set search_path = ''
 as $$
 declare
   v_now timestamptz := clock_timestamp();

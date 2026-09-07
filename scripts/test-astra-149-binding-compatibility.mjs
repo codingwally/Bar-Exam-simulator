@@ -31,6 +31,43 @@ async function compatibilityCases() {
   await exec(compatibilitySql);
   await setTime('2026-09-07T06:01:00Z');
   const projected = await snapshot();
+  await check('Exact public snapshot uses one statement snapshot; a VOLATILE counterfactual switches bindings', async () => {
+    const volatility = (signature) => scalar('select provolatile from pg_proc where oid=$1::regprocedure', [signature]);
+    assert.equal(await volatility('public.phase4_pricing_snapshot()'), 's');
+    assert.equal(await volatility('public.phase4_astra_149_binding_compatibility(timestamptz)'), 's');
+    assert.equal(await volatility('public.phase4_pricing_revision_snapshot(uuid,boolean,timestamptz)'), 'v');
+    for (const signature of [
+      'public.phase4_create_payment_request_v2(uuid,uuid,uuid,date,text,text,text,text,bigint,text)',
+      'public.phase4_create_payment_request_v3(uuid,uuid,uuid,text,text,text,bigint,text)',
+    ]) assert.equal(await volatility(signature), 'v', 'Mutating intake must remain VOLATILE');
+    await db.exec('begin');
+    try {
+      // Single-backend MVCC witness, NOT a two-backend overlap claim. A test-only
+      // helper makes a publication visible between helper and fallback SELECT.
+      // The exact installed public function is otherwise unchanged. Its nested
+      // VOLATILE renderer remains safe because it receives the captured old ID.
+      await db.exec('alter table public.pricing_revisions disable trigger user');
+      await db.query("update public.pricing_revisions set effective_at='2026-09-08T00:00:00Z' where id=$1", [newRevision]);
+      await db.exec(`create or replace function public.phase4_astra_149_binding_compatibility(p_now timestamptz)
+        returns jsonb language plpgsql volatile security invoker set search_path='' as $witness$
+        begin
+          update public.pricing_revisions set effective_at='2026-09-07T06:00:00Z'
+          where id='${newRevision}'::uuid;
+          return null;
+        end; $witness$;`);
+      const consistent = await snapshot();
+      assert.equal(consistent.revisionId, oldRevision);
+      assert.equal(consistent.plans[0].versionId, oldPlan);
+      assert.equal(consistent.paymentMethods[0].versionId, oldChannel);
+      await db.query("update public.pricing_revisions set effective_at='2026-09-08T00:00:00Z' where id=$1", [newRevision]);
+      await db.exec('alter function public.phase4_pricing_snapshot() volatile');
+      const inconsistent = await snapshot();
+      assert.equal(inconsistent.revisionId, newRevision, 'Prior VOLATILE declaration exposes the newly visible clone');
+      assert.equal(inconsistent.plans[0].versionId, newPlan);
+    } finally { await db.exec('rollback'); }
+    assert.equal(await volatility('public.phase4_pricing_snapshot()'), 's');
+    assert.ok(await compatible());
+  });
   await check('Public checkout preserves all original binding IDs with explicit effective-term provenance', async () => {
     assert.equal(projected.revisionId, oldRevision);
     assert.equal(projected.plans[0].versionId, oldPlan);

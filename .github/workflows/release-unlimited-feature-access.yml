@@ -206,6 +206,7 @@ jobs:
             scripts/staging-e2e-diagnostics.mjs \
             scripts/test-approved-renovation-shell.mjs \
             scripts/test-astra-forecast-durable-frontend.mjs \
+            scripts/test-astra-forecast-entry-diagnostics.mjs \
             scripts/test-astra-payment-cohort-repair.mjs \
             scripts/test-astra-payment-lifecycle.mjs \
             scripts/test-astra-payment-presentation.mjs \
@@ -326,6 +327,7 @@ jobs:
           node scripts/test-astra-payment-lifecycle.mjs
           node scripts/test-astra-payment-cohort-repair.mjs
           node scripts/test-astra-payment-presentation.mjs
+          node scripts/test-astra-forecast-entry-diagnostics.mjs
           node scripts/astra-release-database-contract.mjs --self-test
           node scripts/verify-astra-forecast-staging.mjs --self-test
           node scripts/test-bar-forecast-frontend.mjs
@@ -488,6 +490,7 @@ jobs:
           name: astra-forecast-durable-${{ github.run_id }}
           path: |
             artifacts/astra-forecast-staging/**/summary.json
+            artifacts/astra-forecast-staging/**/failure-browser-diagnostics.json
             artifacts/astra-forecast-staging/**/cleanup-manifest.json
             artifacts/astra-forecast-staging/**/*.png
           if-no-files-found: ignore

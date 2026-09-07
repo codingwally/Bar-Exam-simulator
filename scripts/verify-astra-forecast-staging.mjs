@@ -29,7 +29,77 @@ const digest = (value) => createHash('sha256').update(typeof value === 'string' 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const meanTenths = (scores) => Math.round(scores.reduce((sum, score) => sum + Math.round(score * 10), 0) / scores.length) / 10;
 const VIEWPORTS = Object.freeze([320, 375, 390, 600, 768, 820, 1024, 1280, 1440]);
+const DIAGNOSTIC_OPERATIONS = Object.freeze(['status', 'start', 'submit_attempt', 'attempt', 'history', 'retry_attempt', 'result_pdf', 'email_result', 'accept']);
+const DIAGNOSTIC_ERROR_CODES = Object.freeze([
+  'AUTHENTICATION_REQUIRED', 'INVALID_SESSION', 'AUTH_UNRESOLVED',
+  'BAR_FORECAST_ACCESS_REQUIRED', 'BAR_FORECAST_SETUP_REQUIRED', 'BAR_FORECAST_CONSENT_REQUIRED',
+  'BAR_FORECAST_CONSENT_NOT_RECORDED', 'BAR_FORECAST_CONTENT_INCOMPLETE', 'BAR_FORECAST_CONTENT_INVALID',
+  'BAR_FORECAST_CONTENT_MANIFEST_MISMATCH', 'BAR_FORECAST_SUBJECT_INVALID', 'BAR_FORECAST_SET_CHANGED',
+  'BAR_FORECAST_GRADING_CAPACITY', 'BAR_FORECAST_GRADING_INVALID', 'BAR_FORECAST_GRADING_TIMEOUT',
+  'BAR_FORECAST_GRADING_UNAVAILABLE', 'BAR_FORECAST_PERSISTENCE_UNAVAILABLE', 'BAR_FORECAST_PROCESSING_FAILED',
+  'BAR_FORECAST_PROCESSING_PENDING', 'BAR_FORECAST_ATTEMPT_CONFLICT', 'BAR_FORECAST_REQUEST_TIMEOUT',
+  'BAR_FORECAST_REQUEST_SHAPE_INVALID', 'INVALID_JSON', 'UNRECOGNIZED',
+]);
+const READY_FORECAST_LAUNCHER = '.qfs-practice-rail [data-public-feature="bar-forecast"]:not(:disabled)';
 const isolatedBrowserEnv = () => Object.fromEntries(Object.entries(process.env).filter(([name]) => /^(?:path|pathext|systemroot|windir|comspec|home|userprofile|localappdata|appdata|temp|tmp|tmpdir|user|logname|ci|display|xdg_runtime_dir|xdg_cache_home|lang|lc_all|ld_library_path)$/iu.test(name)));
+
+// Project a closed schema at both browser and Node boundaries. Never persist
+// arbitrary error strings, operation names, response bodies, DOM text or IDs.
+export function sanitizeForecastBrowserDiagnostics(raw) {
+  const value = raw && typeof raw === 'object' ? raw : {};
+  const bool = input => typeof input === 'boolean' ? input : null;
+  const count = input => Number.isInteger(input) && input >= 0 && input <= 10000 ? input : null;
+  const oneOf = (input, allowed, fallback) => allowed.includes(input) ? input : fallback;
+  return {
+    schemaVersion: 'astra-forecast-browser-diagnostics-v1',
+    probePresent: bool(value.probePresent),
+    sessionPresent: bool(value.sessionPresent),
+    authReady: oneOf(value.authReady, ['unobserved', 'pending', 'settled', 'rejected'], 'unobserved'),
+    route: oneOf(value.route, ['forecast', 'home', 'pricing', 'other'], 'other'),
+    rootVisible: bool(value.rootVisible), pickerPresent: bool(value.pickerPresent), editorPresent: bool(value.editorPresent),
+    errorPresent: bool(value.errorPresent), launcherReady: bool(value.launcherReady),
+    operations: Object.fromEntries(DIAGNOSTIC_OPERATIONS.map(operation => {
+      const row = value.operations?.[operation] || {};
+      return [operation, {
+        requested: count(row.requested), responded: count(row.responded),
+        httpStatus: Number.isInteger(row.httpStatus) && row.httpStatus >= 100 && row.httpStatus <= 599 ? row.httpStatus : null,
+        errorCode: row.errorCode == null ? null : oneOf(row.errorCode, DIAGNOSTIC_ERROR_CODES, 'UNRECOGNIZED'),
+        transportError: oneOf(row.transportError, ['ABORTED', 'NETWORK_ERROR'], null),
+      }];
+    })),
+  };
+}
+
+export function forecastBrowserDiagnosticsSource() {
+  return `(() => {
+    const probe=window.__astraForecastProbe;
+    const visible=node=>Boolean(node && !node.hidden && node.getClientRects().length && !node.closest('[inert],[aria-hidden="true"]'));
+    const session=window.DueDiligencePhase2?.getSession?.();
+    const raw={probePresent:Boolean(probe),sessionPresent:Boolean(session?.access_token),authReady:probe?.authReady,
+      route:location.hash==='#bar-forecast-2026'?'forecast':['','#quorum'].includes(location.hash)?'home':location.hash==='#pricing'?'pricing':'other',
+      rootVisible:visible(document.getElementById('bf26-root')),
+      pickerPresent:visible(document.querySelector('.bf26-subject-grid')),
+      editorPresent:visible(document.querySelector('#bf26-current-answer')),
+      errorPresent:Boolean(document.querySelector('[data-bf26-status][data-kind="error"],.bf26-view [role="alert"]')),
+      launcherReady:visible(document.querySelector(${JSON.stringify(READY_FORECAST_LAUNCHER)})),operations:probe?.operations};
+    const DIAGNOSTIC_OPERATIONS=${JSON.stringify(DIAGNOSTIC_OPERATIONS)};
+    const DIAGNOSTIC_ERROR_CODES=${JSON.stringify(DIAGNOSTIC_ERROR_CODES)};
+    return (${sanitizeForecastBrowserDiagnostics.toString()})(raw);
+  })()`;
+}
+
+export async function openForecastFromReadyLauncher({ waitReady, clickLauncher, waitPicker, readRoute, setStep = () => {} }) {
+  setStep('home-ready'); await waitReady();
+  setStep('launcher-click'); await clickLauncher(); // One real click; no retry or alternate opener.
+  setStep('picker'); await waitPicker();
+  assert.equal(await readRoute(), true, 'The public launcher must restore the actual Forecast route');
+}
+
+export async function captureForecastFailureDiagnostics({ readDiagnostics, saveDiagnostics }) {
+  const safe = sanitizeForecastBrowserDiagnostics(await readDiagnostics());
+  await saveDiagnostics(safe);
+  return safe;
+}
 
 // Keep daemon socket identities short on Linux without weakening per-run or
 // per-account isolation. The full fixture prefix remains in every data journal.
@@ -203,16 +273,37 @@ export function assertControlledCoverage(result, { requireFailure = false, requi
 export function probeSource() {
   return `(() => {
     const original = window.fetch.bind(window);
-    const probe = window.__astraForecastProbe = { counts: {}, accepted: null, acceptedResponses: 0, retry: null, dropAcceptance: false, loseNextAttempt: false };
+    const operations=${JSON.stringify(DIAGNOSTIC_OPERATIONS)};
+    const errorCodes=${JSON.stringify(DIAGNOSTIC_ERROR_CODES)};
+    const probe = window.__astraForecastProbe = { counts: {}, operations:Object.fromEntries(operations.map(name=>[name,{requested:0,responded:0,httpStatus:null,errorCode:null,transportError:null}])),
+      authReady:'unobserved',accepted: null, acceptedResponses: 0, retry: null, dropAcceptance: false, loseNextAttempt: false };
+    const observeAuth=()=>{
+      if(probe.authReady!=='unobserved' || typeof window.DueDiligencePhase2?.whenAuthReady!=='function') return;
+      probe.authReady='pending';
+      Promise.resolve().then(()=>window.DueDiligencePhase2.whenAuthReady()).then(()=>{probe.authReady='settled';},()=>{probe.authReady='rejected';});
+    };
+    window.addEventListener?.('DOMContentLoaded',observeAuth,{once:true});
+    observeAuth();
     window.fetch = async (...args) => {
       let input;
       try { input = JSON.parse(args[1]?.body || '{}'); } catch {}
       const forecast = String(args[0]?.url || args[0]).includes('${ENDPOINT}');
-      if (forecast && input?.operation) probe.counts[input.operation] = (probe.counts[input.operation] || 0) + 1;
+      const operation=forecast && operations.includes(input?.operation)?input.operation:null;
+      const row=operation?probe.operations[operation]:null;
+      if (row) { probe.counts[operation] = Math.min(10000,(probe.counts[operation] || 0) + 1); row.requested=Math.min(10000,row.requested+1); }
       if (forecast && input?.operation === 'attempt' && probe.loseNextAttempt) {
         probe.loseNextAttempt = false; throw new TypeError('Controlled staging progress-response loss');
       }
-      const response = await original(...args);
+      let response;
+      try { response = await original(...args); }
+      catch(error) { if(row) row.transportError=error?.name==='AbortError'?'ABORTED':'NETWORK_ERROR'; throw error; }
+      if(row) {
+        row.responded=Math.min(10000,row.responded+1); row.httpStatus=response.status; row.errorCode=null; row.transportError=null;
+        const responseOrdinal=row.responded;
+        if(!response.ok) response.clone().json().then(payload=>{
+          if(row.responded===responseOrdinal) row.errorCode=errorCodes.includes(payload?.error?.code)?payload.error.code:'UNRECOGNIZED';
+        },()=>{if(row.responded===responseOrdinal) row.errorCode='INVALID_JSON';});
+      }
       if (forecast && input?.operation === 'submit_attempt' && response.ok) {
         const accepted = await response.clone().json();
         probe.accepted = { id: accepted.attempt?.id, clientAttemptId: accepted.attempt?.clientAttemptId, status: response.status };
@@ -338,14 +429,15 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
   const persistManifest = () => writeFile(manifestPath, JSON.stringify({ schemaVersion: 1, target: TARGET.ref, prefix,
     fixtures: fixtures.map(({ id, email, kind, attemptIds = [] }) => ({ id, email, kind, attemptIds })) }, null, 2), { mode: 0o600 });
   const browserEnv = isolatedBrowserEnv();
+  let collectingFailureDiagnostics = false;
   const browser = async (...args) => {
-    if (args[0] !== 'close') checkDeadline();
+    if (args[0] !== 'close' && !collectingFailureDiagnostics) checkDeadline();
     try {
       const script = args[0] === 'eval' ? args[1] : null;
       const cliArgs = script === null ? args : ['eval', '--stdin'];
       const pending = runCommand(launcher.command, [...launcher.prefix, '--namespace', browserIdentity(prefix, 'local').namespace, '--session', browserSession,
         '--config', configPath, '--restore-save', 'never', '--json', ...cliArgs],
-      { timeout: 60000, maxBuffer: 1000000, windowsHide: true, env: { ...browserEnv, AGENT_BROWSER_DEFAULT_TIMEOUT: '30000' } });
+      { timeout: collectingFailureDiagnostics ? 10000 : 60000, maxBuffer: 1000000, windowsHide: true, env: { ...browserEnv, AGENT_BROWSER_DEFAULT_TIMEOUT: '30000' } });
       if (script !== null) {
         pending.child.stdin.on('error', () => {}); // exec's promise reports a failed command; keep fixture cleanup reachable on EPIPE.
         pending.child.stdin.end(script);
@@ -368,6 +460,18 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
   const browserSnapshot = async () => { await browser('snapshot', '-i'); };
   const clickText = async (name) => { await browserSnapshot(); await browser('find', 'role', 'button', 'click', '--name', name); };
   const closeForecast = async () => { await browserSnapshot(); await browser('click', '.bf26-close'); };
+  const closeAndReopenForecast = async (label) => {
+    const originalStage = stage;
+    stage = `${label}-close`; await closeForecast();
+    await openForecastFromReadyLauncher({
+      setStep: step => { stage = `${label}-${step}`; },
+      waitReady: () => browserWait(`(() => { const node=document.querySelector(${JSON.stringify(READY_FORECAST_LAUNCHER)}); return Boolean(node && node.getClientRects().length && !node.closest('[inert],[aria-hidden="true"]')); })()`),
+      clickLauncher: async () => { await browserSnapshot(); await browser('click', READY_FORECAST_LAUNCHER); },
+      waitPicker: () => browserWait('document.querySelector(".bf26-subject-grid")'),
+      readRoute: () => evaluate('location.hash === "#bar-forecast-2026"'),
+    });
+    stage = originalStage;
+  };
   const screen = (name) => browser('screenshot', path.join(evidenceDir, `${name}.png`));
   const store = createForecastAttemptStore({ rpc: async (_env, name, args) => {
     assert.ok(FORECAST_ATTEMPT_RPC_NAMES.includes(name));
@@ -442,9 +546,13 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
   }
 
   async function acceptBrowserJourney(number, dropAcceptance = false) {
-    stage = `journey-${number}-editor`;
+    stage = `journey-${number}-picker`;
     await browserWait('document.querySelector(".bf26-subject-grid")'); await browserSnapshot();
-    await browser('click', `[data-subject="${SUBJECT}"]`); await browserWait('document.querySelector("#bf26-current-answer")');
+    assert.equal(await evaluate('location.hash === "#bar-forecast-2026"'), true);
+    stage = `journey-${number}-subject-start`;
+    await browser('click', `[data-subject="${SUBJECT}"]`);
+    stage = `journey-${number}-editor`;
+    await browserWait('document.querySelector("#bf26-current-answer")');
     await browserSnapshot();
     const answers = Array.from({ length: 20 }, (_, index) => fixtureAnswer(prefix, number, index + 1));
     const entered = await evaluate(`(() => {
@@ -562,8 +670,7 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
         assert.equal(await evaluate('window.__astraForecastProbe.loseNextAttempt'), false, 'The controlled progress-response loss must actually occur');
         const pending = await ownedAttempt(member, id); assert.equal(pending.result, null);
         await screen('journey-2-controlled-slow-processing');
-        await closeForecast(); await browser('open', `${TARGET.site}/#bar-forecast-2026`);
-        await browserWait('document.querySelector(".bf26-subject-grid")'); await openSaved();
+        await closeAndReopenForecast('journey-2-slow-reopen'); await openSaved();
         slowProgressLossExercised = true;
       }
       const scores = { results: claim.rows.map((row) => ({ questionId: row.id, score: 4,
@@ -587,8 +694,8 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
     assert.equal(await evaluate('document.querySelector(".bf26-grade strong").textContent'), `${grade.totalScore} / 100`);
     await screen(`journey-${number}-complete-report`);
     if (number === 1) await verifyGeometry('report');
-    await closeForecast(); await browser('open', `${TARGET.site}/#bar-forecast-2026`);
-    await browserWait('document.querySelector(".bf26-subject-grid")'); await openSaved(); await browserWait('document.querySelector(".bf26-results")');
+    await closeAndReopenForecast(`journey-${number}-report-reopen`);
+    await openSaved(); await browserWait('document.querySelector(".bf26-results")');
     const pdfs = [];
     for (let repeat = 0; repeat < 2; repeat++) {
       const reloaded = await ownedAttempt(member, journey.id); assert.equal(digest(reloaded.result), grade.canonicalSha256);
@@ -663,8 +770,7 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
       stage = `journey-${number}-grading`;
       let controlled = null;
       if (number === 1) {
-        await closeForecast(); await browser('open', `${TARGET.site}/#bar-forecast-2026`);
-        await browserWait('document.querySelector(".bf26-subject-grid")'); await openSaved();
+        await closeAndReopenForecast('journey-1-grading-reopen'); await openSaved();
         await waitForRealReport(journey.id);
       } else controlled = await controlledComplete(journey.id, number === 3, number === 2);
       journeys.push({ number, gradingMode: number === 1 ? 'real-approved-provider-via-scheduled-worker' : 'controlled-sql-checkpoint-fixture',
@@ -698,6 +804,17 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
     if (error?.browserDiagnostic) summary.browserFailure = error.browserDiagnostic;
     const location = String(error?.stack || '').match(/(?:^|[\\/])(verify-astra-forecast-staging\.mjs:[1-9][0-9]{0,5}:[1-9][0-9]{0,4})(?:\)|\s|$)/mu)?.[1];
     if (location) summary.failureLocation = location;
+    if (browserSession && launcher) {
+      collectingFailureDiagnostics = true;
+      try {
+        summary.browserState = await captureForecastFailureDiagnostics({
+          readDiagnostics: () => evaluate(forecastBrowserDiagnosticsSource()),
+          saveDiagnostics: safe => writeFile(path.join(evidenceDir, 'failure-browser-diagnostics.json'), JSON.stringify(safe, null, 2), { mode: 0o600 }),
+        });
+        summary.browserStateCapture = 'saved-before-close';
+      } catch { summary.browserStateCapture = 'unavailable'; }
+      finally { collectingFailureDiagnostics = false; }
+    }
   } finally {
     stopRequested = false;
     summary.browserSessionClosed = !browserSession;

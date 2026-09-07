@@ -6,6 +6,7 @@ import {
   TARGET, probeSource, sanitizeForecastBrowserDiagnostics, forecastBrowserDiagnosticsSource,
   openForecastFromReadyLauncher, captureForecastFailureDiagnostics, forecastBootstrapState,
   waitForForecastBootstrap, canCaptureForecastFixtureScreenshot,
+  seedColdFixtureStorage, coldFixtureInitSource,
 } from './verify-astra-forecast-staging.mjs';
 
 const secret = 'Bearer private-token private.person@example.invalid /proof/private-object.png 11111111-1111-4111-8111-111111111111';
@@ -354,10 +355,126 @@ test('failure screenshots require the expected signed-in owner on the actual iso
 test('actual runner checkpoints cold auth and gates private screenshot before cleanup without warm navigation', async () => {
   const source = await readFile(new URL('./verify-astra-forecast-staging.mjs', import.meta.url), 'utf8');
   const start = source.slice(source.indexOf('  async function startBrowser(account)'), source.indexOf('  async function openSaved('));
-  assert.match(start, /probeSource\(\{ expectedOwnerId: account.id \}\)/);
-  assert.match(start, /await browser\('--state', statePath, '--init-script', initPath, 'open', `\$\{TARGET.site\}\/#bar-forecast-2026`\)/);
+  assert.match(start, /writeFile\(initPath, coldFixtureInitSource\(account\), \{ mode: 0o600 \}\)/);
+  assert.match(start, /await browser\('--init-script', initPath, 'open', `\$\{TARGET.site\}\/#bar-forecast-2026`\)/);
+  assert.doesNotMatch(start, /--state|browser\('reload'|setSession|signIn/);
   assert.match(start, /stage = `browser-bootstrap-\$\{account.kind\}`[\s\S]*waitForForecastBootstrap[\s\S]*summary.bootstrapCheckpoints.push/);
   assert.equal((start.match(/await browser\([^;]*'open'/g) || []).length, 1, 'One cold navigation, no warm-up or retry.');
   assert.match(source, /canCaptureForecastFixtureScreenshot\(summary.browserState\)[\s\S]*await screen\('failure-owned-forecast'\)/);
   assert.match(source, /skipped-no-verified-forecast-fixture/);
+});
+
+function fixtureStorageWindow({ origin = TARGET.site, existing = null } = {}) {
+  const local = new Map(existing === null ? [] : [[storageKey, existing]]);
+  const tab = new Map();
+  const storage = values => ({ getItem: key => values.has(key) ? values.get(key) : null,
+    setItem: (key, value) => values.set(key, value), removeItem: key => values.delete(key) });
+  const window = { location: { origin }, localStorage: storage(local), sessionStorage: storage(tab),
+    fetch: async () => new Response('{}') };
+  window.top = window;
+  return { window, local, tab };
+}
+function signedFixtureAccount(overrides = {}) {
+  const claims = { sub: expectedOwner, iss: `${TARGET.supabase}/auth/v1`, role: 'authenticated' };
+  const session = storedFixture({ access_token: `inert.${Buffer.from(JSON.stringify(claims)).toString('base64url')}.not-a-real-signature`, ...overrides });
+  return { id: expectedOwner, session };
+}
+const seedConfig = session => ({ origin: TARGET.site, storageKey, markerKey: '__astra_fixture_auth_import_once',
+  sessionValue: JSON.stringify(session), ownerId: expectedOwner });
+
+test('cold fixture import precedes initial diagnostics and application auth with one actual user state', () => {
+  const account = signedFixtureAccount();
+  const { window, local } = fixtureStorageWindow();
+  vm.runInNewContext(coldFixtureInitSource(account), { window, TypeError, URL });
+  assert.equal(window.__astraFixtureStorageImport, 'seeded');
+  assert.deepEqual(JSON.parse(local.get(storageKey)), account.session);
+  const initial = window.__astraForecastProbe.initialBootstrap;
+  assert.equal(initial.authStoragePresent, true);
+  assert.equal(initial.authStorageOwnerMatchesExpected, true);
+  assert.equal(initial.authStorageNotExpired, true);
+  assert.equal(window.DueDiligencePhase2, undefined, 'No application auth API or response is replaced.');
+  assert.doesNotMatch(JSON.stringify(initial), /private|aaaaaaaa|inert\./);
+});
+
+test('first-document auth reproduction separates a late state import from pre-document restoration', () => {
+  const account = signedFixtureAccount();
+  const old = fixtureStorageWindow();
+  vm.runInNewContext(probeSource({ expectedOwnerId: expectedOwner }), { window: old.window, TypeError, URL });
+  const oldRuntimeSignedIn = Boolean(old.window.localStorage.getItem(storageKey));
+  old.window.localStorage.setItem(storageKey, JSON.stringify(account.session));
+  assert.equal(oldRuntimeSignedIn, false);
+  assert.equal(old.window.__astraForecastProbe.initialBootstrap.authStoragePresent, false);
+  assert.equal(Boolean(old.window.localStorage.getItem(storageKey)), true);
+  const fixed = fixtureStorageWindow();
+  vm.runInNewContext(coldFixtureInitSource(account), { window: fixed.window, TypeError, URL });
+  assert.equal(Boolean(fixed.window.localStorage.getItem(storageKey)), true);
+  assert.equal(fixed.window.__astraForecastProbe.initialBootstrap.authStoragePresent, true);
+});
+
+test('reload does not reset refreshed credentials and logout/storage loss cannot be concealed by reseeding', () => {
+  const account = signedFixtureAccount();
+  const { window } = fixtureStorageWindow();
+  const source = coldFixtureInitSource(account);
+  vm.runInNewContext(source, { window, TypeError, URL });
+  const refreshed = JSON.stringify({ ...account.session, access_token: 'actual-refreshed-fixture-token' });
+  window.localStorage.setItem(storageKey, refreshed);
+  vm.runInNewContext(source, { window, TypeError, URL });
+  assert.equal(window.__astraFixtureStorageImport, 'already_seeded');
+  assert.equal(window.localStorage.getItem(storageKey), refreshed);
+  window.localStorage.removeItem(storageKey);
+  vm.runInNewContext(source, { window, TypeError, URL });
+  assert.equal(window.__astraFixtureStorageImport, 'already_seeded');
+  assert.equal(window.localStorage.getItem(storageKey), null);
+  assert.equal(window.__astraForecastProbe.initialBootstrap.authStoragePresent, false);
+});
+
+test('existing same-owner state is preserved, then never reimported after it is cleared', () => {
+  const account = signedFixtureAccount();
+  const existing = JSON.stringify({ ...account.session, access_token: 'existing-session-not-overwritten' });
+  const { window } = fixtureStorageWindow({ existing });
+  const config = seedConfig(account.session);
+  assert.equal(seedColdFixtureStorage(window, config), 'existing_owner_preserved');
+  assert.equal(window.localStorage.getItem(storageKey), existing);
+  window.localStorage.removeItem(storageKey);
+  assert.equal(seedColdFixtureStorage(window, config), 'already_seeded');
+  assert.equal(window.localStorage.getItem(storageKey), null);
+});
+
+test('malformed or another owner storage is never overwritten or passed as a successful restore', () => {
+  const account = signedFixtureAccount();
+  for (const existing of [secret, '', JSON.stringify(storedFixture({ user: { id: differentOwner } })),
+    JSON.stringify(storedFixture({ refresh_token: null }))]) {
+    const { window, tab } = fixtureStorageWindow({ existing });
+    assert.equal(seedColdFixtureStorage(window, seedConfig(account.session)), 'storage_conflict');
+    assert.equal(window.localStorage.getItem(storageKey), existing);
+    assert.equal(tab.size, 0);
+  }
+});
+
+test('private fixture credentials cannot be seeded into another origin, subframe, or inaccessible storage', () => {
+  const config = seedConfig(signedFixtureAccount().session);
+  for (const origin of ['https://duediligence.ph', TARGET.supabase, 'http://127.0.0.1:4179', 'null']) {
+    const { window, local, tab } = fixtureStorageWindow({ origin });
+    assert.equal(seedColdFixtureStorage(window, config), 'origin_skipped');
+    assert.equal(local.size + tab.size, 0);
+  }
+  const framed = fixtureStorageWindow(); framed.window.top = {};
+  assert.equal(seedColdFixtureStorage(framed.window, config), 'frame_skipped');
+  assert.equal(framed.local.size + framed.tab.size, 0);
+  const blocked = fixtureStorageWindow();
+  Object.defineProperty(blocked.window, 'sessionStorage', { get() { throw new Error(secret); } });
+  assert.equal(seedColdFixtureStorage(blocked.window, config), 'storage_unavailable');
+  assert.equal(blocked.local.size, 0);
+});
+
+test('generated cold fixture script rejects service tokens, wrong owners/issuers and expired sessions', () => {
+  const account = signedFixtureAccount();
+  for (const changes of [{ sub: differentOwner }, { iss: 'https://duediligence.ph/auth/v1' }, { role: 'service_role' }]) {
+    const claims = { sub: expectedOwner, iss: `${TARGET.supabase}/auth/v1`, role: 'authenticated', ...changes };
+    const invalid = signedFixtureAccount({ access_token: `inert.${Buffer.from(JSON.stringify(claims)).toString('base64url')}.not-real` });
+    assert.throws(() => coldFixtureInitSource(invalid));
+  }
+  for (const changes of [{ expires_at: 1 }, { refresh_token: '' }, { access_token: secret }, { user: { id: differentOwner } }]) {
+    assert.throws(() => coldFixtureInitSource({ ...account, session: { ...account.session, ...changes } }));
+  }
 });

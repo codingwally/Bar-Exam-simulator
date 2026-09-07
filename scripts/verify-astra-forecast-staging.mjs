@@ -180,6 +180,51 @@ export function canCaptureForecastFixtureScreenshot(raw) {
     && safe.sessionPresent === true && safe.route === 'forecast' && safe.rootVisible === true;
 }
 
+// agent-browser0.36.0 --state navigates to '/' before filling localStorage.
+// For a hash-routed app that is not a cold, signed-in first document. Restore
+// our normally signed-in disposable fixture before app scripts instead. Never
+// re-seed after reload/logout, overwrite another session, or modify app auth.
+export function seedColdFixtureStorage(window, { origin, storageKey, markerKey, sessionValue, ownerId }) {
+  if (window.location?.origin !== origin) return 'origin_skipped';
+  if (window.top !== window) return 'frame_skipped';
+  try {
+    if (window.sessionStorage.getItem(markerKey) !== null) return 'already_seeded';
+    const existing = window.localStorage.getItem(storageKey);
+    if (existing !== null) {
+      let session;
+      try { session = JSON.parse(existing); } catch { return 'storage_conflict'; }
+      if (session?.user?.id !== ownerId || typeof session.access_token !== 'string'
+          || typeof session.refresh_token !== 'string' || !session.refresh_token) return 'storage_conflict';
+      window.sessionStorage.setItem(markerKey, '1');
+      return 'existing_owner_preserved';
+    }
+    window.sessionStorage.setItem(markerKey, '1');
+    window.localStorage.setItem(storageKey, sessionValue);
+    return 'seeded';
+  } catch { return 'storage_unavailable'; }
+}
+
+export function coldFixtureInitSource(account) {
+  assert.match(account?.id || '', UUID);
+  const session = account.session;
+  assert.equal(session?.user?.id, account.id, 'The fixture session must belong to its normal Auth user.');
+  assert.ok(typeof session.access_token === 'string' && session.access_token.length > 40);
+  assert.ok(typeof session.refresh_token === 'string' && session.refresh_token.length > 0);
+  assert.ok(Number.isFinite(session.expires_at) && session.expires_at > Date.now() / 1000);
+  let claims;
+  try { claims = JSON.parse(Buffer.from(session.access_token.split('.')[1], 'base64url').toString('utf8')); } catch {}
+  assert.equal(claims?.sub, account.id, 'Only a user Auth token may be restored.');
+  assert.equal(claims?.iss, `${TARGET.supabase}/auth/v1`);
+  assert.equal(claims?.role, 'authenticated');
+  const config = { origin: TARGET.site, storageKey: `sb-${TARGET.ref}-auth-token`,
+    markerKey: '__astra_fixture_auth_import_once', sessionValue: JSON.stringify(session), ownerId: account.id };
+  // The generated file contains the private fixture's actual Auth state. It is
+  // 0600, passed only by path, and removed with the validated private temp dir.
+  return `(() => { const status=(${seedColdFixtureStorage.toString()})(window,${JSON.stringify(config)});
+    window.__astraFixtureStorageImport=status;
+  })();\n${probeSource({ expectedOwnerId: account.id })}`;
+}
+
 export async function openForecastFromReadyLauncher({ waitReady, clickLauncher, waitPicker, readRoute, setStep = () => {} }) {
   setStep('home-ready'); await waitReady();
   setStep('launcher-click'); await clickLauncher(); // One real click; no retry or alternate opener.
@@ -514,7 +559,6 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
     : path.join(process.env.ASTRA_FORECAST_EVIDENCE_DIR || path.join(root, 'artifacts/astra-forecast-staging'), prefix));
   await mkdir(evidenceDir, { recursive: true });
   const privateDir = await mkdtemp(path.join(tmpdir(), 'dd-astra-durable-'));
-  const statePath = path.join(privateDir, 'auth-state.json');
   const configPath = path.join(privateDir, 'browser-config.json');
   const initPath = path.join(privateDir, 'probe.js');
   const manifestPath = path.join(evidenceDir, 'cleanup-manifest.json');
@@ -653,10 +697,8 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
     if (browserSession) await browser('close');
     browserSession = browserIdentity(prefix, account.kind).session;
     browserAccount = account;
-    await writeFile(statePath, JSON.stringify({ cookies: [], origins: [{ origin: TARGET.site,
-      localStorage: [{ name: `sb-${TARGET.ref}-auth-token`, value: JSON.stringify(account.session) }] }] }), { mode: 0o600 });
-    await writeFile(initPath, probeSource({ expectedOwnerId: account.id }), { mode: 0o600 });
-    await browser('--state', statePath, '--init-script', initPath, 'open', `${TARGET.site}/#bar-forecast-2026`);
+    await writeFile(initPath, coldFixtureInitSource(account), { mode: 0o600 });
+    await browser('--init-script', initPath, 'open', `${TARGET.site}/#bar-forecast-2026`);
     stage = `browser-bootstrap-${account.kind}`;
     const checkpoint = await waitForForecastBootstrap({
       readDiagnostics: () => evaluate(forecastBrowserDiagnosticsSource({ expectedOwnerId: account.id })),

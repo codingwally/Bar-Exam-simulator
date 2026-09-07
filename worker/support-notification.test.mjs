@@ -48,7 +48,8 @@ function assertSupportEmail(request) {
     'Due Diligence Support <support@duediligence.ph>',
   );
   assert.match(request.body.text, /authorized review/i);
-  assert.equal(request.body.reply_to, 'member@example.com');
+  assert.equal(Object.hasOwn(request.body, 'reply_to'), false);
+  assert.doesNotMatch(JSON.stringify(request.body), /member@example\.com/);
 }
 
 test('Support requests are stored before an email is sent only to support@duediligence.ph', async () => {
@@ -78,7 +79,8 @@ test('Support requests are stored before an email is sent only to support@duedil
     assert.deepEqual(calls.map((call) => call.kind), ['storage', 'email']);
     assertSupportEmail(calls[1]);
     assert.equal(calls[1].body.subject, 'Due Diligence Support request');
-    assert.match(calls[1].body.text, /signed-in page remains stuck/i);
+    assert.match(calls[0].body.message, /signed-in page remains stuck/i);
+    assert.doesNotMatch(calls[1].body.text, /signed-in page remains stuck/i);
   } finally {
     globalThis.fetch = originalFetch;
   }

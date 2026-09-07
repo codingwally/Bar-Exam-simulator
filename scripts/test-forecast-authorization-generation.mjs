@@ -92,7 +92,7 @@ function harness({ deferredSetup = false } = {}) {
     handleForecastAccessInterruption: () => { observations.interruptions += 1; return false; },
   });
   for (const name of [
-    'resetProtectedState', 'abortRequest', 'abortAuthorization', 'beginAuthorizationDeadline',
+    'stopForecastPolling', 'resetProtectedState', 'abortRequest', 'abortAuthorization', 'beginAuthorizationDeadline',
     'beginRequest', 'requestForecast', 'checkAuthorization', 'hasDraftAnswers', 'closeForecast',
     'openForecast', 'handleForecastSessionChange', 'handleForecastAccessChange',
   ]) vm.runInContext(extract(forecast, name), context);

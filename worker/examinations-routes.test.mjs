@@ -155,7 +155,7 @@ test('Bar Simulation catalog rejects a current non-unlimited member before conte
   });
 });
 
-test('Bar Simulation history is owner-authorized and read from the track-filtered RPC', async () => {
+test('Bar Simulation history requires current paid access and uses the track-filtered RPC', async () => {
   await withFetchMock(async (url, options = {}) => {
     const auth = authResponse(url);
     if (auth) return auth;
@@ -169,7 +169,7 @@ test('Bar Simulation history is owner-authorized and read from the track-filtere
         p_attempt_id: null,
         p_allow_historical: true,
       });
-      return Response.json({ allowed: true, basis: 'historical_owner', track: 'bar_feels' });
+      return Response.json({ allowed: true, unlimited: true, basis: 'paid_subscription', track: 'bar_feels' });
     }
     assert.equal(target, `${supabaseUrl}/rest/v1/rpc/examination_history_by_track_v1`);
     assert.deepEqual(payload, {
@@ -221,7 +221,7 @@ test('examination history rejects an explicitly invalid track before database ac
   assert.equal(fetchCalls, 0);
 });
 
-test('already-owned attempt continuation commands stay historical after current access ends', async () => {
+test('per_subject owned attempt continuation commands stay historical after current access ends', async () => {
   const operations = [
     {
       operation: 'heartbeat',
@@ -291,6 +291,65 @@ test('already-owned attempt continuation commands stay historical after current 
       p_attempt_id: attemptId,
       p_allow_historical: true,
     });
+  }
+});
+
+test('historical-only Simulator users cannot read content, resume, save, heartbeat or submit', async () => {
+  const operations = [
+    ['/examinations/query', { operation: 'catalog', track: 'bar_feels' }],
+    ['/examinations/query', { operation: 'history', track: 'bar_feels' }],
+    ['/examinations/query', { operation: 'setup', versionId }],
+    ['/examinations/query', { operation: 'resume', attemptId }],
+    ['/examinations/query', { operation: 'verdict', attemptId }],
+    ['/examinations/command', { operation: 'heartbeat', attemptId, tabToken, takeover: false }],
+    ['/examinations/command', { operation: 'save_response', attemptId, questionId: versionId, tabToken,
+      answerText: 'Retained locally.', expectedRevision: 0, flagged: false }],
+    ['/examinations/command', { operation: 'submit_attempt', attemptId, tabToken,
+      requestKey: 'astra_denied_submit_0001', confirmed: true }],
+    ['/examinations/command', { operation: 'request_ai_grading', attemptId,
+      requestKey: 'astra_denied_grading_0001' }],
+    ['/examinations/command', { operation: 'start_attempt', versionId, timerMode: 'strict', tabToken,
+      requestKey: 'astra_denied_start_0001' }],
+  ];
+  let contentQueries = 0;
+  await withFetchMock(async (url) => {
+    const auth = authResponse(url);
+    if (auth) return auth;
+    if (String(url).endsWith('/rpc/examination_authorize_access')) {
+      // Even an obsolete database response claiming unlimited cannot authorize ownership alone.
+      return Response.json({ allowed: true, unlimited: true, basis: 'historical_owner', track: 'bar_feels' });
+    }
+    contentQueries++;
+    throw new Error('A denied Simulator owner must not reach a content or mutation RPC.');
+  }, async () => {
+    for (const [route, payload] of operations) {
+      const response = await worker.fetch(request(route, payload), env);
+      const body = await response.json();
+      assert.equal(response.status, 403, payload.operation + ': ' + JSON.stringify(body));
+      assert.equal(body.error.code, 'EXAM_PREMIUM_REQUIRED', payload.operation);
+    }
+  });
+  assert.equal(contentQueries, 0);
+});
+
+test('current Simulator paid, beta, authorized admin and provisional users reach catalog without an access popup denial', async () => {
+  for (const basis of ['paid_subscription', 'early_access', 'founding_beta', 'admin', 'provisional_payment']) {
+    let contentQueries = 0;
+    await withFetchMock(async (url) => {
+      const auth = authResponse(url);
+      if (auth) return auth;
+      if (String(url).endsWith('/rpc/examination_authorize_access')) {
+        return Response.json({ allowed: true, unlimited: true, basis, track: 'bar_feels',
+          entitlementEndsAt: new Date(Date.now() + 60000).toISOString() });
+      }
+      assert.equal(String(url), `${supabaseUrl}/rest/v1/rpc/examination_query`);
+      contentQueries++;
+      return Response.json({ items: [] });
+    }, async () => {
+      const response = await worker.fetch(request('/examinations/query', { operation: 'catalog', track: 'bar_feels' }), env);
+      assert.equal(response.status, 200, basis + ': ' + await response.text());
+    });
+    assert.equal(contentQueries, 1, basis);
   }
 });
 
@@ -681,7 +740,7 @@ test(`${track} AI completion suppresses email without calling a provider or fail
       });
       return Response.json({
         allowed: true,
-        basis: 'current_owner',
+        basis: track === 'bar_feels' ? 'paid_subscription' : 'current_owner',
         track,
         ...(track === 'bar_feels' ? { unlimited: true } : {}),
       });
@@ -794,7 +853,7 @@ test('3-of-20 token exhaustion fails truthfully and resumes at question four aft
     if (target === `${supabaseUrl}/rest/v1/rpc/examination_authorize_access`) {
       return Response.json({
         allowed: true,
-        basis: 'current_owner',
+        basis: 'paid_subscription',
         track: 'bar_feels',
         unlimited: true,
       });
@@ -918,7 +977,7 @@ test('Human Examiner assignment returns a manual link without calling an email p
       });
       return Response.json({
         allowed: true,
-        basis: 'current_owner',
+        basis: 'paid_subscription',
         track: 'bar_feels',
         unlimited: true,
       });
@@ -1041,7 +1100,7 @@ test('eligible public curated Bar Simulation destination uses the private random
     const payload = JSON.parse(options.body);
     called.push(target);
     if (target === `${supabaseUrl}/rest/v1/rpc/examination_authorize_access`) {
-      return Response.json({ allowed: true, track: 'bar_feels', unlimited: true });
+      return Response.json({ allowed: true, track: 'bar_feels', unlimited: true, basis: 'paid_subscription' });
     }
     if (target === `${supabaseUrl}/rest/v1/rpc/examination_query`) {
       assert.deepEqual(payload, {
@@ -1124,7 +1183,7 @@ test('test-only, uploaded, system-test, and noncanonical Bar Simulation definiti
       const payload = JSON.parse(options.body);
       calls.push(target);
       if (target === `${supabaseUrl}/rest/v1/rpc/examination_authorize_access`) {
-        return Response.json({ allowed: true, track: 'bar_feels', unlimited: true });
+        return Response.json({ allowed: true, track: 'bar_feels', unlimited: true, basis: 'paid_subscription' });
       }
       if (target === `${supabaseUrl}/rest/v1/rpc/examination_query`) {
         assert.equal(payload.p_operation, 'setup');
@@ -1191,7 +1250,7 @@ test('Simulation rollback resumes an existing private allocation but sends new s
       const payload = JSON.parse(options.body);
       calls.push(target);
       if (target === `${supabaseUrl}/rest/v1/rpc/examination_authorize_access`) {
-        return Response.json({ allowed: true, track: 'bar_feels', unlimited: true });
+        return Response.json({ allowed: true, track: 'bar_feels', unlimited: true, basis: 'paid_subscription' });
       }
       if (target === `${supabaseUrl}/rest/v1/rpc/examination_query`) {
         return Response.json(canonicalBarSimulationSetup());
@@ -1262,7 +1321,7 @@ test('Simulation allocator failures return safe exhaustion and availability resp
       if (auth) return auth;
       const target = String(url);
       if (target === `${supabaseUrl}/rest/v1/rpc/examination_authorize_access`) {
-        return Response.json({ allowed: true, track: 'bar_feels', unlimited: true });
+        return Response.json({ allowed: true, track: 'bar_feels', unlimited: true, basis: 'paid_subscription' });
       }
       if (target === `${supabaseUrl}/rest/v1/rpc/examination_query`) {
         return Response.json(canonicalBarSimulationSetup());

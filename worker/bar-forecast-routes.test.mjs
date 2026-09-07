@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createForecastMemoryStoreForTest } from '../scripts/forecast-attempt-test-fixture.mjs';
 
 import {
   BAR_FORECAST_CONSENT_VERSION,
@@ -85,6 +86,8 @@ function harness(overrides = {}) {
   const calls = [];
   let consentAccepted = overrides.consentAccepted ?? true;
   const dependencies = {
+    attemptStore: createForecastMemoryStoreForTest(),
+    wait: async () => {},
     authorizeAdministrator: async () => Object.prototype.hasOwnProperty.call(
       overrides,
       'authorization',
@@ -128,7 +131,7 @@ function harness(overrides = {}) {
         error.status = 401;
         throw error;
       }
-      return { id: 'admin-user-id' };
+      return { id: '11111111-1111-4111-8111-111111111111' };
     },
     structuredGemini: async (_env, prompt, _schema, validate, options) => {
       calls.push({ functionName: 'structured_gemini', prompt, options });
@@ -175,6 +178,33 @@ async function responseBody(response) {
   return JSON.parse(await response.text());
 }
 
+test('saved PDF and self-email operations retain authorization, exact shapes, and private binary export', async () => {
+  const attemptId = '33333333-3333-4333-8333-333333333333';
+  const calls = [];
+  const { handlers } = harness({ dependencies: { resultExporter: {
+    pdf: async (_env, user, id) => {
+      calls.push({ user, id, operation: 'pdf' });
+      return { bytes: new TextEncoder().encode('%PDF-fixture'), fileName: 'saved-forecast.pdf' };
+    },
+    email: async (_env, user, id) => {
+      calls.push({ user, id, operation: 'email' });
+      return { ok: true, email: { status: 'provider_accepted', deliveryConfirmed: false } };
+    },
+  } } });
+  const pdf = await handlers.handle(request({ operation: 'result_pdf', attemptId }), {});
+  assert.equal(pdf.status, 200);
+  assert.equal(pdf.headers.get('Content-Type'), 'application/pdf');
+  assert.equal(pdf.headers.get('Content-Disposition'), 'attachment; filename="saved-forecast.pdf"');
+  assert.match(pdf.headers.get('Cache-Control'), /no-store/u);
+  assert.equal(await pdf.text(), '%PDF-fixture');
+  const emailed = await responseBody(await handlers.handle(request({ operation: 'email_result', attemptId }), {}));
+  assert.equal(emailed.email.deliveryConfirmed, false);
+  assert.deepEqual(calls.map((entry) => entry.id), [attemptId, attemptId]);
+  await assert.rejects(handlers.handle(request({ operation: 'email_result', attemptId, recipient: 'arbitrary@example.test' }), {}), { code: 'BAR_FORECAST_REQUEST_SHAPE_INVALID' });
+  await assert.rejects(handlers.handle(request({ operation: 'result_pdf', attemptId }, 'bad-token'), {}), { status: 401 });
+  assert.equal(calls.length, 2);
+});
+
 test('status is fail-closed and returns only the contracted fields with private no-store', async () => {
   const { calls, handlers } = harness({ consentAccepted: false });
   const response = await handlers.handle(request({ operation: 'status' }), {}, '', '');
@@ -191,7 +221,7 @@ test('status is fail-closed and returns only the contracted fields with private 
   ]);
   assert.deepEqual(calls.filter((call) => call.functionName === 'rate_limit'), [
     { functionName: 'rate_limit', userId: null },
-    { functionName: 'rate_limit', userId: 'admin-user-id' },
+    { functionName: 'rate_limit', userId: '11111111-1111-4111-8111-111111111111' },
   ]);
 
   const denied = harness({ authorization: { authorized: false, role: 'super_admin' } });
@@ -495,7 +525,7 @@ test('accept persists the exact version for the authenticated eligible user', as
   assert.deepEqual(calls.find((call) => call.functionName === 'dd2026_bar_forecast_accept_consent'), {
     functionName: 'dd2026_bar_forecast_accept_consent',
     body: {
-      p_actor_user_id: 'admin-user-id',
+      p_actor_user_id: '11111111-1111-4111-8111-111111111111',
       p_consent_version: BAR_FORECAST_CONSENT_VERSION,
     },
   });

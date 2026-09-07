@@ -78,7 +78,7 @@ assert.match(shell, /'spa-bar-forecast':\s*'2026 Bar Forecast'/);
 assert.match(shell, /addEventListener\('hashchange',[\s\S]*synchronizePracticeRail/);
 assert.match(landing, /const stillHoldMs = 30 \* 60 \* 1000/);
 assert.match(landing, /Promise\.allSettled\(playback\)/);
-assert.match(serviceWorker, /duediligence-shell-astra-forecast-entry-20260907-1/);
+assert.match(serviceWorker, /duediligence-shell-astra-durable-payments-20260907-r1/);
 assert.match(serviceWorker, /quorum-first-shell\.css\?v=profile-photo-release2-20260827-1/);
 assert.match(serviceWorker, /quorum-first-shell\.js\?v=syllabus-review-20260823-1/);
 

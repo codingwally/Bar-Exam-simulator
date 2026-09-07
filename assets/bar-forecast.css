@@ -14,6 +14,49 @@
   --bf26-shadow: 0 24px 70px rgba(4, 19, 39, .28);
 }
 
+/* astra-forecast-durable-20260907-r1: same palette, compact saved-work navigation. */
+.bf26-workspace-tabs, .bf26-history-filters, .bf26-local-drafts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin: 0 0 24px;
+}
+.bf26-local-drafts { padding: 18px; border: 1px solid var(--bf26-line); border-radius: var(--bf26-radius); }
+.bf26-local-drafts h3 { flex-basis: 100%; margin: 0; }
+.bf26-local-drafts .bf26-button { text-align: left; white-space: normal; }
+.bf26-history-filters select, .bf26-history-filters input[type="date"] {
+  min-height: 44px;
+  max-width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--bf26-line);
+  border-radius: var(--bf26-radius);
+  background: var(--bf26-paper);
+  color: var(--bf26-ink);
+  font: inherit;
+}
+.bf26-history-filters select { flex: 1 1 240px; min-width: 0; }
+.bf26-history-date { display: grid; gap: 4px; font-size: .85rem; }
+.bf26-history-complete { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+.bf26-history-row {
+  padding: 18px 0;
+  border-bottom: 1px solid var(--bf26-line);
+  overflow-wrap: anywhere;
+}
+.bf26-history-row h3 { margin: 0 0 8px; }
+.bf26-history-row p { color: var(--bf26-muted); }
+.bf26-history-row meter { width: 100%; height: 22px; accent-color: var(--bf26-gold); }
+.bf26-subject-analytics { margin-top: 24px; }
+.bf26-score-trend { display: flex; gap: 8px; height: 180px; align-items: stretch; overflow-x: auto; padding-top: 22px; }
+.bf26-score-column { position: relative; flex: 1 0 40px; min-width: 40px; display: flex; align-items: flex-end; }
+.bf26-score-bar { width: 100%; min-height: 2px; background: var(--bf26-gold); border-radius: 4px 4px 0 0; }
+.bf26-score-value { position: absolute; top: -22px; width: 100%; text-align: center; font-size: .76rem; color: var(--bf26-ink); }
+@media (max-width: 620px) {
+  .bf26-workspace-tabs .bf26-button { flex: 1 1 110px; min-height: 44px; }
+  .bf26-history-date { flex: 1 1 140px; min-width: 0; }
+  .bf26-history-date input { width: 100%; min-width: 0; }
+}
+
 #site-header.qfs-shell #qfs-practice-rail button[data-public-feature="bar-forecast"],
 #site-header.qfs-shell #quorum-practice-menu button[data-public-feature="bar-forecast"] {
   position: relative;

@@ -917,10 +917,21 @@
     }
   }
 
+  function forecastAuthReturnSearch(value) {
+    try {
+      const url = new URL(String(value || ''), location.origin);
+      if (url.origin !== location.origin || url.pathname !== location.pathname || url.hash !== '#bar-forecast-2026') return '';
+      const attempts = url.searchParams.getAll('forecastAttempt');
+      if (attempts.length !== 1 || !/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/iu.test(attempts[0])) return '';
+      return `?${new URLSearchParams({ forecastAttempt: attempts[0].toLowerCase() })}`;
+    } catch { return ''; }
+  }
+
   function rememberAuthReturn(returnHash) {
     const hash = safeReturnHash(returnHash);
     if (!hash) return;
-    safeSessionWrite(authReturnStorageKey, `${location.origin}${location.pathname}${hash}`);
+    const search = forecastAuthReturnSearch(`${location.origin}${location.pathname}${location.search}${hash}`);
+    safeSessionWrite(authReturnStorageKey, `${location.origin}${location.pathname}${search}${hash}`);
   }
 
   function setEntryMode(mode = 'signin') {
@@ -1442,11 +1453,12 @@
     state.authReturnPending = false;
     const storedReturn = safeSessionRead(authReturnStorageKey);
     const returnHash = safeReturnHash(storedReturn) || '#quorum';
+    const returnSearch = forecastAuthReturnSearch(storedReturn) || location.search;
     safeSessionRemove(authReturnStorageKey);
     history.replaceState(
       { ...(history.state || {}), dueDiligenceRoute: returnHash.slice(1) },
       '',
-      `${location.pathname}${location.search}${returnHash}`,
+      `${location.pathname}${returnSearch}${returnHash}`,
     );
     global.dispatchEvent(new PopStateEvent('popstate', { state: history.state }));
   }
@@ -2689,7 +2701,7 @@
     const planAmount = formatPhp(plan.priceCentavos, { alwaysDecimals: true });
     const rollingTerm = plan.entitlementMode === 'rolling_days';
     const termCopy = rollingTerm
-      ? `${Math.max(1, Number(plan.durationDays) || 30)} days are anchored to the payment time verified from the proof. If finite paid access is still active, the new period is added after the current expiry.`
+      ? `${Math.max(1, Number(plan.durationDays) || 30)} days begin after payment verification and activation. If finite paid access is still active, the new period is added after the current expiry.`
       : plan.fixedEntitlementEndsAt
         ? `Approval keeps this legacy plan active through ${manilaDate(plan.fixedEntitlementEndsAt, { includeTime: true })} Philippine time.`
         : 'The captured legacy entitlement dates are kept with this payment request.';

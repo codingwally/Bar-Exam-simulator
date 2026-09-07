@@ -202,6 +202,8 @@ on:
       - 'scripts/*astra*'
       - 'scripts/test-forecast-durable-api.mjs'
       - 'scripts/forecast-attempt-test-fixture.mjs'
+      - 'scripts/staging-e2e-diagnostics.mjs'
+      - 'scripts/test-auth-session-persistence.mjs'
       - 'supabase/migrations/*_astra_*.sql'
 
 permissions:
@@ -231,6 +233,10 @@ jobs:
           node scripts/test-astra-payment-lifecycle.mjs
           node scripts/test-astra-payment-cohort-repair.mjs
           node scripts/test-astra-payment-presentation.mjs
+          node scripts/test-astra-staging-diagnostics.mjs
+          node scripts/test-astra-simulator-staging-contract.mjs
+          node scripts/astra-release-database-contract.mjs --self-test
+          node scripts/verify-astra-forecast-staging.mjs --self-test
 
       - name: Verify maintenance, token access, and payment-notification contracts
         run: |

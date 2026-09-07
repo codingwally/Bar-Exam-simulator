@@ -95,6 +95,7 @@
     action: null,
     actionInFlight: false,
     subscriptionRows: new Map(),
+    subscriptionPlans: [],
     premiumStatus: 'all',
     examinationData: null,
     supportSearch: '',
@@ -143,14 +144,10 @@
   const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   const SUPPORT_PAGE_SIZE = 100;
   const ADMIN_OPERATIONAL_MAX_OFFSET = 1_000_000;
-  const EARLY_ACCESS_PLAN = Object.freeze({
-    id: 'early_access_beta',
-    name: 'Early Access',
-    pricePhp: 149,
-    expiresAt: '2026-10-01T23:59:59+08:00',
-    salesCloseAt: '2026-10-01T00:00:00+08:00',
-  });
-
+  const PAYMENT_INVALIDATION_NO_CHANGE_CODES = new Set([
+    'PAYMENT_RECEIPT_IN_FLIGHT', 'PAYMENT_REFUND_IN_PROGRESS',
+    'PAYMENT_INVALIDATION_CONFLICT', 'PAYMENT_INVALIDATION_UNSAFE',
+  ]);
   function commercialPlanLabel(planCode) {
     const code = String(planCode || '').trim().toLowerCase();
     if (code === 'early_access_beta') return 'Early Access';
@@ -1946,7 +1943,7 @@
         { html: true, value: `<span class="status ${accessState.className}">${escapeHtml(accessState.label)}</span>`, sortValue: accessState.label },
         payment ? `₱${number(payment.trusted_amount_php, 2)}` : 'Historical paid record',
         { html: true, value: dateTime(payment?.submitted_at || account.subscription_starts_at), sortValue: payment?.submitted_at || account.subscription_starts_at || '' },
-        { html: true, value: dateTime(account.subscription_starts_at || payment?.submitted_at), sortValue: account.subscription_starts_at || payment?.submitted_at || '' },
+        { html: true, value: dateTime(account.subscription_starts_at || payment?.purchasedStartsAt), sortValue: account.subscription_starts_at || payment?.purchasedStartsAt || '' },
         { html: true, value: dateTime(expiry), sortValue: expiry || '' },
         { html: true, value: `<span class="status ${expiryAlert.className}">${escapeHtml(expiryAlert.label)}</span>`, sortValue: expiryAlert.rank },
         { html: true, value: dateTime(account.last_sign_in_at), sortValue: account.last_sign_in_at || '' },
@@ -1973,9 +1970,10 @@
   }
 
   async function renderSubscriptions(report, context) {
-    const [directory, introductoryAccess] = await Promise.all([
+    const [directory, introductoryAccess, publishedPlans] = await Promise.all([
       loadUserDirectory(false, state.subscriptionSearch, state.subscriptionOffset, context),
-      loadPhase4Operational('introductory_access', false, state.subscriptionSearch, state.subscriptionOffset, context)
+      loadPhase4Operational('introductory_access', false, state.subscriptionSearch, state.subscriptionOffset, context),
+      readApi('/plans', {}, context),
     ]);
     const betaAllAccess = report.betaAllAccess || {};
     const globalBetaKnown = typeof betaAllAccess.enabled === 'boolean';
@@ -2019,7 +2017,7 @@
         globalBetaEnabled ? 'Temporary safety access' : commercialAccountLabel(account),
         dateTime(account.last_sign_in_at),
         number(account.answered_question_count),
-        globalBetaEnabled ? 'Temporary override' : (account.subscription_expires_at ? dateTime(account.subscription_expires_at) : 'Daily reset'),
+        globalBetaEnabled ? 'Temporary override' : (account.subscription_expires_at ? dateTime(account.subscription_expires_at) : account.subscription_id ? 'No expiry recorded' : 'See introductory allowance'),
         {
           html: true,
           value: `<div class="row-actions" data-subscription-actions-for="${escapeHtml(account.id)}" aria-label="Subscription actions for ${escapeHtml(account.display_name || account.email || account.id)}"></div>`,
@@ -2033,6 +2031,8 @@
     stageRenderCommit(context, () => {
       state.subscriptionRows = subscriptionRows;
       state.subscriptionExportRows = accounts;
+      state.subscriptionPlans = (publishedPlans.plans || []).filter((plan) =>
+        plan.checkoutOpen === true && Number.isInteger(plan.durationDays) && plan.durationDays > 0);
     });
     return `
       ${heading('Subscriptions', 'Review each account’s commercial state and remaining introductory tokens. Access changes require a reason and are recorded.')}
@@ -2075,12 +2075,18 @@
         )}
       </section>
       <section class="panel">
-        <h3>Commercial access options</h3>
-        ${table(['Access', 'Price', 'Availability'], [
-          ['Early Access', '₱149 promotional', 'Next manual renewal: October 1, 2026 at ₱199 · no automatic charge'],
-        ])}
+        <h3>Recorded subscription terms</h3>
+        <p class="panel-note">These are each account's stored access dates, including valid renewals and independent grants. Current purchase prices remain in Plans &amp; Pricing. No automatic charge is scheduled.</p>
+        ${table(['Account', 'Plan', 'Access begins', 'Access through'], accounts
+          .filter((account) => account.subscription_id)
+          .map((account) => [
+            account.display_name || 'Not provided',
+            commercialPlanLabel(account.subscription_plan),
+            account.subscription_starts_at ? dateTime(account.subscription_starts_at) : 'Not recorded',
+            account.subscription_expires_at ? dateTime(account.subscription_expires_at) : 'No expiry recorded',
+          ]))}
       </section>
-      <section class="panel"><h3>Refund policy</h3><p class="panel-note">Eligible Early Access requests must be filed within seven calendar days of first provisional or paid access. The server calculates the unused-time amount through October 1, capped at ₱149; administrator review and manual payment confirmation are required.</p></section>`;
+      <section class="panel"><h3>Refund policy</h3><p class="panel-note">Eligibility and the unused-time amount are calculated by the server from the selected payment, its approved term, and recorded usage. Review the stored calculation before deciding. Manual payment confirmation is required.</p></section>`;
   }
 
   async function renderPayments(context) {
@@ -2097,7 +2103,7 @@
     const directoryById = new Map((directory.items || []).map((account) => [String(account.id), account]));
     return `
       ${heading('Payments', 'Review manual subscription payments. Private proofs open for five minutes, and every view is recorded in the activity log.')}
-      <div class="notice danger"><strong>Money and access warning.</strong> Confirm the student, trusted plan amount, payment channel, and private proof. For a rolling plan, enter the exact payment date and time shown on the proof before approval; the purchased term is anchored to that verified timestamp.</div>
+      <div class="notice danger"><strong>Money and access warning.</strong> Confirm the student, trusted amount, payment channel, and private proof. Current 30-day subscriptions begin when approved, or after existing finite access. Record a payment time only if it is visible on the proof.</div>
       ${table(
         ['Student', 'Amount & channel', 'Verified payment time', 'Verification', 'Reviewed by', 'Verifier email', 'Proof', 'Submitted', 'Actions'],
         (data.items || []).map((row) => {
@@ -2106,10 +2112,23 @@
           const proofDetails = [row.proof_original_name, row.proof_mime_type,
             row.proof_size_bytes ? `${Math.ceil(Number(row.proof_size_bytes) / 1024)} KiB` : '']
             .filter(Boolean);
+          const activationBased = row.entitlementMode === 'rolling_days' && (
+            (row.plan_code === 'early_access_beta' && Number(row.trusted_amount_php) === 149)
+            || (row.plan_code === 'bar_access_30d' && Number(row.trusted_amount_php) === 199)
+          );
+          const reviewPayload = {
+            planCode: row.plan_code,
+            planName: row.planName || commercialPlanLabel(row.plan_code),
+            entitlementMode: row.entitlementMode || null,
+            durationDays: row.durationDays || null,
+            verifiedPaidAt: row.verifiedPaidAt || null,
+            activationBased,
+            requiresVerifiedPaidAt: row.entitlementMode === 'rolling_days' && !activationBased,
+          };
           return [
             { html: true, value: `<strong>${escapeHtml(row.display_name || 'Not provided')}</strong>${studentDetails.length ? `<br><small>${escapeHtml(studentDetails.join(' · '))}</small>` : ''}` },
             { html: true, value: `<strong>₱${number(row.trusted_amount_php,2)}</strong><br><small>${escapeHtml(row.planName || commercialPlanLabel(row.plan_code))} · ${escapeHtml(row.payment_method || 'Not provided')}</small>` },
-            row.verifiedPaidAt ? dateTime(row.verifiedPaidAt) : 'Verify from proof',
+            { html: true, value: `${escapeHtml(row.verifiedPaidAt ? dateTime(row.verifiedPaidAt) : 'Not recorded')}${row.activatedAt ? `<br><small>Activated ${escapeHtml(dateTime(row.activatedAt))}</small>` : ''}` },
             { html: true, value: `<span class="status ${row.status === 'approved' ? 'ok' : row.status === 'rejected' ? 'danger' : 'warn'}">${escapeHtml(commercialPaymentLabel(row.status))}</span>${row.provisional_access_expires_at ? `<br><small>Provisional until ${escapeHtml(dateTime(row.provisional_access_expires_at))}</small>` : ''}` },
             row.reviewed_by ? administratorIdentity(row.reviewed_by, directoryById) : 'Pending review',
             { html: true, value: `<span class="status ${notification.className}">${escapeHtml(notification.text)}</span>${row.verification_email_last_attempt_at ? `<br><small>${escapeHtml(dateTime(row.verification_email_last_attempt_at))}</small>` : ''}` },
@@ -2119,16 +2138,23 @@
               html: true,
               value: `<div class="row-actions">
                 ${['pending', 'needs_information'].includes(row.status) ? actionButton('Approve subscription', 'payment_review', row.id, {
-                  status: row.status,
-                  planCode: row.plan_code,
-                  planName: row.planName || commercialPlanLabel(row.plan_code),
-                  entitlementMode: row.entitlementMode || null,
-                  verifiedPaidAt: row.verifiedPaidAt || null,
-                  requiresVerifiedPaidAt: row.entitlementMode === 'rolling_days'
-                    || row.plan_code === 'bar_access_30d',
+                  ...reviewPayload,
+                  status: 'approved',
                   approvalOnly: true,
                 }).value : ''}
+                ${['pending', 'needs_information'].includes(row.status) ? actionButton('Needs information', 'payment_review', row.id, {
+                  ...reviewPayload, status: 'needs_information',
+                }).value : ''}
+                ${['pending', 'needs_information'].includes(row.status) ? actionButton('Decline', 'payment_review', row.id, {
+                  ...reviewPayload, status: 'rejected',
+                }).value : ''}
+                ${row.status === 'approved' && ['founder_admin', 'super_admin'].includes(state.authorization?.role)
+                  ? actionButton('Mark proof invalid', 'payment_invalidate', row.id, {
+                    studentName: row.display_name || 'Not provided',
+                    planName: reviewPayload.planName, amountPhp: row.trusted_amount_php,
+                  }).value : ''}
                 ${actionButton('View private proof', 'view_payment_proof', row.id, {
+                  ...reviewPayload,
                   studentName: row.display_name || 'Not provided',
                   studentEmail: row.email || 'Not available',
                   amountPhp: row.trusted_amount_php,
@@ -2137,8 +2163,8 @@
                   planName: row.planName || commercialPlanLabel(row.plan_code),
                   entitlementMode: row.entitlementMode || null,
                   verifiedPaidAt: row.verifiedPaidAt || null,
-                  requiresVerifiedPaidAt: row.entitlementMode === 'rolling_days'
-                    || row.plan_code === 'bar_access_30d',
+                  paymentStatus: row.status,
+                  activatedAt: row.activatedAt || null,
                   proofOriginalName: row.proof_original_name || 'Not available',
                   proofMimeType: row.proof_mime_type || 'Not available',
                   proofSizeBytes: row.proof_size_bytes || null,
@@ -3575,11 +3601,15 @@
     }
     if (action === 'subscription_audit_view') return 'View this student’s recorded access history';
     if (['activate', 'complimentary', 'replace_plan'].includes(operation)) {
-      const plan = selectedPlan() || payload.planCode || EARLY_ACCESS_PLAN.id;
+      const selected = state.subscriptionPlans.find((plan) => plan.planCode === selectedPlan());
+      const plan = selected?.planCode || payload.planCode;
       const verb = operation === 'activate' ? 'Activate'
         : operation === 'complimentary' ? 'Grant complimentary'
           : 'Change plan to';
-      return `${verb} ${planDisplayName(plan)} · expires ${$('#action-expires')?.value || 'October 1, 2026 at 11:59 PM Philippine time'}`;
+      return `${verb} ${selected?.name || planDisplayName(plan)} · ${operation === 'replace_plan'
+        ? 'the server preserves an existing finite expiry; this is not another paid purchase'
+        : selected ? `${selected.durationDays}-day server-calculated term; confirmation records the exact dates`
+          : 'select an available duration-based plan'}`;
     }
     if (operation === 'pause') return 'Suspend the active Subscription';
     if (operation === 'resume') return 'Resume the suspended Subscription';
@@ -3615,32 +3645,26 @@
     const legend = document.createElement('legend');
     legend.textContent = 'Select the trusted plan';
     fieldset.append(legend);
-    const plans = [{
-      ...EARLY_ACCESS_PLAN,
-      disabled: false,
-      durationDays: null,
-      statusLabel: 'Active',
-      note: 'One-time launch access',
-    }];
-    const preferred = EARLY_ACCESS_PLAN.id;
+    const plans = state.subscriptionPlans;
+    const preferred = plans.find((plan) => plan.planCode === payload.planCode)?.planCode || plans[0]?.planCode;
     for (const plan of plans) {
       const label = document.createElement('label');
       label.className = `plan-option${plan.disabled ? ' disabled' : ''}`;
       const input = document.createElement('input');
       input.type = 'radio';
       input.name = 'subscription-plan';
-      input.value = plan.id;
+      input.value = plan.planCode;
       input.disabled = plan.disabled;
-      input.checked = !plan.disabled && plan.id === preferred;
+      input.checked = !plan.disabled && plan.planCode === preferred;
       const copy = document.createElement('span');
       const name = document.createElement('strong');
       name.textContent = plan.name;
       const details = document.createElement('small');
-      details.textContent = 'One-time access through October 1, 2026 · all examination tracks';
+      details.textContent = `${plan.durationDays}-day published plan · exact access dates are recorded by the server`;
       copy.append(name, details);
       const price = document.createElement('strong');
       price.className = 'plan-price';
-      price.textContent = `₱${number(plan.pricePhp, 2)}`;
+      price.textContent = `₱${number(plan.priceCentavos / 100, 2)}`;
       label.append(input, copy, price);
       fieldset.append(label);
       input.addEventListener('change', updateActionContext);
@@ -3654,18 +3678,13 @@
     if (action === 'subscription_change') {
       if (['activate', 'complimentary', 'replace_plan'].includes(payload.operation)) {
         appendPlanOptions(container, payload);
-        const input = appendInputField(
-          container,
-          'Early Access expiration (fixed commercial term)',
-          'action-expires',
-          {
-            type: 'datetime-local',
-            value: localDateTimeValue(EARLY_ACCESS_PLAN.expiresAt),
-            required: true,
-          },
-        );
-        input.readOnly = true;
-        input.addEventListener('input', updateActionContext);
+        const explanation = document.createElement('p');
+        explanation.className = 'panel-note';
+        explanation.textContent = payload.operation === 'replace_plan'
+          ? 'Change Plan is a manual access adjustment, not proof approval or another purchase. The server preserves an existing finite end date; otherwise it applies the selected plan duration.'
+          : 'The server calculates the selected duration at confirmation. Complimentary access uses that enforced duration too; this control does not accept a custom end date. For a paid purchase, review its payment proof in Payments.';
+        if (!state.subscriptionPlans.length) explanation.textContent = 'No current duration-based plan is available. Refresh Plans & Pricing before using this manual grant control.';
+        container.append(explanation);
       } else if (payload.operation === 'extend') {
         const input = appendInputField(container, 'Extension in calendar days', 'action-days', {
           type: 'number', value: '30', min: 1, max: 366, required: true,
@@ -3782,7 +3801,13 @@
   }
 
   function cancelActionDialog(options = {}) {
+    if (state.actionInFlight && ['payment_review', 'payment_invalidate'].includes(state.action?.action)
+        && options.allowInFlight !== true) {
+      toast('The payment decision is still pending. Keep this dialog open until its outcome is confirmed.');
+      return;
+    }
     const dialog = $('#action-dialog');
+    if ($('#action-reason')) $('#action-reason').readOnly = false;
     if (!dialog?.open) {
       state.action = null;
       return;
@@ -3847,7 +3872,8 @@
             ${privateProofDetail('Amount', Number.isFinite(Number(payload.amountPhp)) ? `₱${number(payload.amountPhp, 2)}` : 'Not available')}
             ${privateProofDetail('Method', humanizeAuditValue(payload.paymentMethod))}
             ${privateProofDetail('Plan', payload.planName || commercialPlanLabel(payload.planCode))}
-            ${privateProofDetail('Verified payment time', payload.verifiedPaidAt ? dateTime(payload.verifiedPaidAt) : 'Pending administrator verification')}
+            ${privateProofDetail('Verified payment time', payload.verifiedPaidAt ? dateTime(payload.verifiedPaidAt) : 'Not recorded')}
+            ${payload.activatedAt ? privateProofDetail('Activated', dateTime(payload.activatedAt)) : ''}
             ${privateProofDetail('Submitted', dateTime(payload.submittedAt))}
             ${privateProofDetail('File', payload.proofOriginalName)}
             ${privateProofDetail('Type and size', [mimeType || payload.proofMimeType, sizeLabel].filter(Boolean).join(' · '))}
@@ -3867,7 +3893,7 @@
     const reasonField = $('#action-reason')?.closest('label');
     if (reasonField) reasonField.hidden = true;
     $('#action-warning').textContent = 'Review the image and payment details together. Approval sends the user an electronic receipt with this exact proof attached.';
-    $('#action-confirm').hidden = false;
+    $('#action-confirm').hidden = !['pending', 'needs_information'].includes(payload.paymentStatus);
     $('#action-confirm').textContent = 'Approve subscription';
     $('#action-dialog-cancel').textContent = 'Done';
   }
@@ -3887,7 +3913,8 @@
       const nextRank = roleRank[String(payload.role || '').toLowerCase()];
       return Number.isFinite(previousRank) && Number.isFinite(nextRank) && nextRank < previousRank;
     }
-    if (action === 'payment_review') return String(payload.status || '').toLowerCase() === 'rejected';
+    if (action === 'payment_review') return ['approved', 'needs_information', 'rejected'].includes(String(payload.status || '').toLowerCase());
+    if (action === 'payment_invalidate') return true;
     if (action.startsWith('forum_') || action.startsWith('quorum_')) {
       return /(hide|remove|restrict|lock|reject)/i.test(action);
     }
@@ -3895,8 +3922,13 @@
   }
 
   function openAction(action, targetId, payload) {
+    if (state.actionInFlight && ['payment_review', 'payment_invalidate'].includes(state.action?.action)) {
+      toast('Wait for the current payment decision before starting another action.');
+      return;
+    }
     state.action = { action, targetId: targetId || null, payload: { ...(payload || {}) } };
     state.actionInFlight = false;
+    $('#action-reason').readOnly = false;
     $('#action-dialog').classList.remove('payment-proof-open');
     const reasonField = $('#action-reason')?.closest('label');
     if (reasonField) reasonField.hidden = false;
@@ -3924,9 +3956,9 @@
       warning = 'This action changes the student’s access and may affect future billing records. Confirm the requested change and effective dates before continuing.';
     } else if (action === 'payment_review') {
       title = 'Approve subscription';
-      const verifiedPaymentField = payload.requiresVerifiedPaidAt === true
+      const verifiedPaymentField = payload.entitlementMode === 'rolling_days'
         ? actionField(
-          'Verified payment date and time shown on proof',
+          `Verified payment time shown on proof${payload.requiresVerifiedPaidAt === true ? '' : ' (optional)'}`,
           'action-paid-at',
           localDateTimeValue(payload.verifiedPaidAt),
           'datetime-local',
@@ -3934,13 +3966,15 @@
       fields = payload.approvalOnly === true
         ? `<div class="notice"><strong>Receipt delivery</strong><br>Confirming approves ${escapeHtml(payload.planName || 'the selected subscription')} and sends the subscriber an electronic receipt with the exact reviewed payment proof attached.</div>${verifiedPaymentField}`
         : `<label class="field">Decision<select id="action-status">
-          <option value="approved">Approve subscription</option>
-          <option value="needs_information">Needs information</option>
-          <option value="rejected">Reject</option>
+          <option value="approved"${payload.status === 'approved' ? ' selected' : ''}>Approve subscription</option>
+          <option value="needs_information"${payload.status === 'needs_information' ? ' selected' : ''}>Needs information</option>
+          <option value="rejected"${payload.status === 'rejected' ? ' selected' : ''}>Decline</option>
         </select></label>${verifiedPaymentField}`;
-      warning = payload.requiresVerifiedPaidAt === true
-        ? 'Approval requires the exact payment timestamp visible on the private proof. The 30-day term is calculated from that verified time, or after a later finite expiry so existing paid days are not lost. No automatic charge or renewal is scheduled.'
-        : 'Approval activates the captured fixed entitlement and emails the user a professional electronic receipt with the exact reviewed proof attached. No automatic charge or renewal is scheduled.';
+      warning = 'Confirm the reviewed proof, decision, and reason. No automatic charge or renewal is scheduled.';
+    } else if (action === 'payment_invalidate') {
+      title = 'Mark approved proof invalid';
+      fields = `<div class="notice danger"><strong>Approved payment</strong><br>${escapeHtml(payload.studentName || 'Not provided')} · ${escapeHtml(payload.planName || 'Selected subscription')} · ₱${number(payload.amountPhp, 2)}</div>`;
+      warning = 'This marks the payment declined and reverses only access safely linked to that approval. Independent access, proof, and history are preserved. Introductory tokens are not replenished. Sent receipts cannot be recalled. Ambiguous history or active refunds block this action.';
     } else if (action === 'view_payment_proof') {
       title = 'View private payment proof';
       fields = `<div class="notice"><strong>Review context</strong><br>${escapeHtml(payload.studentName || 'Not provided')} · ${escapeHtml(payload.planName || commercialPlanLabel(payload.planCode))} · ${Number.isFinite(Number(payload.amountPhp)) ? `₱${number(payload.amountPhp, 2)}` : 'Amount unavailable'}</div>`;
@@ -4105,7 +4139,11 @@
     };
     $('#action-context').hidden = !isAccessAction;
     syncActionConfirmation();
-    $('#action-confirmation-copy').textContent = isGlobalBetaAction
+    $('#action-confirmation-copy').textContent = action === 'payment_invalidate'
+      ? 'I verified this approved proof is invalid and understand that only safely linked access will be reversed.'
+      : isPaymentReview
+      ? 'I checked the payment proof and selected decision. I understand this action and reason will be recorded.'
+      : isGlobalBetaAction
       ? `I understand this will ${payload.enabled ? 'enable temporary safety access for' : 'activate commercial enforcement for'} all signed-in users and that the immediate change is recorded.`
       : isForumAction
         ? 'I checked the report or content and the proposed moderation action. I understand this immediate action is recorded.'
@@ -4115,6 +4153,7 @@
       ? 'View activity history'
       : action === 'user_response_export'
         ? 'Download answer records'
+        : action === 'payment_invalidate' ? 'Confirm proof invalidation'
         : isPaymentReview && payload.approvalOnly === true ? 'Confirm'
           : isPaymentReview ? 'Approve subscription'
           : isForumAction ? 'Confirm moderation action' : 'Confirm action';
@@ -4129,17 +4168,22 @@
         const isApproval = selected === 'approved';
         $('#action-title').textContent = isApproval
           ? 'Approve subscription'
-          : selected === 'rejected' ? 'Reject payment request' : 'Request payment information';
+          : selected === 'rejected' ? 'Decline payment request' : 'Payment needs information';
         $('#action-confirm').textContent = isApproval
           ? payload.approvalOnly === true ? 'Confirm' : 'Approve subscription'
-          : selected === 'rejected' ? 'Reject request' : 'Request information';
+          : selected === 'rejected' ? 'Confirm decline' : 'Confirm needs information';
         $('#action-warning').textContent = isApproval
-          ? payload.requiresVerifiedPaidAt === true
-            ? 'Confirm the exact payment timestamp shown on the private proof. The server anchors the 30-day term to that verified time and emails the user an electronic receipt with the reviewed proof attached.'
-            : 'Confirming activates the captured fixed entitlement and emails the user an electronic receipt with the exact reviewed proof attached. No automatic charge or renewal is scheduled.'
+          ? payload.activationBased === true
+            ? 'Approval starts the 30-day purchased term now, or after existing finite access, and queues a receipt with the reviewed proof. A payment timestamp is optional and must come from the proof, never the upload time.'
+            : payload.requiresVerifiedPaidAt === true
+              ? 'Enter the payment time shown on the proof. The captured plan determines the purchased term. Approval queues a receipt with the reviewed proof.'
+              : 'Approval activates the captured entitlement and queues delivery that emails the user an electronic receipt with the exact reviewed proof attached. No automatic charge or renewal is scheduled.'
           : selected === 'rejected'
-            ? 'Rejecting revokes provisional access and records your reason. No receipt is sent.'
-            : 'The request remains unapproved while the user provides the missing information. No receipt is sent.';
+            ? 'Decline closes this payment request and revokes only its provisional access. Existing independent access and the proof are preserved. No receipt is sent.'
+            : 'This records the missing information and leaves the request unapproved. Follow up with the user; no receipt is sent.';
+        const paidAtField = $('#action-paid-at')?.closest('label');
+        if (paidAtField) paidAtField.hidden = !isApproval;
+        if ($('#action-paid-at')) $('#action-paid-at').required = isApproval && payload.requiresVerifiedPaidAt === true;
         syncActionConfirmation();
       };
       decision?.addEventListener('change', syncPaymentDecision);
@@ -4175,7 +4219,9 @@
         ? 'Confirm that you verified the report and moderation action.'
         : state.action.action === 'global_beta_change'
           ? 'Confirm that you understand the platform-wide access impact.'
-          : 'Confirm that you verified the target and destructive change.');
+          : state.action.action === 'payment_review'
+            ? 'Confirm that you checked the proof and payment decision.'
+            : 'Confirm that you verified the target and destructive change.');
       return;
     }
     const reason = $('#action-reason').value.trim();
@@ -4210,18 +4256,24 @@
           : payload.status === 'expired' ? 'expire' : 'adjust';
     } else if (action === 'payment_review') {
       payload.status = payload.approvalOnly === true ? 'approved' : $('#action-status').value;
-      payload.verifiedPaidAt = null;
-      if (payload.status === 'approved' && payload.requiresVerifiedPaidAt === true) {
+      delete payload.verifiedPaidAt;
+      if (payload.status === 'approved' && ($('#action-paid-at')?.value || payload.requiresVerifiedPaidAt === true)) {
         payload.verifiedPaidAt = isoFromLocalInput($('#action-paid-at')?.value);
         if (!payload.verifiedPaidAt) {
           toast('Enter the exact payment date and time shown on the private proof.');
           return;
         }
-        if (new Date(payload.verifiedPaidAt).getTime() > Date.now() + 5 * 60_000) {
+        if (new Date(payload.verifiedPaidAt).getTime() > Date.now()) {
           toast('The verified payment time cannot be in the future.');
           return;
         }
       }
+      const decisionFingerprint = JSON.stringify({ status: payload.status, verifiedPaidAt: payload.verifiedPaidAt || null, reason });
+      if (state.action.paymentDecisionFingerprint && state.action.paymentDecisionFingerprint !== decisionFingerprint) {
+        toast('Retry the same decision and reason. Close and refresh the queue before changing a submitted review.');
+        return;
+      }
+      state.action.paymentDecisionFingerprint = decisionFingerprint;
     } else if (action === 'refund_review') {
       payload.status = $('#action-status').value;
       payload.approvedRefundPhp = Number($('#action-refund-amount').value);
@@ -4232,11 +4284,11 @@
           toast('Select an available plan.');
           return;
         }
-        payload.expiresAt = EARLY_ACCESS_PLAN.expiresAt;
-        if (payload.planCode !== EARLY_ACCESS_PLAN.id) {
-          toast('Only the current Early Access plan may be assigned.');
+        if (!state.subscriptionPlans.some((plan) => plan.planCode === payload.planCode)) {
+          toast('Select a currently published duration-based plan, or refresh Subscriptions.');
           return;
         }
+        delete payload.expiresAt;
       }
       if (payload.operation === 'extend') {
         payload.durationDays = Number($('#action-days').value);
@@ -4280,6 +4332,11 @@
       payload.durationHours = Number($('#action-duration').value);
     }
     state.action.requestKey ||= uuidKey();
+    if (action === 'payment_invalidate') {
+      state.action.requestReason ||= reason;
+      $('#action-reason').value = state.action.requestReason;
+      $('#action-reason').readOnly = true;
+    }
     state.actionInFlight = true;
     $('#action-confirm').disabled = true;
     try {
@@ -4394,7 +4451,7 @@
         toast('Community moderation action completed and recorded.');
       } else {
         const phase4Actions = new Set([
-          'payment_review','refund_review','subscription_change',
+          'payment_review','payment_invalidate','refund_review','subscription_change',
           'free_beta_change','partnership_update','provider_incident_clear',
           'role_change','discount_assign','subscription_audit_view',
         ]);
@@ -4402,7 +4459,7 @@
           action,
           targetId: state.action.targetId,
           payload,
-          reason,
+          reason: action === 'payment_invalidate' ? state.action.requestReason : reason,
           requestKey: state.action.requestKey,
         };
         let response;
@@ -4421,19 +4478,33 @@
           } else {
             toast('Payment decision recorded. No subscriber receipt was sent.');
           }
+        } else if (action === 'payment_invalidate') {
+          toast(response?.data?.accessReversed === true
+            ? 'Proof marked invalid. Only linked access was reversed; proof and history were preserved.'
+            : 'Proof marked invalid. Independent access, proof, and history were preserved.');
         } else {
           toast('Access change completed, recorded, and refreshed.');
         }
       }
-      cancelActionDialog();
+      cancelActionDialog({ allowInFlight: true });
       state.operational.clear();
       if (action.startsWith('quorum_')) state.quorumPosts = null;
-      if (['subscription_change', 'free_beta_change', 'global_beta_change'].includes(action)) {
+      if (['payment_invalidate', 'subscription_change', 'free_beta_change', 'global_beta_change'].includes(action)) {
         state.report = null;
       }
       await renderSection(state.section);
     } catch (error) {
-      toast(error.message || 'Action failed without changing production data.');
+      if (state.action?.action === 'payment_invalidate') {
+        const noChange = PAYMENT_INVALIDATION_NO_CHANGE_CODES.has(error.code);
+        const message = noChange ? error.message
+          : `Outcome not confirmed. Retry in this dialog with the same safety key, or refresh Payments to verify the current status. ${error.message || ''}`;
+        $('#action-warning').textContent = message;
+        if (noChange) {
+          delete state.action.requestKey; delete state.action.requestReason;
+          $('#action-reason').readOnly = false;
+        } else $('#action-confirm').textContent = 'Retry same request safely';
+        toast(message);
+      } else toast(error.message || 'Action outcome could not be confirmed. Refresh before making another change.');
     } finally {
       state.actionInFlight = false;
       $('#action-confirm').disabled = false;

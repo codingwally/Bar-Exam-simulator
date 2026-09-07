@@ -73,8 +73,15 @@ export function requireBarFeelsUnlimitedAccess(authorization, requestedTrack = n
   const authorizationTrack = examinationText(authorization?.track, 40);
   const expectedTrack = examinationText(requestedTrack, 40);
   if (authorizationTrack !== 'bar_feels' && expectedTrack !== 'bar_feels') return authorization;
-  if (authorization?.basis === 'historical_owner') return authorization;
-  if (authorization?.unlimited === true) return authorization;
+  const currentBases = new Set([
+    'admin', 'founder_admin', 'super_admin', 'paid_subscription',
+    'early_access', 'founding_beta', 'provisional_payment',
+  ]);
+  const basis = examinationText(authorization?.basis, 40);
+  const provisionalCurrent = basis !== 'provisional_payment'
+    || Date.parse(authorization?.entitlementEndsAt) > Date.now();
+  if (authorization?.allowed === true && authorization?.unlimited === true
+      && currentBases.has(basis) && provisionalCurrent) return authorization;
   throw new ExaminationValidationError(
     'EXAM_PREMIUM_REQUIRED',
     'Subscribe to access this feature.',

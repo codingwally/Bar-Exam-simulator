@@ -47,6 +47,7 @@
     'legal.un.org',
   ]);
   // simulation-timer-review-20260906-r2: the Simulation clock is advisory, never a submission gate.
+  // astra-simulator-access-20260907-r1: current access, retained drafts, and owned result requests.
   const HEARTBEAT_MS = 30_000;
   const AUTOSAVE_MS = 1_100;
   const BAR_SIMULATION_HISTORY_PAGE_SIZE = 50;
@@ -93,6 +94,10 @@
     subjectPerformanceRequestGeneration: 0,
     subjectPerformanceRequest: null,
     initialized: false,
+    requestGeneration: 0,
+    requestControllers: new Set(),
+    verdictGeneration: 0,
+    simulationAccessRevoked: false,
   };
 
   const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({
@@ -177,7 +182,52 @@
   }
 
   function isStaleIdentityError(error) {
-    return error?.code === 'STALE_IDENTITY';
+    return error?.code === 'STALE_IDENTITY' || error?.code === 'STALE_EXAMINATION_REQUEST';
+  }
+
+  function invalidateExaminationRequests() {
+    state.requestGeneration = (state.requestGeneration || 0) + 1;
+    state.verdictGeneration = (state.verdictGeneration || 0) + 1;
+    for (const controller of state.requestControllers || []) controller.abort();
+    state.requestControllers?.clear();
+  }
+
+  function simulatorAccessAllowed(access) {
+    if (!access || access.termsRequired === true || access.reauthenticationRequired === true
+        || (access.commercialLaunchEnabled === true && access.profileCompleted === false)) return false;
+    if (['admin', 'founder_admin', 'super_admin'].includes(access.role)) return true;
+    if (access.allowed !== true || access.unlimited !== true) return false;
+    if (['paid_subscription', 'early_access', 'founding_beta'].includes(access.basis)) return true;
+    return access.basis === 'provisional_payment'
+      && Date.parse(access.entitlementEndsAt) > Date.now();
+  }
+
+  function syncSimulatorAccessUi(access) {
+    // Only a resolved server snapshot may revoke access; a network outage is not a sign-out.
+    if (!access || typeof access.allowed !== 'boolean' || !access.basis) return;
+    if (simulatorAccessAllowed(access)) {
+      state.simulationAccessRevoked = false;
+      return;
+    }
+    const activeSimulation = state.active?.examination?.track === 'bar_feels';
+    if (state.track !== 'bar_feels' && !activeSimulation) return;
+    if (activeSimulation) saveRecovery();
+    stopActiveTimers();
+    invalidateExaminationRequests();
+    state.simulationAccessRevoked = true;
+    state.catalog = [];
+    state.history = [];
+    state.historyTotal = 0;
+    state.historyOffset = 0;
+    state.historyHasMore = false;
+    state.setup = null;
+    state.active = null;
+    state.screen = 'access';
+    const root = pageRoot('bar_feels');
+    if (root) root.innerHTML = `<div class="dd-exam-page"><section class="dd-exam-shell" role="status">
+      <h1>Subscribe to continue.</h1><p>Your saved answers and draft are retained.</p>
+      <a class="dd-exam-button is-primary" href="#pricing">Plans &amp; Pricing</a>
+    </section></div>`;
   }
 
   function normalizeTargetedQuestion(value) {
@@ -283,8 +333,28 @@
       throw error;
     }
     const identity = privateRequestIdentity();
-    const payload = await phase4.request(path, { body, signal: options.signal });
-    if (!privateRequestIdentityIsCurrent(identity)) {
+    const generation = state.requestGeneration || 0;
+    const controller = typeof global.AbortController === 'function'
+      ? new global.AbortController() : null;
+    if (controller) state.requestControllers?.add(controller);
+    const relayAbort = () => controller?.abort();
+    options.signal?.addEventListener('abort', relayAbort, { once: true });
+    if (options.signal?.aborted) controller?.abort();
+    let payload;
+    try {
+      payload = await phase4.request(path, { body, signal: controller?.signal || options.signal });
+    } catch (error) {
+      if (generation !== (state.requestGeneration || 0)) {
+        const stale = new Error('This examination view is no longer current.');
+        stale.code = 'STALE_EXAMINATION_REQUEST';
+        throw stale;
+      }
+      throw error;
+    } finally {
+      options.signal?.removeEventListener('abort', relayAbort);
+      state.requestControllers?.delete(controller);
+    }
+    if (!privateRequestIdentityIsCurrent(identity) || generation !== (state.requestGeneration || 0)) {
       const error = new Error('The signed-in account changed before the request completed.');
       error.code = 'STALE_IDENTITY';
       throw error;
@@ -326,6 +396,7 @@
   }
 
   function showTrackPage(track) {
+    state.verdictGeneration = (state.verdictGeneration || 0) + 1;
     state.track = track;
     const page = track === 'bar_feels' ? 'bar-feels' : 'midterms';
     global.showPage?.(page, null);
@@ -1963,6 +2034,9 @@
     const seconds = strict ? state.clientRemaining : state.clientElapsed;
     value.textContent = formatClock(seconds);
     clock.classList.toggle('is-warning', strict && Number(seconds) <= 300);
+    const footer = pageRoot(state.active.examination.track)?.querySelector('[data-current-word-status]');
+    if (footer) footer.textContent = `${wordCount(currentQuestion()?.answerText)} words · ${strict
+      ? `${formatClock(seconds)} remaining` : 'Autosave active'}`;
   }
 
   function pauseActiveClock() {
@@ -3384,6 +3458,11 @@
     const track = state.active?.examination?.track || state.track;
     state.screen = 'verdict';
     showTrackPage(track);
+    const verdictGeneration = state.verdictGeneration;
+    const routeHash = global.location?.hash;
+    const verdictIsCurrent = () => state.verdictGeneration === verdictGeneration
+      && state.screen === 'verdict' && state.track === track && global.location?.hash === routeHash
+      && (track !== 'bar_feels' || !state.simulationAccessRevoked);
     const root = pageRoot(track);
     root.innerHTML = `<div class="dd-exam-page"><section class="dd-verdict-screen" role="status" aria-live="polite">
         <p class="dd-exam-kicker">Assessment</p><h1 tabindex="-1">Loading individual assessments…</h1>
@@ -3395,6 +3474,7 @@
         limit: 30,
         offset: 0,
       });
+      if (!verdictIsCurrent()) return;
       if (verdict?.attempt && state.active?.attempt) {
         Object.assign(state.active.attempt, verdict.attempt);
       }
@@ -3458,7 +3538,7 @@
         console.warn('Auxiliary diagnostics could not be mounted.', auxiliaryError);
       }
     } catch (error) {
-      if (isStaleIdentityError(error)) return;
+      if (isStaleIdentityError(error) || !verdictIsCurrent()) return;
       root.innerHTML = track === 'per_subject'
         ? `<div class="dd-subject-editorial"><section class="dd-subject-result-unavailable" role="alert" tabindex="-1">
           <p class="dd-exam-kicker">Syllabus-Based Review</p><h1>Assessment unavailable.</h1>
@@ -3605,6 +3685,8 @@
   }
 
   function resetForIdentityChange() {
+    invalidateExaminationRequests();
+    state.simulationAccessRevoked = false;
     stopActiveTimers();
     state.catalog = [];
     state.history = [];
@@ -4196,6 +4278,7 @@
     });
     global.addEventListener('duediligence:access', (event) => {
       syncSubjectReviewAccessUi(event.detail);
+      syncSimulatorAccessUi(event.detail);
     });
     global.DueDiligencePrivateWorkspace?.registerReset?.(({ previousUserId, nextUserId }) => {
       if (previousUserId === nextUserId) return;

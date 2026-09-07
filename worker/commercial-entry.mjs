@@ -227,12 +227,17 @@ function trustedPaymentEmailDetails(payment = {}, fields = {}) {
       currency: cleanSingleLine(payment.currency, 3).toUpperCase() || 'PHP',
     }).format(amountPhp);
   const durationDays = Number(payment.durationDays);
+  const activationBased = Boolean(payment.activatedAt) || (payment.entitlementMode === 'rolling_days' && (
+    (planCode === 'early_access_beta' && amountPhp === 149)
+    || (planCode === 'bar_access_30d' && amountPhp === 199)
+  ));
   const fixedEndsAt = payment.fixedEntitlementEndsAt
     || payment.fixedEndsAt
     || payment.purchasedEndsAt
     || payment.subscription?.expiresAt;
   const termLabel = Number.isInteger(durationDays) && durationDays > 0
-    ? `${durationDays} days from verified payment`
+    ? activationBased ? `${durationDays} days from access start after approval, or after existing finite access`
+      : `${durationDays} days from verified payment`
     : fixedEndsAt
       ? `Through ${philippineDateTime(fixedEndsAt)}`
       : historicalEarlyAccess ? 'Legacy Early Access terms' : 'As captured by the approved plan';
@@ -279,7 +284,7 @@ export function paymentEmailText({ payment, fields = {}, user, proof, proofHash 
     '',
     `Authorized review page: https://duediligence.ph/admin/payments?request=${encodeURIComponent(payment?.id || '')}`,
     '',
-    'Verify the amount, exact payment date/time shown in the attached receipt, and recipient account before approving access. Enter that timestamp in the protected Admin review; never infer it from upload time or file metadata. This email and attachment contain private payment information; do not forward them outside the authorized verification group.',
+    'Verify the amount, payment proof, and recipient account before approving access. Record a payment timestamp only if shown on the proof; never infer it from upload time or file metadata. Current 30-day subscriptions start at approval, or after existing finite access. This email and attachment contain private payment information; do not forward them outside the authorized verification group.',
   ].join('\n');
 }
 

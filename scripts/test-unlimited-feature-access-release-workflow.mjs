@@ -19,6 +19,15 @@ for (const required of [
   'validation_run_id:',
   'expected_current_pages_sha:',
   'forecast_content_verified_sha256:',
+  'stage_only:',
+  'astra_database_verified_sha256:',
+  'production_database_verified:',
+  'if: ${{ !inputs.stage_only }}',
+  'test "$PRODUCTION_DATABASE_VERIFIED" = "true"',
+  'node scripts/astra-release-database-contract.mjs --verify-attestation',
+  'node scripts/verify-astra-forecast-staging.mjs --execute-staging',
+  'artifacts/staging-e2e/*.json',
+  'artifacts/astra-forecast-staging/**/summary.json',
   'test "$GITHUB_REF" = "refs/heads/main"',
   'test "$PRODUCT_SHA" = "$GITHUB_SHA"',
   'test "$(jq -r \'\.event\' <<<"$validation_run")" = "pull_request"',
@@ -72,6 +81,9 @@ const pages = workflow.indexOf('\n  deploy_production_pages:');
 const verify = workflow.indexOf('\n  verify_production:');
 assert.ok(staging > 0 && worker > staging && pages > worker && verify > pages);
 assert.match(workflow.slice(worker, pages), /needs: deploy_staging/u);
+assert.ok(workflow.slice(staging, worker).includes('Require the exact applied and probed Astra staging database bundle'));
+assert.ok(workflow.slice(worker, pages).indexOf('independently applied and probed production schema') < workflow.slice(worker, pages).indexOf('Deploy Worker before'));
+assert.doesNotMatch(workflow, /(?:cat|printenv|echo).*STAGING_SUPABASE_SERVICE_ROLE_KEY/u);
 assert.match(workflow.slice(pages, verify), /needs: deploy_production_worker/u);
 assert.match(workflow.slice(verify), /needs: deploy_production_pages/u);
 

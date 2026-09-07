@@ -28,7 +28,8 @@ function money(value) {
 }
 
 function manilaDateTime(value) {
-  const date = new Date(value || Date.now());
+  if (!value) return 'Not available';
+  const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return 'Not available';
   return new Intl.DateTimeFormat('en-PH', {
     timeZone: 'Asia/Manila',
@@ -107,17 +108,20 @@ export function subscriptionReceiptContent(context = {}) {
   );
   const approvedAt = manilaDateTime(payment.reviewedAt || payment.approvedAt);
   const durationDays = Number(payment.durationDays);
-  const capturedAccessStart = payment.purchasedStartsAt || subscription.startsAt;
-  const verifiedPaidAt = payment.verifiedPaidAt || capturedAccessStart;
+  const activatedAt = payment.activatedAt;
+  const capturedAccessStart = payment.purchasedStartsAt
+    || (!payment.planVersionId ? subscription.startsAt : null);
+  const verifiedPaidAt = payment.verifiedPaidAt;
   const capturedAccessEnd = payment.purchasedEndsAt
-    || subscription.expiresAt
     || payment.fixedEntitlementEndsAt
-    || payment.fixedEndsAt;
+    || payment.fixedEndsAt
+    || (!payment.planVersionId ? subscription.expiresAt : null);
   const accessEndsAt = capturedAccessEnd
     ? manilaDateTime(capturedAccessEnd)
     : 'No expiration returned by the approved access record';
   const term = Number.isInteger(durationDays) && durationDays > 0
-    ? `${durationDays} days from verified payment`
+    ? activatedAt ? `${durationDays} days from access start`
+      : verifiedPaidAt ? `${durationDays} days from verified payment` : `${durationDays} days`
     : capturedAccessEnd
       ? `Access through ${accessEndsAt}`
       : historicalEarlyAccess ? 'Legacy Early Access terms' : 'As captured by the approved plan';
@@ -150,6 +154,7 @@ export function subscriptionReceiptContent(context = {}) {
     `Payment method: ${method}`,
     ...(verifiedPaidAt ? [`Verified payment time: ${manilaDateTime(verifiedPaidAt)}`] : []),
     `Approved: ${approvedAt}`,
+    ...(activatedAt ? [`Activated: ${manilaDateTime(activatedAt)}`] : []),
     ...(capturedAccessStart ? [`Access begins: ${manilaDateTime(capturedAccessStart)}`] : []),
     `Access through: ${accessEndsAt}`,
     `Due Diligence receipt reference: ${internalReference}`,
@@ -184,6 +189,7 @@ export function subscriptionReceiptContent(context = {}) {
             ${detailRow('Payment method', method)}
             ${verifiedPaidAt ? detailRow('Verified payment time', manilaDateTime(verifiedPaidAt)) : ''}
             ${detailRow('Approved', approvedAt)}
+            ${activatedAt ? detailRow('Activated', manilaDateTime(activatedAt)) : ''}
             ${capturedAccessStart ? detailRow('Access begins', manilaDateTime(capturedAccessStart)) : ''}
             ${detailRow('Access through', accessEndsAt)}
             ${detailRow('Receipt reference', internalReference)}

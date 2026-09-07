@@ -302,10 +302,10 @@ export function barForecastEntitlementEvidence(context) {
 export function normalizeBarForecastRequest(value) {
   const input = object(value);
   const operation = String(input.operation ?? '');
-  if (!['status', 'accept', 'start', 'submit'].includes(operation)) {
+  if (!['status', 'accept', 'start', 'submit', 'submit_attempt', 'attempt', 'history', 'retry_attempt', 'result_pdf', 'email_result'].includes(operation)) {
     throw new BarForecastError(
       'BAR_FORECAST_OPERATION_INVALID',
-      'Choose status, accept, start, or submit.',
+      'Choose a supported Forecast action.',
     );
   }
   if (operation === 'status') {
@@ -322,11 +322,58 @@ export function normalizeBarForecastRequest(value) {
     }
     return Object.freeze({ operation, version: BAR_FORECAST_CONSENT_VERSION });
   }
+  const attemptUuid = (value) => {
+    if (typeof value !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(value)) {
+      throw new BarForecastError('BAR_FORECAST_ATTEMPT_INVALID', 'Choose a valid saved Forecast.', 400);
+    }
+    return value.toLowerCase();
+  };
+  if (['attempt', 'retry_attempt', 'result_pdf', 'email_result'].includes(operation)) {
+    exactKeys(input, ['operation', 'attemptId']);
+    return Object.freeze({ operation, attemptId: attemptUuid(input.attemptId) });
+  }
+  if (operation === 'history') {
+    const allowed = ['operation', 'limit', 'before', 'subject', 'completeOnly', 'from', 'to'];
+    if (Object.keys(input).some((key) => !allowed.includes(key))) {
+      throw new BarForecastError('BAR_FORECAST_REQUEST_SHAPE_INVALID', 'The history request contains unsupported fields.', 400);
+    }
+    const limit = input.limit ?? 20;
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100
+        || (input.completeOnly !== undefined && typeof input.completeOnly !== 'boolean')) {
+      throw new BarForecastError('BAR_FORECAST_HISTORY_INVALID', 'The history filters are invalid.', 400);
+    }
+    let before = null;
+    if (input.before != null) {
+      const cursor = object(input.before, 'history cursor');
+      exactKeys(cursor, ['acceptedAt', 'id'], 'history cursor');
+      if (typeof cursor.acceptedAt !== 'string' || !/(?:Z|[+-]\d{2}:\d{2})$/u.test(cursor.acceptedAt)
+          || !Number.isFinite(Date.parse(cursor.acceptedAt))) {
+        throw new BarForecastError('BAR_FORECAST_HISTORY_INVALID', 'The history cursor is invalid.', 400);
+      }
+      before = Object.freeze({ acceptedAt: cursor.acceptedAt, id: attemptUuid(cursor.id) });
+    }
+    const dateFilter = (value) => {
+      if (value == null) return null;
+      if (typeof value !== 'string' || !/(?:Z|[+-]\d{2}:\d{2})$/u.test(value) || !Number.isFinite(Date.parse(value))) {
+        throw new BarForecastError('BAR_FORECAST_HISTORY_INVALID', 'Choose valid history dates including the time zone.', 400);
+      }
+      return value;
+    };
+    const from = dateFilter(input.from);
+    const to = dateFilter(input.to);
+    if (from && to && Date.parse(from) >= Date.parse(to)) {
+      throw new BarForecastError('BAR_FORECAST_HISTORY_INVALID', 'The history end must follow its start.', 400);
+    }
+    return Object.freeze({ operation, limit, before, from, to,
+      subject: input.subject == null ? null : exactSubject(input.subject), completeOnly: input.completeOnly === true });
+  }
   exactKeys(
     input,
     operation === 'start'
       ? ['operation', 'subject']
-      : ['operation', 'subject', 'setId', 'answers'],
+      : operation === 'submit_attempt'
+        ? ['operation', 'subject', 'setId', 'answers', 'clientAttemptId']
+        : ['operation', 'subject', 'setId', 'answers'],
   );
   const subject = exactSubject(input.subject);
   if (operation === 'start') return Object.freeze({ operation, subject });
@@ -375,7 +422,8 @@ export function normalizeBarForecastRequest(value) {
       'Each Forecast question must be answered exactly once.',
     );
   }
-  return Object.freeze({ operation, subject, setId, answers: Object.freeze(answers) });
+  return Object.freeze({ operation, subject, setId, answers: Object.freeze(answers),
+    ...(operation === 'submit_attempt' ? { clientAttemptId: attemptUuid(input.clientAttemptId) } : {}) });
 }
 
 export function validatedForecastRows(value, subject) {
@@ -799,6 +847,13 @@ function deterministicBarForecastCoaching(grade) {
   });
 }
 
+// Validated grades have one decimal place. Integer tenths avoid binary half
+// rounding (e.g. 23 / 20 -> 1.15) disagreeing with PostgreSQL numeric round.
+export function aggregateBarForecastScores(scores) {
+  const tenths = scores.reduce((sum, score) => sum + Math.round(score * 10), 0);
+  return { total: tenths / 10, average: scores.length ? Math.round(tenths / scores.length) / 10 : null };
+}
+
 export function completeBarForecastResult(rowsWithAnswers, gradedResults) {
   const byId = new Map(gradedResults.flatMap((batch) => batch.results)
     .map((result) => [result.questionId, result]));
@@ -843,9 +898,8 @@ export function completeBarForecastResult(rowsWithAnswers, gradedResults) {
       }),
     });
   });
-  const totalScore = Number(results.reduce((sum, row) => sum + row.score, 0).toFixed(1));
-  const average = (field) => Number((results.reduce((sum, row) => sum + field(row), 0)
-    / results.length).toFixed(1));
+  const totalScore = aggregateBarForecastScores(results.map((row) => row.score)).total;
+  const average = (field) => aggregateBarForecastScores(results.map(field)).average;
   const analytics = Object.freeze({
     questionCount: results.length,
     averageScore: average((row) => row.score),

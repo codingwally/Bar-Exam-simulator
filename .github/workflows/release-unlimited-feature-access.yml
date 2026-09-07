@@ -28,6 +28,20 @@ on:
         description: "Owner approval or reviewed change reference"
         required: true
         type: string
+      stage_only:
+        description: "Stop after staging; do not deploy production"
+        required: true
+        default: true
+        type: boolean
+      astra_database_verified_sha256:
+        description: "Exact Astra schema bundle applied, read back, and rollback-probed on the target database"
+        required: true
+        type: string
+      production_database_verified:
+        description: "The same staging-proven schema bundle is independently verified on production"
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   actions: read
@@ -43,6 +57,9 @@ jobs:
     name: Authorize the exact unlimited-feature product tree
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    env:
+      PGLITE_MODULE_PATH: ${{ github.workspace }}/worker/node_modules/@electric-sql/pglite/dist/index.js
+      ASTRA_PGLITE_MODULE: ${{ github.workspace }}/worker/node_modules/@electric-sql/pglite
     steps:
       - name: Checkout the exact main release candidate
         uses: actions/checkout@v4
@@ -170,6 +187,79 @@ jobs:
             worker/examinations-routes.test.mjs \
             worker/index.mjs \
             worker/phase4-access.test.mjs \
+            .github/workflows/release-unlimited-feature-access.yml \
+            .github/workflows/validate-mandatory-early-access.yml \
+            admin/admin.js \
+            admin/index.html \
+            admin/subscription-actions-core.js \
+            assets/bar-forecast.css \
+            assets/bar-forecast.js \
+            assets/examinations.js \
+            assets/feature-loader.js \
+            assets/phase2-experience.js \
+            index.html \
+            scripts/astra-payment-cohort-repair.template.sql \
+            scripts/astra-release-database-contract.mjs \
+            scripts/forecast-attempt-test-fixture.mjs \
+            scripts/run-staging-e2e-suite.mjs \
+            scripts/staging-e2e-diagnostics.mjs \
+            scripts/test-approved-renovation-shell.mjs \
+            scripts/test-astra-forecast-durable-frontend.mjs \
+            scripts/test-astra-payment-cohort-repair.mjs \
+            scripts/test-astra-payment-lifecycle.mjs \
+            scripts/test-astra-payment-presentation.mjs \
+            scripts/test-astra-simulator-access.mjs \
+            scripts/test-astra-simulator-staging.sql \
+            scripts/test-astra-simulator-staging-contract.mjs \
+            scripts/test-astra-staging-diagnostics.mjs \
+            scripts/test-auth-session-persistence.mjs \
+            scripts/test-bar-forecast-frontend.mjs \
+            scripts/test-design-correction-release.mjs \
+            scripts/test-examinations.mjs \
+            scripts/test-forecast-authorization-generation.mjs \
+            scripts/test-forecast-durable-api.mjs \
+            scripts/test-login-loop-p0.mjs \
+            scripts/test-mobile-responsive-hotfix.mjs \
+            scripts/test-pedro-release2-integration.mjs \
+            scripts/test-syllabus-review-reveal-contract.mjs \
+            scripts/test-unlimited-feature-access.mjs \
+            scripts/verify-astra-forecast-staging.mjs \
+            service-worker.js \
+            supabase/migrations/20260907060650_astra_forecast_attempts.sql \
+            supabase/migrations/20260907064532_astra_forecast_result_exports.sql \
+            supabase/migrations/20260907071547_astra_payment_term_repair_journal.sql \
+            supabase/migrations/20260907120000_astra_payment_activation_terms.sql \
+            supabase/migrations/20260907120100_astra_payment_proof_evidence.sql \
+            supabase/migrations/20260907120200_astra_payment_invalidation.sql \
+            supabase/migrations/20260907130000_astra_simulator_access.sql \
+            worker/astra-rubric-reconciliation.test.mjs \
+            worker/astra-support-privacy.test.mjs \
+            worker/bar-forecast-coaching-release.test.mjs \
+            worker/bar-forecast-core.mjs \
+            worker/bar-forecast-routes.mjs \
+            worker/bar-forecast-routes.test.mjs \
+            worker/commercial-entry.mjs \
+            worker/examinations-core.mjs \
+            worker/examinations-core.test.mjs \
+            worker/examinations-routes.test.mjs \
+            worker/examiner-core.mjs \
+            worker/forecast-attempt-store.mjs \
+            worker/forecast-attempt-store.test.mjs \
+            worker/forecast-email-adapter.mjs \
+            worker/forecast-email-adapter.test.mjs \
+            worker/forecast-email-presentation.test.mjs \
+            worker/forecast-finalization-reliability.test.mjs \
+            worker/forecast-result-export.mjs \
+            worker/forecast-result-export.test.mjs \
+            worker/forum-core.test.mjs \
+            worker/index.mjs \
+            worker/package-lock.json \
+            worker/package.json \
+            worker/payment-core.mjs \
+            worker/subscription-receipt.mjs \
+            worker/support-notification.test.mjs \
+            worker/wrangler.staging.toml \
+            worker/wrangler.toml \
             worker/question-visibility-release.test.mjs | sort -u)"
           actual_scope="$(git diff --name-only "$base_sha" "$validated_head" | sort -u)"
           test -n "$actual_scope"
@@ -225,7 +315,14 @@ jobs:
           node --check worker/bar-forecast-routes.mjs
           node --check worker/examinations-core.mjs
           node --check worker/index.mjs
-          node --test worker/*.test.mjs
+          node --input-type=module -e "await import(process.env.PGLITE_MODULE_PATH)"
+          node --test --test-concurrency=1 worker/*.test.mjs
+          node --test --test-concurrency=1 scripts/test-forecast-durable-api.mjs scripts/test-astra-forecast-durable-frontend.mjs scripts/test-astra-simulator-access.mjs
+          node scripts/test-astra-payment-lifecycle.mjs
+          node scripts/test-astra-payment-cohort-repair.mjs
+          node scripts/test-astra-payment-presentation.mjs
+          node scripts/astra-release-database-contract.mjs --self-test
+          node scripts/verify-astra-forecast-staging.mjs --self-test
           node scripts/test-bar-forecast-frontend.mjs
           node --test scripts/test-forecast-authorization-generation.mjs
           node scripts/test-bar-forecast-boundary.mjs
@@ -311,6 +408,11 @@ jobs:
           STAGING_SUPABASE_URL: https://hlzqmreeoghbldnhlybr.supabase.co
         run: node scripts/test-staging-artifact.mjs
 
+      - name: Require the exact applied and probed Astra staging database bundle
+        env:
+          ASTRA_DATABASE_VERIFIED_SHA256: ${{ inputs.astra_database_verified_sha256 }}
+        run: node scripts/astra-release-database-contract.mjs --verify-attestation
+
       - name: Deploy the exact Worker and client to staging
         uses: cloudflare/wrangler-action@v3
         with:
@@ -356,9 +458,38 @@ jobs:
           npm install --no-save --no-package-lock playwright@1.54.2
           node scripts/run-staging-e2e-suite.mjs examinations
 
+      - name: Retain sanitized staging child diagnostics and cleanup results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: astra-staging-e2e-${{ github.run_id }}
+          path: artifacts/staging-e2e/*.json
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Verify three durable Forecast journeys including the real provider
+        env:
+          STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          node scripts/verify-astra-forecast-staging.mjs --preflight
+          node scripts/verify-astra-forecast-staging.mjs --execute-staging
+
+      - name: Retain bounded Forecast journey evidence and fixture recovery manifest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: astra-forecast-durable-${{ github.run_id }}
+          path: |
+            artifacts/astra-forecast-staging/**/summary.json
+            artifacts/astra-forecast-staging/**/cleanup-manifest.json
+            artifacts/astra-forecast-staging/**/*.png
+          if-no-files-found: ignore
+          retention-days: 7
+
   deploy_production_worker:
     name: Verify content, then deploy Worker and public API first
     needs: deploy_staging
+    if: ${{ !inputs.stage_only }}
     environment: production-worker
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -375,6 +506,14 @@ jobs:
 
       - name: Install reviewed Worker dependencies
         run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Require independently applied and probed production schema before Worker mutation
+        env:
+          ASTRA_DATABASE_VERIFIED_SHA256: ${{ inputs.astra_database_verified_sha256 }}
+          PRODUCTION_DATABASE_VERIFIED: ${{ inputs.production_database_verified }}
+        run: |
+          test "$PRODUCTION_DATABASE_VERIFIED" = "true"
+          node scripts/astra-release-database-contract.mjs --verify-attestation
 
       - name: Require exact protected production Forecast import and read-back
         env:
@@ -402,7 +541,7 @@ jobs:
         run: |
           set -euo pipefail
           npx --yes wrangler@4.114.0 secret list --format json \
-            | node -e "let value=''; process.stdin.on('data', chunk => value += chunk); process.stdin.on('end', () => { const names = new Set(JSON.parse(value).map(item => item.name)); const required = ['GEMINI_API_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_URL']; const missing = required.filter(name => !names.has(name)); if (missing.length) { console.error('Required production Worker secrets are missing: ' + missing.join(', ') + '.'); process.exit(1); } });"
+            | node -e "let value=''; process.stdin.on('data', chunk => value += chunk); process.stdin.on('end', () => { const names = new Set(JSON.parse(value).map(item => item.name)); const required = ['GEMINI_API_KEY', 'RESEND_API_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_URL']; const missing = required.filter(name => !names.has(name)); if (missing.length) { console.error('Required production Worker secrets are missing: ' + missing.join(', ') + '.'); process.exit(1); } });"
 
       - name: Recheck the live Pages baseline immediately before Worker mutation
         env:
@@ -597,6 +736,9 @@ jobs:
             assets/pricing-checkout-safety.js
             assets/pricing-renderer.css
             assets/pricing-renderer.js
+            admin/index.html
+            admin/admin.js
+            admin/subscription-actions-core.js
           )
           live_root="$(mktemp -d "$RUNNER_TEMP/unlimited-feature-pages.XXXXXX")"
           trap 'rm -rf -- "$live_root"' EXIT

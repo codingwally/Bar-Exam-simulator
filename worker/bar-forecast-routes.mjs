@@ -9,9 +9,7 @@ import {
   BarForecastError,
   answersForForecastRows,
   buildBarForecastGradingPrompt,
-  completeBarForecastResult,
   forecastSetId,
-  forecastGradingBatches,
   normalizeBarForecastRequest,
   publicForecastQuestions,
   barForecastEntitlementEvidence,
@@ -19,6 +17,48 @@ import {
   validateBarForecastGradingResult,
   validatedForecastRows,
 } from './bar-forecast-core.mjs';
+import { createForecastAttemptStore } from './forecast-attempt-store.mjs';
+import { createForecastResultExporter } from './forecast-result-export.mjs';
+
+export async function legacyForecastAttemptId(ownerId, input) {
+  const answers = [...input.answers].map((row) => ({ questionId: row.questionId.toLowerCase(), answer: row.answer }))
+    .sort((left, right) => left.questionId.localeCompare(right.questionId));
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify([
+    'duediligence/forecast-legacy-submit/v1', ownerId, input.subject, input.setId, answers,
+  ]))));
+  digest[6] = (digest[6] & 0x0f) | 0x50;
+  digest[8] = (digest[8] & 0x3f) | 0x80;
+  const hex = [...digest.slice(0, 16)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+function assertSameAcceptedSubmission(attempt, input) {
+  const answers = new Map((attempt.answers || []).map((row) => [row.questionId.toLowerCase(), row.answer]));
+  if (attempt.subject !== input.subject || attempt.setId !== input.setId || answers.size !== 20
+      || input.answers.some((row) => answers.get(row.questionId.toLowerCase()) !== row.answer)) {
+    throw new BarForecastError('BAR_FORECAST_ATTEMPT_CONFLICT', 'This submission was already accepted with different answers. Open its saved report.', 409);
+  }
+}
+
+function legacyResult(attempt) {
+  const result = attempt.result;
+  return {
+    ok: true, authorized: true, consentAccepted: true, subject: attempt.subject,
+    attemptId: attempt.id, totalScore: result.totalScore, maxScore: result.maxScore,
+    analytics: result.analytics,
+    results: result.results.map((row) => ({
+      questionId: row.questionId, number: row.number, score: row.score, maxScore: row.maxScore,
+      feedback: row.feedback, userAnswer: row.userAnswer, suggestedAnswer: row.suggestedAnswer,
+      explanation: row.explanation, mockBarCoaching: row.mockBarCoaching,
+      grammar: row.grammar, issueSpotting: row.issueSpotting,
+    })),
+  };
+}
+
+function savedProcessingFailure(error) {
+  if (error instanceof BarForecastError) return error;
+  return new BarForecastError('BAR_FORECAST_PROCESSING_FAILED', 'Your answers are saved. Assessment will resume when the service is available.', 503);
+}
 
 function privateJson(jsonResponse, body, status, origin, allowedOrigin) {
   const response = jsonResponse(body, status, origin, allowedOrigin);
@@ -143,6 +183,11 @@ export function createBarForecastHandlers(deps) {
     approvedSetIds = BAR_FORECAST_APPROVED_SET_IDS,
     wait = defaultWait,
   } = deps;
+  const attemptStore = deps.attemptStore || createForecastAttemptStore({ rpc: barForecastRpc });
+  const resultExporter = deps.resultExporter || createForecastResultExporter({
+    attemptStore, rpc: barForecastRpc, sendEmail: deps.sendForecastResultEmail, resolveVerifiedUser: deps.resolveForecastEmailUser,
+    assertEmailAvailable: deps.assertForecastResultEmailAvailable,
+  });
 
   async function authorizedContext(request, env) {
     await enforceBarForecastRateLimit(request, env);
@@ -225,13 +270,58 @@ export function createBarForecastHandlers(deps) {
     );
   }
 
-  async function gradeForecast(env, rowsWithAnswers) {
-    const batches = forecastGradingBatches(rowsWithAnswers);
-    const graded = [];
-    for (const batch of batches) {
-      graded.push(await gradeForecastBatch(env, batch));
+  // The scheduler owns durable work; returning 202 never relies on waitUntil
+  // outliving an HTTP connection. Every claim is persisted and fenced in SQL.
+  async function drain(env, { maxBatches = 1, attemptId = null, throwOnFailure = false } = {}) {
+    if (!Number.isSafeInteger(maxBatches) || maxBatches < 1 || maxBatches > 5) {
+      throw new BarForecastError('BAR_FORECAST_DRAIN_INVALID', 'The processing budget is invalid.', 500);
     }
-    return completeBarForecastResult(rowsWithAnswers, graded);
+    const summary = { claimed: 0, checkpointed: 0, completed: 0, failed: 0, errors: [] };
+    for (let index = 0; index < maxBatches; index += 1) {
+      const claim = await attemptStore.claim(env, { attemptId });
+      if (claim.readyToFinalize) {
+        try { await attemptStore.finalize(env, claim.attemptId); summary.completed += 1; }
+        catch (error) {
+          const safe = savedProcessingFailure(error);
+          summary.failed += 1; summary.errors.push(safe.code);
+          if (throwOnFailure) throw safe;
+        }
+        break;
+      }
+      if (!claim.claimed) break;
+      summary.claimed += 1;
+      try {
+        const result = await gradeForecastBatch(env, claim.rows);
+        let checkpoint;
+        try { checkpoint = await attemptStore.checkpoint(env, claim, result); }
+        catch (error) {
+          if (['BAR_FORECAST_GRADING_INVALID', 'BAR_FORECAST_LEASE_LOST'].includes(error?.code)) throw error;
+          // A transport failure may occur after SQL committed. Retry the same
+          // checkpoint once, never the provider, to resolve that uncertainty.
+          checkpoint = await attemptStore.checkpoint(env, claim, result);
+        }
+        summary.checkpointed += 1;
+        if (checkpoint.readyToFinalize) {
+          await attemptStore.finalize(env, claim.attemptId);
+          summary.completed += 1;
+        }
+      } catch (error) {
+        const safe = savedProcessingFailure(error);
+        summary.failed += 1; summary.errors.push(safe.code);
+        try { await attemptStore.fail(env, claim, safe); }
+        catch (persistenceError) {
+          // If the checkpoint already committed or another lease now owns the
+          // batch, no failure may overwrite it. Other outages leave the lease
+          // recoverable by the next scheduled drain after its bounded expiry.
+          if (persistenceError?.code !== 'BAR_FORECAST_LEASE_LOST') {
+            summary.errors.push('BAR_FORECAST_PERSISTENCE_UNAVAILABLE');
+          }
+        }
+        if (throwOnFailure) throw safe;
+        break;
+      }
+    }
+    return summary;
   }
 
   async function handle(request, env, origin, allowedOrigin) {
@@ -268,50 +358,85 @@ export function createBarForecastHandlers(deps) {
     }
 
     await requireConsent(env, user.id);
-    const rows = await subjectRows(env, user.id, input.subject);
-    const setId = await forecastSetId(rows);
-    if (approvedSetIds[input.subject] !== setId) {
-      throw new BarForecastError(
-        'BAR_FORECAST_CONTENT_MANIFEST_MISMATCH',
-        'The selected Forecast content does not match the independently approved question manifest.',
-        503,
-      );
+    if (input.operation === 'result_pdf') {
+      const exported = await resultExporter.pdf(env, user, input.attemptId);
+      const response = privateJson(jsonResponse, {}, 200, origin, allowedOrigin);
+      response.headers.set('Content-Type', 'application/pdf');
+      response.headers.set('Content-Disposition', `attachment; filename="${exported.fileName}"`);
+      response.headers.set('X-Content-Type-Options', 'nosniff');
+      return new Response(exported.bytes, { status: 200, headers: response.headers });
     }
-    if (input.operation === 'start') {
-      return privateJson(jsonResponse, {
-        ok: true,
-        authorized: true,
-        consentAccepted: true,
-        subject: input.subject,
-        sourceVersion: BAR_FORECAST_SOURCE_VERSION,
-        contentType: BAR_FORECAST_CONTENT_TYPE,
-        setId,
-        schedule: BAR_FORECAST_OFFICIAL_SCHEDULE,
-        questions: publicForecastQuestions(rows),
-      }, 200, origin, allowedOrigin);
+    if (input.operation === 'email_result') {
+      return privateJson(jsonResponse, await resultExporter.email(env, user, input.attemptId), 200, origin, allowedOrigin);
     }
+    if (input.operation === 'attempt') {
+      const saved = await attemptStore.getOwned(env, user.id, input.attemptId);
+      return privateJson(jsonResponse, { ...saved, authorized: true, consentAccepted: true }, 200, origin, allowedOrigin);
+    }
+    if (input.operation === 'history') {
+      const history = await attemptStore.history(env, user.id, input);
+      return privateJson(jsonResponse, { ...history, authorized: true, consentAccepted: true }, 200, origin, allowedOrigin);
+    }
+    if (input.operation === 'retry_attempt') {
+      const saved = await attemptStore.retry(env, user.id, input.attemptId);
+      return privateJson(jsonResponse, { ...saved, authorized: true, consentAccepted: true }, 202, origin, allowedOrigin);
+    }
+    const submitting = input.operation === 'submit' || input.operation === 'submit_attempt';
+    const clientAttemptId = submitting
+      ? input.clientAttemptId || await legacyForecastAttemptId(user.id, input) : null;
+    let accepted = submitting ? await attemptStore.getByClient(env, user.id, clientAttemptId) : null;
+    if (accepted) assertSameAcceptedSubmission(accepted.attempt, input);
+    // Accepted snapshots remain readable and resumable after publication changes.
+    // Only new acceptance consults the current content manifest.
+    if (!accepted) {
+      const rows = await subjectRows(env, user.id, input.subject);
+      const setId = await forecastSetId(rows);
+      if (approvedSetIds[input.subject] !== setId) {
+        throw new BarForecastError(
+          'BAR_FORECAST_CONTENT_MANIFEST_MISMATCH',
+          'The selected Forecast content does not match the independently approved question manifest.',
+          503,
+        );
+      }
+      if (input.operation === 'start') {
+        return privateJson(jsonResponse, {
+          ok: true,
+          authorized: true,
+          consentAccepted: true,
+          subject: input.subject,
+          sourceVersion: BAR_FORECAST_SOURCE_VERSION,
+          contentType: BAR_FORECAST_CONTENT_TYPE,
+          setId,
+          schedule: BAR_FORECAST_OFFICIAL_SCHEDULE,
+          questions: publicForecastQuestions(rows),
+        }, 200, origin, allowedOrigin);
+      }
 
-    if (input.setId !== setId) {
-      throw new BarForecastError(
-        'BAR_FORECAST_SET_CHANGED',
-        'This Forecast question set changed after it was opened. Restart the subject before submitting.',
-        409,
-      );
-    }
+      if (input.setId !== setId) {
+        throw new BarForecastError(
+          'BAR_FORECAST_SET_CHANGED',
+          'This Forecast question set changed after it was opened. Restart the subject before submitting.',
+          409,
+        );
+      }
 
-    const rowsWithAnswers = answersForForecastRows(input.answers, rows);
-    const result = await gradeForecast(env, rowsWithAnswers);
-    return privateJson(jsonResponse, {
-      ok: true,
-      authorized: true,
-      consentAccepted: true,
-      subject: input.subject,
-      totalScore: result.totalScore,
-      maxScore: result.maxScore,
-      analytics: result.analytics,
-      results: result.results,
-    }, 200, origin, allowedOrigin);
+      accepted = await attemptStore.accept(env, {
+        ownerId: user.id, clientAttemptId, subject: input.subject, setId,
+        rowsWithAnswers: answersForForecastRows(input.answers, rows),
+      });
+    }
+    if (input.operation === 'submit_attempt') {
+      return privateJson(jsonResponse, { ...accepted, authorized: true, consentAccepted: true }, 202, origin, allowedOrigin);
+    }
+    if (accepted.attempt.status !== 'complete') {
+      await drain(env, { maxBatches: 5, attemptId: accepted.attempt.id, throwOnFailure: true });
+      accepted = await attemptStore.getOwned(env, user.id, accepted.attempt.id);
+    }
+    if (accepted.attempt.status !== 'complete') {
+      throw new BarForecastError('BAR_FORECAST_PROCESSING_PENDING', 'Your answers are saved and assessment is still in progress. Open the saved Forecast to check its progress.', 503);
+    }
+    return privateJson(jsonResponse, legacyResult(accepted.attempt), 200, origin, allowedOrigin);
   }
 
-  return Object.freeze({ handle });
+  return Object.freeze({ handle, drain });
 }

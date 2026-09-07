@@ -4,6 +4,10 @@ compatibility_date = "2026-07-26"
 compatibility_flags = ["nodejs_compat"]
 preview_urls = true
 
+# Saved 20-answer PDFs require a declared, bounded CPU budget.
+[limits]
+cpu_ms = 30000
+
 [[rules]]
 type = "Data"
 globs = ["**/*.png"]

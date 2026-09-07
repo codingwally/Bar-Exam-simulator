@@ -211,6 +211,7 @@ jobs:
             scripts/test-astra-forecast-durable-frontend.mjs \
             scripts/test-astra-forecast-entry-diagnostics.mjs \
             scripts/test-forecast-poll-rate-contract.mjs \
+            scripts/test-worker-cpu-limit-contract.mjs \
             scripts/test-astra-forecast-entry-cleanup-evidence.mjs \
             scripts/test-forecast-cold-entry-cancellation.mjs \
             scripts/test-quorum-navigation-intent.mjs \
@@ -341,6 +342,7 @@ jobs:
           node scripts/test-astra-payment-presentation.mjs
           node scripts/test-astra-forecast-entry-diagnostics.mjs
           node scripts/test-forecast-poll-rate-contract.mjs
+          node scripts/test-worker-cpu-limit-contract.mjs
           node scripts/test-astra-forecast-entry-cleanup-evidence.mjs
           node scripts/test-forecast-cold-entry-cancellation.mjs
           node scripts/test-quorum-navigation-intent.mjs

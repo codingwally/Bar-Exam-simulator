@@ -27,6 +27,7 @@ for (const required of [
   'node scripts/astra-release-database-contract.mjs --verify-attestation',
   'node scripts/test-astra-149-binding-compatibility.mjs',
   'node scripts/test-forecast-poll-rate-contract.mjs',
+  'node scripts/test-worker-cpu-limit-contract.mjs',
   'worker/bar-forecast-rate-limit.test.mjs',
   'scripts/test-astra-149-binding-compatibility.mjs',
   'supabase/migrations/20260907133129_astra_149_binding_compatibility.sql',
@@ -120,6 +121,8 @@ assert.ok(exactPages > verify && firstJourney > exactPages && secondJourney > fi
 for (const validationContract of [
   "- 'worker/bar-forecast-rate-limit.test.mjs'",
   "- 'scripts/test-forecast-poll-rate-contract.mjs'",
+  "- 'scripts/test-worker-cpu-limit-contract.mjs'",
+  'node scripts/test-worker-cpu-limit-contract.mjs',
   'node scripts/test-forecast-poll-rate-contract.mjs',
   "- '.github/workflows/release-unlimited-feature-access.yml'",
   "- 'scripts/test-unlimited-feature-access-live.mjs'",

@@ -181,7 +181,7 @@ assert.match(indexBarFeels(html), /ensureUnlimitedFeatureAccess\('#bar-feels'/);
 assert.match(html, /if \(page === 'bar-feels'\)[\s\S]*Do not reveal the page before that asynchronous gate resolves/);
 assert.match(forecast, /openUnlimitedFeatureGate\(ROUTE,[\s\S]*featureId: 'bar-forecast'/);
 assert.doesNotMatch(namedFunction(forecast, 'routeToPlansAndPricing'), /toast/);
-assert.match(serviceWorker, /duediligence-shell-astra-forecast-poll-20260907-r1/);
+assert.match(serviceWorker, /duediligence-shell-astra-browser-pdf-20260908-r1/);
 for (const asset of [
   'phase2-experience.js',
   'phase4-experience.js',

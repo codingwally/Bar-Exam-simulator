@@ -38,6 +38,11 @@ on:
         required: false
         default: ""
         type: string
+      admin_payment_invalidation_database_preapplied_sha256:
+        description: "When DB URL is absent: SHA-256 of exact 20260901120000 Admin payment invalidation bundle + rollback-only probe"
+        required: false
+        default: ""
+        type: string
       admin_bar_forecast_database_preapplied_sha256:
         description: "When DB URL is absent: SHA-256 of exact 20260831170000/20260901010837/20260901014500/20260901030000 bundle + rollback-only probe"
         required: false
@@ -185,6 +190,9 @@ jobs:
           node scripts/test-september-pricing-sql-contract.mjs
           node scripts/test-september-pricing-release-bundle.mjs
           node scripts/test-september-pricing-release-workflow.mjs
+          node scripts/test-admin-payment-invalidation.mjs
+          node scripts/test-admin-payment-invalidation-release-bundle.mjs
+          node scripts/test-admin-payment-invalidation-release-workflow.mjs
           node scripts/test-bar-forecast-frontend.mjs
           node scripts/test-bar-forecast-boundary.mjs
           node scripts/test-bar-forecast-preview-isolation.mjs
@@ -337,6 +345,32 @@ jobs:
             echo "The exact bundle-hash attestation confirms both September pricing migrations, their ledger records, and the rollback-only post-apply probe completed on production before Worker cutover."
           else
             echo "EXAMINATION_ROOM_PRODUCTION_DATABASE_URL is missing. Manually apply the generated September pricing bundle, verify its embedded rollback-only probe, then rerun with this exact attestation: $expected_attestation" >&2
+            exit 1
+          fi
+
+      - name: Apply and rollback-probe the exact Admin payment invalidation migration
+        env:
+          ADMIN_PAYMENT_INVALIDATION_DATABASE_URL: ${{ secrets.EXAMINATION_ROOM_PRODUCTION_DATABASE_URL }}
+          ADMIN_PAYMENT_INVALIDATION_DATABASE_PREAPPLIED_SHA256: ${{ inputs.admin_payment_invalidation_database_preapplied_sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          payment_invalidation_bundle="$RUNNER_TEMP/admin-payment-invalidation-release.sql"
+          trap 'rm -f -- "$payment_invalidation_bundle"' EXIT
+          node scripts/build-admin-payment-invalidation-release-bundle.mjs --output "$payment_invalidation_bundle"
+          expected_attestation="$(node --input-type=module -e 'import { createHash } from "node:crypto"; import { readFileSync } from "node:fs"; process.stdout.write("sha256:" + createHash("sha256").update(readFileSync(process.argv[1])).digest("hex"));' "$payment_invalidation_bundle")"
+          test -n "$expected_attestation"
+          if [[ -n "$ADMIN_PAYMENT_INVALIDATION_DATABASE_URL" ]]; then
+            if ! command -v psql >/dev/null 2>&1; then
+              sudo apt-get update
+              sudo apt-get install --yes postgresql-client
+            fi
+            psql --version
+            psql "$ADMIN_PAYMENT_INVALIDATION_DATABASE_URL" -X --set=ON_ERROR_STOP=1 --file "$payment_invalidation_bundle"
+          elif [[ "$ADMIN_PAYMENT_INVALIDATION_DATABASE_PREAPPLIED_SHA256" == "$expected_attestation" ]]; then
+            echo "The exact bundle-hash attestation confirms the Admin payment invalidation migration, privileges, and rollback-only probe completed on production before Worker cutover."
+          else
+            echo "EXAMINATION_ROOM_PRODUCTION_DATABASE_URL is missing. Manually apply the generated Admin payment invalidation bundle, verify its embedded rollback-only probe, then rerun with this exact attestation: $expected_attestation" >&2
             exit 1
           fi
 

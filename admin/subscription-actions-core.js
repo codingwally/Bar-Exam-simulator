@@ -19,7 +19,9 @@
     if (!FOUNDER_ROLES.has(String(actorRole || ''))) return [];
 
     const status = String(row?.subscription_status || '').toLowerCase();
+    const source = String(row?.subscription_source || '').toLowerCase();
     const hasSubscription = Boolean(row?.subscription_id);
+    const invalidatedPayment = source === 'invalidated_payment';
     const actions = [];
 
     if (!hasSubscription || FINAL_STATUSES.has(status) || !status) {
@@ -40,7 +42,8 @@
       );
     } else if (status === 'paused') {
       actions.push(descriptor('Resume', 'subscription_change', 'resume', 'primary'));
-    } else if (['cancelled', 'expired'].includes(status) && hasSubscription) {
+    } else if (['cancelled', 'expired'].includes(status) && hasSubscription
+        && !invalidatedPayment) {
       actions.push(descriptor('Restore', 'subscription_change', 'restore', 'primary'));
     }
 

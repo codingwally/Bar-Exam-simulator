@@ -713,6 +713,39 @@ function isAuthoritativeRpcRejection(error) {
   return error?.authoritativeRpcRejection === true;
 }
 
+function mapPaymentInvalidationRpcError(result) {
+  const message = String(result?.message || '');
+  if (/currently being delivered/i.test(message)) {
+    return new ExaminerError(
+      'PAYMENT_RECEIPT_IN_FLIGHT',
+      'The subscriber receipt is currently being delivered. Wait for it to finish, then try again. Nothing changed.',
+      409,
+    );
+  }
+  if (/active refund workflow/i.test(message)) {
+    return new ExaminerError(
+      'PAYMENT_REFUND_IN_PROGRESS',
+      'This payment has an active refund workflow. Resolve that workflow before marking the proof invalid. Nothing changed.',
+      409,
+    );
+  }
+  if (/payment request not found|only an approved payment/i.test(message)) {
+    return new ExaminerError(
+      'PAYMENT_INVALIDATION_CONFLICT',
+      'This payment is no longer an approved payment. Refresh Payments before trying again. Nothing changed.',
+      409,
+    );
+  }
+  if (/linkage|another approved payment|subscription is unavailable|legacy approved payment|prior-access snapshot|subscription (?:was )?changed|prior subscription changed/i.test(message)) {
+    return new ExaminerError(
+      'PAYMENT_INVALIDATION_UNSAFE',
+      'The payment cannot be reversed automatically because its access history is ambiguous or changed later. Review Subscription history before manual recovery. Nothing changed.',
+      409,
+    );
+  }
+  return null;
+}
+
 async function protectedSupabaseRpc(env, functionName, body, options = {}) {
   const baseUrl = configuredSupabaseUrl(env);
   const response = await fetch(new URL(`/rest/v1/rpc/${functionName}`, baseUrl), {
@@ -730,11 +763,18 @@ async function protectedSupabaseRpc(env, functionName, body, options = {}) {
       || response.status === 403
       || /authorization|capability|required|not allowed/i.test(String(result?.message || ''));
     if (denied && options.returnNullOnAuthorizationDenial === true) return null;
+    const mappedError = !denied && typeof options.errorMapper === 'function'
+      ? options.errorMapper(result)
+      : null;
     console.error('Protected storage request failed', {
       operation: functionName,
       status: response.status,
       denied,
+      expected: mappedError instanceof ExaminerError,
     });
+    if (mappedError instanceof ExaminerError) {
+      throw markRpcOutcome(mappedError, response.status);
+    }
     throw markRpcOutcome(new ExaminerError(
       denied ? 'ADMIN_FORBIDDEN' : 'ADMIN_DATA_UNAVAILABLE',
       denied
@@ -9899,7 +9939,14 @@ async function handlePhase4AdminAction(request, env, origin, allowedOrigin, exec
   const user = await requireAdministrator(request, env);
   const action = normalizePhase4AdminAction(await parseBoundedJson(request, 16_000));
   let result;
-  if (action.action === 'payment_review') {
+  if (action.action === 'payment_invalidate') {
+    result = await protectedSupabaseRpc(env, 'phase4_admin_invalidate_payment', {
+      p_actor_user_id: user.id,
+      p_payment_request_id: action.targetId,
+      p_reason: action.reason,
+      p_request_key: action.requestKey,
+    }, { errorMapper: mapPaymentInvalidationRpcError });
+  } else if (action.action === 'payment_review') {
     result = await protectedSupabaseRpc(env, 'phase4_admin_review_payment', {
       p_actor_user_id: user.id,
       p_payment_request_id: action.targetId,

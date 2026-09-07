@@ -269,6 +269,26 @@ test('reviewer payment decision rejects an invalid verified payment timestamp', 
   );
 });
 
+test('approved-payment invalidation strips every client-supplied mutation field', () => {
+  const normalized = normalizePhase4AdminAction({
+    action: 'payment_invalidate',
+    targetId: '44444444-4444-4444-8444-444444444444',
+    reason: 'The reviewed proof is not a valid payment record.',
+    requestKey: 'payment_invalidation_test_0001',
+    payload: {
+      status: 'rejected',
+      userId: '55555555-5555-4555-8555-555555555555',
+      subscriptionId: '66666666-6666-4666-8666-666666666666',
+      verifiedPaidAt: '2026-09-01T00:00:00.000Z',
+      amountPhp: 0,
+      studentEmail: 'untrusted@example.invalid',
+    },
+  });
+
+  assert.equal(normalized.action, 'payment_invalidate');
+  assert.deepEqual(normalized.payload, {});
+});
+
 test('refund normalization accepts only a selected payment and a substantive reason', () => {
   const normalized = normalizeRefundRequest({
     paymentRequestId: '22222222-2222-4222-8222-222222222222',

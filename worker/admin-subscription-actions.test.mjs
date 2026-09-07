@@ -48,6 +48,22 @@ function actionRequest(body, token = 'verified-admin-token', ip = '203.0.113.171
   });
 }
 
+function paymentInvalidationPayload(overrides = {}) {
+  return {
+    action: 'payment_invalidate',
+    targetId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+    payload: {
+      status: 'rejected',
+      userId: targetId,
+      subscriptionId,
+      studentName: 'Untrusted presentation field',
+    },
+    reason: 'The approved proof is not a valid payment record.',
+    requestKey: 'admin_payment_invalidation_0001',
+    ...overrides,
+  };
+}
+
 test('subscription action normalization strips presentation fields and client prices', () => {
   const normalized = normalizePhase4AdminAction(actionPayload());
   assert.deepEqual(normalized.payload, {
@@ -128,6 +144,81 @@ test('authenticated founder action uses the dedicated transactional RPC', async 
     assert.equal(response.status, 200);
     assert.equal(payload.ok, true);
     assert.equal(calls.filter((url) => url.includes('phase4_admin_manage_subscription')).length, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('approved-payment invalidation calls only its dedicated four-parameter RPC', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, init = {}) => {
+    const target = String(url);
+    calls.push(target);
+    if (target.endsWith('/auth/v1/user')) return Response.json({ id: actorId });
+    if (target.endsWith('/rest/v1/rpc/phase4_admin_invalidate_payment')) {
+      const body = JSON.parse(init.body);
+      assert.deepEqual(body, {
+        p_actor_user_id: actorId,
+        p_payment_request_id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+        p_reason: 'The approved proof is not a valid payment record.',
+        p_request_key: 'admin_payment_invalidation_0001',
+      });
+      assert.equal('p_payload' in body, false);
+      return Response.json({
+        ok: true,
+        action: 'payment_invalidate',
+        accessReversed: true,
+        access: { basis: 'introductory_tokens', tokensRemaining: 3 },
+        replayed: false,
+      });
+    }
+    throw new Error(`Unexpected fetch: ${target}`);
+  };
+  try {
+    const response = await worker.fetch(
+      actionRequest(paymentInvalidationPayload(), 'verified-founder-token', '203.0.113.174'),
+      env,
+    );
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.data.action, 'payment_invalidate');
+    assert.equal(calls.filter((url) => url.includes('phase4_admin_invalidate_payment')).length, 1);
+    assert.equal(calls.some((url) => url.includes('phase4_admin_review_payment')), false);
+    assert.equal(calls.some((url) => url.includes('phase4_admin_manage_subscription')), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('unsafe payment invalidation is a safe conflict and never a success', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const target = String(url);
+    if (target.endsWith('/auth/v1/user')) return Response.json({ id: actorId });
+    if (target.endsWith('/rest/v1/rpc/phase4_admin_invalidate_payment')) {
+      return Response.json(
+        { message: 'The linked subscription was changed after approval; nothing changed.' },
+        { status: 400 },
+      );
+    }
+    throw new Error(`Unexpected fetch: ${target}`);
+  };
+  try {
+    const response = await worker.fetch(
+      actionRequest(
+        paymentInvalidationPayload({ requestKey: 'admin_payment_invalidation_unsafe_0001' }),
+        'verified-founder-token',
+        '203.0.113.175',
+      ),
+      env,
+    );
+    const payload = await response.json();
+    assert.equal(response.status, 409);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error.code, 'PAYMENT_INVALIDATION_UNSAFE');
+    assert.match(payload.error.message, /Nothing changed/i);
   } finally {
     globalThis.fetch = originalFetch;
   }

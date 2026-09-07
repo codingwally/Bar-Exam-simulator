@@ -28,6 +28,11 @@ const noSubscriptionRow = Object.freeze({
   subscription_status: null,
   free_beta_enabled: false,
 });
+const invalidatedPaymentRow = Object.freeze({
+  ...activeRow,
+  subscription_status: 'cancelled',
+  subscription_source: 'invalidated_payment',
+});
 
 const labels = (row, role) => actions.actionsForSubscription(row, role)
   .map((item) => item.label);
@@ -52,6 +57,9 @@ assert.ok(labels(pausedRow, 'founder_admin').includes('Disable Free Beta'));
 assert.ok(labels(noSubscriptionRow, 'super_admin').includes('Activate Subscription'));
 assert.equal(labels(noSubscriptionRow, 'super_admin').includes('Activate Retainer'), false);
 assert.ok(labels(noSubscriptionRow, 'super_admin').includes('Change Plan'));
+assert.equal(labels(invalidatedPaymentRow, 'founder_admin').includes('Restore'), false);
+assert.ok(labels(invalidatedPaymentRow, 'founder_admin').includes('Activate Subscription'));
+assert.ok(labels(invalidatedPaymentRow, 'founder_admin').includes('View Activity History'));
 assert.equal(labels(activeRow, 'student').length, 0);
 assert.equal(labels(activeRow, '').length, 0);
 

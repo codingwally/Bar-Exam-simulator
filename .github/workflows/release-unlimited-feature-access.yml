@@ -132,6 +132,7 @@ jobs:
             scripts/test-bar-forecast-boundary.mjs \
             scripts/test-bar-forecast-frontend.mjs \
             scripts/test-forecast-authorization-generation.mjs \
+            scripts/verify-forecast-entry-staging.mjs \
             scripts/test-bar-forecast-google-sheet.mjs \
             scripts/test-bar-forecast-qbank-google-batch.mjs \
             scripts/test-bar-forecast-question-bank-projection.mjs \
@@ -329,6 +330,22 @@ jobs:
         env:
           STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
         run: node scripts/run-staging-e2e-suite.mjs complete-beta
+
+      - name: Verify authenticated Forecast entry and manual recovery
+        env:
+          STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          npx --yes agent-browser@0.36.0 install --with-deps
+          node scripts/verify-forecast-entry-staging.mjs
+
+      - name: Retain sanitized Forecast entry screenshots and checks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: astra-forecast-entry-${{ github.run_id }}
+          path: artifacts/astra-forecast-entry/
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Verify staging Bar Simulation access and cleanup
         env:

@@ -258,6 +258,7 @@ assert.doesNotMatch(liveBytes, /sha256sum "\$relative_path"/u);
 
 for (const validationContract of [
   "- 'worker/bar-forecast-rate-limit.test.mjs'",
+  "- 'scripts/test-bar-forecast-boundary.mjs'",
   "- 'scripts/test-forecast-poll-rate-contract.mjs'",
   "- 'scripts/test-worker-cpu-limit-contract.mjs'",
   'node scripts/test-worker-cpu-limit-contract.mjs',
@@ -275,6 +276,11 @@ for (const validationContract of [
   'node scripts/test-astra-149-binding-compatibility.mjs',
 ]) {
   assert.ok(validation.includes(validationContract), `Required validation wiring is missing: ${validationContract}`);
+}
+
+for (const source of [validation, workflow]) {
+  assert.match(source, /^          node scripts\/test-bar-forecast-boundary\.mjs\r?$/mu,
+    'Both mandatory validation and release authorization must execute the Forecast boundary script, not merely allowlist its path.');
 }
 
 for (const liveContract of [

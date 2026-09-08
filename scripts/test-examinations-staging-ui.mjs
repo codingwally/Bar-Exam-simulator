@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildStagingUiFailureDiagnostic, readStagingUiFailureDiagnostic, STAGING_UI_FAILURE_MARKER } from './staging-e2e-diagnostics.mjs';
 import { completeMandatoryCommercialProfile } from './staging-commercial-user.mjs';
+import { createExaminationFixtureLifecycle } from './staging-examination-fixtures.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SUPABASE_URL = String(process.env.STAGING_SUPABASE_URL || '').replace(/\/+$/, '');
@@ -26,6 +27,9 @@ assert.equal(
 );
 
 const runId = `ui-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
+const fixtureLifecycle = createExaminationFixtureLifecycle({ suite: 'examinations-ui', runId,
+  supabaseUrl: SUPABASE_URL, workerUrl: WORKER_URL, serviceRoleKey: SERVICE_ROLE_KEY,
+  publishableKey: PUBLISHABLE_KEY, sourceSha: process.env.GITHUB_SHA || null });
 const email = `dd-ui-${runId.slice(3)}@example.com`;
 const password = `Dd!${randomBytes(30).toString('base64url')}`;
 const serviceHeaders = Object.freeze({ apikey: SERVICE_ROLE_KEY });
@@ -45,6 +49,8 @@ async function jsonRequest(url, options = {}, expected = [200]) {
 }
 
 async function createDisposableUser() {
+  const identity = await fixtureLifecycle.beforeCreate('ui-examinee');
+  assert.equal(identity.email, email);
   const user = await jsonRequest(`${SUPABASE_URL}/auth/v1/admin/users`, {
     method: 'POST',
     headers: {
@@ -55,11 +61,15 @@ async function createDisposableUser() {
       email,
       password,
       email_confirm: true,
+      app_metadata: identity.appMetadata,
       user_metadata: { full_name: 'Synthetic Staging UI Examinee' },
     }),
   }, [200, 201]);
   assert.match(user.id, /^[0-9a-f-]{36}$/i);
   userId = user.id;
+  await fixtureLifecycle.recordCreated('ui-examinee', userId);
+  await fixtureLifecycle.register(userId);
+  await fixtureLifecycle.beforePromotion(userId);
 
   await jsonRequest(`${SUPABASE_URL}/rest/v1/user_roles?user_id=eq.${userId}`, {
     method: 'PATCH',
@@ -82,6 +92,7 @@ async function createDisposableUser() {
 }
 
 async function prepareDisposableCommercialProfile() {
+  await fixtureLifecycle.beforeSignIn(userId);
   const session = await jsonRequest(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
     method: 'POST',
     headers: {
@@ -91,6 +102,7 @@ async function prepareDisposableCommercialProfile() {
     body: JSON.stringify({ email, password }),
   });
   assert.ok(session.access_token, 'The disposable staging session was not created.');
+  await fixtureLifecycle.rememberSession(userId, session);
   const acceptance = await jsonRequest(`${WORKER_URL}/beta/access/accept-terms`, {
     method: 'POST',
     headers: {
@@ -233,7 +245,6 @@ async function deleteSyntheticUserRecords() {
   const targets = [
     ['examination_beta_access', `user_id=eq.${userId}`],
     ['examination_participants', `user_id=eq.${userId}`],
-    ['examination_audit_log', `actor_user_id=eq.${userId}`],
     ['usage_events', `user_id=eq.${userId}`],
     ['usage_sessions', `user_id=eq.${userId}`],
   ];
@@ -247,15 +258,13 @@ async function deleteSyntheticUserRecords() {
 
 async function deleteDisposableUser() {
   if (!userId) return;
-  await jsonRequest(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
-    method: 'DELETE',
-    headers: serviceHeaders,
-  }, [200, 204]);
+  await fixtureLifecycle.deleteUser(userId);
 }
 
 let verifier = null;
 let verifierFailure = null;
 try {
+  await fixtureLifecycle.preflight();
   await enableCommercialLegalVersions();
   await createDisposableUser();
   await prepareDisposableCommercialProfile();
@@ -269,16 +278,26 @@ try {
   }
 } finally {
   const cleanupErrors = [];
-  const examIds = await listSyntheticExamIds().catch((error) => {
-    cleanupErrors.push(error);
-    return [];
-  });
-  for (const examId of examIds.reverse()) {
-    await deleteSyntheticExam(examId).catch((error) => cleanupErrors.push(error));
+  let verified = userId === null;
+  if (userId) {
+    try { verified = await fixtureLifecycle.verifyCleanupIdentity(userId); }
+    catch (error) { cleanupErrors.push(error); }
   }
-  await deleteSyntheticUserRecords().catch((error) => cleanupErrors.push(error));
-  await deleteDisposableUser().catch((error) => cleanupErrors.push(error));
+  if (verified) {
+    const examIds = await listSyntheticExamIds().catch((error) => {
+      cleanupErrors.push(error);
+      return [];
+    });
+    for (const examId of examIds.reverse()) {
+      await deleteSyntheticExam(examId).catch((error) => cleanupErrors.push(error));
+    }
+    await deleteSyntheticUserRecords().catch((error) => cleanupErrors.push(error));
+    await deleteDisposableUser().catch((error) => cleanupErrors.push(error));
+  } else {
+    cleanupErrors.push(new Error('Exact fixture identity verification blocked examination cleanup'));
+  }
   await restoreLegalVersions().catch((error) => cleanupErrors.push(error));
+  await fixtureLifecycle.finishCleanup(cleanupErrors.length === 0).catch((error) => cleanupErrors.push(error));
   if (cleanupErrors.length) {
     throw new AggregateError(cleanupErrors, 'Disposable staging UI cleanup failed.');
   }

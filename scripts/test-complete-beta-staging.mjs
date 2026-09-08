@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { provisionMandatoryCommercialChoice } from './staging-commercial-user.mjs';
+import { createPaymentFixtureLifecycle } from './staging-payment-fixtures.mjs';
 
 const SUPABASE_URL = String(process.env.STAGING_SUPABASE_URL || '').replace(/\/+$/, '');
 const SERVICE_ROLE_KEY = String(process.env.STAGING_SUPABASE_SERVICE_ROLE_KEY || '');
@@ -22,6 +23,9 @@ assert.match(PUBLISHABLE_KEY, /^sb_publishable_[A-Za-z0-9_-]{20,}$/);
 const runId = `${Date.now().toString(36)}-${randomBytes(4).toString('hex')}`;
 const createdUsers = [];
 const createdEntryIds = [];
+const fixtureLifecycle = createPaymentFixtureLifecycle({ runId,
+  supabaseUrl: SUPABASE_URL, workerUrl: WORKER_URL, serviceRoleKey: SERVICE_ROLE_KEY,
+  publishableKey: PUBLISHABLE_KEY, sourceSha: process.env.GITHUB_SHA || null });
 
 const serviceHeaders = {
   apikey: SERVICE_ROLE_KEY,
@@ -89,7 +93,8 @@ async function serviceRpc(name, payload) {
 }
 
 async function createUser(label) {
-  const email = `dd-complete-beta-${label}-${runId}@duediligence.ph`;
+  const identity = await fixtureLifecycle.beforeCreate(label);
+  const email = identity.email;
   const password = `Dd!${randomBytes(24).toString('base64url')}9z`;
   const { body: user } = await jsonRequest(`${SUPABASE_URL}/auth/v1/admin/users`, {
     method: 'POST',
@@ -98,10 +103,14 @@ async function createUser(label) {
       email,
       password,
       email_confirm: true,
+      app_metadata: identity.appMetadata,
       user_metadata: { display_name: `Release ${label}` },
     }),
   }, [200, 201]);
   createdUsers.push(user.id);
+  await fixtureLifecycle.recordCreated(label, user.id);
+  await fixtureLifecycle.register(user.id);
+  await fixtureLifecycle.beforeSignIn(user.id);
 
   const { body: session } = await jsonRequest(
     `${SUPABASE_URL}/auth/v1/token?grant_type=password`,
@@ -115,6 +124,7 @@ async function createUser(label) {
     },
   );
   assert.ok(session.access_token);
+  await fixtureLifecycle.rememberSession(user.id, session);
   const created = { id: user.id, token: session.access_token };
   const legalVersions = await acceptCurrentTerms(created);
   await provisionMandatoryCommercialChoice({
@@ -254,14 +264,12 @@ async function deleteSyntheticEntry(entryId) {
 }
 
 async function deleteUser(userId) {
-  await jsonRequest(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
-    method: 'DELETE',
-    headers: serviceHeaders,
-  }, [200, 204]);
+  await fixtureLifecycle.deleteUser(userId);
 }
 
 let outcome;
 try {
+  await fixtureLifecycle.preflight();
   console.log('STAGING_GATE: creating isolated users');
   const administrators = await serviceGet(
     '/rest/v1/user_roles?role=eq.super_admin&select=user_id&order=created_at.asc&limit=1',
@@ -582,12 +590,22 @@ try {
 } finally {
   console.log('STAGING_GATE: cleaning isolated test data');
   const cleanupErrors = [];
-  for (const entryId of createdEntryIds.reverse()) {
-    await deleteSyntheticEntry(entryId).catch((error) => cleanupErrors.push(error));
+  const verifiedUsers = [];
+  for (const userId of createdUsers) {
+    try { if (await fixtureLifecycle.verifyCleanupIdentity(userId)) verifiedUsers.push(userId); }
+    catch (error) { cleanupErrors.push(error); }
   }
-  for (const userId of createdUsers.reverse()) {
+  if (verifiedUsers.length === createdUsers.length) {
+    for (const entryId of createdEntryIds.reverse()) {
+      await deleteSyntheticEntry(entryId).catch((error) => cleanupErrors.push(error));
+    }
+  } else {
+    cleanupErrors.push(new Error('Exact fixture identity verification blocked complete-beta cleanup'));
+  }
+  for (const userId of verifiedUsers.reverse()) {
     await deleteUser(userId).catch((error) => cleanupErrors.push(error));
   }
+  await fixtureLifecycle.finishCleanup(cleanupErrors.length === 0).catch((error) => cleanupErrors.push(error));
   if (cleanupErrors.length) {
     throw new AggregateError(cleanupErrors, 'Complete beta staging cleanup failed.');
   }

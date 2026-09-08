@@ -31,7 +31,7 @@ test('commercial child receives exactly the captured evidence and independent re
   assert.doesNotMatch(artifacts, /wranglerArtifacts|wrangler-output|\.wrangler\//u);
 });
 test('new infrastructure is explicitly reviewed and tested but never enters production SQL bundle', () => {
-  const files = ['scripts/staging-commercial-fixtures.mjs', 'scripts/staging-commercial-suppression.mjs',
+  const files = ['scripts/test-commercial-launch-staging.mjs', 'scripts/staging-commercial-fixtures.mjs', 'scripts/staging-commercial-suppression.mjs',
     'scripts/capture-staging-commercial-deployment.mjs', 'scripts/test-capture-staging-commercial-deployment.mjs',
     'scripts/test-staging-commercial-fixtures.mjs', 'scripts/test-staging-commercial-release-workflow.mjs',
     'docs/astra-staging-commercial-fixtures.md', 'worker/astra-staging-commercial-fixture-registration.test.mjs',

@@ -839,7 +839,7 @@ function hasAffirmativeCentralRuleInsufficiencyFinding(finding) {
     .replace(/(^|[\s,(])['‘][^']*'/g, '$1 ')
     .split(/[.!?;\n]|\b(?:but|however|yet)\b/i)
     .some(clause => !/\b(?:not|no|neither|nor|never|cannot)\b|\b[a-z]+n't\b/i.test(clause)
-      && !/\b(?:reject(?:s|ed)?|refut(?:e|es|ed)|den(?:y|ies|ied)|disagree(?:s|d)?|argued|claimed|contended|asserted|alleged|said)\b/i.test(clause)
+      && !/\b(?:false|untrue|mistaken|inaccurate|reject(?:s|ed)?|refut(?:e|es|ed)|den(?:y|ies|ied)|disagree(?:s|d)?|disput(?:e|es|ed)|argued|claimed|contended|asserted|alleged(?:ly)?|reported(?:ly)?|quoted|supposedly|said)\b/i.test(clause)
       && hasCentralRuleInsufficiencyFinding(clause));
 }
 

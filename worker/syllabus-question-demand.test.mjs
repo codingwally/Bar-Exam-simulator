@@ -325,6 +325,17 @@ for (const finding of [
   'The examiner reported, "The legal basis is overly simplistic."',
   'The earlier evaluator claimed that the legal basis is overly simplistic.',
   'The criticism that the governing rule is legally insufficient is rejected.',
+  'It is false that the legal basis is overly simplistic.',
+  'It is untrue that the governing rule is legally insufficient.',
+  'The claim that the legal reasoning relies solely on bad intent is mistaken.',
+  'It is inaccurate to describe the legal basis as overly simplistic.',
+  'Another reviewer reported that the legal basis is overly simplistic.',
+  'Another reviewer reportedly found the governing rule legally insufficient.',
+  'The reviewer quoted a critique describing the legal basis as overly simplistic.',
+  'The claim that the governing rule is legally insufficient is disputed.',
+  'The legal basis is allegedly overly simplistic.',
+  'The governing rule supposedly relies solely on bad intent.',
+  'The reported claim was that the legal basis is overly simplistic, but the adopted analysis identifies the statutory elements.',
 ]) {
   test(`negated provider insufficiency is not independent corroboration: ${finding}`, () => {
     const result = applyDeterministicScoreCap(incompleteRuleAssessment({
@@ -339,6 +350,8 @@ for (const finding of [
   'The legal basis is not overly broad, but the governing rule is overly simplistic and relies solely on bad intent.',
   'The legal basis is not vague; however, the governing rule relies solely on bad intent.',
   'The first governing rule is not legally insufficient. The second governing rule is overly simplistic and relies solely on bad intent.',
+  'It is false that the legal basis is vague, but the governing rule is overly simplistic and relies solely on bad intent.',
+  'A reviewer reportedly called the first legal basis vague; however, the second governing rule is legally insufficient and relies solely on bad intent.',
 ]) {
   test(`an independent affirmative critique after contrast still corroborates the intent-only failure: ${finding}`, () => {
     const result = applyDeterministicScoreCap(incompleteRuleAssessment({
@@ -355,4 +368,13 @@ test('a separate affirmative provider error is not masked by a negated rationale
   }), intentOnlyResponse, impossibleCrimeContext);
   assert.equal(result.score, 1.5);
   assert.equal(result.appliedScoreCeiling?.code, 'materially_wrong_rule');
+});
+
+test('canonical legal explanation is not an independent provider critique', () => {
+  const result = applyDeterministicScoreCap(incompleteRuleAssessment({
+    rationale: 'The response addresses the requested question.', errors: [],
+    legalExplanation: centralRuleFinding,
+  }), intentOnlyResponse, impossibleCrimeContext);
+  assert.equal(result.score, 3);
+  assert.notEqual(result.appliedScoreCeiling?.code, 'materially_wrong_rule');
 });

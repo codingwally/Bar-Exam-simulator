@@ -809,7 +809,7 @@ function withTimeout(label, promise, timeoutMs = RTC_TIMEOUT_MS) {
 }
 
 function waitForRoomEvent(room, event, label, predicate = () => true) {
-  return new Promise((resolve, reject) => {
+  const pending = new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       room.off(event, handler);
       reject(new Error(`${label} timed out`));
@@ -822,6 +822,11 @@ function waitForRoomEvent(room, event, label, predicate = () => true) {
     };
     room.on(event, handler);
   });
+  // A parallel HTTP operation can outlast this event timer. Observe rejection
+  // immediately so fixture cleanup can run, while preserving the original
+  // rejecting promise for the caller's later await and failure report.
+  pending.catch(() => {});
+  return pending;
 }
 
 function waitForSubscribedTrack(room, participantIdentity, source, label) {

@@ -17,6 +17,30 @@ function extract(name) {
   return source.slice(start, start + end + 1);
 }
 const definitions = names.map(extract).join('\n');
+test('an early RTC timeout stays rejected without interrupting delayed HTTP cleanup', async () => {
+  const makeWait = new Function('setTimeout', 'clearTimeout', `
+    const RTC_TIMEOUT_MS = 30000;
+    ${extract('waitForRoomEvent')}
+    return waitForRoomEvent;
+  `);
+  let timeout;
+  const wait = makeWait((callback) => { timeout = callback; return 1; }, () => {});
+  const removed = [];
+  const room = { on() {}, off(...args) { removed.push(args); } };
+  const pending = wait(room, 'participantDisconnected', 'participant removal');
+  timeout();
+  let cleaned = false;
+  await assert.rejects(async () => {
+    try {
+      await new Promise(setImmediate);
+      throw new Error('HTTP request failed before awaiting RTC');
+    } finally { cleaned = true; }
+  }, /HTTP request failed/);
+  assert.equal(cleaned, true);
+  assert.equal(removed.length, 1);
+  await assert.rejects(pending, /participant removal timed out/);
+});
+
 const makeActualFunctions = new Function('assert', 'randomBytes', 'fetch', 'persist', 'setTimeout', `
   const REQUEST_TIMEOUT_MS = 45000;
   const SUPABASE_ADMIN_MAX_ATTEMPTS = 4;

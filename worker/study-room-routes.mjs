@@ -10,7 +10,6 @@ import {
 } from './study-room-core.mjs';
 
 const STUDY_ROOM_ADMIN_ROLES = new Set(['admin', 'founder_admin', 'super_admin']);
-const STUDY_ROOM_PRIVILEGED_MODERATOR_ROLES = new Set(['founder_admin', 'super_admin']);
 const STUDY_ROOM_MEMBER_ACCESS_BASIS = 'signed_in';
 
 function normalizedAdministratorRole(value) {
@@ -35,17 +34,17 @@ function requireAdministrator(context) {
   if (context?.isAdministrator === true) return context.authorization;
   throw new StudyRoomError(
     'STUDY_ROOM_ADMIN_REQUIRED',
-    'Only a Due Diligence administrator can open a Study Room.',
+    'Only a Due Diligence administrator can use this Study Room control.',
     403,
-    'Join a room after an administrator opens it.',
+    'Choose an available public room from the lobby.',
   );
 }
 
 function requirePrivilegedModerator(authorization) {
-  if (!STUDY_ROOM_PRIVILEGED_MODERATOR_ROLES.has(authorization?.role)) {
+  if (!STUDY_ROOM_ADMIN_ROLES.has(authorization?.role)) {
     throw new StudyRoomError(
       'STUDY_ROOM_MODERATION_FORBIDDEN',
-      'Only a Founder or Super Admin can apply room-wide moderation.',
+      'Only a Due Diligence administrator can apply room-wide moderation.',
       403,
       'Use the local participant controls to mute or block someone only for yourself.',
     );

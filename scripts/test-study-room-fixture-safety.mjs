@@ -255,3 +255,83 @@ test('source retains exact-run manifests and excludes stale sweeps / token persi
   assert.match(source, /flag: "wx", mode: 0o600/u);
   assert.doesNotMatch(extract('deleteSyntheticUsers'), /method: "DELETE"[\s\S]*examination_audit_log/u);
 });
+
+// Exercise the actual first-join orchestration without importing native RTC,
+// loading credentials, provisioning accounts, or making a network request.
+const smokeSlots = [
+  { roomKey: '1', label: 'Library', kind: 'library', microphoneAllowed: false, adminOnly: false },
+  { roomKey: '2', label: 'Room 1', kind: 'general', microphoneAllowed: true, adminOnly: false },
+  { roomKey: '3', label: 'Room 2', kind: 'general', microphoneAllowed: true, adminOnly: false },
+  { roomKey: '4', label: 'Room 3', kind: 'general', microphoneAllowed: true, adminOnly: false },
+  { roomKey: '5', label: 'Inner Chamber', kind: 'inner-chamber', microphoneAllowed: true, adminOnly: true },
+];
+const publicProofFactory = new Function('assert', 'workerPost', 'validateJoinResponse', `
+  const STUDY_ROOM_SLOTS = ${JSON.stringify(smokeSlots)};
+  const STUDY_ROOM_MAX_ROOMS = 5, STUDY_ROOM_MAX_PARTICIPANTS = 12;
+  const APPROVED_STAGING_ROOMS = ['inert-private-room-name'];
+  ${['assertPlainObject', 'approvedRoomKey', 'validatePublicRoomDescriptor', 'validateRoomCatalog', 'provePublicFirstJoins'].map(extract).join('\n')}
+  return { provePublicFirstJoins, validateRoomCatalog };
+`);
+function firstJoinHarness({ initiallyActive = [], listCreates = false, alteredDescriptor = null } = {}) {
+  const calls = [];
+  const active = new Set(initiallyActive);
+  const catalog = () => ({ ok: true, allowed: true, role: 'member', administrator: false,
+    canCreateRooms: false, maxRooms: 5, maxParticipants: 12, recording: false,
+    rooms: smokeSlots.map((slot) => ({ ...slot, alwaysOpen: !slot.adminOnly, canCreate: false,
+      canJoin: !slot.adminOnly, capacity: 12, active: active.has(slot.roomKey), participantCount: 0,
+      focusStartedAt: active.has(slot.roomKey) ? '2026-09-08T00:00:00Z' : null,
+      ...(alteredDescriptor && slot.roomKey === '1' ? alteredDescriptor : {}) })) });
+  const actual = publicProofFactory(assert, async (_configuration, path, accessToken, body) => {
+    assert.equal(accessToken, 'inert-student'); calls.push({ path, body: clone(body) });
+    if (path === '/study-room/rooms') {
+      assert.equal(body.operation, 'list', 'The first-join proof must never request administrator creation.');
+      if (listCreates && calls.length === 2) active.add('2');
+      return { body: catalog() };
+    }
+    assert.equal(path, '/study-room/join');
+    assert.ok(['1', '2', '3', '4'].includes(body.roomKey), 'The private room is not auto-created.');
+    active.add(body.roomKey);
+    return { body: { room_key: body.roomKey, administrator: false } };
+  }, (body, nickname, issuer, roomKey) => {
+    assert.equal(nickname, 'Participant #404'); assert.equal(issuer, 'inert-issuer');
+    assert.equal(body.room_key, roomKey); return body;
+  });
+  return { calls, actual, catalog,
+    run: () => actual.provePublicFirstJoins({ liveKitApiKey: 'inert-issuer' }, { token: 'inert-student' }) };
+}
+test('actual smoke joins all four initially inactive public rooms as a free student without admin create', async () => {
+  const h = firstJoinHarness();
+  assert.equal((await h.run()).length, 4);
+  assert.deepEqual(h.calls.filter((call) => call.path.endsWith('/join')).map((call) => call.body.roomKey), ['1', '2', '3', '4']);
+  assert.equal(h.calls.length, 10);
+  assert.equal(h.calls.filter((call) => call.path.endsWith('/rooms')).length, 6);
+  assert.equal(h.calls.some((call) => call.path.startsWith('/admin/') || call.body.operation === 'create'), false);
+});
+test('first-join proof holds pre-existing public sessions and rejects list-triggered activation', async () => {
+  const occupied = firstJoinHarness({ initiallyActive: ['2'] });
+  await assert.rejects(occupied.run(), /initially inactive/);
+  assert.equal(occupied.calls.length, 1);
+  const changing = firstJoinHarness({ listCreates: true });
+  await assert.rejects(changing.run());
+  assert.equal(changing.calls.length, 2);
+  assert.equal(changing.calls.some((call) => call.path.endsWith('/join')), false);
+});
+test('always-open catalog keeps private Inner Chamber protected and active physically truthful', async () => {
+  const h = firstJoinHarness({ initiallyActive: ['5'] });
+  assert.equal((await h.run()).length, 4);
+  assert.equal(h.catalog().rooms[4].alwaysOpen, false);
+  assert.equal(h.catalog().rooms[4].canJoin, false);
+  for (const alteredDescriptor of [{ alwaysOpen: false }, { canCreate: true }, { capacity: 13 }]) {
+    const invalid = firstJoinHarness({ alteredDescriptor });
+    await assert.rejects(invalid.run());
+    assert.equal(invalid.calls.length, 1);
+  }
+});
+test('stage orchestration proves free first-join before admin creation and ordinary-admin mute/removal', () => {
+  const main = extract('runPositiveSmoke');
+  assert.ok(main.indexOf('provePublicFirstJoins(configuration, student)') < main.indexOf('"five_room_catalog_and_creation"'));
+  assert.match(main, /const moderation = await workerPost\(\s*configuration,\s*"\/study-room\/moderate",\s*secondaryAdmin\.token/u);
+  assert.match(main, /const removal = await workerPost\(configuration, "\/study-room\/moderate", secondaryAdmin\.token/u);
+  assert.match(main, /await removedParticipant;/u);
+  assert.match(main, /memberInnerDenied\.body\?\.error\?\.code, "STUDY_ROOM_ADMIN_ROOM_REQUIRED"/u);
+});

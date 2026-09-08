@@ -154,6 +154,7 @@ test('room listing returns five policy-aware slots and ignores every untrusted L
     'Library', 'Room 1', 'Room 2', 'Room 3', 'Inner Chamber',
   ]);
   assert.deepEqual(catalog.rooms.map((room) => room.active), [true, false, true, false, false]);
+  assert.deepEqual(catalog.rooms.map((room) => room.alwaysOpen), [true, true, true, true, false]);
   assert.deepEqual(catalog.rooms.map((room) => room.participantCount), [3, 0, 1, 0, 0]);
   assert.equal(catalog.rooms[0].microphoneAllowed, false);
   assert.equal(catalog.rooms[4].adminOnly, true);
@@ -167,6 +168,9 @@ test('room listing returns five policy-aware slots and ignores every untrusted L
   assert.deepEqual(roomService.calls[0], ['listRooms', [
     roomName('1'), roomName('2'), roomName('3'), roomName('4'), roomName('5'),
   ]]);
+  assert.equal(roomService.calls.some(([operation]) => operation === 'createRoom'), false);
+  const administratorCatalog = await listStudyRooms(TEST_ENV, { roomService, isAdministrator: true });
+  assert.deepEqual(administratorCatalog.rooms.map((room) => room.canCreate), [false, false, false, false, true]);
 });
 
 test('room listing fails closed on unsafe capacity or participant counts', async () => {
@@ -306,8 +310,8 @@ test('general-room credential is active-room-bound, short-lived, chat-enabled, a
   assert.equal(roomService.calls.some(([operation]) => operation === 'createRoom'), false);
 });
 
-test('Library never grants microphone publication and inactive rooms never auto-create', async () => {
-  const roomService = createRoomServiceDouble([activeRoom('1')]);
+test('first Library join opens only its trusted capped room and never grants microphone publication', async () => {
+  const roomService = createRoomServiceDouble();
   const library = await createStudyRoomJoinCredential(
     TEST_ENV, { id: TEST_USER_ID }, '1', 'Dimasalang', fixedTimeOptions(roomService),
   );
@@ -317,16 +321,71 @@ test('Library never grants microphone publication and inactive rooms never auto-
   ).verify(library.participantToken);
   assert.equal(library.microphoneAllowed, false);
   assert.deepEqual(claims.video.canPublishSources, ['camera', 'screen_share']);
+  assert.equal(claims.video.room, roomName('1'));
+  assert.notEqual(claims.video.roomAdmin, true);
+  assert.notEqual(claims.video.roomCreate, true);
+  assert.deepEqual(roomService.calls.map(([operation]) => operation), ['listRooms', 'createRoom']);
+  const created = roomService.rooms[0];
+  assert.equal(created.name, roomName('1'));
+  assert.equal(created.maxParticipants, 12);
+  assert.equal(created.emptyTimeout, 600);
+  assert.equal(created.departureTimeout, 120);
+  const metadata = JSON.parse(created.metadata);
+  assert.equal(metadata.adminOnly, false);
+  assert.equal(metadata.microphoneAllowed, false);
+  assert.equal(metadata.roomKey, '1');
+  assert.equal(created.metadata.includes(TEST_USER_ID), false);
+});
 
-  await assert.rejects(
-    createStudyRoomJoinCredential(
-      TEST_ENV, { id: TEST_USER_ID }, '2', 'Dimasalang', fixedTimeOptions(roomService),
-    ),
-    (error) => error instanceof StudyRoomError
-      && error.code === 'STUDY_ROOM_ROOM_NOT_OPEN'
-      && error.status === 409,
-  );
-  assert.equal(roomService.calls.some(([operation]) => operation === 'createRoom'), false);
+test('simultaneous member first joins converge on one public room and retain non-admin grants', async () => {
+  for (const roomKey of ['2', '3', '4']) {
+    const roomService = createRoomServiceDouble();
+    const credentials = await Promise.all([TEST_USER_ID, SECOND_USER_ID].map((id) => (
+      createStudyRoomJoinCredential(TEST_ENV, { id }, roomKey, 'Dimasalang', fixedTimeOptions(roomService))
+    )));
+    assert.equal(roomService.rooms.length, 1);
+    assert.equal(roomService.rooms[0].name, roomName(roomKey));
+    assert.equal(roomService.rooms[0].maxParticipants, 12);
+    for (const credential of credentials) {
+      const claims = await new TokenVerifier(TEST_ENV.LIVEKIT_API_KEY, TEST_ENV.LIVEKIT_API_SECRET)
+        .verify(credential.participantToken);
+      assert.equal(claims.video.room, roomName(roomKey));
+      assert.equal(claims.video.roomJoin, true);
+      assert.notEqual(claims.video.roomAdmin, true);
+      assert.notEqual(claims.video.roomCreate, true);
+      assert.equal(credential.administrator, false);
+    }
+    assert.equal(new Set(credentials.map((credential) => credential.participantIdentity)).size, 2);
+  }
+});
+
+test('first join race recovery rejects malformed lists, wrong rooms and wrong capacity', async () => {
+  for (const scenario of ['malformed-list', 'wrong-room', 'wrong-capacity', 'create-failure']) {
+    let creates = 0;
+    let lists = 0;
+    const roomService = {
+      async listRooms(names) {
+        assert.deepEqual(names, [roomName('2')]);
+        lists += 1;
+        if (scenario === 'malformed-list') return {};
+        if (lists === 1) return [];
+        if (scenario === 'wrong-room') return [activeRoom('3')];
+        if (scenario === 'wrong-capacity') return [activeRoom('2', { maxParticipants: 13 })];
+        return [];
+      },
+      async createRoom(options) {
+        creates += 1;
+        assert.equal(options.name, roomName('2'));
+        if (scenario === 'wrong-room') return activeRoom('3');
+        throw new Error('already exists or unavailable');
+      },
+    };
+    await assert.rejects(createStudyRoomJoinCredential(TEST_ENV, { id: TEST_USER_ID }, '2',
+      'Dimasalang', fixedTimeOptions(roomService)), (error) => (
+      error instanceof StudyRoomError && error.code === 'STUDY_ROOM_UNAVAILABLE' && error.status === 503
+    ), scenario);
+    assert.equal(creates, scenario === 'malformed-list' ? 0 : 1);
+  }
 });
 
 test('Inner Chamber rejects members and accepts administrators only after it is open', async () => {
@@ -348,6 +407,12 @@ test('Inner Chamber rejects members and accepts administrators only after it is 
   );
   assert.equal(credential.roomLabel, 'Inner Chamber');
   assert.equal(credential.administrator, true);
+  const absent = createRoomServiceDouble();
+  await assert.rejects(createStudyRoomJoinCredential(TEST_ENV, { id: TEST_USER_ID }, '5',
+    'Dimasalang', { ...fixedTimeOptions(absent), isAdministrator: true }), (error) => (
+    error instanceof StudyRoomError && error.code === 'STUDY_ROOM_ROOM_NOT_OPEN' && error.status === 409
+  ));
+  assert.equal(absent.calls.some(([operation]) => operation === 'createRoom'), false);
 });
 
 test('repeated joins only inspect an existing slot and never repair a wrong capacity', async () => {
@@ -434,7 +499,7 @@ test('upstream LiveKit failures expose only a stable safe error', async () => {
   const logText = JSON.stringify(logged);
   assert.equal(logText.includes('upstream leaked secret'), false);
   assert.equal(logText.includes(TEST_ENV.LIVEKIT_API_SECRET), false);
-  assert.match(logText, /join_room_lookup/u);
+  assert.match(logText, /ensure_room/u);
   assert.match(logText, /502/u);
 });
 
@@ -555,7 +620,7 @@ test('admin, founder_admin, and super_admin can create and enter all five rooms'
   }
 });
 
-test('Signed-in members can list and join open public rooms but cannot create rooms', async () => {
+test('signed-in members can list and join public slots without the privileged create endpoint', async () => {
   const listed = routeHarness({
     role: 'member',
     authorized: false,
@@ -697,11 +762,11 @@ test('join and rename are room-key aware with a slot-one compatibility bridge', 
   ]);
 });
 
-test('room-wide mute and removal require founder or super-admin while muted=false never unmutes', async () => {
+test('room-wide mute and removal allow verified administrators only while muted=false never unmutes', async () => {
   const identity = 'sr_abcdefghijklmnopqrstuvwx';
   for (const operation of ['mute', 'remove']) {
-    const admin = routeHarness({
-      role: 'admin',
+    const member = routeHarness({
+      role: 'student', authorized: false, memberAllowed: true,
       body: {
         operation,
         roomKey: '2',
@@ -711,15 +776,15 @@ test('room-wide mute and removal require founder or super-admin while muted=fals
       },
     });
     await assert.rejects(
-      admin.handlers.moderate(new Request('https://worker.test'), TEST_ENV, '', ''),
+      member.handlers.moderate(new Request('https://worker.test'), TEST_ENV, '', ''),
       (error) => error instanceof StudyRoomError
-        && error.code === 'STUDY_ROOM_MODERATION_FORBIDDEN'
+        && error.code === 'STUDY_ROOM_ADMIN_REQUIRED'
         && error.status === 403,
     );
-    assert.equal(admin.calls.some(([name]) => name === 'muteParticipant' || name === 'removeParticipant'), false);
+    assert.equal(member.calls.some(([name]) => name === 'muteParticipant' || name === 'removeParticipant'), false);
   }
 
-  for (const role of ['founder_admin', 'super_admin']) {
+  for (const role of ['admin', 'founder_admin', 'super_admin']) {
     const privileged = routeHarness({
       role,
       body: {
@@ -737,6 +802,10 @@ test('room-wide mute and removal require founder or super-admin while muted=fals
     assert.deepEqual(privileged.calls.find(([operation]) => operation === 'muteParticipant').slice(2), [
       '2', identity, 'TR_audio123',
     ]);
+    const remove = routeHarness({ role, body: { operation: 'remove', roomKey: '3', participantIdentity: identity } });
+    const removed = await remove.handlers.moderate(new Request('https://worker.test'), TEST_ENV, '', '');
+    assert.equal(removed.status, 200);
+    assert.deepEqual(remove.calls.find(([operation]) => operation === 'removeParticipant').slice(2), ['3', identity]);
   }
 });
 
@@ -852,8 +921,17 @@ test('production Worker gives all active signed-in accounts access and room-scop
           if (url.pathname === '/rest/v1/rpc/admin_authorization_context') return Response.json(
             { message: 'Administrator authorization required' }, { status: 403 });
           if (url.pathname === '/twirp/livekit.RoomService/ListRooms') return Response.json({
-            rooms: [{ name: roomName('2'), maxParticipants: 12, numParticipants: 0, creationTime: '1788000000' }],
+            rooms: [],
           });
+          if (url.pathname === '/twirp/livekit.RoomService/CreateRoom') {
+            const creation = JSON.parse(init.body);
+            assert.equal(creation.name, roomName('2'));
+            assert.equal(creation.maxParticipants, 12);
+            assert.equal(creation.emptyTimeout, 600);
+            assert.equal(creation.departureTimeout, 120);
+            assert.equal(JSON.parse(creation.metadata).adminOnly, false);
+            return Response.json({ ...creation, numParticipants: 0, creationTime: '1788000000' });
+          }
           throw new Error('Unexpected upstream: ' + url.pathname);
         };
         const response = await studyRoomWorker.fetch(new Request('https://worker.example' + pathname, {
@@ -872,6 +950,10 @@ test('production Worker gives all active signed-in accounts access and room-scop
         ]);
         assert.equal(calls.some(([p]) => p.includes('access_snapshot') || p.includes('reserve')), false);
         if (pathname.endsWith('/join')) {
+          assert.deepEqual(calls.slice(2), [
+            ['/twirp/livekit.RoomService/ListRooms', 'POST'],
+            ['/twirp/livekit.RoomService/CreateRoom', 'POST'],
+          ]);
           const claims = await new TokenVerifier(TEST_ENV.LIVEKIT_API_KEY, TEST_ENV.LIVEKIT_API_SECRET)
             .verify(body.participant_token);
           assert.equal(claims.video.room, roomName('2'));
@@ -882,6 +964,11 @@ test('production Worker gives all active signed-in accounts access and room-scop
           assert.equal(body.recording, false);
         } else {
           assert.equal(body.role, 'member'); assert.equal(body.canCreateRooms, false);
+          assert.equal(calls.some(([path]) => path.endsWith('/CreateRoom')), false);
+          if (pathname.endsWith('/rooms')) {
+            assert.deepEqual(body.rooms.map((room) => room.alwaysOpen), [true, true, true, true, false]);
+            assert.equal(body.rooms.every((room) => room.active === false), true);
+          }
         }
       }
     }

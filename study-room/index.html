@@ -8,7 +8,7 @@
   <meta name="robots" content="noindex,nofollow,noarchive">
   <title>Study Room — Due Diligence</title>
   <link rel="icon" href="../assets/brand/favicon.ico" sizes="any">
-  <link rel="stylesheet" href="../assets/study-room-live.css?v=study-room-meet-layout-20260831-5">
+  <link rel="stylesheet" href="../assets/study-room-live.css?v=study-room-always-open-20260908-1">
 </head>
 <body>
   <a class="sr-skip-link" href="#study-room-main">Skip to Study Room</a>
@@ -58,7 +58,7 @@
           </div>
           <p class="sr-room-note">
             <span class="sr-lock-dot" aria-hidden="true"></span>
-            Authorized testers can join open rooms. Due Diligence administrators can create and manage them.
+            Open to every signed-in member. No subscription required.
           </p>
         </div>
         <div class="sr-date-block" aria-label="Current date and time in the Philippines">
@@ -74,6 +74,7 @@
             <div>
               <p class="sr-panel-eyebrow">Room lobby</p>
               <h2 id="sr-room-lobby-title">Choose where to study</h2>
+              <p class="sr-lobby-entry-hint">Double-click a room to enter, or select it and choose Join. Camera and microphone start off.</p>
             </div>
             <span class="sr-room-capacity" id="sr-room-lobby-count">Checking rooms…</span>
           </div>
@@ -164,7 +165,7 @@
               <div class="sr-stage-tools">
                 <button class="sr-room-selector-chip" id="sr-room-selector" type="button"
                   data-room-action="open-selector" aria-haspopup="listbox" aria-expanded="false"
-                  aria-controls="sr-room-selector-menu">
+                  aria-controls="sr-room-selector-menu" aria-label="Choose Study Room">
                   <img src="../assets/icons/navigation/layout-grid.svg" width="18" height="18" alt="" aria-hidden="true">
                   <span><small>Room</small><strong id="sr-active-room-name">Library</strong></span>
                 </button>
@@ -215,14 +216,14 @@
               </button>
             </header>
             <nav class="sr-panel-tabs" aria-label="Study Room panel">
-              <button id="sr-panel-tab-people" type="button" data-panel-target="people" aria-selected="true">
+              <button id="sr-panel-tab-people" type="button" data-panel-target="people" aria-selected="true" aria-label="People">
                 <img src="../assets/icons/navigation/users.svg" width="18" height="18" alt="" aria-hidden="true"><span>People</span>
               </button>
-              <button id="sr-panel-tab-chat" type="button" data-panel-target="chat" aria-selected="false">
+              <button id="sr-panel-tab-chat" type="button" data-panel-target="chat" aria-selected="false" aria-label="Chat">
                 <img src="../assets/icons/community/chat-circle.svg" width="18" height="18" alt="" aria-hidden="true"><span>Chat</span>
                 <span class="sr-unread-badge" id="sr-chat-tab-badge" hidden>0</span>
               </button>
-              <button id="sr-panel-tab-settings" type="button" data-panel-target="settings" aria-selected="false">
+              <button id="sr-panel-tab-settings" type="button" data-panel-target="settings" aria-selected="false" aria-label="Settings">
                 <img src="../assets/icons/navigation/settings.svg" width="18" height="18" alt="" aria-hidden="true"><span>Settings</span>
               </button>
             </nav>
@@ -280,6 +281,27 @@
                     <strong id="sr-branded-backdrop-title">Backdrop off</strong>
                     <small id="sr-branded-backdrop-copy">Off by default for smoother video. Apply the Due Diligence backdrop whenever you want it.</small>
                   </span>
+                </div>
+                <div class="sr-background-picker">
+                  <h3>Background</h3>
+                  <img id="sr-background-preview" class="sr-background-preview"
+                    src="../assets/study-room/virtual-background-due-diligence-polished-20260908.webp"
+                    alt="Preview of your selected video background" width="320" height="180" loading="lazy">
+                  <label class="sr-field" for="sr-background-choice">
+                    <span>Camera background</span>
+                    <select id="sr-background-choice">
+                      <option value="off">Off · smoother video</option>
+                      <option value="brand">Due Diligence</option>
+                      <option value="custom" id="sr-background-custom-option" disabled>My image</option>
+                    </select>
+                  </label>
+                  <label class="sr-field" for="sr-background-file">
+                    <span>Upload background</span>
+                    <input id="sr-background-file" type="file" accept="image/png,image/jpeg,image/webp"
+                      aria-describedby="sr-background-upload-status">
+                  </label>
+                  <small id="sr-background-upload-status" role="status" aria-live="polite">PNG, JPG or WebP · Up to 5 MB. Kept on this device only.</small>
+                  <button class="sr-text-button" id="sr-background-remove" type="button" hidden>Remove my image</button>
                 </div>
                 <button class="sr-text-button" id="sr-open-devices" type="button"
                   aria-controls="sr-device-drawer" aria-expanded="false">Choose devices</button>
@@ -359,8 +381,8 @@
   <script src="../assets/phase2-config.js?v=provider-neutral-release2-20260827-1"></script>
   <script src="../assets/auth-session-storage.js?v=auth-persistence-20260812-1"></script>
   <script src="../assets/vendor/livekit-client.umd.js?v=2.22.1"></script>
-  <script src="../assets/vendor/livekit-track-processors.iife.js?v=0.7.2"></script>
-  <script src="../assets/study-room-backgrounds.js?v=study-room-background-processor-20260902-1"></script>
-  <script src="../assets/study-room-live.js?v=study-room-meet-layout-20260902-6"></script>
+  <script src="../assets/vendor/livekit-track-processors.iife.js?v=0.7.2-study-room-background-images-20260908-1"></script>
+  <script src="../assets/study-room-backgrounds.js?v=study-room-background-images-20260908-1"></script>
+  <script src="../assets/study-room-live.js?v=study-room-always-open-20260908-1"></script>
 </body>
 </html>

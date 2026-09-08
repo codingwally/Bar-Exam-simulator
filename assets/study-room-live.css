@@ -2999,7 +2999,7 @@ body.sr-in-call.sr-compact-mode #sr-toggle-compact,
 }
 
 /* Keep every call action, including Leave, visible on portrait phones. */
-@media (max-width: 760px) and (min-height: 620px) {
+@media (max-width: 760px) and (orientation: portrait) {
   body.sr-in-call:not(.sr-compact-mode) .sr-live-room:not([hidden]) {
     padding-bottom: calc(138px + env(safe-area-inset-bottom, 0px));
   }

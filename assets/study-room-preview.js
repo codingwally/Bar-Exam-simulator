@@ -8,6 +8,7 @@
 
   let access = null;
   let session = null;
+  let sessionFromExplicitEvent = false;
   let restoreFocusTo = null;
   let initialized = false;
   let authSettled = false;
@@ -69,9 +70,10 @@
 
     const busy = accessIsResolving();
     document.querySelectorAll('[data-study-room-trigger]').forEach((trigger) => {
-      trigger.disabled = busy;
+      // A user gesture can always reach the separately authenticated room page.
+      trigger.disabled = false;
       trigger.setAttribute('aria-busy', String(busy));
-      trigger.setAttribute('aria-disabled', String(busy));
+      trigger.setAttribute('aria-disabled', 'false');
     });
     const mobileTrigger = document.getElementById('spa-study-room');
     if (mobileTrigger) mobileTrigger.hidden = !signedIn();
@@ -83,7 +85,7 @@
     const note = document.getElementById('dd-study-room-subscribe-note');
     if (!subscribe || !note) return;
     const liveAccess = hasLiveRoomAccess();
-    subscribe.disabled = accessIsResolving();
+    subscribe.disabled = false;
     subscribe.classList.toggle('is-subscribed', false);
     subscribe.querySelector('span').textContent = liveAccess ? 'Open Study Room' : 'Sign in to join';
     note.textContent = 'Available to all signed-in members, free and paid';
@@ -157,8 +159,11 @@
   }
 
   function open(trigger = null) {
-    session = runtimeSession();
-    if (accessIsResolving()) return false;
+    const latestSession = runtimeSession();
+    if (latestSession || !sessionFromExplicitEvent) session = latestSession;
+    // Do not wait for Home Auth initialization inside a popup user gesture.
+    // The dedicated page still verifies its own normal session and server access.
+    if (accessIsResolving()) return openLiveRoom();
     access = accessWithVerifiedRole() || access;
     if (hasLiveRoomAccess()) {
       return openLiveRoom();
@@ -180,7 +185,7 @@
   }
 
   function openEntry() {
-    if (signedIn(runtimeSession())) return open();
+    if (accessIsResolving() || signedIn(runtimeSession()) || (sessionFromExplicitEvent && signedIn())) return open();
     close({ restoreFocus: false });
     if (typeof global.DueDiligencePhase2?.openSignIn === 'function') {
       global.DueDiligencePhase2.openSignIn({ allowDismiss: true });
@@ -286,7 +291,8 @@
     const nextAccess = hasNestedAccess
       ? detail.access
       : (detail && typeof detail === 'object' ? detail : runtimeAccess());
-    authSettled = true;
+    // Entitlement loading alone cannot establish that the browser is signed out.
+    if (signedIn(runtimeSession() || session)) authSettled = true;
     accessResolutionFailed = false;
     syncTriggerVisibility({ access: nextAccess || null });
   }
@@ -305,6 +311,7 @@
       && (!signedIn(session) || (previousUserId && nextUserId && previousUserId !== nextUserId));
 
     accessResolution += 1;
+    sessionFromExplicitEvent = hasExplicitSession && signedIn(nextSession);
     authSettled = true;
     accessResolutionFailed = false;
     syncTriggerVisibility({

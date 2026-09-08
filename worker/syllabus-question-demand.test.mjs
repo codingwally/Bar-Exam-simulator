@@ -221,3 +221,138 @@ test('question-demand fix preserves Gemini and the approved rubric constants', (
   assert.equal(inferQuestionType(general), 'explanation');
   assert.equal(applicationRequiredForQuestion(general), false);
 });
+
+// Regression evidence uses the existing approved source, with no question IDs,
+// personal names, benchmark thresholds, or new legal propositions in the guard.
+const { readFileSync } = await import('node:fs');
+const { questionFromBankRow } = await import('./examiner-core.mjs');
+const impossibleCrimeRows = JSON.parse(readFileSync(new URL('../content/question-bank/website-upload.json', import.meta.url), 'utf8')).records
+  .filter(row => /impossible crime/i.test(row['Essay Question']) && /electronic wallet/i.test(row['Essay Question']));
+assert.equal(impossibleCrimeRows.length, 1, 'Use exactly one existing canonical source.');
+const impossibleCrimeContext = questionFromBankRow(impossibleCrimeRows[0]);
+const intentOnlyProposition = 'Therefore, bad intent alone makes the accused liable for an impossible crime.';
+const intentOnlyResponse = [
+  'Answer: Yes. The accused is liable for an impossible crime.',
+  'Legal Basis: A person who acts with bad intent is criminally liable even when no property is actually taken.',
+  'Application: The accused wanted to steal money and secretly opened the electronic wallet, showing bad intent.',
+  `Conclusion: ${intentOnlyProposition}`,
+].join('\n\n');
+const centralRuleFinding = 'The legal basis is overly simplistic and relies solely on bad intent, without the required elements.';
+
+function incompleteRuleAssessment(overrides = {}) {
+  return assessment({
+    score: 3,
+    rationale: 'The response reaches the expected outcome but its stated governing rule is incomplete.',
+    legalExplanation: impossibleCrimeContext.legalBasis,
+    errors: [centralRuleFinding],
+    rubricBreakdown: {
+      responsiveness: 4, legalBasis: 2.5, application: 2.5, conclusion: 4,
+      indicativeWeightedScore: 3, questionType: 'problem', applicationRequired: true,
+    },
+    ...overrides,
+  });
+}
+
+test('canonical impossible-crime context, affirmative intent-only claim, and central provider finding retain the existing 1.5 ceiling', () => {
+  const provider = incompleteRuleAssessment();
+  const before = structuredClone(provider);
+  const result = applyDeterministicScoreCap(provider, intentOnlyResponse, impossibleCrimeContext);
+  assert.equal(result.score, 1.5);
+  assert.equal(result.appliedScoreCeiling?.code, 'materially_wrong_rule');
+  assert.equal(result.rubricBreakdown.legalBasis, 2.5);
+  assert.equal(result.rubricBreakdown.application, 2.5);
+  assert.deepEqual(provider, before, 'Evidence reconciliation must not alter provider components.');
+});
+
+for (const proposition of [
+  'Therefore, bad intent alone does not make the accused liable for an impossible crime.',
+  'Therefore, it is not true that bad intent alone makes the accused liable for an impossible crime.',
+  'Therefore, the assertion that bad intent alone makes the accused liable for an impossible crime is false.',
+  'Therefore, I reject the assertion that bad intent alone makes the accused liable for an impossible crime.',
+  'The prosecutor argued, "bad intent alone makes the accused liable for an impossible crime." That proposition is rejected.',
+  "The disputed theory was 'bad intent alone makes the accused liable for an impossible crime.' That theory is rejected.",
+]) {
+  test(`a negated, rejected, or quoted intent-only proposition cannot trigger the independent fallback: ${proposition}`, () => {
+    const answer = intentOnlyResponse.replace(intentOnlyProposition, proposition);
+    const result = applyDeterministicScoreCap(incompleteRuleAssessment(), answer, impossibleCrimeContext);
+    assert.equal(result.score, 3);
+    assert.notEqual(result.appliedScoreCeiling?.code, 'materially_wrong_rule');
+  });
+}
+
+test('neutral provider findings do not extend the existing component thresholds', () => {
+  for (const [legalBasis, application] of [[2.5, 2.5], [2, 3]]) {
+    const provider = incompleteRuleAssessment({ errors: [], rationale: 'The response addresses the requested question.' });
+    provider.rubricBreakdown.legalBasis = legalBasis;
+    provider.rubricBreakdown.application = application;
+    const result = applyDeterministicScoreCap(provider, intentOnlyResponse, impossibleCrimeContext);
+    assert.equal(result.score, 3);
+    assert.notEqual(result.appliedScoreCeiling?.code, 'materially_wrong_rule');
+  }
+});
+
+test('provider finding and intent-only claim cannot extend the numeric safeguard without canonical impossible-crime subject matter', () => {
+  const context = { ...impossibleCrimeContext, question: general.question,
+    suggestedAnswer: general.suggestedAnswer, legalBasis: general.legalBasis };
+  const result = applyDeterministicScoreCap(incompleteRuleAssessment(), intentOnlyResponse, context);
+  assert.notEqual(result.appliedScoreCeiling?.code, 'materially_wrong_rule');
+  assert.ok(result.score > 1.5, 'An unrelated canonical context must not receive the independent 1.5 ceiling.');
+});
+
+test('the independent ceiling never raises an already lower provider score', () => {
+  for (const score of [0.5, 1, 1.5]) {
+    const result = applyDeterministicScoreCap(incompleteRuleAssessment({ score }), intentOnlyResponse, impossibleCrimeContext);
+    assert.equal(result.score, score);
+    assert.equal(result.appliedScoreCeiling?.code, 'materially_wrong_rule');
+    assert.equal(result.appliedScoreCeiling?.changedScore, false);
+  }
+});
+
+for (const finding of [
+  'The legal basis is not overly simplistic and does not rely solely on bad intent.',
+  'The governing rule is not legally insufficient.',
+  'The legal reasoning is not based solely on bad intent.',
+  "The legal basis isn't overly simplistic.",
+  'The legal basis isn’t overly simplistic.',
+  "The governing rule doesn't rely solely on bad intent.",
+  'The governing rule doesn’t rely solely on bad intent.',
+  'The legal basis is not overly broad.',
+  'The legal basis is not excessively broad.',
+  'The governing rule is not reduced to bad intent alone.',
+  'The legal basis never misstates the governing law.',
+  'The governing rule does not rest solely on bad intent.',
+  'The legal basis does not rely on a vague notion of liability.',
+  'The examiner reported, "The legal basis is overly simplistic."',
+  'The earlier evaluator claimed that the legal basis is overly simplistic.',
+  'The criticism that the governing rule is legally insufficient is rejected.',
+]) {
+  test(`negated provider insufficiency is not independent corroboration: ${finding}`, () => {
+    const result = applyDeterministicScoreCap(incompleteRuleAssessment({
+      rationale: finding, legalExplanation: impossibleCrimeContext.legalBasis, errors: [],
+    }), intentOnlyResponse, impossibleCrimeContext);
+    assert.equal(result.score, 3);
+    assert.notEqual(result.appliedScoreCeiling?.code, 'materially_wrong_rule');
+  });
+}
+
+for (const finding of [
+  'The legal basis is not overly broad, but the governing rule is overly simplistic and relies solely on bad intent.',
+  'The legal basis is not vague; however, the governing rule relies solely on bad intent.',
+  'The first governing rule is not legally insufficient. The second governing rule is overly simplistic and relies solely on bad intent.',
+]) {
+  test(`an independent affirmative critique after contrast still corroborates the intent-only failure: ${finding}`, () => {
+    const result = applyDeterministicScoreCap(incompleteRuleAssessment({
+      rationale: finding, legalExplanation: impossibleCrimeContext.legalBasis, errors: [],
+    }), intentOnlyResponse, impossibleCrimeContext);
+    assert.equal(result.score, 1.5);
+    assert.equal(result.appliedScoreCeiling?.code, 'materially_wrong_rule');
+  });
+}
+
+test('a separate affirmative provider error is not masked by a negated rationale', () => {
+  const result = applyDeterministicScoreCap(incompleteRuleAssessment({
+    rationale: 'The legal basis is not overly broad.', errors: [centralRuleFinding],
+  }), intentOnlyResponse, impossibleCrimeContext);
+  assert.equal(result.score, 1.5);
+  assert.equal(result.appliedScoreCeiling?.code, 'materially_wrong_rule');
+});

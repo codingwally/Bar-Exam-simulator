@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { test } from 'node:test';
 import { isDeepStrictEqual } from 'node:util';
@@ -348,6 +348,11 @@ test('public probes exercise real Syllabus catalog and Study Room signed-out bou
 });
 
 test('workflow ordering retains exact proof before the marker and prevents unrelated mutations', () => {
+  for (const line of workflow.split('\n').filter(line => /^\s+node (?:--test )?(?:worker|scripts)\//u.test(line))) {
+    for (const filename of line.trim().split(/\s+/u).filter(token => /^(?:worker|scripts)\/.*\.mjs$/u.test(token))) {
+      assert.ok(existsSync(new URL(`../${filename}`, import.meta.url)), `Workflow references a missing script: ${filename}`);
+    }
+  }
   const index = token => { const value = workflow.indexOf(token); assert.ok(value >= 0, token); return value; };
   assert.ok(index('node scripts/verify-syllabus-coaching-staging.mjs --execute-staging') < index('id: staging_evidence'));
   assert.ok(index('id: staging_evidence') < index('// BEGIN staging-marker'));

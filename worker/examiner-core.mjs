@@ -823,6 +823,26 @@ function affirmativelyReliesOnIntentAlone(studentAnswer) {
   });
 }
 
+function hasCentralRuleInsufficiencyFinding(finding) {
+  return /(?:legal\s+basis|governing\s+rule|doctrine|legal\s+reasoning)[\s\S]{0,140}(?:overly simplistic|(?:excessively|extremely|overly) broad|legally insufficient|faulty|vague|reduced to|misstat(?:ed|es)|rests? (?:only|solely)|rel(?:y|ies|ying) (?:only|solely|merely)|based (?:only|solely|purely))/i.test(finding)
+    || /(?:rel(?:y|ies|ying)|rests?) on[\s\S]{0,100}(?:alone|only|solely|merely)[\s\S]{0,100}(?:legal\s+basis|governing\s+rule|doctrine|legal\s+reasoning)/i.test(finding)
+    || /(?:rel(?:y|ies|ying) on (?:a )?vague (?:notion|rule|principle)|no correct legal basis|faulty intent-only reasoning|based liability solely on ['"]?bad intent)/i.test(finding);
+}
+
+function hasAffirmativeCentralRuleInsufficiencyFinding(finding) {
+  // Independent corroboration is intentionally conservative. Do not infer a
+  // provider's adopted criticism from a negated, quoted, or reported clause.
+  // Keep contrasts separate so a positive criticism is not lost to a different
+  // rule's negation. The existing low-component safeguard remains unchanged.
+  return String(finding || '').replace(/[’]/g, "'")
+    .replace(/["“`][^"”`]*["”`]/g, ' ')
+    .replace(/(^|[\s,(])['‘][^']*'/g, '$1 ')
+    .split(/[.!?;\n]|\b(?:but|however|yet)\b/i)
+    .some(clause => !/\b(?:not|no|neither|nor|never|cannot)\b|\b[a-z]+n't\b/i.test(clause)
+      && !/\b(?:reject(?:s|ed)?|refut(?:e|es|ed)|den(?:y|ies|ied)|disagree(?:s|d)?|argued|claimed|contended|asserted|alleged|said)\b/i.test(clause)
+      && hasCentralRuleInsufficiencyFinding(clause));
+}
+
 export function applyDeterministicScoreCap(assessment, studentAnswer, context = {}) {
   const analysis = analyzeStudentAnswer(studentAnswer, context);
   const resolvedAssessment = assessment?.rubricBreakdown
@@ -904,13 +924,19 @@ export function applyDeterministicScoreCap(assessment, studentAnswer, context = 
     cleanText(assessment?.legalExplanation, 2_000),
     ...examinerErrors,
   ].some(hasAffirmativeWrongRuleFinding);
-  const centralRuleInsufficiencyFinding = /(?:legal\s+basis|governing\s+rule|doctrine|legal\s+reasoning)[\s\S]{0,140}(?:overly simplistic|(?:excessively|extremely|overly) broad|legally insufficient|faulty|vague|reduced to|misstat(?:ed|es)|rests? (?:only|solely)|rel(?:y|ies|ying) (?:only|solely|merely)|based (?:only|solely|purely))/i.test(examinerFindings)
-    || /(?:rel(?:y|ies|ying)|rests?) on[\s\S]{0,100}(?:alone|only|solely|merely)[\s\S]{0,100}(?:legal\s+basis|governing\s+rule|doctrine|legal\s+reasoning)/i.test(examinerFindings)
-    || /(?:rel(?:y|ies|ying) on (?:a )?vague (?:notion|rule|principle)|no correct legal basis|faulty intent-only reasoning|based liability solely on ['"]?bad intent)/i.test(examinerFindings);
+  const centralRuleInsufficiencyFinding = hasCentralRuleInsufficiencyFinding(examinerFindings);
   const rubricShowsCentralRuleFailure = Number(assessment?.rubricBreakdown?.legalBasis) <= 2
     && Number(assessment?.rubricBreakdown?.application) <= 2.5;
+  // A provider component score must not override an adopted intent-only rule
+  // that its own feedback identifies as insufficient for an impossible crime.
+  // Require all three signals; ordinary omissions and neutral findings retain
+  // the existing component thresholds and quoted/rejected claims stay exempt.
+  const corroboratedIntentOnlyRuleFailure = /\bimpossible crimes?\b/i.test(`${cleanText(context?.question, 20_000)} ${referenceAnswer}`)
+    && [assessment?.rationale, ...examinerErrors].some(hasAffirmativeCentralRuleInsufficiencyFinding)
+    && affirmativelyReliesOnIntentAlone(normalizedStudentAnswer);
   const materiallyWrongRuleFinding = assessment?.authorityStatus === 'materially_incorrect_or_irrelevant'
     || explicitWrongRuleFinding
+    || corroboratedIntentOnlyRuleFailure
     || (rubricShowsCentralRuleFailure && (
       centralRuleInsufficiencyFinding
       || affirmativelyReliesOnIntentAlone(normalizedStudentAnswer)

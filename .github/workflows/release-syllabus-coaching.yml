@@ -173,7 +173,7 @@ jobs:
       - name: Verify the focused release contracts
         run: |
           set -euo pipefail
-          node --test worker/examiner-core.test.mjs worker/syllabus-question-demand.test.mjs worker/subject-matter-review.test.mjs
+          node --test worker/index.test.mjs worker/rubric-v2.test.mjs worker/syllabus-question-demand.test.mjs worker/subject-matter-review.test.mjs
           node scripts/test-syllabus-review-reveal-contract.mjs
           node scripts/test-syllabus-coaching-layout.mjs
           node scripts/test-syllabus-coaching-staging.mjs

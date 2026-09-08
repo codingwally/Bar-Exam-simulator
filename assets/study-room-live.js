@@ -20,7 +20,8 @@
   const MAX_NICKNAME_LENGTH = 32;
   const MAX_ROOMS = 5;
   const ROOM_REFRESH_INTERVAL_MS = 15_000;
-  const MEDIA_RELIABILITY_VERSION = 'study-room-meet-layout-20260902-6';
+  const MEDIA_RELIABILITY_VERSION = 'study-room-always-open-20260908-1';
+  const DEFAULT_BACKGROUND_IMAGE = '/assets/study-room/virtual-background-due-diligence-polished-20260908.webp';
   const LAYOUT_STORAGE_KEY = 'duediligence.study-room.layout.v1';
   const MICROPHONE_STATS_INTERVAL_MS = 400;
   const MICROPHONE_STATS_ATTEMPTS = 10;
@@ -83,6 +84,11 @@
     userApprovedRawCameraTracks: new Set(),
     rawCameraPublishAuthorized: false,
     backdropEnabled: false,
+    backgroundChoice: 'brand',
+    customBackgroundFile: null,
+    customBackgroundPath: '',
+    customBackgroundController: null,
+    customBackgroundPreview: '',
     recovering: false,
     previewStream: null,
     audioContext: null,
@@ -95,6 +101,7 @@
     blockedParticipants: new Set(),
     localMutedParticipants: new Set(),
     participantVolumes: new Map(),
+    pendingModeration: new Set(),
     activeSpeakers: new Set(),
     connectionQualities: new Map(),
     pinnedParticipantIdentity: '',
@@ -246,6 +253,9 @@
     if (error?.code === 'MEDIA_TRACK_NOT_LIVE') {
       return `The ${label} did not produce a live signal. Choose another device and try again.`;
     }
+    if (kind === 'camera' && error?.code === 'MEDIA_TRACK_STOP_UNCONFIRMED') {
+      return 'The camera could not be confirmed off. Leave the room to stop sharing video.';
+    }
     if (isPermissionError(error)) {
       return `${label === 'microphone' ? 'Microphone' : 'Camera'} access is blocked. Allow it for duediligence.ph in your browser site permissions, then try again.`;
     }
@@ -318,7 +328,7 @@
       const error = new Error(
         payload?.error?.message
         || (response.status === 403
-          ? 'The live Study Room is currently limited to authorized testers.'
+          ? 'This Study Room is not available to your account.'
           : 'The Study Room is temporarily unavailable.'),
       );
       error.status = response.status;
@@ -334,11 +344,13 @@
     const copy = byId('sr-access-copy');
     const retry = byId('sr-access-retry');
     const forbidden = Number(error?.status) === 401 || Number(error?.status) === 403;
-    title.textContent = forbidden ? 'The live room is still private' : 'The Study Room needs a moment';
+    title.textContent = Number(error?.status) === 401
+      ? 'Sign in to join Study Room'
+      : forbidden ? 'Study Room access unavailable' : 'The Study Room needs a moment';
     copy.textContent = friendlyError(
       error,
       forbidden
-        ? 'The preview remains available on the Due Diligence home page.'
+        ? 'Sign in on Due Diligence to join. No subscription is required.'
         : 'Your camera and microphone stayed off. Check your connection and try again.',
     );
     if (error?.recovery && error.recovery !== copy.textContent) {
@@ -380,6 +392,7 @@
         canCreate: candidate?.canCreate === true,
         canJoin: candidate?.canJoin !== false,
         active: candidate?.active === true,
+        alwaysOpen: candidate?.alwaysOpen === true && candidate?.adminOnly !== true,
         participantCount: Number.isSafeInteger(participantCount) && participantCount >= 0
           ? Math.min(participantCount, 12)
           : 0,
@@ -397,9 +410,10 @@
         kind: roomKey === '1' ? 'library' : roomKey === '5' ? 'inner-chamber' : 'general',
         microphoneAllowed: roomKey !== '1',
         adminOnly: roomKey === '5',
-        canCreate: state.isAdministrator,
+        canCreate: roomKey === '5' && state.isAdministrator,
         canJoin: roomKey !== '5' || state.isAdministrator,
         active: false,
+        alwaysOpen: false,
         participantCount: 0,
         capacity: 12,
         focusStartedAt: null,
@@ -412,7 +426,7 @@
   }
 
   function activeRoom(roomKey) {
-    return state.rooms.find((room) => room.roomKey === String(roomKey) && room.active) || null;
+    return state.rooms.find((room) => room.roomKey === String(roomKey) && room.canJoin !== false && (room.active || room.alwaysOpen)) || null;
   }
 
   function syncJoinButton() {
@@ -420,11 +434,12 @@
     if (!button || state.joining) return;
     const room = selectedRoom();
     const restricted = room?.canJoin === false;
-    const canCreateAndJoin = Boolean(room && !room.active && state.isAdministrator && room.canCreate !== false);
-    button.disabled = !room || restricted || (!room.active && !canCreateAndJoin);
+    const available = Boolean(room && (room.active || room.alwaysOpen));
+    const canCreateAndJoin = Boolean(room && !available && state.isAdministrator && room.canCreate === true);
+    button.disabled = !room || restricted || (!available && !canCreateAndJoin);
     button.textContent = restricted
       ? 'Inner Chamber · Admin only'
-      : room?.active
+      : available
       ? `Join ${roomPresentation(room.roomKey).name}`
       : canCreateAndJoin
       ? `Create and join ${roomPresentation(room.roomKey).name}`
@@ -438,14 +453,21 @@
     if (!room || room.canJoin === false) return false;
     state.selectedRoomKey = room.roomKey;
     if (room.microphoneAllowed === false) setJoinOption('microphone', false);
-    renderRoomCatalog();
+    // Keep the actual button alive between clicks so native double-click and
+    // keyboard focus survive selecting a different room.
+    byId('sr-room-card-grid')?.querySelectorAll('[data-room-key]').forEach((button) => {
+      const selected = button.dataset.roomKey === state.selectedRoomKey;
+      button.classList.toggle('is-selected', selected);
+      button.setAttribute('aria-pressed', String(selected));
+    });
+    syncJoinButton();
     syncSelectedRoomPolicy();
     return true;
   }
 
   function roomCountCopy(room) {
     if (room.canJoin === false) return 'Administrators only';
-    if (!room.active) return state.isAdministrator ? 'Ready to create' : 'Waiting for an administrator';
+    if (!room.active && !room.alwaysOpen) return 'Private room';
     if (room.microphoneAllowed === false) {
       return room.participantCount === 0
         ? 'Silent video room · Ready'
@@ -457,24 +479,25 @@
 
   function createRoomCard(room, firstInactiveRoomKey) {
     const presentation = roomPresentation(room.roomKey);
+    const available = room.active || room.alwaysOpen;
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = `sr-room-card${room.active ? '' : ' sr-room-card-closed'}${room.canJoin === false ? ' is-restricted' : ''}${state.selectedRoomKey === room.roomKey ? ' is-selected' : ''}`;
-    button.id = room.active ? `sr-room-card-${room.roomKey}` : (room.roomKey === firstInactiveRoomKey ? 'sr-create-room' : `sr-create-room-${room.roomKey}`);
+    button.className = `sr-room-card${available ? '' : ' sr-room-card-closed'}${room.canJoin === false ? ' is-restricted' : ''}${state.selectedRoomKey === room.roomKey ? ' is-selected' : ''}`;
+    button.id = available ? `sr-room-card-${room.roomKey}` : (room.roomKey === firstInactiveRoomKey ? 'sr-create-room' : `sr-create-room-${room.roomKey}`);
     button.dataset.roomKey = room.roomKey;
     button.dataset.roomAction = 'select';
-    button.dataset.roomState = room.active ? 'available' : room.canJoin === false ? 'restricted' : 'closed';
+    button.dataset.roomState = available ? 'available' : room.canJoin === false ? 'restricted' : 'closed';
     button.disabled = state.roomCatalogBusy
       || state.roomMutationBusy
       || state.joining
       || state.switchingRoom
       || room.canJoin === false;
-    button.setAttribute('aria-label', room.active
+    button.setAttribute('aria-label', available
       ? `${presentation.name}, ${roomCountCopy(room)}`
       : room.canJoin === false ? `${presentation.name}, administrators only` : `${presentation.name}, ${roomCountCopy(room)}`);
     button.setAttribute('aria-pressed', String(state.selectedRoomKey === room.roomKey));
 
-    if (room.active) {
+    if (available) {
       const cover = document.createElement('img');
       cover.className = 'sr-room-card-cover';
       cover.src = presentation.cover;
@@ -499,7 +522,7 @@
     const title = document.createElement('strong');
     title.textContent = presentation.name;
     const status = document.createElement('small');
-    if (room.active) {
+    if (available) {
       const peopleIcon = document.createElement('img');
       peopleIcon.src = '../assets/icons/navigation/users.svg';
       peopleIcon.width = 15;
@@ -513,17 +536,23 @@
     status.append(statusText);
     copy.append(title, status);
     button.append(copy);
-    button.addEventListener('click', () => {
-      if (room.active) selectRoom(room.roomKey);
+    const enter = () => {
+      if (button.disabled || state.joining || state.roomMutationBusy) return;
+      if (selectRoom(room.roomKey)) void joinRoom();
+    };
+    button.addEventListener('click', (event) => {
+      if (button.disabled) return;
+      if (event.detail === 0) enter();
       else selectRoom(room.roomKey);
     });
+    button.addEventListener('dblclick', enter);
     return button;
   }
 
   function renderRoomSelector() {
     const menu = byId('sr-room-selector-menu');
     if (!menu) return;
-    const activeRooms = state.rooms.filter((room) => room.active && room.canJoin !== false);
+    const activeRooms = state.rooms.filter((room) => (room.active || room.alwaysOpen) && room.canJoin !== false);
     menu.replaceChildren(...activeRooms.map((room) => {
       const option = document.createElement('button');
       option.type = 'button';
@@ -541,11 +570,11 @@
 
   function renderRoomCatalog() {
     const grid = byId('sr-room-card-grid');
-    const firstInactiveRoomKey = state.rooms.find((room) => !room.active && room.canJoin !== false)?.roomKey || '';
+    const firstInactiveRoomKey = state.rooms.find((room) => !room.active && !room.alwaysOpen && room.canJoin !== false)?.roomKey || '';
     if (grid) grid.replaceChildren(...state.rooms.map((room) => createRoomCard(room, firstInactiveRoomKey)));
-    const activeCount = state.rooms.filter((room) => room.active).length;
+    const activeCount = state.rooms.filter((room) => (room.active || room.alwaysOpen) && room.canJoin !== false).length;
     const count = byId('sr-room-lobby-count');
-    if (count) count.textContent = `${activeCount} of ${MAX_ROOMS} rooms open`;
+    if (count) count.textContent = `${activeCount} rooms available`;
     const selected = selectedRoom();
     const activeName = byId('sr-active-room-name');
     if (activeName) activeName.textContent = roomPresentation(state.currentRoomKey || selected?.roomKey || '1').name;
@@ -560,6 +589,7 @@
       rooms: Array.from({ length: MAX_ROOMS }, (_unused, index) => ({
         roomKey: String(index + 1),
         active: index < activeCount,
+        alwaysOpen: index !== 4,
         participantCount: index === 0 ? 4 : index < activeCount ? index : 0,
         label: roomPresentation(String(index + 1)).name,
         kind: index === 0 ? 'library' : index === 4 ? 'inner-chamber' : 'general',
@@ -585,7 +615,7 @@
         state.rooms = normalizeRoomCatalog(payload);
         const selected = selectedRoom();
         if (!selected || selected.canJoin === false) {
-          state.selectedRoomKey = state.rooms.find((room) => room.active && room.canJoin !== false)?.roomKey
+          state.selectedRoomKey = state.rooms.find((room) => (room.active || room.alwaysOpen) && room.canJoin !== false)?.roomKey
             || (state.isAdministrator ? state.rooms.find((room) => room.canJoin !== false)?.roomKey : '')
             || '';
         }
@@ -1516,6 +1546,49 @@
       : `${displayName(participant)} is visible and audible again.`);
   }
 
+  async function moderateParticipant(participant, operation) {
+    const room = state.room;
+    const roomKey = state.currentRoomKey;
+    const session = state.session;
+    if (!state.isAdministrator || !room || participant.isLocal || !['mute', 'remove'].includes(operation)) return;
+    const identity = participant.identity;
+    const pendingKey = `${roomKey}:${identity}`;
+    if (state.pendingModeration.has(pendingKey)) return;
+    const isCurrent = () => state.room === room && state.session === session
+      && state.currentRoomKey === roomKey && state.isAdministrator
+      && room.remoteParticipants?.get(identity) === participant;
+    if (!isCurrent()) return;
+    if (LOCAL_TEST_MODE) {
+      toast('Admin moderation is available in a connected Study Room.');
+      return;
+    }
+    if (operation === 'remove' && !global.confirm(`Remove ${displayName(participant)} from this room? They can rejoin; this is not a permanent block.`)) return;
+    if (!isCurrent()) return;
+    const microphone = publicationFor(participant, LiveKit?.Track?.Source?.Microphone || 'microphone');
+    if (operation === 'mute' && (!microphone?.trackSid || microphone.isMuted)) return;
+    const body = { operation, roomKey, participantIdentity: identity };
+    if (operation === 'mute') body.trackSid = microphone.trackSid;
+    state.pendingModeration.add(pendingKey);
+    renderPeople();
+    try {
+      const payload = await workerRequest('/study-room/moderate', body);
+      const result = payload?.result;
+      if (result?.action !== (operation === 'mute' ? 'muted' : 'removed')
+        || result.roomKey !== roomKey || result.participantIdentity !== identity
+        || (operation === 'mute' && result.trackSid !== body.trackSid)) throw new Error('Unconfirmed moderation result');
+      if (state.room === room && state.session === session && state.currentRoomKey === roomKey) {
+        toast(operation === 'mute' ? 'Microphone muted for the room.' : 'Removed from the room. They can rejoin.');
+      }
+    } catch {
+      if (state.room === room && state.session === session && state.currentRoomKey === roomKey) {
+        toast(`Could not confirm ${operation === 'mute' ? 'the microphone mute' : 'removal'}. Check the participant before retrying.`);
+      }
+    } finally {
+      state.pendingModeration.delete(pendingKey);
+      if (state.room === room) renderPeople();
+    }
+  }
+
   function createPersonRow(participant) {
     const row = document.createElement('div');
     row.className = 'sr-person-row';
@@ -1613,6 +1686,26 @@
       });
       volume.append(volumeLabel, slider, volumeValue);
       row.append(volume);
+      if (state.isAdministrator) {
+        const moderation = document.createElement('div');
+        moderation.className = 'sr-admin-person-actions';
+        const pending = state.pendingModeration.has(`${state.currentRoomKey}:${participant.identity}`);
+        const microphone = publicationFor(participant, LiveKit?.Track?.Source?.Microphone || 'microphone');
+        const muteForRoom = document.createElement('button');
+        muteForRoom.type = 'button';
+        muteForRoom.textContent = 'Mute for room';
+        muteForRoom.setAttribute('aria-label', `Mute ${displayName(participant)} for the room`);
+        muteForRoom.disabled = pending || !microphone?.trackSid || microphone.isMuted === true;
+        muteForRoom.addEventListener('click', () => moderateParticipant(participant, 'mute'));
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.textContent = 'Remove';
+        remove.setAttribute('aria-label', `Remove ${displayName(participant)} from room`);
+        remove.disabled = pending;
+        remove.addEventListener('click', () => moderateParticipant(participant, 'remove'));
+        moderation.append(muteForRoom, remove);
+        row.append(moderation);
+      }
     }
     return row;
   }
@@ -2547,6 +2640,14 @@
     if (typeof originalPublishTrack !== 'function') return true;
     const originalDescriptor = Object.getOwnPropertyDescriptor(participant, 'publishTrack');
     const guardedPublishTrack = function guardedStudyRoomPublishTrack(track, publishOptions) {
+      if (isCameraPublishAttempt(track, publishOptions)) {
+        const existingTrack = localSourcePublication(participant, 'camera')?.track;
+        if (existingTrack && existingTrack !== track) {
+          const error = new Error('The previous camera could not close. Leave and rejoin before changing backgrounds.');
+          error.code = 'STUDY_ROOM_BACKGROUND_CAMERA_BUSY';
+          throw error;
+        }
+      }
       if (isCameraPublishAttempt(track, publishOptions) && !isMandatoryProcessedCameraTrack(track)) {
         if (state.backdropEnabled !== false || state.rawCameraPublishAuthorized !== true) {
           throw mandatoryCameraError();
@@ -2645,22 +2746,36 @@
       backdropButton.setAttribute('aria-pressed', String(state.backdropEnabled));
       backdropButton.setAttribute(
         'aria-label',
-        state.backdropEnabled ? 'Remove the Due Diligence backdrop' : 'Apply the Due Diligence backdrop',
+        state.backdropEnabled ? 'Turn background off' : 'Apply selected background',
       );
       backdropButton.disabled = state.cameraOperationBusy || effectsUnavailable;
       backdropButton.title = effectsUnavailable
-        ? 'Background effects are unavailable; your camera remains available.'
-        : state.backdropEnabled ? 'Remove backdrop' : 'Apply backdrop';
+        ? 'Choose Background off to use your camera without effects.'
+        : state.backdropEnabled ? 'Turn background off' : 'Apply selected background';
       const label = backdropButton.querySelector('span');
       if (label) label.textContent = state.backdropEnabled ? 'Remove backdrop' : 'Apply backdrop';
     }
+    const choice = byId('sr-background-choice');
+    if (choice) {
+      choice.value = state.backdropEnabled ? state.backgroundChoice : 'off';
+      choice.disabled = state.cameraOperationBusy;
+    }
+    const upload = byId('sr-background-file');
+    if (upload) upload.disabled = state.cameraOperationBusy || effectsUnavailable;
+    const remove = byId('sr-background-remove');
+    if (remove) { remove.hidden = !state.customBackgroundFile; remove.disabled = state.cameraOperationBusy; }
+    const customOption = byId('sr-background-custom-option');
+    if (customOption) customOption.disabled = !state.customBackgroundFile;
+    const preview = byId('sr-background-preview');
+    if (preview) preview.src = state.backgroundChoice === 'custom' && state.customBackgroundPreview
+      ? state.customBackgroundPreview : DEFAULT_BACKGROUND_IMAGE;
 
     if (!state.backdropEnabled) {
       if (node) node.dataset.backdropState = 'off';
       if (title) title.textContent = 'Backdrop off';
       if (copy) copy.textContent = effectsUnavailable
         ? 'Background effects are unavailable in this browser. Your camera remains available without them.'
-        : 'Your real background is visible. Turn the Due Diligence backdrop on whenever you want it.';
+        : 'No background processing. Your real background is visible only when your camera is on.';
       for (const id of ['sr-join-camera', 'sr-toggle-camera']) {
         const button = byId(id);
         if (!button) continue;
@@ -2673,21 +2788,21 @@
     if (node) node.dataset.backdropState = status;
     if (title) {
       title.textContent = status === 'enabled'
-        ? 'Due Diligence backdrop on'
+        ? (state.backgroundChoice === 'custom' ? 'Custom background on' : 'Due Diligence background on')
         : status === 'unavailable'
         ? 'Backdrop unavailable'
-        : 'Due Diligence backdrop';
+        : (state.backgroundChoice === 'custom' ? 'Custom background' : 'Due Diligence backdrop');
     }
     if (copy) {
       copy.textContent = status === 'enabled'
-        ? 'Due Diligence backdrop is active on your camera.'
+        ? 'Your selected background is active on your camera.'
         : status === 'preparing'
         ? 'Preparing the Due Diligence backdrop before video is shared…'
         : status === 'unavailable'
         ? (snapshot.error || 'This device cannot apply the backdrop. Remove it to use your camera without processing.')
         : status === 'destroyed'
           ? 'The protected camera has been closed.'
-        : 'Off by default for smoother video. Apply it whenever you want the Due Diligence backdrop.';
+        : 'Ready for your next camera start. Your selected background is applied before video is shared.';
     }
     for (const id of ['sr-join-camera', 'sr-toggle-camera']) {
       const button = byId(id);
@@ -2757,6 +2872,12 @@
     await state.backgroundCleanup.catch(() => {});
     const room = state.room;
     if (!room?.localParticipant) throw new Error('The room is not connected.');
+    const previousCamera = localSourcePublication(room.localParticipant, 'camera')?.track;
+    if (enabled && previousCamera && !state.controllerProtectedCameraTracks.has(previousCamera)) {
+      const error = new Error('The previous camera could not close. Leave and rejoin before changing backgrounds.');
+      error.code = 'STUDY_ROOM_BACKGROUND_CAMERA_BUSY';
+      throw error;
+    }
     if (!installLocalCameraPublishGuard(room)) {
       syncBrandedBackdropState({
         status: 'unavailable',
@@ -2773,6 +2894,7 @@
         return;
       }
       const deviceId = selectedDeviceId('videoinput');
+      await controller.switchBackground(await selectedBackgroundRequest(controller));
       const result = await controller.enableCamera(
         captureOptions('camera', deviceId),
         cameraPublishOptions(),
@@ -2828,13 +2950,36 @@
     } catch {
       // Unpublishing and stopping below are the definitive cleanup path.
     }
+    let unpublished = false;
     try {
-      await local.unpublishTrack?.(track, true);
+      if (typeof local.unpublishTrack === 'function') {
+        await local.unpublishTrack(track, true);
+        unpublished = localSourcePublication(local, 'camera')?.track !== track;
+      }
     } catch {
       // A stopped local track cannot continue sending even if disconnect cleanup races.
     }
-    state.userApprovedRawCameraTracks.delete(track);
-    track.stop?.();
+    try { track.stop?.(); } catch { /* Confirm the actual publication below. */ }
+    if (!unpublished && !cameraPublicationIsQuiet(publication)) throw cameraStopError();
+    if (unpublished) state.userApprovedRawCameraTracks.delete(track);
+  }
+
+  function cameraPublicationIsQuiet(publication) {
+    const track = publication?.track;
+    const mediaTrack = track?.mediaStreamTrack;
+    return !publication || publication.isMuted === true || track?.isMuted === true
+      || mediaTrack?.readyState === 'ended' || mediaTrack?.enabled === false;
+  }
+
+  function cameraStopError() {
+    const error = new Error('The camera could not be confirmed off. Leave the room to stop sharing video.');
+    error.name = 'TrackStopError';
+    error.code = 'MEDIA_TRACK_STOP_UNCONFIRMED';
+    return error;
+  }
+
+  function assertCameraQuiet(local) {
+    if (!cameraPublicationIsQuiet(localSourcePublication(local, 'camera'))) throw cameraStopError();
   }
 
   async function setRawCameraEnabled(enabled, requestedDeviceId = selectedDeviceId('videoinput')) {
@@ -2847,6 +2992,15 @@
       return;
     }
     if (typeof local.setCameraEnabled !== 'function') throw sourceStartError('camera');
+
+    // A failed processor teardown may leave a muted publication behind. Never
+    // let the SDK unmute/reuse it while claiming that background effects are off.
+    const survivingTrack = localSourcePublication(local, 'camera')?.track;
+    if (survivingTrack && !state.userApprovedRawCameraTracks.has(survivingTrack)) {
+      const error = new Error('The previous camera could not close. Leave and rejoin before changing backgrounds.');
+      error.code = 'STUDY_ROOM_BACKGROUND_CAMERA_BUSY';
+      throw error;
+    }
 
     state.rawCameraPublishAuthorized = true;
     try {
@@ -2868,80 +3022,121 @@
     }
   }
 
-  async function toggleBackdrop() {
+  async function selectedBackgroundRequest(controller) {
+    if (!state.backdropEnabled) return { mode: 'disabled' };
+    if (state.backgroundChoice === 'custom' && state.customBackgroundFile) {
+      if (state.customBackgroundController !== controller || !state.customBackgroundPath) {
+        const registered = await controller.registerCustomBackground(state.customBackgroundFile);
+        state.customBackgroundController = controller;
+        state.customBackgroundPath = registered.imagePath;
+      }
+      return { mode: 'virtual-background', imagePath: state.customBackgroundPath };
+    }
+    return { mode: 'virtual-background', imagePath: DEFAULT_BACKGROUND_IMAGE };
+  }
+
+  async function applyBackgroundChoice(choice) {
     const local = state.room?.localParticipant;
-    if (!local || state.cameraOperationBusy) return;
+    if (!local || state.cameraOperationBusy || !['off', 'brand', 'custom'].includes(choice)) return;
+    if (choice === 'custom' && !state.customBackgroundFile) return;
+    const wasCameraOn = isLocalSourceEnabled(local, 'camera');
+    const backdropEnabled = choice !== 'off';
+    state.backdropEnabled = backdropEnabled;
+    if (backdropEnabled) state.backgroundChoice = choice;
     if (LOCAL_TEST_MODE === 'live') {
-      state.backdropEnabled = !state.backdropEnabled;
       syncBrandedBackdropState({
         status: state.backdropEnabled ? 'enabled' : 'off',
         supported: true,
       });
-      toast(state.backdropEnabled
-        ? 'Due Diligence backdrop applied.'
-        : 'Backdrop removed. Your real background is now visible.');
+      toast(state.backdropEnabled ? 'Selected background applied in the local preview.' : 'Background off.');
       return;
     }
-    let controller;
-    try {
-      controller = ensureBackgroundController();
-    } catch (error) {
-      state.backdropEnabled = false;
-      syncBrandedBackdropState({ status: 'unavailable', supported: false, error: error.message });
-      toast('Background effects are unavailable. Your camera remains available.');
-      return;
-    }
-    const capabilities = controller.capabilities?.() || { supported: false };
-    if (capabilities.supported !== true) {
-      state.backdropEnabled = false;
-      syncBrandedBackdropState({
-        status: 'unavailable',
-        ...capabilities,
-        error: 'Background effects are unavailable in this browser. Your camera remains available without them.',
-      });
-      toast('Background effects are unavailable. Your camera remains available.');
-      return;
-    }
-    const backdropEnabled = !state.backdropEnabled;
     state.cameraOperationBusy = true;
-    state.backdropEnabled = backdropEnabled;
-    syncBrandedBackdropState({
-      ...(controller.snapshot?.() || capabilities),
-      status: 'preparing',
-    });
+    syncBrandedBackdropState({ status: 'preparing', supported: true });
     try {
-      const result = await controller.switchBackground(
-        backdropEnabled
-          ? { mode: 'virtual-background', imagePath: '/assets/study-room/virtual-background-due-diligence-branded.webp' }
-          : { mode: 'disabled' },
-      );
-      const fallbackTrack = localSourcePublication(local, 'camera')?.track;
-      if (result?.fallbackRaw && fallbackTrack) {
-        state.userApprovedRawCameraTracks.add(fallbackTrack);
-        state.backdropEnabled = false;
+      if (!backdropEnabled) {
+        await destroyBackgroundController();
+        if (wasCameraOn) await setRawCameraEnabled(true);
+      } else {
+        // Remove raw video before preparing an effect. Failure must not expose
+        // the real background or silently change the user's privacy choice.
+        await discardUserApprovedRawCamera(local);
+        const controller = ensureBackgroundController();
+        if (!controller.capabilities?.().supported) {
+          const error = new Error('Background effects are unavailable. Choose Background off to start your camera without them.');
+          error.code = 'STUDY_ROOM_BACKGROUND_UNSUPPORTED';
+          throw error;
+        }
+        await controller.switchBackground(await selectedBackgroundRequest(controller));
+        if (wasCameraOn) await setProtectedCameraEnabled(true);
       }
       syncSelfMediaState();
-      toast(state.backdropEnabled
-        ? 'Due Diligence backdrop applied.'
-        : 'Backdrop removed. Your real background is now visible.');
+      toast(backdropEnabled ? 'Background selected.' : 'Background off. Your camera uses no background processing.');
+      return true;
     } catch (error) {
-      const fallbackTrack = localSourcePublication(local, 'camera')?.track;
-      const snapshot = controller.snapshot?.() || {};
-      if (snapshot.fallbackRaw && fallbackTrack) {
-        state.userApprovedRawCameraTracks.add(fallbackTrack);
-        state.backdropEnabled = false;
-      } else {
-        state.backdropEnabled = !backdropEnabled;
-      }
       syncSelfMediaState();
       toast(deviceErrorMessage('camera', error));
+      return false;
     } finally {
       state.cameraOperationBusy = false;
-      syncBrandedBackdropState(controller.snapshot?.() || {
+      syncBrandedBackdropState(state.backgroundController?.snapshot?.() || {
         status: state.backdropEnabled ? 'idle' : 'off',
         supported: true,
       });
     }
+  }
+
+  function toggleBackdrop() {
+    return applyBackgroundChoice(state.backdropEnabled ? 'off' : state.backgroundChoice);
+  }
+
+  async function uploadBackground(event) {
+    const input = event.target;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file || state.cameraOperationBusy) return;
+    state.cameraOperationBusy = true;
+    syncBrandedBackdropState(state.backgroundController?.snapshot?.() || { supported: true });
+    try {
+      const controller = ensureBackgroundController();
+      const registered = await controller.registerCustomBackground(file);
+      const previous = { controller: state.customBackgroundController, path: state.customBackgroundPath, preview: state.customBackgroundPreview };
+      state.customBackgroundFile = file;
+      state.customBackgroundPath = registered.imagePath;
+      state.customBackgroundController = controller;
+      state.customBackgroundPreview = global.URL.createObjectURL(file);
+      state.cameraOperationBusy = false;
+      const applied = await applyBackgroundChoice('custom');
+      if (previous.preview) global.URL.revokeObjectURL(previous.preview);
+      if (previous.path && previous.path !== registered.imagePath) {
+        try { previous.controller?.removeCustomBackground?.(previous.path); } catch { /* Teardown owns any still-active image. */ }
+      }
+      setStatus('sr-background-upload-status', applied === false
+        ? 'Image kept on this device. The background could not start; retry or choose Off.'
+        : 'Image stays on this device. Not uploaded to our servers.', applied === false ? 'error' : 'ok');
+    } catch (error) {
+      setStatus('sr-background-upload-status', friendlyError(error, 'Choose a PNG, JPG or WebP image up to 5 MB.'), 'error');
+    } finally {
+      state.cameraOperationBusy = false;
+      syncBrandedBackdropState(state.backgroundController?.snapshot?.() || { supported: true });
+    }
+  }
+
+  async function removeCustomBackground() {
+    if (state.cameraOperationBusy || !state.customBackgroundFile) return;
+    const previous = { controller: state.customBackgroundController, path: state.customBackgroundPath, preview: state.customBackgroundPreview };
+    if (state.backdropEnabled && state.backgroundChoice === 'custom') await applyBackgroundChoice('brand');
+    state.backgroundChoice = 'brand';
+    state.customBackgroundFile = null;
+    state.customBackgroundPath = '';
+    state.customBackgroundController = null;
+    state.customBackgroundPreview = '';
+    if (previous.preview) global.URL.revokeObjectURL(previous.preview);
+    if (previous.path) {
+      try { previous.controller?.removeCustomBackground?.(previous.path); } catch { /* Teardown owns any still-active image. */ }
+    }
+    setStatus('sr-background-upload-status', 'Custom image removed from this page.');
+    syncBrandedBackdropState(state.backgroundController?.snapshot?.() || { supported: true });
   }
 
   function captureOptions(kind, deviceId = '') {
@@ -3006,6 +3201,20 @@
       state.cameraOperationBusy = true;
       syncBrandedBackdropState(state.backgroundController?.snapshot?.() || { status: 'idle', supported: true });
       try {
+        const cameraTrack = localSourcePublication(local, 'camera')?.track;
+        if (!enabled) {
+          if (cameraTrack && state.userApprovedRawCameraTracks.has(cameraTrack)) await setRawCameraEnabled(false);
+          else await state.backgroundController?.disableCamera?.();
+          assertCameraQuiet(local);
+          return;
+        }
+        if (!state.backdropEnabled) {
+          // Background off is genuinely processor-free. Camera starts only
+          // after the user's camera-on action or explicit prejoin choice.
+          await destroyBackgroundController();
+          await setRawCameraEnabled(true);
+          return;
+        }
         let controller = null;
         let supported = false;
         try {
@@ -3019,22 +3228,11 @@
           });
         }
         if (supported) {
-          try {
-            await setProtectedCameraEnabled(enabled);
-          } catch (error) {
-            // A processor failure must not strand a working camera. Fall back
-            // to the raw LiveKit camera while leaving the room connected.
-            if (enabled) {
-              state.backdropEnabled = false;
-              await setRawCameraEnabled(true);
-              toast('Background effects are unavailable. Camera is on without them.');
-            } else {
-              throw error;
-            }
-          }
+          await setProtectedCameraEnabled(true);
         } else {
-          state.backdropEnabled = false;
-          await setRawCameraEnabled(enabled);
+          const error = new Error('Background effects are unavailable. Choose Background off to start your camera without them.');
+          error.code = 'STUDY_ROOM_BACKGROUND_UNSUPPORTED';
+          throw error;
         }
       } finally {
         state.cameraOperationBusy = false;
@@ -3129,13 +3327,14 @@
   async function joinRoom() {
     if (state.joining || state.room) return;
     let roomToJoin = selectedRoom();
-    if (roomToJoin && !roomToJoin.active && state.isAdministrator && roomToJoin.canCreate !== false) {
+    if (roomToJoin?.canJoin === false) return;
+    if (roomToJoin && !roomToJoin.active && !roomToJoin.alwaysOpen && state.isAdministrator && roomToJoin.canCreate === true) {
       const created = await createRoomSlot(roomToJoin.roomKey);
       roomToJoin = selectedRoom();
       if (!created || !roomToJoin?.active) return;
     }
-    if (!roomToJoin?.active) {
-      setStatus('sr-prejoin-status', 'Choose an open Study Room. Only administrators can create a room.', 'error');
+    if (!roomToJoin || roomToJoin.canJoin === false || (!roomToJoin.active && !roomToJoin.alwaysOpen)) {
+      setStatus('sr-prejoin-status', 'Choose an available Study Room.', 'error');
       byId('sr-room-lobby')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
       return;
     }
@@ -3253,8 +3452,8 @@
       if (kind === 'camera') {
         const controller = state.backgroundController;
         syncBrandedBackdropState(controller?.snapshot?.() || controller?.capabilities?.() || {
-          status: 'unavailable',
-          supported: false,
+          status: state.backdropEnabled ? 'idle' : 'off',
+          supported: true,
         });
       } else {
         button.disabled = false;
@@ -3641,6 +3840,9 @@
     byId('sr-toggle-screen-share').addEventListener('click', toggleScreenShare);
     byId('sr-toggle-hand').addEventListener('click', toggleRaiseHand);
     byId('sr-toggle-backdrop').addEventListener('click', toggleBackdrop);
+    byId('sr-background-choice')?.addEventListener('change', (event) => applyBackgroundChoice(event.target.value));
+    byId('sr-background-file')?.addEventListener('change', uploadBackground);
+    byId('sr-background-remove')?.addEventListener('click', removeCustomBackground);
     byId('sr-dock-chat').addEventListener('click', () => {
       if (state.panelOpen && state.panelView === 'chat') closePanel();
       else openPanel('chat');
@@ -3725,6 +3927,9 @@
       global.clearInterval(state.roomRefreshTimer);
       const room = state.room;
       destroyBackgroundController().catch(() => {});
+      if (state.customBackgroundPreview) global.URL.revokeObjectURL(state.customBackgroundPreview);
+      state.customBackgroundPreview = '';
+      state.customBackgroundFile = null;
       removeLocalCameraPublishGuard(room);
       room?.disconnect?.();
     });
@@ -3793,7 +3998,9 @@
       }
       syncBrandedBackdropState({ status: 'off', supported: true });
       bindDeviceChangeDetection();
-      await discoverDevices();
+      // Local visual QA never requests a camera or microphone permission.
+      if (LOCAL_TEST_MODE) await refreshDeviceLists();
+      else await discoverDevices();
       startRoomCatalogRefresh();
       if (LOCAL_TEST_MODE === 'live') createLocalQualityPreview();
     } catch (error) {

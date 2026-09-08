@@ -101,6 +101,7 @@ for (const required of [
   'assets/vendor/mediapipe/wasm/vision_wasm_nosimd_internal.js',
   'assets/vendor/mediapipe/wasm/vision_wasm_nosimd_internal.wasm',
   'assets/study-room/virtual-background-due-diligence-branded.webp',
+  'assets/study-room/virtual-background-due-diligence-polished-20260908.webp',
   'assets/study-room/dimasalang-library.webp',
   'assets/study-room/participant-2-tropical.webp',
   'assets/study-room/participant-3-bedroom.webp',
@@ -271,11 +272,13 @@ assert.match(index, /phase2\.css[^"\n]*pricing=regular-checkout-r1[\s\S]*pricing
 assert.doesNotMatch(index, /20260914|2026-09-14/u, 'Public cache keys must not reveal the private cutover date.');
 assert.doesNotMatch(index, /href=["']\/study-room\//i);
 assert.match(studyRoomPage, /<title>Study Room — Due Diligence<\/title>/);
-assert.match(studyRoomPage, /Authorized testers can join open rooms/);
+assert.match(studyRoomPage, /Open to every signed-in member\. No subscription required\./);
+assert.match(studyRoomPage, /Double-click a room to enter/);
+assert.match(studyRoomPage, /id="sr-background-file"[^>]+accept="image\/png,image\/jpeg,image\/webp"/);
 assert.match(studyRoomPage, /camera and microphone remain off/i);
 assert.match(studyRoomPage, /assets\/vendor\/livekit-client\.umd\.js\?v=2\.22\.1/);
-assert.match(studyRoomPage, /study-room-backgrounds\.js\?v=study-room-background-processor-20260902-1/);
-assert.match(studyRoomPage, /study-room-live\.js\?v=study-room-meet-layout-20260902-6/);
+assert.match(studyRoomPage, /study-room-backgrounds\.js\?v=study-room-background-images-20260908-1/);
+assert.match(studyRoomPage, /study-room-live\.js\?v=study-room-always-open-20260908-1/);
 assert.match(studyRoomPage, /id="sr-toggle-backdrop"[\s\S]*aria-pressed="false"/u);
 assert.match(studyRoomLive, /\/study-room\/access/);
 assert.match(studyRoomLive, /\/study-room\/rooms/);
@@ -284,7 +287,8 @@ assert.match(studyRoomLive, /\/study-room\/moderate/);
 assert.match(studyRoomLive, /\/admin\/study-room\/rooms/);
 assert.doesNotMatch(studyRoomLive, /operation:\s*['"]mute['"]/);
 assert.match(studyRoomLive, /operation:\s*'rename'/);
-assert.doesNotMatch(studyRoomLive, /Mute for room/i);
+assert.match(studyRoomLive, /if \(state\.isAdministrator\) \{[\s\S]*?muteForRoom\.textContent = 'Mute for room'/);
+assert.match(studyRoomLive, /if \(!state\.isAdministrator \|\| !room \|\| participant\.isLocal/);
 assert.match(studyRoomLive, /Mute for me/);
 assert.match(studyRoomLive, /Block locally/);
 assert.match(studyRoomLive, /width:\s*640,[\s\S]*height:\s*360,[\s\S]*frameRate:\s*15/u);
@@ -295,7 +299,7 @@ assert.match(studyRoomLive, /setScreenShareEnabled/u);
 assert.match(studyRoomLive, /dd\.studyRoom\.handRaised/u);
 assert.match(studyRoomLive, /function toggleBackdrop\(/u);
 assert.match(studyRoomBackgrounds, /DueDiligenceStudyRoomMandatoryBackground/);
-assert.match(studyRoomBackgrounds, /virtual-background-due-diligence-branded\.webp/);
+assert.match(studyRoomBackgrounds, /virtual-background-due-diligence-polished-20260908\.webp/);
 assert.match(studyRoomBackgrounds, /mode:\s*'virtual-background'/);
 assert.match(studyRoomBackgrounds, /mode:\s*'disabled'/);
 assert.match(studyRoomBackgrounds, /processor\.switchTo\(nextMode\)/u);
@@ -307,7 +311,7 @@ assert.match(
 assert.match(liveKitTrackProcessors, /LivekitTrackProcessors/);
 assert.match(liveKitTrackProcessors, /0\.7\.2/);
 assert.match(liveKitTrackProcessors, /due-diligence-mandatory-virtual-background-no-raw-first-frame/);
-assert.match(liveKitTrackProcessors, /virtual-background-due-diligence-branded\.webp/);
+assert.match(liveKitTrackProcessors, /virtual-background-due-diligence-polished-20260908\.webp/);
 assert.doesNotMatch(liveKitTrackProcessors, /require\s*\(/);
 assert.ok(
   Buffer.byteLength(liveKitTrackProcessors) > 100_000,
@@ -325,7 +329,13 @@ assert.ok(
     }
   }
   class TestVideoFrame {}
+  const registeredCustomImage = 'blob:https://duediligence.ph/custom-background';
   const runtimeContext = {
+    URL,
+    location: { origin: 'https://duediligence.ph', protocol: 'https:' },
+    DueDiligenceStudyRoomMandatoryBackground: {
+      isRegisteredCustomImage: (value) => value === registeredCustomImage,
+    },
     console: {
       debug() {},
       error() {},
@@ -361,13 +371,26 @@ assert.ok(
   assert.equal(mandatoryProcessor.transformer.isFirstFrame, false);
   await mandatoryProcessor.switchTo({
     mode: 'virtual-background',
-    imagePath: '/unapproved-background.webp',
+    imagePath: '/assets/study-room/virtual-background-due-diligence-polished-20260908.webp',
   });
   assert.equal(mandatoryProcessor.mode, 'virtual-background');
   assert.equal(
     mandatoryProcessor.transformer.options.imagePath,
-    '/assets/study-room/virtual-background-due-diligence-branded.webp',
+    '/assets/study-room/virtual-background-due-diligence-polished-20260908.webp',
   );
+  await mandatoryProcessor.switchTo({ mode: 'virtual-background', imagePath: registeredCustomImage });
+  assert.equal(mandatoryProcessor.transformer.options.imagePath, registeredCustomImage);
+  const customProcessor = effects.BackgroundProcessor({ mode:'virtual-background', imagePath:registeredCustomImage });
+  assert.equal(customProcessor.transformer.options.imagePath,registeredCustomImage);
+  assert.equal(customProcessor.transformer.isFirstFrame,false);
+  for (const imagePath of ['/unapproved-background.webp','https://evil.invalid/image.png','file:///image.png',
+    'data:image/svg+xml,<svg/>','blob:https://elsewhere.invalid/custom-background','blob:https://duediligence.ph/unregistered']) {
+    await assert.rejects(mandatoryProcessor.switchTo({ mode:'virtual-background', imagePath }), /not registered/);
+    assert.throws(() => effects.BackgroundProcessor({ mode:'virtual-background', imagePath }), /not registered/);
+    assert.equal(mandatoryProcessor.transformer.options.imagePath, registeredCustomImage);
+  }
+  runtimeContext.DueDiligenceStudyRoomMandatoryBackground.isRegisteredCustomImage = () => false;
+  await assert.rejects(mandatoryProcessor.switchTo({ mode:'virtual-background', imagePath:registeredCustomImage }), /not registered/);
   await mandatoryProcessor.switchTo({ mode: 'background-blur', blurRadius: 12 });
   assert.equal(mandatoryProcessor.mode, 'background-blur');
   assert.equal(mandatoryProcessor.transformer.options.blurRadius, 12);

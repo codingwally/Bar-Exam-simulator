@@ -218,7 +218,7 @@ export function validateStudyRoomJwt(token, expected) {
   assert.equal(
     claims.roomConfig,
     undefined,
-    "A join token must never auto-create or silently repair a room.",
+    "A participant token must never grant room-creation or room-repair privileges.",
   );
   assert.ok(
     !claims.metadata,
@@ -589,6 +589,7 @@ function validatePublicRoomDescriptor(room, expectedRoomKey, expectedActive) {
     [
       "active",
       "adminOnly",
+      "alwaysOpen",
       "canCreate",
       "canJoin",
       "capacity",
@@ -606,6 +607,7 @@ function validatePublicRoomDescriptor(room, expectedRoomKey, expectedActive) {
   assert.equal(descriptor.kind, slot.kind);
   assert.equal(descriptor.microphoneAllowed, slot.microphoneAllowed);
   assert.equal(descriptor.adminOnly, slot.adminOnly);
+  assert.equal(descriptor.alwaysOpen, !slot.adminOnly);
   assert.equal(typeof descriptor.canCreate, "boolean");
   assert.equal(typeof descriptor.canJoin, "boolean");
   assert.equal(typeof descriptor.active, "boolean");
@@ -652,7 +654,7 @@ function validateRoomCatalog(body, expectedRole, expectedActiveKeys = null, expe
     ),
   );
   for (const room of rooms) {
-    assert.equal(room.canCreate, expectedAdministrator);
+    assert.equal(room.canCreate, room.adminOnly && expectedAdministrator);
     assert.equal(room.canJoin, room.adminOnly ? expectedAdministrator : true);
   }
   const serialized = JSON.stringify(body);
@@ -675,6 +677,31 @@ function validateCreatedRoom(body, expectedRoomKey, expectedStatus) {
     false,
     "Room creation must not expose the internal LiveKit room name.",
   );
+}
+
+async function provePublicFirstJoins(configuration, student) {
+  const listed = await workerPost(configuration, "/study-room/rooms", student.token, { operation: "list" });
+  const before = validateRoomCatalog(listed.body, "member", null, false);
+  // Do not delete or repurpose a room belonging to an earlier/live session to
+  // manufacture a first-join proof. An occupied public slot holds this smoke.
+  for (const room of before.filter((entry) => !entry.adminOnly)) assert.equal(room.active, false,
+    "Public first-join proof requires initially inactive staging slots.");
+  const activeKeys = before.filter((entry) => entry.active).map((entry) => entry.roomKey);
+  const listedAgain = await workerPost(configuration, "/study-room/rooms", student.token, { operation: "list" });
+  validateRoomCatalog(listedAgain.body, "member", activeKeys, false);
+  const joined = [];
+  for (const slot of STUDY_ROOM_SLOTS.filter((entry) => !entry.adminOnly)) {
+    const nickname = "Participant #404";
+    const response = await workerPost(configuration, "/study-room/join", student.token,
+      { roomKey: slot.roomKey, nickname }, [201]);
+    const credential = validateJoinResponse(response.body, nickname, configuration.liveKitApiKey, slot.roomKey);
+    assert.equal(credential.administrator, false);
+    joined.push(credential);
+    activeKeys.push(slot.roomKey);
+    const after = await workerPost(configuration, "/study-room/rooms", student.token, { operation: "list" });
+    validateRoomCatalog(after.body, "member", activeKeys, false);
+  }
+  return joined;
 }
 
 function validateRejectedRoomOperation(body, expectedCode) {
@@ -782,7 +809,7 @@ function withTimeout(label, promise, timeoutMs = RTC_TIMEOUT_MS) {
 }
 
 function waitForRoomEvent(room, event, label, predicate = () => true) {
-  return new Promise((resolve, reject) => {
+  const pending = new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       room.off(event, handler);
       reject(new Error(`${label} timed out`));
@@ -795,6 +822,11 @@ function waitForRoomEvent(room, event, label, predicate = () => true) {
     };
     room.on(event, handler);
   });
+  // A parallel HTTP operation can outlast this event timer. Observe rejection
+  // immediately so fixture cleanup can run, while preserving the original
+  // rejecting promise for the caller's later await and failure report.
+  pending.catch(() => {});
+  return pending;
 }
 
 function waitForSubscribedTrack(room, participantIdentity, source, label) {
@@ -1375,6 +1407,11 @@ async function runPositiveSmoke() {
     assert.equal(memberCreateDenied.body?.error?.code, "STUDY_ROOM_ADMIN_REQUIRED");
     console.log("STUDY_ROOM_STAGING_POSITIVE: free_member_access=true no_billing_grant=true member_create_denied=true");
 
+    checkpoint = "free_public_first_join_without_admin_create";
+    const firstPublicJoins = await provePublicFirstJoins(configuration, student);
+    assert.equal(firstPublicJoins.length, 4);
+    console.log("STUDY_ROOM_STAGING_POSITIVE: free_public_first_join=true list_does_not_activate=true admin_create_not_required=true");
+
     checkpoint = "admin_access";
     const primaryAccess = await workerPost(
       configuration,
@@ -1722,7 +1759,7 @@ async function runPositiveSmoke() {
     const moderation = await workerPost(
       configuration,
       "/study-room/moderate",
-      primaryAdmin.token,
+      secondaryAdmin.token,
       {
         operation: "mute",
         roomKey: "2",
@@ -1803,6 +1840,19 @@ async function runPositiveSmoke() {
       resources,
     );
     console.log("STUDY_ROOM_STAGING_POSITIVE: reconnect=true");
+
+    checkpoint = "ordinary_admin_remove";
+    const removedParticipant = waitForRoomEvent(primaryRoom, RoomEvent.ParticipantDisconnected,
+      "ordinary administrator removes the synthetic participant",
+      (participant) => participant?.identity === reconnectJoin.participant_identity);
+    const removal = await workerPost(configuration, "/study-room/moderate", secondaryAdmin.token,
+      { operation: "remove", roomKey: "2", participantIdentity: reconnectJoin.participant_identity });
+    assert.equal(removal.body?.ok, true);
+    assert.equal(removal.body?.result?.action, "removed");
+    assert.equal(removal.body?.result?.roomKey, "2");
+    assert.equal(removal.body?.result?.participantIdentity, reconnectJoin.participant_identity);
+    await removedParticipant;
+    console.log("STUDY_ROOM_STAGING_POSITIVE: ordinary_admin_mute=true ordinary_admin_remove=true");
   } catch (error) {
     failure = error;
     failureCheckpoint = checkpoint;
@@ -2003,7 +2053,8 @@ async function runSelfTest() {
       kind: STUDY_ROOM_SLOTS[index].kind,
       microphoneAllowed: STUDY_ROOM_SLOTS[index].microphoneAllowed,
       adminOnly: STUDY_ROOM_SLOTS[index].adminOnly,
-      canCreate: true,
+      alwaysOpen: !STUDY_ROOM_SLOTS[index].adminOnly,
+      canCreate: STUDY_ROOM_SLOTS[index].adminOnly,
       canJoin: true,
       active: true,
       participantCount: index === 0 ? 2 : 0,

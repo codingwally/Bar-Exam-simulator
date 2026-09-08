@@ -115,6 +115,8 @@ function verifyScopeCase(overrides = {}, rejected = false) {
   scopeCases += 1;
 }
 verifyScopeCase();
+verifyScopeCase({ MOCK_CANDIDATE_DELTA: "scripts/test-study-room-always-open.mjs\nscripts/test-study-room-background-picker.mjs\nassets/study-room/virtual-background-due-diligence-polished-20260908.webp" });
+verifyScopeCase({ MOCK_CANDIDATE_DELTA: "assets/study-room/virtual-background-due-diligence-polished-20260909.webp" }, true);
 verifyScopeCase({ MOCK_CANDIDATE_DELTA: "supabase/migrations/20260908131116_astra_staging_study_room_fixture_registration.sql\nworker/astra-staging-study-room-fixture-registration.test.mjs" });
 verifyScopeCase({ MOCK_CANDIDATE_DELTA: "supabase/migrations/20260908070656_astra_staging_commercial_fixture_registration.sql" }, true);
 verifyScopeCase({ MOCK_MISSING_COMMIT: "true" }, true);
@@ -152,6 +154,7 @@ for (const expectedReleaseFile of [
   "assets/study-room-preview.css",
   "assets/study-room-preview.js",
   "assets/study-room/virtual-background-due-diligence-branded.webp",
+  "assets/study-room/virtual-background-due-diligence-polished-20260908.webp",
   "assets/vendor/mediapipe/LICENSE.txt",
   "assets/vendor/mediapipe/PROVENANCE.txt",
   "assets/vendor/mediapipe/selfie_segmenter-float16-2023-05-07.tflite",
@@ -159,6 +162,8 @@ for (const expectedReleaseFile of [
   "scripts/build-pages-artifact.mjs",
   "scripts/test-pages-artifact.mjs",
   "scripts/test-study-room-backgrounds.mjs",
+  "scripts/test-study-room-always-open.mjs",
+  "scripts/test-study-room-background-picker.mjs",
   "scripts/test-study-room-deployment-smoke.mjs",
   "scripts/test-study-room-fixture-safety.mjs",
   "scripts/test-study-room-hotfix-behavior.mjs",
@@ -196,6 +201,13 @@ assert.match(workflow, /node scripts\/test-pages-artifact\.mjs/u);
 assert.match(workflow, /node scripts\/test-study-room-backgrounds\.mjs/u);
 assert.match(workflow, /node scripts\/test-study-room-hotfix-behavior\.mjs/u);
 assert.equal((workflow.match(/node scripts\/test-study-room-fixture-safety\.mjs/gu) || []).length, 1);
+for (const script of ['test-study-room-always-open.mjs', 'test-study-room-background-picker.mjs']) {
+  for (const [label, candidate] of [['protected Study Room', workflow], ['Pages-only', pagesOnlyWorkflow]]) {
+    const command = `node scripts/${script}`;
+    assert.equal(candidate.split('\n').filter((line) => line.trim() === command).length, 1,
+      `${label} must run the exact ${script} once, not only allow its path.`);
+  }
+}
 assert.match(workflow, /node --check assets\/study-room-backgrounds\.js/u);
 assert.match(
   workflow,
@@ -229,12 +241,15 @@ for (const expectedPagesFile of [
   "assets/study-room-live.css",
   "assets/study-room-live.js",
   "assets/study-room/virtual-background-due-diligence-branded.webp",
+  "assets/study-room/virtual-background-due-diligence-polished-20260908.webp",
   "assets/vendor/mediapipe/LICENSE.txt",
   "assets/vendor/mediapipe/PROVENANCE.txt",
   "assets/vendor/mediapipe/selfie_segmenter-float16-2023-05-07.tflite",
   "scripts/build-pages-artifact.mjs",
   "scripts/test-pages-artifact.mjs",
   "scripts/test-study-room-backgrounds.mjs",
+  "scripts/test-study-room-always-open.mjs",
+  "scripts/test-study-room-background-picker.mjs",
   "scripts/test-study-room-live.mjs",
   "study-room/index.html",
 ]) {
@@ -300,8 +315,8 @@ assert.match(cleanupArtifactStep, /retention-days: 7/u);
 assert.match(cleanupArtifactStep, /if-no-files-found: error/u);
 const stagingAssetChecks = workflow.slice(stagingSmoke, stagingPositiveSmoke);
 for (const requiredStagingMarker of [
-  "study-room-meet-layout-20260902-6",
-  "study-room-background-processor-20260902-1",
+  "study-room-always-open-20260908-1",
+  "study-room-background-images-20260908-1",
   "workerRequest('/study-room/rooms'",
   "workerRequest('/study-room/join'",
   "registerTextStreamHandler",
@@ -314,6 +329,7 @@ for (const requiredStagingMarker of [
   "assets/icons/navigation/pin.svg",
   "assets/icons/navigation/settings.svg",
   "assets/study-room/virtual-background-due-diligence-branded.webp",
+  "assets/study-room/virtual-background-due-diligence-polished-20260908.webp",
   "assets/vendor/mediapipe/selfie_segmenter-float16-2023-05-07.tflite",
   "assets/vendor/mediapipe/wasm/vision_wasm_internal.wasm",
   "assets/study-room-preview.js?v=study-room-all-members-20260908-1",
@@ -457,7 +473,7 @@ assert.match(
 );
 assert.match(
   workflow.slice(pagesVerificationJob),
-  /study-room-meet-layout-20260902-6/u,
+  /study-room-always-open-20260908-1/u,
 );
 assert.match(
   home,
@@ -470,7 +486,7 @@ assert.match(
 );
 assert.match(
   workflow.slice(pagesVerificationJob),
-  /study-room-background-processor-20260902-1/u,
+  /study-room-background-images-20260908-1/u,
 );
 for (const requiredAllMembersMarker of [
   "assets/study-room-preview.js?v=study-room-all-members-20260908-1",
@@ -494,6 +510,7 @@ for (const requiredProductionAsset of [
   "assets/icons/navigation/pin.svg",
   "assets/icons/navigation/settings.svg",
   "assets/study-room/virtual-background-due-diligence-branded.webp",
+  "assets/study-room/virtual-background-due-diligence-polished-20260908.webp",
   "assets/vendor/livekit-track-processors.iife.js",
   "assets/vendor/mediapipe/selfie_segmenter-float16-2023-05-07.tflite",
   "assets/vendor/mediapipe/wasm/vision_wasm_internal.js",
@@ -512,10 +529,10 @@ for (const requiredProductionAsset of [
     `Pages-only production verification must check ${requiredProductionAsset}.`,
   );
 }
-assert.match(pagesOnlyWorkflow, /study-room-meet-layout-20260902-6/u);
+assert.match(pagesOnlyWorkflow, /study-room-always-open-20260908-1/u);
 assert.match(
   pagesOnlyWorkflow,
-  /study-room-background-processor-20260902-1/u,
+  /study-room-background-images-20260908-1/u,
 );
 assert.match(
   workflow.slice(pagesVerificationJob),

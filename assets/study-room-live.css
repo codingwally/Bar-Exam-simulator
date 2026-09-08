@@ -2333,8 +2333,8 @@ body.sr-in-call .sr-participant-grid[data-layout-mode="tiled"] {
 }
 
 @media (max-width: 1080px), (min-width: 1081px) and (max-height: 619px) {
-  .sr-live-room:not([hidden]) {
-    padding-bottom: 102px;
+  body.sr-in-call .sr-live-room:not([hidden]) {
+    padding-bottom: calc(102px + env(safe-area-inset-bottom, 0px));
   }
 
   .sr-control-dock {
@@ -2914,4 +2914,105 @@ body.sr-in-call.sr-compact-mode #sr-toggle-compact,
   color: #211603;
   border-color: #efc968;
   background: linear-gradient(180deg, #f6d77e, #d7a43d);
+}
+
+/* Keep room names, background controls and call actions usable on smaller screens. */
+.sr-lobby-entry-hint {
+  max-width: 62ch;
+  margin: 8px 0 0;
+  color: #b9c8d8;
+  font-size: .875rem;
+  line-height: 1.5;
+}
+
+.sr-background-picker {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  margin: 18px 0;
+}
+
+.sr-background-preview {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border: 1px solid rgba(217, 170, 69, .45);
+  border-radius: 10px;
+}
+
+.sr-background-picker input[type="file"] {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  font: inherit;
+  font-size: .85rem;
+  overflow: hidden;
+}
+
+.sr-background-picker input[type="file"]::file-selector-button {
+  min-height: 44px;
+  margin-right: 8px;
+  padding: 8px 12px;
+  color: #f5f0e6;
+  background: #15344e;
+  border: 1px solid #61768b;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.sr-background-picker small { line-height: 1.5; color: #b9c8d8; }
+.sr-background-picker small.is-error { color: #ffb9b9; }
+.sr-background-picker select { min-height: 44px; }
+.sr-room-card-copy { min-width: 0; }
+.sr-room-card-copy small { white-space: normal; overflow-wrap: anywhere; }
+.sr-settings-panel { overflow-y: auto; overscroll-behavior: contain; }
+.sr-admin-person-actions { display: flex; flex-wrap: wrap; gap: 8px; grid-column: 1 / -1; }
+.sr-admin-person-actions button {
+  min-height: 44px;
+  padding: 8px 12px;
+  color: var(--sr-gold-bright);
+  border: 1px solid rgba(217, 170, 69, .4);
+  border-radius: 7px;
+  background: rgba(2, 17, 32, .82);
+  cursor: pointer;
+}
+.sr-admin-person-actions button:disabled { opacity: .5; cursor: not-allowed; }
+
+@media (min-width: 761px) and (max-width: 1080px) {
+  .sr-room-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 760px) {
+  .sr-room-lobby-heading { align-items: flex-start; flex-wrap: wrap; gap: 12px; }
+  .sr-room-panel { max-height: min(70dvh, 620px); }
+  .sr-panel-view { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+  .sr-control-dock { scrollbar-width: thin; scrollbar-color: #718398 transparent; }
+  .sr-control-dock::-webkit-scrollbar { display: block; height: 3px; }
+  .sr-control-dock::-webkit-scrollbar-thumb { background: #718398; border-radius: 3px; }
+}
+
+@media (max-width: 1080px) and (min-height: 620px) {
+  body.sr-in-call:not(.sr-compact-mode) .sr-control-dock { max-width: 680px; }
+}
+
+/* Keep every call action, including Leave, visible on portrait phones. */
+@media (max-width: 760px) and (orientation: portrait) {
+  body.sr-in-call:not(.sr-compact-mode) .sr-live-room:not([hidden]) {
+    padding-bottom: calc(138px + env(safe-area-inset-bottom, 0px));
+  }
+  body.sr-in-call:not(.sr-compact-mode) .sr-control-dock {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(44px, 1fr));
+    gap: 8px;
+    overflow: visible;
+  }
+  body.sr-in-call:not(.sr-compact-mode) .sr-control-dock button {
+    width: 100%;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
 }

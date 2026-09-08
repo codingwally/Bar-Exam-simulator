@@ -16,6 +16,7 @@ const instrumentedLiveClient = liveClient.replace(
   `global.__DueDiligenceStudyRoomTestHooks = {
     state,
     createPersonRow,
+    moderateParticipant,
     createTile,
     buildMediaViews,
     reconcileTile,
@@ -523,7 +524,7 @@ function createFakeMandatoryBackground(liveKit, calls) {
           getSettings: () => ({ deviceId: activeDeviceId }),
         };
         processor = {
-          mode: 'disabled',
+          mode,
           processedTrack: mediaStreamTrack,
           imagePath: undefined,
           blurRadius: undefined,
@@ -853,7 +854,7 @@ async function eventually(check, message) {
   assert.equal(harness.hooks.state.selectedRoomKey, '1', 'The first open room should be selected by default.');
   const roomCards = harness.document.getElementById('sr-room-card-grid').children;
   assert.equal(roomCards.length, 5);
-  assert.equal(harness.document.getElementById('sr-room-lobby-count').textContent, '3 of 5 rooms open');
+  assert.equal(harness.document.getElementById('sr-room-lobby-count').textContent, '3 rooms available');
   assert.equal(roomCards.find(({ id }) => id === 'sr-create-room')?.dataset.roomKey, '4');
   assert.equal(harness.document.getElementById('sr-branded-backdrop-status').dataset.backdropState, 'off');
   assert.match(harness.document.getElementById('sr-branded-backdrop-copy').textContent, /real background/iu);
@@ -955,9 +956,11 @@ async function eventually(check, message) {
     },
   });
   await eventually(
-    () => harness.document.getElementById('sr-access-title').textContent === 'The live room is still private',
-    'Denied access did not reach the private-room recovery state.',
+    () => harness.document.getElementById('sr-access-title').textContent === 'Study Room access unavailable',
+    'Denied access did not reach the access-denial recovery state.',
   );
+  assert.equal(harness.document.getElementById('sr-access-retry').hidden, true,
+    'An explicit forbidden response must not offer an automatic retry loop.');
   assert.equal(enumerateCalls, 0, 'A denied visitor must not have devices enumerated.');
   assert.equal(permissionCalls, 0, 'A denied visitor must never receive a camera or microphone permission prompt.');
   assert.equal(harness.deviceChangeHandlers.length, 0, 'A denied visitor must not receive device-enumeration listeners.');
@@ -1187,55 +1190,73 @@ function fakeLocalTrack(kind, deviceId) {
 
   const cameraButton = harness.document.getElementById('sr-toggle-camera');
   await cameraButton.emit('click');
-  assert.equal(rawCameraCalls.length, 0, 'Supported browsers must start the managed camera lifecycle even with the backdrop off.');
+  assert.equal(rawCameraCalls.length, 1, 'Background off must start processor-free camera only after explicit camera-on.');
+  assert.equal(rawCameraCalls[0].options.deviceId.exact, 'camera-selected');
+  assert.equal(harness.backgroundCalls.filter(({ operation }) => operation === 'createController').length, 0);
   const initialCameraTrack = publications.get(liveKitSources.Camera).track;
-  const initialCameraProcessor = initialCameraTrack.getProcessor();
-  assert.equal(initialCameraProcessor.mode, 'disabled');
-  assert.equal(initialCameraTrack.mediaStreamTrack, initialCameraProcessor.processedTrack);
+  assert.equal(initialCameraTrack.getProcessor?.(), undefined, 'Off must not attach even a disabled processor.');
+  assert.equal(harness.hooks.state.userApprovedRawCameraTracks.has(initialCameraTrack), true);
   assert.equal(cameraButton.getAttribute('aria-pressed'), 'true');
   assert.equal(harness.document.getElementById('sr-camera-state').textContent, 'On');
   assert.equal(harness.document.getElementById('sr-branded-backdrop-status').dataset.backdropState, 'off');
   assert.match(harness.document.getElementById('sr-branded-backdrop-copy').textContent, /real background/iu);
+  assert.equal(harness.document.getElementById('sr-toggle-backdrop').disabled, false,
+    'Processor-free camera startup must not falsely disable supported background effects.');
+  assert.equal(harness.document.getElementById('sr-background-file').disabled, false,
+    'No allocated controller is not evidence that custom backgrounds are unsupported.');
 
   const backdropButton = harness.document.getElementById('sr-toggle-backdrop');
   await backdropButton.emit('click');
   const cameraEnableCalls = harness.backgroundCalls.filter(({ operation }) => operation === 'enableCamera');
   assert.equal(backdropButton.getAttribute('aria-pressed'), 'true');
-  assert.equal(cameraEnableCalls.length, 1, 'Applying the backdrop must reuse the existing camera lifecycle.');
+  assert.equal(cameraEnableCalls.length, 1, 'Applying a background must establish one protected camera lifecycle.');
   assert.equal(cameraEnableCalls[0].captureOptions.deviceId.exact, 'camera-selected');
   assert.equal(cameraEnableCalls[0].publishOptions.source, liveKitSources.Camera);
-  assert.equal(harness.backgroundCalls.filter(({ operation }) => operation === 'switchBackground').length, 1);
-  assert.equal(harness.backgroundCalls.find(({ operation }) => operation === 'switchBackground').mode, 'virtual-background');
-  assert.equal(publications.get(liveKitSources.Camera).track, initialCameraTrack);
-  assert.equal(publications.get(liveKitSources.Camera).track.getProcessor(), initialCameraProcessor);
-  assert.equal(initialCameraProcessor.mode, 'virtual-background');
+  const selectedBackgroundCalls = harness.backgroundCalls.filter(({ operation }) => operation === 'switchBackground');
+  assert.equal(selectedBackgroundCalls.length, 2, 'Selection and protected publication both confirm the chosen effect.');
+  assert.ok(selectedBackgroundCalls.every(({ mode }) => mode === 'virtual-background'));
+  assert.ok(harness.backgroundCalls.findIndex(({ operation }) => operation === 'switchBackground')
+    < harness.backgroundCalls.findIndex(({ operation }) => operation === 'enableCamera'),
+  'The chosen effect must be configured before a protected publication is enabled.');
+  assert.equal(initialCameraTrack.stopped, true, 'The raw stream must stop before protected video replaces it.');
+  assert.equal(harness.hooks.state.userApprovedRawCameraTracks.has(initialCameraTrack), false);
+  const protectedCameraTrack = publications.get(liveKitSources.Camera).track;
+  const protectedCameraProcessor = protectedCameraTrack.getProcessor();
+  assert.notEqual(protectedCameraTrack, initialCameraTrack);
+  assert.equal(protectedCameraProcessor.mode, 'virtual-background');
+  assert.equal(protectedCameraTrack.mediaStreamTrack, protectedCameraProcessor.processedTrack);
+  assert.equal(rawCameraCalls.length, 1, 'Selecting the background must not publish another raw stream.');
   assert.equal(cameraButton.getAttribute('aria-pressed'), 'true');
   assert.equal(harness.document.getElementById('sr-branded-backdrop-status').dataset.backdropState, 'enabled');
-  assert.match(harness.document.getElementById('sr-branded-backdrop-copy').textContent, /backdrop is active/iu);
+  assert.match(harness.document.getElementById('sr-branded-backdrop-copy').textContent, /background.*active/iu);
 
   await backdropButton.emit('click');
   assert.equal(backdropButton.getAttribute('aria-pressed'), 'false');
   assert.equal(
     harness.backgroundCalls.filter(({ operation }) => operation === 'enableCamera').length,
     1,
-    'Removing the backdrop must not create a second camera lifecycle.',
+    'Background off must not create a second protected camera lifecycle.',
   );
-  assert.equal(rawCameraCalls.length, 0, 'Removing the backdrop must not replace the managed camera track.');
-  assert.equal(harness.backgroundCalls.filter(({ operation }) => operation === 'switchBackground').length, 2);
-  assert.equal(harness.backgroundCalls.at(-1).mode, 'disabled');
-  assert.equal(publications.get(liveKitSources.Camera).track, initialCameraTrack);
-  assert.equal(publications.get(liveKitSources.Camera).track.getProcessor(), initialCameraProcessor);
-  assert.equal(initialCameraProcessor.mode, 'disabled');
+  assert.equal(harness.backgroundCalls.filter(({ operation }) => operation === 'destroy').length, 1);
+  assert.equal(harness.hooks.state.backgroundController, null, 'Off must release the background controller.');
+  assert.equal(rawCameraCalls.length, 2, 'Explicit Background off resumes processor-free video when the camera was on.');
+  const resumedRawTrack = publications.get(liveKitSources.Camera).track;
+  assert.notEqual(resumedRawTrack, protectedCameraTrack);
+  assert.equal(resumedRawTrack.getProcessor?.(), undefined);
+  assert.equal(harness.hooks.state.userApprovedRawCameraTracks.has(resumedRawTrack), true);
   assert.equal(cameraButton.getAttribute('aria-pressed'), 'true');
 
   await cameraButton.emit('click');
   assert.equal(
     harness.backgroundCalls.filter(({ operation }) => operation === 'destroy').length,
-    0,
-    'Turning the camera off must mute the publication without destroying its processor.',
+    1,
+    'Turning raw camera off must not allocate or destroy a new background processor.',
   );
-  assert.equal(harness.backgroundCalls.filter(({ operation }) => operation === 'disableCamera').length, 1);
-  assert.equal(rawCameraCalls.length, 0);
+  assert.equal(harness.backgroundCalls.filter(({ operation }) => operation === 'disableCamera').length, 0);
+  assert.equal(rawCameraCalls.length, 2);
+  assert.equal(resumedRawTrack.stopped, true, 'Camera off must stop the raw capture track.');
+  assert.equal(publications.has(liveKitSources.Camera), false, 'Camera off must remove the raw publication.');
+  assert.equal(harness.hooks.state.userApprovedRawCameraTracks.size, 0);
   assert.equal(cameraButton.getAttribute('aria-pressed'), 'false');
   assert.equal(harness.document.getElementById('sr-camera-state').textContent, 'Off');
   assert.equal(harness.document.getElementById('sr-branded-backdrop-status').dataset.backdropState, 'off');
@@ -1818,6 +1839,7 @@ class FakeMediaStream {
     connectionState: 'connected',
     canPlaybackAudio: true,
   };
+  harness.hooks.state.isAdministrator = false;
   harness.hooks.renderParticipants();
   assert.equal(remoteAudioTrack.attachedElements.length, 1);
   assert.equal(remoteAudioTrack.attachedElements[0].volume, 1);
@@ -1826,8 +1848,9 @@ class FakeMediaStream {
   assert.equal(
     descendantWithText(row, 'Mute for room'),
     undefined,
-    'Remote-participant controls must not expose irreversible room-wide muting.',
+    'Ordinary members must not expose room-wide administrator controls.',
   );
+  assert.equal(descendantWithText(row, 'Remove'), undefined);
   const slider = descendants(row).find((child) => child.type === 'range');
   slider.value = '42';
   await slider.emit('input');
@@ -2352,4 +2375,183 @@ class FakeMediaStream {
   assert.equal(harness.document.body.classList.contains('sr-in-call'), false, 'Explicit room teardown must leave the call UI.');
 }
 
+let moderationCases = 0;
+function moderationResponse(body) {
+  return response({ ok: true, status: 200, payload: { ok: true, result: {
+    action: body.operation === 'mute' ? 'muted' : 'removed',
+    roomKey: body.roomKey, participantIdentity: body.participantIdentity,
+    ...(body.operation === 'mute' ? { trackSid: body.trackSid } : {}),
+  } } });
+}
+
+async function createModeratorHarness({ respond = moderationResponse, confirm = () => true } = {}) {
+  const requests = [];
+  const confirmations = [];
+  const harness = createLiveHarness({
+    fetch: async (url, options) => {
+      if (String(url).endsWith('/study-room/moderate')) {
+        const body = JSON.parse(options.body);
+        assert.equal(url, 'https://worker.example.test/study-room/moderate');
+        assert.equal(options.method, 'POST');
+        assert.equal(options.headers.Authorization, 'Bearer admin-session-token');
+        assert.equal(options.cache, 'no-store');
+        requests.push(body);
+        return respond(body);
+      }
+      return authorizedResponse();
+    },
+    enumerateDevices: async () => labeledDevices,
+    getUserMedia: async () => { throw new Error('No real media in moderator VM tests.'); },
+    liveKit: { Track: { Source: liveKitSources } },
+  });
+  await waitForAuthorizedPrejoin(harness);
+  const publication = { source: liveKitSources.Microphone, trackSid: 'TR_inert_microphone', isMuted: false };
+  const participant = {
+    identity: 'sr_inert_remote_participant', name: 'VM study partner', isLocal: false,
+    trackPublications: new Map([[liveKitSources.Microphone, publication]]),
+    getTrackPublication(source) { return this.trackPublications.get(source) || null; },
+  };
+  const localParticipant = {
+    identity: 'sr_inert_local_admin', name: 'VM moderator', isLocal: true,
+    trackPublications: new Map(), getTrackPublication: () => null,
+  };
+  const room = { localParticipant, remoteParticipants: new Map([[participant.identity, participant]]), state: 'connected' };
+  const state = harness.hooks.state;
+  state.room = room;
+  state.currentRoomKey = '2';
+  state.isAdministrator = true;
+  harness.window.confirm = (copy) => { confirmations.push(copy); return confirm(copy); };
+  const toastNode = harness.document.getElementById('sr-toast');
+  toastNode.textContent = '';
+  return { ...harness, state, room, participant, publication, localParticipant, requests, confirmations, toastNode };
+}
+
+for (const operation of ['mute', 'remove']) {
+  const h = await createModeratorHarness();
+  const row = h.hooks.createPersonRow(h.participant);
+  const button = descendantWithText(row, operation === 'mute' ? 'Mute for room' : 'Remove');
+  assert.equal(button.disabled, false);
+  await button.emit('click');
+  assert.deepEqual(h.requests, [{ operation, roomKey: '2', participantIdentity: h.participant.identity,
+    ...(operation === 'mute' ? { trackSid: 'TR_inert_microphone' } : {}) }]);
+  assert.equal(h.confirmations.length, operation === 'remove' ? 1 : 0);
+  if (operation === 'remove') assert.match(h.confirmations[0], /They can rejoin; this is not a permanent block/);
+  assert.equal(h.toastNode.textContent, operation === 'mute' ? 'Microphone muted for the room.' : 'Removed from the room. They can rejoin.');
+  assert.equal(h.publication.isMuted, false, 'Server acknowledgement must not forge a local LiveKit track event.');
+  assert.equal(h.room.remoteParticipants.get(h.participant.identity), h.participant, 'Removal awaits authoritative RTC state.');
+  assert.equal(h.state.pendingModeration.size, 0);
+  assert.equal(h.state.blockedParticipants.size, 0, 'Admin removal must not claim permanent/local blocking.');
+  moderationCases += 1;
+}
+
+{
+  const h = await createModeratorHarness({ confirm: () => false });
+  await descendantWithText(h.hooks.createPersonRow(h.participant), 'Remove').emit('click');
+  assert.equal(h.confirmations.length, 1);
+  assert.equal(h.requests.length, 0);
+  assert.equal(h.state.pendingModeration.size, 0);
+  assert.equal(h.toastNode.textContent, '');
+  moderationCases += 1;
+}
+
+for (const failure of ['503', 'missing-result', 'wrong-action', 'wrong-room', 'wrong-participant', 'wrong-track']) {
+  const h = await createModeratorHarness({ respond: (body) => {
+    if (failure === '503') return response({ ok: false, status: 503, payload: { ok: false, error: { message: 'DO_NOT_DISPLAY_PRIVATE_SERVER_BODY' } } });
+    const result = { action: 'muted', roomKey: body.roomKey, participantIdentity: body.participantIdentity, trackSid: body.trackSid };
+    if (failure === 'wrong-action') result.action = 'removed';
+    if (failure === 'wrong-room') result.roomKey = '3';
+    if (failure === 'wrong-participant') result.participantIdentity = 'different-participant';
+    if (failure === 'wrong-track') result.trackSid = 'different-track';
+    return response({ ok: true, status: 200, payload: { ok: true, ...(failure === 'missing-result' ? {} : { result }) } });
+  } });
+  await h.hooks.moderateParticipant(h.participant, 'mute');
+  assert.equal(h.requests.length, 1, failure);
+  assert.equal(h.toastNode.textContent, 'Could not confirm the microphone mute. Check the participant before retrying.', failure);
+  assert.doesNotMatch(h.toastNode.textContent, /DO_NOT_DISPLAY_PRIVATE_SERVER_BODY/);
+  assert.equal(h.publication.isMuted, false);
+  assert.equal(h.room.remoteParticipants.get(h.participant.identity), h.participant);
+  assert.equal(h.state.pendingModeration.size, 0);
+  assert.equal(descendantWithText(h.hooks.createPersonRow(h.participant), 'Mute for room').disabled, false,
+    'Uncertain response clears local pending state but does not automatically resend.');
+  moderationCases += 1;
+}
+
+for (const microphoneState of ['absent', 'missing-track-sid', 'muted']) {
+  const h = await createModeratorHarness();
+  if (microphoneState === 'absent') h.participant.trackPublications.clear();
+  if (microphoneState === 'missing-track-sid') delete h.publication.trackSid;
+  if (microphoneState === 'muted') h.publication.isMuted = true;
+  assert.equal(descendantWithText(h.hooks.createPersonRow(h.participant), 'Mute for room').disabled, true);
+  await h.hooks.moderateParticipant(h.participant, 'mute');
+  assert.equal(h.requests.length, 0);
+  assert.equal(h.state.pendingModeration.size, 0);
+  moderationCases += 1;
+}
+
+{
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const h = await createModeratorHarness({ respond: async (body) => { await gate; return moderationResponse(body); } });
+  const first = h.hooks.moderateParticipant(h.participant, 'mute');
+  assert.equal(h.requests.length, 1);
+  assert.equal(h.state.pendingModeration.size, 1);
+  const pendingRow = h.hooks.createPersonRow(h.participant);
+  assert.equal(descendantWithText(pendingRow, 'Mute for room').disabled, true);
+  assert.equal(descendantWithText(pendingRow, 'Remove').disabled, true);
+  assert.equal(h.toastNode.textContent, '', 'No optimistic success before server acknowledgement.');
+  assert.equal(h.publication.isMuted, false);
+  await h.hooks.moderateParticipant(h.participant, 'mute');
+  await h.hooks.moderateParticipant(h.participant, 'remove');
+  assert.equal(h.requests.length, 1, 'Dedupe covers both actions for the same room/participant.');
+  assert.equal(h.confirmations.length, 0);
+  release();
+  await first;
+  assert.equal(h.state.pendingModeration.size, 0);
+  moderationCases += 1;
+}
+
+for (const stale of ['room', 'room-key', 'session']) {
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const h = await createModeratorHarness({ respond: async (body) => { await gate; return moderationResponse(body); } });
+  const first = h.hooks.moderateParticipant(h.participant, 'mute');
+  if (stale === 'room') h.state.room = { ...h.room, remoteParticipants: new Map() };
+  if (stale === 'room-key') h.state.currentRoomKey = '3';
+  if (stale === 'session') h.state.session = { access_token: 'different-inert-session' };
+  h.toastNode.textContent = 'New context';
+  release();
+  await first;
+  assert.equal(h.toastNode.textContent, 'New context', 'Late moderation must not notify a different room/session.');
+  assert.equal(h.state.pendingModeration.size, 0);
+  assert.equal(h.publication.isMuted, false);
+  moderationCases += 1;
+}
+
+for (const guard of ['member', 'self', 'missing-room', 'replaced-participant', 'unsupported-action']) {
+  const h = await createModeratorHarness();
+  if (guard === 'member') h.state.isAdministrator = false;
+  if (guard === 'missing-room') h.state.room = null;
+  if (guard === 'replaced-participant') h.room.remoteParticipants.set(h.participant.identity, { ...h.participant });
+  const target = guard === 'self' ? h.localParticipant : h.participant;
+  if (guard === 'member' || guard === 'self') {
+    const row = h.hooks.createPersonRow(target);
+    assert.equal(descendantWithText(row, 'Mute for room'), undefined);
+    assert.equal(descendantWithText(row, 'Remove'), undefined);
+  }
+  await h.hooks.moderateParticipant(target, guard === 'unsupported-action' ? 'unmute' : 'mute');
+  assert.equal(h.requests.length, 0, guard);
+  assert.equal(h.confirmations.length, 0);
+  assert.equal(h.state.pendingModeration.size, 0);
+  moderationCases += 1;
+}
+
+{
+  const h = await createModeratorHarness();
+  h.window.confirm = () => { h.state.session = null; return true; };
+  await h.hooks.moderateParticipant(h.participant, 'remove');
+  assert.equal(h.requests.length, 0, 'Session must be rechecked after the blocking confirmation prompt.');
+  moderationCases += 1;
+}
+
+console.log(`Study Room administrator moderation: ${moderationCases} inert actual-function cases passed.`);
 console.log('Study Room admin-window, device, microphone, and local-control behavioral tests passed.');

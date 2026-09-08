@@ -98,6 +98,7 @@ const studyRoomPreviewFiles = Object.freeze([
   'assets/study-room-live.js',
   'assets/study-room-backgrounds.js',
   'assets/study-room/virtual-background-due-diligence-branded.webp',
+  'assets/study-room/virtual-background-due-diligence-polished-20260908.webp',
   'assets/study-room/dimasalang-library.webp',
   'assets/study-room/participant-2-tropical.webp',
   'assets/study-room/participant-3-bedroom.webp',
@@ -300,8 +301,19 @@ async function buildStudyRoomBackgroundRuntime() {
           supportsModernBackgroundProcessors,
         } from '@livekit/track-processors';
 
-        const MANDATORY_IMAGE_PATH = '/assets/study-room/virtual-background-due-diligence-branded.webp';
+        const MANDATORY_IMAGE_PATH = '/assets/study-room/virtual-background-due-diligence-polished-20260908.webp';
         const POLICY = 'due-diligence-mandatory-virtual-background-no-raw-first-frame';
+
+        function approvedImagePath(imagePath = MANDATORY_IMAGE_PATH) {
+          if (imagePath === MANDATORY_IMAGE_PATH) return imagePath;
+          try {
+            const url = new URL(imagePath);
+            if (url.protocol === 'blob:' && url.origin === globalThis.location?.origin
+              && /^https?:$/.test(globalThis.location?.protocol || '')
+              && globalThis.DueDiligenceStudyRoomMandatoryBackground?.isRegisteredCustomImage(imagePath) === true) return imagePath;
+          } catch {}
+          throw new Error('Study Room background image is not registered on this device.');
+        }
 
         function BackgroundProcessor(options = {}, name) {
           const {
@@ -321,7 +333,7 @@ async function buildStudyRoomBackgroundRuntime() {
           const processorOptionsWithMode = mode === 'virtual-background'
             ? {
                 ...processorOptions,
-                imagePath: MANDATORY_IMAGE_PATH,
+                imagePath: approvedImagePath(_requestedImagePath),
                 blurRadius: undefined,
                 backgroundDisabled: false,
               }
@@ -351,7 +363,7 @@ async function buildStudyRoomBackgroundRuntime() {
           if (typeof nativeSwitchTo === 'function') {
             processor.switchTo = async (nextOptions = {}) => {
               const safeOptions = nextOptions.mode === 'virtual-background'
-                ? { ...nextOptions, imagePath: MANDATORY_IMAGE_PATH }
+                ? { ...nextOptions, imagePath: approvedImagePath(nextOptions.imagePath) }
                 : nextOptions;
               await nativeSwitchTo(safeOptions);
               if (['disabled', 'background-blur', 'virtual-background'].includes(safeOptions.mode)) {

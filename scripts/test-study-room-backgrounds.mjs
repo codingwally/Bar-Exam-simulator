@@ -41,6 +41,7 @@ function createHarness(overrides = {}) {
     },
     async setProcessor(nextProcessor, stopExistingProcessor) {
       events.push(`set-processor:${stopExistingProcessor}`);
+      if (overrides.beforeSetProcessor) await overrides.beforeSetProcessor();
       if (overrides.setProcessorFailure) throw new Error('processor init failed');
       this.processor = nextProcessor;
     },
@@ -68,7 +69,7 @@ function createHarness(overrides = {}) {
 
   const effects = {
     POLICY: 'due-diligence-mandatory-virtual-background-no-raw-first-frame',
-    MANDATORY_IMAGE_PATH: '/assets/study-room/virtual-background-due-diligence-branded.webp',
+    MANDATORY_IMAGE_PATH: '/assets/study-room/virtual-background-due-diligence-polished-20260908.webp',
     supportsBackgroundProcessors() {
       events.push('check-support');
       return overrides.supported !== false;
@@ -121,6 +122,7 @@ function createHarness(overrides = {}) {
   const participant = {
     async publishTrack(publishedTrack, publishOptions) {
       events.push('publish-track');
+      if (overrides.beforePublishResult) await overrides.beforePublishResult();
       assert.equal(publishedTrack, track);
       assert.equal(
         publishedTrack.mediaStreamTrack,
@@ -157,7 +159,13 @@ function createHarness(overrides = {}) {
     },
   };
 
-  const sandboxWindow = {};
+  let imageId = 0;
+  const revokedImages = [];
+  class LocalURL extends URL {
+    static createObjectURL() { return `blob:https://duediligence.ph/${++imageId}`; }
+    static revokeObjectURL(value) { revokedImages.push(value); }
+  }
+  const sandboxWindow = { Blob, URL: LocalURL, location: { origin: 'https://duediligence.ph', protocol: 'https:' } };
   vm.runInNewContext(moduleSource, { window: sandboxWindow }, { filename: modulePath });
   const api = sandboxWindow.DueDiligenceStudyRoomMandatoryBackground;
   assert.ok(api, 'the Study Room background API must be installed');
@@ -169,6 +177,8 @@ function createHarness(overrides = {}) {
     async verifyImage(imagePath) {
       events.push(`verify-image:${imagePath}`);
       if (overrides.imageFailure) throw new Error('image unavailable');
+      if (overrides.verifyImage) return overrides.verifyImage(imagePath);
+      return overrides.decodedBounds || { width: 640, height: 360 };
     },
   });
 
@@ -185,6 +195,7 @@ function createHarness(overrides = {}) {
     get publication() { return publication; },
     participant,
     rawMediaTrack,
+    revokedImages,
     processedMediaTrack,
     track,
   };
@@ -238,7 +249,7 @@ async function rejectsWithCode(promise, code) {
 
   await harness.controller.switchBackground({
     mode: 'virtual-background',
-    imagePath: '/assets/study-room/virtual-background-due-diligence-branded.webp',
+    imagePath: '/assets/study-room/virtual-background-due-diligence-polished-20260908.webp',
   });
   assert.equal(harness.controller.snapshot().mode, 'virtual-background');
   assert.equal(harness.processor, originalProcessor);
@@ -340,10 +351,12 @@ async function rejectsWithCode(promise, code) {
     harness.controller.switchBackground({ mode: 'virtual-background' }),
     'STUDY_ROOM_BACKGROUND_SWITCH_FAILED',
   );
-  assert.equal(harness.controller.snapshot().fallbackRaw, true);
+  assert.equal(harness.controller.snapshot().fallbackRaw, false);
   assert.equal(harness.controller.snapshot().mode, 'disabled');
   assert.equal(harness.track.getProcessor(), null);
-  assert.equal(harness.track.mediaStreamTrack, harness.rawMediaTrack);
+  assert.equal(harness.rawMediaTrack.readyState, 'ended', 'A failed backdrop must not expose the raw camera.');
+  assert.ok(harness.events.includes('mute-publication'));
+  assert.ok(harness.events.includes('unpublish-track:false'));
 }
 
 for (const failure of [
@@ -427,5 +440,149 @@ assert.doesNotMatch(
   /BackgroundProcessor\(\{\s*mode:\s*['"]virtual-background['"]/u,
   'camera startup must not recreate a virtual processor for every toggle',
 );
+
+function rasterBlob(type = 'image/png', width = 640, height = 360) {
+  if (type === 'image/jpeg') {
+    const bytes = new Uint8Array([255,216,255,192,0,8,8,height >>> 8,height & 255,width >>> 8,width & 255,1]);
+    return new Blob([bytes], { type });
+  }
+  if (type === 'image/webp') {
+    const bytes = new Uint8Array(30);
+    for (const [at,text] of [[0,'RIFF'],[8,'WEBP'],[12,'VP8X']]) [...text].forEach((char,i) => { bytes[at+i]=char.charCodeAt(0); });
+    bytes[24]=(width-1)&255;bytes[25]=((width-1)>>>8)&255;
+    bytes[27]=(height-1)&255;bytes[28]=((height-1)>>>8)&255;
+    return new Blob([bytes], { type });
+  }
+  const bytes = new Uint8Array(24);
+  bytes.set([137,80,78,71,13,10,26,10]);bytes.set([73,72,68,82],12);
+  new DataView(bytes.buffer).setUint32(16,width);new DataView(bytes.buffer).setUint32(20,height);
+  return new Blob([bytes], { type });
+}
+
+for (const type of ['image/png','image/jpeg','image/webp']) {
+  const h = createHarness();
+  const first = await h.controller.registerCustomBackground(rasterBlob(type));
+  assert.equal(first.width,640);assert.equal(first.height,360);
+  assert.equal(h.api.isRegisteredCustomImage(first.imagePath),true);
+  await h.controller.switchBackground({ mode:'virtual-background', imagePath:first.imagePath });
+  await h.controller.enableCamera();
+  assert.equal(h.processor.imagePath,first.imagePath,'An image selected before camera ON must survive startup.');
+  const track=h.track, processor=h.processor, publication=h.publication;
+  await h.controller.disableCamera();await h.controller.enableCamera();
+  await h.controller.switchCamera({ deviceId:'camera-b' });
+  assert.equal(h.processor.imagePath,first.imagePath);
+  assert.equal(h.track,track);assert.equal(h.processor,processor);assert.equal(h.publication,publication);
+  assert.throws(()=>h.controller.removeCustomBackground(first.imagePath),/different background/);
+  const next=await h.controller.registerCustomBackground(rasterBlob());
+  await h.controller.switchBackground({ mode:'virtual-background', imagePath:next.imagePath });
+  assert.equal(h.controller.removeCustomBackground(first.imagePath),true);
+  assert.equal(h.controller.removeCustomBackground(first.imagePath),false);
+  assert.equal(h.api.isRegisteredCustomImage(first.imagePath),false);
+  await h.controller.destroy();
+  assert.equal(h.api.isRegisteredCustomImage(next.imagePath),false);
+  assert.deepEqual(h.revokedImages,[first.imagePath,next.imagePath]);
+}
+
+for (const imagePath of ['https://evil.invalid/a.png','http://duediligence.ph/a.png','file:///image.png',
+  'data:image/png;base64,AAAA','blob:https://elsewhere.invalid/id','blob:https://duediligence.ph/unregistered','/other.png']) {
+  const h=createHarness();
+  assert.throws(()=>h.controller.switchBackground({mode:'virtual-background',imagePath}),/this device/);
+  assert.equal(h.events.includes('publish-track'),false);
+}
+for (const blob of [new Blob(['<svg/>'],{type:'image/svg+xml'}),new Blob(['<svg/>'],{type:'image/png'}),
+  new Blob([],{type:'image/png'}),new Blob([new Uint8Array(5*1024*1024+1)],{type:'image/png'}),
+  rasterBlob('image/png',4097,1),rasterBlob('image/jpeg',1,4097),rasterBlob('image/webp',4097,1)]) {
+  const h=createHarness();await assert.rejects(h.controller.registerCustomBackground(blob));
+  assert.equal(h.events.some(e=>e.startsWith('verify-image:')),false,'Invalid/oversized raster must not decode.');
+}
+{
+  const h=createHarness({decodedBounds:{width:9000,height:1}});
+  await assert.rejects(h.controller.registerCustomBackground(rasterBlob()));
+  assert.equal(h.revokedImages.length,1);
+  assert.equal(h.api.isRegisteredCustomImage(h.revokedImages[0]),false);
+}
+{
+  const h=createHarness({imageFailure:true});
+  await assert.rejects(h.controller.registerCustomBackground(rasterBlob()));
+  assert.equal(h.revokedImages.length,1);
+  assert.equal(h.api.isRegisteredCustomImage(h.revokedImages[0]),false);
+}
+{
+  const h=createHarness();
+  const paths=[];
+  for(let i=0;i<4;i++) paths.push(await h.controller.registerCustomBackground(rasterBlob()));
+  await assert.rejects(h.controller.registerCustomBackground(rasterBlob()));
+  await h.controller.switchBackground({mode:'disabled'});
+  assert.equal(h.controller.removeCustomBackground(paths[0].imagePath),true);
+  await h.controller.registerCustomBackground(rasterBlob());
+  await h.controller.destroy();assert.equal(h.revokedImages.length,5);
+}
+{
+  let release,started;
+  const gate=new Promise(resolve=>{release=resolve;});
+  const start=new Promise(resolve=>{started=resolve;});
+  const h=createHarness({verifyImage:async imagePath=>{started(imagePath);await gate;return {width:640,height:360};}});
+  const pending=h.controller.registerCustomBackground(rasterBlob());
+  const imagePath=await start;
+  assert.equal(h.api.isRegisteredCustomImage(imagePath),false,'Decode-pending URLs are not approved.');
+  await h.controller.destroy();release();await assert.rejects(pending);
+  assert.equal(h.api.isRegisteredCustomImage(imagePath),false);
+  assert.deepEqual(h.revokedImages,[imagePath]);
+}
+{
+  let release;
+  const gate=new Promise(resolve=>{release=resolve;});
+  const h=createHarness({verifyImage:async()=>{await gate;return {width:640,height:360};}});
+  const pending=Array.from({length:4},()=>h.controller.registerCustomBackground(rasterBlob()));
+  await assert.rejects(h.controller.registerCustomBackground(rasterBlob()),/5 MB/);
+  release();await Promise.all(pending);await h.controller.destroy();assert.equal(h.revokedImages.length,4);
+}
+{
+  const h=createHarness();const selected=await h.controller.registerCustomBackground(rasterBlob());
+  await h.controller.enableCamera();h.processor.switchTo=async()=>{throw new Error('processor image switch failed');};
+  await assert.rejects(h.controller.switchBackground({mode:'virtual-background',imagePath:selected.imagePath}));
+  assert.equal(h.rawMediaTrack.readyState,'ended');assert.equal(h.controller.snapshot().fallbackRaw,false);
+  assert.throws(()=>h.controller.removeCustomBackground(selected.imagePath),/different background/);
+  await h.controller.switchBackground({mode:'disabled'});
+  assert.equal(h.controller.removeCustomBackground(selected.imagePath),true);
+}
+{
+  const h=createHarness({switchFailure:true});
+  const selected=await h.controller.registerCustomBackground(rasterBlob());
+  await h.controller.enableCamera();
+  await assert.rejects(h.controller.switchBackground({mode:'virtual-background',imagePath:selected.imagePath}));
+  // The fake camera factory returns one reusable object; revive it as a newly
+  // captured camera would be, without weakening the actual failed publication.
+  h.rawMediaTrack.readyState='live';h.processedMediaTrack.readyState='live';
+  await assert.rejects(h.controller.enableCamera());
+  assert.equal(h.events.filter(e=>e==='switch-to:virtual-background').length,2);
+  assert.equal(h.events.filter(e=>e==='publish-track').length,1,'Retry must not publish raw while the selected effect still fails.');
+  assert.equal(h.rawMediaTrack.readyState,'ended');
+  assert.equal(h.controller.snapshot().fallbackRaw,false);
+  await h.controller.destroy();
+}
+for (const during of ['beforeSetProcessor','beforePublishResult']) {
+  let release,started;
+  const gate=new Promise(resolve=>{release=resolve;});
+  const entered=new Promise(resolve=>{started=resolve;});
+  const h=createHarness({[during]:async()=>{started();await gate;}});
+  const enabling=h.controller.enableCamera();await entered;
+  const closing=h.controller.destroy();release();
+  await rejectsWithCode(enabling,'STUDY_ROOM_BACKGROUND_DESTROYED');await closing;
+  assert.equal(h.controller.snapshot().status,'destroyed');assert.equal(h.rawMediaTrack.readyState,'ended');
+  assert.equal(h.events.filter(e=>e==='publish-track').length,during==='beforeSetProcessor'?0:1);
+  if(during==='beforePublishResult')assert.ok(h.events.includes('unpublish-track:false'));
+}
+{
+  const h=createHarness({blockFirstSwitch:true,switchFailure:true});
+  const selected=await h.controller.registerCustomBackground(rasterBlob());
+  await h.controller.enableCamera();
+  const changing=h.controller.switchBackground({mode:'virtual-background',imagePath:selected.imagePath});
+  await h.firstSwitchStarted;
+  const latest=h.controller.switchBackground({mode:'disabled'});
+  assert.equal(changing,latest);h.releaseFirstSwitch();await assert.rejects(changing);
+  assert.equal(h.controller.removeCustomBackground(selected.imagePath),true,'A later explicit Off must survive an earlier failed switch.');
+  await h.controller.destroy();
+}
 
 console.log('Study Room background processor lifecycle tests passed.');

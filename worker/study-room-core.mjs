@@ -334,19 +334,23 @@ function listedRoomForSlot(rooms, slot) {
 async function ensureStudyRoom(service, slot, options = {}) {
   return liveKitCall('ensure_room', async () => {
     const existingRooms = await service.listRooms([slot.roomName]);
+    if (!Array.isArray(existingRooms)) throw new Error('Unexpected LiveKit room list response');
     const existingRoom = listedRoomForSlot(existingRooms, slot);
     if (existingRoom) {
       return { room: requireConfiguredRoomCapacity(existingRoom), created: false };
     }
 
     try {
+      const createdRoom = await service.createRoom(configuredRoomCreation(slot, options));
+      if (createdRoom?.name !== slot.roomName) throw new Error('Unexpected LiveKit room creation response');
       return {
-        room: requireConfiguredRoomCapacity(await service.createRoom(configuredRoomCreation(slot, options))),
+        room: requireConfiguredRoomCapacity(createdRoom),
         created: true,
       };
     } catch (creationError) {
       // A concurrent creator may have occupied this trusted slot after the list call.
       const racedRooms = await service.listRooms([slot.roomName]);
+      if (!Array.isArray(racedRooms)) throw new Error('Unexpected LiveKit room list response');
       const racedRoom = listedRoomForSlot(racedRooms, slot);
       if (racedRoom) {
         return { room: requireConfiguredRoomCapacity(racedRoom), created: false };
@@ -387,7 +391,8 @@ function publicRoomDescriptor(slot, room = null, options = {}) {
     kind: slot.kind,
     microphoneAllowed: slot.microphoneAllowed,
     adminOnly: slot.adminOnly,
-    canCreate: isAdministrator,
+    alwaysOpen: !slot.adminOnly,
+    canCreate: slot.adminOnly && isAdministrator,
     canJoin: !slot.adminOnly || isAdministrator,
   });
   if (!room) {
@@ -485,17 +490,22 @@ export async function createStudyRoomJoinCredential(env, user, roomKey, nickname
       'Choose Library, Room 1, Room 2, or Room 3.',
     );
   }
-  const activeRooms = await liveKitCall('join_room_lookup', () => service.listRooms([slot.roomName]));
-  const room = listedRoomForSlot(activeRooms, slot);
-  if (!room) {
-    throw new StudyRoomError(
-      'STUDY_ROOM_ROOM_NOT_OPEN',
-      `${slot.label} is not open yet.`,
-      409,
-      isAdministrator
-        ? `Create ${slot.label}, then join it.`
-        : 'Wait for an administrator to open the room, then refresh the lobby.',
-    );
+  let room;
+  if (slot.adminOnly) {
+    const activeRooms = await liveKitCall('join_room_lookup', () => service.listRooms([slot.roomName]));
+    room = listedRoomForSlot(activeRooms, slot);
+    if (!room) {
+      throw new StudyRoomError(
+        'STUDY_ROOM_ROOM_NOT_OPEN',
+        `${slot.label} is not open yet.`,
+        409,
+        `Create ${slot.label}, then join it.`,
+      );
+    }
+  } else {
+    // Public slots are always available. Only a real join creates the transient
+    // media room; concurrent first joiners converge on the same trusted name.
+    ({ room } = await ensureStudyRoom(service, slot, options));
   }
   requireConfiguredRoomCapacity(room);
 

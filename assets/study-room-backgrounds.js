@@ -1,11 +1,74 @@
 (function dueDiligenceStudyRoomMandatoryBackground(global) {
   'use strict';
 
-  const VERSION = 'study-room-background-processor-20260902-1';
+  const VERSION = 'study-room-background-images-20260908-1';
   const REQUIRED_EFFECTS_POLICY = 'due-diligence-mandatory-virtual-background-no-raw-first-frame';
-  const DEFAULT_IMAGE_PATH = '/assets/study-room/virtual-background-due-diligence-branded.webp';
+  const DEFAULT_IMAGE_PATH = '/assets/study-room/virtual-background-due-diligence-polished-20260908.webp';
   const DEFAULT_TASKS_VISION_PATH = '/assets/vendor/mediapipe/wasm';
   const DEFAULT_MODEL_PATH = '/assets/vendor/mediapipe/selfie_segmenter-float16-2023-05-07.tflite';
+  const MAX_CUSTOM_BYTES = 5 * 1024 * 1024;
+  const MAX_CUSTOM_DIMENSION = 4096;
+  const registeredCustomImages = new Set();
+
+  function isSameOriginBlob(imagePath) {
+    if (typeof imagePath !== 'string') return false;
+    try {
+      const url = new global.URL(imagePath);
+      return url.protocol === 'blob:' && url.origin === global.location?.origin
+        && /^https?:$/.test(global.location?.protocol || '');
+    } catch { return false; }
+  }
+  function isRegisteredCustomImage(imagePath) {
+    return registeredCustomImages.has(imagePath) && isSameOriginBlob(imagePath);
+  }
+
+  function imageBounds(width, height) {
+    if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1
+      || width > MAX_CUSTOM_DIMENSION || height > MAX_CUSTOM_DIMENSION) {
+      throw new StudyRoomBackgroundError('STUDY_ROOM_BACKGROUND_IMAGE_LIMIT', 'Choose an image no larger than 4096 × 4096 pixels.');
+    }
+    return Object.freeze({ width, height });
+  }
+
+  // Inspect bounded raster headers BEFORE decoding; a tiny compressed image must
+  // not allocate an unbounded bitmap. SVG/GIF/unknown and animated WebP are not accepted.
+  function rasterBounds(bytes, type) {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const tag = (at, text) => bytes.length >= at + text.length
+      && [...text].every((char, index) => bytes[at + index] === char.charCodeAt(0));
+    if (type === 'image/png' && bytes.length >= 24
+      && [137,80,78,71,13,10,26,10].every((value,index) => bytes[index] === value)
+      && tag(12, 'IHDR')) return imageBounds(view.getUint32(16), view.getUint32(20));
+    if (type === 'image/jpeg' && bytes.length >= 4 && bytes[0] === 255 && bytes[1] === 216) {
+      let offset = 2;
+      while (offset + 4 <= bytes.length) {
+        if (bytes[offset++] !== 255) break;
+        while (bytes[offset] === 255) offset += 1;
+        const marker = bytes[offset++];
+        if (marker === 217 || marker === 218) break;
+        if (marker === 1 || (marker >= 208 && marker <= 215)) continue;
+        if (offset + 2 > bytes.length) break;
+        const length = view.getUint16(offset);
+        if (length < 2 || offset + length > bytes.length) break;
+        if ([192,193,194,195,197,198,199,201,202,203,205,206,207].includes(marker)
+          && length >= 8) return imageBounds(view.getUint16(offset + 5), view.getUint16(offset + 3));
+        offset += length;
+      }
+    }
+    if (type === 'image/webp' && bytes.length >= 30 && tag(0, 'RIFF') && tag(8, 'WEBP')) {
+      if (tag(12, 'VP8X') && !(bytes[20] & 2)) {
+        return imageBounds(1 + bytes[24] + (bytes[25] << 8) + (bytes[26] << 16),
+          1 + bytes[27] + (bytes[28] << 8) + (bytes[29] << 16));
+      }
+      if (tag(12, 'VP8 ') && bytes[23] === 157 && bytes[24] === 1 && bytes[25] === 42)
+        return imageBounds(view.getUint16(26, true) & 16383, view.getUint16(28, true) & 16383);
+      if (tag(12, 'VP8L') && bytes[20] === 47) {
+        const bits = view.getUint32(21, true);
+        return imageBounds(1 + (bits & 16383), 1 + ((bits >>> 14) & 16383));
+      }
+    }
+    throw new StudyRoomBackgroundError('STUDY_ROOM_BACKGROUND_IMAGE_TYPE', 'Choose a valid PNG, JPEG or static WebP image.');
+  }
 
   class StudyRoomBackgroundError extends Error {
     constructor(code, message, cause) {
@@ -50,7 +113,7 @@
       publication: null,
       processor: null,
       mode: 'disabled',
-      requestedMode: 'disabled',
+      requestedMode: Object.freeze({ mode: 'disabled' }),
       pendingMode: null,
       switchPromise: null,
       verifiedImagePath: '',
@@ -59,6 +122,8 @@
       operation: Promise.resolve(),
       error: '',
     };
+    const customImages = new Set();
+    let pendingCustomImages = 0;
 
     function snapshot() {
       return Object.freeze({
@@ -162,11 +227,13 @@
         });
       }
       if (requestedMode === 'virtual-background') {
+        const selectedPath = typeof request === 'string' ? imagePath : request?.imagePath || imagePath;
+        if (selectedPath !== imagePath && (!customImages.has(selectedPath) || !isRegisteredCustomImage(selectedPath))) {
+          throw new StudyRoomBackgroundError('STUDY_ROOM_BACKGROUND_IMAGE_NOT_REGISTERED', 'Choose a background from this device first.');
+        }
         return Object.freeze({
           mode: 'virtual-background',
-          // The Study Room has one reviewed branded background. Callers may
-          // select the effect mode, but cannot bypass the verified asset.
-          imagePath,
+          imagePath: selectedPath,
         });
       }
       return Object.freeze({ mode: 'disabled' });
@@ -187,8 +254,51 @@
       await processor.switchTo(nextMode);
       assertProcessedTrack(track, processor);
       state.mode = nextMode.mode;
-      state.requestedMode = nextMode.mode;
+      state.requestedMode = nextMode;
       return nextMode;
+    }
+
+    async function registerCustomBackground(blob) {
+      if (state.destroyed) ensureUsable();
+      if (typeof global.Blob !== 'function' || !(blob instanceof global.Blob)
+        || !['image/png','image/jpeg','image/webp'].includes(blob.type)
+        || blob.size < 1 || blob.size > MAX_CUSTOM_BYTES || customImages.size + pendingCustomImages >= 4) {
+        throw new StudyRoomBackgroundError('STUDY_ROOM_BACKGROUND_IMAGE_LIMIT', 'Choose a PNG, JPEG or WebP image up to 5 MB; remove an unused custom background before adding another.');
+      }
+      pendingCustomImages += 1;
+      let localPath;
+      try {
+        rasterBounds(new Uint8Array(await blob.arrayBuffer()), blob.type);
+        if (state.destroyed) ensureUsable();
+        localPath = global.URL.createObjectURL(blob);
+        if (!isSameOriginBlob(localPath)) {
+          throw new StudyRoomBackgroundError('STUDY_ROOM_BACKGROUND_IMAGE_NOT_REGISTERED', 'Local background images are unavailable in this browser.');
+        }
+        const decoded = await verifyImage(localPath);
+        imageBounds(decoded?.width, decoded?.height);
+        if (state.destroyed || customImages.size >= 4) throw new Error('Background image selection is no longer active.');
+        customImages.add(localPath);
+        registeredCustomImages.add(localPath);
+        return Object.freeze({ imagePath: localPath, width: decoded.width, height: decoded.height });
+      } catch (error) {
+        registeredCustomImages.delete(localPath);
+        if (localPath) global.URL.revokeObjectURL(localPath);
+        throw error;
+      } finally {
+        pendingCustomImages -= 1;
+      }
+    }
+
+    function removeCustomBackground(localPath) {
+      if (!customImages.has(localPath)) return false;
+      if (state.requestedMode.imagePath === localPath || state.pendingMode?.imagePath === localPath
+        || state.processor?.imagePath === localPath || state.verifiedImagePath === localPath && state.mode === 'virtual-background') {
+        throw new StudyRoomBackgroundError('STUDY_ROOM_BACKGROUND_IMAGE_IN_USE', 'Choose a different background before removing this image.');
+      }
+      customImages.delete(localPath);
+      registeredCustomImages.delete(localPath);
+      global.URL.revokeObjectURL(localPath);
+      return true;
     }
 
     async function safelyMutePublication(publication) {
@@ -294,11 +404,17 @@
           await applyProcessorMode(track, processor, initialMode);
         }
 
+        if (state.destroyed) {
+          throw new StudyRoomBackgroundError('STUDY_ROOM_BACKGROUND_DESTROYED', 'The camera was closed before publication.');
+        }
         publicationAttempted = true;
         publication = await participant.publishTrack(track, {
           ...(publishOptions || {}),
           source: liveKit.Track?.Source?.Camera || 'camera',
         });
+        if (state.destroyed) {
+          throw new StudyRoomBackgroundError('STUDY_ROOM_BACKGROUND_DESTROYED', 'The camera was closed during publication.');
+        }
         if (!publication || publication.track !== track) {
           throw new StudyRoomBackgroundError(
             'STUDY_ROOM_BACKGROUND_PUBLISH_FAILED',
@@ -388,7 +504,7 @@
 
     function switchBackground(request = { mode: 'disabled' }) {
       const nextMode = normalizeMode(request);
-      state.requestedMode = nextMode.mode;
+      state.requestedMode = nextMode;
       state.pendingMode = nextMode;
       if (state.switchPromise) return state.switchPromise;
 
@@ -397,7 +513,7 @@
           while (state.pendingMode) {
             const pendingMode = state.pendingMode;
             state.pendingMode = null;
-            state.requestedMode = pendingMode.mode;
+            state.requestedMode = pendingMode;
             if (!state.track || !state.processor) {
               state.mode = pendingMode.mode;
               notify(state.status === 'disabled' ? 'disabled' : state.status);
@@ -408,27 +524,18 @@
               await applyProcessorMode(state.track, state.processor, pendingMode);
               notify(state.publication && !state.publication.isMuted ? 'enabled' : 'disabled');
             } catch (error) {
-              const processor = state.processor;
-              let restoredRaw = false;
-              try {
-                if (state.track.getProcessor?.() === processor && typeof state.track.stopProcessor === 'function') {
-                  await state.track.stopProcessor(false);
-                  restoredRaw = true;
-                } else {
-                  await processor?.destroy?.();
-                }
-              } catch {
-                state.track.stop?.();
-              }
-              state.processor = null;
+              // A selected backdrop failing must never silently reveal the real
+              // room. Stop the publication; raw camera requires a separate user action.
+              await cleanupMedia();
               state.mode = 'disabled';
-              state.requestedMode = 'disabled';
-              state.fallbackRaw = restoredRaw;
+              // Retain the latest requested selection (including a newer queued
+              // explicit Off). Failure itself must never select a raw view.
+              state.fallbackRaw = false;
               const protectedError = error instanceof StudyRoomBackgroundError
                 ? error
                 : new StudyRoomBackgroundError(
                   'STUDY_ROOM_BACKGROUND_SWITCH_FAILED',
-                  'Background effects could not be switched safely, so the camera remains available without them.',
+                  'The background could not be applied. Camera is off; choose another image or explicitly use your camera without a backdrop.',
                   error,
                 );
               notify('unavailable', errorMessage(protectedError));
@@ -487,6 +594,11 @@
       state.destroyed = true;
       return enqueue(async () => {
         await cleanupMedia();
+        for (const localPath of customImages) {
+          registeredCustomImages.delete(localPath);
+          global.URL.revokeObjectURL(localPath);
+        }
+        customImages.clear();
         notify('destroyed');
       });
     }
@@ -496,6 +608,8 @@
       destroy,
       disableCamera,
       enableCamera,
+      registerCustomBackground,
+      removeCustomBackground,
       snapshot,
       switchBackground,
       switchCamera,
@@ -512,8 +626,16 @@
     const image = new global.Image();
     image.crossOrigin = 'anonymous';
     await new Promise((resolve, reject) => {
-      image.onload = resolve;
-      image.onerror = () => reject(new StudyRoomBackgroundError(
+      const timer = global.setTimeout(() => finish(new StudyRoomBackgroundError(
+        'STUDY_ROOM_BACKGROUND_IMAGE_UNAVAILABLE', 'The background image took too long to load.')), 10000);
+      const finish = (error) => {
+        global.clearTimeout(timer);
+        image.onload = null;
+        image.onerror = null;
+        if (error) { image.src = ''; reject(error); } else resolve();
+      };
+      image.onload = () => finish();
+      image.onerror = () => finish(new StudyRoomBackgroundError(
         'STUDY_ROOM_BACKGROUND_IMAGE_UNAVAILABLE',
         'The required Due Diligence background image could not load.',
       ));
@@ -526,10 +648,12 @@
         'The required Due Diligence background image is invalid.',
       );
     }
+    return Object.freeze({ width: image.naturalWidth, height: image.naturalHeight });
   }
 
   global.DueDiligenceStudyRoomMandatoryBackground = Object.freeze({
     VERSION,
     createController,
+    isRegisteredCustomImage,
   });
 })(typeof window !== 'undefined' ? window : globalThis);

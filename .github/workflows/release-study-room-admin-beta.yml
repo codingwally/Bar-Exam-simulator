@@ -118,7 +118,7 @@ jobs:
             git diff --quiet "$reviewed_live_sha" "$reviewed_baseline_sha" -- worker assets study-room index.html content
             scope_base="$reviewed_baseline_sha"
           fi
-          allowed='^(\.github/workflows/(deploy-pages-only|release-study-room-admin-beta)\.yml|assets/icons/(community/image|navigation/(hand|mic|monitor-up|pin|settings))\.svg|assets/study-room-backgrounds\.js|assets/study-room-live\.(css|js)|assets/study-room-preview\.(css|js)|assets/study-room/virtual-background-due-diligence-branded\.webp|assets/vendor/mediapipe/(LICENSE|PROVENANCE)\.txt|assets/vendor/mediapipe/selfie_segmenter-float16-2023-05-07\.tflite|design-qa\.md|index\.html|scripts/build-pages-artifact\.mjs|scripts/test-pages-artifact\.mjs|scripts/test-study-room-(backgrounds|deployment-smoke|fixture-safety|hotfix-behavior|live|preview|release-workflow)\.mjs|study-room/index\.html|supabase/migrations/20260908131116_astra_staging_study_room_fixture_registration\.sql|worker/astra-staging-study-room-fixture-registration\.test\.mjs|worker/index\.mjs|worker/livekit-credentials-smoke(\.test)?\.mjs|worker/package(-lock)?\.json|worker/study-room-(core|routes|staging-positive-smoke)\.mjs|worker/study-room\.test\.mjs|worker/wrangler(\.staging)?\.toml)$'
+          allowed='^(\.github/workflows/(deploy-pages-only|release-study-room-admin-beta)\.yml|assets/icons/(community/image|navigation/(hand|mic|monitor-up|pin|settings))\.svg|assets/study-room-backgrounds\.js|assets/study-room-live\.(css|js)|assets/study-room-preview\.(css|js)|assets/study-room/virtual-background-due-diligence-(branded|polished-20260908)\.webp|assets/vendor/mediapipe/(LICENSE|PROVENANCE)\.txt|assets/vendor/mediapipe/selfie_segmenter-float16-2023-05-07\.tflite|design-qa\.md|index\.html|scripts/build-pages-artifact\.mjs|scripts/test-pages-artifact\.mjs|scripts/test-study-room-(always-open|background-picker|backgrounds|deployment-smoke|fixture-safety|hotfix-behavior|live|preview|release-workflow)\.mjs|study-room/index\.html|supabase/migrations/20260908131116_astra_staging_study_room_fixture_registration\.sql|worker/astra-staging-study-room-fixture-registration\.test\.mjs|worker/index\.mjs|worker/livekit-credentials-smoke(\.test)?\.mjs|worker/package(-lock)?\.json|worker/study-room-(core|routes|staging-positive-smoke)\.mjs|worker/study-room\.test\.mjs|worker/wrangler(\.staging)?\.toml)$'
           changed="$(git diff --name-only "$scope_base" "$GITHUB_SHA")"
           test -n "$changed"
           unexpected="$(printf '%s\n' "$changed" | grep -Ev "$allowed" || true)"
@@ -154,6 +154,8 @@ jobs:
           node --check worker/study-room-staging-positive-smoke.mjs
           node scripts/test-study-room-preview.mjs
           node scripts/test-study-room-backgrounds.mjs
+          node scripts/test-study-room-always-open.mjs
+          node scripts/test-study-room-background-picker.mjs
           node scripts/test-study-room-live.mjs
           node scripts/test-study-room-hotfix-behavior.mjs
           node scripts/test-study-room-release-workflow.mjs
@@ -261,8 +263,8 @@ jobs:
           processors="$(curl --fail --silent --show-error "$STUDY_ROOM_WORKER_URL/assets/vendor/livekit-track-processors.iife.js?release=$GITHUB_SHA")"
           home="$(curl --fail --silent --show-error "$STUDY_ROOM_WORKER_URL/?release=$GITHUB_SHA")"
           preview="$(curl --fail --silent --show-error "$STUDY_ROOM_WORKER_URL/assets/study-room-preview.js?release=$GITHUB_SHA")"
-          grep -Fq 'study-room-meet-layout-20260902-6' <<<"$room"
-          grep -Fq 'study-room-background-processor-20260902-1' <<<"$room"
+          grep -Fq 'study-room-always-open-20260908-1' <<<"$room"
+          grep -Fq 'study-room-background-images-20260908-1' <<<"$room"
           grep -Fq "workerRequest('/study-room/rooms'" <<<"$live"
           grep -Fq "workerRequest('/study-room/join'" <<<"$live"
           grep -Fq 'registerTextStreamHandler' <<<"$live"
@@ -281,6 +283,7 @@ jobs:
             assets/icons/navigation/pin.svg \
             assets/icons/navigation/settings.svg \
             assets/study-room/virtual-background-due-diligence-branded.webp \
+            assets/study-room/virtual-background-due-diligence-polished-20260908.webp \
             assets/vendor/mediapipe/selfie_segmenter-float16-2023-05-07.tflite \
             assets/vendor/mediapipe/wasm/vision_wasm_internal.wasm; do
             curl --fail --silent --show-error --head --output /dev/null "$STUDY_ROOM_WORKER_URL/$asset?release=$GITHUB_SHA"
@@ -544,6 +547,7 @@ jobs:
               assets/icons/navigation/pin.svg \
               assets/icons/navigation/settings.svg \
               assets/study-room/virtual-background-due-diligence-branded.webp \
+              assets/study-room/virtual-background-due-diligence-polished-20260908.webp \
               assets/vendor/mediapipe/selfie_segmenter-float16-2023-05-07.tflite \
               assets/vendor/mediapipe/wasm/vision_wasm_internal.js \
               assets/vendor/mediapipe/wasm/vision_wasm_internal.wasm \
@@ -554,8 +558,8 @@ jobs:
               fi
             done
             if grep -Fq '<title>Study Room — Due Diligence</title>' <<<"$room" \
-              && grep -Fq 'study-room-meet-layout-20260902-6' <<<"$room" \
-              && grep -Fq 'study-room-background-processor-20260902-1' <<<"$room" \
+              && grep -Fq 'study-room-always-open-20260908-1' <<<"$room" \
+              && grep -Fq 'study-room-background-images-20260908-1' <<<"$room" \
               && grep -Fq "workerRequest('/study-room/rooms'" <<<"$live" \
               && grep -Fq "workerRequest('/study-room/join'" <<<"$live" \
               && grep -Fq 'registerTextStreamHandler' <<<"$live" \
@@ -563,7 +567,7 @@ jobs:
               && grep -Fq 'async function discoverDevices()' <<<"$live" \
               && grep -Fq 'bindDeviceChangeDetection();' <<<"$live" \
               && grep -Fq 'DueDiligenceStudyRoomMandatoryBackground' <<<"$backgrounds" \
-              && grep -Fq 'virtual-background-due-diligence-branded.webp' <<<"$backgrounds" \
+              && grep -Fq 'virtual-background-due-diligence-polished-20260908.webp' <<<"$backgrounds" \
               && grep -Fq 'due-diligence-mandatory-virtual-background-no-raw-first-frame' <<<"$processors" \
               && grep -Fq 'study-room-launch-20260830-1' <<<"$home" \
               && grep -Fq 'assets/study-room-preview.js?v=study-room-all-members-20260908-1' <<<"$home" \

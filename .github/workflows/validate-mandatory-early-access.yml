@@ -243,6 +243,11 @@ on:
       - 'scripts/test-capture-staging-commercial-deployment.mjs'
       - 'scripts/test-staging-commercial-fixtures.mjs'
       - 'scripts/test-staging-commercial-release-workflow.mjs'
+      - 'scripts/staging-current-payment-proof.mjs'
+      - 'scripts/test-current-payment-proof-staging.mjs'
+      - 'scripts/test-staging-current-payment-proof.mjs'
+      - 'scripts/staging-current-payment-proof-cleanup.mjs'
+      - 'scripts/test-staging-current-payment-proof-cleanup.mjs'
       - 'docs/astra-staging-commercial-fixtures.md'
       - 'worker/astra-staging-commercial-fixture-registration.test.mjs'
       - 'supabase/migrations/20260908070656_astra_staging_commercial_fixture_registration.sql'
@@ -314,6 +319,7 @@ jobs:
           node scripts/test-forecast-analytics-browser-pdf.mjs
           node --test scripts/test-astra-forecast-analytics-staging.mjs scripts/test-staging-examination-fixtures.mjs scripts/test-staging-payment-fixtures.mjs
           node --test scripts/test-capture-staging-commercial-deployment.mjs scripts/test-staging-commercial-fixtures.mjs scripts/test-staging-commercial-release-workflow.mjs
+          node --test scripts/test-staging-current-payment-proof.mjs scripts/test-staging-current-payment-proof-cleanup.mjs
           node scripts/test-astra-payment-lifecycle.mjs
           node scripts/test-astra-149-binding-compatibility.mjs
           node scripts/test-astra-late-payment-ui.mjs

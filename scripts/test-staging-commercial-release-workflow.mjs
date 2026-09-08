@@ -44,3 +44,24 @@ test('new infrastructure is explicitly reviewed and tested but never enters prod
   assert.equal((release.match(/node scripts\/verify-astra-forecast-staging\.mjs --execute-staging/gu) || []).length, 1);
   assert.doesNotMatch(release, /run-bar-forecast-live-journeys\.mjs/u);
 });
+
+test('current proof upload is an additional serial child with exact reviewed infrastructure', () => {
+  const runner = read('scripts/run-staging-e2e-suite.mjs');
+  const suite = runner.match(/'complete-beta': \[([\s\S]*?)\]/u)?.[1];
+  assert.ok(suite);
+  assert.deepEqual([...suite.matchAll(/'([^']+\.mjs)'/gu)].map(match => match[1]), [
+    'scripts/test-complete-beta-staging.mjs',
+    'scripts/test-commercial-launch-staging.mjs',
+    'scripts/test-current-payment-proof-staging.mjs',
+  ]);
+  const files = ['scripts/staging-current-payment-proof.mjs',
+    'scripts/test-current-payment-proof-staging.mjs', 'scripts/test-staging-current-payment-proof.mjs',
+    'scripts/staging-current-payment-proof-cleanup.mjs', 'scripts/test-staging-current-payment-proof-cleanup.mjs'];
+  for (const file of files) { assert.ok(release.includes(file), file); assert.ok(mandatory.includes(file), file); }
+  const tests = 'node --test scripts/test-staging-current-payment-proof.mjs scripts/test-staging-current-payment-proof-cleanup.mjs';
+  assert.ok(release.includes(tests)); assert.ok(mandatory.includes(tests));
+  const artifacts = block('Retain sanitized staging child diagnostics and cleanup results');
+  assert.ok(artifacts.includes('artifacts/staging-e2e/*.json'));
+  assert.ok(artifacts.includes('artifacts/staging-e2e/*-cleanup-manifest.json.tmp'));
+  assert.doesNotMatch(read('scripts/astra-release-database-contract.mjs'), /current.payment.proof/u);
+});

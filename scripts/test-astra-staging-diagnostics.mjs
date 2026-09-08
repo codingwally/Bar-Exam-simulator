@@ -5,6 +5,19 @@ import {buildPublishableStagingFailureDiagnostic,buildStagingChildEvidence,
   buildStagingUiFailureDiagnostic,readStagingUiFailureDiagnostic,STAGING_UI_FAILURE_MARKER} from './staging-e2e-diagnostics.mjs';
 
 const secret='sb_secret_abcdefghijklmnopqrstuvwxyz0123456789';
+test('current proof child requires successful cleanup and keeps failures sanitized',()=>{
+  const script='test-current-payment-proof-staging.mjs';
+  const marker='STAGING_GATE: synthetic_cleanup=true run_id=abcdef12-12345678';
+  assert.equal(buildStagingChildEvidence(script,{code:0,output:marker}).status,'PASS');
+  assert.equal(buildStagingChildEvidence(script,{code:0,output:''}).failureReason,'cleanup-unconfirmed');
+  assert.equal(buildStagingChildEvidence(script,null).status,'NOT_RUN');
+  const failed=buildStagingChildEvidence(script,{code:1,output:`${marker}\nError: PRIVATE PAYMENT ${secret}\n at /repo/scripts/staging-current-payment-proof-cleanup.mjs:22:7`},secret);
+  assert.equal(failed.status,'FAIL');
+  assert.equal(failed.cleanup,'completed');
+  assert.equal(failed.failureReason,'credential-output-detected');
+  assert.equal(failed.failure.location,'staging-current-payment-proof-cleanup.mjs:22:7');
+  assert.doesNotMatch(JSON.stringify(failed),/PRIVATE|PAYMENT|sb_secret/);
+});
 test('published assertion identifies source and numeric mismatch without free-form data',()=>{
   const output=`AssertionError [ERR_ASSERTION]: PRIVATE ANSWER, Alice Smith, alice@example.invalid ${secret}
     at file:///home/runner/work/Bar-Exam-simulator/Bar-Exam-simulator/scripts/test-examinations-staging.mjs:608:10

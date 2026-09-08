@@ -247,9 +247,11 @@ assert.match(examCss, /\.dd-subject-editorial\s*\{[\s\S]*?background:/,
 assert.match(examCss, /\.dd-subject-editorial-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/,
   'Subject Matter must use a balanced two-pane examination workspace.');
 assert.match(examCss, /\.dd-subject-editorial-grid\s*\{[\s\S]*?height:\s*auto;[\s\S]*?overflow:\s*visible/,
-  'The split workspace must use one document reading flow instead of two competing scrollbars.');
+  'The split workspace must retain document flow; only submitted coaching has a bounded local scroll region.');
 assert.match(examCss, /\.dd-subject-editorial-pane\s*\{\s*overflow:\s*visible;/,
-  'Each desktop pane must remain in the document scroll flow.');
+  'Writing and Reveal panes must remain in document flow around the result-only coaching region.');
+assert.match(examCss, /\.dd-subject-editorial\.is-result \.dd-subject-coaching-scroll\s*\{[^}]*max-height:[^}]*overflow-y:\s*auto/,
+  'Submitted coaching must be bounded and scrollable without changing the answer editor.');
 assert.match(examCss, /\.dd-subject-editorial-pane\.is-review-panel\s*\{[\s\S]*?border-left:/,
   'The right-hand review pane must retain the restrained central divider on desktop.');
 assert.match(examCss, /@media \(max-width: 900px\)[\s\S]*?\.dd-subject-editorial-grid\s*\{[\s\S]*?grid-template-columns:\s*1fr[\s\S]*?\.dd-subject-editorial-pane\.is-review-panel\s*\{[\s\S]*?border-top:[\s\S]*?border-left:\s*0/,

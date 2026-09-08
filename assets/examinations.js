@@ -3262,9 +3262,6 @@
             <h3 id="dd-subject-submitted-answer-title">Your answer</h3>
             <div class="dd-subject-submitted-answer">${escapeHtml(answerText || 'No answer text is available in this released record.')}</div>
           </section>
-          <section class="dd-subject-result-assessment" aria-label="Score and examiner feedback">
-            ${assessmentCard(result, { track: 'per_subject', compactSubject: true })}
-          </section>
           <nav class="dd-subject-practice-actions" aria-label="Syllabus-Based Review review actions">
             <button class="dd-control dd-exam-button is-primary" type="button" data-subject-next>Next question</button>
             <button class="dd-control dd-exam-button" type="button"
@@ -3273,7 +3270,16 @@
           </nav>
         </main>
         <aside class="dd-subject-editorial-pane is-reading is-review-panel"
-          aria-label="Suggested answer and legal review">
+          aria-label="Coaching, suggested answer and legal review">
+          <section class="dd-subject-result-assessment" data-subject-result-coaching
+            aria-labelledby="dd-subject-coaching-title">
+            <h2 id="dd-subject-coaching-title">Your coaching</h2>
+            <p id="dd-subject-coaching-scroll-hint">Scroll through your score and feedback. Reveal Answer remains a separate choice.</p>
+            <div class="dd-subject-coaching-scroll" role="region" tabindex="0"
+              aria-labelledby="dd-subject-coaching-title" aria-describedby="dd-subject-coaching-scroll-hint">
+              ${assessmentCard(result, { track: 'per_subject', compactSubject: true })}
+            </div>
+          </section>
           ${subjectReviewPanelMarkup({
             attemptId: resolvedAttemptId,
             questionId,

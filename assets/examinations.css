@@ -3396,9 +3396,40 @@ details[open] > summary .dd-subject-chevron {
 }
 
 .dd-subject-result-assessment {
-  margin-top: 28px;
-  padding-top: 28px;
-  border-top: 1px solid rgba(212, 170, 79, .38);
+  margin-bottom: 28px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid rgba(212, 170, 79, .38);
+}
+
+.dd-subject-result-assessment > h2 {
+  margin: 0;
+  color: #fffaf0;
+  font: 500 25px/1.25 "Playfair Display", Georgia, serif;
+}
+
+.dd-subject-result-assessment > p {
+  margin: 9px 0 18px;
+  color: #b8c7d7;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* Only submitted coaching scrolls locally; writing and Reveal stay in the
+   document flow, including when the two panes stack on mobile and tablet. */
+.dd-subject-editorial.is-result .dd-subject-coaching-scroll {
+  max-height: 42rem;
+  max-height: min(62vh, 42rem);
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overflow-wrap: anywhere;
+  scrollbar-gutter: stable;
+  padding: 4px 10px 4px 4px;
+}
+
+.dd-subject-editorial.is-result .dd-subject-coaching-scroll:focus-visible {
+  outline: 2px solid #e6bd59;
+  outline-offset: 3px;
 }
 
 .dd-subject-history-heading .dd-subject-attempt-badge {

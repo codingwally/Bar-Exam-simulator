@@ -603,9 +603,27 @@ function categoricalPosition(value) {
   return '';
 }
 
+function acceptsQuestionDemandMetadata(context = {}) {
+  // Context provenance is assigned by the server, never by the submitted payload.
+  // Unspecified provenance retains compatibility for existing internal callers.
+  return !context.authority || ['server_question_bank', 'curated-approved-examination-snapshot'].includes(context.authority);
+}
+
+function isGeneralRuleQuestion(rawQuestion) {
+  const question = rawQuestion.replace(/\s+(?:explain|discuss)(?:\s+(?:briefly|your answer|the rule))?[.!]?\s*$/i, '').trim();
+  const genericActor = /^(?:can|may|must|should|does|do|is|are)\s+(?:an?|the|any|every|each)\s+(?:accused|person|party|candidate|applicant|employee|employer|lawyer|court|judge|prosecutor|plaintiff|defendant|petitioner|respondent)\b/i.test(question);
+  const generalRight = /^(?:is|are)\b[^?!.\n]*\b(?:a\s+(?:matter\s+of\s+)?right|a\s+(?:unilateral\s+)?entitlement)\b/i.test(question);
+  if (!genericActor && !generalRight) return false;
+  // A narrow generic rule request is not a hypothetical just because it asks
+  // "May an accused ...?". Uncertain or concrete scenarios keep the default cap.
+  if (/\b(?:if|when|where|after|before|suppose|assume|named|here|these|those|this|that|yesterday|agreed|arrested|charged|dismissed|entered|executed|filed|issued|leased|married|mortgaged|paid|refused|registered|resigned|sold|submitted|terminated|transferred|was|were)\b|\d|[.!?]\s+\S/i.test(question)) return false;
+  // Proper-name/title-bearing wording is deliberately not guessed to be generic.
+  return !/\b[A-Z][A-Za-z]+\b/.test(question.replace(/^\S+\s*/, ''));
+}
+
 export function inferQuestionType(context = {}) {
   const explicit = cleanText(context?.questionType, 40).toLowerCase();
-  if (ALLOWED_QUESTION_TYPES.has(explicit)) return explicit;
+  if (acceptsQuestionDemandMetadata(context) && ALLOWED_QUESTION_TYPES.has(explicit)) return explicit;
   const rawQuestion = cleanText(context?.question, 20_000);
   const question = rawQuestion.toLowerCase();
   const subparts = rawQuestion.match(/(?:^|\n)\s*\(?[a-d]\)?[.)]\s+/gim) || [];
@@ -620,6 +638,7 @@ export function inferQuestionType(context = {}) {
     || /\bwhat doctrine\b|\bdoctrinal rule\b/.test(question)) return 'doctrine';
   if (/^\s*(?:draft|prepare|write|formulate)\b/.test(question)) return 'practical';
   if (/^\s*(?:explain|discuss|state|describe|identify)\b/.test(question)) return 'explanation';
+  if (isGeneralRuleQuestion(rawQuestion)) return 'explanation';
   return 'problem';
 }
 
@@ -628,25 +647,26 @@ function questionHasMaterialFacts(context = {}) {
   if (!question) return false;
   const factualAct = /\b(?:agreed|arrested|charged|dismissed|entered|executed|filed|issued|leased|married|mortgaged|paid|refused|registered|resigned|sold|submitted|terminated|transferred|was|were)\b/i.test(question);
   const legalDisposition = /\b(?:admissible|allowed|entitled|guilty|invalid|liable|proper|prosper|valid|whether|can|could|is|are|may|should|will)\b/i.test(question);
-  return question.length >= 110 && factualAct && legalDisposition;
+  const shortScenario = /\b(?:suppose|assume|these facts)\b|\b(?:[A-Z][a-z]+|[A-Z])\s+(?:agreed|filed|paid|refused|sold|submitted|was|were)\b|(?:^|\n)\s*\(?[a-d]\)?[.)]\s+/m.test(question);
+  return factualAct && legalDisposition && (question.length >= 110 || shortScenario);
+}
+
+export function resolveQuestionDemand(context = {}) {
+  const questionType = inferQuestionType(context);
+  const applicationRequired = acceptsQuestionDemandMetadata(context) && typeof context?.applicationRequired === 'boolean'
+    ? context.applicationRequired
+    : ['problem', 'practical'].includes(questionType)
+      || (['mixed', 'procedure', 'doctrine', 'explanation'].includes(questionType) && questionHasMaterialFacts(context));
+  return { questionType, applicationRequired };
 }
 
 export function applicationRequiredForQuestion(context = {}) {
-  if (typeof context?.applicationRequired === 'boolean') return context.applicationRequired;
-  const questionType = inferQuestionType(context);
-  if (['problem', 'practical'].includes(questionType)) return true;
-  if (['mixed', 'procedure', 'doctrine', 'explanation'].includes(questionType)) {
-    return questionHasMaterialFacts(context);
-  }
-  return false;
+  return resolveQuestionDemand(context).applicationRequired;
 }
 
 export function modelAnswerSectionsForQuestion(assessment, context = {}) {
   const alac = assessment?.modelAnswerALAC || {};
-  const questionType = inferQuestionType({
-    ...context,
-    questionType: assessment?.rubricBreakdown?.questionType || context?.questionType,
-  });
+  const { questionType, applicationRequired } = resolveQuestionDemand(context);
   const labels = {
     problem: ['Direct answer', 'Governing law', 'Application to the facts', 'Result'],
     definition: ['Definition', 'Governing authority', 'Elements and scope', 'Material qualification'],
@@ -667,7 +687,7 @@ export function modelAnswerSectionsForQuestion(assessment, context = {}) {
     .filter((section) => section.text);
   return {
     questionType,
-    applicationRequired: applicationRequiredForQuestion({ ...context, questionType }),
+    applicationRequired,
     sections,
   };
 }
@@ -735,8 +755,7 @@ export function analyzeStudentAnswer(studentAnswer, context = {}) {
     && wordCount >= 18
     && applicationConnector
     && questionOverlap >= 1;
-  const questionType = inferQuestionType(context);
-  const applicationRequired = applicationRequiredForQuestion(context);
+  const { questionType, applicationRequired } = resolveQuestionDemand(context);
   const meaningfulTaskPerformance = !applicationOnlyRepeatsBoilerplate
     && wordCount >= 12
     && (referenceOverlap >= 2 || legalReferenceOverlap >= 2 || specificLegalBasis);
@@ -806,6 +825,13 @@ function affirmativelyReliesOnIntentAlone(studentAnswer) {
 
 export function applyDeterministicScoreCap(assessment, studentAnswer, context = {}) {
   const analysis = analyzeStudentAnswer(studentAnswer, context);
+  const resolvedAssessment = assessment?.rubricBreakdown
+    ? { ...assessment, rubricBreakdown: {
+        ...assessment.rubricBreakdown,
+        questionType: analysis.questionType,
+        applicationRequired: analysis.applicationRequired,
+      } }
+    : assessment;
   let cap = 5;
   let capCode = 'none';
   let note = '';
@@ -929,7 +955,7 @@ export function applyDeterministicScoreCap(assessment, studentAnswer, context = 
     : null;
   if (score === originalScore) {
     return {
-      ...assessment,
+      ...resolvedAssessment,
       score,
       percentagePointValue: score,
       tier: tierForScore(score),
@@ -946,7 +972,7 @@ export function applyDeterministicScoreCap(assessment, studentAnswer, context = 
   }
 
   return {
-    ...assessment,
+    ...resolvedAssessment,
     score,
     percentagePointValue: score,
     tier: tierForScore(score),
@@ -1050,6 +1076,7 @@ export function buildExaminerPrompt({
     );
   }
 
+  const questionDemand = resolveQuestionDemand(context);
   const data = JSON.stringify({
     questionId,
     question: context.question,
@@ -1066,10 +1093,7 @@ export function buildExaminerPrompt({
         : [],
     verified: context.verified,
     lawCutoffDate: context.lawCutoffDate || null,
-    questionType: context.questionType || null,
-    applicationRequired: typeof context.applicationRequired === 'boolean'
-      ? context.applicationRequired
-      : null,
+    ...questionDemand,
     requiredAssessmentType: policy.assessmentType,
     requiredLabel: policy.label,
     rubricVersion: RUBRIC_VERSION,
@@ -1087,6 +1111,7 @@ BAR-ALIGNED HOLISTIC RUBRIC — ${RUBRIC_VERSION}:
 - A polished format cannot rescue incorrect law. A legally correct, clearly reasoned answer may receive full credit despite informal structure.
 - For problem, practical, and other fact-based questions, application means connecting material facts to the governing rule.
 - For definition, explanation, distinction, enumeration, procedure, doctrine, and non-fact mixed questions, use the 35% application component for completeness, analysis, and performance of the task; do not demand invented facts.
+- Follow the server-resolved questionType and applicationRequired fields for grading and coaching. When applicationRequired is false, assess the requested legal analysis; do not criticize a general rule answer for lacking fictional facts or ALAC headings.
 - Recognize legally defensible alternative answers when supported by controlling law. Do not require word-for-word alignment with the stored suggested answer.
 - Distinguish citation precision from substantive completeness. Exact references are optional, but essential elements, exceptions, qualifications, voting thresholds, standards, and procedural prerequisites are legal substance.
 - A correct conclusion reached only through a materially wrong or legally insufficient governing rule does not earn substantial credit.
@@ -1122,7 +1147,7 @@ WRITING QUALITY:
 
 SCORING PROCESS:
 1. Identify the actual legal position, rule or doctrine, reasoning/application, and conclusion without requiring labels.
-2. Classify the question type and whether factual application is genuinely required.
+2. Use the server-resolved question type and factual-application requirement consistently in rubricBreakdown and feedback.
 3. Assess the four components using the indicative weights.
 4. Compare the student's stated rule with the stored controlling legal basis. Do not treat a broad principle as complete when the stored key shows that a specific element, exception, qualification, voting threshold, standard, or prerequisite decides the result.
 5. Select the holistic performance band and final score based on legal merit, not literal arithmetic alone.

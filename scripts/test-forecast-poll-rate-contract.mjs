@@ -25,19 +25,40 @@ function quotaFixture() {
 
 test('read budget is separate while all original mutations and export budgets remain thirty', async () => {
   const q = quotaFixture();
-  for (let index = 0; index < 120; index++) await q.call(['status', 'attempt', 'history'][index % 3]);
-  await assert.rejects(q.call('attempt'), (error) => error.status === 429 && error.code === 'RATE_LIMITED' && error.retryAfterSeconds === 600);
-  const writes = ['start', 'submit', 'submit_attempt', 'retry_attempt', 'accept', 'email_result', 'result_pdf', 'unknown'];
+  const reads = ['status', 'attempt', 'history', 'analytics_report', 'analytics_attempt'];
+  for (let index = 0; index < 120; index++) await q.call(reads[index % reads.length]);
+  for (const operation of reads) await assert.rejects(q.call(operation), (error) =>
+    error.status === 429 && error.code === 'RATE_LIMITED' && error.retryAfterSeconds === 600);
+  const writes = ['start', 'submit', 'submit_attempt', 'retry_attempt', 'accept', 'email_result', 'result_pdf',
+    'result_pdf_prepared', 'analytics_snapshot', 'analytics_pdf_prepared', 'analytics_email', 'unknown'];
   for (let index = 0; index < 30; index++) await q.call(writes[index % writes.length]);
   for (const operation of writes) await assert.rejects(q.call(operation), (error) => error.status === 429);
   await q.call('attempt', 'owner-b');
   await q.call('submit_attempt', 'owner-b');
 });
 
+test('Analytics mutations consume exactly the original thirty-write budget without consuming read access', async () => {
+  for (const mutation of ['analytics_snapshot', 'analytics_pdf_prepared', 'analytics_email', 'result_pdf_prepared']) {
+    const q = quotaFixture();
+    for (let index = 0; index < 30; index++) await q.call(mutation);
+    for (const operation of [mutation, 'submit_attempt', 'email_result', 'unknown']) {
+      await assert.rejects(q.call(operation), (error) =>
+        error.status === 429 && error.code === 'RATE_LIMITED' && error.retryAfterSeconds === 600);
+    }
+    await q.call('analytics_report');
+    await q.call('analytics_attempt');
+    await q.call(mutation, 'owner-b');
+    q.advance(600000);
+    await q.call(mutation);
+  }
+});
+
 test('network abuse protection remains180 per ten minutes across owners and read operations', async () => {
   const q = quotaFixture();
-  for (let index = 0; index < 180; index++) await q.call('attempt', null);
-  await assert.rejects(q.call('history', null), (error) => error.status === 429 && error.retryAfterSeconds === 600);
+  const reads = ['status', 'attempt', 'history', 'analytics_report', 'analytics_attempt'];
+  for (let index = 0; index < 180; index++) await q.call(reads[index % reads.length], null);
+  for (const operation of reads) await assert.rejects(q.call(operation, null), (error) =>
+    error.status === 429 && error.retryAfterSeconds === 600);
   q.advance(599500);
   await assert.rejects(q.call('status', null), (error) => error.retryAfterSeconds === 1);
   q.advance(500); await q.call('attempt', null);

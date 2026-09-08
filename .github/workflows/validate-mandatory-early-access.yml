@@ -252,6 +252,7 @@ on:
       - 'worker/package-lock.json'
       - 'scripts/*astra*'
       - 'scripts/test-forecast-durable-api.mjs'
+      - 'scripts/test-bar-forecast-boundary.mjs'
       - 'scripts/test-forecast-poll-rate-contract.mjs'
       - 'scripts/test-worker-cpu-limit-contract.mjs'
       - 'scripts/forecast-attempt-test-fixture.mjs'
@@ -298,6 +299,7 @@ jobs:
           node scripts/test-astra-payment-presentation.mjs
           node scripts/test-astra-staging-diagnostics.mjs
           node scripts/test-astra-forecast-entry-diagnostics.mjs
+          node scripts/test-bar-forecast-boundary.mjs
           node scripts/test-forecast-poll-rate-contract.mjs
           node scripts/test-worker-cpu-limit-contract.mjs
           node scripts/test-astra-forecast-entry-cleanup-evidence.mjs

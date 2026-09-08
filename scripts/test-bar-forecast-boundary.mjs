@@ -204,8 +204,8 @@ export async function main() {
     /read \? barForecastUserReadRateWindows : barForecastUserRateWindows[\s\S]*?`bar-forecast-user\\0\$\{user\.id\}`\)[\s\S]*?read \? MAX_BAR_FORECAST_USER_READ_REQUESTS_PER_WINDOW : MAX_BAR_FORECAST_USER_REQUESTS_PER_WINDOW/,
     'Forecast signed-in traffic must be limited by verified user id, not shared IP or raw token',
   );
-  assert.match(workerIndex, /BAR_FORECAST_READ_OPERATIONS = new Set\(\['status', 'attempt', 'history'\]\)/,
-    'Only non-grading status/history reads may use the separate read budget; all mutations retain their original ceiling');
+  assert.match(workerIndex, /BAR_FORECAST_READ_OPERATIONS = new Set\(\['status', 'attempt', 'history', 'analytics_report', 'analytics_attempt'\]\)/,
+    'Only the five owner-bound non-grading reads may use the separate read budget; snapshots, preparation notes, emails, and grading retain the mutation ceiling');
   assert.match(
     workerIndex,
     /const MAX_BAR_FORECAST_NETWORK_REQUESTS_PER_WINDOW = 180;[\s\S]*const MAX_BAR_FORECAST_USER_REQUESTS_PER_WINDOW = 30;/,

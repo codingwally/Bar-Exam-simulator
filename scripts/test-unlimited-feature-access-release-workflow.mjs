@@ -30,10 +30,11 @@ const expectedMigrations = [
   '20260907181748_astra_admin_role_fail_closed.sql',
   '20260907222627_astra_forecast_analytics_browser_scopes.sql',
   '20260907223228_astra_simulator_verified_source_presentation.sql',
+  '20260908115426_astra_payment_notification_sent_terminal.sql',
 ];
 const actualMigrations = [...databaseContract.match(/ASTRA_MIGRATIONS = Object\.freeze\(\[([\s\S]*?)\]\)/u)[1]
   .matchAll(/'([^']+\.sql)'/gu)].map((match) => match[1]);
-assert.deepEqual(actualMigrations, expectedMigrations, 'Exactly the fifteen reviewed forward migrations must be attested.');
+assert.deepEqual(actualMigrations, expectedMigrations, 'Exactly the sixteen reviewed forward migrations must be attested.');
 assert.deepEqual(actualMigrations, [...actualMigrations].sort());
 for (const stagingOnly of [
   '20260907223149_astra_staging_examination_fixture_registration.sql',
@@ -41,6 +42,9 @@ for (const stagingOnly of [
 ]) assert.ok(!actualMigrations.includes(stagingOnly), 'Optional test registrars must stay outside the production database bundle.');
 
 const newReviewedPaths = [
+  'supabase/migrations/20260908115426_astra_payment_notification_sent_terminal.sql',
+  'scripts/test-astra-payment-notification-sent-terminal.mjs',
+  'scripts/test-astra-payment-notification-postgres.mjs',
   'assets/pricing-checkout-safety.js',
   'scripts/test-pricing-checkout-safety.mjs',
   'worker/commercial-launch-access-payment.test.mjs',
@@ -188,6 +192,16 @@ assert.match(workflow.slice(0, staging), /uses: actions\/checkout@v4[\s\S]*?fetc
 assert.ok(validation.includes('Verify credential-free Linux Forecast browser wiring'));
 assert.ok(validation.includes('node scripts/verify-astra-forecast-staging.mjs --self-test-browser'));
 for (const source of [validation, workflow]) {
+  for (const command of ['node scripts/test-astra-payment-notification-sent-terminal.mjs', 'node scripts/test-astra-payment-notification-postgres.mjs']) {
+    assert.equal(source.split(command).length - 1, 1, 'Require terminal notification verification exactly once: ' + command);
+  }
+  assert.ok(source.includes('postgres:17@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675'));
+  const pgCommand = source.indexOf('run: node scripts/test-astra-payment-notification-postgres.mjs');
+  const pgStep = source.slice(source.lastIndexOf('      - name:', pgCommand), pgCommand);
+  for (const guard of ['timeout-minutes: 3', 'ASTRA_TERMINAL_POSTGRES_TEST: "1"', 'PGHOST: 127.0.0.1', 'PGPORT: "15432"', 'PGDATABASE: astra_terminal_test', 'PGUSER: postgres']) {
+    assert.ok(pgStep.includes(guard), 'PostgreSQL test must remain confined to disposable CI: ' + guard);
+  }
+  assert.doesNotMatch(pgStep, /secrets\.|SERVICE_ROLE_KEY|continue-on-error|\|\| true/u);
   for (const command of ['node scripts/test-astra-late-payment-ui.mjs', 'node scripts/test-astra-late-149-binding-reconciliation.mjs']) {
     assert.ok(source.includes('          ' + command + '\n') || source.includes('          ' + command + '\r\n'),
       'Both workflows must execute the late-proof regression: ' + command);

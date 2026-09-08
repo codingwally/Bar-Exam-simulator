@@ -59,7 +59,7 @@ jobs:
           git cat-file -e "$EXPECTED_BASE_SHA^{commit}"
           git merge-base --is-ancestor "$EXPECTED_BASE_SHA" "$EXPECTED_SOURCE_SHA"
 
-          allowed='^(\.github/workflows/deploy-pages-only\.yml|assets/feature-loader\.js|assets/icons/(community/image|navigation/(circle-check|cloud-upload|hand|mic|monitor-up|pin|settings|shield-check))\.svg|assets/lex-forum\.css|assets/lex-forum\.js|assets/payments/(bpi-instapay-199-qr\.png|bpi-mark\.png)|assets/pedro-navigation\.js|assets/phase2-experience\.js|assets/phase4-experience\.js|assets/phase2\.css|assets/pricing-checkout-safety\.js|assets/pricing-renderer\.(css|js)|assets/private-beta-landing\.js|assets/study-room-backgrounds\.js|assets/study-room-live\.(css|js)|assets/study-room-preview\.(css|js)|assets/study-room/(dimasalang-library|participant-2-tropical|participant-3-bedroom|participant-4-condo|virtual-background-due-diligence-branded|virtual-background-due-diligence-polished-20260908)\.webp|assets/subscription-cta\.css|assets/subscription-cta\.js|assets/vendor/mediapipe/(LICENSE|PROVENANCE)\.txt|assets/vendor/mediapipe/selfie_segmenter-float16-2023-05-07\.tflite|design-qa\.md|index\.html|scripts/build-pages-artifact\.mjs|scripts/test-approved-renovation-shell\.mjs|scripts/test-auth-session-persistence\.mjs|scripts/test-bar-forecast-frontend\.mjs|scripts/test-design-correction-release\.mjs|scripts/test-home-post-collapse\.mjs|scripts/test-lex-forum\.mjs|scripts/test-login-loop-p0\.mjs|scripts/test-mobile-responsive-hotfix\.mjs|scripts/test-pages-artifact\.mjs|scripts/test-pedro-navigation\.mjs|scripts/test-pedro-release2-integration\.mjs|scripts/test-phase4-release1\.mjs|scripts/test-pricing-checkout-safety\.mjs|scripts/test-public-home-responsive-css\.mjs|scripts/test-public-release1-reliability\.mjs|scripts/test-quorum\.mjs|scripts/test-september-pricing-(sql|ui)-contract\.mjs|scripts/test-study-room-(always-open|background-picker|backgrounds|hotfix-behavior|live|preview)\.mjs|scripts/test-syllabus-review-reveal-contract\.mjs|service-worker\.js|study-room/index\.html)$'
+          allowed='^(\.github/workflows/deploy-pages-only\.yml|assets/feature-loader\.js|assets/icons/(community/image|navigation/(circle-check|cloud-upload|hand|mic|monitor-up|pin|settings|shield-check))\.svg|assets/lex-forum\.css|assets/lex-forum\.js|assets/payments/(bpi-instapay-199-qr\.png|bpi-mark\.png)|assets/pedro-navigation\.js|assets/phase2-experience\.js|assets/phase4-experience\.js|assets/phase2\.css|assets/pricing-checkout-safety\.js|assets/pricing-renderer\.(css|js)|assets/private-beta-landing\.js|assets/study-room-backgrounds\.js|assets/study-room-live\.(css|js)|assets/study-room-preview\.(css|js)|assets/study-room/(dimasalang-library|participant-2-tropical|participant-3-bedroom|participant-4-condo|virtual-background-due-diligence-branded|virtual-background-due-diligence-polished-20260908)\.webp|assets/subscription-cta\.css|assets/subscription-cta\.js|assets/vendor/mediapipe/(LICENSE|PROVENANCE)\.txt|assets/vendor/mediapipe/selfie_segmenter-float16-2023-05-07\.tflite|design-qa\.md|index\.html|scripts/build-pages-artifact\.mjs|scripts/test-approved-renovation-shell\.mjs|scripts/test-auth-session-persistence\.mjs|scripts/test-bar-forecast-frontend\.mjs|scripts/test-design-correction-release\.mjs|scripts/test-home-post-collapse\.mjs|scripts/test-lex-forum\.mjs|scripts/test-login-loop-p0\.mjs|scripts/test-mobile-responsive-hotfix\.mjs|scripts/test-pages-artifact\.mjs|scripts/test-pedro-navigation\.mjs|scripts/test-pedro-release2-integration\.mjs|scripts/test-phase4-release1\.mjs|scripts/test-pricing-checkout-safety\.mjs|scripts/test-public-home-responsive-css\.mjs|scripts/test-public-release1-reliability\.mjs|scripts/test-quorum\.mjs|scripts/test-september-pricing-(sql|ui)-contract\.mjs|scripts/test-study-room-(always-open|background-picker|backgrounds|catalog-sql|hotfix-behavior|live|preview)\.mjs|scripts/test-syllabus-review-reveal-contract\.mjs|service-worker\.js|study-room/index\.html)$'
           unexpected="$(git diff --name-only "$EXPECTED_BASE_SHA..$EXPECTED_SOURCE_SHA" | grep -Ev "$allowed" || true)"
           if [[ -n "$unexpected" ]]; then
             echo "The frontend-only release contains files outside the approved isolation boundary:" >&2
@@ -95,6 +95,8 @@ jobs:
           node scripts/test-study-room-live.mjs
           node scripts/test-study-room-hotfix-behavior.mjs
           node scripts/test-study-room-preview.mjs
+          node scripts/test-study-room-catalog-sql.mjs
+          node --test worker/study-room-catalog.test.mjs
           node scripts/test-syllabus-review-reveal-contract.mjs
           node scripts/test-quorum.mjs
           node scripts/test-public-home-responsive-css.mjs
@@ -200,6 +202,17 @@ jobs:
               && grep -q 'dd-study-room-radiance' <<<"$study_room_css" \
               && grep -q 'study-room-always-open-20260908-1' <<<"$study_room_page" \
               && grep -q 'study-room-background-images-20260908-1' <<<"$study_room_page" \
+              && grep -Fq 'layout=stable-pins-20260908-1' <<<"$study_room_page" \
+              && grep -Fq 'catalog=admin-room-manager-20260908-1' <<<"$study_room_page" \
+              && grep -Fq 'study-room-live.css?v=study-room-admin-manager-20260908-1' <<<"$study_room_page" \
+              && grep -Fq 'data-max-rooms="24"' <<<"$study_room_page" \
+              && grep -Fq 'id="sr-room-editor"' <<<"$study_room_page" \
+              && grep -Fq 'Inner Chamber always remains admin-only.' <<<"$study_room_page" \
+              && grep -Fq 'const MAX_ROOMS = 24;' <<<"$study_room_live" \
+              && grep -Fq "name: 'Room 4'" <<<"$study_room_live" \
+              && grep -Fq "const audience = roomKey === '5' ? 'admin' : candidate?.audience;" <<<"$study_room_live" \
+              && grep -Fq "workerRequest('/admin/study-room/rooms'" <<<"$study_room_live" \
+              && grep -Fq 'expectedRevision: editor.revision' <<<"$study_room_live" \
               && grep -q "workerRequest('/study-room/rooms'" <<<"$study_room_live" \
               && grep -q "workerRequest('/study-room/join'" <<<"$study_room_live" \
               && grep -q 'registerTextStreamHandler' <<<"$study_room_live" \

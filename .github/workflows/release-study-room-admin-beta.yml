@@ -118,7 +118,7 @@ jobs:
             git diff --quiet "$reviewed_live_sha" "$reviewed_baseline_sha" -- worker assets study-room index.html content
             scope_base="$reviewed_baseline_sha"
           fi
-          allowed='^(\.github/workflows/(deploy-pages-only|release-study-room-admin-beta)\.yml|assets/icons/(community/image|navigation/(hand|mic|monitor-up|pin|settings))\.svg|assets/study-room-backgrounds\.js|assets/study-room-live\.(css|js)|assets/study-room-preview\.(css|js)|assets/study-room/virtual-background-due-diligence-(branded|polished-20260908)\.webp|assets/vendor/mediapipe/(LICENSE|PROVENANCE)\.txt|assets/vendor/mediapipe/selfie_segmenter-float16-2023-05-07\.tflite|design-qa\.md|index\.html|scripts/build-pages-artifact\.mjs|scripts/test-pages-artifact\.mjs|scripts/test-study-room-(always-open|background-picker|backgrounds|deployment-smoke|fixture-safety|hotfix-behavior|live|preview|release-workflow)\.mjs|study-room/index\.html|supabase/migrations/20260908131116_astra_staging_study_room_fixture_registration\.sql|worker/astra-staging-study-room-fixture-registration\.test\.mjs|worker/index\.mjs|worker/livekit-credentials-smoke(\.test)?\.mjs|worker/package(-lock)?\.json|worker/study-room-(core|routes|staging-positive-smoke)\.mjs|worker/study-room\.test\.mjs|worker/wrangler(\.staging)?\.toml)$'
+          allowed='^(\.github/workflows/(deploy-pages-only|release-study-room-admin-beta)\.yml|assets/icons/(community/image|navigation/(hand|mic|monitor-up|pin|settings))\.svg|assets/study-room-backgrounds\.js|assets/study-room-live\.(css|js)|assets/study-room-preview\.(css|js)|assets/study-room/virtual-background-due-diligence-(branded|polished-20260908)\.webp|assets/vendor/mediapipe/(LICENSE|PROVENANCE)\.txt|assets/vendor/mediapipe/selfie_segmenter-float16-2023-05-07\.tflite|design-qa\.md|index\.html|scripts/build-pages-artifact\.mjs|scripts/test-pages-artifact\.mjs|scripts/test-study-room-(always-open|background-picker|backgrounds|catalog-sql|deployment-smoke|fixture-safety|hotfix-behavior|live|preview|release-workflow)\.mjs|study-room/index\.html|supabase/migrations/20260908131116_astra_staging_study_room_fixture_registration\.sql|supabase/migrations/20260908144814_astra_study_room_persisted_catalog\.sql|worker/astra-staging-study-room-fixture-registration\.test\.mjs|worker/index\.mjs|worker/livekit-credentials-smoke(\.test)?\.mjs|worker/package(-lock)?\.json|worker/study-room-(core|routes|staging-positive-smoke)\.mjs|worker/study-room\.test\.mjs|worker/study-room-catalog\.test\.mjs|worker/wrangler(\.staging)?\.toml)$'
           changed="$(git diff --name-only "$scope_base" "$GITHUB_SHA")"
           test -n "$changed"
           unexpected="$(printf '%s\n' "$changed" | grep -Ev "$allowed" || true)"
@@ -160,6 +160,7 @@ jobs:
           node scripts/test-study-room-hotfix-behavior.mjs
           node scripts/test-study-room-release-workflow.mjs
           node scripts/test-study-room-fixture-safety.mjs
+          node scripts/test-study-room-catalog-sql.mjs
           node worker/study-room-staging-positive-smoke.mjs --preflight
           node worker/study-room-staging-positive-smoke.mjs --self-test
           node --test worker/*.test.mjs
@@ -265,6 +266,17 @@ jobs:
           preview="$(curl --fail --silent --show-error "$STUDY_ROOM_WORKER_URL/assets/study-room-preview.js?release=$GITHUB_SHA")"
           grep -Fq 'study-room-always-open-20260908-1' <<<"$room"
           grep -Fq 'study-room-background-images-20260908-1' <<<"$room"
+          grep -Fq 'layout=stable-pins-20260908-1' <<<"$room"
+          grep -Fq 'catalog=admin-room-manager-20260908-1' <<<"$room"
+          grep -Fq 'study-room-live.css?v=study-room-admin-manager-20260908-1' <<<"$room"
+          grep -Fq 'data-max-rooms="24"' <<<"$room"
+          grep -Fq 'id="sr-room-editor"' <<<"$room"
+          grep -Fq 'Inner Chamber always remains admin-only.' <<<"$room"
+          grep -Fq 'const MAX_ROOMS = 24;' <<<"$live"
+          grep -Fq "name: 'Room 4'" <<<"$live"
+          grep -Fq "const audience = roomKey === '5' ? 'admin' : candidate?.audience;" <<<"$live"
+          grep -Fq "workerRequest('/admin/study-room/rooms'" <<<"$live"
+          grep -Fq 'expectedRevision: editor.revision' <<<"$live"
           grep -Fq "workerRequest('/study-room/rooms'" <<<"$live"
           grep -Fq "workerRequest('/study-room/join'" <<<"$live"
           grep -Fq 'registerTextStreamHandler' <<<"$live"
@@ -560,6 +572,17 @@ jobs:
             if grep -Fq '<title>Study Room — Due Diligence</title>' <<<"$room" \
               && grep -Fq 'study-room-always-open-20260908-1' <<<"$room" \
               && grep -Fq 'study-room-background-images-20260908-1' <<<"$room" \
+              && grep -Fq 'layout=stable-pins-20260908-1' <<<"$room" \
+              && grep -Fq 'catalog=admin-room-manager-20260908-1' <<<"$room" \
+              && grep -Fq 'study-room-live.css?v=study-room-admin-manager-20260908-1' <<<"$room" \
+              && grep -Fq 'data-max-rooms="24"' <<<"$room" \
+              && grep -Fq 'id="sr-room-editor"' <<<"$room" \
+              && grep -Fq 'Inner Chamber always remains admin-only.' <<<"$room" \
+              && grep -Fq 'const MAX_ROOMS = 24;' <<<"$live" \
+              && grep -Fq "name: 'Room 4'" <<<"$live" \
+              && grep -Fq "const audience = roomKey === '5' ? 'admin' : candidate?.audience;" <<<"$live" \
+              && grep -Fq "workerRequest('/admin/study-room/rooms'" <<<"$live" \
+              && grep -Fq 'expectedRevision: editor.revision' <<<"$live" \
               && grep -Fq "workerRequest('/study-room/rooms'" <<<"$live" \
               && grep -Fq "workerRequest('/study-room/join'" <<<"$live" \
               && grep -Fq 'registerTextStreamHandler' <<<"$live" \
@@ -578,7 +601,7 @@ jobs:
               && grep -Fq 'global.location.assign(roomUrl.href)' <<<"$preview" \
               && grep -Fq 'accessResolutionFailed = signedIn(latestSession) && !latestAccess' <<<"$preview" \
               && test "$background_assets" = "true"; then
-              echo "The five-room client, member access, optional backdrop, chat, screen sharing, adaptive video profile, and device discovery are live at the exact release SHA."
+              echo "The dynamic 24-room client, seeded Room 4 presentation, admin room editor, stable tile order, member access, optional backdrop, chat, screen sharing, and device discovery assets are live at the exact release SHA. Catalog authorization is covered separately by the exact-SHA staging gate."
               exit 0
             fi
             sleep 5

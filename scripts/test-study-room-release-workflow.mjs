@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const [workflow, pagesOnlyWorkflow, productionConfig, stagingConfig, home] =
+const [workflow, pagesOnlyWorkflow, productionConfig, stagingConfig, home, studyRoomPage, studyRoomClient] =
   await Promise.all([
     readFile(
       path.join(root, ".github/workflows/release-study-room-admin-beta.yml"),
@@ -18,6 +18,8 @@ const [workflow, pagesOnlyWorkflow, productionConfig, stagingConfig, home] =
     readFile(path.join(root, "worker/wrangler.toml"), "utf8"),
     readFile(path.join(root, "worker/wrangler.staging.toml"), "utf8"),
     readFile(path.join(root, "index.html"), "utf8"),
+    readFile(path.join(root, "study-room/index.html"), "utf8"),
+    readFile(path.join(root, "assets/study-room-live.js"), "utf8"),
   ]);
 
 assert.match(workflow, /workflow_dispatch:/u);
@@ -118,6 +120,9 @@ verifyScopeCase();
 verifyScopeCase({ MOCK_CANDIDATE_DELTA: "scripts/test-study-room-always-open.mjs\nscripts/test-study-room-background-picker.mjs\nassets/study-room/virtual-background-due-diligence-polished-20260908.webp" });
 verifyScopeCase({ MOCK_CANDIDATE_DELTA: "assets/study-room/virtual-background-due-diligence-polished-20260909.webp" }, true);
 verifyScopeCase({ MOCK_CANDIDATE_DELTA: "supabase/migrations/20260908131116_astra_staging_study_room_fixture_registration.sql\nworker/astra-staging-study-room-fixture-registration.test.mjs" });
+verifyScopeCase({ MOCK_CANDIDATE_DELTA: "supabase/migrations/20260908144814_astra_study_room_persisted_catalog.sql\nscripts/test-study-room-catalog-sql.mjs\nworker/study-room-catalog.test.mjs" });
+verifyScopeCase({ MOCK_CANDIDATE_DELTA: "supabase/migrations/20260908144815_astra_study_room_persisted_catalog.sql" }, true);
+verifyScopeCase({ MOCK_CANDIDATE_DELTA: "supabase/migrations/20260908144814_astra_study_room_catalog_reset.sql" }, true);
 verifyScopeCase({ MOCK_CANDIDATE_DELTA: "supabase/migrations/20260908070656_astra_staging_commercial_fixture_registration.sql" }, true);
 verifyScopeCase({ MOCK_MISSING_COMMIT: "true" }, true);
 verifyScopeCase({ MOCK_BAD_LIVE_ANCESTRY: "true" }, true);
@@ -164,6 +169,7 @@ for (const expectedReleaseFile of [
   "scripts/test-study-room-backgrounds.mjs",
   "scripts/test-study-room-always-open.mjs",
   "scripts/test-study-room-background-picker.mjs",
+  "scripts/test-study-room-catalog-sql.mjs",
   "scripts/test-study-room-deployment-smoke.mjs",
   "scripts/test-study-room-fixture-safety.mjs",
   "scripts/test-study-room-hotfix-behavior.mjs",
@@ -172,6 +178,7 @@ for (const expectedReleaseFile of [
   "scripts/test-study-room-release-workflow.mjs",
   "study-room/index.html",
   "supabase/migrations/20260908131116_astra_staging_study_room_fixture_registration.sql",
+  "supabase/migrations/20260908144814_astra_study_room_persisted_catalog.sql",
   "worker/astra-staging-study-room-fixture-registration.test.mjs",
   "worker/index.mjs",
   "worker/livekit-credentials-smoke.mjs",
@@ -182,6 +189,7 @@ for (const expectedReleaseFile of [
   "worker/study-room-routes.mjs",
   "worker/study-room-staging-positive-smoke.mjs",
   "worker/study-room.test.mjs",
+  "worker/study-room-catalog.test.mjs",
   "worker/wrangler.staging.toml",
   "worker/wrangler.toml",
 ]) {
@@ -201,12 +209,22 @@ assert.match(workflow, /node scripts\/test-pages-artifact\.mjs/u);
 assert.match(workflow, /node scripts\/test-study-room-backgrounds\.mjs/u);
 assert.match(workflow, /node scripts\/test-study-room-hotfix-behavior\.mjs/u);
 assert.equal((workflow.match(/node scripts\/test-study-room-fixture-safety\.mjs/gu) || []).length, 1);
-for (const script of ['test-study-room-always-open.mjs', 'test-study-room-background-picker.mjs']) {
+for (const script of ['test-study-room-always-open.mjs', 'test-study-room-background-picker.mjs', 'test-study-room-catalog-sql.mjs']) {
   for (const [label, candidate] of [['protected Study Room', workflow], ['Pages-only', pagesOnlyWorkflow]]) {
     const command = `node scripts/${script}`;
     assert.equal(candidate.split('\n').filter((line) => line.trim() === command).length, 1,
       `${label} must run the exact ${script} once, not only allow its path.`);
   }
+}
+assert.equal(workflow.split('\n').filter((line) => line.trim() === 'node --test worker/*.test.mjs').length, 1,
+  'The protected Study Room gate must run the new catalog Worker test through its unchanged full Worker suite.');
+assert.equal(workflow.split('\n').filter((line) => line.trim() === 'node --test worker/study-room-catalog.test.mjs').length, 0,
+  'Do not run the catalog Worker test twice in the protected gate.');
+assert.equal(pagesOnlyWorkflow.split('\n').filter((line) => line.trim() === 'node --test worker/study-room-catalog.test.mjs').length, 1,
+  'Pages-only verification must run the existing catalog authorization contract once.');
+for (const candidate of [workflow, pagesOnlyWorkflow]) {
+  assert.doesNotMatch(candidate, /(?:supabase\s+(?:db|migration)|apply_migration|\bpsql\b)/iu,
+    'Release workflow gates may run disposable local SQL tests but must never apply hosted DDL.');
 }
 assert.match(workflow, /node --check assets\/study-room-backgrounds\.js/u);
 assert.match(
@@ -250,6 +268,7 @@ for (const expectedPagesFile of [
   "scripts/test-study-room-backgrounds.mjs",
   "scripts/test-study-room-always-open.mjs",
   "scripts/test-study-room-background-picker.mjs",
+  "scripts/test-study-room-catalog-sql.mjs",
   "scripts/test-study-room-live.mjs",
   "study-room/index.html",
 ]) {
@@ -264,6 +283,13 @@ assert.doesNotMatch(
   pagesOnlyAllowlist,
   "The unused alternate background must stay outside Pages-only releases.",
 );
+for (const serverOnly of [
+  'supabase/migrations/20260908144814_astra_study_room_persisted_catalog.sql',
+  'worker/study-room-catalog.test.mjs', 'worker/study-room-core.mjs', 'worker/study-room-routes.mjs',
+]) {
+  assert.doesNotMatch(serverOnly, pagesOnlyAllowlist,
+    'Backend/catalog changes must use the protected Worker-first release, never Pages-only deployment.');
+}
 assert.match(
   pagesOnlyWorkflow,
   /npm ci --prefix worker --ignore-scripts --no-audit --no-fund/u,
@@ -314,6 +340,22 @@ assert.match(cleanupArtifactStep, /path: artifacts\/study-room\/\*-cleanup-manif
 assert.match(cleanupArtifactStep, /retention-days: 7/u);
 assert.match(cleanupArtifactStep, /if-no-files-found: error/u);
 const stagingAssetChecks = workflow.slice(stagingSmoke, stagingPositiveSmoke);
+for (const [source, requiredMarkers] of [
+  [studyRoomPage, ['layout=stable-pins-20260908-1', 'catalog=admin-room-manager-20260908-1',
+    'study-room-live.css?v=study-room-admin-manager-20260908-1', 'data-max-rooms="24"', 'id="sr-room-editor"',
+    'Inner Chamber always remains admin-only.']],
+  [studyRoomClient, ['const MAX_ROOMS = 24;', "name: 'Room 4'",
+    "const audience = roomKey === '5' ? 'admin' : candidate?.audience;",
+    "workerRequest('/admin/study-room/rooms'", 'expectedRevision: editor.revision']],
+]) {
+  for (const marker of requiredMarkers) {
+    assert.ok(source.includes(marker), `Catalog evidence must match shipped source: ${marker}`);
+    for (const [label, checks] of [['staging', stagingAssetChecks],
+      ['Worker-first production', workflow.slice(pagesVerificationJob)], ['Pages-only', pagesOnlyWorkflow]]) {
+      assert.ok(checks.includes(marker), `${label} must verify the dynamic catalog/admin UI marker: ${marker}`);
+    }
+  }
+}
 for (const requiredStagingMarker of [
   "study-room-always-open-20260908-1",
   "study-room-background-images-20260908-1",

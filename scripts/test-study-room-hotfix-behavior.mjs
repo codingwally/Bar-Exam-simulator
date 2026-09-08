@@ -478,13 +478,17 @@ function roomCatalogResponse() {
     status: 200,
     payload: {
       ok: true,
+      allowed: true, role: 'admin', administrator: true, canCreateRooms: true,
+      maxRooms: 24, maxParticipants: 12, recording: false,
       rooms: [
-        { roomKey: '1', name: 'Library', kind: 'library', microphoneAllowed: false, adminOnly: false, canJoin: true, canCreate: true, active: true, participantCount: 1, capacity: 12, focusStartedAt: '2026-08-29T00:00:00.000Z' },
-        { roomKey: '2', name: 'Room 1', kind: 'standard', microphoneAllowed: true, adminOnly: false, canJoin: true, canCreate: true, active: true, participantCount: 2, capacity: 12, focusStartedAt: '2026-08-29T00:15:00.000Z' },
-        { roomKey: '3', name: 'Room 2', kind: 'standard', microphoneAllowed: true, adminOnly: false, canJoin: true, canCreate: true, active: true, participantCount: 0, capacity: 12, focusStartedAt: '2026-08-29T00:30:00.000Z' },
-        { roomKey: '4', name: 'Room 3', kind: 'standard', microphoneAllowed: true, adminOnly: false, canJoin: true, canCreate: true, active: false, participantCount: 0, capacity: 12, focusStartedAt: null },
-        { roomKey: '5', name: 'Inner Chamber', kind: 'inner_chamber', microphoneAllowed: true, adminOnly: true, canJoin: true, canCreate: true, active: false, participantCount: 0, capacity: 12, focusStartedAt: null },
-      ],
+        { roomKey: '1', label: 'Library', kind: 'library', microphoneAllowed: false, adminOnly: false, active: true, participantCount: 1, capacity: 12, focusStartedAt: '2026-08-29T00:00:00.000Z' },
+        { roomKey: '2', label: 'Room 1', kind: 'general', microphoneAllowed: true, adminOnly: false, active: true, participantCount: 2, capacity: 12, focusStartedAt: '2026-08-29T00:15:00.000Z' },
+        { roomKey: '3', label: 'Room 2', kind: 'general', microphoneAllowed: true, adminOnly: false, active: true, participantCount: 0, capacity: 12, focusStartedAt: '2026-08-29T00:30:00.000Z' },
+        { roomKey: '4', label: 'Room 3', kind: 'general', microphoneAllowed: true, adminOnly: false, active: false, participantCount: 0, capacity: 12, focusStartedAt: null },
+        { roomKey: '5', label: 'Inner Chamber', kind: 'inner-chamber', microphoneAllowed: true, adminOnly: true, active: false, participantCount: 0, capacity: 12, focusStartedAt: null },
+        { roomKey: '6', label: 'Room 4', kind: 'general', microphoneAllowed: true, adminOnly: false, active: false, participantCount: 0, capacity: 12, focusStartedAt: null },
+      ].map((room) => ({ ...room, audience: room.adminOnly ? 'admin' : 'all', revision: 1, accessRevision: 1,
+        alwaysOpen: !room.adminOnly, canJoin: true, canCreate: room.adminOnly })),
     },
   });
 }
@@ -833,7 +837,7 @@ async function eventually(check, message) {
   resolveAccess(response({
     ok: true,
     status: 200,
-    payload: { ok: true, allowed: true, role: 'admin', administrator: true, canCreateRooms: true, maxParticipants: 12, maxRooms: 5 },
+    payload: { ok: true, allowed: true, role: 'admin', administrator: true, canCreateRooms: true, maxParticipants: 12, maxRooms: 24 },
   }));
   await eventually(
     () => harness.document.getElementById('sr-prejoin-status').textContent.includes('available devices were detected'),
@@ -851,12 +855,20 @@ async function eventually(check, message) {
   assert.equal(harness.document.getElementById('sr-live-microphone-select').children[0].label, 'Laptop Array Microphone');
   assert.equal(harness.document.getElementById('sr-join-camera').getAttribute('aria-pressed'), 'false');
   assert.equal(harness.document.getElementById('sr-join-microphone').getAttribute('aria-pressed'), 'false');
-  assert.equal(harness.hooks.state.rooms.length, 5, 'The prejoin lobby must normalize exactly five room slots.');
+  assert.equal(harness.hooks.state.rooms.length, 6, 'The prejoin lobby must retain the six canonical seeded rooms.');
+  assert.deepEqual(Array.from(harness.hooks.state.rooms, ({ roomKey, audience, revision, accessRevision }) =>
+    [roomKey, audience, revision, accessRevision]), [
+    ['1', 'all', 1, 1], ['2', 'all', 1, 1], ['3', 'all', 1, 1],
+    ['4', 'all', 1, 1], ['5', 'admin', 1, 1], ['6', 'all', 1, 1],
+  ]);
   assert.equal(harness.hooks.state.selectedRoomKey, '1', 'The first open room should be selected by default.');
   const roomCards = harness.document.getElementById('sr-room-card-grid').children;
-  assert.equal(roomCards.length, 5);
-  assert.equal(harness.document.getElementById('sr-room-lobby-count').textContent, '3 rooms available');
-  assert.equal(roomCards.find(({ id }) => id === 'sr-create-room')?.dataset.roomKey, '4');
+  assert.equal(roomCards.length, 6);
+  assert.equal(harness.document.getElementById('sr-room-lobby-count').textContent, '5 rooms available');
+  assert.equal(roomCards.flatMap(descendants).find(({ id }) => id === 'sr-create-room')?.dataset.roomKey, '5',
+    'Only private Inner Chamber needs explicit creation; all five public seeds are always open.');
+  assert.equal(roomCards.flatMap(descendants).filter((node) => node.className === 'sr-room-edit').length, 6,
+    'An authenticated administrator must receive one edit control per canonical room.');
   assert.equal(harness.document.getElementById('sr-branded-backdrop-status').dataset.backdropState, 'off');
   assert.match(harness.document.getElementById('sr-branded-backdrop-copy').textContent, /real background/iu);
 }
@@ -867,7 +879,7 @@ async function eventually(check, message) {
     fetch: async () => response({
       ok: true,
       status: 200,
-      payload: { ok: true, allowed: true, role: 'admin', administrator: true, canCreateRooms: true, maxParticipants: 12, maxRooms: 5 },
+      payload: { ok: true, allowed: true, role: 'admin', administrator: true, canCreateRooms: true, maxParticipants: 12, maxRooms: 24 },
     }),
     enumerateDevices: async () => [
       { kind: 'videoinput', deviceId: 'camera-1', label: '' },
@@ -916,7 +928,7 @@ async function eventually(check, message) {
     fetch: async () => response({
       ok: true,
       status: 200,
-      payload: { ok: true, allowed: true, role: 'admin', administrator: true, canCreateRooms: true, maxParticipants: 12, maxRooms: 5 },
+      payload: { ok: true, allowed: true, role: 'admin', administrator: true, canCreateRooms: true, maxParticipants: 12, maxRooms: 24 },
     }),
     enumerateDevices: async () => [
       { kind: 'videoinput', deviceId: 'camera-1', label: 'Camera 1' },
@@ -986,7 +998,7 @@ function authorizedResponse() {
   return response({
     ok: true,
     status: 200,
-    payload: { ok: true, allowed: true, role: 'admin', administrator: true, canCreateRooms: true, maxParticipants: 12, maxRooms: 5 },
+    payload: { ok: true, allowed: true, role: 'admin', administrator: true, canCreateRooms: true, maxParticipants: 12, maxRooms: 24 },
   });
 }
 

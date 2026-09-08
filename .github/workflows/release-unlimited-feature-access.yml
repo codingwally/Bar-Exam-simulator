@@ -127,6 +127,7 @@ jobs:
             assets/phase2-experience.js \
             assets/pricing-checkout-safety.js \
             scripts/test-pricing-checkout-safety.mjs \
+            scripts/test-pricing-public-contract.mjs \
             worker/commercial-launch-access-payment.test.mjs \
             worker/index.test.mjs \
             worker/pricing-builder.test.mjs \
@@ -398,6 +399,7 @@ jobs:
           node scripts/test-astra-payment-lifecycle.mjs
           node scripts/test-astra-149-binding-compatibility.mjs
           node scripts/test-astra-late-payment-ui.mjs
+          node scripts/test-pricing-public-contract.mjs
           node scripts/test-astra-late-149-binding-reconciliation.mjs
           node scripts/test-astra-payment-cohort-repair.mjs
           node scripts/test-astra-payment-presentation.mjs

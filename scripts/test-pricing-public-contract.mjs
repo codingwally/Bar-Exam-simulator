@@ -41,7 +41,13 @@ assert.doesNotMatch(frontend, /form\.set\('amountPhp'/,
 assert.doesNotMatch(frontend, /assets\/payments\/bpi-instapay-149\.png/,
   'the active QR must come from the published payment-channel revision');
 assert.match(frontend, /PRICING_OFFER_STALE/);
-assert.match(frontend, /Pricing changed before submission\. Nothing was charged or accepted/);
+assert.match(frontend, /The payment offer changed while this page was open\. Your proof was not submitted\./,
+  'a changed offer must describe the proof submission outcome, not claim no external payment occurred');
+assert.match(frontend, /If you already paid using the earlier offer, submit the retained proof for review below\./);
+assert.match(frontend, /captureHistoricalPaymentProof/);
+assert.match(frontend, /renderLatePaymentReview/);
+assert.doesNotMatch(frontend, /Nothing was charged or accepted/,
+  'the site cannot assert that no bank or QR payment was made outside the site');
 assert.match(frontend, /Payment is not open yet because this plan has no published matching QR/);
 assert.match(frontend, /plan\.checkoutOpen !== true/);
 assert.match(frontend, /method\.qrAmountMode === 'generic'[\s\S]*amount === Number\(plan\.priceCentavos\)/,

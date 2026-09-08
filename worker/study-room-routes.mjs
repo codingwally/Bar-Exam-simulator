@@ -1,8 +1,10 @@
 import {
   StudyRoomError,
   createStudyRoom,
+  configureStudyRoom,
   createStudyRoomJoinCredential,
   listStudyRooms,
+  normalizeStudyRoomCatalog,
   muteStudyRoomParticipant,
   removeStudyRoomParticipant,
   renameStudyRoomParticipant,
@@ -73,14 +75,41 @@ export function createStudyRoomHandlers(dependencies) {
     parseJson,
     rateLimit,
     respond,
+    readCatalog,
+    configureCatalog,
+    verifyPaidMembership,
     describeRoom = studyRoomDescriptor,
     listRooms = listStudyRooms,
     createRoom = createStudyRoom,
+    configureRoom = configureStudyRoom,
     issueCredential = createStudyRoomJoinCredential,
     muteParticipant = muteStudyRoomParticipant,
     removeParticipant = removeStudyRoomParticipant,
     renameParticipant = renameStudyRoomParticipant,
   } = dependencies;
+
+  async function currentCatalog(env) {
+    if (typeof readCatalog !== 'function') {
+      throw new StudyRoomError('STUDY_ROOM_CATALOG_UNAVAILABLE', 'The Study Room catalog is unavailable.', 503);
+    }
+    return normalizeStudyRoomCatalog(await readCatalog(env));
+  }
+
+  async function roomOptions(env, context, catalog, checkPaid = false) {
+    const paid = async () => typeof verifyPaidMembership === 'function'
+      && await verifyPaidMembership(env, context.user) === true;
+    return {
+      catalog,
+      getCatalog: () => currentCatalog(env),
+      isAdministrator: context.isAdministrator,
+      isPaidMember: !context.isAdministrator && checkPaid ? await paid() : false,
+      verifyPaidMembership: paid,
+      configureCatalog: (body) => {
+        if (typeof configureCatalog !== 'function') throw new StudyRoomError('STUDY_ROOM_CATALOG_UNAVAILABLE', 'Room configuration is unavailable.', 503);
+        return configureCatalog(env, body);
+      },
+    };
+  }
 
   async function authorizedContext(request, env, scope) {
     await rateLimit(request, env, scope);
@@ -132,7 +161,7 @@ export function createStudyRoomHandlers(dependencies) {
   return Object.freeze({
     async access(request, env, origin, allowedOrigin) {
       const context = await authorizedContext(request, env, 'access');
-      const room = describeRoom(env);
+      const room = describeRoom(env, { catalog: await currentCatalog(env) });
       return respond({
         ok: true,
         allowed: true,
@@ -150,7 +179,9 @@ export function createStudyRoomHandlers(dependencies) {
       const body = await parseJson(request, 4_096);
       const operation = String(body?.operation || 'list').trim().toLowerCase();
       if (operation === 'list') {
-        const catalog = await listRooms(env, { isAdministrator: context.isAdministrator });
+        const current = await currentCatalog(env);
+        const catalog = await listRooms(env, await roomOptions(env, context, current,
+          current.rooms.some((room) => room.audience === 'paid')));
         return respond({
           ok: true,
           allowed: true,
@@ -162,12 +193,21 @@ export function createStudyRoomHandlers(dependencies) {
       }
       if (operation === 'create') {
         requireAdministrator(context);
-        const result = await createRoom(env, body?.roomKey, { isAdministrator: true });
+        const result = await createRoom(env, body?.roomKey, await roomOptions(env, context, await currentCatalog(env)));
         return respond({
           ok: true,
           created: result.created,
           room: result.room,
         }, result.created ? 201 : 200, origin, allowedOrigin);
+      }
+      if (operation === 'add' || operation === 'update') {
+        requireAdministrator(context);
+        if (!administratorOnlyRequest(request)) {
+          throw new StudyRoomError('STUDY_ROOM_ADMIN_REQUIRED', 'Use the administrator room configuration endpoint.', 403);
+        }
+        const result = await configureRoom(env, context.user, { ...body, operation },
+          await roomOptions(env, context, await currentCatalog(env)));
+        return respond(result, 200, origin, allowedOrigin);
       }
       throw new StudyRoomError(
         'STUDY_ROOM_OPERATION_UNSUPPORTED',
@@ -179,12 +219,14 @@ export function createStudyRoomHandlers(dependencies) {
     async join(request, env, origin, allowedOrigin) {
       const context = await authorizedContext(request, env, 'join');
       const body = await parseJson(request, 4_096);
+      const catalog = await currentCatalog(env);
       const credential = await issueCredential(
         env,
         context.user,
         requestedRoomKey(body),
         body?.nickname,
-        { isAdministrator: context.isAdministrator },
+        await roomOptions(env, context, catalog,
+          catalog.rooms.some((room) => room.roomKey === String(requestedRoomKey(body)) && room.audience === 'paid')),
       );
       return respond({
         ok: true,
@@ -194,6 +236,9 @@ export function createStudyRoomHandlers(dependencies) {
         room_label: credential.roomLabel,
         room_name: credential.roomName,
         room_kind: credential.roomKind,
+        room_revision: credential.revision,
+        access_revision: credential.accessRevision,
+        audience: credential.audience,
         microphone_allowed: credential.microphoneAllowed,
         administrator: credential.administrator,
         participant_identity: credential.participantIdentity,
@@ -210,10 +255,11 @@ export function createStudyRoomHandlers(dependencies) {
       const body = await parseJson(request, 6_144);
       const operation = String(body?.operation || '').trim().toLowerCase();
       const roomKey = requestedRoomKey(body);
+      const options = await roomOptions(env, context, await currentCatalog(env));
       let result;
       if (operation === 'mute') {
         requirePrivilegedModerator(context.authorization);
-        result = await muteParticipant(env, roomKey, body?.participantIdentity, body?.trackSid);
+        result = await muteParticipant(env, roomKey, body?.participantIdentity, body?.trackSid, options);
       } else if (operation === 'rename') {
         result = await renameParticipant(
           env,
@@ -221,10 +267,11 @@ export function createStudyRoomHandlers(dependencies) {
           roomKey,
           body?.participantIdentity,
           body?.nickname,
+          options,
         );
       } else if (operation === 'remove') {
         requirePrivilegedModerator(context.authorization);
-        result = await removeParticipant(env, roomKey, body?.participantIdentity);
+        result = await removeParticipant(env, roomKey, body?.participantIdentity, options);
       } else {
         throw new StudyRoomError(
           'STUDY_ROOM_OPERATION_UNSUPPORTED',

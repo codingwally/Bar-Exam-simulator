@@ -46,7 +46,11 @@ assert.match(page, /The check stops immediately; joining starts muted with camer
 assert.match(page, /Off when you join/g);
 assert.match(page, /Use a nickname\. Real names are not required\./);
 assert.match(page, /value="Participant #"/);
-assert.match(page, /id="sr-room-lobby"[\s\S]*data-max-rooms="5"/u);
+assert.match(page, /id="sr-room-lobby"[\s\S]*data-max-rooms="24"/u);
+assert.match(page, /id="sr-room-admin-controls"[^>]*hidden/u);
+assert.match(page, /id="sr-room-editor"[^>]*hidden/u);
+assert.match(page, /id="sr-room-audience"[\s\S]*value="admin"[\s\S]*value="paid"[\s\S]*value="all"/u);
+assert.match(page, /Inner Chamber always remains admin-only\./u);
 assert.match(page, /id="sr-room-lobby-count"/u);
 assert.match(page, /id="sr-room-card-grid"[^>]*><\/div>/u);
 assert.match(page, /id="sr-room-selector"[\s\S]*id="sr-room-selector-menu"/u);
@@ -72,7 +76,7 @@ for (const endpoint of ['access', 'rooms', 'join', 'moderate']) {
   assert.match(client, new RegExp(`/study-room/${endpoint}`));
 }
 assert.match(client, /\/admin\/study-room\/rooms/);
-assert.match(client, /const MAX_ROOMS = 5/);
+assert.match(client, /const MAX_ROOMS = 24/);
 assert.match(client, /workerRequest\('\/study-room\/join', \{ nickname, roomKey \}\)/);
 assert.match(client, /Authorization: `Bearer \$\{token\}`/);
 assert.match(client, /cache: 'no-store'/);
@@ -131,11 +135,28 @@ assert.match(client, /joinWithMicrophone:\s*false/);
 assert.match(client, /joinWithCamera:\s*false/);
 assert.match(client, /const STORAGE_KEY = 'duediligence\.study-room\.nickname\.v2'/);
 assert.match(client, /`Participant #\$\{\(value % 900\) \+ 100\}`/);
-for (const roomName of ['Library', 'Room 1', 'Room 2', 'Room 3', 'Inner Chamber']) {
+for (const roomName of ['Library', 'Room 1', 'Room 2', 'Room 3', 'Inner Chamber', 'Room 4']) {
   assert.match(client, new RegExp(roomName.replace(' ', '\\s')));
 }
 assert.match(client, /microphoneAllowed:\s*roomKey !== '1'/);
-assert.match(client, /adminOnly:\s*roomKey === '5'/);
+assert.match(client, /const audience = roomKey === '5' \? 'admin' : candidate\?\.audience/u);
+assert.match(client, /adminOnly:\s*audience === 'admin'/u);
+assert.match(client, /canJoin:\s*candidate\?\.canJoin === true && \(audience !== 'admin' \|\| state\.isAdministrator\)/u,
+  'Member eligibility must come from the canonical server catalog, not a guessed client entitlement.');
+assert.match(client, /Number\.isSafeInteger\(candidate\?\.revision\)[\s\S]*Number\.isSafeInteger\(candidate\?\.accessRevision\)/u);
+assert.match(client, /if \(rooms\.length !== payload\.rooms\.length\) throw new Error\('The Study Room catalog could not be verified\.'\)/u);
+assert.match(client, /state\.rooms = normalizeRoomCatalog\(\{ rooms: \[\] \}\);\s*state\.selectedRoomKey = ''/u,
+  'Normal startup must not synthesize rooms while the authoritative catalog is unavailable.');
+const roomManagerSource = client.slice(client.indexOf('function availableRoomKey('), client.indexOf('function startRoomCatalogRefresh('));
+assert.match(roomManagerSource, /for \(let key = 7; key <= MAX_ROOMS; key \+= 1\)/u);
+assert.match(roomManagerSource, /const allowed = state\.isAdministrator && Boolean\(state\.session\?\.access_token \|\| LOCAL_TEST_MODE\)/u);
+assert.match(roomManagerSource, /if \(!editor \|\| !state\.isAdministrator \|\| !state\.session\?\.access_token/u);
+assert.match(roomManagerSource, /operation: editor\.mode, roomKey: editor\.roomKey, label, audience, expectedRevision: editor\.revision/u);
+assert.match(roomManagerSource, /await refreshRoomCatalog\(\{ quiet: true \}\);[\s\S]*saved\.revision !== result\.room\.revision/u,
+  'A room configuration is confirmed only after the canonical catalog is read back.');
+assert.match(roomManagerSource, /editor\.needsReload = !\['STUDY_ROOM_ROOM_NOT_EMPTY', 'STUDY_ROOM_CONFIG_INVALID'\]/u,
+  'Unknown or stale saves must require an explicit reload, never an automatic retry.');
+assert.match(roomManagerSource, /byId\('sr-room-audience'\)\.disabled = busy \|\| editor\.roomKey === '5'/u);
 assert.match(client, /state\.focusStartedAt = Date\.parse\(credential\.focus_started_at/);
 assert.match(client, /global\.opener = null/);
 assert.match(client, /function bindDeviceChangeDetection\(\)[\s\S]*addEventListener\('devicechange', refreshDeviceLists\)/);

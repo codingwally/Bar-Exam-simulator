@@ -2917,6 +2917,25 @@ body.sr-in-call.sr-compact-mode #sr-toggle-compact,
 }
 
 /* Keep room names, background controls and call actions usable on smaller screens. */
+.sr-room-admin-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 16px; }
+.sr-room-admin-controls[hidden], .sr-room-editor[hidden] { display: none; }
+.sr-room-admin-controls p { margin: 0; color: #b9c8d8; font-size: 13px; }
+.sr-room-admin-card { display: flex; flex-direction: column; min-width: 0; gap: 6px; }
+.sr-room-admin-card > .sr-room-card { width: 100%; flex: 1; }
+.sr-room-edit, .sr-room-add, .sr-room-editor-actions button { min-height: 44px; padding: 10px 14px; border: 1px solid #72889c; border-radius: 10px; background: #142a40; color: #f4f1e9; font: inherit; cursor: pointer; }
+.sr-room-edit { align-self: stretch; font-size: 12px; }
+.sr-room-add, #sr-room-save { border-color: #d4af57; color: #f6db94; }
+.sr-room-edit:disabled, .sr-room-add:disabled, .sr-room-editor-actions button:disabled { opacity: .55; cursor: not-allowed; }
+.sr-room-edit:focus-visible, .sr-room-add:focus-visible, .sr-room-editor :is(input,select,button):focus-visible { outline: 2px solid #f2cf70; outline-offset: 3px; }
+.sr-room-editor { min-width: 0; margin: 0 0 20px; padding: 18px; border: 1px solid #72889c; border-radius: 14px; background: #101f31; }
+.sr-room-editor h3 { margin: 0 0 16px; color: #f4f1e9; }
+.sr-room-editor > p { margin: 10px 0; font-size: 12px; line-height: 1.5; color: #b9c8d8; overflow-wrap: anywhere; }
+.sr-room-editor-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+.sr-room-editor-fields label { display: grid; gap: 7px; min-width: 0; font-size: 13px; color: #f4f1e9; }
+.sr-room-editor-fields :is(input,select) { box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px; padding: 10px; border: 1px solid #72889c; border-radius: 8px; color: #f4f1e9; background: #09192a; font: inherit; }
+.sr-room-editor-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.sr-room-audience { color: #f6db94; }
+@media (max-width: 560px) { .sr-room-editor-fields { grid-template-columns: minmax(0, 1fr); } }
 .sr-lobby-entry-hint {
   max-width: 62ch;
   margin: 8px 0 0;
@@ -2999,7 +3018,11 @@ body.sr-in-call.sr-compact-mode #sr-toggle-compact,
 }
 
 /* Keep every call action, including Leave, visible on portrait phones. */
-@media (max-width: 760px) and (min-height: 620px) {
+@media (max-width: 760px) and (max-height: 600px) and (orientation: portrait) {
+  .sr-stage-header { min-height: 90px; }
+}
+
+@media (max-width: 760px) and (orientation: portrait) {
   body.sr-in-call:not(.sr-compact-mode) .sr-live-room:not([hidden]) {
     padding-bottom: calc(138px + env(safe-area-inset-bottom, 0px));
   }

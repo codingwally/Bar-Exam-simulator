@@ -25,19 +25,23 @@ const APPROVED_STAGING_SUPABASE = "https://hlzqmreeoghbldnhlybr.supabase.co";
 const APPROVED_STAGING_WORKER =
   "https://duediligence-examinations-staging.wallyesteban1993.workers.dev";
 const APPROVED_STAGING_ROOM = "dd-study-room-admin-beta-staging-v1";
-const STUDY_ROOM_MAX_ROOMS = 5;
+const STUDY_ROOM_MAX_ROOMS = 24;
+// This compatibility smoke only operates on the pristine six seeds. A seventh
+// admin-only key24 may be observed, but visibility is not ownership/provenance.
+// It never creates or updates persisted catalog entries, including QA slots.
 const STUDY_ROOM_SLOTS = Object.freeze([
-  Object.freeze({ roomKey: "1", label: "Library", kind: "library", microphoneAllowed: false, adminOnly: false }),
-  Object.freeze({ roomKey: "2", label: "Room 1", kind: "general", microphoneAllowed: true, adminOnly: false }),
-  Object.freeze({ roomKey: "3", label: "Room 2", kind: "general", microphoneAllowed: true, adminOnly: false }),
-  Object.freeze({ roomKey: "4", label: "Room 3", kind: "general", microphoneAllowed: true, adminOnly: false }),
-  Object.freeze({ roomKey: "5", label: "Inner Chamber", kind: "inner-chamber", microphoneAllowed: true, adminOnly: true }),
+  Object.freeze({ roomKey: "1", label: "Library", kind: "library", microphoneAllowed: false, adminOnly: false, audience: "all", revision: 1, accessRevision: 1 }),
+  Object.freeze({ roomKey: "2", label: "Room 1", kind: "general", microphoneAllowed: true, adminOnly: false, audience: "all", revision: 1, accessRevision: 1 }),
+  Object.freeze({ roomKey: "3", label: "Room 2", kind: "general", microphoneAllowed: true, adminOnly: false, audience: "all", revision: 1, accessRevision: 1 }),
+  Object.freeze({ roomKey: "4", label: "Room 3", kind: "general", microphoneAllowed: true, adminOnly: false, audience: "all", revision: 1, accessRevision: 1 }),
+  Object.freeze({ roomKey: "5", label: "Inner Chamber", kind: "inner-chamber", microphoneAllowed: true, adminOnly: true, audience: "admin", revision: 1, accessRevision: 1 }),
+  Object.freeze({ roomKey: "6", label: "Room 4", kind: "general", microphoneAllowed: true, adminOnly: false, audience: "all", revision: 1, accessRevision: 1 }),
 ]);
 const APPROVED_STAGING_ROOMS = Object.freeze(
-  Array.from({ length: STUDY_ROOM_MAX_ROOMS }, (_unused, index) =>
-    index === 0
+  STUDY_ROOM_SLOTS.map(({ roomKey }) =>
+    roomKey === "1"
       ? APPROVED_STAGING_ROOM
-      : `${APPROVED_STAGING_ROOM}-${index + 1}`,
+      : `${APPROVED_STAGING_ROOM}-${roomKey}`,
   ),
 );
 const STUDY_ROOM_MAX_PARTICIPANTS = 12;
@@ -83,12 +87,15 @@ function assertPlainObject(value, message) {
 
 function approvedRoomKey(value) {
   const roomKey = String(value || "").trim();
-  assert.match(roomKey, /^[1-5]$/u, "The smoke requested an invalid room slot.");
+  assert.match(roomKey, /^[1-6]$/u, "The smoke requested a non-seed room slot.");
   return roomKey;
 }
 
-function approvedRoomName(roomKey) {
-  return APPROVED_STAGING_ROOMS[Number(approvedRoomKey(roomKey)) - 1];
+function approvedRoomName(roomKey, accessRevision = 1) {
+  const originalName = APPROVED_STAGING_ROOMS[Number(approvedRoomKey(roomKey)) - 1];
+  assert.ok(Number.isSafeInteger(accessRevision) && accessRevision >= 1 && accessRevision <= 2147483646,
+    "The smoke received an invalid access generation.");
+  return accessRevision === 1 ? originalName : `${originalName}-a${accessRevision}`;
 }
 
 function decodeJwtSegment(value) {
@@ -579,7 +586,10 @@ function validateAccessResponse(body, expectedRole, expectedAdministrator = true
 }
 
 function validatePublicRoomDescriptor(room, expectedRoomKey, expectedActive) {
-  const slot = STUDY_ROOM_SLOTS[Number(approvedRoomKey(expectedRoomKey)) - 1];
+  const optionalReadOnlySlot = expectedRoomKey === "24";
+  const slot = optionalReadOnlySlot
+    ? { roomKey: "24", kind: "general", microphoneAllowed: true, adminOnly: true, audience: "admin" }
+    : STUDY_ROOM_SLOTS[Number(approvedRoomKey(expectedRoomKey)) - 1];
   const descriptor = assertPlainObject(
     room,
     `Study Room ${expectedRoomKey} is missing from the room catalog.`,
@@ -587,9 +597,11 @@ function validatePublicRoomDescriptor(room, expectedRoomKey, expectedActive) {
   assert.deepEqual(
     Object.keys(descriptor).sort(),
     [
+      "accessRevision",
       "active",
       "adminOnly",
       "alwaysOpen",
+      "audience",
       "canCreate",
       "canJoin",
       "capacity",
@@ -598,12 +610,25 @@ function validatePublicRoomDescriptor(room, expectedRoomKey, expectedActive) {
       "label",
       "microphoneAllowed",
       "participantCount",
+      "revision",
       "roomKey",
     ],
     "The public room descriptor exposed an unexpected field.",
   );
   assert.equal(descriptor.roomKey, expectedRoomKey);
-  assert.equal(descriptor.label, slot.label);
+  assert.equal(descriptor.audience, slot.audience);
+  if (optionalReadOnlySlot) {
+    assert.equal(typeof descriptor.label, "string");
+    assert.equal(descriptor.label, descriptor.label.trim());
+    assert.match(descriptor.label, /^[A-Za-z0-9][A-Za-z0-9 .,'()&_\-]{1,63}$/u);
+    assert.ok(Number.isSafeInteger(descriptor.revision) && descriptor.revision >= 1 && descriptor.revision <= 2147483646);
+    assert.ok(Number.isSafeInteger(descriptor.accessRevision) && descriptor.accessRevision >= 1
+      && descriptor.accessRevision <= descriptor.revision);
+  } else {
+    assert.equal(descriptor.label, slot.label);
+    assert.equal(descriptor.revision, slot.revision, "The smoke requires an unchanged seeded catalog.");
+    assert.equal(descriptor.accessRevision, slot.accessRevision, "The smoke requires the seeded access generation.");
+  }
   assert.equal(descriptor.kind, slot.kind);
   assert.equal(descriptor.microphoneAllowed, slot.microphoneAllowed);
   assert.equal(descriptor.adminOnly, slot.adminOnly);
@@ -642,20 +667,25 @@ function validateRoomCatalog(body, expectedRole, expectedActiveKeys = null, expe
   assert.equal(body?.maxRooms, STUDY_ROOM_MAX_ROOMS);
   assert.equal(body?.maxParticipants, STUDY_ROOM_MAX_PARTICIPANTS);
   assert.equal(body?.recording, false);
-  assert.equal(body?.rooms?.length, STUDY_ROOM_MAX_ROOMS);
+  assert.ok(Array.isArray(body?.rooms) && [STUDY_ROOM_SLOTS.length, STUDY_ROOM_SLOTS.length + 1].includes(body.rooms.length),
+    "The smoke requires six seeded entries and at most one read-only admin slot24.");
+  const expectedKeys = STUDY_ROOM_SLOTS.map((slot) => slot.roomKey);
+  if (body.rooms.length === STUDY_ROOM_SLOTS.length + 1) expectedKeys.push("24");
+  assert.deepEqual(body.rooms.map((room) => room?.roomKey), expectedKeys,
+    "Unknown, duplicate, missing, or reordered catalog entries hold this smoke.");
   const activeKeys = Array.isArray(expectedActiveKeys)
     ? new Set(expectedActiveKeys.map(approvedRoomKey))
     : null;
   const rooms = body.rooms.map((room, index) =>
     validatePublicRoomDescriptor(
       room,
-      String(index + 1),
-      activeKeys ? activeKeys.has(String(index + 1)) : undefined,
+      expectedKeys[index],
+      activeKeys && expectedKeys[index] !== "24" ? activeKeys.has(expectedKeys[index]) : undefined,
     ),
   );
   for (const room of rooms) {
     assert.equal(room.canCreate, room.adminOnly && expectedAdministrator);
-    assert.equal(room.canJoin, room.adminOnly ? expectedAdministrator : true);
+    assert.equal(room.canJoin, expectedAdministrator || room.audience === "all");
   }
   const serialized = JSON.stringify(body);
   for (const roomName of APPROVED_STAGING_ROOMS) {
@@ -684,13 +714,13 @@ async function provePublicFirstJoins(configuration, student) {
   const before = validateRoomCatalog(listed.body, "member", null, false);
   // Do not delete or repurpose a room belonging to an earlier/live session to
   // manufacture a first-join proof. An occupied public slot holds this smoke.
-  for (const room of before.filter((entry) => !entry.adminOnly)) assert.equal(room.active, false,
+  for (const room of before.filter((entry) => entry.audience === "all")) assert.equal(room.active, false,
     "Public first-join proof requires initially inactive staging slots.");
-  const activeKeys = before.filter((entry) => entry.active).map((entry) => entry.roomKey);
+  const activeKeys = before.filter((entry) => entry.roomKey !== "24" && entry.active).map((entry) => entry.roomKey);
   const listedAgain = await workerPost(configuration, "/study-room/rooms", student.token, { operation: "list" });
   validateRoomCatalog(listedAgain.body, "member", activeKeys, false);
   const joined = [];
-  for (const slot of STUDY_ROOM_SLOTS.filter((entry) => !entry.adminOnly)) {
+  for (const slot of STUDY_ROOM_SLOTS.filter((entry) => entry.audience === "all")) {
     const nickname = "Participant #404";
     const response = await workerPost(configuration, "/study-room/join", student.token,
       { roomKey: slot.roomKey, nickname }, [201]);
@@ -730,24 +760,27 @@ async function waitForRoomParticipantCounts(
     const rooms = validateRoomCatalog(
       catalog.body,
       expectedRole,
-      ["1", "2", "3", "4", "5"],
+      STUDY_ROOM_SLOTS.map((slot) => slot.roomKey),
     );
     const settled = Object.entries(expectedMinimums).every(
       ([roomKey, minimum]) =>
-        rooms[Number(approvedRoomKey(roomKey)) - 1].participantCount >= minimum,
+        rooms.find((room) => room.roomKey === approvedRoomKey(roomKey)).participantCount >= minimum,
     );
     if (settled) return rooms;
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
-  throw new Error("The five-room participant catalog did not settle in time.");
+  throw new Error("The six-seed participant catalog did not settle in time.");
 }
 
 function validateJoinResponse(body, expectedNickname, issuer, expectedRoomKey) {
   const roomKey = approvedRoomKey(expectedRoomKey);
-  const roomName = approvedRoomName(roomKey);
+  const slot = STUDY_ROOM_SLOTS[Number(roomKey) - 1];
+  assert.equal(body?.room_revision, slot.revision);
+  assert.equal(body?.access_revision, slot.accessRevision);
+  assert.equal(body?.audience, slot.audience);
+  const roomName = approvedRoomName(roomKey, body.access_revision);
   assert.equal(body?.ok, true);
   assert.equal(body?.room_key, roomKey);
-  const slot = STUDY_ROOM_SLOTS[Number(roomKey) - 1];
   assert.equal(body?.room_label, slot.label);
   assert.equal(body?.room_name, roomName);
   assert.equal(body?.room_kind, slot.kind);
@@ -1409,7 +1442,7 @@ async function runPositiveSmoke() {
 
     checkpoint = "free_public_first_join_without_admin_create";
     const firstPublicJoins = await provePublicFirstJoins(configuration, student);
-    assert.equal(firstPublicJoins.length, 4);
+    assert.equal(firstPublicJoins.length, 5);
     console.log("STUDY_ROOM_STAGING_POSITIVE: free_public_first_join=true list_does_not_activate=true admin_create_not_required=true");
 
     checkpoint = "admin_access";
@@ -1438,7 +1471,7 @@ async function runPositiveSmoke() {
       "STUDY_ROOM_STAGING_POSITIVE: authenticated_admin_access=true founder_admin_access=true",
     );
 
-    checkpoint = "five_room_catalog_and_creation";
+    checkpoint = "six_seed_catalog_and_creation";
     const initialCatalog = await workerPost(
       configuration,
       "/admin/study-room/rooms",
@@ -1447,8 +1480,7 @@ async function runPositiveSmoke() {
     );
     validateRoomCatalog(initialCatalog.body, "super_admin");
 
-    for (let index = 0; index < STUDY_ROOM_MAX_ROOMS; index += 1) {
-      const roomKey = String(index + 1);
+    for (const { roomKey } of STUDY_ROOM_SLOTS) {
       const created = await workerPost(
         configuration,
         "/admin/study-room/rooms",
@@ -1465,30 +1497,23 @@ async function runPositiveSmoke() {
       secondaryAdmin.token,
       { operation: "list" },
     );
-    validateRoomCatalog(fullCatalog.body, "admin", ["1", "2", "3", "4", "5"]);
+    validateRoomCatalog(fullCatalog.body, "admin", STUDY_ROOM_SLOTS.map((slot) => slot.roomKey));
 
-    const sixthRoom = await workerPost(
-      configuration,
-      "/admin/study-room/rooms",
-      primaryAdmin.token,
-      { operation: "create" },
-      [409],
-    );
-    validateRejectedRoomOperation(
-      sixthRoom.body,
-      "STUDY_ROOM_ROOM_LIMIT_REACHED",
-    );
+    // Never use an implicit create: it could select the read-only QA slot24.
     const invalidRoom = await workerPost(
       configuration,
       "/admin/study-room/rooms",
       primaryAdmin.token,
-      { operation: "create", roomKey: "6" },
+      { operation: "create", roomKey: "25" },
       [400],
     );
     validateRejectedRoomOperation(
       invalidRoom.body,
       "STUDY_ROOM_ROOM_INVALID",
     );
+    const nonSeedRoom = await workerPost(configuration, "/admin/study-room/rooms",
+      primaryAdmin.token, { operation: "create", roomKey: "7" }, [400]);
+    validateRejectedRoomOperation(nonSeedRoom.body, "STUDY_ROOM_ROOM_INVALID");
     const rawRoomName = await workerPost(
       configuration,
       "/admin/study-room/rooms",
@@ -1501,7 +1526,7 @@ async function runPositiveSmoke() {
       "STUDY_ROOM_ROOM_INVALID",
     );
     console.log(
-      "STUDY_ROOM_STAGING_POSITIVE: five_room_limit=true raw_room_names_rejected=true",
+      "STUDY_ROOM_STAGING_POSITIVE: six_seed_catalog=true max_rooms=24 nonseed_room_rejected=true raw_room_names_rejected=true",
     );
 
     checkpoint = "member_admin_join_and_jwt";
@@ -1860,7 +1885,7 @@ async function runPositiveSmoke() {
     checkpoint = "rtc_cleanup";
     // The public Worker deliberately has no room-deletion operation. Releasing
     // every synthetic RTC participant is the supported cleanup boundary; the
-    // five fixed empty rooms then expire under their reviewed LiveKit timeout.
+    // six seeded empty rooms then expire under their reviewed LiveKit timeout.
     cleanupErrors.push(...(await safeReleaseRtcResources(resources)));
     checkpoint = "synthetic_user_cleanup";
     cleanupErrors.push(
@@ -1913,15 +1938,18 @@ async function runPreflight() {
     "The reviewed Node realtime smoke-test SDK version must remain pinned.",
   );
   assert.equal(APPROVED_STAGING_ROOM, "dd-study-room-admin-beta-staging-v1");
-  assert.equal(APPROVED_STAGING_ROOMS.length, STUDY_ROOM_MAX_ROOMS);
+  assert.equal(STUDY_ROOM_MAX_ROOMS, 24);
+  assert.equal(STUDY_ROOM_SLOTS.length, 6);
+  assert.equal(APPROVED_STAGING_ROOMS.length, STUDY_ROOM_SLOTS.length);
   assert.deepEqual(APPROVED_STAGING_ROOMS, [
     "dd-study-room-admin-beta-staging-v1",
     "dd-study-room-admin-beta-staging-v1-2",
     "dd-study-room-admin-beta-staging-v1-3",
     "dd-study-room-admin-beta-staging-v1-4",
     "dd-study-room-admin-beta-staging-v1-5",
+    "dd-study-room-admin-beta-staging-v1-6",
   ]);
-  assert.equal(new Set(APPROVED_STAGING_ROOMS).size, STUDY_ROOM_MAX_ROOMS);
+  assert.equal(new Set(APPROVED_STAGING_ROOMS).size, STUDY_ROOM_SLOTS.length);
   assert.equal(APPROVED_STAGING_WORKER.includes("-staging."), true);
   assert.equal(
     APPROVED_STAGING_SUPABASE.includes("hlzqmreeoghbldnhlybr"),
@@ -2045,11 +2073,13 @@ async function runSelfTest() {
     /room-administrator/u,
   );
 
-  const roomDescriptors = Array.from(
-    { length: STUDY_ROOM_MAX_ROOMS },
-    (_unused, index) => ({
+  const roomDescriptors = STUDY_ROOM_SLOTS.map(
+    (slot, index) => ({
       roomKey: STUDY_ROOM_SLOTS[index].roomKey,
       label: STUDY_ROOM_SLOTS[index].label,
+      audience: slot.audience,
+      revision: slot.revision,
+      accessRevision: slot.accessRevision,
       kind: STUDY_ROOM_SLOTS[index].kind,
       microphoneAllowed: STUDY_ROOM_SLOTS[index].microphoneAllowed,
       adminOnly: STUDY_ROOM_SLOTS[index].adminOnly,
@@ -2075,7 +2105,7 @@ async function runSelfTest() {
       rooms: roomDescriptors,
     },
     "admin",
-    ["1", "2", "3", "4", "5"],
+    STUDY_ROOM_SLOTS.map((slot) => slot.roomKey),
   );
   validateCreatedRoom(
     { ok: true, created: true, room: roomDescriptors[0] },

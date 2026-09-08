@@ -10,11 +10,11 @@ const names = ['fixtureIdentity', 'responseBody', 'safeRemoteCode', 'requestJson
   'isRetryableSupabaseAdminFailure', 'requestSupabaseAdminJson', 'serviceHeaders',
   'createSyntheticUser', 'assignSyntheticRole', 'fixtureRows', 'deleteSyntheticUsers'];
 function extract(name) {
-  const start = source.search(new RegExp(`^(?:async )?function ${name}\\(`, 'mu'));
+  const start = source.search(new RegExp(`^(?:export )?(?:async )?function ${name}\\(`, 'mu'));
   assert.notEqual(start, -1, `Missing actual source function: ${name}`);
   const end = source.slice(start).search(/^\}/mu);
   assert.ok(end > 0);
-  return source.slice(start, start + end + 1);
+  return source.slice(start, start + end + 1).replace(/^export /u, '');
 }
 const definitions = names.map(extract).join('\n');
 test('an early RTC timeout stays rejected without interrupting delayed HTTP cleanup', async () => {
@@ -282,25 +282,20 @@ test('source retains exact-run manifests and excludes stale sweeps / token persi
 
 // Exercise the actual first-join orchestration without importing native RTC,
 // loading credentials, provisioning accounts, or making a network request.
-const smokeSlots = [
-  { roomKey: '1', label: 'Library', kind: 'library', microphoneAllowed: false, adminOnly: false },
-  { roomKey: '2', label: 'Room 1', kind: 'general', microphoneAllowed: true, adminOnly: false },
-  { roomKey: '3', label: 'Room 2', kind: 'general', microphoneAllowed: true, adminOnly: false },
-  { roomKey: '4', label: 'Room 3', kind: 'general', microphoneAllowed: true, adminOnly: false },
-  { roomKey: '5', label: 'Inner Chamber', kind: 'inner-chamber', microphoneAllowed: true, adminOnly: true },
-];
-const publicProofFactory = new Function('assert', 'workerPost', 'validateJoinResponse', `
-  const STUDY_ROOM_SLOTS = ${JSON.stringify(smokeSlots)};
-  const STUDY_ROOM_MAX_ROOMS = 5, STUDY_ROOM_MAX_PARTICIPANTS = 12;
-  const APPROVED_STAGING_ROOMS = ['inert-private-room-name'];
-  ${['assertPlainObject', 'approvedRoomKey', 'validatePublicRoomDescriptor', 'validateRoomCatalog', 'provePublicFirstJoins'].map(extract).join('\n')}
-  return { provePublicFirstJoins, validateRoomCatalog };
+const catalogConstants = source.slice(source.indexOf('const APPROVED_STAGING_ROOM ='), source.indexOf('const REQUEST_TIMEOUT_MS ='));
+const smokeSlots = new Function(`${catalogConstants}\nreturn STUDY_ROOM_SLOTS;`)();
+const publicProofFactory = new Function('assert', 'workerPost', `
+  ${catalogConstants}
+  const PARTICIPANT_ID_PATTERN = /^sr_[A-Za-z0-9_-]{24}$/u;
+  ${['assertPlainObject', 'approvedRoomKey', 'approvedRoomName', 'decodeJwtSegment', 'validateStudyRoomJwt',
+    'createSelfTestToken', 'validateJoinResponse', 'validatePublicRoomDescriptor', 'validateRoomCatalog', 'provePublicFirstJoins'].map(extract).join('\n')}
+  return { provePublicFirstJoins, validateRoomCatalog, validateJoinResponse, approvedRoomKey, approvedRoomName, createSelfTestToken };
 `);
-function firstJoinHarness({ initiallyActive = [], listCreates = false, alteredDescriptor = null } = {}) {
+function firstJoinHarness({ initiallyActive = [], listCreates = false, alteredDescriptor = null, alterCatalog = (value) => value, alterCredential = (value) => value } = {}) {
   const calls = [];
   const active = new Set(initiallyActive);
-  const catalog = () => ({ ok: true, allowed: true, role: 'member', administrator: false,
-    canCreateRooms: false, maxRooms: 5, maxParticipants: 12, recording: false,
+  const catalog = () => alterCatalog({ ok: true, allowed: true, role: 'member', administrator: false,
+    canCreateRooms: false, maxRooms: 24, maxParticipants: 12, recording: false,
     rooms: smokeSlots.map((slot) => ({ ...slot, alwaysOpen: !slot.adminOnly, canCreate: false,
       canJoin: !slot.adminOnly, capacity: 12, active: active.has(slot.roomKey), participantCount: 0,
       focusStartedAt: active.has(slot.roomKey) ? '2026-09-08T00:00:00Z' : null,
@@ -313,22 +308,32 @@ function firstJoinHarness({ initiallyActive = [], listCreates = false, alteredDe
       return { body: catalog() };
     }
     assert.equal(path, '/study-room/join');
-    assert.ok(['1', '2', '3', '4'].includes(body.roomKey), 'The private room is not auto-created.');
+    assert.ok(['1', '2', '3', '4', '6'].includes(body.roomKey), 'The private room is not auto-created.');
     active.add(body.roomKey);
-    return { body: { room_key: body.roomKey, administrator: false } };
-  }, (body, nickname, issuer, roomKey) => {
-    assert.equal(nickname, 'Participant #404'); assert.equal(issuer, 'inert-issuer');
-    assert.equal(body.room_key, roomKey); return body;
+    const slot = smokeSlots.find((item) => item.roomKey === body.roomKey);
+    const roomName = actual.approvedRoomName(slot.roomKey, slot.accessRevision);
+    const now = Math.floor(Date.now() / 1000);
+    const identity = 'sr_abcdefghijklmnopqrstuvwx';
+    const claims = { iss: 'inert-issuer', sub: identity, name: body.nickname, nbf: now, exp: now + 600,
+      video: { room: roomName, roomJoin: true, canPublish: true, canSubscribe: true,
+        canPublishData: true, canUpdateOwnMetadata: true,
+        canPublishSources: slot.microphoneAllowed ? ['camera', 'microphone', 'screen_share', 'screen_share_audio'] : ['camera', 'screen_share'] } };
+    return { body: alterCredential({ ok: true, room_key: slot.roomKey, room_name: roomName,
+      room_label: slot.label, room_kind: slot.kind, room_revision: slot.revision,
+      access_revision: slot.accessRevision, audience: slot.audience, microphone_allowed: slot.microphoneAllowed,
+      administrator: false, participant_name: body.nickname, participant_identity: identity,
+      participant_token: actual.createSelfTestToken(claims), expires_in_seconds: 600, recording: false,
+      focus_started_at: new Date(now * 1000).toISOString(), server_url: 'wss://inert-rtc.invalid' }) };
   });
   return { calls, actual, catalog,
     run: () => actual.provePublicFirstJoins({ liveKitApiKey: 'inert-issuer' }, { token: 'inert-student' }) };
 }
-test('actual smoke joins all four initially inactive public rooms as a free student without admin create', async () => {
+test('actual smoke joins five initially inactive public seeds as a free student without admin create', async () => {
   const h = firstJoinHarness();
-  assert.equal((await h.run()).length, 4);
-  assert.deepEqual(h.calls.filter((call) => call.path.endsWith('/join')).map((call) => call.body.roomKey), ['1', '2', '3', '4']);
-  assert.equal(h.calls.length, 10);
-  assert.equal(h.calls.filter((call) => call.path.endsWith('/rooms')).length, 6);
+  assert.equal((await h.run()).length, 5);
+  assert.deepEqual(h.calls.filter((call) => call.path.endsWith('/join')).map((call) => call.body.roomKey), ['1', '2', '3', '4', '6']);
+  assert.equal(h.calls.length, 12);
+  assert.equal(h.calls.filter((call) => call.path.endsWith('/rooms')).length, 7);
   assert.equal(h.calls.some((call) => call.path.startsWith('/admin/') || call.body.operation === 'create'), false);
 });
 test('first-join proof holds pre-existing public sessions and rejects list-triggered activation', async () => {
@@ -342,7 +347,7 @@ test('first-join proof holds pre-existing public sessions and rejects list-trigg
 });
 test('always-open catalog keeps private Inner Chamber protected and active physically truthful', async () => {
   const h = firstJoinHarness({ initiallyActive: ['5'] });
-  assert.equal((await h.run()).length, 4);
+  assert.equal((await h.run()).length, 5);
   assert.equal(h.catalog().rooms[4].alwaysOpen, false);
   assert.equal(h.catalog().rooms[4].canJoin, false);
   for (const alteredDescriptor of [{ alwaysOpen: false }, { canCreate: true }, { capacity: 13 }]) {
@@ -351,9 +356,138 @@ test('always-open catalog keeps private Inner Chamber protected and active physi
     assert.equal(invalid.calls.length, 1);
   }
 });
+test('actual helper pins six pristine seeds separately from the 24-room product maximum', () => {
+  assert.deepEqual(smokeSlots.map(({ roomKey, label, audience, revision, accessRevision }) =>
+    [roomKey, label, audience, revision, accessRevision]), [
+    ['1', 'Library', 'all', 1, 1], ['2', 'Room 1', 'all', 1, 1],
+    ['3', 'Room 2', 'all', 1, 1], ['4', 'Room 3', 'all', 1, 1],
+    ['5', 'Inner Chamber', 'admin', 1, 1], ['6', 'Room 4', 'all', 1, 1],
+  ]);
+  assert.equal(smokeSlots[0].microphoneAllowed, false);
+  assert.equal(smokeSlots.slice(1).every((room) => room.microphoneAllowed), true);
+  const h = firstJoinHarness();
+  assert.equal(h.catalog().maxRooms, 24);
+  assert.equal(h.catalog().rooms.length, 6);
+  for (const key of ['0', '7', '24', '25', '01', 'raw-room-name']) assert.throws(() => h.actual.approvedRoomKey(key));
+  for (const { roomKey } of smokeSlots) {
+    const original = `dd-study-room-admin-beta-staging-v1${roomKey === '1' ? '' : `-${roomKey}`}`;
+    assert.equal(h.actual.approvedRoomName(roomKey, 1), original);
+    assert.equal(h.actual.approvedRoomName(roomKey, 2), `${original}-a2`);
+  }
+  assert.throws(() => h.actual.approvedRoomName('24', 1));
+  for (const revision of [0, -1, 1.5, '2', null, 2147483647]) assert.throws(() => h.actual.approvedRoomName('6', revision));
+});
+
+const readonlySlot = { roomKey: '24', label: 'Staging QA room', kind: 'general', audience: 'admin',
+  revision: 8, accessRevision: 4, adminOnly: true, microphoneAllowed: true, alwaysOpen: false,
+  canCreate: false, canJoin: false, active: false, participantCount: 0, capacity: 12, focusStartedAt: null };
+for (const active of [false, true]) {
+  test(`optional admin slot24 is visibility-only while active=${active}`, async () => {
+    const h = firstJoinHarness({ alterCatalog(value) { return { ...value,
+      rooms: [...value.rooms, { ...readonlySlot, active, participantCount: active ? 2 : 0,
+        focusStartedAt: active ? '2026-09-08T00:00:00Z' : null }] }; } });
+    assert.equal((await h.run()).length, 5);
+    assert.equal(h.catalog().rooms.length, 7);
+    assert.deepEqual(h.calls.filter((call) => call.path.endsWith('/join')).map((call) => call.body.roomKey), ['1', '2', '3', '4', '6']);
+    assert.equal(h.calls.some((call) => call.body.roomKey === '24' || call.body.operation !== 'list' && call.path.endsWith('/rooms')), false);
+  });
+}
+test('administrator catalog retains canonical read-only slot24 capabilities without adopting it', () => {
+  const h = firstJoinHarness();
+  const value = h.catalog();
+  value.role = 'admin'; value.administrator = true; value.canCreateRooms = true;
+  value.rooms = [...value.rooms, readonlySlot].map((room) => ({ ...room, canJoin: true, canCreate: room.adminOnly }));
+  assert.equal(h.actual.validateRoomCatalog(value, 'admin').at(-1).roomKey, '24');
+  assert.equal(h.calls.length, 0);
+  assert.throws(() => h.actual.approvedRoomKey('24'));
+});
+for (const [label, alterCatalog] of [
+  ['old five-room maximum', (value) => ({ ...value, maxRooms: 5 })],
+  ['seed count mistaken for maximum', (value) => ({ ...value, maxRooms: 6 })],
+  ['missing Room 4 seed', (value) => ({ ...value, rooms: value.rooms.slice(0, 5) })],
+  ['extra slot7', (value) => ({ ...value, rooms: [...value.rooms, { ...readonlySlot, roomKey: '7' }] })],
+  ['two extra entries', (value) => ({ ...value, rooms: [...value.rooms, readonlySlot, readonlySlot] })],
+  ['non-seed replacement', (value) => ({ ...value, rooms: value.rooms.map((room) => room.roomKey === '6' ? readonlySlot : room) })],
+  ['duplicate seed', (value) => ({ ...value, rooms: [...value.rooms.slice(0, 5), value.rooms[0]] })],
+  ['reordered seeds', (value) => ({ ...value, rooms: value.rooms.toReversed() })],
+  ['changed private audience', (value) => ({ ...value, rooms: value.rooms.map((room) => room.roomKey === '5' ? { ...room, audience: 'all' } : room) })],
+]) {
+  test(`catalog rejects ${label} before any join`, async () => {
+    const h = firstJoinHarness({ alterCatalog });
+    await assert.rejects(h.run());
+    assert.equal(h.calls.length, 1);
+  });
+}
+for (const [label, drift] of [
+  ['all-user audience', { audience: 'all', adminOnly: false }],
+  ['paid audience', { audience: 'paid' }],
+  ['unknown label', { label: '<script>' }],
+  ['noncanonical label', { label: ' QA room ' }],
+  ['missing revision', { revision: undefined }],
+  ['overflow revision', { revision: 2147483647 }],
+  ['generation past revision', { accessRevision: 9 }],
+  ['missing generation', { accessRevision: undefined }],
+  ['wrong kind', { kind: 'library' }],
+  ['member canJoin', { canJoin: true }],
+  ['member canCreate', { canCreate: true }],
+  ['always open', { alwaysOpen: true }],
+]) {
+  test(`read-only slot24 rejects ${label} before any join`, async () => {
+    const h = firstJoinHarness({ alterCatalog: (value) => ({ ...value, rooms: [...value.rooms, { ...readonlySlot, ...drift }] }) });
+    await assert.rejects(h.run());
+    assert.equal(h.calls.length, 1);
+  });
+}
+for (const [label, alteredDescriptor] of [
+  ['renamed seed', { label: 'Another library' }],
+  ['paid audience', { audience: 'paid' }],
+  ['advanced revision', { revision: 2 }],
+  ['advanced access generation', { accessRevision: 2 }],
+  ['missing revision', { revision: undefined }],
+  ['extra metadata', { room_name: 'private-name' }],
+]) {
+  test(`seed metadata rejects ${label} before any join`, async () => {
+    const h = firstJoinHarness({ alteredDescriptor });
+    await assert.rejects(h.run());
+    assert.equal(h.calls.length, 1);
+  });
+}
+for (const [label, drift] of [
+  ['wrong revision', { room_revision: 2 }],
+  ['wrong access generation', { access_revision: 2 }],
+  ['wrong audience', { audience: 'paid' }],
+  ['missing audience', { audience: undefined }],
+  ['unlisted physical generation', { room_name: 'dd-study-room-admin-beta-staging-v1-a2' }],
+  ['Library microphone permission', { microphone_allowed: true }],
+]) {
+  test(`actual join validator rejects ${label} without a follow-up join`, async () => {
+    const h = firstJoinHarness({ alterCredential: (value) => ({ ...value, ...drift }) });
+    await assert.rejects(h.run());
+    assert.equal(h.calls.filter((call) => call.path.endsWith('/join')).length, 1);
+  });
+}
+test('actual JWT validator rejects a different room grant even when response metadata matches', async () => {
+  const h = firstJoinHarness({ alterCredential(value) {
+    const claims = JSON.parse(Buffer.from(value.participant_token.split('.')[1], 'base64url').toString('utf8'));
+    claims.video.room += '-a2';
+    return { ...value, participant_token: h.actual.createSelfTestToken(claims) };
+  } });
+  await assert.rejects(h.run(), /wrong Study Room/);
+  assert.equal(h.calls.filter((call) => call.path.endsWith('/join')).length, 1);
+});
+
 test('stage orchestration proves free first-join before admin creation and ordinary-admin mute/removal', () => {
   const main = extract('runPositiveSmoke');
-  assert.ok(main.indexOf('provePublicFirstJoins(configuration, student)') < main.indexOf('"five_room_catalog_and_creation"'));
+  assert.ok(main.indexOf('provePublicFirstJoins(configuration, student)') < main.indexOf('"six_seed_catalog_and_creation"'));
+  assert.match(main, /for \(const \{ roomKey \} of STUDY_ROOM_SLOTS\)/u);
+  assert.doesNotMatch(main, /operation:\s*['"](?:add|update)['"]/u,
+    'The compatibility smoke must not mutate persisted catalog entries.');
+  assert.doesNotMatch(main, /\{\s*operation:\s*['"]create['"]\s*\}/u,
+    'Implicit creation could activate an observed QA slot; every creation must name a seed or explicit invalid-key denial.');
+  assert.doesNotMatch(main, /roomKey:\s*['"]24['"]/u,
+    'Observed QA slot24 must never be a join, create, or moderation target.');
+  assert.match(main, /operation: "create", roomKey: "25"/u);
+  assert.match(main, /operation: "create", roomKey: "7"/u);
   assert.match(main, /const moderation = await workerPost\(\s*configuration,\s*"\/study-room\/moderate",\s*secondaryAdmin\.token/u);
   assert.match(main, /const removal = await workerPost\(configuration, "\/study-room\/moderate", secondaryAdmin\.token/u);
   assert.match(main, /await removedParticipant;/u);

@@ -18,7 +18,9 @@
   const STORAGE_KEY = 'duediligence.study-room.nickname.v2';
   const FALLBACK_NICKNAME = 'Participant #';
   const MAX_NICKNAME_LENGTH = 32;
-  const MAX_ROOMS = 5;
+  const MAX_ROOMS = 24;
+  const ROOM_AUDIENCES = Object.freeze({ admin: 'Admin only', paid: 'Paying users', all: 'All signed-in users' });
+  const MAX_ROOM_LABEL_LENGTH = 64;
   const ROOM_REFRESH_INTERVAL_MS = 15_000;
   const MEDIA_RELIABILITY_VERSION = 'study-room-always-open-20260908-1';
   const DEFAULT_BACKGROUND_IMAGE = '/assets/study-room/virtual-background-due-diligence-polished-20260908.webp';
@@ -59,6 +61,7 @@
       name: 'Inner Chamber',
       cover: '../assets/study-room/virtual-background-due-diligence-branded.webp',
     }),
+    '6': Object.freeze({ name: 'Room 4', cover: '../assets/study-room/participant-4-condo.webp' }),
   });
 
   const state = {
@@ -71,6 +74,8 @@
     currentRoomKey: '',
     roomCatalogBusy: false,
     roomCatalogPromise: null,
+    roomCatalogLoaded: false,
+    roomEditor: null,
     roomMutationBusy: false,
     roomRefreshTimer: 0,
     room: null,
@@ -369,10 +374,16 @@
   }
 
   function roomPresentation(roomKey) {
-    return ROOM_PRESENTATION[String(roomKey)] || Object.freeze({
+    const presentation = ROOM_PRESENTATION[String(roomKey)] || {
       name: `Study Room ${String(roomKey || '')}`.trim(),
       cover: '../assets/study-room/virtual-background-due-diligence-branded.webp',
-    });
+    };
+    const room = state.rooms.find((candidate) => candidate.roomKey === String(roomKey));
+    return { ...presentation, name: room?.label || presentation.name };
+  }
+
+  function validRoomKey(value) {
+    return /^(?:[1-9]|1[0-9]|2[0-4])$/u.test(String(value || ''));
   }
 
   function normalizeRoomCatalog(payload) {
@@ -380,19 +391,28 @@
     const byRoomKey = new Map();
     listed.forEach((candidate) => {
       const roomKey = String(candidate?.roomKey || '').trim();
-      if (!/^[1-5]$/u.test(roomKey) || byRoomKey.has(roomKey)) return;
+      if (!validRoomKey(roomKey) || byRoomKey.has(roomKey)) return;
+      const audience = roomKey === '5' ? 'admin' : candidate?.audience;
+      if (!Object.hasOwn(ROOM_AUDIENCES, audience)) return;
+      const label = typeof candidate?.label === 'string' ? candidate.label.trim() : '';
+      if (!/^[A-Za-z0-9][A-Za-z0-9 .,'()&_\-]{1,63}$/u.test(label)) return;
+      if (!Number.isSafeInteger(candidate?.revision) || candidate.revision < 1
+        || !Number.isSafeInteger(candidate?.accessRevision) || candidate.accessRevision < 1) return;
       const participantCount = Number(candidate?.participantCount);
       const capacity = Number(candidate?.capacity);
       byRoomKey.set(roomKey, Object.freeze({
         roomKey,
-        label: String(candidate?.label || roomPresentation(roomKey).name),
+        label,
+        audience,
+        revision: candidate.revision,
+        accessRevision: candidate?.accessRevision,
         kind: String(candidate?.kind || (roomKey === '1' ? 'library' : 'general')),
-        microphoneAllowed: candidate?.microphoneAllowed !== false,
-        adminOnly: candidate?.adminOnly === true,
-        canCreate: candidate?.canCreate === true,
-        canJoin: candidate?.canJoin !== false,
+        microphoneAllowed: roomKey !== '1' && candidate?.microphoneAllowed !== false,
+        adminOnly: audience === 'admin',
+        canCreate: state.isAdministrator && candidate?.canCreate === true,
+        canJoin: candidate?.canJoin === true && (audience !== 'admin' || state.isAdministrator),
         active: candidate?.active === true,
-        alwaysOpen: candidate?.alwaysOpen === true && candidate?.adminOnly !== true,
+        alwaysOpen: roomKey !== '5' && candidate?.alwaysOpen === true,
         participantCount: Number.isSafeInteger(participantCount) && participantCount >= 0
           ? Math.min(participantCount, 12)
           : 0,
@@ -402,23 +422,7 @@
           : null,
       }));
     });
-    return Array.from({ length: MAX_ROOMS }, (_unused, index) => {
-      const roomKey = String(index + 1);
-      return byRoomKey.get(roomKey) || Object.freeze({
-        roomKey,
-        label: roomPresentation(roomKey).name,
-        kind: roomKey === '1' ? 'library' : roomKey === '5' ? 'inner-chamber' : 'general',
-        microphoneAllowed: roomKey !== '1',
-        adminOnly: roomKey === '5',
-        canCreate: roomKey === '5' && state.isAdministrator,
-        canJoin: roomKey !== '5' || state.isAdministrator,
-        active: false,
-        alwaysOpen: false,
-        participantCount: 0,
-        capacity: 12,
-        focusStartedAt: null,
-      });
-    });
+    return [...byRoomKey.values()].sort((left, right) => Number(left.roomKey) - Number(right.roomKey));
   }
 
   function selectedRoom() {
@@ -438,7 +442,7 @@
     const canCreateAndJoin = Boolean(room && !available && state.isAdministrator && room.canCreate === true);
     button.disabled = !room || restricted || (!available && !canCreateAndJoin);
     button.textContent = restricted
-      ? 'Inner Chamber · Admin only'
+      ? `${room.label} · ${ROOM_AUDIENCES[room.audience] || 'Access unavailable'}`
       : available
       ? `Join ${roomPresentation(room.roomKey).name}`
       : canCreateAndJoin
@@ -466,7 +470,7 @@
   }
 
   function roomCountCopy(room) {
-    if (room.canJoin === false) return 'Administrators only';
+    if (room.canJoin === false) return `${ROOM_AUDIENCES[room.audience]} · Access unavailable`;
     if (!room.active && !room.alwaysOpen) return 'Private room';
     if (room.microphoneAllowed === false) {
       return room.participantCount === 0
@@ -494,7 +498,7 @@
       || room.canJoin === false;
     button.setAttribute('aria-label', available
       ? `${presentation.name}, ${roomCountCopy(room)}`
-      : room.canJoin === false ? `${presentation.name}, administrators only` : `${presentation.name}, ${roomCountCopy(room)}`);
+      : `${presentation.name}, ${roomCountCopy(room)}`);
     button.setAttribute('aria-pressed', String(state.selectedRoomKey === room.roomKey));
 
     if (available) {
@@ -534,7 +538,10 @@
     const statusText = document.createElement('span');
     statusText.textContent = roomCountCopy(room);
     status.append(statusText);
-    copy.append(title, status);
+    const audience = document.createElement('small');
+    audience.className = 'sr-room-audience';
+    audience.textContent = ROOM_AUDIENCES[room.audience];
+    copy.append(title, audience, status);
     button.append(copy);
     const enter = () => {
       if (button.disabled || state.joining || state.roomMutationBusy) return;
@@ -571,7 +578,21 @@
   function renderRoomCatalog() {
     const grid = byId('sr-room-card-grid');
     const firstInactiveRoomKey = state.rooms.find((room) => !room.active && !room.alwaysOpen && room.canJoin !== false)?.roomKey || '';
-    if (grid) grid.replaceChildren(...state.rooms.map((room) => createRoomCard(room, firstInactiveRoomKey)));
+    if (grid) grid.replaceChildren(...state.rooms.map((room) => {
+      const card = createRoomCard(room, firstInactiveRoomKey);
+      if (!state.isAdministrator) return card;
+      const item = document.createElement('div');
+      item.className = 'sr-room-admin-card';
+      const edit = document.createElement('button');
+      edit.type = 'button';
+      edit.className = 'sr-room-edit';
+      edit.textContent = 'Edit room';
+      edit.setAttribute('aria-label', `Edit ${room.label}`);
+      edit.disabled = !state.roomCatalogLoaded || state.roomCatalogBusy || state.roomMutationBusy || Boolean(state.roomEditor);
+      edit.addEventListener('click', () => openRoomEditor(room.roomKey, edit));
+      item.append(card, edit);
+      return item;
+    }));
     const activeCount = state.rooms.filter((room) => (room.active || room.alwaysOpen) && room.canJoin !== false).length;
     const count = byId('sr-room-lobby-count');
     if (count) count.textContent = `${activeCount} rooms available`;
@@ -579,6 +600,7 @@
     const activeName = byId('sr-active-room-name');
     if (activeName) activeName.textContent = roomPresentation(state.currentRoomKey || selected?.roomKey || '1').name;
     renderRoomSelector();
+    renderRoomAdministration();
     syncJoinButton();
     syncSelectedRoomPolicy();
   }
@@ -586,12 +608,15 @@
   function localQualityRoomCatalog() {
     const activeCount = LOCAL_TEST_MODE === 'live' ? 5 : 3;
     return normalizeRoomCatalog({
-      rooms: Array.from({ length: MAX_ROOMS }, (_unused, index) => ({
+      rooms: Array.from({ length: 6 }, (_unused, index) => ({
         roomKey: String(index + 1),
         active: index < activeCount,
         alwaysOpen: index !== 4,
         participantCount: index === 0 ? 4 : index < activeCount ? index : 0,
         label: roomPresentation(String(index + 1)).name,
+        audience: index === 4 ? 'admin' : 'all',
+        revision: 1,
+        accessRevision: 1,
         kind: index === 0 ? 'library' : index === 4 ? 'inner-chamber' : 'general',
         microphoneAllowed: index !== 0,
         adminOnly: index === 4,
@@ -605,6 +630,8 @@
 
   async function refreshRoomCatalog(options = {}) {
     if (state.roomCatalogPromise) return state.roomCatalogPromise;
+    const session = state.session;
+    const administrator = state.isAdministrator;
     state.roomCatalogBusy = true;
     renderRoomCatalog();
     const operation = (async () => {
@@ -612,7 +639,12 @@
         const payload = LOCAL_TEST_MODE
           ? { rooms: state.rooms.length ? state.rooms : localQualityRoomCatalog() }
           : await workerRequest('/study-room/rooms', { operation: 'list' });
-        state.rooms = normalizeRoomCatalog(payload);
+        if (state.session !== session || state.isAdministrator !== administrator) throw new Error('The signed-in session changed before the catalog loaded.');
+        if (!Array.isArray(payload?.rooms)) throw new Error('The Study Room catalog could not be verified.');
+        const rooms = normalizeRoomCatalog(payload);
+        if (rooms.length !== payload.rooms.length) throw new Error('The Study Room catalog could not be verified.');
+        state.rooms = rooms;
+        state.roomCatalogLoaded = true;
         const selected = selectedRoom();
         if (!selected || selected.canJoin === false) {
           state.selectedRoomKey = state.rooms.find((room) => (room.active || room.alwaysOpen) && room.canJoin !== false)?.roomKey
@@ -641,15 +673,15 @@
   async function createRoomSlot(roomKey) {
     if (state.roomCatalogBusy || state.roomMutationBusy || state.joining || state.switchingRoom) return false;
     const requestedKey = String(roomKey || '');
-    if (!/^[1-5]$/u.test(requestedKey) || !state.isAdministrator) return false;
+    if (!validRoomKey(requestedKey) || !state.isAdministrator) return false;
     const requestedRoom = state.rooms.find((room) => room.roomKey === requestedKey);
-    if (!requestedRoom) return false;
+    if (!requestedRoom || requestedRoom.canJoin !== true || requestedRoom.canCreate !== true) return false;
     if (requestedRoom.active) {
       selectRoom(requestedKey);
       return true;
     }
     if (state.rooms.filter((room) => room.active).length >= MAX_ROOMS) {
-      setStatus('sr-prejoin-status', 'All five Study Rooms are already open. Choose one to join.', 'error');
+      setStatus('sr-prejoin-status', 'All configured Study Rooms are already open. Choose one to join.', 'error');
       await refreshRoomCatalog({ quiet: true }).catch(() => {});
       return false;
     }
@@ -663,10 +695,8 @@
           : room);
       } else {
         await workerRequest('/admin/study-room/rooms', { operation: 'create', roomKey: requestedKey });
-        state.rooms = state.rooms.map((room) => room.roomKey === requestedKey
-          ? Object.freeze({ ...room, active: true, focusStartedAt: new Date().toISOString() })
-          : room);
-        await refreshRoomCatalog({ quiet: true }).catch(() => state.rooms);
+        await refreshRoomCatalog({ quiet: true });
+        if (!activeRoom(requestedKey)) throw new Error('Room availability could not be confirmed. Refresh the room list before joining.');
       }
       state.selectedRoomKey = requestedKey;
       renderRoomCatalog();
@@ -679,6 +709,164 @@
     } finally {
       state.roomMutationBusy = false;
       renderRoomCatalog();
+    }
+  }
+
+  function availableRoomKey() {
+    for (let key = 7; key <= MAX_ROOMS; key += 1) {
+      if (!state.rooms.some((room) => room.roomKey === String(key))) return String(key);
+    }
+    return '';
+  }
+
+  function renderRoomAdministration() {
+    const allowed = state.isAdministrator && Boolean(state.session?.access_token || LOCAL_TEST_MODE);
+    const controls = byId('sr-room-admin-controls');
+    if (controls) controls.hidden = !allowed;
+    const add = byId('sr-room-add');
+    if (add) add.disabled = !allowed || !state.roomCatalogLoaded || state.roomCatalogBusy
+      || state.roomMutationBusy || Boolean(state.roomEditor) || !availableRoomKey();
+    if (!allowed) state.roomEditor = null;
+    const form = byId('sr-room-editor');
+    if (!form) return;
+    form.hidden = !allowed || !state.roomEditor;
+    if (form.hidden) return;
+    const editor = state.roomEditor;
+    const busy = state.roomMutationBusy || state.roomCatalogBusy;
+    byId('sr-room-label').disabled = busy;
+    byId('sr-room-audience').disabled = busy || editor.roomKey === '5';
+    byId('sr-room-save').disabled = busy || editor.needsReload;
+    byId('sr-room-cancel').disabled = state.roomMutationBusy;
+    byId('sr-room-reload').hidden = !editor.needsReload;
+    byId('sr-room-reload').disabled = busy;
+    form.setAttribute('aria-busy', String(state.roomMutationBusy));
+    byId('sr-room-fixed-audience').hidden = editor.roomKey !== '5';
+  }
+
+  function openRoomEditor(roomKey = '', trigger = byId('sr-room-add')) {
+    if (state.roomEditor || !state.isAdministrator || !state.roomCatalogLoaded || state.roomCatalogBusy
+      || state.roomMutationBusy || (!state.session?.access_token && !LOCAL_TEST_MODE)) return false;
+    const room = roomKey ? state.rooms.find((item) => item.roomKey === String(roomKey)) : null;
+    if (roomKey && !room) return false;
+    const key = room?.roomKey || availableRoomKey();
+    if (!key) return false;
+    state.roomEditor = { mode: room ? 'update' : 'add', roomKey: key,
+      revision: room?.revision || 0, needsReload: false, trigger };
+    byId('sr-room-editor-title').textContent = room ? `Edit ${room.label}` : 'Add a Study Room';
+    byId('sr-room-label').value = room?.label || '';
+    byId('sr-room-audience').value = room?.audience || 'admin';
+    setStatus('sr-room-editor-status', '');
+    renderRoomCatalog();
+    byId('sr-room-label').focus();
+    return true;
+  }
+
+  function closeRoomEditor() {
+    if (state.roomMutationBusy) return false;
+    const trigger = state.roomEditor?.trigger;
+    state.roomEditor = null;
+    renderRoomCatalog();
+    (trigger?.isConnected ? trigger : byId('sr-room-add'))?.focus();
+    return true;
+  }
+
+  function roomEditorError(error) {
+    const known = {
+      STUDY_ROOM_CONFIG_CONFLICT: 'This room changed in another session. Your draft is preserved. Reload latest to replace it with the current room settings.',
+      STUDY_ROOM_ROOM_NOT_EMPTY: 'Access cannot change while people are in this room. Your draft is preserved; try again after the room is empty.',
+      STUDY_ROOM_CONFIG_INVALID: 'Check the room name and access setting. Use 2–64 characters: letters, numbers, spaces and . , apostrophe ( ) & _ -.',
+      STUDY_ROOM_ADMIN_REQUIRED: 'Administrator access could not be confirmed. No further room changes can be sent from this form.',
+      STUDY_ROOM_CATALOG_UNAVAILABLE: 'The room catalog is unavailable. Your draft is preserved. Reload latest before another save.',
+    };
+    return known[error?.code] || 'The save outcome could not be confirmed. Your draft and room slot are preserved. Reload latest before another save.';
+  }
+
+  async function saveRoomConfiguration(event) {
+    event?.preventDefault?.();
+    const editor = state.roomEditor;
+    if (!editor || !state.isAdministrator || !state.session?.access_token
+      || state.roomMutationBusy || state.roomCatalogBusy || editor.needsReload) return false;
+    const enteredLabel = String(byId('sr-room-label').value || '');
+    const label = enteredLabel.trim();
+    const audience = String(byId('sr-room-audience').value || '');
+    if (enteredLabel.length > 128 || label.length > MAX_ROOM_LABEL_LENGTH
+      || !/^[A-Za-z0-9][A-Za-z0-9 .,'()&_\-]{1,63}$/u.test(label)
+      || !Object.hasOwn(ROOM_AUDIENCES, audience) || (editor.roomKey === '5' && audience !== 'admin')) {
+      setStatus('sr-room-editor-status', roomEditorError({ code: 'STUDY_ROOM_CONFIG_INVALID' }), 'error');
+      return false;
+    }
+    const session = state.session;
+    const current = () => state.roomEditor === editor && state.session === session && state.isAdministrator;
+    let savedConfirmed = false;
+    state.roomMutationBusy = true;
+    renderRoomCatalog();
+    setStatus('sr-room-editor-status', 'Saving room settings…');
+    try {
+      const result = await workerRequest('/admin/study-room/rooms', {
+        operation: editor.mode, roomKey: editor.roomKey, label, audience, expectedRevision: editor.revision,
+      });
+      if (!current()) return false;
+      if (result?.room?.roomKey !== editor.roomKey || result.room.label !== label
+        || result.room.audience !== audience || !Number.isSafeInteger(result.room.revision)
+        || result.room.revision < 1) throw new Error('Unconfirmed room configuration');
+      await refreshRoomCatalog({ quiet: true });
+      if (!current()) return false;
+      const saved = state.rooms.find((room) => room.roomKey === editor.roomKey);
+      if (!saved || saved.revision !== result.room.revision || saved.label !== label || saved.audience !== audience) {
+        throw new Error('Room changed before refresh');
+      }
+      state.roomEditor = null;
+      savedConfirmed = true;
+      setStatus('sr-room-admin-status', `${saved.label} saved. Access: ${ROOM_AUDIENCES[saved.audience]}.`, 'ok');
+      return true;
+    } catch (error) {
+      if (current()) {
+        editor.needsReload = !['STUDY_ROOM_ROOM_NOT_EMPTY', 'STUDY_ROOM_CONFIG_INVALID'].includes(error?.code);
+        setStatus('sr-room-editor-status', roomEditorError(error), 'error');
+      }
+      return false;
+    } finally {
+      state.roomMutationBusy = false;
+      renderRoomCatalog();
+      if (savedConfirmed && state.session === session && state.isAdministrator) byId('sr-room-add')?.focus();
+    }
+  }
+
+  async function reloadRoomEditor() {
+    const editor = state.roomEditor;
+    const session = state.session;
+    if (!editor || !state.isAdministrator || state.roomMutationBusy || state.roomCatalogBusy) return false;
+    try {
+      await refreshRoomCatalog({ quiet: true });
+      if (state.roomEditor !== editor || state.session !== session || !state.isAdministrator) return false;
+      const room = state.rooms.find((item) => item.roomKey === editor.roomKey);
+      if (editor.mode === 'add' && room) {
+        if (room.label === String(byId('sr-room-label').value).trim() && room.audience === byId('sr-room-audience').value) {
+          state.roomEditor = null;
+          setStatus('sr-room-admin-status', `${room.label} is confirmed in the room catalog.`, 'ok');
+          renderRoomCatalog();
+          byId('sr-room-add')?.focus();
+          return true;
+        }
+        setStatus('sr-room-editor-status', 'This room slot is now in use. Cancel, then edit the existing room or explicitly add another room.', 'error');
+        return false;
+      }
+      if (editor.mode === 'update' && !room) throw new Error('Room missing');
+      if (room) {
+        editor.revision = room.revision;
+        byId('sr-room-label').value = room.label;
+        byId('sr-room-audience').value = room.audience;
+        byId('sr-room-editor-title').textContent = `Edit ${room.label}`;
+      }
+      editor.needsReload = false;
+      setStatus('sr-room-editor-status', room ? 'Latest room settings loaded. Review them before saving.' : 'This same room slot remains available. Review your draft before saving.');
+      renderRoomAdministration();
+      return true;
+    } catch {
+      if (state.roomEditor === editor && state.session === session) {
+        setStatus('sr-room-editor-status', 'The current room settings could not be loaded. Your draft is preserved; no save was retried.', 'error');
+      }
+      return false;
     }
   }
 
@@ -3825,6 +4013,13 @@
   }
 
   function bindControls() {
+    byId('sr-room-add')?.addEventListener('click', () => openRoomEditor());
+    byId('sr-room-editor')?.addEventListener('submit', saveRoomConfiguration);
+    byId('sr-room-cancel')?.addEventListener('click', closeRoomEditor);
+    byId('sr-room-reload')?.addEventListener('click', reloadRoomEditor);
+    byId('sr-room-editor')?.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !state.roomMutationBusy) { event.preventDefault(); closeRoomEditor(); }
+    });
     byId('sr-access-retry').addEventListener('click', verifyAccess);
     byId('sr-nickname').addEventListener('input', syncNicknamePreview);
     byId('sr-test-devices').addEventListener('click', testDevices);
@@ -3969,23 +4164,26 @@
   }
 
   async function verifyAccess() {
+    state.roomCatalogLoaded = false;
+    state.roomEditor = null;
     byId('sr-access-title').textContent = 'Opening the Study Room';
     byId('sr-access-copy').textContent = 'Confirming your Study Room access. Your camera and microphone remain off.';
     byId('sr-access-loading').hidden = false;
     byId('sr-access-actions').hidden = true;
     try {
       if (LOCAL_TEST_MODE) {
-        state.access = { allowed: true, role: 'admin', administrator: true, canCreateRooms: true, maxRooms: 5, maxParticipants: 12 };
+        state.access = { allowed: true, role: 'admin', administrator: true, canCreateRooms: true, maxRooms: MAX_ROOMS, maxParticipants: 12 };
         state.isAdministrator = true;
         state.rooms = localQualityRoomCatalog();
+        state.roomCatalogLoaded = true;
         state.selectedRoomKey = state.rooms.find((room) => room.active)?.roomKey || '';
       } else {
         await createAuthClient();
         state.access = await workerRequest('/study-room/access');
         state.isAdministrator = state.access?.administrator === true;
         // Device discovery and the audio-only join path must not wait on a slow
-        // room-catalog endpoint. Render the five fixed slots immediately and
-        // refresh their active state in parallel.
+        // room-catalog endpoint. Do not invent room keys or availability while
+        // the authoritative catalog is loading in parallel.
         state.rooms = normalizeRoomCatalog({ rooms: [] });
         state.selectedRoomKey = '';
       }

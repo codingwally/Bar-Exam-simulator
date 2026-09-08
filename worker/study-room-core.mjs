@@ -7,7 +7,7 @@ import {
 export const DEFAULT_STUDY_ROOM_NAME = 'dd-study-room-v2';
 export const STUDY_ROOM_TOKEN_TTL_SECONDS = 600;
 export const STUDY_ROOM_MAX_PARTICIPANTS = 12;
-export const STUDY_ROOM_MAX_ROOMS = 5;
+export const STUDY_ROOM_MAX_ROOMS = 24;
 
 export const STUDY_ROOM_SLOTS = Object.freeze([
   Object.freeze({ roomKey: '1', label: 'Library', kind: 'library', microphoneAllowed: false, adminOnly: false }),
@@ -15,6 +15,7 @@ export const STUDY_ROOM_SLOTS = Object.freeze([
   Object.freeze({ roomKey: '3', label: 'Room 2', kind: 'general', microphoneAllowed: true, adminOnly: false }),
   Object.freeze({ roomKey: '4', label: 'Room 3', kind: 'general', microphoneAllowed: true, adminOnly: false }),
   Object.freeze({ roomKey: '5', label: 'Inner Chamber', kind: 'inner-chamber', microphoneAllowed: true, adminOnly: true }),
+  Object.freeze({ roomKey: '6', label: 'Room 4', kind: 'general', microphoneAllowed: true, adminOnly: false }),
 ]);
 
 const STUDY_ROOM_EMPTY_TIMEOUT_SECONDS = 10 * 60;
@@ -23,7 +24,7 @@ const STUDY_ROOM_METADATA_SCHEMA = 'duediligence-study-room-slot-v2';
 const STUDY_ROOM_METADATA_MAX_BYTES = 512;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const ROOM_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{2,79}$/u;
-const ROOM_KEY_PATTERN = /^[1-5]$/u;
+const ROOM_KEY_PATTERN = /^(?:[1-9]|1[0-9]|2[0-4])$/u;
 const PARTICIPANT_ID_PATTERN = /^sr_[A-Za-z0-9_-]{24}$/u;
 const TRACK_SID_PATTERN = /^TR_[A-Za-z0-9_-]{4,128}$/u;
 const DISALLOWED_NICKNAME_CHARACTERS = /[\p{Cc}\p{Cf}<>]/u;
@@ -81,24 +82,77 @@ export function normalizeStudyRoomRoomKey(value, options = {}) {
   if (!ROOM_KEY_PATTERN.test(roomKey)) {
     throw new StudyRoomError(
       'STUDY_ROOM_ROOM_INVALID',
-      'Choose one of the five available Study Rooms.',
+      'Choose an available Study Room from the current catalog.',
       400,
     );
   }
   return roomKey;
 }
 
-function configuredStudyRoomSlots(env) {
+function catalogError() {
+  return new StudyRoomError('STUDY_ROOM_CATALOG_UNAVAILABLE', 'The Study Room catalog is unavailable. Refresh before joining.', 503);
+}
+
+export function normalizeStudyRoomLabel(value) {
+  if (typeof value !== 'string' || value.length > 128
+    || !/^[A-Za-z0-9 .,\u0027()&_-]*$/u.test(value)) {
+    throw new StudyRoomError('STUDY_ROOM_CONFIG_INVALID', 'Use a room name with 2 to 64 plain text characters.', 400);
+  }
+  const label = value.replace(/^ +| +$/gu, '');
+  if (label.length < 2 || label.length > 64 || !/^[A-Za-z0-9]/u.test(label)) {
+    throw new StudyRoomError('STUDY_ROOM_CONFIG_INVALID', 'Use a room name with 2 to 64 plain text characters.', 400);
+  }
+  return label;
+}
+
+export function normalizeStudyRoomCatalog(value) {
+  if (value?.schemaVersion !== 1 || value?.maxRooms !== STUDY_ROOM_MAX_ROOMS
+    || !Array.isArray(value.rooms) || value.rooms.length < 6 || value.rooms.length > STUDY_ROOM_MAX_ROOMS) throw catalogError();
+  const seen = new Set();
+  const rooms = value.rooms.map((row) => {
+    if (typeof row?.roomKey !== 'string' || !ROOM_KEY_PATTERN.test(row.roomKey)
+      || seen.has(row.roomKey) || !['admin', 'paid', 'all'].includes(row.audience)
+      || !Number.isSafeInteger(row.revision) || row.revision < 1 || row.revision > 2_147_483_646
+      || !Number.isSafeInteger(row.accessRevision) || row.accessRevision < 1 || row.accessRevision > row.revision
+      || (row.roomKey === '5' && row.audience !== 'admin')) throw catalogError();
+    let label;
+    try { label = normalizeStudyRoomLabel(row.label); } catch { throw catalogError(); }
+    if (label !== row.label) throw catalogError();
+    seen.add(row.roomKey);
+    return Object.freeze({ roomKey: row.roomKey, label, audience: row.audience,
+      revision: row.revision, accessRevision: row.accessRevision });
+  });
+  if (['1', '2', '3', '4', '5', '6'].some((key) => !seen.has(key))) throw catalogError();
+  rooms.sort((a, b) => Number(a.roomKey) - Number(b.roomKey));
+  return Object.freeze({ schemaVersion: 1, maxRooms: STUDY_ROOM_MAX_ROOMS, rooms: Object.freeze(rooms) });
+}
+
+export function currentPaidStudyRoomMembership(rows, userId, now = Date.now()) {
+  if (!Array.isArray(rows) || rows.length > 1 || !Number.isFinite(now)) throw catalogError();
+  if (!rows.length) return false;
+  const row = rows[0];
+  if (!UUID_PATTERN.test(String(row?.id || '')) || row.user_id !== userId) throw catalogError();
+  return row.status === 'active' && ['manual_payment', 'admin_adjustment', 'migration'].includes(row.source)
+    && typeof row.starts_at === 'string' && Number.isFinite(Date.parse(row.starts_at)) && Date.parse(row.starts_at) <= now
+    && (row.expires_at === null || (typeof row.expires_at === 'string'
+      && Number.isFinite(Date.parse(row.expires_at)) && Date.parse(row.expires_at) > now));
+}
+
+function configuredStudyRoomSlots(env, catalog) {
   const firstRoomName = resolveStudyRoomName(env);
-  const slots = STUDY_ROOM_SLOTS.map((definition, index) => {
-    const roomName = index === 0 ? firstRoomName : `${firstRoomName}-${definition.roomKey}`;
+  const slots = normalizeStudyRoomCatalog(catalog).rooms.map((definition) => {
+    const originalName = definition.roomKey === '1' ? firstRoomName : `${firstRoomName}-${definition.roomKey}`;
+    const roomName = definition.accessRevision === 1 ? originalName : `${originalName}-a${definition.accessRevision}`;
     if (!ROOM_NAME_PATTERN.test(roomName)) throw configurationError();
     return Object.freeze({
       ...definition,
+      kind: definition.roomKey === '1' ? 'library' : definition.roomKey === '5' ? 'inner-chamber' : 'general',
+      microphoneAllowed: definition.roomKey !== '1',
+      adminOnly: definition.audience === 'admin',
       roomName,
     });
   });
-  if (new Set(slots.map((slot) => slot.roomName)).size !== STUDY_ROOM_MAX_ROOMS) {
+  if (new Set(slots.map((slot) => slot.roomName)).size !== slots.length) {
     throw configurationError();
   }
   return Object.freeze(slots);
@@ -106,8 +160,8 @@ function configuredStudyRoomSlots(env) {
 
 export function resolveStudyRoomSlot(env, value, options = {}) {
   const roomKey = normalizeStudyRoomRoomKey(value, options);
-  const slot = configuredStudyRoomSlots(env).find((candidate) => candidate.roomKey === roomKey);
-  if (!slot) throw configurationError();
+  const slot = configuredStudyRoomSlots(env, options.catalog).find((candidate) => candidate.roomKey === roomKey);
+  if (!slot) throw new StudyRoomError('STUDY_ROOM_ROOM_INVALID', 'That room is not in the current catalog.', 400);
   return slot;
 }
 
@@ -151,18 +205,18 @@ function safeLiveKitConfiguration(env) {
     apiKey,
     apiSecret,
     roomName: resolveStudyRoomName(env),
-    roomSlots: configuredStudyRoomSlots(env),
     websocketUrl: websocketUrl.toString().replace(/\/$/u, ''),
     serviceUrl: serviceUrl.toString().replace(/\/$/u, ''),
   };
 }
 
-export function studyRoomDescriptor(env) {
+export function studyRoomDescriptor(env, options = {}) {
   const configuration = safeLiveKitConfiguration(env);
+  const slot = resolveStudyRoomSlot(env, '1', options);
   return Object.freeze({
     roomKey: '1',
     roomName: configuration.roomName,
-    label: STUDY_ROOM_SLOTS[0].label,
+    label: slot.label,
     maxRooms: STUDY_ROOM_MAX_ROOMS,
     maxParticipants: STUDY_ROOM_MAX_PARTICIPANTS,
     recording: false,
@@ -391,9 +445,12 @@ function publicRoomDescriptor(slot, room = null, options = {}) {
     kind: slot.kind,
     microphoneAllowed: slot.microphoneAllowed,
     adminOnly: slot.adminOnly,
+    audience: slot.audience,
+    revision: slot.revision,
+    accessRevision: slot.accessRevision,
     alwaysOpen: !slot.adminOnly,
     canCreate: slot.adminOnly && isAdministrator,
-    canJoin: !slot.adminOnly || isAdministrator,
+    canJoin: isAdministrator || slot.audience === 'all' || (slot.audience === 'paid' && options.isPaidMember === true),
   });
   if (!room) {
     return Object.freeze({
@@ -432,6 +489,7 @@ async function listedConfiguredRooms(configuration, service) {
 
 export async function listStudyRooms(env, options = {}) {
   const configuration = safeLiveKitConfiguration(env);
+  configuration.roomSlots = configuredStudyRoomSlots(env, options.catalog);
   const service = resolvedService(configuration, options);
   const listed = await listedConfiguredRooms(configuration, service);
   return Object.freeze({
@@ -452,6 +510,7 @@ export async function createStudyRoom(env, requestedRoomKey, options = {}) {
     );
   }
   const configuration = safeLiveKitConfiguration(env);
+  configuration.roomSlots = configuredStudyRoomSlots(env, options.catalog);
   const service = resolvedService(configuration, options);
   let slot;
   if (requestedRoomKey === undefined || requestedRoomKey === null || requestedRoomKey === '') {
@@ -460,13 +519,13 @@ export async function createStudyRoom(env, requestedRoomKey, options = {}) {
     if (!slot) {
       throw new StudyRoomError(
         'STUDY_ROOM_ROOM_LIMIT_REACHED',
-        'All five Study Rooms are already open.',
+        'All configured Study Rooms are already open.',
         409,
         'Join an open room or wait until one closes.',
       );
     }
   } else {
-    slot = resolveStudyRoomSlot(env, requestedRoomKey);
+    slot = resolveStudyRoomSlot(env, requestedRoomKey, options);
   }
   const ensured = await ensureStudyRoom(service, slot, options);
   return Object.freeze({
@@ -475,9 +534,60 @@ export async function createStudyRoom(env, requestedRoomKey, options = {}) {
   });
 }
 
+export async function configureStudyRoom(env, user, body, options = {}) {
+  if (options.isAdministrator !== true) {
+    throw new StudyRoomError('STUDY_ROOM_ADMIN_REQUIRED', 'Only an administrator can configure rooms.', 403);
+  }
+  const operation = body?.operation;
+  const roomKey = normalizeStudyRoomRoomKey(body?.roomKey);
+  const label = normalizeStudyRoomLabel(body?.label);
+  const audience = body?.audience;
+  const expectedRevision = body?.expectedRevision;
+  if (!['add', 'update'].includes(operation) || !['admin', 'paid', 'all'].includes(audience)
+    || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0 || expectedRevision > 2_147_483_646
+    || (roomKey === '5' && audience !== 'admin') || (operation === 'add' && Number(roomKey) < 7)) {
+    throw new StudyRoomError('STUDY_ROOM_CONFIG_INVALID', 'Refresh the room configuration and check its name and access choice.', 400);
+  }
+  const catalog = normalizeStudyRoomCatalog(options.catalog);
+  const current = catalog.rooms.find((room) => room.roomKey === roomKey);
+  if ((operation === 'add' && (current || expectedRevision !== 0))
+    || (operation === 'update' && (!current || current.revision !== expectedRevision))) {
+    throw new StudyRoomError('STUDY_ROOM_CONFIG_CONFLICT', 'This room changed. Reload the catalog before saving.', 409);
+  }
+  const changed = !current || current.label !== label || current.audience !== audience;
+  if (changed && current?.revision >= 2_147_483_646) {
+    throw new StudyRoomError('STUDY_ROOM_CONFIG_CONFLICT', 'This room cannot accept another revision. Contact support.', 409);
+  }
+  const expectedRoom = { roomKey, label, audience,
+    revision: current ? current.revision + Number(changed) : 1,
+    accessRevision: current ? current.accessRevision + Number(current.audience !== audience) : 1 };
+  // Refuse a configuration that the current trusted base name cannot address.
+  // This is checked before persistence, not after leaving an unusable catalog.
+  configuredStudyRoomSlots(env, { ...catalog, rooms: [
+    ...catalog.rooms.filter((room) => room.roomKey !== roomKey), expectedRoom,
+  ] });
+  if (current && current.audience !== audience) {
+    const configuration = safeLiveKitConfiguration(env);
+    const slot = resolveStudyRoomSlot(env, roomKey, { catalog });
+    const rooms = await liveKitCall('configure_room_lookup', () => resolvedService(configuration, options).listRooms([slot.roomName]));
+    if (!Array.isArray(rooms) || rooms.some((room) => room?.name !== slot.roomName) || rooms.length > 1) throw catalogError();
+    if (rooms.length && participantCountForRoom(requireConfiguredRoomCapacity(rooms[0])) !== 0) {
+      throw new StudyRoomError('STUDY_ROOM_ROOM_NOT_EMPTY', 'Everyone must leave the current room before its access can change.', 409);
+    }
+  }
+  if (typeof options.configureCatalog !== 'function') throw catalogError();
+  const result = await options.configureCatalog({ p_actor_user_id: user.id, p_operation: operation,
+    p_room_key: roomKey, p_label: label, p_audience: audience, p_expected_revision: expectedRevision });
+  const room = result?.room;
+  if (result?.ok !== true || room?.roomKey !== roomKey || room.label !== label || room.audience !== audience
+    || room.revision !== expectedRoom.revision || room.accessRevision !== expectedRoom.accessRevision) throw catalogError();
+  return Object.freeze({ ok: true, room: Object.freeze({ roomKey, label, audience,
+    revision: room.revision, accessRevision: room.accessRevision }) });
+}
+
 export async function createStudyRoomJoinCredential(env, user, roomKey, nickname, options = {}) {
   const configuration = safeLiveKitConfiguration(env);
-  const slot = resolveStudyRoomSlot(env, roomKey);
+  const slot = resolveStudyRoomSlot(env, roomKey, options);
   const normalizedNickname = normalizeStudyRoomNickname(nickname);
   const identity = await participantIdentity(user?.id, configuration.apiSecret);
   const service = resolvedService(configuration, options);
@@ -485,10 +595,13 @@ export async function createStudyRoomJoinCredential(env, user, roomKey, nickname
   if (slot.adminOnly && !isAdministrator) {
     throw new StudyRoomError(
       'STUDY_ROOM_ADMIN_ROOM_REQUIRED',
-      'The Inner Chamber is available only to Due Diligence administrators.',
+      'This room is available only to Due Diligence administrators.',
       403,
-      'Choose Library, Room 1, Room 2, or Room 3.',
+      'Choose an available room from the current catalog.',
     );
+  }
+  if (slot.audience === 'paid' && !isAdministrator && options.isPaidMember !== true) {
+    throw new StudyRoomError('STUDY_ROOM_PAID_ROOM_REQUIRED', 'This room requires a current paid membership.', 403);
   }
   let room;
   if (slot.adminOnly) {
@@ -530,14 +643,30 @@ export async function createStudyRoomJoinCredential(env, user, roomKey, nickname
       ]
       : [TrackSource.CAMERA, TrackSource.SCREEN_SHARE],
   });
+  const participantToken = await token.toJwt();
+  if (slot.audience === 'paid' && !isAdministrator
+    && (typeof options.verifyPaidMembership !== 'function' || await options.verifyPaidMembership() !== true)) {
+    throw new StudyRoomError('STUDY_ROOM_PAID_ROOM_REQUIRED', 'This room requires a current paid membership.', 403);
+  }
+  // Check after asynchronous media lookup and signing. Audience changes move to
+  // a new physical generation: old issued tokens are not represented as revoked.
+  if (typeof options.getCatalog !== 'function') throw catalogError();
+  const latest = resolveStudyRoomSlot(env, roomKey, { catalog: await options.getCatalog() });
+  if (latest.revision !== slot.revision || latest.accessRevision !== slot.accessRevision
+    || latest.audience !== slot.audience || latest.label !== slot.label) {
+    throw new StudyRoomError('STUDY_ROOM_CONFIG_CONFLICT', 'This room changed. Refresh the catalog before joining.', 409);
+  }
   return {
-    participantToken: await token.toJwt(),
+    participantToken,
     participantIdentity: identity,
     participantName: normalizedNickname,
     roomKey: slot.roomKey,
     roomLabel: slot.label,
     roomName: slot.roomName,
     roomKind: slot.kind,
+    revision: slot.revision,
+    accessRevision: slot.accessRevision,
+    audience: slot.audience,
     microphoneAllowed: slot.microphoneAllowed,
     administrator: isAdministrator,
     serverUrl: configuration.websocketUrl,
@@ -548,7 +677,7 @@ export async function createStudyRoomJoinCredential(env, user, roomKey, nickname
 
 export async function muteStudyRoomParticipant(env, roomKey, identity, trackSid, options = {}) {
   const configuration = safeLiveKitConfiguration(env);
-  const slot = resolveStudyRoomSlot(env, roomKey);
+  const slot = resolveStudyRoomSlot(env, roomKey, options);
   const targetIdentity = validateStudyRoomParticipantIdentity(identity);
   const targetTrackSid = validateStudyRoomTrackSid(trackSid);
   await liveKitCall('mute_participant', () => resolvedService(configuration, options)
@@ -563,7 +692,7 @@ export async function muteStudyRoomParticipant(env, roomKey, identity, trackSid,
 
 export async function renameStudyRoomParticipant(env, userId, roomKey, identity, nickname, options = {}) {
   const configuration = safeLiveKitConfiguration(env);
-  const slot = resolveStudyRoomSlot(env, roomKey);
+  const slot = resolveStudyRoomSlot(env, roomKey, options);
   const targetIdentity = validateStudyRoomParticipantIdentity(identity);
   const ownIdentity = await participantIdentity(userId, configuration.apiSecret);
   if (targetIdentity !== ownIdentity) {
@@ -582,7 +711,7 @@ export async function renameStudyRoomParticipant(env, userId, roomKey, identity,
 
 export async function removeStudyRoomParticipant(env, roomKey, identity, options = {}) {
   const configuration = safeLiveKitConfiguration(env);
-  const slot = resolveStudyRoomSlot(env, roomKey);
+  const slot = resolveStudyRoomSlot(env, roomKey, options);
   const targetIdentity = validateStudyRoomParticipantIdentity(identity);
   await liveKitCall('remove_participant', () => resolvedService(configuration, options)
     // On LiveKit Cloud, omitting revokeTokenTs applies the server's current

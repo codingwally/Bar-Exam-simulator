@@ -11,6 +11,7 @@ import {
   sanitizeForecastNodeDiagnostic, forecastUnexpectedNodeResponse, captureForecastNodeFailure,
   fixtureAnswer, forecastEditorChunkSource,
   forecastPdfDownloadPath, verifyForecastDownloadedBytes, waitForForecastPdfDownload,
+  readForecastPdfCandidate, forecastBrowserRuntime, assertBrowserSocketBudget,
 } from './verify-astra-forecast-staging.mjs';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
@@ -66,6 +67,71 @@ test('native saved-file wait hard-bounds a hung filesystem read and ignores late
   await assert.rejects(waitForForecastPdfDownload({ readCandidate: async () => null, checkDeadline: () => { throw new Error('RUN_CANCELLED'); } }), /RUN_CANCELLED/u);
   await assert.rejects(waitForForecastPdfDownload({ readCandidate: async () => null, evidence: 'prepared-note', timeoutMs: 10 }),
     { code: 'ASTRA_FORECAST_PREPARED_NOTE_MISSING' });
+});
+
+test('native candidate waits for exact complete size through absent, zero and partial files without accepting remnants', async () => {
+  const expected = Buffer.from('%PDF-complete native fixture'); let reads = 0;
+  const regular = size => ({ size, isFile: () => true, isSymbolicLink: () => false });
+  const read = async () => { reads++; return expected; };
+  assert.equal(await readForecastPdfCandidate('private-candidate', expected, {
+    stat: async () => { throw Object.assign(new Error('not yet'), { code: 'ENOENT' }); }, read,
+  }), null);
+  for (const size of [0, 1, expected.length - 1]) {
+    assert.equal(await readForecastPdfCandidate('private-candidate', expected, { stat: async () => regular(size), read }), null);
+  }
+  assert.equal(reads, 0, 'Partial files must not be read or reported complete');
+  assert.equal(await readForecastPdfCandidate('private-candidate', expected, { stat: async () => regular(expected.length),
+    read: async () => expected.subarray(0, 4) }), null, 'A read race returning fewer bytes stays pending');
+  const actual = await readForecastPdfCandidate('private-candidate', expected, { stat: async () => regular(expected.length), read });
+  verifyForecastDownloadedBytes(actual, expected); assert.equal(reads, 1);
+});
+
+test('native candidate rejects oversize/nonregular/symlink/corrupt completed files; partial waits retain hard deadline', async () => {
+  const expected = Buffer.from('%PDF-complete native fixture'); const regular = size => ({ size, isFile: () => true, isSymbolicLink: () => false });
+  for (const stats of [regular(expected.length + 1), { ...regular(0), isFile: () => false },
+    { ...regular(0), isSymbolicLink: () => true }]) {
+    await assert.rejects(readForecastPdfCandidate('private-candidate', expected, { stat: async () => stats,
+      read: async () => { throw new Error('UNSAFE_READ'); } }), error => error.message !== 'UNSAFE_READ');
+  }
+  await assert.rejects(readForecastPdfCandidate('private-candidate', expected, { stat: async () => regular(expected.length),
+    read: async () => Buffer.concat([expected, Buffer.from('x')]) }));
+  const corrupt = await readForecastPdfCandidate('private-candidate', expected, { stat: async () => regular(expected.length),
+    read: async () => Buffer.alloc(expected.length, 65) });
+  assert.throws(() => verifyForecastDownloadedBytes(corrupt, expected));
+  let clock = 0;
+  await assert.rejects(waitForForecastPdfDownload({ timeoutMs: 500, now: () => clock, sleep: async ms => { clock += ms; },
+    readCandidate: () => readForecastPdfCandidate('zero-remnant', expected, { stat: async () => regular(0) }) }),
+  { code: 'ASTRA_FORECAST_DOWNLOAD_TIMEOUT' });
+});
+
+test('runtime download identity uses independent namespaces/directories, never mtime or browser collision naming', () => {
+  const prefix = 'astra-durable-1788750000000-deadbeef', base = path.join(tmpdir(), 'dd-astra-durable-testpdf');
+  const first = forecastBrowserRuntime(prefix, 'member', 1, base), second = forecastBrowserRuntime(prefix, 'member', 2, base);
+  assert.notEqual(first.namespace, second.namespace); assert.notEqual(first.downloadDirectory, second.downloadDirectory);
+  assert.equal(first.session, second.session); assert.match(first.namespace, /^ad-[a-f0-9]{16}$/u);
+  assert.equal(path.relative(base, second.downloadDirectory), path.join('browser-downloads', 'runtime-2'));
+  assert.notEqual(path.join(first.downloadDirectory, 'same.pdf'), path.join(second.downloadDirectory, 'same.pdf'));
+  assertBrowserSocketBudget(second, { HOME: '/home/runner' }, 'linux');
+  for (const ordinal of [0, 13, 1.5, '2', '../escape']) assert.throws(() => forecastBrowserRuntime(prefix, 'member', ordinal, base));
+  assert.throws(() => forecastBrowserRuntime(prefix, 'customer', 1, base));
+  assert.throws(() => forecastBrowserRuntime(prefix, 'member', 1, tmpdir()));
+});
+
+test('download source preserves original files, restarts before second click and records first prepared timestamp', async () => {
+  const source = await readFile(new URL('./verify-astra-forecast-staging.mjs', import.meta.url), 'utf8');
+  const start = source.slice(source.indexOf('  async function startBrowser('), source.indexOf('  async function openSaved('));
+  assert.ok(start.indexOf("await browser('close')") < start.indexOf('forecastBrowserRuntime('));
+  assert.match(start, /assert\.deepEqual\(await readdir\(runtime\.downloadDirectory\), \[\]/u);
+  assert.match(start, /coldFixtureInitSource\(account\)/u); assert.doesNotMatch(start, /createFixture|\/auth\/v1\/token/u);
+  const saved = source.slice(source.indexOf('  async function verifySavedSurfaces('), source.indexOf('  async function verifyAnalyticsScope('));
+  assert.match(saved, /if \(repeat === 1\)[\s\S]*?await startBrowser\(member\)[\s\S]*?await openSaved\(\)/u);
+  assert.match(saved, /readForecastPdfCandidate\(candidate, expectedPdf\)/u);
+  assert.match(saved, /writeFile\(retained, bytes, \{ flag: 'wx', mode: 0o600 \}\)/u);
+  assert.match(saved, /assert\.deepEqual\(prepared, firstPreparedEvent/u); assert.match(saved, /happened_at/u);
+  assert.doesNotMatch(source, /await rename\(|mtimeMs|birthtimeMs|allowAndName/u);
+  const local = source.slice(source.indexOf('export async function selfTestBrowser()'));
+  assert.match(local, /browserSessions: 2, freshDownloadDirectories: 2/u);
+  assert.match(local, /sameSuggestedFileName: true, originalBrowserFilesPreserved: true/u);
 });
 
 test('only controlled journey3 changes its answers; real-provider and lost-ack journeys stay byte-identical', () => {
@@ -147,9 +213,10 @@ test('prepared-note ownership checks execute only in real staging, never in the 
   const inert = source.slice(source.indexOf('export async function selfTestBrowser()'), source.indexOf('\nif (process.argv[1]'));
   assert.match(staging, /stage = 'ownership-boundaries'[\s\S]*const preparedBody[\s\S]*api\(other, preparedBody, \[404\]\)[\s\S]*api\(unpaid, preparedBody, \[403\]\)/u);
   assert.doesNotMatch(inert, /\b(?:api|service)\(|preparedBody|STAGING_SUPABASE_SERVICE_ROLE_KEY|TARGET\./u);
-  assert.match(inert, /--download-path', privateDir/u);
+  assert.match(inert, /--download-path', runtime\.downloadDirectory/u);
   assert.match(inert, /for \(let repeat = 1; repeat <= 2; repeat\+\+\)/u);
-  assert.match(inert, /await rename\(localPdfPath/u);
+  assert.match(inert, /writeFile\(path\.join\(privateDir, `verified-download-\$\{repeat\}\.pdf`\), downloaded, \{ flag: 'wx', mode: 0o600 \}\)/u);
+  assert.doesNotMatch(inert, /await rename\(/u);
 });
 
 test('supported API cleanup never claims protected Pulse or Auth-session absence', async () => {
@@ -187,7 +254,8 @@ test('diagnostics project only enums, booleans, bounded counts and HTTP status',
   assert.equal(safe.operations.status.httpStatus, 403);
   assert.equal(safe.authReady, 'settled');
   assert.deepEqual(Object.keys(safe.operations), ['status', 'start', 'submit_attempt', 'attempt', 'history', 'retry_attempt',
-    'result_pdf', 'result_pdf_prepared', 'email_result', 'accept']);
+    'result_pdf', 'result_pdf_prepared', 'email_result', 'accept',
+    'analytics_snapshot', 'analytics_report', 'analytics_attempt', 'analytics_pdf_prepared', 'analytics_email']);
   assert.doesNotMatch(JSON.stringify(safe), /private-token|private\.person|private-object|11111111/);
   assert.deepEqual(sanitizeForecastBrowserDiagnostics(JSON.parse(JSON.stringify(safe))), safe, 'Revalidate the browser result at the Node boundary');
 });
@@ -506,9 +574,10 @@ test('failure screenshots require the expected signed-in owner on the actual iso
 
 test('actual runner checkpoints cold auth and gates private screenshot before cleanup without warm navigation', async () => {
   const source = await readFile(new URL('./verify-astra-forecast-staging.mjs', import.meta.url), 'utf8');
-  const start = source.slice(source.indexOf('  async function startBrowser(account)'), source.indexOf('  async function openSaved('));
+  const start = source.slice(source.indexOf('  async function startBrowser(account,'), source.indexOf('  async function openSaved('));
   assert.match(start, /writeFile\(initPath, coldFixtureInitSource\(account\), \{ mode: 0o600 \}\)/);
-  assert.match(start, /await browser\('--init-script', initPath, 'open', `\$\{TARGET.site\}\/#bar-forecast-2026`\)/);
+  assert.match(start, /if \(scopeId !== null\) assert\.match\(scopeId, UUID\)/u);
+  assert.match(start, /await browser\('--init-script', initPath, 'open', scopeId \? `\$\{TARGET.site\}\/\?forecastAnalytics=\$\{scopeId\}#verdict` : `\$\{TARGET.site\}\/#bar-forecast-2026`\)/u);
   assert.doesNotMatch(start, /--state|browser\('reload'|setSession|signIn/);
   assert.match(start, /stage = `browser-bootstrap-\$\{account.kind\}`[\s\S]*waitForForecastBootstrap[\s\S]*summary.bootstrapCheckpoints.push/);
   assert.equal((start.match(/await browser\([^;]*'open'/g) || []).length, 1, 'One cold navigation, no warm-up or retry.');

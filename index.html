@@ -623,6 +623,8 @@
   .analytics-page-head h2{margin:7px 0 4px;font:700 clamp(34px,5vw,60px)/.98 var(--serif-display);color:var(--navy);letter-spacing:-1.4px;}
   .analytics-page-head p{max-width:660px;margin:0;color:var(--ink-soft);font:500 14px/1.65 var(--sans);}
   .analytics-head-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap;justify-content:flex-end;}
+  #analytics-practice-actions[hidden]{display:none;}
+  #page-analytics [role="tab"][aria-selected="true"]{background:var(--navy);color:#fff;border-color:var(--gold);}
   .analytics-head-actions .btn-tool{min-height:42px;background:transparent;border-color:rgba(15,33,58,.24);}
   .analytics-head-actions .btn-tool:hover{background:var(--navy);color:#fff;}
   .analytics-status{display:inline-flex;align-items:center;gap:8px;padding:8px 11px;border:1px solid rgba(15,33,58,.14);border-radius:999px;background:rgba(255,255,255,.72);font:700 10px var(--mono);letter-spacing:.5px;text-transform:uppercase;color:var(--ink-soft);}
@@ -1548,13 +1550,18 @@
         <h2 id="analytics-title">Analytics</h2>
         <p>See how your legal writing develops across subjects, pacing, and the grading components that are actually recorded.</p>
       </div>
-      <div class="analytics-head-actions">
+      <div class="analytics-head-actions" id="analytics-practice-actions">
         <span class="analytics-status" id="analytics-data-status">Loading</span>
         <button type="button" class="btn-tool" id="analytics-refresh">Refresh</button>
         <button type="button" class="btn-tool" id="analytics-reset">Reset analytics</button>
       </div>
     </header>
-    <div id="analytics-body" aria-live="polite"></div>
+    <div class="verdict-actions" role="tablist" aria-label="Analytics features">
+      <button type="button" class="btn-tool" id="analytics-tab-practice" role="tab" aria-selected="true" aria-controls="analytics-body" data-analytics-tab="practice">Practice analytics</button>
+      <button type="button" class="btn-tool" id="analytics-tab-forecast" role="tab" aria-selected="false" aria-controls="analytics-forecast-body" data-analytics-tab="forecast" tabindex="-1">Bar Forecast</button>
+    </div>
+    <div id="analytics-body" role="tabpanel" aria-labelledby="analytics-tab-practice" aria-live="polite"></div>
+    <div id="analytics-forecast-body" role="tabpanel" aria-labelledby="analytics-tab-forecast" aria-live="polite" hidden></div>
   </div>
 </section>
 </main><!-- /spa-root -->
@@ -3518,6 +3525,9 @@ function showPage(page, el, options = {}) {
   }
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   target.classList.add('active');
+  // pushState does not emit popstate. Notify route-owned asynchronous panels
+  // before ordinary navigation can leave a hidden export running.
+  window.dispatchEvent(new CustomEvent('duediligence:page-changed', { detail: { page } }));
   const activeTab = el || document.getElementById(SPA_PAGE_TABS[page]);
   activatePrimaryMenuItem(activeTab?.id || '');
   if (page !== 'community') window.DueDiligenceQuorum?.deactivate?.();
@@ -3804,6 +3814,89 @@ const verdictDashboard = {
     minimum: '', maximum: '', dateFrom: '', dateTo: '',
   },
 };
+
+// Forecast remains a separate result type, with its own persisted-data reader.
+const mainAnalyticsTabs = { selected: 'practice', forecast: null, generation: 0 };
+let verdictLoadGeneration = 0;
+
+function analyticsOwnerId() {
+  const session = window.DueDiligencePhase4?.getSession?.() || window.DueDiligencePhase2?.getSession?.();
+  return session?.access_token ? String(session.user?.id || '') : '';
+}
+
+async function selectMainAnalyticsTab(value, options = {}) {
+  if (location.hash !== '#verdict') {
+    mainAnalyticsTabs.generation++; mainAnalyticsTabs.forecast?.setActive(false); return;
+  }
+  const selected = value === 'forecast' ? 'forecast' : 'practice';
+  mainAnalyticsTabs.selected = selected;
+  const generation = ++mainAnalyticsTabs.generation;
+  const owner = analyticsOwnerId();
+  const forecastHost = document.getElementById('analytics-forecast-body');
+  document.getElementById('analytics-body').hidden = selected !== 'practice';
+  forecastHost.hidden = selected !== 'forecast';
+  // Reset/archive applies only to the existing practice records, never Forecast.
+  document.getElementById('analytics-practice-actions').hidden = selected !== 'practice';
+  document.querySelectorAll('[data-analytics-tab]').forEach((tab) => {
+    const active = tab.dataset.analyticsTab === selected;
+    tab.setAttribute('aria-selected', String(active));
+    tab.tabIndex = active ? 0 : -1;
+  });
+  if (options.history !== false && location.hash === '#verdict'
+      && history.state?.dueDiligenceAnalyticsTab !== selected) {
+    history.pushState({ ...(history.state || {}), dueDiligenceAnalyticsTab: selected }, '', location.href);
+  }
+  if (selected === 'practice') {
+    mainAnalyticsTabs.forecast?.setActive(false);
+    if (options.refresh === true) await loadVerdictDashboard();
+    return;
+  }
+  try {
+    if (!mainAnalyticsTabs.forecast) {
+      forecastHost.textContent = 'Opening your saved Forecast analytics…';
+      await window.DueDiligenceFeatureLoader?.loadForFeature?.('bar-forecast');
+      if (generation !== mainAnalyticsTabs.generation || owner !== analyticsOwnerId() || location.hash !== '#verdict') return;
+      if (typeof window.DueDiligenceBarForecast?.mountAnalytics !== 'function') throw new Error('Forecast analytics unavailable');
+      mainAnalyticsTabs.forecast = window.DueDiligenceBarForecast.mountAnalytics(forecastHost);
+    }
+    await mainAnalyticsTabs.forecast.setActive(true);
+  } catch {
+    if (generation !== mainAnalyticsTabs.generation || owner !== analyticsOwnerId() || location.hash !== '#verdict') return;
+    forecastHost.textContent = 'Forecast analytics could not be opened. Select the tab again to retry. Your saved reports are unchanged.';
+  }
+}
+
+document.querySelectorAll('[data-analytics-tab]').forEach((tab, index, tabs) => {
+  tab.addEventListener('click', () => selectMainAnalyticsTab(tab.dataset.analyticsTab, { refresh: true }));
+  tab.addEventListener('keydown', (event) => {
+    const next = event.key === 'ArrowRight' ? tabs[(index + 1) % tabs.length]
+      : event.key === 'ArrowLeft' ? tabs[(index + tabs.length - 1) % tabs.length]
+        : event.key === 'Home' ? tabs[0] : event.key === 'End' ? tabs[tabs.length - 1] : null;
+    if (!next) return;
+    event.preventDefault(); next.focus(); next.click();
+  });
+});
+window.addEventListener('popstate', () => {
+  if (location.hash === '#verdict') selectMainAnalyticsTab(history.state?.dueDiligenceAnalyticsTab || (/[?&]forecastAnalytics=/u.test(location.href) ? 'forecast' : 'practice'), { history: false, refresh: true });
+  else { mainAnalyticsTabs.generation++; mainAnalyticsTabs.forecast?.setActive(false); }
+});
+let mainAnalyticsOwner = analyticsOwnerId();
+window.addEventListener('duediligence:page-changed', (event) => {
+  if (event.detail?.page !== 'analytics') {
+    mainAnalyticsTabs.generation++; mainAnalyticsTabs.forecast?.setActive(false);
+  }
+});
+window.addEventListener('duediligence:session', () => {
+  if (mainAnalyticsOwner === analyticsOwnerId()) return;
+  mainAnalyticsOwner = analyticsOwnerId(); verdictLoadGeneration++; mainAnalyticsTabs.generation++;
+  verdictDashboard.active = []; verdictDashboard.deleted = []; verdictDashboard.selected.clear();
+  verdictDashboard.trendSelectedKey = '';
+  for (const key of Object.keys(verdictDashboard.filters)) verdictDashboard.filters[key] = '';
+  document.getElementById('analytics-body').replaceChildren();
+  mainAnalyticsTabs.forecast?.destroy(); mainAnalyticsTabs.forecast = null;
+  document.getElementById('analytics-forecast-body').replaceChildren();
+  if (location.hash === '#verdict') selectMainAnalyticsTab(mainAnalyticsTabs.selected, { history: false, refresh: true });
+});
 
 function analyticsFeatureLabel(value) {
   const label = String(value || '').trim();
@@ -4379,6 +4472,8 @@ async function resetAnalyticsHistory() {
 }
 
 async function loadVerdictDashboard() {
+  const generation = ++verdictLoadGeneration;
+  const owner = analyticsOwnerId();
   const body = document.getElementById('analytics-body');
   if (body) body.innerHTML = '<div class="loading">Opening your private analytics history…</div>';
   verdictDashboard.dataState = 'loading';
@@ -4390,6 +4485,7 @@ async function loadVerdictDashboard() {
     verdictRequest('/dd2026/verdict/records', { includeDeleted: false, limit: 500 }),
     verdictRequest('/dd2026/verdict/records', { includeDeleted: true, limit: 500 }),
   ]);
+  if (generation !== verdictLoadGeneration || owner !== analyticsOwnerId()) return;
   if (activeResult.status === 'fulfilled') {
     const remoteItems = Array.isArray(activeResult.value?.items) ? activeResult.value.items : [];
     const remote = analyticsGradedRecords(remoteItems.map(analyticsDisplayRecord));
@@ -4436,7 +4532,7 @@ async function openAnalytics() {
   verdictDashboard.selected.clear();
   verdictDashboard.showDeleted = false;
   if (showPage('analytics', document.getElementById('spa-progress')) !== true) return false;
-  await loadVerdictDashboard();
+  await selectMainAnalyticsTab(history.state?.dueDiligenceAnalyticsTab || (/[?&]forecastAnalytics=/u.test(location.href) ? 'forecast' : 'practice'), { history: false, refresh: true });
   return true;
 }
 window.openVerdictDashboard = openAnalytics;
@@ -4967,14 +5063,14 @@ window.addEventListener('storage', (event) => {
 <script src="assets/profile-photo.js?v=profile-photo-release2-20260827-1"></script>
 <script src="assets/pricing-renderer.js?v=regular-checkout-r2"></script>
 <script src="assets/pricing-checkout-safety.js?v=regular-checkout-r2"></script>
-<script src="assets/phase2-experience.js?v=profile-photo-release2-20260827-1&amp;baseline=syllabus-reveal-p0-20260826-2-examination-room-4&amp;profile=chambers-20260827-1&amp;access=paid-expiry-20260827-1&amp;pricing=regular-checkout-r3&amp;legal=explicit-20260901-1&amp;auth=login-loop-p0-20260901-1&amp;unlimited=feature-access-20260902-1&amp;terms=astra-activation-20260907-r1"></script>
+<script src="assets/phase2-experience.js?v=profile-photo-release2-20260827-1&amp;baseline=syllabus-reveal-p0-20260826-2-examination-room-4&amp;profile=chambers-20260827-1&amp;access=paid-expiry-20260827-1&amp;pricing=regular-checkout-r3&amp;legal=explicit-20260901-1&amp;auth=login-loop-p0-20260901-1&amp;unlimited=feature-access-20260902-1&amp;terms=astra-activation-20260907-r1&amp;analytics=astra-analytics-browser-20260908-r1"></script>
 <script src="assets/phase4-experience.js?v=syllabus-reveal-p0-20260826-2&amp;access=paid-expiry-20260827-1&amp;recovery=subject-review-timeout-20260828-1&amp;forecast-setup=20260901-2&amp;auth=login-loop-p0-20260901-1&amp;unlimited=feature-access-20260902-1&amp;forecast-loop=astra-20260907-1&amp;poll=astra-forecast-read-wait-20260907-r1"></script>
 <script src="assets/subscription-cta.js?v=home-subscription-cta-20260828-3"></script>
 <script src="assets/study-room-preview.js?v=study-room-launch-20260830-1"></script>
 <script src="assets/auxiliary-writing-diagnostics.js?v=auxiliary-writing-diagnostics-20260827-1"></script>
 <script src="assets/phase3-analytics.js?v=home-telemetry-20260828-1"></script>
 <script src="assets/private-workspace.js?v=master-experience-20260813-1"></script>
-<script src="assets/feature-loader.js?v=profile-photo-release2-20260827-1&amp;baseline=public-reliability-20260827-1&amp;feedback=offline-save-20260827-1&amp;hotfix=ian-provisional-reveal-20260828-1&amp;recovery=subject-review-timeout-20260828-1&amp;cta=home-subscription-20260828-2&amp;collapse=home-read-more-20260828-1&amp;results=history-20260828-1&amp;forecast=access-flow-20260902-1&amp;coaching=report-20260901-1&amp;unlimited=feature-access-20260902-1&amp;simulation=simulation-timer-review-20260906-r2&amp;totals=simulation-cumulative-score-20260906-r1&amp;answers=simulation-submitted-answer-20260906-r1&amp;forecast-loop=astra-20260907-1&amp;durable=astra-forecast-durable-20260907-r1&amp;entry=astra-forecast-cancel-20260907-r1&amp;poll=astra-forecast-read-wait-20260907-r1&amp;pdf=astra-browser-pdf-20260908-r1&amp;editor=astra-forecast-multiline-20260908-r1"></script>
+<script src="assets/feature-loader.js?v=profile-photo-release2-20260827-1&amp;baseline=public-reliability-20260827-1&amp;feedback=offline-save-20260827-1&amp;hotfix=ian-provisional-reveal-20260828-1&amp;recovery=subject-review-timeout-20260828-1&amp;cta=home-subscription-20260828-2&amp;collapse=home-read-more-20260828-1&amp;results=history-20260828-1&amp;forecast=access-flow-20260902-1&amp;coaching=report-20260901-1&amp;unlimited=feature-access-20260902-1&amp;simulation=simulation-timer-review-20260906-r2&amp;totals=simulation-cumulative-score-20260906-r1&amp;answers=simulation-submitted-answer-20260906-r1&amp;forecast-loop=astra-20260907-1&amp;durable=astra-forecast-durable-20260907-r1&amp;entry=astra-forecast-cancel-20260907-r1&amp;poll=astra-forecast-read-wait-20260907-r1&amp;pdf=astra-browser-pdf-20260908-r1&amp;editor=astra-forecast-multiline-20260908-r1&amp;analytics=astra-analytics-browser-20260908-r1&amp;source=astra-simulator-source-20260908-r1"></script>
 <script src="assets/quorum-first-shell.js?v=syllabus-review-20260823-1&amp;forecast=exam-tools-20260901-4"></script>
 <script src="assets/private-beta-landing.js?v=public-reliability-20260827-2&amp;feedback=quiet-navigation-20260828-1&amp;forecast=access-flow-20260902-1&amp;auth=login-loop-p0-20260901-1&amp;unlimited=feature-access-20260902-1&amp;forecast-loop=astra-20260907-1&amp;entry=astra-forecast-cancel-20260907-r1"></script>
 <script src="assets/pedro-navigation.js?v=pedro-release2-20260827-1&amp;feedback=quiet-navigation-20260828-1"></script>

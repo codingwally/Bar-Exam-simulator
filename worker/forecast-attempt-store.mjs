@@ -119,11 +119,11 @@ export function createForecastAttemptStore({ rpc }) {
     }
   }
 
-  async function history(env, ownerId, { limit = 20, before = null, subject = null, completeOnly = false, from = null, to = null } = {}) {
+  async function history(env, ownerId, { limit = 20, before = null, subject = null, completeOnly = false, from = null, to = null, includeClassifications = false } = {}) {
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
       throw new BarForecastError('BAR_FORECAST_HISTORY_INVALID', 'Choose a history page size between 1 and 100.', 400);
     }
-    return call(env, 'dd2026_forecast_attempt_history', {
+    return call(env, includeClassifications === true ? 'dd2026_forecast_analytics_history' : 'dd2026_forecast_attempt_history', {
       p_actor_user_id: uuid(ownerId, 'owner'), p_limit: limit,
       p_before: before && typeof before === 'object' ? before.acceptedAt : before,
       p_before_id: before && typeof before === 'object' ? uuid(before.id, 'history cursor') : null,

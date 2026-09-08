@@ -11,7 +11,7 @@ import {
 } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildForecastPdfBrowserWorker } from './build-forecast-pdf-browser-worker.mjs';
+import { buildForecastPdfBrowserWorker, buildForecastAnalyticsPdfBrowserWorker } from './build-forecast-pdf-browser-worker.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outputRoot = path.join(repositoryRoot, '.pages-dist');
@@ -473,6 +473,8 @@ async function listFiles(directory, prefix = '') {
 async function buildForecastPdfRuntime() {
   const { code } = await buildForecastPdfBrowserWorker();
   await writeFile(path.join(outputRoot, 'assets/forecast-result-pdf-worker.js'), code);
+  const analytics = await buildForecastAnalyticsPdfBrowserWorker();
+  await writeFile(path.join(outputRoot, 'assets/forecast-analytics-pdf-worker.js'), analytics.code);
   const licenses = path.join(outputRoot, 'assets/vendor/forecast-pdf');
   await mkdir(licenses, { recursive: true });
   await Promise.all([

@@ -19,6 +19,7 @@ import {
 } from './bar-forecast-core.mjs';
 import { createForecastAttemptStore } from './forecast-attempt-store.mjs';
 import { createForecastResultExporter } from './forecast-result-export.mjs';
+import { createForecastAnalyticsExporter } from './forecast-analytics-export.mjs';
 
 export async function legacyForecastAttemptId(ownerId, input) {
   const answers = [...input.answers].map((row) => ({ questionId: row.questionId.toLowerCase(), answer: row.answer }))
@@ -186,6 +187,10 @@ export function createBarForecastHandlers(deps) {
   const attemptStore = deps.attemptStore || createForecastAttemptStore({ rpc: barForecastRpc });
   const resultExporter = deps.resultExporter || createForecastResultExporter({
     attemptStore, rpc: barForecastRpc, sendEmail: deps.sendForecastResultEmail, resolveVerifiedUser: deps.resolveForecastEmailUser,
+    assertEmailAvailable: deps.assertForecastResultEmailAvailable,
+  });
+  const analyticsExporter = deps.analyticsExporter || createForecastAnalyticsExporter({
+    rpc: barForecastRpc, sendEmail: deps.sendForecastResultEmail, resolveVerifiedUser: deps.resolveForecastEmailUser,
     assertEmailAvailable: deps.assertForecastResultEmailAvailable,
   });
 
@@ -366,6 +371,21 @@ export function createBarForecastHandlers(deps) {
     }
 
     await requireConsent(env, user.id);
+    if (input.operation === 'analytics_snapshot') {
+      return privateJson(jsonResponse, await analyticsExporter.snapshot(env, user, input), 200, origin, allowedOrigin);
+    }
+    if (input.operation === 'analytics_report') {
+      return privateJson(jsonResponse, await analyticsExporter.get(env, user, input.scopeId), 200, origin, allowedOrigin);
+    }
+    if (input.operation === 'analytics_attempt') {
+      return privateJson(jsonResponse, await analyticsExporter.attempt(env, user, input.scopeId, input.attemptId), 200, origin, allowedOrigin);
+    }
+    if (input.operation === 'analytics_pdf_prepared') {
+      return privateJson(jsonResponse, await analyticsExporter.prepared(env, user, input), 200, origin, allowedOrigin);
+    }
+    if (input.operation === 'analytics_email') {
+      return privateJson(jsonResponse, await analyticsExporter.email(env, user, input.scopeId), 200, origin, allowedOrigin);
+    }
     if (input.operation === 'result_pdf_prepared') {
       // Optional client observation only. It never renders, stores, hashes,
       // emails, or certifies a PDF, and is not a prerequisite for a download.

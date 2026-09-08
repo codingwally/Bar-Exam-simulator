@@ -302,7 +302,8 @@ export function barForecastEntitlementEvidence(context) {
 export function normalizeBarForecastRequest(value) {
   const input = object(value);
   const operation = String(input.operation ?? '');
-  if (!['status', 'accept', 'start', 'submit', 'submit_attempt', 'attempt', 'history', 'retry_attempt', 'result_pdf', 'email_result', 'result_pdf_prepared'].includes(operation)) {
+  if (!['status', 'accept', 'start', 'submit', 'submit_attempt', 'attempt', 'history', 'retry_attempt', 'result_pdf', 'email_result', 'result_pdf_prepared',
+    'analytics_snapshot', 'analytics_report', 'analytics_attempt', 'analytics_pdf_prepared', 'analytics_email'].includes(operation)) {
     throw new BarForecastError(
       'BAR_FORECAST_OPERATION_INVALID',
       'Choose a supported Forecast action.',
@@ -343,14 +344,40 @@ export function normalizeBarForecastRequest(value) {
     exactKeys(input, ['operation', 'attemptId']);
     return Object.freeze({ operation, attemptId: attemptUuid(input.attemptId) });
   }
+  if (['analytics_report', 'analytics_email'].includes(operation)) {
+    exactKeys(input, ['operation', 'scopeId']);
+    return Object.freeze({ operation, scopeId: attemptUuid(input.scopeId) });
+  }
+  if (operation === 'analytics_attempt') {
+    exactKeys(input, ['operation', 'scopeId', 'attemptId']);
+    return Object.freeze({ operation, scopeId: attemptUuid(input.scopeId), attemptId: attemptUuid(input.attemptId) });
+  }
+  if (operation === 'analytics_pdf_prepared') {
+    exactKeys(input, ['operation', 'scopeId', 'scopeHash', 'pdfVersion', 'byteCount']);
+    if (typeof input.scopeHash !== 'string' || !/^[a-f0-9]{64}$/u.test(input.scopeHash)
+        || input.pdfVersion !== 'forecast-analytics-pdf-v1' || !Number.isSafeInteger(input.byteCount)
+        || input.byteCount < 1 || input.byteCount > 10485760) {
+      throw new BarForecastError('BAR_FORECAST_PREPARED_NOTE_INVALID', 'The client-reported period PDF metadata is invalid.', 400);
+    }
+    return Object.freeze({ operation, scopeId: attemptUuid(input.scopeId), scopeHash: input.scopeHash,
+      pdfVersion: input.pdfVersion, byteCount: input.byteCount });
+  }
+  if (operation === 'analytics_snapshot') {
+    if (Object.keys(input).some(key => !['operation', 'requestId', 'subject', 'from', 'to'].includes(key))) {
+      throw new BarForecastError('BAR_FORECAST_REQUEST_SHAPE_INVALID', 'The reporting scope contains unsupported fields.', 400);
+    }
+    const filters = normalizeBarForecastRequest({ operation: 'history', subject: input.subject, from: input.from, to: input.to });
+    return Object.freeze({ operation, requestId: attemptUuid(input.requestId), subject: filters.subject, from: filters.from, to: filters.to });
+  }
   if (operation === 'history') {
-    const allowed = ['operation', 'limit', 'before', 'subject', 'completeOnly', 'from', 'to'];
+    const allowed = ['operation', 'limit', 'before', 'subject', 'completeOnly', 'from', 'to', 'includeClassifications'];
     if (Object.keys(input).some((key) => !allowed.includes(key))) {
       throw new BarForecastError('BAR_FORECAST_REQUEST_SHAPE_INVALID', 'The history request contains unsupported fields.', 400);
     }
     const limit = input.limit ?? 20;
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100
-        || (input.completeOnly !== undefined && typeof input.completeOnly !== 'boolean')) {
+        || (input.completeOnly !== undefined && typeof input.completeOnly !== 'boolean')
+        || (input.includeClassifications !== undefined && typeof input.includeClassifications !== 'boolean')) {
       throw new BarForecastError('BAR_FORECAST_HISTORY_INVALID', 'The history filters are invalid.', 400);
     }
     let before = null;
@@ -376,7 +403,8 @@ export function normalizeBarForecastRequest(value) {
       throw new BarForecastError('BAR_FORECAST_HISTORY_INVALID', 'The history end must follow its start.', 400);
     }
     return Object.freeze({ operation, limit, before, from, to,
-      subject: input.subject == null ? null : exactSubject(input.subject), completeOnly: input.completeOnly === true });
+      subject: input.subject == null ? null : exactSubject(input.subject), completeOnly: input.completeOnly === true,
+      ...(Object.hasOwn(input, 'includeClassifications') ? { includeClassifications: input.includeClassifications } : {}) });
   }
   exactKeys(
     input,

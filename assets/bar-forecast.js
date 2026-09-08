@@ -712,10 +712,12 @@
       error.code = 'AUTH_UNRESOLVED';
       throw error;
     }
-    const controller = options.signal ? null : beginRequest();
+    const externalController = options.controller || null;
+    const controller = options.signal ? null : externalController || beginRequest();
     let deadline;
     let rejectAborted;
     try {
+      if (controller?.signal.aborted) { const error = new Error('This Forecast request was cancelled.'); error.name = 'AbortError'; throw error; }
       const pending = client.request(ENDPOINT, {
         body,
         signal: options.signal || controller?.signal,
@@ -733,14 +735,14 @@
           reject(error); controller.abort();
         }, FORECAST_REQUEST_TIMEOUT_MS);
       })]) : await pending;
-      if (controller && (state.requestController !== controller || controller.signal.aborted)) {
+      if (controller && ((!externalController && state.requestController !== controller) || controller.signal.aborted)) {
         const error = new Error('This Forecast request is no longer current.'); error.name = 'AbortError'; throw error;
       }
       return payload;
     } finally {
       if (deadline !== undefined) global.clearTimeout(deadline);
       if (rejectAborted) controller?.signal.removeEventListener('abort', rejectAborted);
-      if (controller && state.requestController === controller) state.requestController = null;
+      if (controller && !externalController && state.requestController === controller) state.requestController = null;
     }
   }
 
@@ -1361,6 +1363,9 @@
       metricCard('Grammar', nullableMetric(analytics.averageGrammarScore, ' / 5')),
       metricCard('Issue spotting', nullableMetric(analytics.averageIssueSpottingScore, ' / 5')));
     panel.append(metrics);
+    if (Number.isInteger(analytics.pendingAttempts) && Number.isInteger(analytics.failedAttempts)) {
+      panel.append(element('p', '', `${analytics.pendingAttempts} pending · ${analytics.failedAttempts} need attention · not included in scores.`));
+    }
     if (!analytics.completedAttempts) { panel.append(element('p', '', 'Complete an assessment to see your progress.')); return; }
     const bars = element('div', 'bf26-subject-analytics');
     for (const row of analytics.bySubject) {
@@ -1374,6 +1379,17 @@
       bars.append(item);
     }
     panel.append(bars);
+    const comparable = analytics.bySubject.filter((row) => SUBJECT_NAMES.has(row.subject)
+      && Number.isInteger(row.completedAttempts) && row.completedAttempts >= 2
+      && typeof row.averagePercentage === 'number' && row.averagePercentage >= 0 && row.averagePercentage <= 100)
+      .sort((left, right) => right.averagePercentage - left.averagePercentage);
+    if (comparable.length >= 2 && comparable[0].averagePercentage > comparable.at(-1).averagePercentage) {
+      panel.append(element('p', '', `Relative strength: ${comparable[0].subject} (${comparable[0].completedAttempts} completed).`),
+        element('p', '', `Review priority: ${comparable.at(-1).subject} (${comparable.at(-1).completedAttempts} completed).`),
+        element('p', '', 'Based only on saved subject averages with at least two completed attempts each; this is not a predicted Bar rating.'));
+    } else {
+      panel.append(element('p', '', 'More comparable completed attempts are needed to identify subject strengths and review priorities. Open a report for its saved coaching.'));
+    }
     const trend = Array.isArray(analytics.trend) ? analytics.trend.filter((row) => typeof row.percentage === 'number'
       && Number.isFinite(row.percentage) && row.percentage >= 0 && row.percentage <= 100).slice(-12) : [];
     if (trend.length > 1) {
@@ -1429,6 +1445,430 @@
     const refresh = makeButton('Refresh'); refresh.addEventListener('click', () => loadForecastHistory(tab)); panel.append(refresh);
     replaceView(panel, tab);
   }
+
+  function forecastAnalyticsRenderingSnapshot(scope) {
+    const pick = (value, keys) => Object.fromEntries(keys.map(key => [key, value?.[key]]));
+    return {
+      ...pick(scope, ['id', 'ownerId', 'schemaVersion', 'scopeHash', 'templateVersion', 'createdAt']),
+      filter: pick(scope.filter, ['subject', 'from', 'to', 'completeOnly', 'timeZone']),
+      manifest: scope.manifest.map(row => ({ ...pick(row, ['attemptId', 'resultRevision', 'resultHash', 'subject', 'acceptedAt', 'completedAt']),
+        summary: pick(row.summary, ['percentage', 'totalScore', 'maxScore']) })),
+      analytics: {
+        ...pick(scope.analytics, ['completeOnly', 'completedAttempts', 'pendingAttempts', 'failedAttempts',
+          'averagePercentage', 'averageGrammarScore', 'averageIssueSpottingScore']),
+        bySubject: (scope.analytics.bySubject || []).map(row => pick(row, ['subject', 'completedAttempts', 'averagePercentage', 'averageGrammarScore', 'averageIssueSpottingScore'])),
+        trend: (scope.analytics.trend || []).map(row => pick(row, ['id', 'attemptId', 'subject', 'completedAt', 'percentage'])),
+        byUnit: (scope.analytics.byUnit || []).map(row => pick(row, ['subject', 'unitId', 'unit', 'averageScore', 'questionSamples', 'completedAttempts'])),
+        byTopic: (scope.analytics.byTopic || []).map(row => pick(row, ['subject', 'unitId', 'topic', 'averageScore', 'questionSamples', 'completedAttempts'])),
+        classificationCoverage: pick(scope.analytics.classificationCoverage, ['unitUnknownQuestions', 'topicUnknownQuestions']),
+      },
+    };
+  }
+
+  async function renderForecastAnalyticsPdf(scope, ownerId, requestController, isCurrent, onProgress) {
+    if (!Array.isArray(scope?.manifest) || !scope.manifest.length || scope.manifest.length * 21 + 1 > 400) {
+      const error = new Error('The complete period PDF exceeds the safe page limit. No reports were omitted.');
+      error.code = 'BAR_FORECAST_ANALYTICS_SIZE_LIMIT'; throw error;
+    }
+    let worker; let pending = null; let stepTimer; let totalTimer;
+    const cancelled = () => { const error = new Error('Period PDF preparation cancelled.'); error.name = 'AbortError'; return error; };
+    const guard = () => { if (requestController.signal.aborted || !isCurrent()) throw cancelled(); };
+    const settle = (error, value) => {
+      const request = pending; pending = null; global.clearTimeout(stepTimer); stepTimer = null;
+      if (request) { if (error) request.reject(error); else request.resolve(value); }
+    };
+    const onAbort = () => { worker?.terminate(); settle(cancelled()); };
+    try {
+      guard();
+      const origin = global.location.origin || new URL(global.location.href).origin;
+      if (typeof global.Worker !== 'function') throw new Error('This browser cannot prepare the period PDF. Your saved reports remain available.');
+      worker = new global.Worker(`${origin}/assets/forecast-analytics-pdf-worker.js?v=astra-analytics-browser-20260908-r1`, { name: 'due-diligence-period-pdf' });
+      requestController.signal.addEventListener('abort', onAbort, { once: true });
+      totalTimer = global.setTimeout(() => requestController.abort(), 180000);
+      worker.onmessage = ({ data }) => {
+        if (!isCurrent()) { requestController.abort(); return; }
+        if (!pending || !data || data.requestId !== 1) { settle(new Error('The period PDF sequence could not be verified.')); worker.terminate(); return; }
+        if (data.type === 'error') {
+          const error = new Error('The complete period PDF could not be prepared. Your saved reports are unchanged.');
+          if (['BAR_FORECAST_ANALYTICS_SIZE_LIMIT', 'BAR_FORECAST_PDF_SIZE_LIMIT', 'BAR_FORECAST_PDF_CHARACTER_UNAVAILABLE'].includes(data.code)) error.code = data.code;
+          settle(error); return;
+        }
+        if (data.type !== pending.expected || data.scopeId !== scope.id || data.scopeHash !== scope.scopeHash) {
+          settle(new Error('The period PDF identity could not be verified.')); return;
+        }
+        settle(null, data);
+      };
+      worker.onerror = worker.onmessageerror = (event) => {
+        event?.preventDefault?.(); settle(new Error('The complete period PDF could not be prepared. Your saved reports are unchanged.'));
+      };
+      const exchange = (message, expected) => {
+        guard();
+        if (pending) throw new Error('The period PDF sequence is busy.');
+        return new Promise((resolve, reject) => {
+          pending = { resolve, reject, expected };
+          stepTimer = global.setTimeout(() => { settle(cancelled()); requestController.abort(); }, 60000);
+          try { worker.postMessage({ ...message, requestId: 1 }); } catch (error) { settle(error); }
+        });
+      };
+      const ready = await exchange({ type: 'start', ownerId, scope }, 'ready');
+      if (ready.totalAttempts !== scope.manifest.length || ready.pdfVersion !== 'forecast-analytics-pdf-v1') throw new Error('The period PDF manifest could not be verified.');
+      for (let index = 0; index < scope.manifest.length; index++) {
+        guard();
+        const row = scope.manifest[index];
+        onProgress(index, scope.manifest.length);
+        const payload = await requestForecast({ operation: 'analytics_attempt', scopeId: scope.id, attemptId: row.attemptId }, { controller: requestController });
+        guard();
+        const saved = normalizedSavedAttempt(payload?.attempt);
+        if (payload.scopeId !== scope.id || payload.scopeHash !== scope.scopeHash || payload.resultHash !== row.resultHash
+            || saved.id !== row.attemptId || saved.resultRevision !== row.resultRevision
+            || saved.result?.ownerId !== ownerId || saved.result?.attemptId !== saved.id
+            || saved.subject !== row.subject || Date.parse(saved.completedAt) !== Date.parse(row.completedAt)
+            || saved.result?.totalScore !== row.summary?.totalScore || saved.result?.percentage !== row.summary?.percentage) {
+          throw new Error('A frozen scope member could not be verified. No partial report was downloaded.');
+        }
+        normalizeResults(saved.result, { questions: saved.questions, answers: new Map(saved.answers.map(row => [row.questionId, row.answer])) });
+        const progress = await exchange({ type: 'append', index, attempt: forecastPdfRenderingSnapshot(saved) }, 'progress');
+        if (progress.completedAttempts !== index + 1 || progress.totalAttempts !== scope.manifest.length
+            || !Number.isSafeInteger(progress.pageCount) || progress.pageCount < 1 || progress.pageCount > 400) throw new Error('The period PDF progress could not be verified.');
+        onProgress(index + 1, scope.manifest.length);
+      }
+      const result = await exchange({ type: 'finish' }, 'result'); guard();
+      if (result.completedAttempts !== scope.manifest.length || result.pdfVersion !== 'forecast-analytics-pdf-v1'
+          || result.fileName !== `duediligence-forecast-analytics-${scope.id}-v1.pdf`
+          || !(result.bytes instanceof ArrayBuffer) || result.bytes.byteLength < 1 || result.bytes.byteLength > 10485760) {
+        throw new Error('The complete period PDF response could not be verified.');
+      }
+      return { bytes: new Uint8Array(result.bytes), fileName: result.fileName };
+    } finally {
+      worker?.terminate(); global.clearTimeout(stepTimer); global.clearTimeout(totalTimer);
+      requestController.signal.removeEventListener('abort', onAbort);
+    }
+  }
+
+  function mountForecastAnalytics(host) {
+    let ownerId = runtimeOwnerId();
+    let generation = 0; let controller = null; let noteController = null; let active = true; let destroyed = false;
+    let pendingAction = null;
+    const model = { subject: '', from: '', to: '', completeOnly: true, items: [], cursor: null, analytics: null, recovery: null,
+      scope: null, requestId: null, email: null };
+    function scopeFromLocation() {
+      try {
+        const values = new URL(global.location.href).searchParams.getAll('forecastAnalytics');
+        if (values.length) return values.length === 1 && /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/iu.test(values[0]) ? values[0] : 'invalid';
+      } catch { /* Ordinary Analytics has no required link. */ }
+      return null;
+    }
+    let linkedScope = scopeFromLocation();
+    const cancel = () => { generation++; controller?.abort(); controller = null; noteController?.abort(); noteController = null; pendingAction = null; };
+    const clear = () => { model.items = []; model.cursor = null; model.analytics = null; model.recovery = null; model.scope = null; model.email = null; model.requestId = null; };
+    const current = (owner, revision) => !destroyed && active && host.isConnected && global.location.hash === '#verdict'
+      && owner && owner === ownerId && owner === runtimeOwnerId() && revision === generation;
+
+    function updateScopeLink(id) {
+      linkedScope = id;
+      try {
+        const url = new URL(global.location.href);
+        if (id) url.searchParams.set('forecastAnalytics', id); else url.searchParams.delete('forecastAnalytics');
+        global.history.replaceState(global.history.state, '', url.href);
+      } catch { /* The server-owned scope remains usable in this pane. */ }
+    }
+    function filters() {
+      const from = model.from ? new Date(`${model.from}T00:00:00+08:00`).toISOString() : null;
+      const to = model.to ? new Date(Date.parse(`${model.to}T00:00:00+08:00`) + 86400000).toISOString() : null;
+      if (from && to && from >= to) throw new Error('Choose an end date on or after the start date.');
+      return { ...(model.subject ? { subject: model.subject } : {}), ...(from ? { from } : {}), ...(to ? { to } : {}) };
+    }
+    function adoptScope(payload, owner) {
+      const saved = payload?.scope;
+      if (!saved || saved.ownerId !== owner || saved.schemaVersion !== 'forecast-analytics-scope-v1'
+          || !Array.isArray(saved.manifest) || !saved.manifest.length || saved.analytics?.completedAttempts !== saved.manifest.length
+          || saved.filter?.completeOnly !== true) throw new Error('Saved analytics scope unavailable.');
+      model.scope = saved; model.email = payload.email; model.analytics = saved.analytics; model.cursor = null;
+      model.items = saved.manifest.map((row) => ({ ...row, id: row.attemptId, status: 'complete' }));
+      model.subject = saved.filter.subject || ''; model.completeOnly = true;
+      model.from = saved.filter.from ? new Date(Date.parse(saved.filter.from) + 28800000).toISOString().slice(0, 10) : '';
+      model.to = saved.filter.to ? new Date(Date.parse(saved.filter.to) + 28800000 - 1).toISOString().slice(0, 10) : '';
+      updateScopeLink(saved.id);
+    }
+    function recover(error) {
+      if (isForecastAccessRequired(error)) { clear(); model.recovery = 'pricing'; render('Subscribe to access Bar Forecast.'); return true; }
+      if (['BAR_FORECAST_CONSENT_REQUIRED', 'BAR_FORECAST_SETUP_REQUIRED', 'PROFILE_COMPLETION_REQUIRED',
+        'LEGAL_ACCEPTANCE_REQUIRED', 'REAUTHENTICATION_REQUIRED'].includes(error?.code)) {
+        clear(); model.recovery = 'forecast'; render('Open Bar Forecast to complete the required terms or account setup. Your saved reports are unchanged.'); return true;
+      }
+      return false;
+    }
+    async function downloadScope(scopeId, owner, revision) {
+      if (model.scope?.id !== scopeId || !current(owner, revision)) return;
+      const requestController = controller;
+      const exported = await renderForecastAnalyticsPdf(forecastAnalyticsRenderingSnapshot(model.scope), owner,
+        requestController, () => current(owner, revision),
+        (done, total) => { if (current(owner, revision)) render(`Preparing complete period PDF: ${done} of ${total} reports…`, true); });
+      if (!current(owner, revision) || requestController.signal.aborted) return;
+      const url = global.URL.createObjectURL(new Blob([exported.bytes], { type: 'application/pdf' }));
+      const link = document.createElement('a'); link.href = url; link.download = exported.fileName;
+      try { document.body.append(link); link.click(); } finally { link.remove(); global.setTimeout(() => global.URL.revokeObjectURL(url), 1000); }
+      // Optional, deduplicated client observation. Not server PDF verification or
+      // proof that a file was saved; never a prerequisite for the download.
+      noteController?.abort();
+      const note = new AbortController(); noteController = note;
+      const deadline = global.setTimeout(() => note.abort(), 5000);
+      void requestForecast({ operation: 'analytics_pdf_prepared', scopeId, scopeHash: model.scope.scopeHash,
+        pdfVersion: 'forecast-analytics-pdf-v1', byteCount: exported.bytes.length }, { controller: note })
+        .catch(() => {}).finally(() => { global.clearTimeout(deadline); if (noteController === note) noteController = null; });
+    }
+    async function exportScope(kind) {
+      const owner = ownerId;
+      if (!current(owner, generation) || !model.analytics?.completedAttempts || model.recovery) return;
+      cancel(); const revision = generation;
+      pendingAction = kind;
+      render(kind === 'pdf' ? 'Preparing your complete saved report…' : 'Preparing the report for your verified account email…', true);
+      try {
+        controller = new AbortController();
+        if (!model.scope) {
+          model.requestId ||= newClientAttemptId();
+          const saved = await requestForecast({ operation: 'analytics_snapshot', requestId: model.requestId, ...filters() }, { controller });
+          if (!current(owner, revision)) return; adoptScope(saved, owner);
+        }
+        if (kind === 'pdf') {
+          await downloadScope(model.scope.id, owner, revision);
+          if (current(owner, revision)) render('PDF download started. The snapshot below matches the complete period PDF.');
+        } else {
+          const saved = await requestForecast({ operation: 'analytics_email', scopeId: model.scope.id }, { controller });
+          if (!current(owner, revision)) return; model.email = saved.email;
+          render(saved.email?.status === 'provider_accepted' ? 'Email accepted by the provider. Delivery is not yet confirmed.'
+            : saved.email?.status === 'processing' ? 'This saved report email is already being processed.'
+              : saved.email?.status === 'failed' ? 'The provider did not accept the email. The saved PDF remains available.'
+                : 'Email acceptance is uncertain. Check your inbox before retrying; the PDF remains available.');
+        }
+      } catch (error) {
+        if (!current(owner, revision)) return;
+        if (recover(error)) return;
+        if (error?.name === 'AbortError') { render('Period preparation timed out. Retry this saved snapshot or choose a narrower period. No reports were omitted.'); return; }
+        render(['BAR_FORECAST_ANALYTICS_SIZE_LIMIT', 'BAR_FORECAST_PDF_SIZE_LIMIT'].includes(error?.code)
+          ? 'Choose a narrower reporting period. The complete PDF exceeds the safe limit; no attempts were omitted.'
+          : error?.code === 'BAR_FORECAST_REQUEST_TIMEOUT' ? (kind === 'pdf'
+            ? 'The complete PDF took too long. Choose a narrower period or retry this saved snapshot. No reports were omitted.'
+            : 'Email status could not be confirmed. Check your inbox, then reopen this saved snapshot before retrying. Large reports may need a narrower period.')
+          : error?.code === 'BAR_FORECAST_EMAIL_RATE_LIMIT' ? 'You can email five saved reports in 24 hours. Download the PDF instead.'
+            : error?.code === 'BAR_FORECAST_VERIFIED_EMAIL_REQUIRED' ? 'Verify your account email before emailing this report.'
+              : 'The saved report action could not be confirmed. Retry the same action; your saved results are unchanged.');
+      }
+    }
+
+    async function openReport(attempt, button) {
+      const owner = ownerId;
+      if (!current(owner, generation) || !host.contains(button) || state.isOpen) return;
+      cancel(); const revision = generation;
+      button.disabled = true;
+      try {
+        await openForecast(button, { isCurrent: () => !destroyed && revision === generation && owner === runtimeOwnerId() });
+        if (!destroyed && revision === generation && owner === runtimeOwnerId() && state.ownerId === owner && state.consentAccepted && state.isOpen) {
+          await openSavedForecast(attempt.id);
+        }
+      } finally { button.disabled = false; }
+    }
+
+    function render(message = '', loading = false) {
+      const panel = element('section', 'analytics-panel');
+      panel.append(element('h3', '', 'Bar Forecast'), element('p', 'analytics-panel-note',
+        'Your saved assessments across devices. Scores and diagnostics come from the same reports you can reopen below.'));
+      const filters = element('div', 'bf26-history-filters');
+      const subject = element('select'); subject.setAttribute('aria-label', 'Filter Forecast subject');
+      const all = element('option', '', 'All subjects'); all.value = ''; subject.append(all);
+      for (const item of SUBJECTS) { const option = element('option', '', item.name); option.value = item.name; subject.append(option); }
+      subject.value = model.subject;
+      subject.addEventListener('change', () => { model.subject = subject.value; refresh(false, true); }); filters.append(subject);
+      for (const [field, labelText] of [['from', 'From'], ['to', 'Through']]) {
+        const label = element('label', 'bf26-history-date', labelText);
+        const input = element('input'); input.type = 'date'; input.value = model[field];
+        input.setAttribute('aria-label', `${labelText} date, Philippine time`);
+        input.addEventListener('change', () => { model[field] = input.value; refresh(false, true); });
+        label.append(input); filters.append(label);
+      }
+      panel.append(filters);
+      panel.append(element('p', 'analytics-panel-note', 'Dates use Philippine time: completion date for completed reports, submission date for unfinished attempts.'));
+      if (message) panel.append(element('p', 'bf26-status', message));
+      if (model.recovery) {
+        const owner = ownerId; const revision = generation; const recovery = model.recovery;
+        const action = makeButton(recovery === 'pricing' ? 'Subscribe to access' : 'Open Bar Forecast', 'bf26-button bf26-button--primary');
+        action.addEventListener('click', async () => {
+          if (!current(owner, revision) || !host.contains(action) || state.isOpen || action.disabled) return;
+          action.disabled = true;
+          try {
+            if (recovery === 'pricing' && typeof global.DueDiligencePhase4?.openUnlimitedFeatureGate === 'function') {
+              global.DueDiligencePhase4.openUnlimitedFeatureGate(ROUTE, {
+                featureId: 'bar-forecast', backgroundHash: '#verdict', focusOrigin: action,
+              });
+            } else await openForecast(action);
+          } catch {
+            if (current(owner, revision)) render('Forecast could not be opened. Use the action below to try again.');
+          } finally { action.disabled = false; }
+        });
+        panel.append(action);
+      }
+      panel.setAttribute('aria-busy', String(loading));
+      if (loading) {
+        const stop = makeButton('Cancel');
+        stop.addEventListener('click', () => {
+          const wasEmail = pendingAction === 'email'; cancel();
+          render(wasEmail ? 'Stopped waiting for email status. Sending may still finish; check your inbox before retrying this saved snapshot.'
+            : 'Action cancelled. Your saved reports are unchanged.');
+        });
+        panel.append(stop);
+      }
+      if (model.analytics) {
+        appendForecastAnalytics(panel, model.analytics);
+        panel.append(element('p', 'analytics-panel-note',
+          'Grammar and issue spotting are separate diagnostics, not additions to your grade. Active writing time was not recorded; no writing speed is estimated.'));
+        for (const [heading, key, field] of [['Saved syllabus units', 'byUnit', 'unit'], ['Saved topics', 'byTopic', 'topic']]) {
+          panel.append(element('h4', '', heading));
+          const rows = model.analytics[key];
+          if (!Array.isArray(rows) || !rows.length) panel.append(element('p', '', 'No supported saved classifications in this scope.'));
+          else for (const row of rows) panel.append(element('p', '',
+            `${row.subject} · ${field === 'topic' && row.unitId ? `${row.unitId} / ` : ''}${row[field]} · ${nullableMetric(row.averageScore)} / 5 · ${row.questionSamples} graded answers across ${row.completedAttempts} complete attempts`));
+        }
+        const coverage = model.analytics.classificationCoverage;
+        if (coverage) panel.append(element('p', 'analytics-panel-note',
+          `${coverage.unitUnknownQuestions} answers have unknown unit classification; ${coverage.topicUnknownQuestions} have unknown topic classification. Unit and topic views overlap; they are not added together.`));
+        if (model.scope) panel.append(element('p', 'bf26-status', `Saved snapshot: ${forecastDate(model.scope.createdAt)} Philippine time · ${model.scope.manifest.length} complete reports. PDF, email and the scores below use this exact snapshot. Refresh creates a current view.`));
+        const actions = element('div', 'bf26-history-filters');
+        for (const [kind, label] of [['pdf', 'Download period PDF'], ['email', 'Email period report']]) {
+          const action = makeButton(label); action.disabled = loading || !model.analytics.completedAttempts
+            || (kind === 'email' && (['provider_accepted', 'processing'].includes(model.email?.status)
+              || (model.email?.alreadyRequested && !model.email?.retryAllowed)));
+          action.addEventListener('click', () => { if (!action.disabled && host.contains(action)) return exportScope(kind); }); actions.append(action);
+        }
+        panel.append(actions, element('p', 'analytics-panel-note', 'The period PDF includes every complete report, not only this page. Large PDFs require a narrower period. Email sends the saved summary and private link only to your verified account address.'));
+        if (model.analytics.completedAttempts === 1) panel.append(element('p', '', 'One completed attempt: more results are needed for a score trend.'));
+      } else if (!message) appendForecastAnalytics(panel, null);
+      panel.append(element('h3', '', 'Attempt history'));
+      const scope = element('label', 'bf26-history-complete');
+      const checkbox = element('input'); checkbox.type = 'checkbox'; checkbox.checked = !model.completeOnly;
+      checkbox.addEventListener('change', () => { model.completeOnly = !checkbox.checked; refresh(false, true); });
+      scope.append(checkbox, document.createTextNode('Include pending and failed attempts')); panel.append(scope);
+      if (!model.items.length && !message) panel.append(element('p', '', 'No saved attempts match these filters.'));
+      const completed = model.items.filter((attempt) => attempt.status === 'complete');
+      const unfinished = model.items.filter((attempt) => attempt.status !== 'complete');
+      for (const [label, attempts] of [['Completed reports', completed], ['Pending or incomplete — excluded from averages', unfinished]]) {
+        if (!attempts.length) continue;
+        panel.append(element('h4', '', label));
+        for (const attempt of attempts) {
+          const row = element('article', 'bf26-history-row');
+          const status = ({ pending: 'Queued', processing: 'Assessing', retryable_failed: 'Retry scheduled', failed: 'Needs attention', complete: 'Complete' })[attempt.status] || 'Status unavailable';
+          const score = attempt.status === 'complete' ? nullableMetric(attempt.summary?.percentage, '%') : 'No final score';
+          const date = attempt.status === 'complete' ? `Completed ${forecastDate(attempt.completedAt)}` : `Submitted ${forecastDate(attempt.acceptedAt)}`;
+          row.append(element('h4', '', attempt.subject), element('p', '', `${date} Philippine time · ${status} · ${score}`));
+          if (attempt.status === 'complete') row.append(element('p', '',
+            `${nullableMetric(attempt.summary?.totalScore)} / ${nullableMetric(attempt.summary?.maxScore)} points · Revision ${nullableMetric(attempt.resultRevision)} · Open the report for coaching, Email Results and Download PDF.`));
+          const open = makeButton(attempt.status === 'complete' ? 'Open report' : 'Open saved attempt');
+          open.addEventListener('click', () => openReport(attempt, open)); row.append(open); panel.append(row);
+        }
+      }
+      if (model.cursor) {
+        const more = makeButton('Load more'); more.disabled = loading;
+        more.addEventListener('click', () => refresh(true)); panel.append(more);
+      }
+      const reload = makeButton('Refresh'); reload.disabled = loading;
+      reload.addEventListener('click', () => refresh(false, true)); panel.append(reload);
+      host.replaceChildren(panel);
+    }
+
+    async function refresh(more = false, live = false) {
+      if (destroyed || !active || global.location.hash !== '#verdict') return;
+      cancel();
+      if (live) updateScopeLink(null);
+      const savedScopeId = live ? null : model.scope?.id || linkedScope;
+      const owner = runtimeOwnerId();
+      if (owner !== ownerId) {
+        ownerId = owner; Object.assign(model, { subject: '', from: '', to: '', completeOnly: true }); clear();
+      }
+      const revision = generation;
+      const before = more ? model.cursor : null;
+      if (!more) clear();
+      if (!owner) { clear(); render('Sign in to see your private saved Forecast results.'); return; }
+      render('Loading saved attempts…', true);
+      try {
+        controller = new AbortController();
+        if (savedScopeId) {
+          if (savedScopeId === 'invalid') throw new Error('Invalid saved analytics link.');
+          const saved = await requestForecast({ operation: 'analytics_report', scopeId: savedScopeId }, { controller });
+          if (!current(owner, revision)) return; adoptScope(saved, owner); render(); return;
+        }
+        const payload = await requestForecast({ operation: 'history', limit: 20, completeOnly: model.completeOnly,
+          includeClassifications: true, ...(before ? { before } : {}), ...filters() }, { controller });
+        if (!current(owner, revision)) return;
+        if (!Array.isArray(payload?.attempts)) throw new Error('Saved history is unavailable.');
+        // IDs identify attempts, never result revisions: retries do not add rows.
+        model.items = [...new Map([...model.items, ...payload.attempts].map((attempt) => [attempt.id, attempt])).values()];
+        model.cursor = payload.nextCursor || null; model.analytics = payload.analytics || null;
+        render();
+      } catch (error) {
+        if (!current(owner, revision) || error?.name === 'AbortError') return;
+        clear();
+        if (isForecastAccessRequired(error)) {
+          model.recovery = 'pricing'; render('Subscribe to access Bar Forecast.'); return;
+        }
+        if (['BAR_FORECAST_CONSENT_REQUIRED', 'BAR_FORECAST_SETUP_REQUIRED', 'PROFILE_COMPLETION_REQUIRED',
+          'LEGAL_ACCEPTANCE_REQUIRED', 'REAUTHENTICATION_REQUIRED'].includes(error?.code)) {
+          model.recovery = 'forecast';
+          render(error.code === 'BAR_FORECAST_CONSENT_REQUIRED'
+            ? 'Open Bar Forecast to review and accept its terms. Then return here to view your saved results.'
+            : 'Open Bar Forecast to complete the required account setup. Your saved results are unchanged.');
+          return;
+        }
+        render(error?.code === 'BAR_FORECAST_HISTORY_INVALID'
+          ? 'Choose valid subject and date filters, then retry.'
+          : savedScopeId ? 'This saved analytics link could not be opened for your account. Refresh to view your current saved results.'
+          : error?.message === 'Choose an end date on or after the start date.' ? error.message
+            : 'Saved Forecast history could not be loaded. Refresh to retry; your saved reports are unchanged.');
+      }
+    }
+    function sessionChanged() {
+      if (ownerId === runtimeOwnerId()) return;
+      cancel(); clear(); ownerId = runtimeOwnerId();
+      Object.assign(model, { subject: '', from: '', to: '', completeOnly: true });
+      host.replaceChildren();
+      if (active) refresh();
+    }
+    function accessChanged(event) {
+      const access = event?.detail;
+      if (destroyed || !access?.basis || ['admin', 'founder_admin', 'super_admin'].includes(access.role)
+          || (access.allowed !== false && access.unlimited !== false)) return;
+      // Explicit revocation clears protected results. Routine access refreshes do
+      // not start another request (which could itself emit an access event).
+      cancel(); clear(); host.replaceChildren();
+      model.recovery = 'pricing';
+      if (active) render('Forecast access changed. Refresh after your subscription is active.');
+    }
+    function routeChanged() {
+      if (global.location.hash !== '#verdict') { active = false; cancel(); }
+    }
+    global.addEventListener('popstate', routeChanged);
+    global.addEventListener('hashchange', routeChanged);
+    global.addEventListener('duediligence:session', sessionChanged);
+    global.addEventListener('duediligence:access', accessChanged);
+    return Object.freeze({
+      refresh,
+      setActive(value) {
+        active = value === true;
+        if (!active) cancel();
+        else {
+          const incomingScope = scopeFromLocation();
+          if (incomingScope !== linkedScope) { linkedScope = incomingScope; clear(); }
+          return refresh();
+        }
+      },
+      destroy() {
+        destroyed = true; cancel(); clear(); host.replaceChildren();
+        global.removeEventListener('popstate', routeChanged);
+        global.removeEventListener('hashchange', routeChanged);
+        global.removeEventListener('duediligence:session', sessionChanged);
+        global.removeEventListener('duediligence:access', accessChanged);
+      },
+    });
+  }
+
 
   async function loadForecastHistory(tab = 'history', more = false) {
     stopForecastPolling(); abortRequest(); state.workspaceGeneration = (state.workspaceGeneration || 0) + 1;
@@ -2713,6 +3153,7 @@
 
   global.openBarForecast = openForecast;
   global.DueDiligenceBarForecast = Object.freeze({
+    mountAnalytics: mountForecastAnalytics,
     open: openForecast,
     close: closeForecast,
   });

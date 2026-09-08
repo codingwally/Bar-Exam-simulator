@@ -209,6 +209,7 @@ import { BarForecastError } from './bar-forecast-core.mjs';
 import { createBarForecastHandlers } from './bar-forecast-routes.mjs';
 import { FORECAST_ATTEMPT_RPC_NAMES } from './forecast-attempt-store.mjs';
 import { FORECAST_RESULT_EXPORT_RPC_NAMES } from './forecast-result-export.mjs';
+import { FORECAST_ANALYTICS_RPC_NAMES } from './forecast-analytics-export.mjs';
 import { sendForecastResultEmail, resolveForecastEmailUser, assertForecastResultEmailAvailable } from './forecast-email-adapter.mjs';
 import { createAuxiliaryWritingDiagnosticsHandlers } from './auxiliary-writing-diagnostics-routes.mjs';
 import { StudyRoomError } from './study-room-core.mjs';
@@ -255,7 +256,7 @@ const MAX_SUPPORT_REQUESTS_PER_WINDOW = 4;
 const MAX_BAR_FORECAST_NETWORK_REQUESTS_PER_WINDOW = 180;
 const MAX_BAR_FORECAST_USER_REQUESTS_PER_WINDOW = 30;
 const MAX_BAR_FORECAST_USER_READ_REQUESTS_PER_WINDOW = 120;
-const BAR_FORECAST_READ_OPERATIONS = new Set(['status', 'attempt', 'history']);
+const BAR_FORECAST_READ_OPERATIONS = new Set(['status', 'attempt', 'history', 'analytics_report', 'analytics_attempt']);
 const DUPLICATE_TTL_MS = 20 * 1000;
 const GEMINI_TIMEOUT_MS = 45 * 1000;
 const SUBJECT_MATTER_TEACHING_TIMEOUT_MS = 8 * 1000;
@@ -3401,6 +3402,7 @@ async function dd2026Rpc(env, functionName, body) {
 const BAR_FORECAST_RPC_FUNCTIONS = new Set([
   ...FORECAST_ATTEMPT_RPC_NAMES,
   ...FORECAST_RESULT_EXPORT_RPC_NAMES,
+  ...FORECAST_ANALYTICS_RPC_NAMES,
   'dd2026_bar_forecast_consent_status',
   'dd2026_bar_forecast_accept_consent',
   'dd2026_bar_forecast_admin_list',

@@ -26,16 +26,44 @@ const expectedMigrations = [
   '20260907172508_astra_forecast_summary_email.sql',
   '20260907173112_astra_browser_pdf_prepared_note.sql',
   '20260907181748_astra_admin_role_fail_closed.sql',
+  '20260907222627_astra_forecast_analytics_browser_scopes.sql',
+  '20260907223228_astra_simulator_verified_source_presentation.sql',
 ];
 const actualMigrations = [...databaseContract.match(/ASTRA_MIGRATIONS = Object\.freeze\(\[([\s\S]*?)\]\)/u)[1]
   .matchAll(/'([^']+\.sql)'/gu)].map((match) => match[1]);
-assert.deepEqual(actualMigrations, expectedMigrations, 'Exactly the eleven reviewed forward migrations must be attested.');
+assert.deepEqual(actualMigrations, expectedMigrations, 'Exactly the thirteen reviewed forward migrations must be attested.');
 assert.deepEqual(actualMigrations, [...actualMigrations].sort());
+for (const stagingOnly of [
+  '20260907223149_astra_staging_examination_fixture_registration.sql',
+  '20260907230740_astra_staging_payment_fixture_registration.sql',
+]) assert.ok(!actualMigrations.includes(stagingOnly), 'Optional test registrars must stay outside the production database bundle.');
 
 const newReviewedPaths = [
+  '.gitattributes',
   'assets/bar-forecast.js',
   'assets/bar-forecast.css',
   'browser/forecast-result-pdf-worker.mjs',
+  'browser/forecast-analytics-pdf-worker.mjs',
+  'scripts/test-astra-main-forecast-analytics.mjs',
+  'scripts/test-astra-simulator-source-presentation.mjs',
+  'supabase/migrations/20260907223228_astra_simulator_verified_source_presentation.sql',
+  'scripts/test-astra-forecast-analytics-staging.mjs',
+  'scripts/staging-examination-fixtures.mjs',
+  'scripts/test-staging-examination-fixtures.mjs',
+  'worker/astra-staging-examination-fixture-registration.test.mjs',
+  'supabase/migrations/20260907223149_astra_staging_examination_fixture_registration.sql',
+  'scripts/staging-payment-fixtures.mjs',
+  'scripts/test-staging-payment-fixtures.mjs',
+  'worker/astra-staging-payment-fixture-registration.test.mjs',
+  'supabase/migrations/20260907230740_astra_staging_payment_fixture_registration.sql',
+  'scripts/test-forecast-analytics-browser-pdf.mjs',
+  'worker/forecast-analytics-core.mjs',
+  'worker/forecast-analytics-pdf.mjs',
+  'worker/forecast-analytics-export.mjs',
+  'worker/forecast-analytics-export.test.mjs',
+  'worker/forecast-analytics-test-fixture.mjs',
+  'worker/forecast-analytics-browser-sql.test.mjs',
+  'supabase/migrations/20260907222627_astra_forecast_analytics_browser_scopes.sql',
   'scripts/build-forecast-pdf-browser-worker.mjs',
   'scripts/build-pages-artifact.mjs',
   'scripts/test-pages-artifact.mjs',
@@ -75,6 +103,9 @@ for (const required of [
   'test "$PRODUCTION_DATABASE_VERIFIED" = "true"',
   'node scripts/astra-release-database-contract.mjs --verify-attestation',
   'node scripts/test-astra-149-binding-compatibility.mjs',
+  'node scripts/test-astra-main-forecast-analytics.mjs',
+  'node scripts/test-astra-simulator-source-presentation.mjs --sql --browser',
+  'node scripts/test-forecast-analytics-browser-pdf.mjs --browser',
   'node scripts/test-forecast-poll-rate-contract.mjs',
   'node scripts/test-worker-cpu-limit-contract.mjs',
   'worker/bar-forecast-rate-limit.test.mjs',
@@ -82,6 +113,10 @@ for (const required of [
   'supabase/migrations/20260907133129_astra_149_binding_compatibility.sql',
   'node scripts/verify-astra-forecast-staging.mjs --execute-staging',
   'artifacts/staging-e2e/*.json',
+  'artifacts/staging-e2e/*-cleanup-manifest.json.tmp',
+  'artifacts/astra-forecast-staging/**/analytics-period-saved-report.pdf',
+  'artifacts/astra-forecast-staging/**/analytics-period-main-saved-scope.png',
+  'node --test scripts/test-astra-forecast-analytics-staging.mjs scripts/test-staging-examination-fixtures.mjs scripts/test-staging-payment-fixtures.mjs',
   'artifacts/astra-forecast-staging/**/summary.json',
   'test "$GITHUB_REF" = "refs/heads/main"',
   'test "$PRODUCT_SHA" = "$GITHUB_SHA"',
@@ -139,17 +174,29 @@ assert.match(workflow.slice(0, staging), /uses: actions\/checkout@v4[\s\S]*?fetc
 assert.ok(validation.includes('Verify credential-free Linux Forecast browser wiring'));
 assert.ok(validation.includes('node scripts/verify-astra-forecast-staging.mjs --self-test-browser'));
 for (const source of [validation, workflow]) {
+  const simulatorCommand = 'node scripts/test-astra-simulator-source-presentation.mjs --sql --browser';
+  assert.equal(source.split(simulatorCommand).length - 1, 1,
+    'Require actual Simulator SQL and browser verification exactly once; neither gate may silently skip.');
+  const simulatorGate = source.indexOf(simulatorCommand);
+  const simulatorStep = source.slice(source.lastIndexOf('      - name:', simulatorGate), source.indexOf('\n      - name:', simulatorGate));
+  assert.ok(simulatorStep.includes('PGLITE_MODULE_PATH: ${{ github.workspace }}/worker/node_modules/@electric-sql/pglite/dist/index.js'));
+  assert.ok(simulatorStep.indexOf('npm install --no-save --no-package-lock playwright@1.54.2') < simulatorStep.indexOf(simulatorCommand));
+  assert.doesNotMatch(simulatorStep, /secrets\.|SERVICE_ROLE_KEY|continue-on-error|\|\| true/u,
+    'Simulator source verification is credential-free and fail-closed.');
   assert.equal((source.match(/node scripts\/test-forecast-browser-pdf\.mjs --browser\s*$/gmu) || []).length, 1,
     'Require the full credential-free real-browser parity gate exactly once, not browser-only or a skipped test.');
   assert.equal((source.match(/node scripts\/test-forecast-multiline-editor\.mjs --browser\s*$/gmu) || []).length, 1,
     'Require native multiline answer-preservation checks before authenticated release journeys.');
   assert.equal((source.match(/node scripts\/test-forecast-structured-selection\.mjs --browser\s*$/gmu) || []).length, 1,
     'Require native paragraph/list replacement checks before authenticated release journeys.');
+  assert.equal((source.match(/node scripts\/test-forecast-analytics-browser-pdf\.mjs --browser\s*$/gmu) || []).length, 1,
+    'Require actual serial Analytics browser PDF parity once before release journeys.');
   const parity = source.indexOf('node scripts/test-forecast-browser-pdf.mjs --browser');
   const parityStep = source.slice(source.lastIndexOf('      - name:', parity), source.indexOf('\n      - name:', parity));
   assert.ok(parityStep.indexOf('npx --yes agent-browser@0.36.0 install --with-deps') < parityStep.indexOf('node scripts/test-forecast-browser-pdf.mjs --browser'));
   assert.ok(parityStep.indexOf('node scripts/test-forecast-multiline-editor.mjs --browser') > 0);
   assert.ok(parityStep.indexOf('node scripts/test-forecast-structured-selection.mjs --browser') > 0);
+  assert.ok(parityStep.indexOf('node scripts/test-forecast-analytics-browser-pdf.mjs --browser') > 0);
   assert.doesNotMatch(parityStep, /secrets\.|SERVICE_ROLE_KEY|--execute-staging/u,
     'Local browser parity must not run with a fixture credential or a remote journey.');
   assert.doesNotMatch(parityStep, /continue-on-error|\|\| true|--browser-only/u);
@@ -199,6 +246,7 @@ assert.ok(workflow.slice(verify, exactPages).includes('npm ci --prefix worker --
 assert.ok(workflow.slice(verify, exactPages).includes('node scripts/build-pages-artifact.mjs'));
 for (const file of [
   'assets/forecast-result-pdf-worker.js',
+  'assets/forecast-analytics-pdf-worker.js',
   'assets/vendor/forecast-pdf/pdf-lib.LICENSE.txt',
   'assets/vendor/forecast-pdf/Noto-Sans.LICENSE.txt',
   'assets/vendor/forecast-pdf/fontkit.README.txt',

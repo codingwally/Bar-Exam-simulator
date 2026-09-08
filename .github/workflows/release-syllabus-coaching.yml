@@ -23,7 +23,7 @@ on:
         required: true
         type: string
       expected_current_pages_sha:
-        description: "Reviewed live baseline: 646c2e0185da61cd8ce473bcd787a05ec1883b4c"
+        description: "Reviewed live baseline: 448b76d53682951f7188f477924a4a9dd7b48354"
         required: true
         type: string
       approval_reference:
@@ -44,6 +44,7 @@ permissions:
   actions: read
   contents: read
   deployments: read
+  pages: read
 
 concurrency:
   group: examination-room-production-cutover
@@ -52,7 +53,7 @@ concurrency:
 env:
   PRODUCT_SHA: ${{ inputs.product_sha }}
   EXPECTED_CURRENT_PAGES_SHA: ${{ inputs.expected_current_pages_sha }}
-  REVIEWED_BASELINE_SHA: 646c2e0185da61cd8ce473bcd787a05ec1883b4c
+  REVIEWED_BASELINE_SHA: 448b76d53682951f7188f477924a4a9dd7b48354
   STAGING_MARKER_ENVIRONMENT: syllabus-coaching-staging-approved
   STAGING_MARKER_TASK: syllabus-coaching-staging-gate
 
@@ -96,7 +97,7 @@ jobs:
           assert.match(env.PRODUCT_SHA, /^[a-f0-9]{40}$/u);
           assert.match(env.VALIDATION_RUN_ID, /^[1-9][0-9]{0,19}$/u);
           assert.equal(env.EXPECTED_CURRENT_PAGES_SHA, env.REVIEWED_BASELINE_SHA);
-          assert.equal(env.REVIEWED_BASELINE_SHA, '646c2e0185da61cd8ce473bcd787a05ec1883b4c');
+          assert.equal(env.REVIEWED_BASELINE_SHA, '448b76d53682951f7188f477924a4a9dd7b48354');
           assert.equal(env.PRODUCT_SHA, env.GITHUB_SHA);
           assert.equal(git('rev-parse', 'HEAD'), env.PRODUCT_SHA);
           assert.equal(api('git/ref/heads/main').object.sha, env.PRODUCT_SHA);
@@ -128,10 +129,10 @@ jobs:
             '.github/workflows/release-syllabus-coaching.yml',
             '.github/workflows/validate-mandatory-early-access.yml',
             'assets/examinations.css', 'assets/examinations.js', 'assets/feature-loader.js',
-            'index.html', 'service-worker.js', 'worker/examiner-core.mjs',
+            'index.html', 'service-worker.js', 'worker/examiner-core.mjs', 'worker/index.mjs',
             'worker/syllabus-question-demand.test.mjs',
-            'scripts/test-design-correction-release.mjs',
-            'scripts/test-syllabus-review-reveal-contract.mjs',
+            'worker/syllabus-results-policy.test.mjs', 'worker/syllabus-results-route-policy.test.mjs',
+            'scripts/test-syllabus-submission-reliability.mjs',
             'scripts/test-syllabus-coaching-layout.mjs',
             'scripts/verify-syllabus-coaching-staging.mjs',
             'scripts/test-syllabus-coaching-staging.mjs',
@@ -150,19 +151,16 @@ jobs:
             'assets/vendor', 'package.json', 'package-lock.json',
             '.github/workflows/release-unlimited-feature-access.yml',
             'scripts/astra-release-database-contract.mjs',
-            ':(exclude)worker/examiner-core.mjs', ':(exclude)worker/syllabus-question-demand.test.mjs');
+            ':(exclude)worker/examiner-core.mjs', ':(exclude)worker/index.mjs',
+            ':(exclude)worker/syllabus-results-policy.test.mjs', ':(exclude)worker/syllabus-results-route-policy.test.mjs',
+            ':(exclude)worker/syllabus-question-demand.test.mjs');
           const ciPatch = git('diff', '--unified=0', env.REVIEWED_BASELINE_SHA, env.PRODUCT_SHA, '--', '.github/workflows/validate-mandatory-early-access.yml');
           assert.equal(ciPatch.split('\n').filter(line => line.startsWith('-') && !line.startsWith('---')).length, 0);
           assert.deepEqual(ciPatch.split('\n').filter(line => line.startsWith('+') && !line.startsWith('+++')).map(line => line.slice(1).trim()).sort(), [
-            "- 'worker/syllabus-question-demand.test.mjs'",
-            "- 'scripts/test-syllabus-coaching-layout.mjs'",
-            "- 'scripts/verify-syllabus-coaching-staging.mjs'",
-            "- 'scripts/test-syllabus-coaching-staging.mjs'",
-            "- 'scripts/test-syllabus-coaching-release-workflow.mjs'",
-            "- '.github/workflows/release-syllabus-coaching.yml'",
-            'node --test scripts/test-syllabus-coaching-layout.mjs',
-            'node --test scripts/test-syllabus-coaching-staging.mjs',
-            'node scripts/test-syllabus-coaching-release-workflow.mjs',
+            "- 'scripts/test-syllabus-submission-reliability.mjs'",
+            "- 'worker/syllabus-results-policy.test.mjs'",
+            "- 'worker/syllabus-results-route-policy.test.mjs'",
+            'node --test scripts/test-syllabus-submission-reliability.mjs',
           ].sort());
           // END source-gate
           NODE
@@ -174,8 +172,10 @@ jobs:
         run: |
           set -euo pipefail
           node --test worker/index.test.mjs worker/rubric-v2.test.mjs worker/syllabus-question-demand.test.mjs worker/subject-matter-review.test.mjs
+          node --test worker/syllabus-results-policy.test.mjs worker/syllabus-results-route-policy.test.mjs
           node scripts/test-syllabus-review-reveal-contract.mjs
           node scripts/test-syllabus-coaching-layout.mjs
+          node --test scripts/test-syllabus-submission-reliability.mjs
           node scripts/test-syllabus-coaching-staging.mjs
           node scripts/test-syllabus-coaching-release-workflow.mjs
           node scripts/test-study-room-hotfix-behavior.mjs
@@ -333,6 +333,7 @@ jobs:
       - name: Checkout the exact staging candidate
         uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           ref: ${{ inputs.product_sha }}
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -440,6 +441,33 @@ jobs:
           for (const deployment of api('deployments?environment=github-pages&per_page=100')) {
             const state = api(`deployments/${deployment.id}/statuses?per_page=1`)[0]?.state || 'unknown';
             if (env.PAGES_LOCK === 'true' && deployment.sha === env.PRODUCT_SHA && state !== 'success') continue;
+            // This single historical publishing job succeeded, then its verifier
+            // waited on the job's own environment status. Preserve that failure;
+            // independently prove the actual publication instead of rewriting it.
+            if (deployment.id === 6335563699 && deployment.sha === env.REVIEWED_BASELINE_SHA && state === 'failure') {
+              const run = api('actions/runs/34269676417');
+              assert.equal(run.head_sha, env.REVIEWED_BASELINE_SHA);
+              assert.equal(run.path, '.github/workflows/release-syllabus-coaching.yml');
+              assert.equal(run.event, 'workflow_dispatch');
+              assert.equal(run.head_branch, 'main');
+              assert.equal(run.status, 'completed');
+              assert.equal(run.conclusion, 'failure');
+              const jobs = api('actions/runs/34269676417/jobs').jobs;
+              assert.equal(jobs.find(job => job.name === 'deploy_production_worker')?.conclusion, 'success');
+              const publishing = jobs.find(job => job.name === 'deploy_production_pages');
+              assert.equal(publishing?.steps.find(step => step.name === 'Publish Pages after both Worker gates')?.conclusion, 'success');
+              assert.deepEqual(publishing?.steps.filter(step => step.conclusion === 'failure').map(step => step.name),
+                ['Verify exact live Pages bytes and preserved Study Room markers']);
+              assert.equal(api(`pages/deployments/${env.REVIEWED_BASELINE_SHA}`).status, 'succeed');
+              for (const path of ['index.html', 'service-worker.js', 'assets/feature-loader.js', 'assets/examinations.css', 'assets/examinations.js']) {
+                const live = await fetch(`https://duediligence.ph/${path}?baseline=${env.REVIEWED_BASELINE_SHA}`, {
+                  cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(15000),
+                });
+                assert.equal(live.status, 200);
+                assert.deepEqual(Buffer.from(await live.arrayBuffer()), execFileSync('git', ['show', `${env.REVIEWED_BASELINE_SHA}:${path}`]), `Baseline bytes: ${path}`);
+              }
+              authoritative = { state: 'success', sha: deployment.sha }; break;
+            }
             if (['inactive', 'failure', 'error'].includes(state)) continue;
             authoritative = { state, sha: deployment.sha }; break;
           }
@@ -465,8 +493,8 @@ jobs:
           // deployment object; src/versions/view.ts emits resources.bindings.
           const wrangler = (...args) => execFileSync('npx', ['--yes', 'wrangler@4.114.0', ...args], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
           const targets = [
-            ['wrangler.toml', '54b99125-cf41-47c5-8b13-6669f3dbb69f'],
-            ['wrangler.public-api.toml', '36ad11e7-6f62-43cf-b2cd-8e2391eab5b3'],
+            ['wrangler.toml', '596c3bf7-1e60-4d39-b99d-3cedca897a54'],
+            ['wrangler.public-api.toml', 'ae73867c-8fc1-4169-8588-8d32d73d0aef'],
           ];
           const current = config => JSON.parse(wrangler('deployments', 'status', '--config', config, '--json'));
           const bindings = (config, version) => JSON.parse(wrangler('versions', 'view', version, '--config', config, '--json')).resources.bindings
@@ -529,6 +557,7 @@ jobs:
       - name: Checkout the Worker-verified candidate
         uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           ref: ${{ inputs.product_sha }}
       - name: Setup Node
         uses: actions/setup-node@v4

@@ -75,6 +75,7 @@
     clientRemaining: null,
     clientElapsed: 0,
     saveInFlight: false,
+    subjectSaveRequest: null,
     pendingSave: false,
     expiryInFlight: false,
     assignment: null,
@@ -91,6 +92,7 @@
     reviewMaterialCache: new Map(),
     reviewMaterialRequests: new Map(),
     pendingSubjectSkip: null,
+    subjectSubmissionRequest: null,
     subjectPerformanceRequestGeneration: 0,
     subjectPerformanceRequest: null,
     initialized: false,
@@ -290,6 +292,9 @@
         state.pendingSubjectSkip?.attemptId === state.active.attempt.attemptId
           ? state.pendingSubjectSkip.requestKey
           : null,
+      subjectSubmissionUnconfirmed: state.active.attempt.subjectSubmissionUnconfirmed === true,
+      subjectSubmissionRecovery: state.active.attempt.subjectSubmissionUnconfirmed
+        ? state.active.attempt.subjectSubmissionRecovery || null : null,
       savedAt: Date.now(),
       questions: state.active.questions.map((question) => ({
         questionId: question.questionId,
@@ -1440,6 +1445,7 @@
     stopActiveTimers();
     const recovery = readRecovery();
     state.active = reconcileRecovery(active);
+    restoreSubjectSubmissionRecovery(state.active, recovery);
     state.pendingSubjectSkip = recovery?.attemptId === state.active?.attempt?.attemptId
       && /^[A-Za-z0-9_-]{16,128}$/.test(String(recovery.pendingSubjectSkipRequestKey || ''))
       ? {
@@ -1785,7 +1791,15 @@
   function bindRoom(root) {
     const editor = root.querySelector('#dd-answer-editor');
     const richEditor = root.querySelector('#dd-answer-rich-editor');
+    const boundSubjectAttempt = state.active?.examination?.track === 'per_subject' ? state.active : null;
+    const boundIdentity = boundSubjectAttempt ? privateRequestIdentity() : null;
+    if (boundSubjectAttempt) syncSubjectSubmissionControls(root);
     const updateAnswer = () => {
+      if (boundSubjectAttempt && (state.active !== boundSubjectAttempt
+          || !privateRequestIdentityIsCurrent(boundIdentity) || subjectAnswerLocked())) {
+        editor.value = boundSubjectAttempt.questions[0]?.answerText || '';
+        return;
+      }
       const question = currentQuestion();
       const answerText = richEditor ? plainTextFromRich(richEditor) : editor.value;
       question.answerText = answerText;
@@ -1857,12 +1871,22 @@
   async function saveCurrent(options = {}) {
     const question = options.question || currentQuestion();
     if (!question || !state.active) return true;
+    if (state.active.examination.track === 'per_subject'
+        && (subjectAttemptSubmitted() || state.active.attempt.subjectSubmissionUnconfirmed)) return true;
+    const subjectAttempt = state.active.examination.track === 'per_subject' ? state.active : null;
+    const identity = subjectAttempt ? privateRequestIdentity() : null;
+    const subjectSaveRequest = subjectAttempt ? { active: subjectAttempt, identity } : null;
     const root = pageRoot(state.active?.examination?.track || state.track);
     const editor = root?.querySelector('#dd-answer-editor');
     if (editor && question === currentQuestion()) question.answerText = editor.value;
-    if (state.saveInFlight) {
+    if (state.saveInFlight && (!subjectAttempt || !state.subjectSaveRequest
+        || state.subjectSaveRequest.active === subjectAttempt)) {
       state.pendingSave = true;
       return false;
+    }
+    if (subjectAttempt) {
+      if (state.subjectSaveRequest?.active !== subjectAttempt) state.pendingSave = false;
+      state.subjectSaveRequest = subjectSaveRequest;
     }
     state.saveInFlight = true;
     const answerSnapshot = question.answerText || '';
@@ -1883,6 +1907,7 @@
         expectedRevision: revisionSnapshot,
         flagged: flaggedSnapshot,
       });
+      if (subjectAttempt && (state.active !== subjectAttempt || !privateRequestIdentityIsCurrent(identity))) return false;
       // A premature-expiry receipt is not a save acknowledgement. Never erase a draft with it.
       if (!result || result.questionId !== question.questionId
           || typeof result.answerText !== 'string'
@@ -1919,6 +1944,7 @@
       saveRecovery();
       return true;
     } catch (error) {
+      if (subjectAttempt && (state.active !== subjectAttempt || !privateRequestIdentityIsCurrent(identity))) return false;
       if (saveNode) {
         saveNode.textContent = error.code === 'EXAM_RESPONSE_CONFLICT'
           ? 'Revision conflict — reload required'
@@ -1933,25 +1959,34 @@
       }
       return false;
     } finally {
-      state.saveInFlight = false;
-      if (state.pendingSave) {
-        state.pendingSave = false;
-        scheduleSave();
+      if (!subjectAttempt || state.subjectSaveRequest === subjectSaveRequest) {
+        if (subjectAttempt) state.subjectSaveRequest = null;
+        state.saveInFlight = false;
+        if (state.pendingSave) {
+          state.pendingSave = false;
+          scheduleSave();
+        }
       }
     }
   }
 
   async function flushCurrentSave() {
+    const subjectAttempt = state.active?.examination?.track === 'per_subject' ? state.active : null;
+    const identity = subjectAttempt ? privateRequestIdentity() : null;
     clearTimeout(state.saveTimer);
     state.saveTimer = null;
     const deadline = Date.now() + 12_000;
-    while (state.saveInFlight && Date.now() < deadline) {
+    const savingCurrentAttempt = () => state.saveInFlight && (!subjectAttempt
+      || !state.subjectSaveRequest || state.subjectSaveRequest.active === subjectAttempt);
+    while (savingCurrentAttempt() && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 40));
+      if (subjectAttempt && (state.active !== subjectAttempt || !privateRequestIdentityIsCurrent(identity))) return false;
     }
-    if (state.saveInFlight) {
+    if (savingCurrentAttempt()) {
       setStatus('The latest revision is still saving. Submission is paused to protect your answer.', 'error');
       return false;
     }
+    if (subjectAttempt && (state.active !== subjectAttempt || !privateRequestIdentityIsCurrent(identity))) return false;
     return saveCurrent({ silent: true });
   }
 
@@ -1969,6 +2004,8 @@
 
   async function heartbeat(takeover) {
     if (!state.active?.attempt?.attemptId || !['room', 'review'].includes(state.screen)) return false;
+    const subjectAttempt = state.active.examination.track === 'per_subject' ? state.active : null;
+    if (subjectAttempt && subjectAnswerLocked()) return false;
     try {
       const result = await api('/examinations/command', {
         operation: 'heartbeat',
@@ -1976,6 +2013,7 @@
         tabToken: tabToken(),
         takeover: takeover === true,
       });
+      if (subjectAttempt && (state.active !== subjectAttempt || subjectAnswerLocked())) return false;
       if (result.expired || ['submitted', 'expired'].includes(result.status)) {
         showReceipt(result);
         return true;
@@ -1990,6 +2028,7 @@
       updateClockNode();
       return true;
     } catch (error) {
+      if (subjectAttempt && (state.active !== subjectAttempt || subjectAnswerLocked() || isStaleIdentityError(error))) return false;
       if (error.code === 'EXAM_SECOND_TAB_BLOCKED') {
         stopActiveTimers();
         notify('This examination is active in another tab. This view is read-only until its lease expires.', 'warn');
@@ -2049,6 +2088,7 @@
   function resumeActiveClock() {
     if (!state.active || !['room', 'review'].includes(state.screen)
         || document.visibilityState === 'hidden') return;
+    if (state.active.examination.track === 'per_subject' && subjectAnswerLocked()) return;
     if (!state.clockTimer) state.clockTimer = setInterval(tickClock, 1000);
     if (!state.heartbeatTimer) {
       state.heartbeatTimer = setInterval(() => heartbeat(false), HEARTBEAT_MS);
@@ -2076,7 +2116,13 @@
   async function toggleFlag() {
     const question = currentQuestion();
     if (!question) return;
+    const subjectAttempt = state.active?.examination?.track === 'per_subject' ? state.active : null;
+    const identity = subjectAttempt ? privateRequestIdentity() : null;
+    const flagIsCurrent = () => !subjectAttempt || (state.active === subjectAttempt
+      && privateRequestIdentityIsCurrent(identity) && !subjectAnswerLocked());
+    if (state.active?.examination?.track === 'per_subject' && subjectAnswerLocked()) return;
     if (!await flushCurrentSave()) return;
+    if (!flagIsCurrent()) return;
     try {
       const result = await api('/examinations/command', {
         operation: 'flag_response',
@@ -2086,6 +2132,7 @@
         expectedRevision: Number(question.revision) || 0,
         flagged: !question.flagged,
       });
+      if (!flagIsCurrent()) return;
       question.flagged = result.flagged;
       question.revision = result.revision;
       question.savedAt = result.savedAt;
@@ -2094,6 +2141,7 @@
       requestAnimationFrame(() => pageRoot('per_subject')
         ?.querySelector('#dd-subject-flag-button')?.focus());
     } catch (error) {
+      if (!flagIsCurrent()) return;
       notify(error.message, 'warn');
     }
   }
@@ -2101,12 +2149,13 @@
   async function skipCurrentSubjectQuestion(button) {
     const question = currentQuestion();
     if (!question || !state.active || state.active.examination.track !== 'per_subject') return;
+    if (subjectAnswerLocked()) return;
     const confirmed = await confirmDecision({
       title: 'Skip this question?',
       copy: 'Your draft and any flag will remain saved. This question will not be submitted, assessed, or counted in your performance. A different question will open if one remains in this course.',
       confirmLabel: 'Skip question',
     });
-    if (!confirmed || !state.active) return;
+    if (!confirmed || !state.active || subjectAnswerLocked()) return;
 
     button.disabled = true;
     button.setAttribute('aria-busy', 'true');
@@ -2308,52 +2357,174 @@
     }
   }
 
+  function subjectAttemptSubmitted(active = state.active) {
+    return Boolean(active?.attempt?.submittedAt)
+      || ['submitted', 'expired'].includes(active?.attempt?.status);
+  }
+
+  function restoreSubjectSubmissionRecovery(active, recovery) {
+    if (active?.examination?.track !== 'per_subject' || recovery?.attemptId !== active.attempt.attemptId
+        || recovery.subjectSubmissionUnconfirmed !== true || subjectAttemptSubmitted(active)) return;
+    active.attempt.subjectSubmissionUnconfirmed = true;
+    const saved = recovery.subjectSubmissionRecovery;
+    const command = saved?.command;
+    const snapshot = saved?.snapshot;
+    if (command?.operation !== 'submit_attempt' || command.attemptId !== active.attempt.attemptId
+        || command.confirmed !== true || !/^[A-Za-z0-9_-]{16,128}$/.test(command.requestKey || '')
+        || !/^[A-Za-z0-9_-]{32,128}$/.test(command.tabToken || '')
+        || typeof snapshot?.questionId !== 'string' || typeof snapshot.answerText !== 'string'
+        || !Number.isInteger(snapshot.revision) || typeof snapshot.flagged !== 'boolean') return;
+    active.attempt.subjectSubmissionRecovery = Object.freeze({
+      command: Object.freeze({ operation: command.operation, attemptId: command.attemptId,
+        tabToken: command.tabToken, requestKey: command.requestKey, confirmed: true }),
+      snapshot: Object.freeze({ questionId: snapshot.questionId, answerText: snapshot.answerText,
+        revision: snapshot.revision, flagged: snapshot.flagged }),
+    });
+  }
+
+  function subjectSubmissionSnapshotMatches(active, snapshot) {
+    const question = active?.questions?.length === 1 ? active.questions[0] : null;
+    return Boolean(question && snapshot && question.questionId === snapshot.questionId
+      && question.answerText === snapshot.answerText && question.revision === snapshot.revision
+      && (question.flagged === true) === snapshot.flagged);
+  }
+
+  function subjectSubmissionInFlight(active = state.active) {
+    return Boolean(active && state.subjectSubmissionRequest?.active === active);
+  }
+
+  function subjectAnswerLocked() {
+    return state.active?.examination?.track === 'per_subject'
+      && (subjectSubmissionInFlight() || subjectAttemptSubmitted()
+        || state.active.attempt.subjectSubmissionUnconfirmed === true);
+  }
+
+  function syncSubjectSubmissionControls(root = pageRoot('per_subject')) {
+    if (state.active?.examination?.track !== 'per_subject') return;
+    const editor = root?.querySelector('#dd-answer-editor');
+    if (editor) editor.readOnly = subjectAnswerLocked();
+    root?.querySelectorAll('#dd-subject-flag-button, [data-subject-skip], [data-use-local-draft]').forEach((control) => {
+      control.disabled = subjectAnswerLocked();
+    });
+    const submit = root?.querySelector('[data-submit-current]');
+    if (!submit) return;
+    submit.disabled = subjectSubmissionInFlight() || subjectReviewSubmissionBlocked()
+      || !currentQuestion()?.answerText?.trim();
+    if (!subjectSubmissionInFlight()) {
+      submit.textContent = state.active.attempt.subjectSubmissionUnconfirmed
+        ? 'Check submission status' : subjectAttemptSubmitted() ? 'Retry assessment' : 'Submit for coaching';
+      submit.removeAttribute('aria-busy');
+    }
+  }
+
   async function submitCurrentSubjectAnswer(button) {
     const question = currentQuestion();
-    if (!question?.answerText?.trim() || !state.active) return;
+    const active = state.active;
+    if (!button || button.disabled || !question?.answerText?.trim()
+        || active?.examination?.track !== 'per_subject' || subjectSubmissionInFlight()) return;
     if (subjectReviewSubmissionBlocked()) {
       button.disabled = true;
       setStatus('Submission remains paused until Due Diligence confirms whether the review was opened. Retry the review first.', 'error');
       return;
     }
-    const alreadySubmitted = Boolean(state.active.attempt.submittedAt)
-      || ['submitted', 'expired'].includes(state.active.attempt.status);
-    const idleLabel = alreadySubmitted ? 'Retry assessment' : 'Submit for coaching';
+    const request = Object.freeze({ active, attemptId: active.attempt.attemptId,
+      track: active.examination.track, identity: privateRequestIdentity(),
+      root: pageRoot('per_subject'), routeHash: global.location?.hash,
+      verdictGeneration: state.verdictGeneration });
+    const isCurrent = () => state.subjectSubmissionRequest === request
+      && state.active === active && state.track === request.track && state.screen === 'room'
+      && state.verdictGeneration === request.verdictGeneration
+      && global.location?.hash === request.routeHash && privateRequestIdentityIsCurrent(request.identity)
+      && pageRoot(request.track) === request.root && button.isConnected;
+    state.subjectSubmissionRequest = request;
+    const alreadySubmitted = subjectAttemptSubmitted(active);
     button.disabled = true;
     button.setAttribute('aria-busy', 'true');
-    button.textContent = idleLabel;
+    button.textContent = alreadySubmitted ? 'Assessing answer…' : 'Submitting answer…';
+    syncSubjectSubmissionControls(request.root);
+    pauseActiveClock();
     setStatus(alreadySubmitted
       ? 'Your submitted answer is preserved. Retrying the assessment only…'
       : 'Saving your answer before assessment…');
     try {
-      if (!alreadySubmitted) {
-        if (!await flushCurrentSave()) {
-          throw new Error('Your latest answer could not be confirmed. Nothing was submitted.');
+      let replaySubmission = false;
+      if (active.attempt.subjectSubmissionUnconfirmed) {
+        setStatus('Checking the saved submission before requesting any assessment…');
+        const recovered = await api('/examinations/query', { operation: 'resume', attemptId: request.attemptId });
+        if (!isCurrent()) return;
+        if (recovered?.attempt?.attemptId !== request.attemptId || recovered?.examination?.track !== request.track) {
+          throw new Error('The saved submission could not be matched to this question. Nothing was retried.');
         }
-        const receipt = await api('/examinations/command', {
-          operation: 'submit_attempt',
-          attemptId: state.active.attempt.attemptId,
-          tabToken: tabToken(),
-          requestKey: requestKey('submit'),
-          confirmed: true,
-        });
+        if (subjectAttemptSubmitted(recovered)) {
+          Object.assign(active.attempt, recovered.attempt, { subjectSubmissionUnconfirmed: false });
+          saveRecovery();
+        } else if (['in_progress', 'review'].includes(recovered.attempt.status)
+            && active.attempt.subjectSubmissionRecovery
+            && subjectSubmissionSnapshotMatches(recovered, active.attempt.subjectSubmissionRecovery.snapshot)) {
+          replaySubmission = true;
+          setStatus('Your saved answer is unchanged. Safely confirming the same submission once…');
+        } else {
+          const error = new Error('The saved answer or attempt status changed. No submission was retried. Your retained draft is unchanged; contact support before continuing.');
+          error.code = 'SUBJECT_SUBMISSION_READBACK_CHANGED';
+          throw error;
+        }
+      }
+      if (!subjectAttemptSubmitted(active)) {
+        if (!replaySubmission) {
+          if (!await flushCurrentSave()) {
+            throw new Error('Your latest answer could not be confirmed. Nothing was submitted.');
+          }
+          if (!isCurrent()) return;
+          active.attempt.subjectSubmissionRecovery = Object.freeze({
+            command: Object.freeze({ operation: 'submit_attempt', attemptId: request.attemptId,
+              tabToken: tabToken(), requestKey: requestKey('submit'), confirmed: true }),
+            snapshot: Object.freeze({ questionId: question.questionId, answerText: question.answerText,
+              revision: question.revision, flagged: question.flagged === true }),
+          });
+        }
+        if (!isCurrent()) return;
+        active.attempt.subjectSubmissionUnconfirmed = true;
+        saveRecovery();
+        let receipt;
+        try {
+          receipt = await api('/examinations/command', active.attempt.subjectSubmissionRecovery.command);
+        } catch (error) {
+          // These explicit rejections confirm that this command was not accepted.
+          // Transport failures and closed/conflicting attempts require readback instead.
+          if (!replaySubmission && isCurrent() && ['EXAM_SECOND_TAB_BLOCKED', 'EXAM_ACCESS_REQUIRED',
+            'EXAM_PREMIUM_REQUIRED', 'EXAM_BETA_ACCESS_REQUIRED', 'LEGAL_ACCEPTANCE_REQUIRED',
+            'REAUTHENTICATION_REQUIRED', 'PROFILE_COMPLETION_REQUIRED'].includes(error?.code)) {
+            active.attempt.subjectSubmissionUnconfirmed = false;
+            saveRecovery();
+          }
+          throw error;
+        }
+        if (!isCurrent()) return;
+        if (receipt?.attemptId !== request.attemptId || !subjectAttemptSubmitted({ attempt: receipt })) {
+          throw new Error('The submission receipt could not be confirmed. Check submission status before continuing.');
+        }
         stopActiveTimers();
-        state.active.attempt.status = receipt.status;
-        state.active.attempt.submittedAt = receipt.submittedAt;
+        active.attempt.status = receipt.status;
+        active.attempt.submittedAt = receipt.submittedAt;
+        active.attempt.subjectSubmissionUnconfirmed = false;
+        saveRecovery();
       }
       setStatus('Your answer is preserved. Due Diligence is preparing the coaching assessment…');
-      const maximumBatches = Math.max(2, state.active.questions.length + 1);
+      button.textContent = 'Assessing answer…';
+      const maximumBatches = Math.max(2, active.questions.length + 1);
       let result = null;
       let transientRetries = 0;
       for (let batch = 0; batch < maximumBatches; batch += 1) {
         try {
           result = await api('/examinations/command', {
             operation: 'request_ai_grading',
-            attemptId: state.active.attempt.attemptId,
+            attemptId: request.attemptId,
             requestKey: requestKey('ai'),
           });
+          if (!isCurrent()) return;
           transientRetries = 0;
         } catch (error) {
+          if (!isCurrent()) return;
           if (error?.code === 'MALFORMED_MODEL_RESPONSE' && transientRetries < 1) {
             transientRetries += 1;
             batch -= 1;
@@ -2367,12 +2538,19 @@
       if (result?.status !== 'completed') {
         throw new Error('Assessment paused before completion. Your submitted answer is preserved.');
       }
-      await openVerdict(state.active.attempt.attemptId);
+      if (isCurrent()) await openVerdict(request.attemptId);
     } catch (error) {
-      setStatus(error.message, 'error');
-      button.disabled = subjectReviewSubmissionBlocked() || !currentQuestion()?.answerText?.trim();
-      button.removeAttribute('aria-busy');
-      button.textContent = state.active?.attempt?.submittedAt ? 'Retry assessment' : 'Submit for coaching';
+      if (isStaleIdentityError(error) || !isCurrent()) return;
+      setStatus(active.attempt.subjectSubmissionUnconfirmed && error.code !== 'SUBJECT_SUBMISSION_READBACK_CHANGED'
+        ? 'Your answer is preserved, but submission was not confirmed. Check submission status to safely confirm the same request. Assessment starts only after submission is confirmed.'
+        : error.message, 'error');
+    } finally {
+      const restore = isCurrent();
+      if (state.subjectSubmissionRequest === request) state.subjectSubmissionRequest = null;
+      if (restore) {
+        syncSubjectSubmissionControls(request.root);
+        if (!subjectAnswerLocked()) resumeActiveClock();
+      }
     }
   }
 
@@ -2728,7 +2906,7 @@
     }
     const submitButton = pageRoot('per_subject')?.querySelector('[data-submit-current]');
     if (submitButton && !state.active?.attempt?.submittedAt) {
-      submitButton.disabled = !currentQuestion()?.answerText?.trim();
+      submitButton.disabled = subjectSubmissionInFlight() || !currentQuestion()?.answerText?.trim();
     }
   }
 
@@ -3107,6 +3285,11 @@
     const attemptId = panel?.dataset.attemptId || '';
     const questionId = panel?.dataset.questionId || '';
     if (!attemptId || !questionId) return;
+    if (state.active?.attempt?.attemptId === attemptId && !subjectAttemptSubmitted()
+        && subjectAnswerLocked()) {
+      setStatus('Confirming your submission. Reveal Answer will be available after its status is known.');
+      return;
+    }
     if (panel.dataset.reviewLoading === 'true') return;
     // An open tab can retain provisional access after an administrator approves
     // the payment. Let the owner-bound server command re-check the current
@@ -3128,7 +3311,7 @@
       });
       const submitButton = pageRoot('per_subject')?.querySelector('[data-submit-current]');
       if (submitButton && !state.active?.attempt?.submittedAt) {
-        submitButton.disabled = !currentQuestion()?.answerText?.trim();
+        submitButton.disabled = subjectSubmissionInFlight() || !currentQuestion()?.answerText?.trim();
       }
       return;
     }
@@ -3208,7 +3391,7 @@
     } finally {
       if (reviewConfirmed && submitButton && state.active?.attempt?.attemptId === attemptId
           && !state.active.attempt.submittedAt) {
-        submitButton.disabled = !currentQuestion()?.answerText?.trim();
+        submitButton.disabled = subjectSubmissionInFlight() || !currentQuestion()?.answerText?.trim();
       }
     }
   }
@@ -3746,8 +3929,10 @@
     state.screen = 'catalog';
     state.resumeAttemptId = null;
     state.saveInFlight = false;
+    state.subjectSaveRequest = null;
     state.pendingSave = false;
     state.pendingSubjectSkip = null;
+    state.subjectSubmissionRequest = null;
     state.subjectPerformanceRequestGeneration += 1;
     state.subjectPerformanceRequest = null;
     state.reviewMaterialCache.clear();
@@ -4229,6 +4414,7 @@
     }
     if (event.target.closest('[data-return-catalog]')) { returnCatalog(); return; }
     if (event.target.closest('[data-use-local-draft]')) {
+      if (state.active?.examination?.track === 'per_subject' && subjectAnswerLocked()) return;
       const item = currentQuestion();
       item.answerText = item.localRecoveryText;
       item.answerHtml = item.localRecoveryHtml || richHtmlFromText(item.localRecoveryText);

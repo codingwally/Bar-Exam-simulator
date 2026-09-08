@@ -7,6 +7,7 @@ import {
   MODEL_FALLBACKS,
   RESPONSE_SCHEMA,
   applyDeterministicScoreCap,
+  withSyllabusGradingPolicy,
   assessmentPolicy,
   buildExaminerPrompt,
   chooseQuestionContext,
@@ -7151,11 +7152,11 @@ function retiredForumWriteResponse(origin, allowedOrigin) {
   }, 410, origin, allowedOrigin);
 }
 
-function examinationQuestionContext(question) {
+function examinationQuestionContext(question, { authorizedTrack = null } = {}) {
   const jurisprudence = Array.isArray(question?.jurisprudence)
     ? question.jurisprudence.filter(Boolean).join('; ')
     : String(question?.jurisprudence || '');
-  return {
+  return withSyllabusGradingPolicy({
     subject: String(question?.subject || 'Philippine law'),
     question: String(question?.prompt || ''),
     suggestedAnswer: stripInternalEditorialBlocks(question?.modelAnswer),
@@ -7167,11 +7168,11 @@ function examinationQuestionContext(question) {
     sourceUrls: Array.isArray(question?.sourceUrls) ? question.sourceUrls : [],
     verified: true,
     authority: 'curated-approved-examination-snapshot',
-  };
+  }, authorizedTrack);
 }
 
-async function gradeExaminationQuestion(env, question) {
-  const context = examinationQuestionContext(question);
+async function gradeExaminationQuestion(env, question, gradingOptions) {
+  const context = examinationQuestionContext(question, gradingOptions);
   const policy = assessmentPolicy(context);
   const prompt = buildExaminerPrompt({
     questionId: String(question.questionId),
@@ -7266,7 +7267,7 @@ async function failExaminationAiJob(env, user, gradingPackage, error) {
   }
 }
 
-async function processExaminationAiJob(env, user, gradingPackage, commercialReservation = null) {
+async function processExaminationAiJob(env, user, gradingPackage, commercialReservation = null, gradingOptions) {
   const questions = Array.isArray(gradingPackage?.questions)
     ? gradingPackage.questions
     : [];
@@ -7295,7 +7296,7 @@ async function processExaminationAiJob(env, user, gradingPackage, commercialRese
   try {
     let finalState = null;
     const question = questions[0];
-    const { assessment, model } = await gradeExaminationQuestion(env, question);
+    const { assessment, model } = await gradeExaminationQuestion(env, question, gradingOptions);
     const persistenceOperation = commercialReservation?.reservationId
       ? 'examination_store_ai_assessment_commercial'
       : 'examination_store_ai_assessment';
@@ -7652,7 +7653,10 @@ async function handleExaminationCommand(request, env, origin, allowedOrigin) {
     }
     let state;
     try {
-      state = await processExaminationAiJob(env, user, result, reservation);
+      state = await processExaminationAiJob(env, user, result, reservation, {
+        // Only the owner-bound service authorization result selects this policy.
+        authorizedTrack: authorizedAccess?.track,
+      });
     } catch (error) {
       await releaseCommercialSubmission(env, reservation, 'grading_failed');
       throw error;

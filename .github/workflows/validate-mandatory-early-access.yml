@@ -83,7 +83,10 @@ on:
       - 'worker/syllabus-review-reveal-policy.test.mjs'
       - 'scripts/test-syllabus-review-reveal-contract.mjs'
       - 'worker/syllabus-question-demand.test.mjs'
+      - 'worker/syllabus-results-policy.test.mjs'
+      - 'worker/syllabus-results-route-policy.test.mjs'
       - 'scripts/test-syllabus-coaching-layout.mjs'
+      - 'scripts/test-syllabus-submission-reliability.mjs'
       - 'scripts/verify-syllabus-coaching-staging.mjs'
       - 'scripts/test-syllabus-coaching-staging.mjs'
       - 'scripts/test-syllabus-coaching-release-workflow.mjs'
@@ -430,6 +433,7 @@ jobs:
           node scripts/test-paid-subscription-expiry-database.mjs
           node scripts/test-syllabus-review-reveal-contract.mjs
           node --test scripts/test-syllabus-coaching-layout.mjs
+          node --test scripts/test-syllabus-submission-reliability.mjs
           node --test scripts/test-syllabus-coaching-staging.mjs
           node scripts/test-syllabus-coaching-release-workflow.mjs
           node scripts/test-subject-matter-incremental-snapshot-hash-fix.mjs

@@ -224,3 +224,20 @@ test('result-only scroll CSS keeps the writer/Reveal panes in document flow and 
   assert.match(css, /\.dd-subject-editorial-pane\s*\{\s*overflow:\s*visible;/);
   assert.match(css, /@media \(max-width: 900px\)[\s\S]*?\.dd-subject-editorial-grid\s*\{[^}]*grid-template-columns:\s*1fr/);
 });
+
+test('dark Syllabus discussion paragraphs inherit the readable panel color, not the shared light-card ink', () => {
+  assert.match(css, /\.dd-subject-editorial \.alac-part p\s*\{[^}]*color:\s*inherit;/);
+  assert.match(css, /\.dd-subject-editorial \.source-link\s*\{[^}]*color:\s*#e5ebf2;/);
+  const luminance = (hex) => {
+    const channels = hex.match(/[a-f0-9]{2}/gi).map((part) => parseInt(part, 16) / 255)
+      .map((c) => c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+    return channels.reduce((sum, c, index) => sum + c * [0.2126, 0.7152, 0.0722][index], 0);
+  };
+  const contrast = (foreground, background) => {
+    const values = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
+    return (values[0] + 0.05) / (values[1] + 0.05);
+  };
+  assert.ok(contrast('24364d', '041d3b') < 4.5, 'Reproduce the original unreadable palette.');
+  assert.ok(contrast('e5ebf2', '041d3b') >= 4.5, 'Normal discussion text must meet the contrast threshold.');
+  assert.doesNotMatch(css, /^\.alac-part p\s*\{/m, 'Do not change unrelated light assessment cards.');
+});

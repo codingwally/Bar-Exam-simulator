@@ -6,7 +6,7 @@ import { isDeepStrictEqual } from 'node:util';
 
 const workflow = readFileSync(new URL('../.github/workflows/release-syllabus-coaching.yml', import.meta.url), 'utf8').replaceAll('\r\n', '\n');
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-const baseline = '646c2e0185da61cd8ce473bcd787a05ec1883b4c';
+const baseline = '448b76d53682951f7188f477924a4a9dd7b48354';
 const product = 'a'.repeat(40), head = 'b'.repeat(40);
 const hash = value => createHash('sha256').update(value).digest('hex');
 const clone = value => structuredClone(value);
@@ -37,11 +37,9 @@ async function execute(name, dependencies = {}, source = block(name)) {
 }
 
 const ciAdditions = [
-  "- 'worker/syllabus-question-demand.test.mjs'", "- 'scripts/test-syllabus-coaching-layout.mjs'",
-  "- 'scripts/verify-syllabus-coaching-staging.mjs'", "- 'scripts/test-syllabus-coaching-staging.mjs'",
-  "- 'scripts/test-syllabus-coaching-release-workflow.mjs'", "- '.github/workflows/release-syllabus-coaching.yml'",
-  'node --test scripts/test-syllabus-coaching-layout.mjs', 'node --test scripts/test-syllabus-coaching-staging.mjs',
-  'node scripts/test-syllabus-coaching-release-workflow.mjs',
+  "- 'worker/syllabus-results-policy.test.mjs'", "- 'worker/syllabus-results-route-policy.test.mjs'",
+  "- 'scripts/test-syllabus-submission-reliability.mjs'",
+  'node --test scripts/test-syllabus-submission-reliability.mjs',
 ];
 
 function sourceFixture(overrides = {}) {
@@ -120,7 +118,7 @@ test('the real source gate fails closed on bad authorization, source, PR, or CI'
 test('the actual scope gate rejects deletion, rename, and every unrelated runtime surface', async () => {
   for (const changes of [
     '', 'D\tassets/examinations.js', 'R100\tassets/examinations.js\tassets/other.js',
-    ...['worker/index.mjs', 'worker/wrangler.toml', 'worker/wrangler.staging.toml',
+    ...['worker/wrangler.toml', 'worker/wrangler.staging.toml',
       'worker/wrangler.public-api.toml', 'worker/package.json', 'worker/package-lock.json',
       'worker/commercial-entry.mjs', 'worker/subject-matter-review.mjs', 'worker/public-api-alias.mjs',
       'assets/phase2-config.js', 'assets/study-room-live.js', 'study-room/index.html',
@@ -294,9 +292,88 @@ test('Pages baseline ignores only terminal failures and its own queued Pages job
   await assert.rejects(execute('pages-baseline', baselineFixture([])));
 });
 
+function historicalBaselineFixture(change = () => {}) {
+  const state = {
+    records: [{ id: 6335563699, sha: baseline, state: 'failure' }],
+    run: { head_sha: baseline, path: '.github/workflows/release-syllabus-coaching.yml',
+      event: 'workflow_dispatch', head_branch: 'main', status: 'completed', conclusion: 'failure' },
+    jobs: [
+      { name: 'deploy_production_worker', conclusion: 'success' },
+      { name: 'deploy_production_pages', conclusion: 'failure', steps: [
+        { name: 'Publish Pages after both Worker gates', conclusion: 'success' },
+        { name: 'Verify exact live Pages bytes and preserved Study Room markers', conclusion: 'failure' },
+      ] },
+    ],
+    pagesStatus: 'succeed', assetDrift: false, markerDrift: false, env: clone(env), reads: [],
+  };
+  change(state);
+  state.dependencies = {
+    process: { env: state.env },
+    execFileSync(command, args) {
+      state.reads.push([command, ...args]);
+      if (command === 'git') {
+        assert.equal(args[0], 'show'); assert.ok(args[1].startsWith(`${baseline}:`));
+        return Buffer.from(args[1]);
+      }
+      assert.equal(command, 'gh');
+      const route = args[1].replace(`repos/${env.GITHUB_REPOSITORY}/`, '');
+      if (route === 'git/ref/heads/main') return JSON.stringify({ object: { sha: product } });
+      if (route.startsWith('deployments?')) return JSON.stringify(state.records);
+      if (route.startsWith('deployments/')) {
+        const id = Number(route.split('/')[1]);
+        return JSON.stringify([{ state: state.records.find(record => record.id === id)?.state }]);
+      }
+      if (route === 'actions/runs/34269676417') return JSON.stringify(state.run);
+      if (route === 'actions/runs/34269676417/jobs') return JSON.stringify({ jobs: state.jobs });
+      if (route === `pages/deployments/${baseline}`) return JSON.stringify({ status: state.pagesStatus });
+      throw new Error(`Unreviewed historical route: ${route}`);
+    },
+    fetch: async url => {
+      const path = new URL(url).pathname.slice(1);
+      return { status: 200, text: async () => state.markerDrift ? head : `${baseline}\n`,
+        arrayBuffer: async () => Buffer.from(state.assetDrift ? 'changed' : `${baseline}:${path}`) };
+    },
+  };
+  return state;
+}
+
+test('only the pinned historical verifier failure may be proven by actual publication and exact live bytes', async () => {
+  const good = historicalBaselineFixture();
+  await execute('pages-baseline', good.dependencies);
+  assert.equal(good.reads.filter(call => call[0] === 'git').length, 5);
+  assert.ok(good.reads.every(call => !call.includes('--input')), 'Baseline proof is read-only');
+  const locked = historicalBaselineFixture(state => {
+    state.env.PAGES_LOCK = 'true'; state.records.unshift({ id: 2, sha: product, state: 'in_progress' });
+  });
+  await execute('pages-baseline', locked.dependencies);
+  for (const change of [
+    state => { state.records[0].id = 6335563700; },
+    state => { state.records[0].sha = head; },
+    state => { state.run.head_sha = head; },
+    state => { state.run.path = '.github/workflows/other.yml'; },
+    state => { state.run.event = 'push'; },
+    state => { state.run.head_branch = 'other'; },
+    state => { state.run.status = 'in_progress'; },
+    state => { state.run.conclusion = 'cancelled'; },
+    state => { state.jobs[0].conclusion = 'failure'; },
+    state => { state.jobs[1].steps[0].conclusion = 'failure'; },
+    state => { state.jobs[1].steps[1].name = 'Different failure'; },
+    state => { state.jobs[1].steps.push({ name: 'Other failure', conclusion: 'failure' }); },
+    state => { state.pagesStatus = 'queued'; },
+    state => { state.assetDrift = true; },
+    state => { state.markerDrift = true; },
+    ...['queued', 'pending', 'in_progress', 'success', 'unknown'].map(status => state => {
+      state.env.PAGES_LOCK = 'true'; state.records.unshift({ id: 2, sha: head, state: status });
+    }),
+  ]) {
+    const bad = historicalBaselineFixture(change);
+    await assert.rejects(execute('pages-baseline', bad.dependencies), String(change));
+  }
+});
+
 function workerFixture(options = {}) {
-  const baselines = { 'wrangler.toml': '54b99125-cf41-47c5-8b13-6669f3dbb69f',
-    'wrangler.public-api.toml': '36ad11e7-6f62-43cf-b2cd-8e2391eab5b3' };
+  const baselines = { 'wrangler.toml': '596c3bf7-1e60-4d39-b99d-3cedca897a54',
+    'wrangler.public-api.toml': 'ae73867c-8fc1-4169-8588-8d32d73d0aef' };
   const changed = new Set(), mutations = [], reads = [];
   return {
     mutations, reads,

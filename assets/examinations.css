@@ -2878,6 +2878,11 @@ details[open] > summary .dd-subject-chevron {
   margin-top: 18px;
 }
 
+.dd-subject-editorial .alac-part p {
+  /* The shared light-card paragraph rule must not override this navy panel. */
+  color: inherit;
+}
+
 .dd-subject-editorial .alac-part b,
 .dd-subject-editorial .source-link small {
   color: #e6bd59;

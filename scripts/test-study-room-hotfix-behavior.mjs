@@ -23,6 +23,7 @@ const instrumentedLiveClient = liveClient.replace(
     reconcileTile,
     calculateSquareGrid,
     renderParticipants,
+    normalizeRoomCatalog,
     syncJoinButton,
     setParticipantBlocked,
     setParticipantVolume,
@@ -445,8 +446,9 @@ for (const value of [
 
 for (const missingSession of [null, {}, { user: { id: 'tester-1' } }, { access_token: '' }]) {
   const harness = createPreviewHarness({ role: 'admin', open: () => ({}), session: missingSession });
+  harness.setSession(missingSession);
   fireStudyRoomClick(harness.document);
-  assert.equal(harness.openCalls.length, 0, 'Role/profile metadata without a browser token must not open live Study Room.');
+  assert.equal(harness.openCalls.length, 0, 'Known settled signed-out state must retain the normal sign-in preview, not trust role/profile metadata.');
   harness.document.emit('duediligence:session', { detail: { authenticated: true } });
   fireStudyRoomClick(harness.document);
   assert.equal(harness.openCalls.length, 0, 'An auth event without a real session must not fabricate live access.');
@@ -454,12 +456,15 @@ for (const missingSession of [null, {}, { user: { id: 'tester-1' } }, { access_t
 
 {
   const harness = createPreviewHarness({ role: 'member', open: () => ({}), settleAccess: false, session: null });
-  assert.equal(harness.document.studyRoomTriggers.every((trigger) => trigger.disabled), true, 'Unknown Auth with no token remains guarded.');
+  assert.equal(harness.document.studyRoomTriggers.every((trigger) => !trigger.disabled), true,
+    'Unknown Home Auth must not strand an explicit click; the dedicated room still verifies its own session.');
   fireStudyRoomClick(harness.document);
-  assert.equal(harness.openCalls.length, 0);
+  assert.equal(harness.openCalls.length, 1);
+  assert.equal(harness.openCalls[0][0], 'https://duediligence.ph/study-room/');
+  assert.equal(harness.document.getElementById('dd-study-room-overlay').hidden, true);
   harness.setSession({ access_token: 'new-inert-token', user: { id: 'tester-2' } });
   fireStudyRoomClick(harness.document);
-  assert.equal(harness.openCalls.length, 1, 'A new signed-in member opens while its subscription access is still loading.');
+  assert.equal(harness.openCalls.length, 1, 'A new signed-in member reuses the same room window while subscription access is still loading.');
 }
 
 function response({ ok, status, payload }) {
@@ -667,6 +672,8 @@ function createLiveHarness({
   AudioContext,
   MediaStream,
   scheduleTimeout = () => 1,
+  objectConstructor = Object,
+  catalogResponse = roomCatalogResponse,
 }) {
   const { document } = createDocument();
   const storage = new Map();
@@ -682,7 +689,7 @@ function createLiveHarness({
       body = {};
     }
     if (requestPath.includes('/study-room/rooms') && body.operation === 'list') {
-      return Promise.resolve(roomCatalogResponse());
+      return Promise.resolve(catalogResponse());
     }
     return fetch(url, options);
   };
@@ -769,7 +776,7 @@ function createLiveHarness({
     Set,
     WeakMap,
     Array,
-    Object,
+    Object: objectConstructor,
     String,
     Boolean,
     Number,
@@ -1007,6 +1014,87 @@ async function waitForAuthorizedPrejoin(harness) {
     () => harness.document.getElementById('sr-prejoin-status').textContent.includes('available devices were detected'),
     'The authorized Study Room prejoin did not finish loading.',
   );
+}
+
+{
+  // Use an isolated realm: never remove a method from Node's shared Object.
+  const legacyObject = vm.runInNewContext('Object');
+  Object.defineProperty(legacyObject, 'hasOwn', { value: undefined });
+  assert.equal(legacyObject.hasOwn, undefined);
+  assert.equal(typeof Object.hasOwn, 'function');
+  let accessCalls = 0;
+  let permissionCalls = 0;
+  let freeCatalog;
+  const h = createLiveHarness({
+    objectConstructor: legacyObject,
+    fetch: async (url) => {
+      assert.equal(String(url), 'https://worker.example.test/study-room/access');
+      accessCalls += 1;
+      return response({ ok: true, status: 200, payload: {
+        ok: true, allowed: true, role: 'member', administrator: false,
+        canCreateRooms: false, maxParticipants: 12, maxRooms: 24,
+      } });
+    },
+    catalogResponse: async () => {
+      const payload = await roomCatalogResponse().json();
+      freeCatalog = { ...payload, role: 'member', administrator: false, canCreateRooms: false,
+        rooms: payload.rooms.map((room) => ({ ...room, canCreate: false,
+          canJoin: room.roomKey !== '5' })) };
+      return response({ ok: true, status: 200, payload: freeCatalog });
+    },
+    enumerateDevices: async () => labeledDevices,
+    getUserMedia: async () => { permissionCalls += 1; throw new Error('No media in compatibility regression.'); },
+  });
+  await waitForAuthorizedPrejoin(h);
+  await eventually(() => h.hooks.state.roomCatalogLoaded && !h.hooks.state.roomCatalogBusy,
+    'A browser without Object.hasOwn must finish the actual six-room catalog refresh.');
+  assert.equal(accessCalls, 1);
+  assert.equal(permissionCalls, 0);
+  assert.equal(h.hooks.state.isAdministrator, false);
+  assert.deepEqual(Array.from(h.hooks.state.rooms, ({ roomKey, canJoin }) => [roomKey, canJoin]),
+    [['1', true], ['2', true], ['3', true], ['4', true], ['5', false], ['6', true]]);
+  assert.equal(h.document.getElementById('sr-room-card-grid').children.length, 6);
+  assert.equal(h.document.getElementById('sr-room-lobby-count').textContent, '5 rooms available');
+  assert.equal(h.document.getElementById('sr-room-admin-controls').hidden, true);
+  assert.equal(h.document.getElementById('sr-room-add').disabled, true);
+  assert.equal(h.document.getElementById('sr-room-card-grid').children.flatMap(descendants)
+    .some((node) => node.className === 'sr-room-edit'), false);
+  assert.equal(h.document.getElementById('sr-join').disabled, false);
+  assert.equal(h.document.getElementById('sr-join').textContent, 'Join Library');
+  // A real click reaches the existing visible SDK-load guard; no fake RTC is used.
+  await h.document.getElementById('sr-join').emit('click');
+  assert.match(h.document.getElementById('sr-prejoin-status').textContent, /secure video library could not load/);
+  assert.equal(h.hooks.state.room, null);
+  assert.equal(accessCalls, 1);
+  h.hooks.state.selectedRoomKey = '5';
+  h.hooks.syncJoinButton();
+  assert.equal(h.document.getElementById('sr-join').disabled, true);
+  assert.match(h.document.getElementById('sr-join').textContent, /Admin only/);
+
+  const originalGuard = 'Object.prototype.hasOwnProperty.call(ROOM_AUDIENCES, audience)';
+  const normalizationSource = h.hooks.normalizeRoomCatalog.toString();
+  assert.ok(normalizationSource.includes(originalGuard));
+  const oldNormalization = vm.runInNewContext(`(${normalizationSource.replace(originalGuard,
+    'Object.hasOwn(ROOM_AUDIENCES, audience)')})`, {
+    Object: legacyObject, state: h.hooks.state,
+    ROOM_AUDIENCES: { admin: 'Admin only', paid: 'Paying users', all: 'All signed-in users' },
+    validRoomKey: (key) => /^(?:[1-9]|1[0-9]|2[0-4])$/.test(key),
+  });
+  assert.throws(() => oldNormalization(freeCatalog),
+    (error) => error?.name === 'TypeError' && /hasOwn/.test(error.message),
+    'The pre-fix actual normalizer must reproduce the missing-method failure.');
+  for (const audience of ['constructor', '__proto__', 'toString', '', null]) {
+    const result = h.hooks.normalizeRoomCatalog({ rooms: [
+      { ...freeCatalog.rooms[0], roomKey: '7', audience },
+    ] });
+    assert.equal(result.length, 0, 'The compatibility fallback must not admit inherited/unknown audiences.');
+  }
+  const privateRoom = h.hooks.normalizeRoomCatalog({ rooms: [
+    { ...freeCatalog.rooms[4], audience: 'all', canJoin: true },
+  ] })[0];
+  assert.equal(privateRoom.audience, 'admin');
+  assert.equal(privateRoom.canJoin, false, 'Inner Chamber remains restricted despite malformed public claims.');
+  console.log('Study Room missing-Object.hasOwn regression: old normalizer fails; free six-seed initialization and restriction guards pass.');
 }
 
 function descendants(node) {

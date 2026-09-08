@@ -31,8 +31,13 @@ assert.ok(
 );
 assert.match(html, /id="dd-study-room-trigger"[\s\S]*data-study-room-trigger[\s\S]*aria-haspopup="dialog"/);
 assert.match(html, /id="spa-study-room"[\s\S]*data-study-room-trigger[\s\S]*hidden/);
-assert.match(html, /id="dd-study-room-trigger"[\s\S]*aria-busy="true"[\s\S]*aria-disabled="true" disabled/);
-assert.match(html, /id="spa-study-room"[\s\S]*aria-busy="true"[\s\S]*aria-disabled="true" disabled hidden/);
+for (const id of ['dd-study-room-trigger', 'spa-study-room']) {
+  const button = html.match(new RegExp(`<button[^>]*id="${id}"[^>]*>`))?.[0];
+  assert.ok(button, `${id}: the Home entry must exist.`);
+  assert.match(button, /aria-busy="true"/);
+  assert.doesNotMatch(button, /\sdisabled(?:\s|=|>)|aria-disabled="true"/,
+    `${id}: pending Home Auth must not prevent a user-triggered dedicated-page launch.`);
+}
 
 assert.match(html, /id="dd-study-room-dialog" role="dialog" aria-modal="true"/);
 assert.match(html, /aria-labelledby="dd-study-room-title" aria-describedby="dd-study-room-description"/);
@@ -73,7 +78,7 @@ assert.match(css, /dd-study-room-mute:focus-visible/);
 
 assert.match(client, /ADMIN_ROLES/);
 assert.doesNotMatch(client, /DueDiligenceSubscriptionCta|isFoundingBetaTester|headerShowsAdmin/);
-assert.match(client, /subscribe\.disabled = accessIsResolving\(\)/);
+assert.match(client, /subscribe\.disabled = false/);
 assert.match(client, /liveAccess \? 'Open Study Room' : 'Sign in to join'/);
 assert.match(client, /Available to all signed-in members, free and paid/);
 assert.match(client, /hasLiveRoomAccess\(\)[\s\S]*return openLiveRoom\(\)/);
@@ -91,7 +96,7 @@ assert.match(client, /DueDiligencePhase2\.openSignIn\(\{ allowDismiss: true \}\)
 assert.match(client, /getElementById\('btn-signin'\)\?\.click\(\)/);
 assert.match(client, /study_room_preview_opened/);
 assert.match(html, /study-room-preview\.css\?v=study-room-launch-20260830-1/);
-assert.match(html, /study-room-preview\.js\?v=study-room-all-members-20260908-1/);
+assert.match(html, /study-room-preview\.js\?v=study-room-all-members-20260908-1&amp;entry=free-join-20260909-1/);
 
 function extractNamedFunction(source, name) {
   const start = source.indexOf(`function ${name}(`);
@@ -141,7 +146,7 @@ for (const [label, value] of memberAccessCases) {
     let launches = 0;
     let previews = 0;
     const context = vm.createContext({
-      session: null, access: value, authSettled,
+      session: null, sessionFromExplicitEvent: false, access: value, authSettled,
       global: { DueDiligencePhase4: { getSession: () => currentSession } },
       accessWithVerifiedRole: () => value,
       openLiveRoom: () => { launches += 1; return true; },
@@ -167,14 +172,14 @@ assert.doesNotMatch(liveWindowFunction, /openMarketingPreview/);
 assert.doesNotMatch(liveWindowFunction, /setPreviewStatus/);
 const openFunction = extractNamedFunction(client, 'open');
 assert.doesNotMatch(openFunction, /await|\.then\(/, 'Study Room click routing must stay synchronous for popup user activation.');
-assert.match(openFunction, /accessIsResolving\(\)[\s\S]*return false/);
+assert.match(openFunction, /accessIsResolving\(\)[\s\S]*return openLiveRoom\(\)/);
 
 assert.equal(extractNamedFunction(client, 'accessIsResolving').includes('return !authSettled && !signedIn();'), true);
 assert.doesNotMatch(extractNamedFunction(client, 'hasLiveRoomAccess'), /isAdmin\(|\.allowed|\.basis|subscription|remainingTokens/);
 assert.doesNotMatch(client, /access_token: 'authenticated-session'/, 'An event without a real runtime session must not synthesize a token.');
-assert.match(client, /querySelectorAll\('\[data-study-room-trigger\]'\)[\s\S]*trigger\.disabled = busy/);
+assert.match(client, /querySelectorAll\('\[data-study-room-trigger\]'\)[\s\S]*trigger\.disabled = false/);
 assert.match(client, /setAttribute\('aria-busy', String\(busy\)\)/);
-assert.match(client, /setAttribute\('aria-disabled', String\(busy\)\)/);
+assert.match(client, /setAttribute\('aria-disabled', 'false'\)/);
 assert.match(client, /DueDiligencePhase2\?\.whenAuthReady\?\.\(\)/);
 assert.match(client, /DueDiligencePhase4\?\.refreshAccess\?\.\(\{[\s\S]*enforce: false,[\s\S]*force: true/);
 assert.match(client, /accessResolutionFailed = signedIn\(latestSession\) && !latestAccess/);
@@ -182,6 +187,127 @@ assert.match(client, /detail\?\.authenticated === false[\s\S]*\? null/);
 assert.match(client, /access: !signedIn\(nextSession\) \|\| changedAccount \? null : access/);
 assert.match(client, /if \(!signedIn\(readySession\)\) \{[\s\S]*session: null, access: null/);
 assert.match(client, /if \(!current \|\| typeof current !== 'object'\) return null/);
+
+// Run the complete actual module: isolated function stubs cannot catch a disabled
+// DOM trigger or a pending bootstrap that never reaches its rejection handler.
+function previewHarness({ popupMode = 'open' } = {}) {
+  class Element {
+    constructor(id) {
+      this.id = id;
+      this.disabled = true;
+      this.hidden = true;
+      this.attributes = new Map();
+      this.classList = { add() {}, remove() {}, toggle() {} };
+      this.label = { textContent: '' };
+    }
+    setAttribute(key, value) { this.attributes.set(key, value); }
+    getAttribute(key) { return this.attributes.get(key) ?? null; }
+    querySelector() { return this.label; }
+    querySelectorAll() { return []; }
+    addEventListener() {}
+    focus() {}
+    closest(selector) {
+      if (selector === '[data-study-room-trigger]') return this.id === 'dd-study-room-trigger' ? this : null;
+      return selector === `#${this.id}` ? this : null;
+    }
+  }
+  const nodes = new Map(['dd-study-room-trigger', 'spa-study-room', 'dd-study-room-overlay',
+    'dd-study-room-dialog', 'dd-study-room-close', 'dd-study-room-subscribe',
+    'dd-study-room-subscribe-note'].map((id) => [id, new Element(id)]));
+  const documentHandlers = new Map();
+  const windowHandlers = new Map();
+  const record = (target, type, callback) => target.set(type, [...(target.get(type) || []), callback]);
+  const opened = [];
+  const navigated = [];
+  let currentSession = null;
+  let readyCalls = 0;
+  let signInCalls = 0;
+  const document = {
+    readyState: 'complete', activeElement: null,
+    body: { classList: { add() {}, remove() {} } },
+    getElementById: (id) => nodes.get(id) || null,
+    querySelectorAll: (selector) => selector === '[data-study-room-trigger]'
+      ? [nodes.get('dd-study-room-trigger'), nodes.get('spa-study-room')] : [],
+    addEventListener: (type, callback) => record(documentHandlers, type, callback),
+  };
+  const window = {
+    document, HTMLElement: Element,
+    location: { origin: 'https://inert.example', assign: (url) => navigated.push(url) },
+    requestAnimationFrame: (callback) => callback(),
+    addEventListener: (type, callback) => record(windowHandlers, type, callback),
+    DueDiligencePhase2: {
+      getSession: () => currentSession,
+      whenAuthReady: () => { readyCalls += 1; return new Promise(() => {}); },
+      openSignIn: () => { signInCalls += 1; },
+    },
+    open: (url, name) => {
+      opened.push({ url, name });
+      if (popupMode === 'throw') throw new Error('Inert blocked popup');
+      return popupMode === 'null' ? null : { closed: false, focus() {} };
+    },
+    fetch: () => { throw new Error('The Home launcher must never make an Auth or service request.'); },
+  };
+  vm.runInContext(client, vm.createContext({ window, URL }));
+  return {
+    nodes, opened, navigated,
+    readyCalls: () => readyCalls,
+    signInCalls: () => signInCalls,
+    session: (value) => { currentSession = value; },
+    dispatch: (type, detail) => {
+      for (const callback of windowHandlers.get(type) || []) callback({ detail });
+    },
+    click: (id = 'dd-study-room-trigger') => {
+      const target = nodes.get(id);
+      assert.equal(target.disabled, false, `${id}: a real disabled button would never dispatch a click.`);
+      for (const callback of documentHandlers.get('click') || []) callback({ target, preventDefault() {} });
+    },
+  };
+}
+
+let bootstrapCases = 0;
+for (const popupMode of ['open', 'null', 'throw']) {
+  const harness = previewHarness({ popupMode });
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(harness.readyCalls(), 1, 'The actual Auth readiness promise is pending, not mocked away.');
+  assert.equal(harness.nodes.get('dd-study-room-trigger').getAttribute('aria-busy'), 'true');
+  harness.dispatch('duediligence:access', { access: null });
+  harness.click();
+  assert.deepEqual(harness.opened, [{ url: 'https://inert.example/study-room/', name: 'DueDiligenceStudyRoom' }]);
+  assert.deepEqual(harness.navigated, popupMode === 'open' ? [] : ['https://inert.example/study-room/']);
+  assert.equal(harness.nodes.get('dd-study-room-overlay').hidden, true);
+  assert.equal(harness.signInCalls(), 0);
+  bootstrapCases += 1;
+}
+
+const signedOut = previewHarness();
+signedOut.dispatch('duediligence:session', { authenticated: false });
+signedOut.click();
+assert.equal(signedOut.opened.length, 0);
+assert.equal(signedOut.nodes.get('dd-study-room-overlay').hidden, false);
+signedOut.click('dd-study-room-subscribe');
+assert.equal(signedOut.signInCalls(), 1);
+assert.equal(signedOut.opened.length, 0, 'A known signed-out user keeps the normal sign-in path.');
+bootstrapCases += 1;
+
+const eventSession = previewHarness();
+eventSession.dispatch('duediligence:session', {
+  authenticated: true, session: { access_token: 'inert-session', user: { id: 'inert-user' } },
+});
+eventSession.click();
+assert.equal(eventSession.opened.length, 1, 'An explicit session event must survive a temporarily null runtime getter.');
+eventSession.dispatch('duediligence:session', { authenticated: false });
+eventSession.click();
+assert.equal(eventSession.opened.length, 1, 'Explicit logout must clear the event session, without reopening the cached window.');
+assert.equal(eventSession.nodes.get('dd-study-room-overlay').hidden, false);
+bootstrapCases += 1;
+
+const metadataOnly = previewHarness();
+metadataOnly.dispatch('duediligence:session', { authenticated: true, userId: 'inert-user-without-session' });
+metadataOnly.click();
+assert.equal(metadataOnly.opened.length, 0, 'Auth metadata alone must not become a retained session.');
+assert.equal(metadataOnly.nodes.get('dd-study-room-overlay').hidden, false);
+bootstrapCases += 1;
 
 for (const forbidden of [
   /study-room-demo/,
@@ -223,5 +349,5 @@ const sizes = await Promise.all(
 const totalImageBytes = sizes.reduce((total, size) => total + size, 0);
 assert.ok(totalImageBytes <= 1.5 * 1024 * 1024, 'Study Room preview images must total at most 1.5 MiB.');
 
-console.log(`Study Room signed-in launch contract tests passed (${launchCases} access/auth combinations plus missing-session guards).`);
+console.log(`Study Room signed-in launch contract tests passed (${launchCases} access/auth combinations, ${bootstrapCases} full-module bootstrap/event cases, plus missing-session guards).`);
 console.log('Optimized WebP total: ' + totalImageBytes + ' bytes.');

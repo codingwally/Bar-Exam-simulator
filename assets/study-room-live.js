@@ -393,7 +393,7 @@
       const roomKey = String(candidate?.roomKey || '').trim();
       if (!validRoomKey(roomKey) || byRoomKey.has(roomKey)) return;
       const audience = roomKey === '5' ? 'admin' : candidate?.audience;
-      if (!Object.hasOwn(ROOM_AUDIENCES, audience)) return;
+      if (!Object.prototype.hasOwnProperty.call(ROOM_AUDIENCES, audience)) return;
       const label = typeof candidate?.label === 'string' ? candidate.label.trim() : '';
       if (!/^[A-Za-z0-9][A-Za-z0-9 .,'()&_\-]{1,63}$/u.test(label)) return;
       if (!Number.isSafeInteger(candidate?.revision) || candidate.revision < 1
@@ -791,7 +791,7 @@
     const audience = String(byId('sr-room-audience').value || '');
     if (enteredLabel.length > 128 || label.length > MAX_ROOM_LABEL_LENGTH
       || !/^[A-Za-z0-9][A-Za-z0-9 .,'()&_\-]{1,63}$/u.test(label)
-      || !Object.hasOwn(ROOM_AUDIENCES, audience) || (editor.roomKey === '5' && audience !== 'admin')) {
+      || !Object.prototype.hasOwnProperty.call(ROOM_AUDIENCES, audience) || (editor.roomKey === '5' && audience !== 'admin')) {
       setStatus('sr-room-editor-status', roomEditorError({ code: 'STUDY_ROOM_CONFIG_INVALID' }), 'error');
       return false;
     }

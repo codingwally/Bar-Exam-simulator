@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { assertCheckoutContract, checkoutPreflightDiagnostic } from './staging-current-payment-proof.mjs';
 const read = name => readFileSync(new URL('../' + name, import.meta.url), 'utf8').replaceAll('\r\n', '\n');
 const release = read('.github/workflows/release-unlimited-feature-access.yml');
 const mandatory = read('.github/workflows/validate-mandatory-early-access.yml');
@@ -14,6 +15,12 @@ test('exact staging deployment captures its own version and command-associated d
   const deploy = block('Deploy the exact Worker and client to staging');
   assert.ok(deploy.includes('id: staging_worker_deploy'));
   assert.ok(deploy.includes('wranglerVersion: "4.114.0"'));
+  assert.ok(deploy.includes('NPM_CONFIG_SAVE: "false"'));
+  assert.ok(deploy.includes('NPM_CONFIG_PACKAGE_LOCK: "false"'));
+  const sourceSha = 'a'.repeat(40);
+  assert.doesNotThrow(() => assertCheckoutContract(sourceSha, sourceSha, ''));
+  assert.throws(() => assertCheckoutContract(sourceSha, sourceSha, ' M worker/package-lock.json'),
+    error => checkoutPreflightDiagnostic(error)?.code === 'CHECKOUT_TRACKED_DIRTY');
   assert.ok(deploy.includes('command: deploy --config wrangler.staging.toml --message astra-commercial-stage:${{ github.run_id }}:${{ github.run_attempt }}:${{ github.sha }}'));
   assert.ok(deploy.includes('postCommands: node ../scripts/capture-staging-commercial-deployment.mjs'));
   assert.ok(deploy.includes('STAGING_COMMERCIAL_DEPLOYMENT_EVIDENCE: ' + evidence));

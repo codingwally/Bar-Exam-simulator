@@ -25,21 +25,39 @@ const mailModes=['OUTBOUND_EMAIL_MODE','SUBSCRIPTION_RECEIPT_EMAIL_MODE','SIGN_I
  'ADMIN_DIRECTORY_EMAIL_MODE','SUPPORT_NOTIFICATION_EMAIL_MODE','FORECAST_RESULTS_EMAIL_MODE','EXAMINATION_ROOM_EMAIL_MODE'];
 function must(value,message){assert.ok(value,message);}
 function git(...args){return execFileSync('git',['-C',REPOSITORY,...args],{encoding:'utf8',maxBuffer:8*1024*1024,windowsHide:true});}
+// Only locally branded checkout failures can enter this closed diagnostic.
+// Original exceptions may contain paths/stdout/stderr and are never retained.
+const checkoutFailures=new WeakMap();
+function checkoutFailure(code){const error=new Error('Current proof checkout preflight failed');checkoutFailures.set(error,code);return error;}
+export function checkoutPreflightDiagnostic(error){
+ const code=error&&checkoutFailures.get(error);if(!code)return null;
+ return {schemaVersion:1,kind:'current-v4-checkout-preflight',phase:'checkout',status:'FAIL',code,fixtureCreationRequested:false};
+}
+export async function retainCheckoutPreflightDiagnostic(error,{makeDirectory=fs.mkdir,writeFile=fs.writeFile}={}){
+ const diagnostic=checkoutPreflightDiagnostic(error);if(!diagnostic)return false;
+ const directory=path.join(REPOSITORY,'artifacts','staging-e2e');
+ await makeDirectory(directory,{recursive:true});
+ await writeFile(path.join(directory,'current-v4-checkout-preflight.json'),JSON.stringify(diagnostic,null,2)+'\n',{flag:'wx',mode:0o600});
+ return true;
+}
 export function assertCheckoutContract(expectedSha,head,trackedStatus) {
- assert.match(expectedSha,/^[a-f0-9]{40}$/);assert.equal(head.trim(),expectedSha,'Workflow checkout SHA mismatch');
- assert.equal(trackedStatus.trim(),'','Tracked checkout changes refuse fixture creation');
+ if(typeof expectedSha!=='string'||!/^[a-f0-9]{40}$/.test(expectedSha))throw checkoutFailure('EXPECTED_SOURCE_SHA_INVALID');
+ if(typeof head!=='string'||head.trim()!==expectedSha)throw checkoutFailure('CHECKOUT_SHA_MISMATCH');
+ if(typeof trackedStatus!=='string'||trackedStatus.trim()!=='')throw checkoutFailure('CHECKOUT_TRACKED_DIRTY');
 }
 export async function verifySource(expectedSha,{runGit=git,readFile=fs.readFile}={}) {
+ try{
  assertCheckoutContract(expectedSha,runGit('rev-parse','HEAD'),runGit('status','--porcelain','--untracked-files=no'));
  const pins={};
  for(const name of sourcePaths){
   // An untracked/missing helper is not a valid protected workflow input.
-  runGit('ls-files','--error-unmatch',name);
+  try{runGit('ls-files','--error-unmatch',name);}catch{throw checkoutFailure('CHECKOUT_DEPENDENCY_UNAVAILABLE');}
   const expected=runGit('show',`${expectedSha}:${name}`).replaceAll('\r\n','\n');
   const actual=(await readFile(path.join(REPOSITORY,name),'utf8')).replaceAll('\r\n','\n');
-  assert.equal(actual,expected,'Checkout dependency differs from workflow commit');pins[name]=sha(expected);
+  if(actual!==expected)throw checkoutFailure('CHECKOUT_DEPENDENCY_MISMATCH');pins[name]=sha(expected);
  }
  return {sourceSha:expectedSha,tree:runGit('rev-parse',`${expectedSha}^{tree}`).trim(),pins};
+ }catch(error){if(checkoutFailures.has(error))throw error;throw checkoutFailure('CHECKOUT_READ_FAILED');}
 }
 export function assertMailBindings(version,evidence) {
  assert.equal(version?.id,evidence.versionId);must(Array.isArray(version.resources?.bindings));

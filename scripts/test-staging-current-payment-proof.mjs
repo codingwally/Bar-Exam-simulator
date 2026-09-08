@@ -6,7 +6,8 @@ import { fileURLToPath,pathToFileURL } from 'node:url';
 import { inflateSync } from 'node:zlib';
 import { tmpdir } from 'node:os';
 import { STAGE,REPOSITORY,sha,selectOffer,objectIdentity,assertPayment,assertMailBindings,createHttp,
- fixturePng,runCurrentPaymentProof,assertCheckoutContract,verifySource } from './staging-current-payment-proof.mjs';
+ fixturePng,runCurrentPaymentProof,assertCheckoutContract,verifySource,checkoutPreflightDiagnostic,
+ retainCheckoutPreflightDiagnostic } from './staging-current-payment-proof.mjs';
 import { cleanupCurrentPaymentProof } from './staging-current-payment-proof-cleanup.mjs';
 import { exactCommercialRowFilter } from './staging-commercial-fixtures.mjs';
 const ids=['11111111-1111-4111-8111-111111111111','22222222-2222-4222-8222-222222222222',
@@ -110,8 +111,32 @@ test('portable checkout gate rejects wrong SHA, tracked drift, missing dependenc
  const good=await verifySource(expected,{runGit:fakeGit,readFile:async()=>source.replaceAll('\n','\r\n')});
  assert.equal(Object.keys(good.pins).length,10);
  assert.ok(good.pins['scripts/staging-commercial-fixtures.mjs']);
- await assert.rejects(verifySource(expected,{runGit:fakeGit,readFile:async()=>source+'drift'}));
- await assert.rejects(verifySource(expected,{runGit:(...args)=>{if(args[0]==='ls-files')throw Error('not tracked');return fakeGit(...args);},readFile:async()=>source}));
+ const errors=[];
+ for(const [expectedCode,options] of [
+  ['EXPECTED_SOURCE_SHA_INVALID',{sha:'invalid'}],
+  ['CHECKOUT_SHA_MISMATCH',{runGit:(...args)=>args.join(' ')==='rev-parse HEAD'?'c'.repeat(40):fakeGit(...args)}],
+  ['CHECKOUT_TRACKED_DIRTY',{runGit:(...args)=>args[0]==='status'?' M worker/package-lock.json':fakeGit(...args)}],
+  ['CHECKOUT_DEPENDENCY_MISMATCH',{readFile:async()=>source+'private changed content'}],
+  ['CHECKOUT_DEPENDENCY_UNAVAILABLE',{runGit:(...args)=>{if(args[0]==='ls-files')throw Error('private missing path');return fakeGit(...args);}}],
+  ['CHECKOUT_READ_FAILED',{readFile:async()=>{throw Error('sb_secret_private path stderr');}}],
+ ]){
+  let caught;try{await verifySource(options.sha||expected,{runGit:fakeGit,readFile:async()=>source,...options});}catch(error){caught=error;}
+  assert.ok(caught);const diagnostic=checkoutPreflightDiagnostic(caught);
+  assert.deepEqual(diagnostic,{schemaVersion:1,kind:'current-v4-checkout-preflight',phase:'checkout',status:'FAIL',code:expectedCode,fixtureCreationRequested:false});
+  assert.doesNotMatch(JSON.stringify(diagnostic),/worker\/|sb_secret_|private|stderr/);errors.push(caught);
+ }
+ assert.equal(checkoutPreflightDiagnostic({code:'CHECKOUT_TRACKED_DIRTY',message:'secret'}),null);
+ assert.equal(await retainCheckoutPreflightDiagnostic(new Error('private')),false);
+ const writes=[];
+ assert.equal(await retainCheckoutPreflightDiagnostic(errors[2],{makeDirectory:async()=>{},writeFile:async(...args)=>writes.push(args)}),true);
+ assert.equal(writes.length,1);assert.equal(path.basename(writes[0][0]),'current-v4-checkout-preflight.json');
+ assert.deepEqual(writes[0][2],{flag:'wx',mode:0o600});
+ assert.deepEqual(JSON.parse(writes[0][1]),checkoutPreflightDiagnostic(errors[2]));
+ await assert.rejects(retainCheckoutPreflightDiagnostic(errors[2],{makeDirectory:async()=>{},writeFile:async()=>{throw Error('EEXIST');}}));
+ let network=0,persisted=0;
+ await assert.rejects(runCurrentPaymentProof({env:{GITHUB_ACTIONS:'true',GITHUB_SHA:expected},
+  verifyCheckout:async()=>{throw errors[2];},request:async()=>{network++;throw Error('unexpected');},persist:async()=>{persisted++;}}));
+ assert.equal(network,0);assert.equal(persisted,0,'Checkout failure stays before fixture manifest and identity creation');
 });
 test('CLI is inert-by-import module, no workstation pins, and cleanup marker is after success',async()=>{
  const module=await fs.readFile(new URL('./staging-current-payment-proof.mjs',import.meta.url),'utf8');

@@ -34,6 +34,7 @@ const instrumentedLiveClient = liveClient.replace(
     testDevices,
     toggleLocalTrack,
     attachTrack,
+    detachTracks,
     microphonePublicationIsLive,
     verifyMicrophoneTransport,
     startRoomAudioFromGesture,
@@ -158,6 +159,10 @@ class FakeHTMLElement {
     const listeners = this.listeners.get(type) || [];
     listeners.push(handler);
     this.listeners.set(type, listeners);
+  }
+
+  removeEventListener(type, handler) {
+    this.listeners.set(type, (this.listeners.get(type) || []).filter((listener) => listener !== handler));
   }
 
   async emit(type, event = {}) {
@@ -2406,6 +2411,280 @@ class FakeMediaStream {
   }
 }
 
+// Real receiver code, inert transport and deterministic timers. No SDK events
+// are synthesized to rescue a stalled element: the receiver must recover itself.
+{
+  const timers = new Map();
+  const clearedTimers = [];
+  let timerId = 0;
+  let attachCalls = 0;
+  let detachCalls = 0;
+  let playCalls = 0;
+  let playMode = 'resolve-without-data';
+  const deferredPlays = [];
+  const shareTrack = {
+    streamState: 'active',
+    mediaStreamTrack: { kind: 'video', readyState: 'live', enabled: true },
+    attach() {
+      attachCalls += 1;
+      const element = new FakeHTMLElement('receiver-share', 'video');
+      element.readyState = 0;
+      element.videoWidth = 0;
+      element.videoHeight = 0;
+      element.paused = true;
+      element.play = () => {
+        playCalls += 1;
+        if (playMode === 'reject') return Promise.reject(new Error('transient playback error'));
+        if (playMode === 'defer') return new Promise((resolve, reject) => deferredPlays.push({ resolve, reject }));
+        if (playMode === 'playing') {
+          element.readyState = 2;
+          element.videoWidth = 1280;
+          element.videoHeight = 720;
+          element.paused = false;
+        }
+        return Promise.resolve();
+      };
+      return element;
+    },
+    detach() { detachCalls += 1; },
+  };
+  const publication = { source: liveKitSources.ScreenShare, track: shareTrack, isMuted: false };
+  const remote = {
+    identity: 'screen-recovery-remote', name: 'Remote', isLocal: false, attributes: {},
+    trackPublications: new Map([[liveKitSources.ScreenShare, publication]]),
+    getTrackPublication(source) { return this.trackPublications.get(source); },
+  };
+  const local = {
+    identity: 'screen-recovery-local', name: 'Local', isLocal: true, attributes: {},
+    trackPublications: new Map(), getTrackPublication() { return null; },
+  };
+  const harness = createLiveHarness({
+    fetch: async () => authorizedResponse(), enumerateDevices: async () => labeledDevices,
+    getUserMedia: async () => { throw new Error('Camera capture is forbidden in receiver tests.'); },
+    liveKit: { Track: { Source: liveKitSources } },
+  });
+  await waitForAuthorizedPrejoin(harness);
+  harness.window.setTimeout = (callback, delay) => {
+    const id = ++timerId; timers.set(id, { callback, delay }); return id;
+  };
+  harness.window.clearTimeout = (id) => {
+    if (timers.has(id)) clearedTimers.push(timers.get(id).callback);
+    timers.delete(id);
+  };
+  const settle = async () => { for (let count = 0; count < 6; count += 1) await Promise.resolve(); };
+  const runTimer = async () => {
+    const [id, timer] = timers.entries().next().value || [];
+    assert.ok(timer, 'A bounded same-element recovery timer must exist.');
+    timers.delete(id); timer.callback(); await settle();
+  };
+  const room = { localParticipant: local, remoteParticipants: new Map([[remote.identity, remote]]), state: 'connected' };
+  harness.hooks.state.room = room;
+  const grid = harness.document.getElementById('sr-participant-grid');
+  const shareTile = () => grid.children.find((tile) => tile.dataset.trackSource === liveKitSources.ScreenShare);
+  const shareVideo = () => descendants(shareTile()).find((node) => node.tagName === 'VIDEO');
+  const fallback = () => descendants(shareTile()).find((node) => node.dataset.srVideoFallback === 'true');
+  harness.hooks.renderParticipants();
+  await settle();
+  const originalTile = shareTile();
+  const originalVideo = shareVideo();
+  assert.notEqual(originalTile.dataset.videoState, 'live', 'Resolving play() without decoded data must not falsely report live video.');
+  assert.equal(originalVideo.hidden, false, 'Pending remote video must remain visible to adaptive streaming.');
+  assert.equal(timers.size, 1, 'A pending play promise/data arrival must have one bounded watchdog.');
+  await originalVideo.emit('stalled');
+  assert.equal(originalVideo.hidden, false, 'A transient stall must not hide the SDK-observed element.');
+  for (let count = 0; count < 5; count += 1) harness.hooks.renderParticipants();
+  assert.equal(shareTile(), originalTile, 'Unrelated room renders must preserve a recovering tile.');
+  assert.equal(shareVideo(), originalVideo, 'Unrelated room renders must preserve the same video element.');
+  assert.equal(attachCalls, 1);
+  assert.equal(detachCalls, 0);
+  playMode = 'playing';
+  await runTimer();
+  assert.equal(originalTile.dataset.videoState, 'live', 'A retry must restore playback without another SDK event.');
+  assert.equal(fallback().hidden, true);
+  assert.equal(timers.size, 0, 'Decoded playback must cancel its recovery watchdog.');
+  const stablePlayCalls = playCalls;
+  await originalVideo.emit('stalled');
+  assert.equal(fallback().hidden, true, 'A static shared screen with a decoded frame must not be blanked on stalled.');
+  assert.equal(timers.size, 0);
+  assert.equal(playCalls, stablePlayCalls);
+
+  shareTrack.streamState = 'paused';
+  harness.hooks.renderParticipants();
+  assert.equal(shareTile(), originalTile, 'An actual SDK track.streamState pause must preserve the tile.');
+  assert.equal(shareVideo(), originalVideo, 'Pausing must preserve the visibility observer that can resume the subscription.');
+  assert.equal(originalVideo.hidden, false);
+  assert.equal(originalTile.dataset.mediaVisible, 'false');
+  shareTrack.streamState = 'active';
+  harness.hooks.renderParticipants();
+  await settle();
+  assert.equal(shareVideo(), originalVideo);
+  assert.equal(detachCalls, 0);
+
+  originalVideo.readyState = 0; originalVideo.videoWidth = 0; originalVideo.videoHeight = 0;
+  originalVideo.paused = true; playMode = 'reject';
+  await originalVideo.emit('emptied');
+  await settle();
+  const beforeRetries = playCalls;
+  for (let count = 0; count < 3; count += 1) await runTimer();
+  assert.equal(playCalls - beforeRetries, 3, 'One incident must have exactly three automatic retry attempts.');
+  assert.equal(timers.size, 0, 'Persistent failures must stop retrying instead of looping.');
+  assert.equal(originalVideo.hidden, false, 'Even exhausted retries must not deadlock adaptive visibility.');
+  for (let count = 0; count < 8; count += 1) {
+    await originalVideo.emit('stalled'); harness.hooks.renderParticipants();
+  }
+  assert.equal(timers.size, 0, 'Repeated stalled and room events must not reset an exhausted incident.');
+  const retry = descendants(fallback()).find((node) => node.dataset.srVideoRetry === 'true');
+  assert.ok(retry && !retry.hidden, 'Exhaustion must offer an explicit, bounded Retry video control.');
+  playMode = 'defer';
+  await retry.emit('click'); await settle();
+  assert.equal(deferredPlays.length, 1);
+  originalVideo.readyState = 2; originalVideo.videoWidth = 1280; originalVideo.videoHeight = 720; originalVideo.paused = false;
+  await originalVideo.emit('playing');
+  deferredPlays[0].reject(new Error('older play request failed after recovery'));
+  await settle();
+  assert.equal(originalTile.dataset.videoState, 'live', 'A stale play rejection cannot blank a newer decoded frame.');
+  assert.equal(fallback().hidden, true);
+
+  originalVideo.readyState = 0; originalVideo.paused = true; playMode = 'defer';
+  await originalVideo.emit('emptied');
+  const staleTimer = timers.values().next().value.callback;
+  publication.isMuted = true;
+  harness.hooks.renderParticipants();
+  const callsBeforeRemoval = playCalls;
+  staleTimer(); await settle();
+  for (const callback of clearedTimers) callback();
+  await originalVideo.emit('playing'); await settle();
+  assert.equal(playCalls, callsBeforeRemoval, 'Detached/stale timers must not play a removed screen share.');
+  assert.equal(timers.size, 0);
+  assert.equal([...originalVideo.listeners.values()].flat().length, 0, 'Detach must remove owned video event listeners.');
+  assert.equal(shareTile(), undefined);
+
+  publication.isMuted = false; shareTrack.streamState = 'paused'; playMode = 'playing';
+  harness.hooks.renderParticipants(); await settle();
+  const initiallyPausedVideo = shareVideo();
+  assert.ok(initiallyPausedVideo, 'An initially paused remote publication still needs an observed video element to resume.');
+  assert.equal(initiallyPausedVideo.hidden, false);
+  shareTrack.streamState = 'active'; harness.hooks.renderParticipants(); await settle();
+  assert.equal(shareVideo(), initiallyPausedVideo);
+  assert.equal(shareTile().dataset.videoState, 'live');
+
+  initiallyPausedVideo.readyState = 0; initiallyPausedVideo.paused = true; playMode = 'reject';
+  await initiallyPausedVideo.emit('emptied');
+  const beforeBlock = playCalls;
+  harness.hooks.state.blockedParticipants.add(remote.identity);
+  harness.hooks.renderParticipants();
+  for (const callback of clearedTimers) callback();
+  await settle();
+  assert.equal(playCalls, beforeBlock);
+  assert.equal(timers.size, 0, 'Blocking a participant must cancel their video recovery.');
+  harness.hooks.state.blockedParticipants.clear();
+  harness.hooks.renderParticipants(); await settle();
+  const beforeLeave = playCalls;
+  const leaveTimer = timers.values().next().value?.callback;
+  harness.hooks.detachTracks(); harness.hooks.state.room = null;
+  leaveTimer?.(); await settle();
+  assert.equal(playCalls, beforeLeave);
+  assert.equal(timers.size, 0, 'Leaving must cancel all video recovery timers.');
+  console.log('Study Room receiver recovery: pending data, stalled static frame, finite playback retries, paused attach/resume, stable nodes, stale work and teardown passed.');
+}
+
+{
+  const shareAudioSource = 'screen_share_audio';
+  const sources = { ...liveKitSources, ScreenShareAudio: shareAudioSource };
+  const attachCounts = new Map();
+  const detachCounts = new Map();
+  const volumeBySource = new Map();
+  let shareAudioAllowed = false;
+  let delayedAudio = false;
+  const deferredAudio = [];
+  const makeAudioTrack = (source) => ({
+    attach() {
+      attachCounts.set(source, (attachCounts.get(source) || 0) + 1);
+      const audio = new FakeHTMLElement(source, 'audio');
+      audio.play = () => {
+        if (source === shareAudioSource && delayedAudio) {
+          return new Promise((resolve, reject) => deferredAudio.push({ resolve, reject }));
+        }
+        return source !== shareAudioSource || shareAudioAllowed
+          ? Promise.resolve() : Promise.reject(new Error('User gesture required for shared audio'));
+      };
+      return audio;
+    },
+    detach() { detachCounts.set(source, (detachCounts.get(source) || 0) + 1); },
+  });
+  const microphone = { source: sources.Microphone, isMuted: false, track: makeAudioTrack(sources.Microphone) };
+  const sharedAudio = { source: shareAudioSource, isMuted: false, track: makeAudioTrack(shareAudioSource) };
+  const remote = {
+    identity: 'shared-audio-remote', name: 'Remote', isLocal: false, attributes: {},
+    trackPublications: new Map([[sources.Microphone, microphone], [shareAudioSource, sharedAudio]]),
+    getTrackPublication(source) { return this.trackPublications.get(source); },
+    setVolume(value, source = sources.Microphone) { volumeBySource.set(source, value); },
+  };
+  const local = {
+    identity: 'shared-audio-local', name: 'Local', isLocal: true, attributes: {},
+    trackPublications: new Map([[shareAudioSource, sharedAudio]]),
+    getTrackPublication(source) { return this.trackPublications.get(source); },
+  };
+  const harness = createLiveHarness({
+    fetch: async () => authorizedResponse(), enumerateDevices: async () => labeledDevices,
+    getUserMedia: async () => { throw new Error('No real microphone or camera may be captured.'); },
+    liveKit: { Track: { Source: sources } },
+  });
+  await waitForAuthorizedPrejoin(harness);
+  const settle = async () => { for (let count = 0; count < 6; count += 1) await Promise.resolve(); };
+  harness.hooks.state.room = { localParticipant: local,
+    remoteParticipants: new Map([[remote.identity, remote]]), state: 'connected', canPlaybackAudio: true,
+    async startAudio() {},
+  };
+  harness.hooks.renderParticipants(); await settle();
+  const audioEntries = () => harness.hooks.state.attachedTracks.filter((entry) => entry.kind === 'audio');
+  assert.deepEqual(Array.from(audioEntries(), (entry) => entry.key).sort(),
+    [`audio:${remote.identity}`, `audio:${remote.identity}:screen_share_audio`],
+    'Receiver must attach remote microphone and shared-video audio independently, never local loopback.');
+  assert.equal(harness.hooks.state.audioPlaybackBlocked, true,
+    'Successful microphone playback must not hide a blocked shared-audio track.');
+  assert.equal(harness.document.getElementById('sr-audio-prompt').hidden, false);
+  assert.equal(await harness.hooks.startRoomAudioFromGesture(), false);
+  assert.equal(harness.hooks.state.audioPlaybackBlocked, true);
+  shareAudioAllowed = true;
+  assert.equal(await harness.hooks.startRoomAudioFromGesture(), true);
+  assert.equal(harness.hooks.state.audioPlaybackBlocked, false);
+  assert.equal(harness.document.getElementById('sr-audio-prompt').hidden, true);
+  for (let count = 0; count < 4; count += 1) harness.hooks.renderParticipants();
+  assert.equal(attachCounts.get(sources.Microphone), 1);
+  assert.equal(attachCounts.get(shareAudioSource), 1, 'Room rerenders must not duplicate shared audio playback.');
+  harness.hooks.setParticipantVolume(remote, 31);
+  assert.equal(volumeBySource.get(sources.Microphone), 0.31);
+  assert.equal(volumeBySource.get(shareAudioSource), 0.31, 'The existing participant volume must also govern shared video audio.');
+  const microphoneEntry = audioEntries().find((entry) => entry.key === `audio:${remote.identity}`);
+  sharedAudio.isMuted = true; harness.hooks.renderParticipants();
+  assert.equal(audioEntries().length, 1);
+  assert.equal(audioEntries()[0], microphoneEntry, 'Stopping shared audio must preserve the microphone attachment.');
+  assert.equal(detachCounts.get(shareAudioSource), 1);
+  sharedAudio.isMuted = false; harness.hooks.renderParticipants(); await settle();
+  assert.equal(audioEntries().length, 2);
+  assert.equal(attachCounts.get(sources.Microphone), 1);
+  remote.trackPublications.delete(shareAudioSource); harness.hooks.renderParticipants();
+  assert.equal(audioEntries().length, 1);
+  assert.equal(audioEntries()[0], microphoneEntry);
+  remote.trackPublications.set(shareAudioSource, sharedAudio); harness.hooks.renderParticipants(); await settle();
+  harness.hooks.state.localMutedParticipants.add(remote.identity); harness.hooks.renderParticipants();
+  assert.equal(audioEntries().length, 0, 'Mute for me must silence microphone and shared audio.');
+  harness.hooks.state.localMutedParticipants.clear(); harness.hooks.renderParticipants(); await settle();
+  harness.hooks.state.blockedParticipants.add(remote.identity); harness.hooks.renderParticipants();
+  assert.equal(audioEntries().length, 0, 'Local blocking must silence both audio sources.');
+  delayedAudio = true;
+  harness.hooks.state.blockedParticipants.clear(); harness.hooks.renderParticipants(); await settle();
+  assert.equal(deferredAudio.length, 1);
+  remote.trackPublications.delete(shareAudioSource); harness.hooks.renderParticipants();
+  deferredAudio[0].reject(new Error('old removed share audio playback rejected'));
+  await settle();
+  assert.equal(harness.hooks.state.audioPlaybackBlocked, false, 'A removed audio element cannot re-open the current audio prompt.');
+  harness.hooks.detachTracks();
+  assert.equal(audioEntries().length, 0);
+  console.log('Study Room shared audio: dual-source playback, no loopback/duplicates, gesture gating, volume, selective unpublish, local mute/block and stale-promise cleanup passed.');
+}
+
 {
   let endedAttachCount = 0;
   const endedTrack = {
@@ -2551,11 +2830,15 @@ class FakeMediaStream {
   );
   const playErrorVideo = descendants(playErrorTile).find((child) => child.tagName === 'VIDEO');
   await eventually(() => playErrorCount === 1 && playErrorTile?.dataset.videoState === 'unavailable', 'A rejected video play promise did not expose the recovery state.');
-  assert.equal(playErrorVideo.hidden, true);
+  assert.equal(playErrorVideo.hidden, false, 'A rejected play must retain adaptive-stream visibility behind the fallback.');
   const fallback = descendants(playErrorTile).find((child) => child.dataset.srVideoFallback === 'true');
   assert.equal(fallback.hidden, false);
 
   playErrorVideo.play = async () => {};
+  playErrorVideo.readyState = 2;
+  playErrorVideo.videoWidth = 640;
+  playErrorVideo.videoHeight = 360;
+  playErrorVideo.paused = false;
   await playErrorVideo.emit('playing');
   assert.equal(playErrorVideo.hidden, false, 'A later playing event must restore the video element.');
   assert.equal(fallback.hidden, true, 'A recovered video must hide its fallback placeholder.');

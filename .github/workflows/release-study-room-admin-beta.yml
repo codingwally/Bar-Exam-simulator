@@ -242,8 +242,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes wrangler@4.114.0 deploy --config wrangler.staging.toml --secrets-file "$LIVEKIT_SECRET_FILE" --dry-run
-          npx --yes wrangler@4.114.0 deploy --config wrangler.staging.toml --secrets-file "$LIVEKIT_SECRET_FILE"
+          npx --yes wrangler@4.114.0 deploy --config wrangler.staging.toml --keep-vars --secrets-file "$LIVEKIT_SECRET_FILE" --dry-run
+          npx --yes wrangler@4.114.0 deploy --config wrangler.staging.toml --keep-vars --secrets-file "$LIVEKIT_SECRET_FILE"
 
       - name: Remove the ephemeral secret file
         if: always()
@@ -393,7 +393,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes wrangler@4.114.0 deploy --secrets-file "$LIVEKIT_SECRET_FILE" --dry-run
+          npx --yes wrangler@4.114.0 deploy --keep-vars --secrets-file "$LIVEKIT_SECRET_FILE" --dry-run
 
       - name: Recheck the live Pages baseline immediately before Worker mutation
         env:
@@ -424,8 +424,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes wrangler@4.114.0 deploy --secrets-file "$LIVEKIT_SECRET_FILE"
-          npx --yes wrangler@4.114.0 deploy --config wrangler.public-api.toml
+          npx --yes wrangler@4.114.0 deploy --keep-vars --secrets-file "$LIVEKIT_SECRET_FILE"
+          npx --yes wrangler@4.114.0 deploy --config wrangler.public-api.toml --keep-vars
 
       - name: Remove the ephemeral secret file
         if: always()

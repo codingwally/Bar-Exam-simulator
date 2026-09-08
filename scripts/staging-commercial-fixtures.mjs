@@ -20,8 +20,9 @@ export function commercialFixtureIdentity(runId, label) {
 }
 
 // Every returned row must still match the scalar snapshot in this same UPDATE /
-// DELETE statement. Values are URL encoded, quoted as PostgREST literals, never
-// spliced as filter grammar. Unknown JSON/array columns fail closed.
+// DELETE statement. URLSearchParams encodes each complete scalar value. Top-level
+// PostgREST eq consumes the literal remainder; it does not unquote it like an
+// in-list or logic-tree value. Unknown JSON/array columns fail closed.
 export function exactCommercialRowFilter(row) {
   assert.ok(row && !Array.isArray(row) && Object.keys(row).length > 0);
   const params = new URLSearchParams();
@@ -29,7 +30,7 @@ export function exactCommercialRowFilter(row) {
     assert.match(key, /^[a-z][a-z0-9_]*$/u);
     assert.ok(value === null || ['string','number','boolean'].includes(typeof value));
     if (typeof value === 'number') assert.ok(Number.isFinite(value));
-    params.set(key, value === null ? 'is.null' : `eq."${String(value).replaceAll('\\','\\\\').replaceAll('"','\\"')}"`);
+    params.set(key, value === null ? 'is.null' : `eq.${String(value)}`);
   }
   return params;
 }

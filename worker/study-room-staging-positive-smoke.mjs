@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   AudioFrame,
@@ -53,6 +53,25 @@ const TRACK_SID_PATTERN = /^TR_[A-Za-z0-9_-]{4,128}$/u;
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 
 let checkpoint = "startup";
+let fixtureManifest = null;
+let fixtureManifestPath = null;
+const fixtureSessions = new Map();
+
+async function persistFixtureManifest() {
+  assert.ok(fixtureManifest && fixtureManifestPath);
+  await mkdir(dirname(fixtureManifestPath), { recursive: true });
+  const temporary = `${fixtureManifestPath}.tmp`;
+  await writeFile(temporary, `${JSON.stringify(fixtureManifest, null, 2)}\n`, { flag: "wx", mode: 0o600 });
+  await rename(temporary, fixtureManifestPath);
+}
+
+function fixtureIdentity(label, runId) {
+  assert.match(runId, /^[a-z0-9]{8,12}-[a-f0-9]{8}$/u);
+  assert.ok(["student", "primary-admin", "secondary-admin", "founder-admin"].includes(label));
+  return { email: `dd-study-room-${label}-${runId}@example.com`,
+    fullName: `Synthetic Study Room ${label}`,
+    marker: { version: 1, runId, label } };
+}
 
 function assertPlainObject(value, message) {
   assert.ok(
@@ -369,11 +388,17 @@ function serviceHeaders(configuration, contentType = false) {
 }
 
 async function createSyntheticUser(configuration, label, runId, createdUsers) {
-  const email = `dd-study-room-${label}-${runId}@example.com`;
+  const identity = fixtureIdentity(label, runId);
+  const email = identity.email;
   const password = `Dd!${randomBytes(30).toString("base64url")}9z`;
-  const { body: createdBody } = await requestSupabaseAdminJson(
-    configuration,
-    "/auth/v1/admin/users",
+  const cleanupRecord = { id: null, label, runId, creationState: "requested", registrationState: "not_started",
+    signInState: "not_started", signOutState: "not_started", cleanupState: "pending", role: "student", assignedBy: null };
+  createdUsers.push(cleanupRecord);
+  await persistFixtureManifest();
+  // Creation is not retried after an unknown outcome. Its exact run identity
+  // remains in the private manifest for operator recovery, never a prefix sweep.
+  const { body: createdBody } = await requestJson(
+    `${configuration.supabaseUrl}/auth/v1/admin/users`,
     {
       method: "POST",
       headers: serviceHeaders(configuration, true),
@@ -381,7 +406,8 @@ async function createSyntheticUser(configuration, label, runId, createdUsers) {
         email,
         password,
         email_confirm: true,
-        user_metadata: { full_name: `Synthetic Study Room ${label}` },
+        user_metadata: { full_name: identity.fullName },
+        app_metadata: { astra_staging_study_room_fixture: identity.marker },
       }),
     },
     [200, 201],
@@ -392,8 +418,22 @@ async function createSyntheticUser(configuration, label, runId, createdUsers) {
     UUID_PATTERN,
     "Supabase did not create the synthetic user.",
   );
-  const cleanupRecord = { id: created.id, token: null };
-  createdUsers.push(cleanupRecord);
+  cleanupRecord.id = created.id;
+  cleanupRecord.creationState = "recorded";
+  cleanupRecord.registrationState = "requested";
+  await persistFixtureManifest();
+  const { body: registration } = await requestJson(
+    `${configuration.supabaseUrl}/rest/v1/rpc/astra_register_staging_study_room_fixture`,
+    { method: "POST", headers: serviceHeaders(configuration, true),
+      body: JSON.stringify({ p_user_id: created.id, p_run_id: runId, p_label: label }) },
+  );
+  assert.equal(registration?.registered, true);
+  assert.equal(registration?.fixtureUserId, created.id);
+  assert.equal(registration?.dataScope, "internal_test");
+  assert.equal(registration?.registrationVersion, "astra-staging-study-room-v1");
+  cleanupRecord.registrationState = "confirmed";
+  cleanupRecord.signInState = "requested";
+  await persistFixtureManifest();
 
   const { body: session } = await requestJson(
     `${configuration.supabaseUrl}/auth/v1/token?grant_type=password`,
@@ -411,11 +451,20 @@ async function createSyntheticUser(configuration, label, runId, createdUsers) {
       session.access_token.length > 80,
     "Supabase did not issue a synthetic-user session.",
   );
-  cleanupRecord.token = session.access_token;
+  assert.equal(session?.user?.id, created.id);
+  fixtureSessions.set(created.id, session.access_token);
+  cleanupRecord.signInState = "confirmed";
+  await persistFixtureManifest();
   return Object.freeze({ id: created.id, token: session.access_token });
 }
 
 async function assignSyntheticRole(configuration, userId, role, assignedBy) {
+  const record = fixtureManifest.fixtures.find((user) => user.id === userId);
+  assert.equal(record?.registrationState, "confirmed");
+  record.roleChangeState = "requested";
+  record.role = role;
+  record.assignedBy = assignedBy || null;
+  await persistFixtureManifest();
   const { body } = await requestJson(
     `${configuration.supabaseUrl}/rest/v1/user_roles?user_id=eq.${encodeURIComponent(userId)}`,
     {
@@ -439,34 +488,10 @@ async function assignSyntheticRole(configuration, userId, role, assignedBy) {
   );
   assert.equal(body[0]?.user_id, userId);
   assert.equal(body[0]?.role, role);
+  record.roleChangeState = "confirmed";
+  await persistFixtureManifest();
 }
 
-async function grantSyntheticFoundingAccess(configuration, actorUserId, member) {
-  const expiresAt = new Date(Date.now() + 3_600_000).toISOString();
-  const { body } = await requestJson(
-    `${configuration.supabaseUrl}/rest/v1/free_beta_access?on_conflict=user_id`,
-    {
-      method: "POST",
-      headers: {
-        ...serviceHeaders(configuration, true),
-        Prefer: "resolution=merge-duplicates,return=representation",
-      },
-      body: JSON.stringify({
-        user_id: member.id,
-        enabled: true,
-        expires_at: expiresAt,
-        reason: "Study Room subscriber staging verification",
-        created_by: actorUserId,
-        updated_by: actorUserId,
-        access_program: "founding_beta_2026",
-      }),
-    },
-    [200, 201],
-  );
-  assert.equal(Array.isArray(body) ? body.length : 0, 1);
-  assert.equal(body[0]?.enabled, true);
-  assert.equal(body[0]?.access_program, "founding_beta_2026");
-}
 
 async function acceptSyntheticCurrentTerms(configuration, member) {
   const settingsUrl = new URL(
@@ -1134,146 +1159,88 @@ function isSyntheticStudyRoomUser(user) {
   );
 }
 
-async function listStaleSyntheticAdministrators(configuration) {
-  // The hosted Supabase Auth collection endpoint can currently return a
-  // platform-side 500. Enumerate only administrator IDs from the staging
-  // authorization table, then use the existing audited administrator
-  // directory to re-check both the synthetic email namespace and the exact
-  // synthetic profile marker before deletion.
-  const candidateLimit = 200;
-  const candidateUrl = new URL(
-    `${configuration.supabaseUrl}/rest/v1/user_roles`,
-  );
-  candidateUrl.searchParams.set(
-    "role",
-    "in.(admin,founder_admin,super_admin)",
-  );
-  candidateUrl.searchParams.set("select", "user_id,role");
-  candidateUrl.searchParams.set("limit", String(candidateLimit));
-  const { body: rows } = await requestJson(candidateUrl, {
-    headers: serviceHeaders(configuration),
-  });
-  assert.ok(
-    Array.isArray(rows) && rows.length < candidateLimit,
-    "The staging administrator candidate set exceeded its reviewed cleanup boundary.",
-  );
-  const rolePriority = Object.freeze({ super_admin: 0, founder_admin: 1, admin: 2 });
-  const candidates = rows
-    .map((row) => ({
-      id: String(row?.user_id || ""),
-      role: String(row?.role || ""),
-    }))
-    .filter(
-      (candidate) =>
-        UUID_PATTERN.test(candidate.id) &&
-        Object.hasOwn(rolePriority, candidate.role),
-    )
-    .sort((left, right) => rolePriority[left.role] - rolePriority[right.role]);
-  const candidateIds = new Set(candidates.map((candidate) => candidate.id));
-  let directoryItems = null;
-  for (const candidate of candidates) {
-    try {
-      const { body } = await requestJson(
-        `${configuration.supabaseUrl}/rest/v1/rpc/admin_user_directory`,
-        {
-          method: "POST",
-          headers: serviceHeaders(configuration, true),
-          body: JSON.stringify({
-            p_actor_user_id: candidate.id,
-            p_search: "dd-study-room-",
-            p_limit: 100,
-            p_offset: 0,
-            p_request_key: `study-room-cleanup-${randomBytes(12).toString("hex")}`,
-            p_access_purpose: "dashboard",
-          }),
-        },
-      );
-      if (Array.isArray(body?.items)) {
-        directoryItems = body.items;
-        break;
-      }
-    } catch (error) {
-      if (![400, 401, 403].includes(Number(error?.remoteStatus || 0))) {
-        throw error;
-      }
-    }
-  }
-  assert.ok(
-    Array.isArray(directoryItems),
-    "No authorized staging administrator could verify stale synthetic users.",
-  );
-  return directoryItems
-    .filter((entry) => candidateIds.has(String(entry?.id || "")))
-    .filter((entry) =>
-      isSyntheticStudyRoomUser({
-        email: entry?.email,
-        user_metadata: { full_name: entry?.display_name },
-      }),
-    )
-    .map((entry) => ({ id: String(entry.id), token: null }));
+async function fixtureRows(configuration, table, userId, column = "user_id") {
+  assert.match(userId, UUID_PATTERN);
+  const query = new URLSearchParams({ [column]: `eq.${userId}`, select: "*", limit: "101" });
+  const { body, response } = await requestJson(`${configuration.supabaseUrl}/rest/v1/${table}?${query}`,
+    { headers: { ...serviceHeaders(configuration), Prefer: "count=exact" } });
+  assert.ok(Array.isArray(body) && body.length <= 100, "Incomplete exact-fixture discovery.");
+  const total = /^(?:\d+-\d+|\*)\/(\d+)$/u.exec(response.headers.get("content-range") || "");
+  assert.ok(total && Number(total[1]) === body.length, "Incomplete exact-fixture count.");
+  return body;
 }
 
 async function deleteSyntheticUsers(configuration, createdUsers) {
   const errors = [];
-  const filter = createdUsers
-    .map((user) => encodeURIComponent(user.id))
-    .join(",");
-  if (filter) {
-    // Remove the exact synthetic authorization rows first. Some of them retain
-    // the synthetic administrator as their actor, so deleting auth users first
-    // can create a foreign-key cycle after a partially completed smoke run.
-    for (const table of ["free_beta_access", "user_roles"]) {
-      await requestJson(
-        `${configuration.supabaseUrl}/rest/v1/${table}?user_id=in.(${filter})`,
-        {
-          method: "DELETE",
-          headers: {
-            ...serviceHeaders(configuration),
-            Prefer: "return=minimal",
-          },
-        },
-        [200, 204],
-      ).catch((error) => errors.push(error));
-    }
-  }
+  // Reverse provisioning order clears exact synthetic assigned_by references.
+  // A missing response never authorizes deletion of any other run's accounts.
   for (const user of [...createdUsers].reverse()) {
-    if (user.token) {
-      await requestJson(
-        `${configuration.supabaseUrl}/auth/v1/logout?scope=global`,
-        {
-          method: "POST",
-          headers: {
-            apikey: configuration.publishableKey,
-            Authorization: `Bearer ${user.token}`,
-          },
-        },
-        [204],
-      ).catch((error) => errors.push(error));
-    }
-    await requestSupabaseAdminJson(
-      configuration,
-      `/auth/v1/admin/users/${encodeURIComponent(user.id)}`,
-      {
-        method: "DELETE",
-        headers: serviceHeaders(configuration),
-      },
-      [200, 204],
-    ).catch((error) => errors.push(error));
-  }
-  if (createdUsers.length) {
-    for (const table of ["user_roles", "free_beta_access"]) {
-      const { body } = await requestJson(
-        `${configuration.supabaseUrl}/rest/v1/${table}?user_id=in.(${filter})&select=user_id`,
-        { headers: serviceHeaders(configuration) },
-      ).catch((error) => {
-        errors.push(error);
-        return { body: null };
-      });
-      if (body !== null && (!Array.isArray(body) || body.length !== 0)) {
-        errors.push(
-          new Error(`Synthetic Supabase ${table} rows remained after user deletion.`),
-        );
+    try {
+      assert.equal(user.creationState, "recorded", "Unknown fixture creation outcome is held.");
+      assert.match(user.id, UUID_PATTERN);
+      const expected = fixtureIdentity(user.label, user.runId);
+      const { body: raw } = await requestSupabaseAdminJson(configuration, `/auth/v1/admin/users/${user.id}`,
+        { headers: serviceHeaders(configuration) });
+      const current = raw?.user || raw;
+      assert.equal(current?.id, user.id);
+      assert.equal(current?.email, expected.email);
+      assert.deepEqual(current?.app_metadata?.astra_staging_study_room_fixture, expected.marker);
+      assert.equal(current?.user_metadata?.full_name, expected.fullName);
+      assert.equal(user.registrationState, "confirmed", "Unknown classification is held for operator recovery.");
+      assert.equal(user.signInState, "confirmed", "Unknown sign-in is held for operator recovery.");
+      const token = fixtureSessions.get(user.id);
+      assert.ok(token);
+      user.signOutState = "requested";
+      await persistFixtureManifest();
+      await requestJson(`${configuration.supabaseUrl}/auth/v1/logout?scope=global`,
+        { method: "POST", headers: { apikey: configuration.publishableKey, Authorization: `Bearer ${token}` } }, [204]);
+      user.signOutState = "confirmed";
+      await persistFixtureManifest();
+      // This suite never creates billing, outbound mail, storage, or examinations.
+      // Unexpected state is a hold, never something to cascade-delete casually.
+      for (const table of ["payment_requests", "subscriptions", "free_beta_access", "admin_capabilities",
+        "examination_beta_access", "examination_participants", "examination_attempts_multi", "grade_reservations",
+        "subscription_history", "refund_requests"]) {
+        assert.deepEqual(await fixtureRows(configuration, table, user.id), [], `Unexpected ${table} is held.`);
       }
+      for (const table of ["payment_request_history", "refund_request_history", "subscription_history"])
+        assert.deepEqual(await fixtureRows(configuration, table, user.id, "actor_user_id"), [],
+          `Unexpected financial actor history in ${table} is held.`);
+      const audits = await fixtureRows(configuration, "examination_audit_log", user.id, "actor_user_id");
+      user.retainedAuditIds = audits.map((row) => row.id);
+      user.auditCaptureState = "captured-before-auth-delete";
+      const roles = await fixtureRows(configuration, "user_roles", user.id);
+      assert.equal(roles.length, 1);
+      assert.equal(roles[0].role, user.role);
+      assert.equal(roles[0].assigned_by, user.assignedBy);
+      assert.deepEqual(await fixtureRows(configuration, "user_roles", user.id, "assigned_by"), [],
+        "A remaining role assignment still refers to this fixture; hold the ancestor.");
+      const exact = new URLSearchParams();
+      for (const [key, value] of Object.entries(roles[0])) {
+        assert.match(key, /^[a-z][a-z0-9_]*$/u);
+        assert.ok(value === null || ["string", "number", "boolean"].includes(typeof value));
+        exact.set(key, value === null ? "is.null" : `eq.${String(value)}`);
+      }
+      user.cleanupState = "role_delete_requested";
+      await persistFixtureManifest();
+      const { body: removedRoles } = await requestJson(`${configuration.supabaseUrl}/rest/v1/user_roles?${exact}`,
+        { method: "DELETE", headers: { ...serviceHeaders(configuration), Prefer: "return=representation" } });
+      assert.deepEqual(removedRoles, roles, "Exact fixture role changed during cleanup.");
+      user.cleanupState = "auth_delete_requested";
+      await persistFixtureManifest();
+      await requestJson(`${configuration.supabaseUrl}/auth/v1/admin/users/${user.id}`,
+        { method: "DELETE", headers: serviceHeaders(configuration) }, [200, 204]);
+      const deleted = await requestSupabaseAdminJson(configuration, `/auth/v1/admin/users/${user.id}`,
+        { headers: serviceHeaders(configuration) }, [404]);
+      assert.equal(deleted.response.status, 404);
+      assert.deepEqual(await fixtureRows(configuration, "user_roles", user.id), []);
+      user.cleanupState = "auth_deleted_verified";
+      fixtureSessions.delete(user.id);
+      await persistFixtureManifest();
+    } catch (error) {
+      user.cleanupState = "held";
+      errors.push(error);
+      await persistFixtureManifest().catch((persistError) => errors.push(persistError));
     }
   }
   return errors;
@@ -1283,27 +1250,26 @@ async function runPositiveSmoke() {
   const configuration = runtimeConfiguration();
   const runId = `${Date.now().toString(36)}-${randomBytes(4).toString("hex")}`;
   const createdUsers = [];
+  assert.match(String(process.env.GITHUB_SHA || ""), /^[a-f0-9]{40}$/u);
+  fixtureManifest = { schemaVersion: 1, purpose: "study-room-all-members-staging", runId,
+    projectRef: "hlzqmreeoghbldnhlybr", sourceSha: process.env.GITHUB_SHA,
+    cleanupComplete: false, independentDatabaseReadbackRequired: true,
+    cleanupScope: "exact-current-run-only", fixtures: createdUsers };
+  fixtureManifestPath = resolve(scriptDirectory, "../artifacts/study-room", `${runId}-cleanup-manifest.json`);
+  await persistFixtureManifest();
   const resources = { readers: new Set(), rooms: new Set(), tracks: new Set() };
   let failure = null;
   let failureCheckpoint = "";
   let cleanupErrors = [];
 
   try {
-    checkpoint = "stale_synthetic_cleanup";
-    const staleUsers = await listStaleSyntheticAdministrators(configuration);
-    const staleCleanupErrors = await deleteSyntheticUsers(
-      configuration,
-      staleUsers,
-    );
-    if (staleCleanupErrors.length) {
-      throw new AggregateError(
-        staleCleanupErrors,
-        "A stale synthetic Study Room user could not be removed safely.",
-      );
-    }
-    console.log(
-      `STUDY_ROOM_STAGING_POSITIVE: stale_synthetic_cleanup=${staleUsers.length}`,
-    );
+    checkpoint = "registration_preflight";
+    const registrationBoundary = await requestJson(
+      `${configuration.supabaseUrl}/rest/v1/rpc/astra_register_staging_study_room_fixture`,
+      { method: "POST", headers: serviceHeaders(configuration, true),
+        body: JSON.stringify({ p_user_id: null, p_run_id: runId, p_label: "student" }) }, [400]);
+    assert.equal(registrationBoundary.body?.code, "P0001");
+    assert.equal(registrationBoundary.body?.message, "Staging Study Room fixture identity is invalid");
 
     checkpoint = "synthetic_user_provisioning";
     const student = await createSyntheticUser(
@@ -1381,9 +1347,10 @@ async function runPositiveSmoke() {
     );
     console.log("STUDY_ROOM_STAGING_POSITIVE: non_admin_denied=true");
 
-    checkpoint = "subscriber_access";
-    await acceptSyntheticCurrentTerms(configuration, student);
-    await grantSyntheticFoundingAccess(configuration, primaryAdmin.id, student);
+    checkpoint = "free_member_access";
+    // No subscription, Beta grant, quota or paid-feature terms are prerequisites.
+    for (const table of ["subscriptions", "payment_requests", "free_beta_access"])
+      assert.deepEqual(await fixtureRows(configuration, table, student.id), []);
     const memberAccess = await workerPost(
       configuration,
       "/study-room/access",
@@ -1406,7 +1373,7 @@ async function runPositiveSmoke() {
       [403],
     );
     assert.equal(memberCreateDenied.body?.error?.code, "STUDY_ROOM_ADMIN_REQUIRED");
-    console.log("STUDY_ROOM_STAGING_POSITIVE: subscriber_access=true subscriber_create_denied=true");
+    console.log("STUDY_ROOM_STAGING_POSITIVE: free_member_access=true no_billing_grant=true member_create_denied=true");
 
     checkpoint = "admin_access";
     const primaryAccess = await workerPost(
@@ -1547,7 +1514,7 @@ async function runPositiveSmoke() {
         await workerPost(
           configuration,
           "/study-room/join",
-          secondaryAdmin.token,
+          student.token,
           { roomKey: "2", nickname: secondaryNickname },
           [201],
         )
@@ -1556,6 +1523,8 @@ async function runPositiveSmoke() {
       configuration.liveKitApiKey,
       "2",
     );
+    assert.equal(secondaryJoin.administrator, false);
+    assert.equal(secondaryJoin.microphone_allowed, true);
     const founderJoin = validateJoinResponse(
       (
         await workerPost(
@@ -1792,7 +1761,7 @@ async function runPositiveSmoke() {
         await workerPost(
           configuration,
           "/study-room/join",
-          secondaryAdmin.token,
+          student.token,
           { roomKey: "2", nickname: secondaryNickname },
           [201],
         )
@@ -1847,6 +1816,10 @@ async function runPositiveSmoke() {
     cleanupErrors.push(
       ...(await deleteSyntheticUsers(configuration, createdUsers)),
     );
+    fixtureManifest.cleanupComplete = cleanupErrors.length === 0;
+    fixtureManifest.rtcReleased = cleanupErrors.length === 0;
+    fixtureManifest.testPassed = !failure;
+    await persistFixtureManifest();
   }
 
   if (cleanupErrors.length) {

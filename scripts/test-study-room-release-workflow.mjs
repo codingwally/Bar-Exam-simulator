@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -29,6 +30,113 @@ assert.match(workflow, /Enforce the Study Room-only diff/u);
 const allowlistSource = workflow.match(/allowed='([^']+)'/u)?.[1];
 assert.ok(allowlistSource, "The Study Room release allowlist must be present.");
 const releaseAllowlist = new RegExp(allowlistSource, "u");
+const reviewedLiveSha = "9801ebbb4c972a782dd59a387bd973ae732ca1d5";
+const reviewedBaselineSha = "24dfd65bbfdbbaf843a9e00d3be7e53b4bb20030";
+const reviewedBaselineTree = "2f5c922c519b6223781a1e262e5999568f59576c";
+const reviewedDelta = [
+  "M\t.github/workflows/release-unlimited-feature-access.yml",
+  "M\t.github/workflows/validate-mandatory-early-access.yml",
+  "M\tscripts/astra-release-database-contract.mjs",
+  "M\tscripts/test-astra-late-payment-ui.mjs",
+  "A\tscripts/test-astra-payment-notification-postgres.mjs",
+  "A\tscripts/test-astra-payment-notification-sent-terminal.mjs",
+  "M\tscripts/test-unlimited-feature-access-release-workflow.mjs",
+  "A\tsupabase/migrations/20260908115426_astra_payment_notification_sent_terminal.sql",
+].join("\n");
+for (const entry of reviewedDelta.split("\n")) {
+  assert.doesNotMatch(entry.slice(2), releaseAllowlist,
+    "Reviewed baseline files must never become generally allowed candidate edits.");
+}
+for (const pin of [reviewedLiveSha, reviewedBaselineSha, reviewedBaselineTree]) {
+  assert.ok(workflow.includes(`'${pin}'`), "The recognized baseline must have exact immutable pins.");
+}
+const scopeStep = workflow.replace(/\r\n/gu, "\n").split(
+  "      - name: Enforce the Study Room-only diff\n",
+)[1]?.split("      - name: Setup Node\n")[0];
+const scopeScript = scopeStep?.split("        run: |\n")[1]
+  ?.split("\n").map((line) => line.replace(/^          /u, "")).join("\n");
+assert.ok(scopeScript, "Exercise the actual workflow scope script, not a copied policy model.");
+// No Git writes, fixture creation or network: the real Bash gate receives only
+// deterministic Git outputs. Unknown commands/arguments fail with a distinct code.
+const mockGit = String.raw`
+PATH=/usr/bin:/bin:$PATH
+git() {
+  case "$1" in
+    cat-file) [[ "$*" == "cat-file -e $MOCK_BASELINE^{commit}" ]] || return 90
+      [[ "$MOCK_MISSING_COMMIT" != true ]] ;;
+    merge-base)
+      if [[ "$*" == "merge-base --is-ancestor $MOCK_LIVE $MOCK_BASELINE" ]]; then
+        [[ "$MOCK_BAD_LIVE_ANCESTRY" != true ]]
+      elif [[ "$*" == "merge-base --is-ancestor $MOCK_BASELINE $GITHUB_SHA" ]]; then
+        [[ "$MOCK_BAD_CANDIDATE_ANCESTRY" != true ]]
+      else return 91; fi ;;
+    rev-parse) [[ "$*" == "rev-parse $MOCK_BASELINE^{tree}" ]] || return 92
+      printf '%s\n' "$MOCK_TREE" ;;
+    diff)
+      if [[ "$*" == "diff --no-renames --name-status $MOCK_LIVE $MOCK_BASELINE" ]]; then
+        printf '%s\n' "$MOCK_BASELINE_DELTA"
+      elif [[ "$*" == "diff --quiet $MOCK_LIVE $MOCK_BASELINE -- worker assets study-room index.html content" ]]; then
+        [[ "$MOCK_RUNTIME_DRIFT" != true ]]
+      elif [[ "$*" == "diff --name-only $MOCK_SCOPE_BASE $GITHUB_SHA" ]]; then
+        printf '%s\n' "$MOCK_CANDIDATE_DELTA"
+      elif [[ "$*" == "diff --diff-filter=D --name-only $MOCK_SCOPE_BASE $GITHUB_SHA" ]]; then
+        printf '%s\n' "$MOCK_DELETED"
+      else return 93; fi ;;
+    *) return 94 ;;
+  esac
+}
+`;
+const bash = process.platform === "win32"
+  ? path.join(process.env.ProgramFiles || "C:/Program Files", "Git/bin/bash.exe")
+  : "/bin/bash";
+let scopeCases = 0;
+function verifyScopeCase(overrides = {}, rejected = false) {
+  const env = {
+    ...process.env,
+    EXPECTED_CURRENT_PAGES_SHA: reviewedLiveSha,
+    GITHUB_SHA: "1".repeat(40),
+    MOCK_LIVE: reviewedLiveSha,
+    MOCK_BASELINE: reviewedBaselineSha,
+    MOCK_SCOPE_BASE: reviewedBaselineSha,
+    MOCK_TREE: reviewedBaselineTree,
+    MOCK_BASELINE_DELTA: reviewedDelta,
+    MOCK_CANDIDATE_DELTA: "worker/study-room-core.mjs\nassets/study-room-preview.js",
+    MOCK_DELETED: "",
+    MOCK_MISSING_COMMIT: "false",
+    MOCK_BAD_LIVE_ANCESTRY: "false",
+    MOCK_BAD_CANDIDATE_ANCESTRY: "false",
+    MOCK_RUNTIME_DRIFT: "false",
+    ...overrides,
+  };
+  const run = () => execFileSync(bash, ["--noprofile", "--norc", "-c", mockGit + scopeScript],
+    { env, encoding: "utf8", stdio: "pipe", timeout: 10000 });
+  if (rejected) assert.throws(run, (error) => error.status === 1);
+  else run();
+  scopeCases += 1;
+}
+verifyScopeCase();
+verifyScopeCase({ MOCK_CANDIDATE_DELTA: "supabase/migrations/20260908131116_astra_staging_study_room_fixture_registration.sql\nworker/astra-staging-study-room-fixture-registration.test.mjs" });
+verifyScopeCase({ MOCK_CANDIDATE_DELTA: "supabase/migrations/20260908070656_astra_staging_commercial_fixture_registration.sql" }, true);
+verifyScopeCase({ MOCK_MISSING_COMMIT: "true" }, true);
+verifyScopeCase({ MOCK_BAD_LIVE_ANCESTRY: "true" }, true);
+verifyScopeCase({ MOCK_BAD_CANDIDATE_ANCESTRY: "true" }, true);
+verifyScopeCase({ MOCK_TREE: "0".repeat(40) }, true);
+verifyScopeCase({ MOCK_BASELINE_DELTA: reviewedDelta + "\nM\tworker/index.mjs" }, true);
+verifyScopeCase({ MOCK_BASELINE_DELTA: reviewedDelta.replace("M\t", "D\t") }, true);
+verifyScopeCase({ MOCK_BASELINE_DELTA: reviewedDelta.split("\n").slice(1).join("\n") }, true);
+verifyScopeCase({ MOCK_RUNTIME_DRIFT: "true" }, true);
+verifyScopeCase({ MOCK_CANDIDATE_DELTA: "" }, true);
+verifyScopeCase({ MOCK_CANDIDATE_DELTA: "worker/study-room-core.mjs\nworker/commercial-entry.mjs" }, true);
+for (const entry of reviewedDelta.split("\n")) {
+  verifyScopeCase({ MOCK_CANDIDATE_DELTA: entry.slice(2) }, true);
+}
+verifyScopeCase({ MOCK_DELETED: "assets/study-room-preview.js" }, true);
+const otherLiveSha = "2".repeat(40);
+verifyScopeCase({ EXPECTED_CURRENT_PAGES_SHA: otherLiveSha, MOCK_SCOPE_BASE: otherLiveSha });
+verifyScopeCase({ EXPECTED_CURRENT_PAGES_SHA: otherLiveSha, MOCK_SCOPE_BASE: otherLiveSha,
+  MOCK_CANDIDATE_DELTA: "scripts/astra-release-database-contract.mjs" }, true);
+assert.doesNotMatch(scopeStep, /supabase\s+(?:db|migration)|apply_migration|psql/iu);
+console.log(`Study Room recognized-baseline scope gate: ${scopeCases} inert Bash cases passed.`);
 for (const expectedReleaseFile of [
   ".github/workflows/deploy-pages-only.yml",
   ".github/workflows/release-study-room-admin-beta.yml",
@@ -52,11 +160,14 @@ for (const expectedReleaseFile of [
   "scripts/test-pages-artifact.mjs",
   "scripts/test-study-room-backgrounds.mjs",
   "scripts/test-study-room-deployment-smoke.mjs",
+  "scripts/test-study-room-fixture-safety.mjs",
   "scripts/test-study-room-hotfix-behavior.mjs",
   "scripts/test-study-room-live.mjs",
   "scripts/test-study-room-preview.mjs",
   "scripts/test-study-room-release-workflow.mjs",
   "study-room/index.html",
+  "supabase/migrations/20260908131116_astra_staging_study_room_fixture_registration.sql",
+  "worker/astra-staging-study-room-fixture-registration.test.mjs",
   "worker/index.mjs",
   "worker/livekit-credentials-smoke.mjs",
   "worker/livekit-credentials-smoke.test.mjs",
@@ -84,6 +195,7 @@ assert.match(workflow, /node --test worker\/\*\.test\.mjs/u);
 assert.match(workflow, /node scripts\/test-pages-artifact\.mjs/u);
 assert.match(workflow, /node scripts\/test-study-room-backgrounds\.mjs/u);
 assert.match(workflow, /node scripts\/test-study-room-hotfix-behavior\.mjs/u);
+assert.equal((workflow.match(/node scripts\/test-study-room-fixture-safety\.mjs/gu) || []).length, 1);
 assert.match(workflow, /node --check assets\/study-room-backgrounds\.js/u);
 assert.match(
   workflow,
@@ -159,8 +271,12 @@ const stagingPublishableResolver = workflow.indexOf(
   stagingJob,
 );
 const stagingPositiveSmoke = workflow.indexOf(
-  "Verify subscriber, admin, chat, and two-participant media on staging",
+  "Verify free-member, admin, chat, and two-participant media on staging",
   stagingJob,
+);
+const stagingCleanupArtifact = workflow.indexOf(
+  "Preserve Study Room fixture cleanup evidence",
+  stagingPositiveSmoke,
 );
 const stagingMarker = workflow.indexOf(
   "Record the successful exact-SHA staging marker",
@@ -171,10 +287,17 @@ assert.ok(
     stagingPublishableResolver > stagingJob &&
     stagingSmoke > stagingJob &&
     stagingPositiveSmoke > stagingSmoke &&
-    stagingMarker > stagingPositiveSmoke &&
+    stagingCleanupArtifact > stagingPositiveSmoke &&
+    stagingMarker > stagingCleanupArtifact &&
     stagingMarker < workerJob,
   "The exact-SHA marker must be recorded only after every staging smoke check.",
 );
+const cleanupArtifactStep = workflow.slice(stagingCleanupArtifact, stagingMarker);
+assert.match(cleanupArtifactStep, /if: always\(\)/u);
+assert.match(cleanupArtifactStep, /uses: actions\/upload-artifact@v4/u);
+assert.match(cleanupArtifactStep, /path: artifacts\/study-room\/\*-cleanup-manifest\.json/u);
+assert.match(cleanupArtifactStep, /retention-days: 7/u);
+assert.match(cleanupArtifactStep, /if-no-files-found: error/u);
 const stagingAssetChecks = workflow.slice(stagingSmoke, stagingPositiveSmoke);
 for (const requiredStagingMarker of [
   "study-room-meet-layout-20260902-6",
@@ -193,6 +316,10 @@ for (const requiredStagingMarker of [
   "assets/study-room/virtual-background-due-diligence-branded.webp",
   "assets/vendor/mediapipe/selfie_segmenter-float16-2023-05-07.tflite",
   "assets/vendor/mediapipe/wasm/vision_wasm_internal.wasm",
+  "assets/study-room-preview.js?v=study-room-all-members-20260908-1",
+  "Open to all signed-in members",
+  "function hasLiveRoomAccess(value = session)",
+  "return signedIn(value);",
 ]) {
   assert.ok(
     stagingAssetChecks.includes(requiredStagingMarker),
@@ -345,6 +472,16 @@ assert.match(
   workflow.slice(pagesVerificationJob),
   /study-room-background-processor-20260902-1/u,
 );
+for (const requiredAllMembersMarker of [
+  "assets/study-room-preview.js?v=study-room-all-members-20260908-1",
+  "Open to all signed-in members",
+  "function hasLiveRoomAccess(value = session)",
+  "return signedIn(value);",
+]) {
+  assert.ok(workflow.slice(pagesVerificationJob).includes(requiredAllMembersMarker),
+    `Dedicated production verification must check ${requiredAllMembersMarker}.`);
+}
+assert.ok(home.includes("assets/study-room-preview.js?v=study-room-all-members-20260908-1"));
 for (const requiredProductionAsset of [
   "workerRequest('/study-room/rooms'",
   "workerRequest('/study-room/join'",

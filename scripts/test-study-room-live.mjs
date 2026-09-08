@@ -214,7 +214,8 @@ const openRoom = previewClient.indexOf('popup = global.open(');
 const fallbackNavigation = previewClient.indexOf('global.location.assign(roomUrl.href)', openRoom);
 const severOpener = previewClient.indexOf('popup.opener = null', fallbackNavigation);
 assert.ok(openRoom >= 0 && fallbackNavigation > openRoom && severOpener > fallbackNavigation);
-assert.match(previewClient, /hasLiveRoomAccess\(access\)[\s\S]*accessResolutionFailed[\s\S]*return openLiveRoom\(\)/);
+assert.match(previewClient, /hasLiveRoomAccess\(\)[\s\S]*return openLiveRoom\(\)/);
+assert.doesNotMatch(previewClient, /basis === ['"]founding_beta['"]/);
 assert.match(previewClient, /return openMarketingPreview\(trigger\)/);
 
 assert.match(css, /min-width:\s*320px/);

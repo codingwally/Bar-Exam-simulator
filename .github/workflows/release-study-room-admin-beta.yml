@@ -99,8 +99,27 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          allowed='^(\.github/workflows/(deploy-pages-only|release-study-room-admin-beta)\.yml|assets/icons/(community/image|navigation/(hand|mic|monitor-up|pin|settings))\.svg|assets/study-room-backgrounds\.js|assets/study-room-live\.(css|js)|assets/study-room-preview\.(css|js)|assets/study-room/virtual-background-due-diligence-branded\.webp|assets/vendor/mediapipe/(LICENSE|PROVENANCE)\.txt|assets/vendor/mediapipe/selfie_segmenter-float16-2023-05-07\.tflite|design-qa\.md|index\.html|scripts/build-pages-artifact\.mjs|scripts/test-pages-artifact\.mjs|scripts/test-study-room-(backgrounds|deployment-smoke|hotfix-behavior|live|preview|release-workflow)\.mjs|study-room/index\.html|worker/index\.mjs|worker/livekit-credentials-smoke(\.test)?\.mjs|worker/package(-lock)?\.json|worker/study-room-(core|routes|staging-positive-smoke)\.mjs|worker/study-room\.test\.mjs|worker/wrangler(\.staging)?\.toml)$'
-          changed="$(git diff --name-only "$EXPECTED_CURRENT_PAGES_SHA" "$GITHUB_SHA")"
+          scope_base="$EXPECTED_CURRENT_PAGES_SHA"
+          # One reviewed, runtime-identical baseline only. These SQL/test/CI
+          # files are not a general Study Room allowance and no SQL is applied.
+          reviewed_live_sha='9801ebbb4c972a782dd59a387bd973ae732ca1d5'
+          reviewed_baseline_sha='24dfd65bbfdbbaf843a9e00d3be7e53b4bb20030'
+          reviewed_baseline_tree='2f5c922c519b6223781a1e262e5999568f59576c'
+          if [[ "$EXPECTED_CURRENT_PAGES_SHA" == "$reviewed_live_sha" ]]; then
+            git cat-file -e "$reviewed_baseline_sha^{commit}"
+            git merge-base --is-ancestor "$reviewed_live_sha" "$reviewed_baseline_sha"
+            git merge-base --is-ancestor "$reviewed_baseline_sha" "$GITHUB_SHA"
+            test "$(git rev-parse "$reviewed_baseline_sha^{tree}")" = "$reviewed_baseline_tree"
+            reviewed_delta=$'M\t.github/workflows/release-unlimited-feature-access.yml\nM\t.github/workflows/validate-mandatory-early-access.yml\nM\tscripts/astra-release-database-contract.mjs\nM\tscripts/test-astra-late-payment-ui.mjs\nA\tscripts/test-astra-payment-notification-postgres.mjs\nA\tscripts/test-astra-payment-notification-sent-terminal.mjs\nM\tscripts/test-unlimited-feature-access-release-workflow.mjs\nA\tsupabase/migrations/20260908115426_astra_payment_notification_sent_terminal.sql'
+            actual_delta="$(git diff --no-renames --name-status "$reviewed_live_sha" "$reviewed_baseline_sha")"
+            test "$actual_delta" = "$reviewed_delta"
+            # Exact whole-tree path/status equality above excludes every other
+            # change; additionally assert the deployed runtime roots are equal.
+            git diff --quiet "$reviewed_live_sha" "$reviewed_baseline_sha" -- worker assets study-room index.html content
+            scope_base="$reviewed_baseline_sha"
+          fi
+          allowed='^(\.github/workflows/(deploy-pages-only|release-study-room-admin-beta)\.yml|assets/icons/(community/image|navigation/(hand|mic|monitor-up|pin|settings))\.svg|assets/study-room-backgrounds\.js|assets/study-room-live\.(css|js)|assets/study-room-preview\.(css|js)|assets/study-room/virtual-background-due-diligence-branded\.webp|assets/vendor/mediapipe/(LICENSE|PROVENANCE)\.txt|assets/vendor/mediapipe/selfie_segmenter-float16-2023-05-07\.tflite|design-qa\.md|index\.html|scripts/build-pages-artifact\.mjs|scripts/test-pages-artifact\.mjs|scripts/test-study-room-(backgrounds|deployment-smoke|fixture-safety|hotfix-behavior|live|preview|release-workflow)\.mjs|study-room/index\.html|supabase/migrations/20260908131116_astra_staging_study_room_fixture_registration\.sql|worker/astra-staging-study-room-fixture-registration\.test\.mjs|worker/index\.mjs|worker/livekit-credentials-smoke(\.test)?\.mjs|worker/package(-lock)?\.json|worker/study-room-(core|routes|staging-positive-smoke)\.mjs|worker/study-room\.test\.mjs|worker/wrangler(\.staging)?\.toml)$'
+          changed="$(git diff --name-only "$scope_base" "$GITHUB_SHA")"
           test -n "$changed"
           unexpected="$(printf '%s\n' "$changed" | grep -Ev "$allowed" || true)"
           if [[ -n "$unexpected" ]]; then
@@ -108,7 +127,7 @@ jobs:
             printf '%s\n' "$unexpected" >&2
             exit 1
           fi
-          deleted="$(git diff --diff-filter=D --name-only "$EXPECTED_CURRENT_PAGES_SHA" "$GITHUB_SHA")"
+          deleted="$(git diff --diff-filter=D --name-only "$scope_base" "$GITHUB_SHA")"
           if [[ -n "$deleted" ]]; then
             echo "The isolated Study Room release may not delete files." >&2
             exit 1
@@ -138,6 +157,7 @@ jobs:
           node scripts/test-study-room-live.mjs
           node scripts/test-study-room-hotfix-behavior.mjs
           node scripts/test-study-room-release-workflow.mjs
+          node scripts/test-study-room-fixture-safety.mjs
           node worker/study-room-staging-positive-smoke.mjs --preflight
           node worker/study-room-staging-positive-smoke.mjs --self-test
           node --test worker/*.test.mjs
@@ -239,6 +259,8 @@ jobs:
           live="$(curl --fail --silent --show-error "$STUDY_ROOM_WORKER_URL/assets/study-room-live.js?release=$GITHUB_SHA")"
           backgrounds="$(curl --fail --silent --show-error "$STUDY_ROOM_WORKER_URL/assets/study-room-backgrounds.js?release=$GITHUB_SHA")"
           processors="$(curl --fail --silent --show-error "$STUDY_ROOM_WORKER_URL/assets/vendor/livekit-track-processors.iife.js?release=$GITHUB_SHA")"
+          home="$(curl --fail --silent --show-error "$STUDY_ROOM_WORKER_URL/?release=$GITHUB_SHA")"
+          preview="$(curl --fail --silent --show-error "$STUDY_ROOM_WORKER_URL/assets/study-room-preview.js?release=$GITHUB_SHA")"
           grep -Fq 'study-room-meet-layout-20260902-6' <<<"$room"
           grep -Fq 'study-room-background-processor-20260902-1' <<<"$room"
           grep -Fq "workerRequest('/study-room/rooms'" <<<"$live"
@@ -247,6 +269,10 @@ jobs:
           grep -Fq 'setScreenShareEnabled' <<<"$live"
           grep -Fq 'DueDiligenceStudyRoomMandatoryBackground' <<<"$backgrounds"
           grep -Fq 'due-diligence-mandatory-virtual-background-no-raw-first-frame' <<<"$processors"
+          grep -Fq 'assets/study-room-preview.js?v=study-room-all-members-20260908-1' <<<"$home"
+          grep -Fq 'Open to all signed-in members' <<<"$home"
+          grep -Fq 'function hasLiveRoomAccess(value = session)' <<<"$preview"
+          grep -Fq 'return signedIn(value);' <<<"$preview"
           for asset in \
             assets/icons/community/image.svg \
             assets/icons/navigation/hand.svg \
@@ -260,7 +286,7 @@ jobs:
             curl --fail --silent --show-error --head --output /dev/null "$STUDY_ROOM_WORKER_URL/$asset?release=$GITHUB_SHA"
           done
 
-      - name: Verify subscriber, admin, chat, and two-participant media on staging
+      - name: Verify free-member, admin, chat, and two-participant media on staging
         env:
           STAGING_SUPABASE_URL: https://hlzqmreeoghbldnhlybr.supabase.co
           STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
@@ -268,6 +294,15 @@ jobs:
           STAGING_EXAMINATION_ORIGIN: https://duediligence-examinations-staging.wallyesteban1993.workers.dev
           LIVEKIT_API_KEY: ${{ secrets.LIVEKIT_API_KEY }}
         run: node worker/study-room-staging-positive-smoke.mjs
+
+      - name: Preserve Study Room fixture cleanup evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: study-room-cleanup-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/study-room/*-cleanup-manifest.json
+          retention-days: 7
+          if-no-files-found: error
 
       - name: Record the successful exact-SHA staging marker
         env:
@@ -531,6 +566,10 @@ jobs:
               && grep -Fq 'virtual-background-due-diligence-branded.webp' <<<"$backgrounds" \
               && grep -Fq 'due-diligence-mandatory-virtual-background-no-raw-first-frame' <<<"$processors" \
               && grep -Fq 'study-room-launch-20260830-1' <<<"$home" \
+              && grep -Fq 'assets/study-room-preview.js?v=study-room-all-members-20260908-1' <<<"$home" \
+              && grep -Fq 'Open to all signed-in members' <<<"$home" \
+              && grep -Fq 'function hasLiveRoomAccess(value = session)' <<<"$preview" \
+              && grep -Fq 'return signedIn(value);' <<<"$preview" \
               && grep -Fq "new URL('/study-room/', global.location.origin)" <<<"$preview" \
               && grep -Fq 'global.location.assign(roomUrl.href)' <<<"$preview" \
               && grep -Fq 'accessResolutionFailed = signedIn(latestSession) && !latestAccess' <<<"$preview" \

@@ -227,7 +227,7 @@ function fireStudyRoomClick(document) {
   assert.ok(closestCalls >= 1, 'The delegated Study Room trigger must be evaluated.');
 }
 
-function createPreviewHarness({ role, open, settleAccess = true, access: accessOverride = null }) {
+function createPreviewHarness({ role, open, settleAccess = true, access: accessOverride = null, session: sessionOverride = { access_token: 'signed-in-session', user: { id: 'tester-1' } } }) {
   const { document } = createDocument();
   document.getElementById('dd-study-room-overlay').hidden = true;
   document.getElementById('dd2-header-role-label').textContent = role;
@@ -236,6 +236,8 @@ function createPreviewHarness({ role, open, settleAccess = true, access: accessO
   const analytics = [];
   const resolvedAccess = { role, ...(accessOverride || {}) };
   let currentAccess = settleAccess ? resolvedAccess : null;
+  let currentSession = sessionOverride;
+  let signInCalls = 0;
   const window = {
     document,
     HTMLElement: FakeHTMLElement,
@@ -256,8 +258,11 @@ function createPreviewHarness({ role, open, settleAccess = true, access: accessO
     addEventListener() {},
     DueDiligencePhase4: {
       getAccess: () => currentAccess,
-      getSession: () => ({ access_token: 'signed-in-session', user: { id: 'tester-1' } }),
+      getSession: () => currentSession,
       refreshAccess: async () => currentAccess,
+    },
+    DueDiligencePhase2: {
+      openSignIn() { signInCalls += 1; },
     },
     DueDiligenceAnalytics: {
       track(name, detail) {
@@ -284,7 +289,14 @@ function createPreviewHarness({ role, open, settleAccess = true, access: accessO
     document.emit('duediligence:access', { detail: { access: resolvedAccess } });
   };
   if (settleAccess) resolveAccess();
-  return { window, document, openCalls, assigned, analytics, resolveAccess };
+  return {
+    window, document, openCalls, assigned, analytics, resolveAccess,
+    get signInCalls() { return signInCalls; },
+    setSession(value) {
+      currentSession = value;
+      document.emit('duediligence:session', { detail: { session: value, authenticated: Boolean(value?.access_token) } });
+    },
+  };
 }
 
 {
@@ -313,17 +325,17 @@ function createPreviewHarness({ role, open, settleAccess = true, access: accessO
   const popup = { closed: false, opener: {}, focus() {} };
   const harness = createPreviewHarness({ role: 'admin', open: () => popup, settleAccess: false });
   for (const trigger of harness.document.studyRoomTriggers) {
-    assert.equal(trigger.disabled, true, 'Study Room triggers must be disabled while account access is unresolved.');
-    assert.equal(trigger.getAttribute('aria-busy'), 'true');
-    assert.equal(trigger.getAttribute('aria-disabled'), 'true');
+    assert.equal(trigger.disabled, false, 'A real signed-in session must enable Study Room while subscription access is unresolved.');
+    assert.equal(trigger.getAttribute('aria-busy'), 'false');
+    assert.equal(trigger.getAttribute('aria-disabled'), 'false');
   }
   fireStudyRoomClick(harness.document);
-  assert.equal(harness.openCalls.length, 0, 'An unresolved admin role must not race into a stale marketing or live-room route.');
+  assert.equal(harness.openCalls.length, 1, 'Signed-in launch must not wait for subscription or role resolution.');
   assert.equal(harness.document.getElementById('dd-study-room-overlay').hidden, true);
 
   harness.resolveAccess();
   for (const trigger of harness.document.studyRoomTriggers) {
-    assert.equal(trigger.disabled, false, 'Study Room triggers must enable after verified access resolves.');
+    assert.equal(trigger.disabled, false, 'Resolving subscription access must not disable Study Room.');
     assert.equal(trigger.getAttribute('aria-busy'), 'false');
     assert.equal(trigger.getAttribute('aria-disabled'), 'false');
   }
@@ -342,7 +354,7 @@ function createPreviewHarness({ role, open, settleAccess = true, access: accessO
     assert.equal(trigger.disabled, false, 'A failed access refresh must not leave Study Room permanently disabled.');
   }
   fireStudyRoomClick(harness.document);
-  assert.equal(harness.openCalls.length, 1, 'A signed-in Admin may fall through to the server-verified private room after an access refresh failure.');
+  assert.equal(harness.openCalls.length, 1, 'A signed-in member may open the server-verified room after an access refresh failure.');
   assert.equal(harness.document.getElementById('dd-study-room-overlay').hidden, true);
 }
 
@@ -365,12 +377,11 @@ for (const popupFailure of [
 {
   const harness = createPreviewHarness({ role: 'member', open: () => ({}) });
   fireStudyRoomClick(harness.document);
-  assert.equal(harness.openCalls.length, 0, 'A non-admin must not open the private live room.');
+  assert.equal(harness.openCalls.length, 1, 'A signed-in free member must open the live room.');
   assert.equal(harness.assigned.length, 0);
-  assert.equal(harness.document.getElementById('dd-study-room-overlay').hidden, false);
-  assert.equal(harness.document.getElementById('dd-study-room-overlay').getAttribute('aria-hidden'), 'false');
-  assert.equal(harness.document.body.classList.contains('dd-study-room-open'), true);
-  assert.equal(harness.analytics.some(({ name }) => name === 'study_room_preview_opened'), true);
+  assert.equal(harness.document.getElementById('dd-study-room-overlay').hidden, true);
+  assert.equal(harness.document.body.classList.contains('dd-study-room-open'), false);
+  assert.equal(harness.analytics.some(({ name }) => name === 'study_room_preview_opened'), false);
 }
 
 {
@@ -386,13 +397,13 @@ for (const popupFailure of [
     },
   });
   fireStudyRoomClick(harness.document);
-  assert.equal(harness.openCalls.length, 0, 'A paid member must not open the live Study Room during testing.');
-  assert.equal(harness.document.getElementById('dd-study-room-overlay').hidden, false);
-  assert.deepEqual(harness.analytics.map(({ name }) => name), ['study_room_preview_opened']);
-  assert.equal(harness.analytics[0].detail.access, 'subscribed');
+  assert.equal(harness.openCalls.length, 1, 'A paid member must open the live Study Room.');
+  assert.equal(harness.document.getElementById('dd-study-room-overlay').hidden, true);
+  assert.deepEqual(harness.analytics.map(({ name }) => name), ['study_room_window_opened']);
+  assert.equal(harness.analytics[0].detail.audience, 'signed_in');
   assert.equal(
     harness.document.getElementById('dd-study-room-subscribe-note').textContent,
-    'Study Room access is not yet available during testing',
+    'Available to all signed-in members, free and paid',
   );
 }
 
@@ -407,7 +418,46 @@ for (const popupFailure of [
   assert.equal(harness.openCalls.length, 1, 'A Founding Beta tester must retain live Study Room access.');
   assert.equal(harness.document.getElementById('dd-study-room-overlay').hidden, true);
   assert.deepEqual(harness.analytics.map(({ name }) => name), ['study_room_window_opened']);
-  assert.equal(harness.analytics[0].detail.audience, 'test_cohort');
+  assert.equal(harness.analytics[0].detail.audience, 'signed_in');
+}
+
+for (const value of [
+  { allowed: false, remainingTokens: 0, basis: 'introductory' },
+  { allowed: false, paidSubscriptionExpired: true, subscription: { status: 'expired' } },
+]) {
+  const popup = { closed: false, focus() {} };
+  const harness = createPreviewHarness({ role: 'member', open: () => popup, access: value });
+  fireStudyRoomClick(harness.document);
+  assert.equal(harness.openCalls.length, 1, 'Exhausted grading quota or an expired plan must not block Study Room.');
+  harness.setSession(null);
+  fireStudyRoomClick(harness.document);
+  assert.equal(harness.openCalls.length, 1, 'Logout must prevent another live launch even while an old popup exists.');
+  assert.equal(harness.document.getElementById('dd-study-room-overlay').hidden, false);
+  assert.equal(harness.document.getElementById('dd-study-room-subscribe').querySelector('span').textContent, 'Sign in to join');
+  harness.document.emit('click', {
+    target: { closest: (selector) => selector === '#dd-study-room-subscribe' ? {} : null },
+  });
+  assert.equal(harness.signInCalls, 1, 'The signed-out preview CTA must open the existing normal sign-in interface.');
+  assert.equal(harness.openCalls.length, 1);
+}
+
+for (const missingSession of [null, {}, { user: { id: 'tester-1' } }, { access_token: '' }]) {
+  const harness = createPreviewHarness({ role: 'admin', open: () => ({}), session: missingSession });
+  fireStudyRoomClick(harness.document);
+  assert.equal(harness.openCalls.length, 0, 'Role/profile metadata without a browser token must not open live Study Room.');
+  harness.document.emit('duediligence:session', { detail: { authenticated: true } });
+  fireStudyRoomClick(harness.document);
+  assert.equal(harness.openCalls.length, 0, 'An auth event without a real session must not fabricate live access.');
+}
+
+{
+  const harness = createPreviewHarness({ role: 'member', open: () => ({}), settleAccess: false, session: null });
+  assert.equal(harness.document.studyRoomTriggers.every((trigger) => trigger.disabled), true, 'Unknown Auth with no token remains guarded.');
+  fireStudyRoomClick(harness.document);
+  assert.equal(harness.openCalls.length, 0);
+  harness.setSession({ access_token: 'new-inert-token', user: { id: 'tester-2' } });
+  fireStudyRoomClick(harness.document);
+  assert.equal(harness.openCalls.length, 1, 'A new signed-in member opens while its subscription access is still loading.');
 }
 
 function response({ ok, status, payload }) {

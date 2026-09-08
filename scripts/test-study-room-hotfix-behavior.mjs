@@ -19,6 +19,7 @@ const instrumentedLiveClient = liveClient.replace(
     moderateParticipant,
     createTile,
     buildMediaViews,
+    bindRoomEvents,
     reconcileTile,
     calculateSquareGrid,
     renderParticipants,
@@ -2069,7 +2070,7 @@ class FakeMediaStream {
   );
   assert.ok(
     companionViews.some((view) => view.participant.identity === pinnedRemote.identity),
-    'The remaining companion must respect the highest-priority remote participant.',
+    'The remaining companion must respect a manual pin, not the current speaker.',
   );
   harness.hooks.state.layoutMode = 'spotlight';
   harness.hooks.state.pinnedTrackKey = `${pinnedRemote.identity}:${liveKitSources.Camera}`;
@@ -2084,23 +2085,121 @@ class FakeMediaStream {
   harness.hooks.state.pinnedParticipantIdentity = '';
   harness.hooks.state.activeSpeakers = new Set([activeRemote.identity]);
   harness.hooks.renderParticipants();
-  let activeCompanion = harness.document.getElementById('sr-participant-grid').children.find((tile) => (
+  let stableCompanion = harness.document.getElementById('sr-participant-grid').children.find((tile) => (
     String(tile.className).includes('is-companion') && !String(tile.className).includes('is-self')
   ));
-  assert.equal(activeCompanion?.dataset.participantIdentity, activeRemote.identity);
+  assert.equal(stableCompanion?.dataset.participantIdentity, pinnedRemote.identity,
+    'An unpinned companion must follow participant insertion order, not the current speaker.');
   const cameraAttachmentsBeforeSpeakerChange = cameraAttachCount;
   harness.hooks.state.activeSpeakers = new Set([pinnedRemote.identity]);
   harness.hooks.renderParticipants();
-  activeCompanion = harness.document.getElementById('sr-participant-grid').children.find((tile) => (
+  stableCompanion = harness.document.getElementById('sr-participant-grid').children.find((tile) => (
     String(tile.className).includes('is-companion') && !String(tile.className).includes('is-self')
   ));
-  assert.equal(activeCompanion?.dataset.participantIdentity, pinnedRemote.identity, 'The unpinned active-speaker companion must switch without waiting for another event.');
+  assert.equal(stableCompanion?.dataset.participantIdentity, pinnedRemote.identity, 'Changing the active speaker must leave the companion unchanged.');
   assert.equal(
     cameraAttachCount,
     cameraAttachmentsBeforeSpeakerChange,
-    'Changing the active-speaker companion must not remount any camera track.',
+    'Changing the active speaker must not remount any camera track.',
   );
-  assert.equal(cameraDetachCount, 0, 'Changing the active-speaker companion must not detach camera tracks.');
+  assert.equal(cameraDetachCount, 0, 'Changing the active speaker must not detach camera tracks.');
+
+  const eventHandlers = new Map();
+  harness.window.LivekitClient.RoomEvent = { ActiveSpeakersChanged: 'active-speakers',
+    TrackMuted: 'track-muted', TrackUnmuted: 'track-unmuted' };
+  harness.hooks.state.room.on = (name, callback) => {
+    const handlers = eventHandlers.get(name) || [];
+    handlers.push(callback); eventHandlers.set(name, handlers);
+  };
+  harness.hooks.bindRoomEvents(harness.hooks.state.room);
+  assert.equal(eventHandlers.get('active-speakers')?.length, 1);
+  const speakersChanged = eventHandlers.get('active-speakers')[0];
+  publications.set(liveKitSources.Microphone, { source: liveKitSources.Microphone, isMuted: false,
+    track: { isMuted: false, mediaStreamTrack: { readyState: 'live', enabled: true, muted: false } } });
+  const mediaKeys = () => Array.from(participantGrid.children, (tile) => tile.dataset.mediaKey);
+  const companionKeys = () => Array.from(participantGrid.children)
+    .filter((tile) => String(tile.className).includes('is-companion')).map((tile) => tile.dataset.mediaKey);
+  let layoutRequests = 0;
+  let domCreations = 0;
+  const previousRaf = harness.window.requestAnimationFrame;
+  const previousCreateElement = harness.document.createElement.bind(harness.document);
+  harness.window.requestAnimationFrame = () => { layoutRequests += 1; return 1; };
+  harness.document.createElement = (...args) => { domCreations += 1; return previousCreateElement(...args); };
+  for (const layout of ['auto', 'tiled', 'spotlight']) {
+    for (const presenting of [false, true]) {
+      const scenario = `${layout}, presenting=${presenting}`;
+      harness.hooks.state.layoutMode = layout;
+      harness.hooks.state.pinnedTrackKey = '';
+      harness.hooks.state.pinnedParticipantIdentity = '';
+      harness.hooks.state.activeSpeakers.clear();
+      screenPublication.isMuted = !presenting;
+      harness.hooks.renderParticipants();
+      const originalOrder = mediaKeys();
+      const originalCompanions = companionKeys();
+      const originalTiles = [...participantGrid.children];
+      const originalCounts = { grid: gridReplaceChildrenCount, layout: layoutRequests, dom: domCreations,
+        attach: cameraAttachCount, detach: cameraDetachCount, screenAttach: screenAttachCount, screenDetach: screenDetachCount };
+      for (const speakers of [[activeRemote], [pinnedRemote], [localParticipant], [],
+        [activeRemote, pinnedRemote], [pinnedRemote, activeRemote], [activeRemote], [], [localParticipant]]) {
+        speakersChanged(speakers);
+        assert.deepEqual(mediaKeys(), originalOrder, `Speaker events must not reorder tiles (${scenario}).`);
+        assert.deepEqual(companionKeys(), originalCompanions, `Speaker events must not switch screen companions (${scenario}).`);
+        assert.ok(participantGrid.children.every((tile, index) => tile === originalTiles[index]),
+          `Speaker events must preserve every tile object (${scenario}).`);
+        for (const tile of participantGrid.children) {
+          assert.equal(tile.classList.contains('is-speaking'), speakers.some((speaker) => speaker.identity === tile.dataset.participantIdentity),
+            `Speaking CSS must reflect the actual event without rebuilding (${scenario}).`);
+        }
+      }
+      assert.deepEqual({ grid: gridReplaceChildrenCount, layout: layoutRequests, dom: domCreations,
+        attach: cameraAttachCount, detach: cameraDetachCount, screenAttach: screenAttachCount, screenDetach: screenDetachCount },
+      originalCounts, `Speaker events must do zero grid replacement, layout scheduling, DOM creation, or track remounting (${scenario}).`);
+      assert.equal(harness.hooks.state.microphoneTransport, 'sending',
+        `Speaking updates must retain the local microphone transport indicator (${scenario}).`);
+
+      const firstRemoteCamera = pinnedRemote.getTrackPublication(liveKitSources.Camera);
+      for (const muted of [true, false, true, false]) {
+        firstRemoteCamera.isMuted = muted;
+        for (const callback of eventHandlers.get(muted ? 'track-muted' : 'track-unmuted')) callback();
+        assert.deepEqual(mediaKeys(), originalOrder, `Camera mute/unmute must preserve tile order (${scenario}).`);
+        assert.deepEqual(companionKeys(), originalCompanions, `Camera mute/unmute must preserve companion identities (${scenario}).`);
+      }
+      const manualPin = participantGrid.children.find((tile) => tile.dataset.participantIdentity === activeRemote.identity).__srPin;
+      const pinBaseline = { attach: cameraAttachCount, detach: cameraDetachCount };
+      await manualPin.emit('click');
+      const pinnedKey = `${activeRemote.identity}:${liveKitSources.Camera}`;
+      const pinPosition = layout === 'auto' && presenting ? 1 : 0;
+      assert.equal(mediaKeys()[pinPosition], pinnedKey, `An explicit manual pin moves the tile to the first camera position (${scenario}).`);
+      if (pinPosition === 1) assert.equal(mediaKeys()[0], `${localParticipant.identity}:${liveKitSources.ScreenShare}`,
+        'Auto presentation must preserve the shared-screen cell while promoting the pinned camera companion.');
+      assert.deepEqual(mediaKeys().filter((key) => key !== pinnedKey), originalOrder.filter((key) => key !== pinnedKey),
+        `Manual pinning must preserve the relative order of all other tiles (${scenario}).`);
+      const manuallyPinnedOrder = mediaKeys();
+      const manuallyPinnedCompanions = companionKeys();
+      speakersChanged([pinnedRemote]);
+      speakersChanged([localParticipant]);
+      assert.deepEqual(mediaKeys(), manuallyPinnedOrder, `Talking cannot displace a manual pin (${scenario}).`);
+      assert.deepEqual(companionKeys(), manuallyPinnedCompanions, `Talking cannot switch a pinned companion (${scenario}).`);
+      await manualPin.emit('click');
+      assert.deepEqual(mediaKeys(), originalOrder, `Unpin restores the stable insertion order (${scenario}).`);
+      assert.deepEqual(companionKeys(), originalCompanions, `Unpin restores stable companions (${scenario}).`);
+      assert.deepEqual({ attach: cameraAttachCount, detach: cameraDetachCount }, pinBaseline,
+        `Pin/unpin must not remount or detach camera tracks (${scenario}).`);
+    }
+  }
+  const currentRoom = harness.hooks.state.room;
+  const currentSpeakers = harness.hooks.state.activeSpeakers;
+  const staleCounts = { grid: gridReplaceChildrenCount, layout: layoutRequests, dom: domCreations };
+  harness.hooks.state.room = { ...currentRoom };
+  speakersChanged([activeRemote]);
+  assert.equal(harness.hooks.state.activeSpeakers, currentSpeakers, 'A stale room speaker event must not change the current room.');
+  assert.deepEqual({ grid: gridReplaceChildrenCount, layout: layoutRequests, dom: domCreations }, staleCounts);
+  harness.hooks.state.room = currentRoom;
+  publications.delete(liveKitSources.Microphone);
+  harness.window.requestAnimationFrame = previousRaf;
+  harness.document.createElement = previousCreateElement;
+  harness.hooks.state.layoutMode = 'auto';
+  screenPublication.isMuted = false;
   harness.hooks.state.room.remoteParticipants.clear();
   harness.hooks.state.activeSpeakers.clear();
   harness.hooks.renderParticipants();
@@ -2108,12 +2207,13 @@ class FakeMediaStream {
   harness.hooks.state.activeSpeakers.clear();
 
   const cameraDetachCountBeforeStoppingShare = cameraDetachCount;
+  const screenDetachCountBeforeStoppingShare = screenDetachCount;
   screenPublication.isMuted = true;
   harness.hooks.renderParticipants();
   tiles = harness.document.getElementById('sr-participant-grid').children;
   assert.equal(tiles.length, 1, 'Stopping a screen share must remove only the shared-screen view.');
   assert.equal(tiles[0].dataset.trackSource, liveKitSources.Camera);
-  assert.equal(screenDetachCount, 1);
+  assert.equal(screenDetachCount, screenDetachCountBeforeStoppingShare + 1);
   assert.equal(
     cameraDetachCount,
     cameraDetachCountBeforeStoppingShare,

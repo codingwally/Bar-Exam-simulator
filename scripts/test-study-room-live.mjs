@@ -64,7 +64,7 @@ assert.doesNotMatch(page, /Virtual backgrounds|Coming after the quality test/iu)
 assert.match(page, /assets\/vendor\/livekit-client\.umd\.js\?v=2\.22\.1/);
 assert.match(page, /assets\/vendor\/livekit-track-processors\.iife\.js\?v=0\.7\.2/);
 assert.match(page, /study-room-backgrounds\.js\?v=study-room-background-images-20260908-1/);
-assert.match(page, /study-room-live\.js\?v=study-room-always-open-20260908-1/);
+assert.match(page, /study-room-live\.js\?v=study-room-always-open-20260908-1&amp;layout=stable-pins-20260908-1"/);
 assert.match(page, /study-room-live\.css\?v=study-room-always-open-20260908-1/);
 assert.doesNotMatch(page, /facebook|fb\.com|recording is on|Recording enabled/i);
 
@@ -110,9 +110,22 @@ assert.match(client, /event\.Reconnecting[\s\S]*event\.Reconnected/);
 assert.match(client, /microphone_allowed !== false/);
 assert.match(client, /mediaStreamTrack\.readyState === 'live'/);
 assert.match(client, /deviceId: \{ exact: deviceId \}/);
-assert.match(client, /ActiveSpeakersChanged[\s\S]*renderParticipants\(\)/);
+const activeSpeakerStart = client.indexOf('room.on(event.ActiveSpeakersChanged,');
+const activeSpeakerEnd = client.indexOf('room.on(event.ConnectionStateChanged,', activeSpeakerStart);
+assert.ok(activeSpeakerStart >= 0 && activeSpeakerEnd > activeSpeakerStart);
+const activeSpeakerSource = client.slice(activeSpeakerStart, activeSpeakerEnd);
+assert.match(activeSpeakerSource, /if \(state\.room !== room\) return/u);
+assert.match(activeSpeakerSource, /tile\.classList\.toggle\('is-speaking', state\.activeSpeakers\.has\(tile\.dataset\.participantIdentity\)\)/u);
+assert.doesNotMatch(activeSpeakerSource, /renderParticipants|renderPeople|replaceChildren|scheduleStudyRoomLayout|updateStudyRoomLayout|reconcileTile|attachTrack|detachTrack/u,
+  'Speaker events may update speaking indicators, never tile order, layout, or media attachment.');
 assert.match(client, /ActiveDeviceChanged[\s\S]*rememberDeviceSelection\(deviceKind, deviceId\)/);
-assert.match(client, /Stable-key reconciliation preserves media elements while the preferred companion changes/);
+const stableMediaViewsSource = extractNamedFunction(client, 'buildMediaViews');
+assert.doesNotMatch(stableMediaViewsSource, /scoreCamera|activeSpeakers|cameraViews\.sort/u,
+  'Camera order must not depend on speakers or live/muted camera scores.');
+assert.match(stableMediaViewsSource, /if \(\(state\.pinnedTrackKey \|\| state\.pinnedParticipantIdentity\)\s*&& \(state\.layoutMode !== 'auto' \|\| !primaryShare\)\)/u,
+  'Manual pins lead the grid except that auto presentation reserves the shared-screen cell.');
+assert.match(stableMediaViewsSource, /if \(pinnedCameraIndex > 0\) cameraViews\.unshift\(\.\.\.cameraViews\.splice\(pinnedCameraIndex, 1\)\)/u,
+  'The pinned camera must still be first among cameras in auto presentation.');
 assert.match(client, /function recoverFromTerminalDisconnect\(room\)/);
 assert.match(
   client,

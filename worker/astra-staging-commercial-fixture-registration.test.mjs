@@ -222,13 +222,14 @@ test('actual existing notification claim SQL and exact-row CAS have safe serial 
     const current=async()=>(await db.query('select to_jsonb(p) row from public.payment_requests p')).rows[0].row;
     async function cas(snapshot){
       const params=exactCommercialRowFilter(snapshot),args=[],clauses=[];
-      // Translate the production helper's quoted scalar PostgREST filter to bound
-      // SQL values. This tests PostgreSQL comparison/claim semantics, not hosted
-      // REST parsing, permissions or a separate-session timing witness.
+      // Match PostgREST's top-level pOpExpr pSingleVal: consume the decoded eq.
+      // remainder literally, never unquote it as a list/logic-tree operand.
+      // Bound SQL tests comparison/claim semantics, not hosted REST permissions
+      // or a separate-session timing witness.
       for(const [column,filter] of params){
         if(filter==='is.null'){clauses.push(`"${column}" is null`);continue;}
-        assert.ok(filter.startsWith('eq."')&&filter.endsWith('"'));
-        args.push(filter.slice(4,-1).replace(/\\([\\"])/gu,'$1'));
+        assert.ok(filter.startsWith('eq.'));
+        args.push(filter.slice(3));
         clauses.push(`"${column}"=$${args.length}`);
       }
       return (await db.query(`update public.payment_requests set verification_email_status='suppressed' where ${clauses.join(' and ')} returning id`,args)).rows;
@@ -239,6 +240,9 @@ test('actual existing notification claim SQL and exact-row CAS have safe serial 
         await callback(await current());
       }finally{await db.exec('rollback');}
     }
+    await t.test('the old quoted UUID operand is rejected by the actual UUID cast',()=>scenario(async()=>{
+      await assert.rejects(()=>db.query('select id from public.payment_requests where id=$1',[`"${ID}"`]),error=>error.code==='22P02');
+    }));
     await t.test('CAS first prevents the extracted claim from taking a send intent',()=>scenario(async before=>{
       assert.equal((await cas(before)).length,1);
       assert.equal((await db.query('select public.phase4_claim_payment_notification($1) value',[ID])).rows[0].value,null);

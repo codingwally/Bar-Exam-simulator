@@ -385,6 +385,10 @@ export async function sendPaymentVerificationEmail(env, context) {
 }
 
 export async function dispatchQueuedPaymentNotification(env, paymentRequestId = null) {
+  // Suppression must not claim an attempt or read private proof before the sender guard.
+  if (notificationMode(env) !== 'enabled') {
+    return { status: 'suppressed', recipientCount: 0, paymentRequestId };
+  }
   const claim = await serviceRoleRpc(env, 'phase4_claim_payment_notification', {
     p_payment_request_id: paymentRequestId,
   });
@@ -449,6 +453,7 @@ export async function drainPaymentNotificationQueue(env, limit = 5) {
     const result = await dispatchQueuedPaymentNotification(env);
     if (result.status === 'idle') break;
     results.push(result);
+    if (result.status === 'suppressed') break;
   }
   return results;
 }

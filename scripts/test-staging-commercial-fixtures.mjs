@@ -30,6 +30,18 @@ function paymentRow(p=payload()) {
     proof_bucket:'p_proof_bucket',proof_object_path:'p_proof_path',proof_mime_type:'p_proof_mime_type',proof_size_bytes:'p_proof_size_bytes',proof_sha256:'p_proof_sha256'})) row[column]=p[input];
   return row;
 }
+// PostgREST pRequestFilter uses pOpExpr pSingleVal: the decoded top-level eq
+// operand is the entire remainder, without quoted-list/logic-tree unescaping.
+// Deliberately independent of the production encoder, including every row key.
+function assertExactTopLevelFilter(params,row) {
+  assert.deepEqual([...params.keys()].filter(key=>key!=='select').sort(),Object.keys(row).sort());
+  for(const [key,value] of Object.entries(row)) {
+    const filter=params.get(key);
+    if(value===null){assert.equal(filter,'is.null');continue;}
+    assert.ok(filter?.startsWith('eq.'));
+    assert.equal(filter.slice(3),String(value));
+  }
+}
 function harness(options={}) {
   const label=options.label||'provisional',identity=commercialFixtureIdentity(RUN,label),calls=[],manifests=[];
   let auth=null,payment=null,notices=[],invites=[],deleted=false,history=[];
@@ -77,19 +89,18 @@ function harness(options={}) {
       if(u.pathname==='/rest/v1/payment_requests'&&method==='PATCH'){
         assert.equal(current().payment.fenceState,'requested');assert.ok(current().payment.before);
         assert.deepEqual(body,{verification_email_status:'suppressed'});
-        // Interpret the produced scalar CAS predicates (not a PostgREST server).
-        const pinned=exactCommercialRowFilter(payment);
-        for(const [key,value] of pinned) assert.equal(u.searchParams.get(key),value);
+        assertExactTopLevelFilter(u.searchParams,payment);
         if(options.claimWins){payment.verification_email_status='sending';payment.verification_email_attempts=1;return response([]);}
         payment.verification_email_status='suppressed';
         if(options.casUnknown)throw Error('unknown CAS outcome');return response([payment]);
       }
       if(u.pathname==='/rest/v1/outbound_notifications'&&method==='DELETE'){
         assert.equal(payment.verification_email_status,'suppressed');
-        for(const [key,value] of exactCommercialRowFilter(notices[0]))assert.equal(u.searchParams.get(key),value);
+        assertExactTopLevelFilter(u.searchParams,notices[0]);
         if(options.noticeDrift)return response([]);const old=notices;notices=[];return response(old);
       }
       if(u.pathname==='/rest/v1/founding_beta_invites'&&method==='DELETE'){
+        assertExactTopLevelFilter(u.searchParams,invites[0]);
         if(options.inviteDrift)return response([]);const old=invites;invites=[];return response(old);
       }
       if(u.pathname.startsWith('/rest/v1/')&&method==='GET'){
@@ -175,11 +186,21 @@ for(const options of[{unknown:true},{inviteDrift:true}])test(`invite uncertainty
   const h=harness({label:'founding',...options});await h.start();await h.addInvite(options);await assert.rejects(()=>h.lifecycle.cleanup());assert.equal(h.deleted,false);
 });
 test('CAS filter encodes literals rather than widening the PostgREST predicate',()=>{
-  const value='quoted "string",or(id.not.is.null)\\x',p=exactCommercialRowFilter({id:ID,note:value,attempts:0,empty:null});
-  assert.equal(p.get('note'),'eq."quoted \\"string\\",or(id.not.is.null)\\\\x"');
-  assert.equal(p.get('empty'),'is.null');assert.equal(p.size,4);
-  assert.throws(()=>exactCommercialRowFilter({'id.or':ID}));assert.throws(()=>exactCommercialRowFilter({json:{unreviewed:true}}));
+  const value='quoted "string",or(id.not.is.null)\\x&active=eq.true+%\nUnicode: \u03b1';
+  const row={id:ID,note:value,attempts:0,decimal:1.25,negative:-1,active:true,disabled:false,
+    timestamp:'2026-09-08T08:00:00.123456+00:00',empty:null,blank:''};
+  const encoded=exactCommercialRowFilter(row),decoded=new URLSearchParams(encoded.toString());
+  assert.equal(decoded.get('note'),`eq.${value}`);assert.equal(decoded.size,Object.keys(row).length);
+  assertExactTopLevelFilter(decoded,row);
+  assert.throws(()=>exactCommercialRowFilter({'id.or':ID}));
+  for(const value of[{unreviewed:true},[],undefined,NaN,Infinity,-Infinity])assert.throws(()=>exactCommercialRowFilter({unknown:value}));
   assertCommercialPayment(paymentRow(),payload());
+});
+test('top-level grammar rejects the old artificially quoted UUID, text and numeric operands',()=>{
+  for(const value of[ID,'pending',0,true]){
+    const params=new URLSearchParams({value:`eq."${value}"`});
+    assert.throws(()=>assertExactTopLevelFilter(new URLSearchParams(params.toString()),{value}));
+  }
 });
 
 const commercialSource=(await readFile(new URL('../worker/commercial-entry.mjs',import.meta.url),'utf8')).replaceAll('\r\n','\n');

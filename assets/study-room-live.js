@@ -1511,15 +1511,12 @@
       };
     }).filter(Boolean);
 
-    const scoreCamera = (view) => {
-      let score = 0;
-      if (view.participant.isLocal) score += 100;
-      if (state.pinnedTrackKey === view.key || state.pinnedParticipantIdentity === view.participant.identity) score += 400;
-      if (state.activeSpeakers.has(view.participant.identity)) score += 160;
-      if (view.track && !view.publication?.isMuted) score += 10;
-      return score;
-    };
-    cameraViews.sort((left, right) => scoreCamera(right) - scoreCamera(left));
+    // Keep connection order, even when somebody speaks or toggles their camera.
+    // Only an explicit local pin may promote a participant's tile.
+    const pinnedCameraIndex = cameraViews.findIndex((view) => state.pinnedTrackKey
+      ? state.pinnedTrackKey === view.key
+      : state.pinnedParticipantIdentity === view.participant.identity);
+    if (pinnedCameraIndex > 0) cameraViews.unshift(...cameraViews.splice(pinnedCameraIndex, 1));
 
     const pinnedShare = screenViews.find((view) => state.pinnedTrackKey === view.key);
     const primaryShare = pinnedShare || screenViews[0] || null;
@@ -1535,8 +1532,13 @@
       ? [primaryShare, ...screenViews.filter((view) => view !== primaryShare)]
       : [];
     const orderedViews = [...orderedShares, ...cameraViews];
-    if (state.layoutMode === 'spotlight' && state.pinnedTrackKey) {
-      const pinnedIndex = orderedViews.findIndex((view) => view.key === state.pinnedTrackKey);
+    // Auto presentation reserves its first grid cell for the shared screen.
+    // The pinned camera remains the first camera/companion without breaking that layout.
+    if ((state.pinnedTrackKey || state.pinnedParticipantIdentity)
+      && (state.layoutMode !== 'auto' || !primaryShare)) {
+      const pinnedIndex = orderedViews.findIndex((view) => state.pinnedTrackKey
+        ? view.key === state.pinnedTrackKey
+        : view.participant.identity === state.pinnedParticipantIdentity);
       if (pinnedIndex > 0) orderedViews.unshift(...orderedViews.splice(pinnedIndex, 1));
     }
     return orderedViews.map((view, index) => ({
@@ -2496,6 +2498,7 @@
     ].filter(Boolean);
     rerenderEvents.forEach((eventName) => room.on(eventName, renderParticipants));
     room.on(event.ActiveSpeakersChanged, (speakers) => {
+      if (state.room !== room) return;
       state.activeSpeakers = new Set((speakers || []).map((participant) => participant.identity));
       if (
         state.activeSpeakers.has(room.localParticipant?.identity)
@@ -2504,8 +2507,11 @@
         state.microphoneTransport = 'sending';
         syncSelfMediaState();
       }
-      // Stable-key reconciliation preserves media elements while the preferred companion changes.
-      renderParticipants();
+      // Talking is a visual indicator, never a layout, tile-order, or media event.
+      // Do not rebuild the grid/people panel or schedule geometry work here.
+      state.tileViews.forEach(({ tile }) => {
+        tile.classList.toggle('is-speaking', state.activeSpeakers.has(tile.dataset.participantIdentity));
+      });
     });
     room.on(event.ConnectionStateChanged, (connectionState) => {
       syncConnectionState(connectionState);

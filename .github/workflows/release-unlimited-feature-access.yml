@@ -60,6 +60,19 @@ jobs:
     env:
       PGLITE_MODULE_PATH: ${{ github.workspace }}/worker/node_modules/@electric-sql/pglite/dist/index.js
       ASTRA_PGLITE_MODULE: ${{ github.workspace }}/worker/node_modules/@electric-sql/pglite
+    services:
+      payment-postgres:
+        # Official PostgreSQL 17 manifest verified on 2026-09-08; disposable CI only.
+        image: postgres:17@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675
+        env:
+          POSTGRES_DB: astra_terminal_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: astra-ci-only
+        ports:
+          - 15432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d astra_terminal_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - name: Checkout the exact main release candidate
         uses: actions/checkout@v4
@@ -275,6 +288,8 @@ jobs:
             scripts/test-astra-payment-lifecycle.mjs \
             scripts/test-astra-149-binding-compatibility.mjs \
             scripts/test-astra-late-payment-ui.mjs \
+            scripts/test-astra-payment-notification-sent-terminal.mjs \
+            scripts/test-astra-payment-notification-postgres.mjs \
             scripts/test-astra-late-149-binding-reconciliation.mjs \
             docs/ASTRA_LATE_149_BINDING_RECONCILIATION.md \
             scripts/test-astra-payment-presentation.mjs \
@@ -309,6 +324,7 @@ jobs:
             supabase/migrations/20260907130002_astra_late_payment_review.sql \
             supabase/migrations/20260907133129_astra_149_binding_compatibility.sql \
             supabase/migrations/20260907143119_astra_late_149_binding_reconciliation.sql \
+            supabase/migrations/20260908115426_astra_payment_notification_sent_terminal.sql \
             supabase/migrations/20260907172508_astra_forecast_summary_email.sql \
             supabase/migrations/20260907173112_astra_browser_pdf_prepared_note.sql \
             supabase/migrations/20260907181748_astra_admin_role_fail_closed.sql \
@@ -418,6 +434,7 @@ jobs:
           node scripts/test-astra-payment-lifecycle.mjs
           node scripts/test-astra-149-binding-compatibility.mjs
           node scripts/test-astra-late-payment-ui.mjs
+          node scripts/test-astra-payment-notification-sent-terminal.mjs
           node scripts/test-pricing-public-contract.mjs
           node scripts/test-astra-late-149-binding-reconciliation.mjs
           node scripts/test-astra-payment-cohort-repair.mjs
@@ -446,6 +463,17 @@ jobs:
           node scripts/test-unlimited-feature-access-release-workflow.mjs
           node scripts/test-pages-artifact.mjs
           git diff --check
+
+      - name: Verify terminal payment mail with two PostgreSQL 17 backends
+        timeout-minutes: 3
+        env:
+          ASTRA_TERMINAL_POSTGRES_TEST: "1"
+          PGHOST: 127.0.0.1
+          PGPORT: "15432"
+          PGDATABASE: astra_terminal_test
+          PGUSER: postgres
+          PGPASSWORD: astra-ci-only
+        run: node scripts/test-astra-payment-notification-postgres.mjs
 
   deploy_staging:
     name: Stage exact content, Worker, client, and access journeys

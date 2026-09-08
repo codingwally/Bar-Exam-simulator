@@ -21,3 +21,20 @@ export async function buildForecastPdfBrowserWorker() {
   }
   return { code, inputs: Object.keys(result.metafile.inputs) };
 }
+
+// Period reports use a separate serial protocol. Keep the selected-report
+// worker and its one-shot contract unchanged.
+export async function buildForecastAnalyticsPdfBrowserWorker() {
+  const { build } = fromWorker('esbuild');
+  const result = await build({ entryPoints: [path.join(root, 'browser/forecast-analytics-pdf-worker.mjs')],
+    bundle: true, write: false, platform: 'browser', format: 'iife', target: 'es2022',
+    minify: true, sourcemap: false, legalComments: 'inline', metafile: true });
+  const code = result.outputFiles[0].contents;
+  const text = new TextDecoder().decode(code);
+  const inputs = Object.keys(result.metafile.inputs);
+  if (/gemini|generativelanguage|SUPABASE_SERVICE_ROLE_KEY|RESEND_API_KEY|buildBarForecastGradingPrompt|content\/question-bank/iu.test(text)
+      || inputs.some(name => /fixture|\.test\.mjs|forecast-(?:result|analytics)-export\.mjs|forecast-attempt-store\.mjs|content\//u.test(name))) {
+    throw new Error('The Analytics PDF browser bundle contains a server-only dependency.');
+  }
+  return { code, inputs };
+}

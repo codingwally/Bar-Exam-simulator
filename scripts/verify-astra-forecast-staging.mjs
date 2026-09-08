@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdir, mkdtemp, readFile, writeFile, rm, access, lstat, rename } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile, rm, access, lstat, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -12,6 +12,8 @@ import { completeMandatoryCommercialProfile } from './staging-commercial-user.mj
 import { createForecastAttemptStore, FORECAST_ATTEMPT_RPC_NAMES } from '../worker/forecast-attempt-store.mjs';
 import { BAR_FORECAST_LIMITS, normalizeBarForecastRequest } from '../worker/bar-forecast-core.mjs';
 import { buildForecastResultPdf, forecastResultPdfFileName } from '../worker/forecast-result-pdf.mjs';
+import { buildForecastAnalyticsPdf } from '../worker/forecast-analytics-pdf.mjs';
+import { validateForecastAnalyticsScope, forecastAnalyticsFileName } from '../worker/forecast-analytics-core.mjs';
 
 // Deliberately no production mode, configurable target, customer session, mail,
 // runtime synthetic flag, direct model invocation, or automatic remote execution.
@@ -31,7 +33,9 @@ const digest = (value) => createHash('sha256').update(typeof value === 'string' 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const meanTenths = (scores) => Math.round(scores.reduce((sum, score) => sum + Math.round(score * 10), 0) / scores.length) / 10;
 const VIEWPORTS = Object.freeze([320, 375, 390, 600, 768, 820, 1024, 1280, 1440]);
-const DIAGNOSTIC_OPERATIONS = Object.freeze(['status', 'start', 'submit_attempt', 'attempt', 'history', 'retry_attempt', 'result_pdf', 'result_pdf_prepared', 'email_result', 'accept']);
+const DIAGNOSTIC_OPERATIONS = Object.freeze(['status', 'start', 'submit_attempt', 'attempt', 'history', 'retry_attempt', 'result_pdf', 'result_pdf_prepared', 'email_result', 'accept',
+  'analytics_snapshot', 'analytics_report', 'analytics_attempt', 'analytics_pdf_prepared', 'analytics_email']);
+const FORECAST_READ_OPERATIONS = Object.freeze(['status', 'attempt', 'history', 'analytics_report', 'analytics_attempt']);
 const AUTH_DIAGNOSTIC_OPERATIONS = Object.freeze(['token_refresh', 'token_password', 'user', 'logout']);
 const AUTH_DIAGNOSTIC_ERROR_CODES = Object.freeze(['bad_jwt', 'session_not_found', 'refresh_token_not_found',
   'refresh_token_already_used', 'user_not_found', 'invalid_credentials', 'over_request_rate_limit',
@@ -45,8 +49,10 @@ const DIAGNOSTIC_ERROR_CODES = Object.freeze([
   'BAR_FORECAST_GRADING_UNAVAILABLE', 'BAR_FORECAST_PERSISTENCE_UNAVAILABLE', 'BAR_FORECAST_PROCESSING_FAILED',
   'BAR_FORECAST_PROCESSING_PENDING', 'BAR_FORECAST_ATTEMPT_CONFLICT', 'BAR_FORECAST_REQUEST_TIMEOUT',
   'BAR_FORECAST_REQUEST_SHAPE_INVALID', 'INVALID_JSON', 'RATE_LIMITED', 'UNRECOGNIZED',
+  'BAR_FORECAST_ANALYTICS_NOT_FOUND', 'BAR_FORECAST_ANALYTICS_CHANGED', 'BAR_FORECAST_ANALYTICS_INVALID', 'BAR_FORECAST_ANALYTICS_SIZE_LIMIT',
 ]);
 const READY_FORECAST_LAUNCHER = '.qfs-practice-rail [data-public-feature="bar-forecast"]:not(:disabled)';
+const READY_ANALYTICS_LAUNCHER = '.qfs-practice-rail [data-public-feature="verdict"]:not(:disabled)';
 const NODE_FORECAST_ERROR_CODES = Object.freeze([...DIAGNOSTIC_ERROR_CODES,
   'BAR_FORECAST_EXPORT_NOT_READY', 'BAR_FORECAST_EXPORT_INVALID', 'BAR_FORECAST_EXPORT_STORAGE_UNAVAILABLE',
   'BAR_FORECAST_EXPORT_CONFLICT', 'BAR_FORECAST_PDF_CHARACTER_UNAVAILABLE', 'BAR_FORECAST_PDF_SIZE_LIMIT',
@@ -247,7 +253,7 @@ export function forecastCleanupScope() {
 
 export async function retryForecastRead({ operation, request, deadline, now = Date.now, sleep = delay,
   checkDeadline = () => {}, onRateLimited = () => {} }) {
-  assert.ok(['status', 'attempt', 'history'].includes(operation), 'Only read operations may be retried automatically');
+  assert.ok(FORECAST_READ_OPERATIONS.includes(operation), 'Only read operations may be retried automatically');
   const remaining = deadline - now();
   assert.ok(Number.isFinite(remaining) && remaining > 0 && remaining <= 35 * 60 * 1000);
   const timedOut = () => Object.assign(new Error('The bounded saved-read verification window ended.'), { code: 'ASTRA_FORECAST_READ_TIMEOUT' });
@@ -445,12 +451,110 @@ export function forecastPdfDownloadPath(privateDirectory, journeyNumber, repeatN
   return path.join(base, 'saved-pdf-downloads', `journey-${journeyNumber}`, `repeat-${repeatNumber}`, 'saved-report.pdf');
 }
 
+export function forecastBrowserRuntime(prefix, kind, ordinal, privateDirectory) {
+  browserIdentity(prefix, kind); // Preserve the exact fixture prefix/kind guard.
+  assert.ok(Number.isSafeInteger(ordinal) && ordinal >= 1 && ordinal <= 12);
+  const base = assertPrivateTemp(privateDirectory);
+  return Object.freeze({ namespace: `ad-${digest(`${prefix}/${kind}/${ordinal}`).slice(0, 16)}`, session: kind,
+    downloadDirectory: path.join(base, 'browser-downloads', `runtime-${ordinal}`) });
+}
+
+export function assertForecastScopeAggregate(analytics, attempts) {
+  assert.ok(Array.isArray(attempts) && attempts.length > 0 && attempts.length <= 3);
+  assert.ok(attempts.every(row => row.status === 'complete' && row.result?.complete === true));
+  assert.equal(new Set(attempts.map(row => row.id)).size, attempts.length);
+  assert.equal(analytics?.completeOnly, true); assert.equal(analytics.completedAttempts, attempts.length);
+  assert.equal(analytics.pendingAttempts, 0); assert.equal(analytics.failedAttempts, 0);
+  assert.equal(analytics.averagePercentage, meanTenths(attempts.map(row => row.result.percentage)));
+  assert.equal(analytics.averageGrammarScore, meanTenths(attempts.map(row => row.result.analytics.grammarAverage)));
+  assert.equal(analytics.averageIssueSpottingScore, meanTenths(attempts.map(row => row.result.analytics.issueSpottingAverage)));
+  const subjects = [...new Set(attempts.map(row => row.subject))];
+  assert.equal(analytics.bySubject?.length, subjects.length);
+  for (const subject of subjects) {
+    const matches = attempts.filter(row => row.subject === subject), rows = analytics.bySubject.filter(row => row.subject === subject);
+    assert.equal(rows.length, 1); const row = rows[0]; assert.equal(row.completedAttempts, matches.length);
+    assert.equal(row.averagePercentage, meanTenths(matches.map(saved => saved.result.percentage)));
+    assert.equal(row.averageGrammarScore, meanTenths(matches.map(saved => saved.result.analytics.grammarAverage)));
+    assert.equal(row.averageIssueSpottingScore, meanTenths(matches.map(saved => saved.result.analytics.issueSpottingAverage)));
+  }
+  assert.equal(analytics.trend?.length, attempts.length);
+  assert.deepEqual(analytics.trend.map(row => row.attemptId).sort(), attempts.map(row => row.id).sort());
+  for (const row of analytics.trend) {
+    const saved = attempts.find(attempt => attempt.id === row.attemptId);
+    assert.equal(row.subject, saved.subject); assert.equal(row.percentage, saved.result.percentage);
+    assert.equal(row.grammarScore, saved.result.analytics.grammarAverage);
+    assert.equal(row.issueSpottingScore, saved.result.analytics.issueSpottingAverage);
+    assert.equal(Date.parse(row.completedAt), Date.parse(saved.completedAt));
+  }
+  return { completedAttempts: attempts.length, averagePercentage: analytics.averagePercentage,
+    averageGrammarScore: analytics.averageGrammarScore, averageIssueSpottingScore: analytics.averageIssueSpottingScore };
+}
+
+export function assertForecastScopeMetadata(payload, ownerId, attempts) {
+  assert.deepEqual(Object.keys(payload || {}).sort(), ['email', 'ok', 'scope']); assert.equal(payload.ok, true);
+  const scope = validateForecastAnalyticsScope(payload.scope, ownerId);
+  assert.deepEqual(Object.keys(scope).sort(), ['analytics', 'createdAt', 'filter', 'id', 'manifest', 'ownerId', 'schemaVersion', 'scopeHash', 'templateVersion']);
+  assert.equal(scope.filter.subject, null); assert.equal(scope.filter.from, null); assert.equal(scope.filter.to, null);
+  assert.deepEqual(scope.manifest.map(row => row.attemptId).sort(), attempts.map(row => row.id).sort());
+  for (const row of scope.manifest) {
+    assert.deepEqual(Object.keys(row).sort(), ['acceptedAt', 'attemptId', 'completedAt', 'resultHash', 'resultRevision', 'subject', 'summary']);
+    assert.deepEqual(Object.keys(row.summary).sort(), ['completedQuestionCount', 'maxScore', 'percentage', 'questionCount', 'totalScore']);
+    const saved = attempts.find(attempt => attempt.id === row.attemptId);
+    assert.equal(row.resultRevision, saved.resultRevision); assert.equal(row.subject, saved.subject);
+    assert.equal(Date.parse(row.acceptedAt), Date.parse(saved.acceptedAt)); assert.equal(Date.parse(row.completedAt), Date.parse(saved.completedAt));
+    assert.equal(row.summary.totalScore, saved.result.totalScore); assert.equal(row.summary.percentage, saved.result.percentage);
+    assert.deepEqual(row.summary, saved.result.summary);
+  }
+  assert.doesNotMatch(JSON.stringify(payload), /"(?:answers|questions|userAnswer|suggestedAnswer|gradingRubric|prompt|access_token)"\s*:/u,
+    'Scope metadata must not hydrate private answer or grading content');
+  assertForecastScopeAggregate(scope.analytics, attempts);
+  assert.equal(payload.email.status, 'not_requested'); assert.equal(payload.email.alreadyRequested, false);
+  return scope;
+}
+
+export function assertForecastScopeMember(payload, scope, expected, index) {
+  assert.deepEqual(Object.keys(payload || {}).sort(), ['attempt', 'ok', 'resultHash', 'scopeHash', 'scopeId']);
+  assert.equal(payload.ok, true); assert.equal(payload.scopeId, scope.id); assert.equal(payload.scopeHash, scope.scopeHash);
+  assert.equal(payload.resultHash, scope.manifest[index].resultHash);
+  assert.equal(payload.attempt?.id, scope.manifest[index].attemptId); assert.equal(expected.id, payload.attempt.id);
+  assert.equal(digest(payload.attempt), digest(expected), 'A scope member must equal the exact original saved canonical DTO');
+  return payload.attempt;
+}
+
+export function assertForecastScopePrepared(row, scope, byteCount, original = null) {
+  assert.equal(row?.id, scope.id); assert.equal(row.owner_id, scope.ownerId); assert.equal(row.scope_hash, scope.scopeHash);
+  assert.equal(digest(row.manifest), digest(scope.manifest)); assert.equal(digest(row.analytics), digest(scope.analytics));
+  assert.deepEqual(row.filter, scope.filter); assert.equal(row.template_version, scope.templateVersion);
+  assert.equal(Date.parse(row.created_at), Date.parse(scope.createdAt));
+  assert.equal(row.browser_prepared_version, 'forecast-analytics-pdf-v1');
+  assert.ok(Number.isFinite(Date.parse(row.browser_prepared_at)));
+  assert.equal(row.browser_prepared_byte_count, byteCount); assert.equal(row.email_status, 'not_requested');
+  assert.equal(row.email_executions, 0); assert.equal(row.email_requested_at, null);
+  if (original) assert.equal(digest(row), digest(original), 'Repeated downloads must leave the first preparation note and immutable scope unchanged');
+  return row;
+}
+
 export function verifyForecastDownloadedBytes(bytes, expectedBytes) {
   assert.ok(bytes instanceof Uint8Array && expectedBytes instanceof Uint8Array, 'PDF evidence must contain actual bytes');
   assert.ok(bytes.length >= 5 && bytes.length <= 10 * 1024 * 1024, 'Downloaded PDF must meet the shared safe file budget');
   assert.equal(Buffer.from(bytes.subarray(0, 5)).toString('ascii'), '%PDF-', 'Browser must download a real PDF');
   assert.ok(Buffer.from(bytes).equals(Buffer.from(expectedBytes)), 'Downloaded bytes must equal the shared canonical renderer exactly');
   return { sha256: digest(bytes), byteLength: bytes.length, canonicalBytesEqual: true };
+}
+
+// A Chrome placeholder/partial file is not completion evidence. The caller
+// establishes fresh identity using a new empty download directory at launch,
+// not timestamps, a preexisting remnant, or a renamed live browser-owned file.
+export async function readForecastPdfCandidate(candidate, expectedBytes, { stat = lstat, read = readFile } = {}) {
+  assert.ok(expectedBytes instanceof Uint8Array && expectedBytes.length >= 5 && expectedBytes.length <= 10 * 1024 * 1024);
+  let file;
+  try { file = await stat(candidate); } catch (error) { if (error.code === 'ENOENT') return null; throw error; }
+  assert.ok(file.isFile() && !file.isSymbolicLink(), 'Only the exact regular private download file may be read');
+  assert.ok(file.size <= expectedBytes.length, 'A larger file cannot be this exact canonical PDF');
+  if (file.size < expectedBytes.length) return null;
+  const bytes = new Uint8Array(await read(candidate));
+  assert.ok(bytes.length <= expectedBytes.length, 'Downloaded bytes exceed the expected canonical PDF');
+  return bytes.length < expectedBytes.length ? null : bytes;
 }
 
 export async function waitForForecastPdfDownload({ readCandidate, checkDeadline = () => {},
@@ -591,6 +695,7 @@ export function probeSource({ expectedOwnerId = null } = {}) {
     const probe = window.__astraForecastProbe = { counts: {}, operations:Object.fromEntries(operations.map(name=>[name,{requested:0,responded:0,httpStatus:null,errorCode:null,transportError:null}])),
       authOperations:Object.fromEntries(authOperations.map(name=>[name,{requested:0,responded:0,httpStatus:null,errorCode:null,transportError:null}])),
       initialBootstrap:(${forecastBootstrapState.toString()})(window,${JSON.stringify(expectedOwnerId)},${JSON.stringify(TARGET.site)},${JSON.stringify(`sb-${TARGET.ref}-auth-token`)}),
+      analyticsTrace:{enabled:false,requested:[],completed:[],inFlight:0,maximumInFlight:0},
       authReady:'unobserved',accepted: null, acceptedResponses: 0, retry: null, dropAcceptance: false, loseNextAttempt: false };
     const observeAuth=()=>{
       if(probe.authReady!=='unobserved' || typeof window.DueDiligencePhase2?.whenAuthReady!=='function') return;
@@ -623,8 +728,12 @@ export function probeSource({ expectedOwnerId = null } = {}) {
         probe.loseNextAttempt = false; throw new TypeError('Controlled staging progress-response loss');
       }
       let response;
+      const trace=operation==='analytics_attempt'&&probe.analyticsTrace.enabled?probe.analyticsTrace:null;
+      if(trace){if(trace.requested.length<10000)trace.requested.push(input.attemptId);trace.inFlight++;trace.maximumInFlight=Math.max(trace.maximumInFlight,trace.inFlight);}
       try { response = await original(...args); }
       catch(error) { for(const item of [row,authRow]) if(item) item.transportError=error?.name==='AbortError'?'ABORTED':'NETWORK_ERROR'; throw error; }
+      finally { if(trace)trace.inFlight--; }
+      if(trace && response.status===200 && trace.completed.length<10000)trace.completed.push(input.attemptId);
       if(row) {
         row.responded=Math.min(10000,row.responded+1); row.httpStatus=response.status; row.errorCode=null; row.transportError=null;
         const responseOrdinal=row.responded;
@@ -725,6 +834,7 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
       assertFixtureRecord(record, recovery.prefix);
       assert.ok(Array.isArray(record.attemptIds) && record.attemptIds.length <= 3);
       for (const id of record.attemptIds) assert.match(id, UUID);
+      if (record.scopeIds !== undefined) { assert.ok(Array.isArray(record.scopeIds) && record.scopeIds.length <= 1); for (const id of record.scopeIds) assert.match(id, UUID); }
     }
   }
   const prefix = recovery?.prefix || `astra-durable-${Date.now()}-${randomBytes(4).toString('hex')}`;
@@ -732,8 +842,7 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
     : path.join(process.env.ASTRA_FORECAST_EVIDENCE_DIR || path.join(root, 'artifacts/astra-forecast-staging'), prefix));
   await mkdir(evidenceDir, { recursive: true });
   const privateDir = await mkdtemp(path.join(tmpdir(), 'dd-astra-durable-'));
-  const browserDownloadDir = path.join(privateDir, 'browser-downloads');
-  await mkdir(browserDownloadDir);
+  let browserDownloadDir = null; let browserNamespace = null; let browserRuntimeOrdinal = 0;
   const configPath = path.join(privateDir, 'browser-config.json');
   const initPath = path.join(privateDir, 'probe.js');
   const manifestPath = path.join(evidenceDir, 'cleanup-manifest.json');
@@ -743,7 +852,7 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
     fixturePrefix: prefix, verificationComplete: false, cleanupComplete: false,
     nativeBrowserZoomVerified: false, zoomEvidence: 'CLI has no native zoom command; separately labelled CSS 200% zoom stress test only.',
     gradingEvidence: 'One scheduled real-provider journey; two explicitly controlled SQL checkpoint journeys. No mail sent.',
-    bootstrapCheckpoints: [], readRateLimitRecoveries: [], checks, journeys, geometry };
+    bootstrapCheckpoints: [], browserRuntimes: [], readRateLimitRecoveries: [], checks, journeys, geometry };
   let stage = 'preflight'; let browserSession = null; let browserAccount = null; let launcher; let member; let publishable;
   const deadline = Date.now() + 35 * 60 * 1000;
   let stopRequested = false;
@@ -767,7 +876,7 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
   const serviceHeaders = { apikey: key, 'Content-Type': 'application/json', ...(key.startsWith('eyJ') ? { Authorization: `Bearer ${key}` } : {}) };
   const service = async (route, options = {}, statuses = [200]) => (await safeRequest(`${TARGET.supabase}${route}`, { ...options, headers: { ...serviceHeaders, ...options.headers } }, statuses)).body;
   const api = (account, body, statuses = [200]) => {
-    const read = ['status', 'attempt', 'history'].includes(body.operation);
+    const read = FORECAST_READ_OPERATIONS.includes(body.operation);
     const request = () => safeRequest(`${TARGET.site}${ENDPOINT}`, {
       method: 'POST', headers: { Authorization: `Bearer ${account.session.access_token}`, Origin: TARGET.site,
         'Content-Type': 'application/json', 'X-Request-ID': randomUUID() }, body: JSON.stringify(body),
@@ -776,7 +885,7 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
       onRateLimited: observation => summary.readRateLimitRecoveries.push(observation) }) : request();
   };
   const persistManifest = () => writeFile(manifestPath, JSON.stringify({ schemaVersion: 1, target: TARGET.ref, prefix,
-    fixtures: fixtures.map(({ id, email, kind, attemptIds = [] }) => ({ id, email, kind, attemptIds })) }, null, 2), { mode: 0o600 });
+    fixtures: fixtures.map(({ id, email, kind, attemptIds = [], scopeIds = [] }) => ({ id, email, kind, attemptIds, scopeIds })) }, null, 2), { mode: 0o600 });
   const browserEnv = isolatedBrowserEnv();
   let collectingFailureDiagnostics = false;
   const browser = async (...args) => {
@@ -784,7 +893,7 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
     try {
       const script = args[0] === 'eval' ? args[1] : null;
       const cliArgs = script === null ? args : ['eval', '--stdin'];
-      const pending = runCommand(launcher.command, [...launcher.prefix, '--namespace', browserIdentity(prefix, 'local').namespace, '--session', browserSession,
+      const pending = runCommand(launcher.command, [...launcher.prefix, '--namespace', browserNamespace, '--session', browserSession,
         '--config', configPath, '--restore-save', 'never', '--download-path', browserDownloadDir, '--json', ...cliArgs],
       { timeout: collectingFailureDiagnostics ? 10000 : 60000, maxBuffer: 1000000, windowsHide: true, env: { ...browserEnv, AGENT_BROWSER_DEFAULT_TIMEOUT: '30000' } });
       if (script !== null) {
@@ -897,18 +1006,25 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
     return account;
   }
 
-  async function startBrowser(account) {
+  async function startBrowser(account, { scopeId = null } = {}) {
+    if (scopeId !== null) assert.match(scopeId, UUID);
     stage = `browser-start-${account.kind}`;
     if (browserSession) await browser('close');
-    browserSession = browserIdentity(prefix, account.kind).session;
+    const runtime = forecastBrowserRuntime(prefix, account.kind, ++browserRuntimeOrdinal, privateDir);
+    assertBrowserSocketBudget(runtime, browserEnv);
+    await mkdir(runtime.downloadDirectory, { recursive: true });
+    assert.deepEqual(await readdir(runtime.downloadDirectory), [], 'Every browser runtime must start with an empty download directory');
+    browserNamespace = runtime.namespace; browserSession = runtime.session; browserDownloadDir = runtime.downloadDirectory;
     browserAccount = account;
     await writeFile(initPath, coldFixtureInitSource(account), { mode: 0o600 });
-    await browser('--init-script', initPath, 'open', `${TARGET.site}/#bar-forecast-2026`);
+    await browser('--init-script', initPath, 'open', scopeId ? `${TARGET.site}/?forecastAnalytics=${scopeId}#verdict` : `${TARGET.site}/#bar-forecast-2026`);
     stage = `browser-bootstrap-${account.kind}`;
     const checkpoint = await waitForForecastBootstrap({
       readDiagnostics: () => evaluate(forecastBrowserDiagnosticsSource({ expectedOwnerId: account.id })),
     });
     summary.bootstrapCheckpoints.push({ fixtureKind: account.kind, status: 'passed', diagnostics: checkpoint });
+    summary.browserRuntimes.push({ ordinal: browserRuntimeOrdinal, fixtureKind: account.kind,
+      entry: scopeId ? 'same-saved-analytics-scope' : 'forecast', freshDownloadDirectory: true, reusedNormalAuthSession: true });
   }
 
   async function openSaved(index = 0) {
@@ -1086,10 +1202,17 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
     if (number === 1) await verifyGeometry('report');
     await closeAndReopenForecast(`journey-${number}-report-reopen`);
     await openSaved(); await browserWait('document.querySelector(".bf26-results")');
-    const pdfs = []; let pdfByteCount = 0;
-    const preparedEvents = () => service(`/rest/v1/dd2026_forecast_attempt_events?attempt_id=eq.${journey.id}&event_type=eq.browser_pdf_prepared_client_reported&select=event_type,details`);
+    const pdfs = []; let pdfByteCount = 0; let firstPreparedEvent;
+    const preparedEvents = () => service(`/rest/v1/dd2026_forecast_attempt_events?attempt_id=eq.${journey.id}&event_type=eq.browser_pdf_prepared_client_reported&select=event_type,details,happened_at`);
     assert.equal((await preparedEvents()).length, 0, 'Opening a report must not manufacture a browser export event');
     for (let repeat = 0; repeat < 2; repeat++) {
+      if (repeat === 1) {
+        // Pinned native allow-mode can reuse the suggested filename. A fresh
+        // runtime/directory proves the second file came from the second click.
+        await startBrowser(member); await browserWait('document.querySelector(".bf26-subject-grid")');
+        await openSaved(); await browserWait('document.querySelector(".bf26-results")');
+        assert.equal(await evaluate('document.querySelector(".bf26-grade strong").textContent'), `${grade.totalScore} / 100`);
+      }
       const reloaded = await ownedAttempt(member, journey.id); assert.equal(digest(reloaded.result), grade.canonicalSha256);
       const history = (await api(member, { operation: 'history', limit: 1, completeOnly: true })).body;
       assert.equal(history.analytics.completedAttempts, number);
@@ -1109,18 +1232,20 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
       // Startup --download-path preserves the real suggested filename. The
       // CLI's download command has a fixed30s limit and canonicalizes Windows
       // paths, so observe the actual completed file within25s Auth+60s render.
-      const bytes = await waitForForecastPdfDownload({ checkDeadline, readCandidate: async () => {
-        let file; try { file = await lstat(candidate); } catch (error) { if (error.code === 'ENOENT') return null; throw error; }
-        assert.ok(file.isFile() && !file.isSymbolicLink() && file.size <= 10 * 1024 * 1024, 'Only the exact private regular PDF file may be read');
-        return new Uint8Array(await readFile(candidate));
-      } });
+      const bytes = await waitForForecastPdfDownload({ checkDeadline,
+        readCandidate: () => readForecastPdfCandidate(candidate, expectedPdf) });
       const verified = verifyForecastDownloadedBytes(bytes, expectedPdf); pdfs.push(verified.sha256); pdfByteCount = verified.byteLength;
       const retained = forecastPdfDownloadPath(privateDir, number, repeat + 1);
       await mkdir(path.dirname(retained), { recursive: true });
       await assert.rejects(access(retained), error => error.code === 'ENOENT');
-      await rename(candidate, retained); // Recoverable, exact fixture-owned file only.
+      await writeFile(retained, bytes, { flag: 'wx', mode: 0o600 }); // Copy verified bytes; never move a live Chrome-owned file.
       if (!repeat) await writeFile(path.join(evidenceDir, `journey-${number}-saved-report.pdf`), bytes, { mode: 0o600 });
       assert.equal(digest((await ownedAttempt(member, journey.id)).result), grade.canonicalSha256);
+      const prepared = await waitForForecastPdfDownload({ timeoutMs: 10000, evidence: 'prepared-note', checkDeadline,
+        readCandidate: async () => { const rows = await preparedEvents(); assert.ok(rows.length <= 1); return rows.length ? rows[0] : null; } });
+      assert.ok(Number.isFinite(Date.parse(prepared.happened_at)));
+      if (firstPreparedEvent) assert.deepEqual(prepared, firstPreparedEvent, 'The first preparation observation must survive the fresh browser unchanged');
+      firstPreparedEvent ||= prepared;
     }
     assert.equal(pdfs[0], pdfs[1]); assert.deepEqual(await batches(journey.id), executionBefore);
     const eventRows = await waitForForecastPdfDownload({ timeoutMs: 10000, evidence: 'prepared-note', checkDeadline, readCandidate: async () => {
@@ -1139,9 +1264,140 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
     assert.equal(digest((await ownedAttempt(member, journey.id)).result), grade.canonicalSha256);
     checks.push(`journey-${number}-saved-result-history-pdf-reload-no-extra-grading`);
     return { ...grade, pdfSha256: pdfs[0], pdfEvidence: { actualBrowserDownloads: 2, canonicalBytesEqual: true,
-      source: 'same-origin-browser-worker', preparedEvents: 1, eventEvidence: 'client_reported-not-server-rendered' },
+      source: 'same-origin-browser-worker', preparedEvents: 1, eventEvidence: 'client_reported-not-server-rendered',
+      secondDownloadFreshRuntime: true, originalBrowserFilesPreserved: true },
       gradingBatchExecutions: executionBefore.reduce((sum, batch) => sum + batch.executions, 0),
       physicalProviderRequestCount: null, providerCountNote: 'Batch execution counters are verified; internal provider retries are not exposed as a physical-call count.' };
+  }
+
+  async function verifyAnalyticsScope(other, unpaid) {
+    // Extend the same three journeys. No new account, assessment, checkpoint,
+    // grading retry, or email is created by this read/export verification.
+    stage = 'analytics-scope-freeze';
+    assert.equal(journeys.length, 3); assert.equal(member.attemptIds.length, 3);
+    const frozen = [];
+    for (let index = 0; index < member.attemptIds.length; index++) {
+      const attempt = await ownedAttempt(member, member.attemptIds[index]);
+      const answers = Array.from({ length: 20 }, (_, question) => fixtureAnswer(prefix, index + 1, question + 1));
+      assert.equal(assertCanonical(attempt, member.id, answers).canonicalSha256, journeys[index].canonicalSha256);
+      frozen.push({ attempt, batches: await batches(attempt.id) });
+    }
+    const originals = frozen.map(row => row.attempt);
+    const historyIds = []; const cursors = new Set(); let cursor = null; let historyPages = 0;
+    do {
+      checkDeadline(); assert.ok(historyPages++ < 4, 'Three saved attempts must terminate bounded pagination');
+      const history = (await api(member, { operation: 'history', includeClassifications: true,
+        completeOnly: true, limit: 1, ...(cursor ? { before: cursor } : {}) })).body;
+      assert.equal(history.authorized, true); assert.equal(history.consentAccepted, true);
+      assert.ok(Array.isArray(history.attempts) && history.attempts.length <= 1);
+      assertForecastScopeAggregate(history.analytics, originals);
+      for (const row of history.attempts) {
+        assert.equal(row.status, 'complete'); assert.ok(!historyIds.includes(row.id)); historyIds.push(row.id);
+      }
+      cursor = history.nextCursor;
+      if (cursor) { const key = digest(cursor); assert.ok(!cursors.has(key)); cursors.add(key); }
+    } while (cursor);
+    assert.deepEqual(historyIds.slice().sort(), member.attemptIds.slice().sort());
+
+    const scopeRows = () => service(`/rest/v1/dd2026_forecast_analytics_exports?owner_id=eq.${member.id}&select=id,owner_id,scope_hash,filter,manifest,analytics,template_version,created_at,browser_prepared_at,browser_prepared_version,browser_prepared_byte_count,email_status,email_executions,email_requested_at`);
+    const requestRows = () => service(`/rest/v1/dd2026_forecast_analytics_requests?owner_id=eq.${member.id}&select=request_id,scope_id`);
+    assert.equal((await scopeRows()).length, 0); assert.equal((await requestRows()).length, 0);
+    stage = 'analytics-scope-main-navigation'; await closeForecast();
+    await browserWait(`(() => {const node=document.querySelector(${JSON.stringify(READY_ANALYTICS_LAUNCHER)});return Boolean(node && node.getClientRects().length && !node.closest('[inert],[aria-hidden="true"]'));})()`);
+    await browserSnapshot(); await browser('click', READY_ANALYTICS_LAUNCHER);
+    await browserWait('location.hash === "#verdict" && document.querySelector("#analytics-tab-forecast")?.getClientRects().length');
+    await browserSnapshot(); await browser('click', '#analytics-tab-forecast');
+    const waitMainAnalytics = () => browserWait(`(() => {const host=document.querySelector('#analytics-forecast-body');return location.hash==='#verdict' && Boolean(host && !host.hidden && host.getClientRects().length && host.querySelector('.analytics-panel[aria-busy="false"] .bf26-metric-grid')) && document.querySelector('#analytics-tab-forecast')?.getAttribute('aria-selected')==='true';})()`);
+    const verifyMetrics = async (analytics) => {
+      await waitMainAnalytics();
+      const owner = await evaluate(forecastBrowserDiagnosticsSource({ expectedOwnerId: member.id }));
+      assert.equal(owner.runtimeOwnerMatchesExpected, true); assert.equal(owner.expectedOriginMatch, true);
+      const metrics = await evaluate(`Array.from(document.querySelectorAll('#analytics-forecast-body .bf26-metric-grid .bf26-metric-card')).map(node=>({label:node.querySelector('.bf26-metric-label')?.textContent,value:node.querySelector('.bf26-metric-value')?.textContent}))`);
+      assert.deepEqual(metrics, [
+        { label: 'Completed attempts', value: '3' }, { label: 'Average score', value: `${analytics.averagePercentage}%` },
+        { label: 'Grammar', value: `${analytics.averageGrammarScore} / 5` },
+        { label: 'Issue spotting', value: `${analytics.averageIssueSpottingScore} / 5` },
+      ]);
+      assert.equal(await evaluate('document.querySelector("#analytics-practice-actions")?.hidden === true'), true);
+    };
+    const allAnalytics = (await api(member, { operation: 'history', includeClassifications: true, completeOnly: true, limit: 1 })).body.analytics;
+    await verifyMetrics(allAnalytics);
+    let scope; let scopeDigest; let expectedPdf; let firstPrepared; const downloads = [];
+    for (let repeat = 1; repeat <= 2; repeat++) {
+      stage = `analytics-scope-period-pdf-${repeat}`;
+      if (repeat === 2) {
+        await startBrowser(member, { scopeId: scope.id }); await waitMainAnalytics();
+        await browser('reload'); await waitMainAnalytics();
+        assert.equal(await evaluate('new URL(location.href).searchParams.get("forecastAnalytics")'), scope.id);
+      }
+      await verifyMetrics(allAnalytics);
+      await evaluate(`(() => {const probe=window.__astraForecastProbe;probe.analyticsTrace={enabled:true,requested:[],completed:[],inFlight:0,maximumInFlight:0};return true;})()`);
+      const noteBefore = await evaluate('window.__astraForecastProbe.operations.analytics_pdf_prepared.responded');
+      // The real main Analytics button alone creates the snapshot. There is no
+      // direct test snapshot call or programmatic anchor/download substitute.
+      await clickText('Download period PDF');
+      await browserWait(`location.hash==='#verdict' && /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(new URL(location.href).searchParams.get('forecastAnalytics') || '')`);
+      const scopeId = await evaluate('new URL(location.href).searchParams.get("forecastAnalytics")'); assert.match(scopeId, UUID);
+      if (!scope) { member.scopeIds = [scopeId]; await persistManifest(); } else assert.equal(scopeId, scope.id);
+      const saved = (await api(member, { operation: 'analytics_report', scopeId })).body;
+      const verified = assertForecastScopeMetadata(saved, member.id, originals);
+      if (!scope) { scope = verified; scopeDigest = digest(scope); } else assert.equal(digest(verified), scopeDigest);
+      const ordered = [];
+      for (let index = 0; index < scope.manifest.length; index++) {
+        const expected = originals.find(row => row.id === scope.manifest[index].attemptId);
+        const payload = (await api(member, { operation: 'analytics_attempt', scopeId, attemptId: expected.id })).body;
+        ordered.push(assertForecastScopeMember(payload, scope, expected, index));
+      }
+      if (!expectedPdf) expectedPdf = await buildForecastAnalyticsPdf({ scope, ownerId: member.id, attempts: ordered });
+      const candidate = path.join(browserDownloadDir, forecastAnalyticsFileName(scopeId));
+      const bytes = await waitForForecastPdfDownload({ checkDeadline,
+        readCandidate: () => readForecastPdfCandidate(candidate, expectedPdf) });
+      downloads.push(verifyForecastDownloadedBytes(bytes, expectedPdf));
+      const retained = path.join(privateDir, `analytics-period-${repeat}.pdf`);
+      await assert.rejects(access(retained), error => error.code === 'ENOENT'); await writeFile(retained, bytes, { flag: 'wx', mode: 0o600 });
+      if (repeat === 1) await writeFile(path.join(evidenceDir, 'analytics-period-saved-report.pdf'), bytes, { mode: 0o600 });
+      await verifyMetrics(scope.analytics);
+      await browserWait(`window.__astraForecastProbe.operations.analytics_pdf_prepared.responded === ${noteBefore + 1}`, 10000);
+      assert.equal(await evaluate('window.__astraForecastProbe.operations.analytics_pdf_prepared.httpStatus'), 200);
+      const trace = await evaluate('window.__astraForecastProbe.analyticsTrace');
+      assert.deepEqual(trace.completed, scope.manifest.map(row => row.attemptId));
+      assert.ok(trace.requested.length >= 3 && trace.requested.every(id => scope.manifest.some(row => row.attemptId === id)),
+        'A polite read retry may repeat a member request, never introduce another saved assessment');
+      assert.equal(trace.inFlight, 0); assert.equal(trace.maximumInFlight, 1, 'The browser must fetch canonical members serially');
+      assert.equal(await evaluate('window.__astraForecastProbe.counts.analytics_email || 0'), 0);
+      const rows = await scopeRows(); assert.equal(rows.length, 1);
+      assertForecastScopePrepared(rows[0], scope, bytes.length, firstPrepared); firstPrepared ||= rows[0];
+      const requests = await requestRows(); assert.equal(requests.length, 1); assert.equal(requests[0].scope_id, scope.id);
+    }
+    assert.equal(downloads[0].sha256, downloads[1].sha256);
+    await screen('analytics-period-main-saved-scope');
+    stage = 'analytics-scope-owner-boundaries';
+    const authorizedOther = (await api(other, { operation: 'status' })).body;
+    assert.equal(authorizedOther.authorized, true); assert.equal(authorizedOther.consentAccepted, true,
+      'Foreign-owner denial must not be hidden behind missing access or consent');
+    for (const body of [
+      { operation: 'analytics_report', scopeId: scope.id },
+      { operation: 'analytics_attempt', scopeId: scope.id, attemptId: originals[0].id },
+      { operation: 'analytics_pdf_prepared', scopeId: scope.id, scopeHash: scope.scopeHash,
+        pdfVersion: 'forecast-analytics-pdf-v1', byteCount: downloads[0].byteLength },
+    ]) {
+      assert.equal((await api(other, body, [404])).body.error.code, 'BAR_FORECAST_ANALYTICS_NOT_FOUND');
+      assert.equal((await api(unpaid, body, [403])).body.error.code, 'BAR_FORECAST_ACCESS_REQUIRED');
+    }
+    for (const before of frozen) {
+      assert.equal(digest(await ownedAttempt(member, before.attempt.id)), digest(before.attempt),
+        'Analytics must not change any saved answer, canonical grade, revision or timestamp');
+      assert.deepEqual(await batches(before.attempt.id), before.batches, 'Analytics must not start or repeat grading');
+    }
+    assertForecastScopePrepared((await scopeRows())[0], scope, downloads[0].byteLength, firstPrepared);
+    const metrics = assertForecastScopeAggregate(scope.analytics, originals);
+    checks.push('analytics-main-scope-full-history-two-native-pdfs-owner-denials-no-mail-no-regrading');
+    return { ...metrics, pageSize: 1, paginatedAttempts: historyIds.length, immutableScopes: 1,
+      actualBrowserDownloads: 2, pdfSha256: downloads[0].sha256, canonicalBytesEqual: true,
+      secondDownloadFreshRuntime: true, originalBrowserFilesPreserved: true,
+      serialMembersPerDownload: 3, maximumInFlightMembers: 1, reloadSameScope: true,
+      preparedObservations: 1, preparationEvidence: 'client-reported-first-observation-not-server-rendered',
+      emailClaims: 0, emailRequests: 0, canonicalAttemptsUnchanged: 3, gradingBatchExecutionsUnchanged: true };
   }
 
   async function cleanupAccount(account) {
@@ -1163,7 +1419,8 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
     for (const [table, column] of [['profiles', 'id'], ['usage_events', 'user_id'], ['usage_sessions', 'user_id'],
       ['terms_acceptances', 'user_id'], ['introductory_token_grants', 'user_id'], ['introductory_token_ledger', 'user_id'],
       ['free_beta_access', 'user_id'], ['dd2026_bar_forecast_consents', 'user_id'],
-      ['dd2026_forecast_attempts', 'owner_id'], ['dd2026_forecast_result_exports', 'owner_id']]) {
+      ['dd2026_forecast_attempts', 'owner_id'], ['dd2026_forecast_result_exports', 'owner_id'],
+      ['dd2026_forecast_analytics_exports', 'owner_id'], ['dd2026_forecast_analytics_requests', 'owner_id']]) {
       const residue = await service(`/rest/v1/${table}?${column}=eq.${account.id}&select=${column}`); assert.equal(residue.length, 0, 'Disposable account residue must be absent');
     }
     for (const id of account.attemptIds || []) {
@@ -1182,7 +1439,8 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
     publishable = config.match(/sb_publishable_[A-Za-z0-9_-]{20,}/u)?.[0]; assert.ok(publishable);
     const asset = (await safeRequest(`${TARGET.site}/assets/bar-forecast.js`)).bytes;
     assert.ok(new TextDecoder().decode(asset).includes('submit_attempt'), 'Durable frontend candidate is not deployed'); summary.forecastAssetSha256 = digest(asset);
-    for (const table of ['dd2026_forecast_attempts', 'dd2026_forecast_batches', 'dd2026_forecast_result_exports']) await service(`/rest/v1/${table}?select=*&limit=0`);
+    for (const table of ['dd2026_forecast_attempts', 'dd2026_forecast_batches', 'dd2026_forecast_result_exports',
+      'dd2026_forecast_analytics_exports', 'dd2026_forecast_analytics_requests']) await service(`/rest/v1/${table}?select=*&limit=0`);
     checks.push('pinned-staging-config-durable-assets-and-schema');
     await preflightFixtureRegistration();
     checks.push('service-only-pre-sign-in-fixture-registration-rpc');
@@ -1210,6 +1468,7 @@ export async function verifyStaging({ preflightOnly = false, cleanupManifestPath
         finalAnswerSaved: true, acceptedVia: 'authenticated-real-browser-submit_attempt',
         ...await verifySavedSurfaces(journey, number) });
     }
+    summary.analyticsScope = await verifyAnalyticsScope(other, unpaid);
     stage = 'ownership-boundaries';
     const latest = (await api(member, { operation: 'history' })).body.attempts[0].id;
     for (const operation of ['attempt', 'result_pdf', 'retry_attempt']) {
@@ -1462,8 +1721,9 @@ export async function selfTestBrowser() {
   const config = path.join(privateDir, 'browser-config.json');
   const init = path.join(privateDir, 'probe.js');
   const state = path.join(privateDir, 'local-state.json');
-  const localPdfPath = path.join(privateDir, 'local-browser-download.pdf');
   const localPdfBytes = '%PDF-1.7\nExplicit local CLI download wiring only.\n%%EOF';
+  let runtime = forecastBrowserRuntime(prefix, 'local', 1, privateDir);
+  await mkdir(runtime.downloadDirectory, { recursive: true });
   const id = randomUUID(); const clientAttemptId = randomUUID();
   let localHttpRequests = 0; let closed = false; let launched = false;
   const server = createServer((request, response) => {
@@ -1491,9 +1751,9 @@ export async function selfTestBrowser() {
     try {
       const script = args[0] === 'eval' ? args[1] : null;
       const cliArgs = script === null ? args : ['eval', '--stdin'];
-      const identity = browserIdentity(prefix, 'local');
+      const identity = runtime;
       const pending = runCommand(launcher.command, [...launcher.prefix, '--namespace', identity.namespace, '--session', identity.session,
-        '--config', config, '--restore-save', 'never', '--download-path', privateDir, '--json', ...cliArgs],
+        '--config', config, '--restore-save', 'never', '--download-path', runtime.downloadDirectory, '--json', ...cliArgs],
       { timeout: 60000, maxBuffer: 1000000, windowsHide: true, env: isolatedBrowserEnv() });
       if (script !== null) {
         pending.child.stdin.on('error', () => {});
@@ -1539,19 +1799,32 @@ export async function selfTestBrowser() {
     await browser('eval', "document.documentElement.style.zoom='2'");
     for (const surface of ['editor', 'report']) assertGeometry(await browser('eval', geometrySource(surface)));
     for (let repeat = 1; repeat <= 2; repeat++) {
+      if (repeat === 2) {
+        const previous = runtime;
+        await browser('close'); closed = true;
+        assert.equal(await readFile(path.join(previous.downloadDirectory, 'local-browser-download.pdf'), 'utf8'), localPdfBytes);
+        runtime = forecastBrowserRuntime(prefix, 'local', 2, privateDir);
+        assert.notEqual(runtime.namespace, previous.namespace); assert.notEqual(runtime.downloadDirectory, previous.downloadDirectory);
+        await mkdir(runtime.downloadDirectory, { recursive: true }); assert.deepEqual(await readdir(runtime.downloadDirectory), []);
+        assertBrowserSocketBudget(runtime, isolatedBrowserEnv()); closed = false;
+        await browser('--init-script', init, 'open', url); await browser('snapshot', '-i');
+      }
+      const localPdfPath = path.join(runtime.downloadDirectory, 'local-browser-download.pdf');
       await assert.rejects(access(localPdfPath), error => error.code === 'ENOENT');
       await browser('click', '#local-pdf');
-      const downloaded = await waitForForecastPdfDownload({ timeoutMs: 10000, readCandidate: async () => {
-        try { return await readFile(localPdfPath, 'utf8'); } catch (error) { if (error.code === 'ENOENT') return null; throw error; }
-      } });
-      assert.equal(downloaded, localPdfBytes);
-      await rename(localPdfPath, path.join(privateDir, `verified-download-${repeat}.pdf`));
+      const expected = Buffer.from(localPdfBytes);
+      const downloaded = await waitForForecastPdfDownload({ timeoutMs: 10000,
+        readCandidate: () => readForecastPdfCandidate(localPdfPath, expected) });
+      verifyForecastDownloadedBytes(downloaded, expected);
+      await writeFile(path.join(privateDir, `verified-download-${repeat}.pdf`), downloaded, { flag: 'wx', mode: 0o600 });
+      assert.equal(await readFile(localPdfPath, 'utf8'), localPdfBytes, 'Native original remains in place until browser close');
     }
     await browser('close'); closed = true;
-    return { ok: true, test: 'loopback-only CLI wiring, not application evidence', checks: process.platform === 'linux' ? 13 : 12, localHttpRequests,
+    return { ok: true, test: 'loopback-only CLI wiring, not application evidence', checks: process.platform === 'linux' ? 16 : 15, localHttpRequests,
       linuxOriginalIdentityRejected,
       nativeAsyncBlobDownloadVerified: true,
-      browserSessions: 1, externalApplicationRequests: 0, providerRequests: 0, remoteWrites: 0, privateStateRemoved: true };
+      browserSessions: 2, freshDownloadDirectories: 2, sameSuggestedFileName: true, originalBrowserFilesPreserved: true,
+      externalApplicationRequests: 0, providerRequests: 0, remoteWrites: 0, privateStateRemoved: true };
   } finally {
     if (launched && !closed && launcher) { await browser('close').catch(() => {}); }
     await new Promise((resolve) => server.close(resolve));

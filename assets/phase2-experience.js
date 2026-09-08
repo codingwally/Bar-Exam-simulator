@@ -920,10 +920,12 @@
   function forecastAuthReturnSearch(value) {
     try {
       const url = new URL(String(value || ''), location.origin);
-      if (url.origin !== location.origin || url.pathname !== location.pathname || url.hash !== '#bar-forecast-2026') return '';
-      const attempts = url.searchParams.getAll('forecastAttempt');
-      if (attempts.length !== 1 || !/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/iu.test(attempts[0])) return '';
-      return `?${new URLSearchParams({ forecastAttempt: attempts[0].toLowerCase() })}`;
+      if (url.origin !== location.origin || url.pathname !== location.pathname) return '';
+      const key = url.hash === '#bar-forecast-2026' ? 'forecastAttempt' : url.hash === '#verdict' ? 'forecastAnalytics' : null;
+      if (!key || url.searchParams.has(key === 'forecastAttempt' ? 'forecastAnalytics' : 'forecastAttempt')) return '';
+      const values = url.searchParams.getAll(key);
+      if (values.length !== 1 || !/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/iu.test(values[0])) return '';
+      return `?${new URLSearchParams({ [key]: values[0].toLowerCase() })}`;
     } catch { return ''; }
   }
 

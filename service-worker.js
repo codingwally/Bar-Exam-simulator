@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'duediligence-shell-astra-forecast-multiline-20260908-r1';
+const CACHE_VERSION = 'duediligence-shell-astra-simulator-presentation-20260908-r1';
 const EXAMINATION_STUDENT_SHELL = '/examination-room/student.html';
 const EXAMINATION_OFFLINE_GRADER = '/examination-room/offline-grading.html';
 const SHELL = Object.freeze([
@@ -16,10 +16,10 @@ const SHELL = Object.freeze([
   '/assets/due-diligence-controls.css?v=subject-matter-controls-20260817-4',
   '/assets/quorum-first-shell.css?v=profile-photo-release2-20260827-1&baseline=public-reliability-20260827-3',
   '/assets/quorum-first-shell.js?v=syllabus-review-20260823-1&forecast=exam-tools-20260901-4',
-  '/assets/feature-loader.js?v=profile-photo-release2-20260827-1&baseline=public-reliability-20260827-1&feedback=offline-save-20260827-1&hotfix=ian-provisional-reveal-20260828-1&recovery=subject-review-timeout-20260828-1&cta=home-subscription-20260828-2&collapse=home-read-more-20260828-1&results=history-20260828-1&forecast=access-flow-20260902-1&coaching=report-20260901-1&unlimited=feature-access-20260902-1&simulation=simulation-timer-review-20260906-r2&totals=simulation-cumulative-score-20260906-r1&answers=simulation-submitted-answer-20260906-r1&forecast-loop=astra-20260907-1&durable=astra-forecast-durable-20260907-r1&entry=astra-forecast-cancel-20260907-r1&poll=astra-forecast-read-wait-20260907-r1&pdf=astra-browser-pdf-20260908-r1&editor=astra-forecast-multiline-20260908-r1',
+  '/assets/feature-loader.js?v=profile-photo-release2-20260827-1&baseline=public-reliability-20260827-1&feedback=offline-save-20260827-1&hotfix=ian-provisional-reveal-20260828-1&recovery=subject-review-timeout-20260828-1&cta=home-subscription-20260828-2&collapse=home-read-more-20260828-1&results=history-20260828-1&forecast=access-flow-20260902-1&coaching=report-20260901-1&unlimited=feature-access-20260902-1&simulation=simulation-timer-review-20260906-r2&totals=simulation-cumulative-score-20260906-r1&answers=simulation-submitted-answer-20260906-r1&forecast-loop=astra-20260907-1&durable=astra-forecast-durable-20260907-r1&entry=astra-forecast-cancel-20260907-r1&poll=astra-forecast-read-wait-20260907-r1&pdf=astra-browser-pdf-20260908-r1&editor=astra-forecast-multiline-20260908-r1&analytics=astra-analytics-browser-20260908-r1&source=astra-simulator-source-20260908-r1',
   '/assets/private-beta-landing.js?v=public-reliability-20260827-2&feedback=quiet-navigation-20260828-1&forecast=access-flow-20260902-1&auth=login-loop-p0-20260901-1&unlimited=feature-access-20260902-1&forecast-loop=astra-20260907-1&entry=astra-forecast-cancel-20260907-r1',
   '/assets/profile-photo.js?v=profile-photo-release2-20260827-1',
-  '/assets/phase2-experience.js?v=profile-photo-release2-20260827-1&baseline=syllabus-reveal-p0-20260826-2-examination-room-4&profile=chambers-20260827-1&access=paid-expiry-20260827-1&pricing=regular-checkout-r3&legal=explicit-20260901-1&auth=login-loop-p0-20260901-1&unlimited=feature-access-20260902-1&terms=astra-activation-20260907-r1',
+  '/assets/phase2-experience.js?v=profile-photo-release2-20260827-1&baseline=syllabus-reveal-p0-20260826-2-examination-room-4&profile=chambers-20260827-1&access=paid-expiry-20260827-1&pricing=regular-checkout-r3&legal=explicit-20260901-1&auth=login-loop-p0-20260901-1&unlimited=feature-access-20260902-1&terms=astra-activation-20260907-r1&analytics=astra-analytics-browser-20260908-r1',
   '/assets/phase4-experience.js?v=syllabus-reveal-p0-20260826-2&access=paid-expiry-20260827-1&recovery=subject-review-timeout-20260828-1&forecast-setup=20260901-2&auth=login-loop-p0-20260901-1&unlimited=feature-access-20260902-1&forecast-loop=astra-20260907-1&poll=astra-forecast-read-wait-20260907-r1',
   '/assets/pedro-navigation.js?v=pedro-release2-20260827-1',
   '/assets/icons/navigation/door-open.svg',
@@ -38,7 +38,7 @@ const SHELL = Object.freeze([
   '/assets/auth-session-storage.js?v=auth-persistence-20260812-1',
   '/assets/private-beta-session.js?v=beta-all-access-20260802-1',
   '/assets/bar-forecast.css?v=access-flow-20260902-1&durable=astra-forecast-durable-20260907-r1&editor=astra-forecast-multiline-20260908-r1',
-  '/assets/bar-forecast.js?v=access-flow-20260902-1&unlimited=feature-access-20260902-1&loop=astra-20260907-1&durable=astra-forecast-durable-20260907-r1&entry=astra-forecast-cancel-20260907-r1&poll=astra-forecast-read-wait-20260907-r1&pdf=astra-browser-pdf-20260908-r1&editor=astra-forecast-multiline-20260908-r1',
+  '/assets/bar-forecast.js?v=access-flow-20260902-1&unlimited=feature-access-20260902-1&loop=astra-20260907-1&durable=astra-forecast-durable-20260907-r1&entry=astra-forecast-cancel-20260907-r1&poll=astra-forecast-read-wait-20260907-r1&pdf=astra-browser-pdf-20260908-r1&editor=astra-forecast-multiline-20260908-r1&analytics=astra-analytics-browser-20260908-r1',
   '/assets/icons/navigation/flag.svg',
   '/assets/bar-forecast/forecast-workspace-preview.webp',
 ]);

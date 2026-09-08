@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { provisionMandatoryCommercialChoice } from './staging-commercial-user.mjs';
+import { createExaminationFixtureLifecycle } from './staging-examination-fixtures.mjs';
 
 const SUPABASE_URL = String(process.env.STAGING_SUPABASE_URL || '').replace(/\/+$/, '');
 const SERVICE_ROLE_KEY = String(process.env.STAGING_SUPABASE_SERVICE_ROLE_KEY || '');
@@ -18,6 +19,9 @@ assert.match(PUBLISHABLE_KEY, /^sb_publishable_[A-Za-z0-9_-]{20,}$/);
 assert.match(WORKER_URL, /^https:\/\/[a-z0-9.-]+\.workers\.dev$/);
 
 const runId = `${Date.now().toString(36)}-${randomBytes(4).toString('hex')}`;
+const fixtureLifecycle = createExaminationFixtureLifecycle({ suite: 'examinations-api', runId,
+  supabaseUrl: SUPABASE_URL, workerUrl: WORKER_URL, serviceRoleKey: SERVICE_ROLE_KEY,
+  publishableKey: PUBLISHABLE_KEY, sourceSha: process.env.GITHUB_SHA || null });
 const createdUsers = [];
 const createdExams = [];
 const requestKey = (prefix) => `${prefix}_${randomUUID().replaceAll('-', '')}`;
@@ -68,7 +72,8 @@ async function acceptCurrentTerms(user) {
 }
 
 async function createUser(label) {
-  const email = `dd-exam-${label}-${runId}@example.com`;
+  const identity = await fixtureLifecycle.beforeCreate(label);
+  const email = identity.email;
   const password = `Dd!${randomBytes(24).toString('base64url')}`;
   const { body } = await jsonRequest(`${SUPABASE_URL}/auth/v1/admin/users`, {
     method: 'POST',
@@ -80,11 +85,15 @@ async function createUser(label) {
       email,
       password,
       email_confirm: true,
+      app_metadata: identity.appMetadata,
       user_metadata: { full_name: `Synthetic ${label}` },
     }),
   }, [200, 201]);
   assert.match(body.id, /^[0-9a-f-]{36}$/i);
   createdUsers.push(body.id);
+  await fixtureLifecycle.recordCreated(label, body.id);
+  await fixtureLifecycle.register(body.id);
+  await fixtureLifecycle.beforeSignIn(body.id);
 
   const session = await jsonRequest(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
     method: 'POST',
@@ -95,6 +104,7 @@ async function createUser(label) {
     body: JSON.stringify({ email, password }),
   });
   assert.ok(session.body.access_token);
+  await fixtureLifecycle.rememberSession(body.id, session.body);
   const created = { id: body.id, email, token: session.body.access_token };
   const legalVersions = await acceptCurrentTerms(created);
   await provisionMandatoryCommercialChoice({
@@ -137,10 +147,7 @@ async function grantFoundingBetaAccess(actorUserId, targetUser) {
 }
 
 async function deleteUser(userId) {
-  await jsonRequest(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
-    method: 'DELETE',
-    headers: serviceHeaders,
-  }, [200, 204]);
+  await fixtureLifecycle.deleteUser(userId);
 }
 
 async function serviceRpc(name, payload) {
@@ -156,6 +163,7 @@ async function serviceRpc(name, payload) {
 }
 
 async function grantSyntheticSuperAdmin(userId) {
+  await fixtureLifecycle.beforePromotion(userId);
   await jsonRequest(`${SUPABASE_URL}/rest/v1/user_roles?user_id=eq.${userId}`, {
     method: 'PATCH',
     headers: {
@@ -231,7 +239,6 @@ async function deleteSyntheticUserRecords(userIds) {
   const targets = [
     ['examination_beta_access', `user_id=${filter}`],
     ['examination_participants', `user_id=${filter}`],
-    ['examination_audit_log', `actor_user_id=${filter}`],
     ['usage_events', `user_id=${filter}`],
     ['usage_sessions', `user_id=${filter}`],
   ];
@@ -777,6 +784,7 @@ async function cyclePrivateUpload(admin, student) {
 
 let outcome;
 try {
+  await fixtureLifecycle.preflight();
   const admin = await createUser('admin');
   const firstStudent = await createUser('student-a');
   const secondStudent = await createUser('student-b');
@@ -822,14 +830,24 @@ try {
   };
 } finally {
   const cleanupErrors = [];
-  for (const examId of [...new Set(createdExams)].reverse()) {
-    await deleteSyntheticExam(examId).catch((error) => cleanupErrors.push(error));
+  const verifiedUsers = [];
+  for (const userId of createdUsers) {
+    try { if (await fixtureLifecycle.verifyCleanupIdentity(userId)) verifiedUsers.push(userId); }
+    catch (error) { cleanupErrors.push(error); }
   }
-  await deleteSyntheticUserRecords(createdUsers)
+  if (verifiedUsers.length === createdUsers.length) {
+    for (const examId of [...new Set(createdExams)].reverse()) {
+      await deleteSyntheticExam(examId).catch((error) => cleanupErrors.push(error));
+    }
+  } else {
+    cleanupErrors.push(new Error('Exact fixture identity verification blocked examination cleanup'));
+  }
+  await deleteSyntheticUserRecords(verifiedUsers)
     .catch((error) => cleanupErrors.push(error));
-  for (const userId of createdUsers.reverse()) {
+  for (const userId of verifiedUsers.reverse()) {
     await deleteUser(userId).catch((error) => cleanupErrors.push(error));
   }
+  await fixtureLifecycle.finishCleanup(cleanupErrors.length === 0).catch((error) => cleanupErrors.push(error));
   if (cleanupErrors.length) {
     throw new AggregateError(cleanupErrors, 'Synthetic staging cleanup failed.');
   }

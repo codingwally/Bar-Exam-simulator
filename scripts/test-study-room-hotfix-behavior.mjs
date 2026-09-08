@@ -1,13 +1,16 @@
 import assert from 'node:assert/strict';
+import { webcrypto } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const [previewClient, liveClient] = await Promise.all([
+const [previewClient, liveClient, liveHtml, liveKitUmd] = await Promise.all([
   readFile(path.join(root, 'assets/study-room-preview.js'), 'utf8'),
   readFile(path.join(root, 'assets/study-room-live.js'), 'utf8'),
+  readFile(path.join(root, 'study-room/index.html'), 'utf8'),
+  readFile(path.join(root, 'worker/node_modules/livekit-client/dist/livekit-client.umd.js'), 'utf8'),
 ]);
 const liveClientTestHooksMarker = 'global.DueDiligenceStudyRoom = Object.freeze({';
 assert.ok(liveClient.includes(liveClientTestHooksMarker), 'Study Room test hooks marker is missing.');
@@ -46,6 +49,69 @@ const instrumentedLiveClient = liveClient.replace(
   };
   ${liveClientTestHooksMarker}`,
 );
+
+{
+  const matches = [...liveHtml.matchAll(/<script\b[^>]*data-study-room-compat="own-property-20260909-1"[^>]*>([\s\S]*?)<\/script>/g)];
+  assert.equal(matches.length, 1, 'Exactly one Study Room compatibility initializer must precede the SDK.');
+  const compatibility = matches[0][1];
+  const sdkScript = liveHtml.indexOf('<script src="../assets/vendor/livekit-client.umd.js');
+  assert.ok(sdkScript > matches[0].index + matches[0][0].length,
+    'The actual compatibility code must finish before the unchanged classic SDK script loads.');
+  const nativeContext = vm.createContext({});
+  const nativeHasOwn = vm.runInContext('Object.hasOwn', nativeContext);
+  vm.runInContext(compatibility, nativeContext);
+  assert.equal(vm.runInContext('Object.hasOwn', nativeContext), nativeHasOwn,
+    'A native implementation must not be replaced.');
+  const fallbackContext = vm.createContext({});
+  vm.runInContext('delete Object.hasOwn', fallbackContext);
+  vm.runInContext(compatibility, fallbackContext);
+  const fallback = vm.runInContext('Object.hasOwn', fallbackContext);
+  const descriptor = vm.runInContext('Object.getOwnPropertyDescriptor(Object, "hasOwn")', fallbackContext);
+  assert.equal(descriptor.enumerable, false);
+  assert.equal(descriptor.writable, true);
+  assert.equal(descriptor.configurable, true);
+  assert.equal(fallback.length, 2);
+  assert.equal(vm.runInContext('Object.hasOwn({ value: undefined }, "value")', fallbackContext), true);
+  assert.equal(vm.runInContext('Object.hasOwn(Object.create({ inherited: 1 }), "inherited")', fallbackContext), false);
+  assert.equal(vm.runInContext('Object.hasOwn({ hasOwnProperty: null }, "hasOwnProperty")', fallbackContext), true);
+  assert.equal(vm.runInContext('Object.hasOwn(Object.assign(Object.create(null), { value: 1 }), "value")', fallbackContext), true);
+  assert.equal(vm.runInContext('Object.hasOwn({}, "__proto__")', fallbackContext), false);
+  assert.equal(vm.runInContext('Object.hasOwn("abc", 1)', fallbackContext), true);
+  assert.equal(vm.runInContext('(() => { const key = Symbol(); return Object.hasOwn({ [key]: 1 }, key); })()', fallbackContext), true);
+  for (const nullish of ['null', 'undefined']) {
+    assert.throws(() => vm.runInContext(`Object.hasOwn(${nullish}, "value")`, fallbackContext),
+      (error) => error?.name === 'TypeError');
+  }
+  vm.runInContext(compatibility, fallbackContext);
+  assert.equal(vm.runInContext('Object.hasOwn', fallbackContext), fallback, 'Repeated loading must preserve the installed fallback.');
+
+  // Execute the real installed/pinned UMD, not a fake SDK. Timers are inert and
+  // every transport traps; Room construction never connects or captures media.
+  const sdkPackage = JSON.parse(await readFile(path.join(root, 'worker/node_modules/livekit-client/package.json'), 'utf8'));
+  assert.equal(sdkPackage.version, '2.22.1');
+  for (const mode of ['native', 'missing', 'fallback']) {
+    let networkCalls = 0;
+    const sdkContext = vm.createContext({
+      console: { log() {}, warn() {}, error() {}, debug() {} },
+      setTimeout: () => 1, clearTimeout() {}, setInterval: () => 1, clearInterval() {},
+      URL, URLSearchParams, TextEncoder, TextDecoder, ReadableStream, WritableStream,
+      TransformStream, AbortController, DOMException, crypto: webcrypto,
+      fetch() { networkCalls += 1; throw new Error('NETWORK_FORBIDDEN'); },
+      WebSocket: class { constructor() { networkCalls += 1; throw new Error('WEBSOCKET_FORBIDDEN'); } },
+    });
+    if (mode !== 'native') vm.runInContext('Object.hasOwn = undefined', sdkContext);
+    if (mode === 'fallback') vm.runInContext(compatibility, sdkContext);
+    vm.runInContext(liveKitUmd, sdkContext, { timeout: 5000 });
+    if (mode === 'missing') {
+      assert.throws(() => vm.runInContext('new LivekitClient.Room()', sdkContext, { timeout: 5000 }),
+        (error) => error?.name === 'TypeError' && /Object\.hasOwn/.test(error.message));
+    } else {
+      vm.runInContext('new LivekitClient.Room()', sdkContext, { timeout: 5000 });
+    }
+    assert.equal(networkCalls, 0, mode + ': SDK constructor must not use a transport.');
+  }
+  console.log('Study Room pre-SDK own-property compatibility: actual inline semantics and real LiveKit 2.22.1 Room constructor native/failure/fallback checks passed.');
+}
 
 class FakeClassList {
   constructor() {

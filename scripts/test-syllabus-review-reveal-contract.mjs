@@ -632,6 +632,15 @@ assert.ok(
   'assets/examinations.js must publish the provisional-to-paid reveal hotfix',
 );
 
+const coachingCacheMarker = 'question-coaching-20260909-1';
+const loaderReference = index.match(/<script src="(assets\/feature-loader\.js\?[^\"]+)"/)[1].replaceAll('&amp;', '&');
+assert.equal(new URL(loaderReference, 'https://fixture.invalid').searchParams.get('syllabus'), coachingCacheMarker);
+assert.ok(serviceWorker.includes(`'/${loaderReference}'`), 'The new loader URL must also be the exact shell precache URL.');
+for (const asset of ['examinations.js', 'examinations.css']) {
+  const reference = featureLoader.match(new RegExp(`'assets/${asset.replace('.', '\\.')}\\?([^']+)'`))[1];
+  assert.equal(new URLSearchParams(reference).get('syllabus'), coachingCacheMarker, `${asset} must bypass the old browser cache.`);
+}
+
 const userInstructionsStart = runbook.indexOf('## Copy-ready user and Support instructions');
 const technicalContractStart = runbook.indexOf('## Technical contract');
 assert.notEqual(userInstructionsStart, -1, 'the runbook must include copy-ready user and Support instructions');

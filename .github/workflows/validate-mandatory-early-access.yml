@@ -82,6 +82,12 @@ on:
       - 'worker/wrangler.staging.toml'
       - 'worker/syllabus-review-reveal-policy.test.mjs'
       - 'scripts/test-syllabus-review-reveal-contract.mjs'
+      - 'worker/syllabus-question-demand.test.mjs'
+      - 'scripts/test-syllabus-coaching-layout.mjs'
+      - 'scripts/verify-syllabus-coaching-staging.mjs'
+      - 'scripts/test-syllabus-coaching-staging.mjs'
+      - 'scripts/test-syllabus-coaching-release-workflow.mjs'
+      - '.github/workflows/release-syllabus-coaching.yml'
       - 'scripts/test-subject-matter-incremental-snapshot-hash-fix.mjs'
       - 'scripts/test-historical-examination-owner-access.mjs'
       - 'scripts/stress-public-admin-static-1000.mjs'
@@ -423,6 +429,9 @@ jobs:
           node scripts/test-public-home-responsive-css.mjs
           node scripts/test-paid-subscription-expiry-database.mjs
           node scripts/test-syllabus-review-reveal-contract.mjs
+          node --test scripts/test-syllabus-coaching-layout.mjs
+          node --test scripts/test-syllabus-coaching-staging.mjs
+          node scripts/test-syllabus-coaching-release-workflow.mjs
           node scripts/test-subject-matter-incremental-snapshot-hash-fix.mjs
           node scripts/test-historical-examination-owner-access.mjs
           node scripts/test-design-correction-release.mjs

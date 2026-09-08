@@ -1,0 +1,613 @@
+name: Release Syllabus coaching
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Release the reviewed Syllabus coaching candidate to staging or production"
+        required: true
+        default: staging
+        type: choice
+        options: [staging, production]
+      confirm_release:
+        description: "I approve this exact candidate and the selected release target"
+        required: true
+        default: false
+        type: boolean
+      product_sha:
+        description: "Exact merged main SHA, including this dedicated workflow"
+        required: true
+        type: string
+      validation_run_id:
+        description: "Successful mandatory pull-request validation for the exact product tree"
+        required: true
+        type: string
+      expected_current_pages_sha:
+        description: "Reviewed live baseline: 646c2e0185da61cd8ce473bcd787a05ec1883b4c"
+        required: true
+        type: string
+      approval_reference:
+        description: "Owner approval reference; production must also identify the independent cleanup read-back"
+        required: true
+        type: string
+      independent_cleanup_confirmed:
+        description: "Production only: operator independently read back staging DB/auth fixture cleanup"
+        required: true
+        default: false
+        type: boolean
+      independent_cleanup_evidence_sha256:
+        description: "Production only: sha256 of the privately retained independent cleanup evidence for this candidate/run"
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+  deployments: read
+
+concurrency:
+  group: examination-room-production-cutover
+  cancel-in-progress: false
+
+env:
+  PRODUCT_SHA: ${{ inputs.product_sha }}
+  EXPECTED_CURRENT_PAGES_SHA: ${{ inputs.expected_current_pages_sha }}
+  REVIEWED_BASELINE_SHA: 646c2e0185da61cd8ce473bcd787a05ec1883b4c
+  STAGING_MARKER_ENVIRONMENT: syllabus-coaching-staging-approved
+  STAGING_MARKER_TASK: syllabus-coaching-staging-gate
+
+jobs:
+  authorize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout the exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.product_sha }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enforce source, validation, and the closed Syllabus scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CONFIRM_RELEASE: ${{ inputs.confirm_release }}
+          VALIDATION_RUN_ID: ${{ inputs.validation_run_id }}
+          APPROVAL_REFERENCE: ${{ inputs.approval_reference }}
+          RELEASE_TARGET: ${{ inputs.target }}
+        run: |
+          node --input-type=module <<'NODE'
+          // BEGIN source-gate
+          import assert from 'node:assert/strict';
+          import { execFileSync } from 'node:child_process';
+          const env = process.env;
+          const git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim();
+          const api = (route) => JSON.parse(execFileSync('gh', ['api', `repos/${env.GITHUB_REPOSITORY}/${route}`], { encoding: 'utf8' }));
+          assert.equal(env.GITHUB_REPOSITORY, 'codingwally/Bar-Exam-simulator');
+          assert.equal(env.GITHUB_REF, 'refs/heads/main');
+          assert.notEqual(env.GITHUB_ACTOR, 'dependabot[bot]');
+          assert.equal(env.CONFIRM_RELEASE, 'true');
+          assert.ok(env.APPROVAL_REFERENCE?.trim());
+          assert.ok(['staging', 'production'].includes(env.RELEASE_TARGET));
+          assert.match(env.PRODUCT_SHA, /^[a-f0-9]{40}$/u);
+          assert.match(env.VALIDATION_RUN_ID, /^[1-9][0-9]{0,19}$/u);
+          assert.equal(env.EXPECTED_CURRENT_PAGES_SHA, env.REVIEWED_BASELINE_SHA);
+          assert.equal(env.REVIEWED_BASELINE_SHA, '646c2e0185da61cd8ce473bcd787a05ec1883b4c');
+          assert.equal(env.PRODUCT_SHA, env.GITHUB_SHA);
+          assert.equal(git('rev-parse', 'HEAD'), env.PRODUCT_SHA);
+          assert.equal(api('git/ref/heads/main').object.sha, env.PRODUCT_SHA);
+          git('merge-base', '--is-ancestor', env.REVIEWED_BASELINE_SHA, env.PRODUCT_SHA);
+          const run = api(`actions/runs/${env.VALIDATION_RUN_ID}`);
+          assert.equal(run.event, 'pull_request');
+          assert.equal(run.path, '.github/workflows/validate-mandatory-early-access.yml');
+          assert.equal(run.status, 'completed');
+          assert.equal(run.conclusion, 'success');
+          assert.match(run.head_sha, /^[a-f0-9]{40}$/u);
+          let number = run.pull_requests?.[0]?.number;
+          if (!number) {
+            const candidates = api(`commits/${run.head_sha}/pulls`).filter(pr => pr.base.ref === 'main'
+              && pr.head.sha === run.head_sha && pr.head.repo.full_name === env.GITHUB_REPOSITORY);
+            assert.equal(candidates.length, 1); number = candidates[0].number;
+          }
+          assert.ok(Number.isSafeInteger(number) && number > 0);
+          const pr = api(`pulls/${number}`);
+          assert.equal(pr.base.ref, 'main');
+          assert.equal(pr.base.repo.full_name, env.GITHUB_REPOSITORY);
+          assert.equal(pr.head.repo.full_name, env.GITHUB_REPOSITORY);
+          assert.equal(pr.head.sha, run.head_sha);
+          assert.equal(pr.merged, true);
+          git('fetch', '--no-tags', 'origin', `pull/${number}/head:refs/remotes/origin/syllabus-validation-head`);
+          assert.equal(git('rev-parse', 'refs/remotes/origin/syllabus-validation-head'), run.head_sha);
+          assert.equal(git('rev-parse', `${run.head_sha}^{tree}`), git('rev-parse', `${env.PRODUCT_SHA}^{tree}`));
+          git('diff', '--quiet', run.head_sha, env.PRODUCT_SHA, '--', '.');
+          const allowed = new Set([
+            '.github/workflows/release-syllabus-coaching.yml',
+            '.github/workflows/validate-mandatory-early-access.yml',
+            'assets/examinations.css', 'assets/examinations.js', 'assets/feature-loader.js',
+            'index.html', 'service-worker.js', 'worker/examiner-core.mjs',
+            'worker/syllabus-question-demand.test.mjs',
+            'scripts/test-design-correction-release.mjs',
+            'scripts/test-syllabus-review-reveal-contract.mjs',
+            'scripts/test-syllabus-coaching-layout.mjs',
+            'scripts/verify-syllabus-coaching-staging.mjs',
+            'scripts/test-syllabus-coaching-staging.mjs',
+            'scripts/test-syllabus-coaching-release-workflow.mjs',
+          ]);
+          const changes = git('diff', '--no-renames', '--name-status', env.REVIEWED_BASELINE_SHA, env.PRODUCT_SHA).split('\n');
+          assert.ok(changes.length > 0 && changes[0]);
+          for (const change of changes) {
+            const [status, file, extra] = change.split('\t');
+            assert.ok(['A', 'M'].includes(status) && !extra && allowed.has(file), `Unapproved change: ${change}`);
+          }
+          // The broad release and its database gate, schema/RPC/content, provider,
+          // dependencies, configuration, and every Study Room byte are immutable.
+          git('diff', '--quiet', env.REVIEWED_BASELINE_SHA, env.PRODUCT_SHA, '--',
+            'worker', 'supabase', 'content', 'study-room', 'assets/study-room*',
+            'assets/vendor', 'package.json', 'package-lock.json',
+            '.github/workflows/release-unlimited-feature-access.yml',
+            'scripts/astra-release-database-contract.mjs',
+            ':(exclude)worker/examiner-core.mjs', ':(exclude)worker/syllabus-question-demand.test.mjs');
+          const ciPatch = git('diff', '--unified=0', env.REVIEWED_BASELINE_SHA, env.PRODUCT_SHA, '--', '.github/workflows/validate-mandatory-early-access.yml');
+          assert.equal(ciPatch.split('\n').filter(line => line.startsWith('-') && !line.startsWith('---')).length, 0);
+          assert.deepEqual(ciPatch.split('\n').filter(line => line.startsWith('+') && !line.startsWith('+++')).map(line => line.slice(1).trim()).sort(), [
+            "- 'worker/syllabus-question-demand.test.mjs'",
+            "- 'scripts/test-syllabus-coaching-layout.mjs'",
+            "- 'scripts/verify-syllabus-coaching-staging.mjs'",
+            "- 'scripts/test-syllabus-coaching-staging.mjs'",
+            "- 'scripts/test-syllabus-coaching-release-workflow.mjs'",
+            "- '.github/workflows/release-syllabus-coaching.yml'",
+            'node --test scripts/test-syllabus-coaching-layout.mjs',
+            'node --test scripts/test-syllabus-coaching-staging.mjs',
+            'node scripts/test-syllabus-coaching-release-workflow.mjs',
+          ].sort());
+          // END source-gate
+          NODE
+
+      - name: Install reviewed dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Verify the focused release contracts
+        run: |
+          set -euo pipefail
+          node --test worker/index.test.mjs worker/rubric-v2.test.mjs worker/syllabus-question-demand.test.mjs worker/subject-matter-review.test.mjs
+          node scripts/test-syllabus-review-reveal-contract.mjs
+          node scripts/test-syllabus-coaching-layout.mjs
+          node scripts/test-syllabus-coaching-staging.mjs
+          node scripts/test-syllabus-coaching-release-workflow.mjs
+          node scripts/test-study-room-hotfix-behavior.mjs
+          node scripts/test-study-room-live.mjs
+          node scripts/test-pages-artifact.mjs
+          git diff --check
+
+  deploy_staging:
+    if: inputs.target == 'staging'
+    needs: authorize
+    environment: staging-e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: read
+      deployments: write
+    steps:
+      - name: Checkout the verified candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.product_sha }}
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install reviewed dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Resolve the existing staging publishable configuration
+        env:
+          CONFIGURED_STAGING_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          set -euo pipefail
+          staging_publishable_key="$CONFIGURED_STAGING_PUBLISHABLE_KEY"
+          if [[ -z "$staging_publishable_key" ]]; then
+            staging_publishable_key="$(node --input-type=module -e "const r = await fetch('https://duediligence-examinations-staging.wallyesteban1993.workers.dev/assets/phase2-config.js', { cache: 'no-store' }); if (!r.ok) process.exit(1); const match = (await r.text()).match(/sb_publishable_[A-Za-z0-9_-]{20,}/); if (!match) process.exit(1); process.stdout.write(match[0]);")"
+          fi
+          [[ "$staging_publishable_key" =~ ^sb_publishable_[A-Za-z0-9_-]{20,}$ ]]
+          echo "::add-mask::$staging_publishable_key"
+          echo "STAGING_SUPABASE_PUBLISHABLE_KEY=$staging_publishable_key" >> "$GITHUB_ENV"
+
+      - name: Build and verify the isolated staging artifact
+        run: node scripts/test-staging-artifact.mjs
+
+      - name: Deploy staging with existing configuration and credentials
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.114.0 deploy --config wrangler.staging.toml --keep-vars --dry-run
+          npx --yes wrangler@4.114.0 deploy --config wrangler.staging.toml --keep-vars
+
+      - name: Verify the real Syllabus journey and supported fixture cleanup
+        env:
+          STAGING_SUPABASE_URL: https://hlzqmreeoghbldnhlybr.supabase.co
+          STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+          STAGING_EXAMINATION_WORKER_URL: https://duediligence-examinations-staging.wallyesteban1993.workers.dev
+          SYLLABUS_RELEASE_SHA: ${{ inputs.product_sha }}
+        run: node scripts/verify-syllabus-coaching-staging.mjs --execute-staging
+
+      - name: Retain staging proof and original lifecycle cleanup manifest
+        id: staging_evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: syllabus-coaching-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            artifacts/syllabus-coaching/summary.json
+            artifacts/syllabus-coaching/cleanup-manifest.json
+            artifacts/staging-e2e/*-cleanup-manifest.json
+            artifacts/staging-e2e/*-cleanup-manifest.json.tmp
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Record staging success only after real smoke and retained cleanup proof
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STAGING_ARTIFACT_ID: ${{ steps.staging_evidence.outputs.artifact-id }}
+        run: |
+          node --input-type=module <<'NODE'
+          // BEGIN staging-marker
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          import { createHash } from 'node:crypto';
+          import { execFileSync } from 'node:child_process';
+          const env = process.env;
+          const sha = data => createHash('sha256').update(data).digest('hex');
+          const summaryBytes = readFileSync('artifacts/syllabus-coaching/summary.json');
+          const cleanupBytes = readFileSync('artifacts/syllabus-coaching/cleanup-manifest.json');
+          const summary = JSON.parse(summaryBytes), cleanup = JSON.parse(cleanupBytes);
+          for (const value of [summary, cleanup]) {
+            assert.equal(value.schemaVersion, 1);
+            assert.equal(value.releaseSha, env.PRODUCT_SHA);
+            assert.equal(value.githubRunId, env.GITHUB_RUN_ID);
+            assert.equal(value.githubRunAttempt, env.GITHUB_RUN_ATTEMPT);
+            assert.equal(value.repository, env.GITHUB_REPOSITORY);
+          }
+          assert.equal(summary.purpose, 'syllabus-coaching-staging');
+          assert.equal(summary.passed, true);
+          assert.equal(summary.boundedItems, 1);
+          assert.equal(summary.coachingBeforeReveal, true);
+          assert.equal(summary.explicitReveal, true);
+          assert.equal(summary.assistedBeforeReveal, false);
+          assert.equal(summary.assistedAfterReveal, false);
+          assert.equal(summary.cleanup.supportedApiComplete, true);
+          assert.equal(summary.cleanup.independentDatabaseReadbackRequired, true);
+          assert.equal(summary.cleanupManifestSha256, sha(cleanupBytes));
+          assert.equal(cleanup.supportedApiComplete, true);
+          assert.equal(cleanup.independentDatabaseReadbackRequired, true);
+          assert.deepEqual(cleanup.cleanupFailures, []);
+          assert.equal(cleanup.runId, summary.runId);
+          assert.match(cleanup.lifecycleManifestPath, /^artifacts\/staging-e2e\/[A-Za-z0-9_-]+-cleanup-manifest\.json$/u);
+          assert.equal(cleanup.lifecycleManifestPath, `artifacts/staging-e2e/examinations-api-${summary.runId}-cleanup-manifest.json`);
+          const lifecycleBytes = readFileSync(cleanup.lifecycleManifestPath), lifecycle = JSON.parse(lifecycleBytes);
+          assert.equal(cleanup.lifecycleManifestSha256, sha(lifecycleBytes));
+          assert.equal(lifecycle.sourceSha, env.PRODUCT_SHA);
+          assert.equal(lifecycle.runId, summary.runId);
+          assert.equal(lifecycle.projectRef, 'hlzqmreeoghbldnhlybr');
+          assert.equal(lifecycle.cleanupComplete, true);
+          assert.equal(lifecycle.independentDatabaseReadbackRequired, true);
+          assert.deepEqual(lifecycle.fixtures.map(fixture => fixture.label).sort(), ['admin', 'student-a']);
+          for (const fixture of lifecycle.fixtures) {
+            assert.equal(fixture.creationState, 'recorded');
+            assert.equal(fixture.cleanupState, 'deleted');
+            assert.equal(fixture.auditCaptureState, 'captured-before-auth-delete');
+          }
+          assert.match(env.STAGING_ARTIFACT_ID, /^[1-9][0-9]*$/u);
+          const payload = { kind: 'syllabus-coaching-staging-v1', product_sha: env.PRODUCT_SHA,
+            run_id: env.GITHUB_RUN_ID, run_attempt: env.GITHUB_RUN_ATTEMPT, artifact_id: env.STAGING_ARTIFACT_ID,
+            summary_sha256: sha(summaryBytes), cleanup_sha256: sha(cleanupBytes),
+            lifecycle_path: cleanup.lifecycleManifestPath, lifecycle_sha256: cleanup.lifecycleManifestSha256 };
+          const route = `repos/${env.GITHUB_REPOSITORY}/deployments`;
+          const marker = JSON.parse(execFileSync('gh', ['api', route, '--input', '-'], { encoding: 'utf8', input: JSON.stringify({
+            ref: env.PRODUCT_SHA, environment: env.STAGING_MARKER_ENVIRONMENT, task: env.STAGING_MARKER_TASK,
+            auto_merge: false, required_contexts: [], transient_environment: true, production_environment: false, payload,
+          }) }));
+          assert.equal(marker.sha, env.PRODUCT_SHA);
+          execFileSync('gh', ['api', `${route}/${marker.id}/statuses`, '--input', '-'], { input: JSON.stringify({
+            state: 'success', auto_inactive: false, description: 'Real Syllabus smoke and supported cleanup passed; independent DB read-back remains an operator gate.',
+            log_url: `https://github.com/${env.GITHUB_REPOSITORY}/actions/runs/${env.GITHUB_RUN_ID}`,
+          }) });
+          // END staging-marker
+          NODE
+
+  deploy_production_worker:
+    if: inputs.target == 'production'
+    needs: authorize
+    environment: production-worker
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout the exact staging candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.product_sha }}
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install reviewed dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Verify exact staging marker, retained evidence, and separate operator attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INDEPENDENT_CLEANUP_CONFIRMED: ${{ inputs.independent_cleanup_confirmed }}
+          INDEPENDENT_CLEANUP_EVIDENCE_SHA256: ${{ inputs.independent_cleanup_evidence_sha256 }}
+          APPROVAL_REFERENCE: ${{ inputs.approval_reference }}
+        run: |
+          node --input-type=module <<'NODE'
+          // BEGIN production-proof
+          import assert from 'node:assert/strict';
+          import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+          import { createHash } from 'node:crypto';
+          import { execFileSync } from 'node:child_process';
+          const env = process.env;
+          const api = route => JSON.parse(execFileSync('gh', ['api', `repos/${env.GITHUB_REPOSITORY}/${route}`], { encoding: 'utf8' }));
+          // This is an operator attestation, not a CI claim that private DB rows were read.
+          assert.equal(env.INDEPENDENT_CLEANUP_CONFIRMED, 'true');
+          assert.match(env.INDEPENDENT_CLEANUP_EVIDENCE_SHA256, /^sha256:(?!0{64}$)[a-f0-9]{64}$/u);
+          assert.ok(env.APPROVAL_REFERENCE?.trim());
+          const markers = api(`deployments?environment=${env.STAGING_MARKER_ENVIRONMENT}&sha=${env.PRODUCT_SHA}&task=${env.STAGING_MARKER_TASK}&per_page=1`);
+          assert.equal(markers.length, 1);
+          const marker = markers[0], proof = marker.payload;
+          assert.equal(marker.sha, env.PRODUCT_SHA);
+          assert.equal(marker.environment, env.STAGING_MARKER_ENVIRONMENT);
+          assert.equal(marker.task, env.STAGING_MARKER_TASK);
+          assert.equal(api(`deployments/${marker.id}/statuses?per_page=1`)[0]?.state, 'success');
+          assert.equal(proof.kind, 'syllabus-coaching-staging-v1');
+          assert.equal(proof.product_sha, env.PRODUCT_SHA);
+          for (const key of ['run_id', 'run_attempt', 'artifact_id']) assert.match(proof[key], /^[1-9][0-9]*$/u);
+          const run = api(`actions/runs/${proof.run_id}`);
+          assert.equal(run.path, '.github/workflows/release-syllabus-coaching.yml');
+          assert.equal(run.event, 'workflow_dispatch');
+          assert.equal(run.head_branch, 'main');
+          assert.equal(run.head_sha, env.PRODUCT_SHA);
+          assert.equal(String(run.run_attempt), proof.run_attempt);
+          assert.equal(run.status, 'completed');
+          assert.equal(run.conclusion, 'success');
+          const artifact = api(`actions/artifacts/${proof.artifact_id}`);
+          assert.equal(artifact.expired, false);
+          assert.equal(artifact.name, `syllabus-coaching-${proof.run_id}-${proof.run_attempt}`);
+          assert.equal(String(artifact.workflow_run.id), proof.run_id);
+          assert.equal(artifact.workflow_run.head_sha, env.PRODUCT_SHA);
+          const zip = `${env.RUNNER_TEMP}/syllabus-staging-proof.zip`;
+          const dir = `${env.RUNNER_TEMP}/syllabus-staging-proof`;
+          writeFileSync(zip, execFileSync('gh', ['api', `repos/${env.GITHUB_REPOSITORY}/actions/artifacts/${proof.artifact_id}/zip`], { maxBuffer: 8 * 1024 * 1024 }));
+          mkdirSync(dir);
+          const entries = execFileSync('unzip', ['-Z1', zip], { encoding: 'utf8' }).trim().split('\n');
+          assert.ok(entries.length > 0 && entries.every(file => /^(?:syllabus-coaching|staging-e2e)\/[A-Za-z0-9_.-]+\.json(?:\.tmp)?$/u.test(file)));
+          execFileSync('unzip', ['-q', zip, '-d', dir]);
+          const hash = bytes => createHash('sha256').update(bytes).digest('hex');
+          const read = file => readFileSync(`${dir}/${file}`);
+          const summaryBytes = read('syllabus-coaching/summary.json');
+          const cleanupBytes = read('syllabus-coaching/cleanup-manifest.json');
+          assert.equal(hash(summaryBytes), proof.summary_sha256);
+          assert.equal(hash(cleanupBytes), proof.cleanup_sha256);
+          assert.match(proof.lifecycle_path, /^artifacts\/staging-e2e\/[A-Za-z0-9_-]+-cleanup-manifest\.json$/u);
+          assert.equal(hash(read(proof.lifecycle_path.slice('artifacts/'.length))), proof.lifecycle_sha256);
+          const summary = JSON.parse(summaryBytes), cleanup = JSON.parse(cleanupBytes);
+          for (const value of [summary, cleanup]) {
+            assert.equal(value.schemaVersion, 1);
+            assert.equal(value.releaseSha, env.PRODUCT_SHA);
+            assert.equal(value.githubRunId, proof.run_id);
+            assert.equal(value.githubRunAttempt, proof.run_attempt);
+            assert.equal(value.repository, env.GITHUB_REPOSITORY);
+          }
+          assert.equal(summary.passed, true);
+          assert.equal(summary.cleanup.supportedApiComplete, true);
+          assert.equal(summary.cleanup.independentDatabaseReadbackRequired, true);
+          assert.equal(summary.cleanupManifestSha256, proof.cleanup_sha256);
+          assert.equal(cleanup.lifecycleManifestPath, proof.lifecycle_path);
+          assert.equal(cleanup.lifecycleManifestSha256, proof.lifecycle_sha256);
+          assert.equal(cleanup.supportedApiComplete, true);
+          assert.equal(cleanup.independentDatabaseReadbackRequired, true);
+          assert.deepEqual(cleanup.cleanupFailures, []);
+          assert.equal(cleanup.runId, summary.runId);
+          const lifecycle = JSON.parse(read(proof.lifecycle_path.slice('artifacts/'.length)));
+          assert.equal(lifecycle.sourceSha, env.PRODUCT_SHA);
+          assert.equal(lifecycle.runId, summary.runId);
+          assert.equal(lifecycle.projectRef, 'hlzqmreeoghbldnhlybr');
+          assert.equal(lifecycle.cleanupComplete, true);
+          assert.equal(lifecycle.independentDatabaseReadbackRequired, true);
+          // END production-proof
+          NODE
+
+      - name: Recheck source and live Pages baseline immediately before Worker mutation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node --input-type=module <<'NODE'
+          // BEGIN pages-baseline
+          import assert from 'node:assert/strict';
+          import { execFileSync } from 'node:child_process';
+          const env = process.env;
+          const api = route => JSON.parse(execFileSync('gh', ['api', `repos/${env.GITHUB_REPOSITORY}/${route}`], { encoding: 'utf8' }));
+          assert.equal(api('git/ref/heads/main').object.sha, env.PRODUCT_SHA);
+          let authoritative;
+          for (const deployment of api('deployments?environment=github-pages&per_page=100')) {
+            const state = api(`deployments/${deployment.id}/statuses?per_page=1`)[0]?.state || 'unknown';
+            if (env.PAGES_LOCK === 'true' && deployment.sha === env.PRODUCT_SHA && state !== 'success') continue;
+            if (['inactive', 'failure', 'error'].includes(state)) continue;
+            authoritative = { state, sha: deployment.sha }; break;
+          }
+          assert.deepEqual(authoritative, { state: 'success', sha: env.REVIEWED_BASELINE_SHA });
+          const response = await fetch(`https://duediligence.ph/.well-known/duediligence-release.txt?release=${env.PRODUCT_SHA}`, { cache: 'no-store', signal: AbortSignal.timeout(15000) });
+          assert.equal(response.status, 200);
+          assert.equal((await response.text()).trim(), env.REVIEWED_BASELINE_SHA);
+          // END pages-baseline
+          NODE
+
+      - name: Verify actual Worker versions and deploy application then alias without changing secrets
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          node --input-type=module <<'NODE'
+          // BEGIN worker-cutover
+          import assert from 'node:assert/strict';
+          import { execFileSync } from 'node:child_process';
+          import { isDeepStrictEqual } from 'node:util';
+          // Wrangler 4.114.0 src/versions/deployments/status.ts emits the current
+          // deployment object; src/versions/view.ts emits resources.bindings.
+          const wrangler = (...args) => execFileSync('npx', ['--yes', 'wrangler@4.114.0', ...args], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
+          const targets = [
+            ['wrangler.toml', '54b99125-cf41-47c5-8b13-6669f3dbb69f'],
+            ['wrangler.public-api.toml', '36ad11e7-6f62-43cf-b2cd-8e2391eab5b3'],
+          ];
+          const current = config => JSON.parse(wrangler('deployments', 'status', '--config', config, '--json'));
+          const bindings = (config, version) => JSON.parse(wrangler('versions', 'view', version, '--config', config, '--json')).resources.bindings
+            .sort((a, b) => a.name.localeCompare(b.name));
+          const originals = targets.map(([config, version]) => {
+            assert.deepEqual(current(config).versions, [{ version_id: version, percentage: 100 }]);
+            return bindings(config, version);
+          });
+          for (const [config] of targets) wrangler('deploy', '--config', config, '--keep-vars', '--dry-run');
+          for (const [index, [config, baseline]] of targets.entries()) {
+            assert.deepEqual(current(config).versions, [{ version_id: baseline, percentage: 100 }]);
+            wrangler('deploy', '--config', config, '--keep-vars');
+            const deployed = current(config);
+            assert.equal(deployed.versions.length, 1);
+            assert.equal(deployed.versions[0].percentage, 100);
+            assert.notEqual(deployed.versions[0].version_id, baseline);
+            assert.ok(isDeepStrictEqual(bindings(config, deployed.versions[0].version_id), originals[index]), 'Existing variable, secret or service binding metadata changed; values are withheld.');
+          }
+          // END worker-cutover
+          NODE
+
+      - name: Verify application and alias signed-out boundaries before Pages
+        run: |
+          node --input-type=module <<'NODE'
+          // BEGIN public-boundaries
+          import assert from 'node:assert/strict';
+          for (const worker of ['duediligence-gemini-examiner', 'duediligence-api']) {
+            for (const route of ['/examinations/query', '/study-room/access', '/study-room/rooms', '/study-room/join']) {
+              const response = await fetch(`https://${worker}.wallyesteban1993.workers.dev${route}`, {
+                method: 'POST', headers: { Origin: 'https://duediligence.ph', 'Content-Type': 'application/json' },
+                body: route === '/examinations/query' ? '{"operation":"subject_catalog"}' : '{}', signal: AbortSignal.timeout(15000),
+              });
+              assert.equal(response.status, 401, `${worker}${route}`);
+              assert.equal(response.headers.get('access-control-allow-origin'), 'https://duediligence.ph');
+              const value = await response.json();
+              assert.equal(value.ok, false);
+              assert.doesNotMatch(JSON.stringify(value), /"(?:questions|answers|results|payload|participant_token)"/iu);
+            }
+          }
+          // END public-boundaries
+          NODE
+
+  deploy_production_pages:
+    needs: deploy_production_worker
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+    permissions:
+      actions: read
+      contents: read
+      deployments: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout the Worker-verified candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.product_sha }}
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install reviewed dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+      - name: Build and verify the exact Pages artifact
+        run: node scripts/test-pages-artifact.mjs
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+      - name: Upload exact Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .pages-dist
+
+      - name: Recheck old Pages baseline inside the Pages lock
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PAGES_LOCK: 'true'
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const workflow = readFileSync('.github/workflows/release-syllabus-coaching.yml', 'utf8');
+          const source = workflow.match(/\/\/ BEGIN pages-baseline\n([\s\S]*?)\s*\/\/ END pages-baseline/)[1];
+          await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+          NODE
+
+      - name: Publish Pages after both Worker gates
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Verify exact live Pages bytes and preserved Study Room markers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node --input-type=module <<'NODE'
+          // BEGIN live-pages
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          import { execFileSync } from 'node:child_process';
+          const env = process.env;
+          const api = route => JSON.parse(execFileSync('gh', ['api', `repos/${env.GITHUB_REPOSITORY}/${route}`], { encoding: 'utf8' }));
+          const paths = ['.well-known/duediligence-release.txt', 'index.html', 'service-worker.js',
+            'assets/examinations.css', 'assets/examinations.js', 'assets/feature-loader.js',
+            'study-room/index.html', 'assets/study-room-live.js', 'assets/study-room-live.css',
+            'assets/study-room-preview.js', 'assets/study-room-preview.css', 'assets/study-room-backgrounds.js',
+            'assets/vendor/livekit-client.umd.js', 'assets/vendor/livekit-track-processors.iife.js'];
+          let passed = false;
+          for (let attempt = 0; attempt < 12; attempt++) {
+            try {
+              let latest;
+              for (const deployment of api('deployments?environment=github-pages&per_page=100')) {
+                const state = api(`deployments/${deployment.id}/statuses?per_page=1`)[0]?.state || 'unknown';
+                if (['inactive', 'failure', 'error'].includes(state)) continue;
+                latest = { state, sha: deployment.sha }; break;
+              }
+              assert.deepEqual(latest, { state: 'success', sha: env.PRODUCT_SHA });
+              for (const path of paths) {
+                const response = await fetch(`https://duediligence.ph/${path}?release=${env.PRODUCT_SHA}`, { cache: 'no-store', signal: AbortSignal.timeout(15000) });
+                assert.equal(response.status, 200);
+                const bytes = Buffer.from(await response.arrayBuffer());
+                assert.deepEqual(bytes, readFileSync(`.pages-dist/${path}`), `Live bytes: ${path}`);
+                if (path === '.well-known/duediligence-release.txt') assert.equal(bytes.toString().trim(), env.PRODUCT_SHA);
+                if (path === 'study-room/index.html') {
+                  assert.ok(bytes.includes('layout=stable-pins-20260908-1'));
+                  assert.ok(bytes.includes('join=free-join-20260909-1'));
+                }
+              }
+              passed = true; break;
+            } catch (error) {
+              if (attempt === 11) throw error;
+              await new Promise(resolve => setTimeout(resolve, 5000));
+            }
+          }
+          assert.equal(passed, true);
+          // Recheck both API boundaries after Pages, using the exact same reviewed probe.
+          const workflow = readFileSync('.github/workflows/release-syllabus-coaching.yml', 'utf8');
+          const source = workflow.match(/\/\/ BEGIN public-boundaries\n([\s\S]*?)\s*\/\/ END public-boundaries/)[1];
+          await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+          // END live-pages
+          NODE

@@ -8,7 +8,7 @@
   <meta name="robots" content="noindex,nofollow,noarchive">
   <title>Study Room — Due Diligence</title>
   <link rel="icon" href="../assets/brand/favicon.ico" sizes="any">
-  <link rel="stylesheet" href="../assets/study-room-live.css?v=study-room-always-open-20260908-1">
+  <link rel="stylesheet" href="../assets/study-room-live.css?v=study-room-admin-manager-20260908-1">
 </head>
 <body>
   <a class="sr-skip-link" href="#study-room-main">Skip to Study Room</a>
@@ -69,7 +69,7 @@
       </header>
 
       <section class="sr-prejoin" id="sr-prejoin" aria-labelledby="sr-prejoin-title">
-        <section class="sr-room-lobby" id="sr-room-lobby" aria-labelledby="sr-room-lobby-title" data-max-rooms="5">
+        <section class="sr-room-lobby" id="sr-room-lobby" aria-labelledby="sr-room-lobby-title" data-max-rooms="24">
           <div class="sr-room-lobby-heading">
             <div>
               <p class="sr-panel-eyebrow">Room lobby</p>
@@ -79,6 +79,35 @@
             <span class="sr-room-capacity" id="sr-room-lobby-count">Checking rooms…</span>
           </div>
 
+          <div class="sr-room-admin-controls" id="sr-room-admin-controls" hidden>
+            <p>Admin view · Manage room names and access.</p>
+            <button class="sr-room-add" id="sr-room-add" type="button" aria-controls="sr-room-editor">+ Add room</button>
+          </div>
+          <p class="sr-status" id="sr-room-admin-status" role="status" aria-live="polite"></p>
+          <form class="sr-room-editor" id="sr-room-editor" aria-labelledby="sr-room-editor-title" hidden>
+            <h3 id="sr-room-editor-title">Edit room</h3>
+            <div class="sr-room-editor-fields">
+              <label for="sr-room-label">Room name
+                <input id="sr-room-label" name="label" type="text" required minlength="2" maxlength="64" autocomplete="off" aria-describedby="sr-room-label-hint">
+              </label>
+              <label for="sr-room-audience">Who can enter
+                <select id="sr-room-audience" name="audience" aria-describedby="sr-room-audience-hint sr-room-fixed-audience">
+                  <option value="admin">Admin only</option>
+                  <option value="paid">Paying users</option>
+                  <option value="all">All signed-in users</option>
+                </select>
+              </label>
+            </div>
+            <p id="sr-room-label-hint">2–64 characters. Letters, numbers, spaces and . , apostrophe ( ) &amp; _ -.</p>
+            <p id="sr-room-audience-hint">Administrators can enter every room. Access changes require an empty room.</p>
+            <p id="sr-room-fixed-audience" hidden>Inner Chamber always remains admin-only.</p>
+            <div class="sr-room-editor-actions">
+              <button id="sr-room-save" type="submit">Save room</button>
+              <button id="sr-room-cancel" type="button">Cancel</button>
+              <button id="sr-room-reload" type="button" hidden>Reload latest</button>
+            </div>
+            <p class="sr-status" id="sr-room-editor-status" role="status" aria-live="polite" aria-atomic="true"></p>
+          </form>
           <div class="sr-room-card-grid" id="sr-room-card-grid" role="group" aria-label="Available Study Rooms"></div>
         </section>
 
@@ -383,6 +412,6 @@
   <script src="../assets/vendor/livekit-client.umd.js?v=2.22.1"></script>
   <script src="../assets/vendor/livekit-track-processors.iife.js?v=0.7.2-study-room-background-images-20260908-1"></script>
   <script src="../assets/study-room-backgrounds.js?v=study-room-background-images-20260908-1"></script>
-  <script src="../assets/study-room-live.js?v=study-room-always-open-20260908-1&amp;layout=stable-pins-20260908-1"></script>
+  <script src="../assets/study-room-live.js?v=study-room-always-open-20260908-1&amp;layout=stable-pins-20260908-1&amp;catalog=admin-room-manager-20260908-1"></script>
 </body>
 </html>

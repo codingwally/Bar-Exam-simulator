@@ -212,7 +212,7 @@ import { FORECAST_RESULT_EXPORT_RPC_NAMES } from './forecast-result-export.mjs';
 import { FORECAST_ANALYTICS_RPC_NAMES } from './forecast-analytics-export.mjs';
 import { sendForecastResultEmail, resolveForecastEmailUser, assertForecastResultEmailAvailable } from './forecast-email-adapter.mjs';
 import { createAuxiliaryWritingDiagnosticsHandlers } from './auxiliary-writing-diagnostics-routes.mjs';
-import { StudyRoomError } from './study-room-core.mjs';
+import { StudyRoomError, currentPaidStudyRoomMembership } from './study-room-core.mjs';
 import { createStudyRoomHandlers } from './study-room-routes.mjs';
 import {
   EXAMINATION_ROOM_V1_PATHS,
@@ -5417,6 +5417,60 @@ async function studyRoomAdministratorAccess(env, user) {
   }, { returnNullOnAuthorizationDenial: true });
 }
 
+async function studyRoomCatalogRpc(env, operation, body) {
+  if (!['study_room_catalog_v1', 'study_room_configure_v1'].includes(operation)) {
+    throw new StudyRoomError('STUDY_ROOM_CONFIG_INVALID', 'Unsupported room configuration request.', 400);
+  }
+  let response;
+  let result;
+  try {
+    response = await fetch(new URL(`/rest/v1/rpc/${operation}`, configuredSupabaseUrl(env)), {
+      method: 'POST',
+      headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10_000),
+    });
+    result = await response.json();
+  } catch {
+    throw new StudyRoomError('STUDY_ROOM_CATALOG_UNAVAILABLE', 'The room configuration could not be confirmed. Reload the catalog before retrying.', 503);
+  }
+  if (!response.ok) {
+    const known = operation === 'study_room_configure_v1' ? {
+      PT409: ['STUDY_ROOM_CONFIG_CONFLICT', 'The room changed. Reload the catalog before saving.', 409],
+      PT400: ['STUDY_ROOM_CONFIG_INVALID', 'Check the room name and access choice.', 400],
+      '42501': ['STUDY_ROOM_ADMIN_REQUIRED', 'Only an administrator can configure rooms.', 403],
+    }[result?.code] : null;
+    if (known) throw new StudyRoomError(...known);
+    throw new StudyRoomError('STUDY_ROOM_CATALOG_UNAVAILABLE', 'The room catalog is temporarily unavailable.', 503);
+  }
+  return result;
+}
+
+async function studyRoomPaidMembership(env, user) {
+  const now = Date.now();
+  const at = new Date(now).toISOString();
+  const url = new URL('/rest/v1/subscriptions', configuredSupabaseUrl(env));
+  url.searchParams.set('select', 'id,user_id,status,source,starts_at,expires_at');
+  url.searchParams.set('user_id', `eq.${user.id}`);
+  url.searchParams.set('status', 'eq.active');
+  url.searchParams.set('source', 'in.(manual_payment,admin_adjustment,migration)');
+  url.searchParams.set('starts_at', `lte.${at}`);
+  url.searchParams.set('or', `(expires_at.is.null,expires_at.gt.${at})`);
+  url.searchParams.set('order', 'starts_at.desc,id.asc');
+  url.searchParams.set('limit', '1');
+  let rows;
+  try {
+    const response = await fetch(url, { headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+    }, signal: AbortSignal.timeout(10_000) });
+    if (!response.ok) throw new Error('Unconfirmed membership');
+    rows = await response.json();
+  } catch {
+    throw new StudyRoomError('STUDY_ROOM_CATALOG_UNAVAILABLE', 'Paid-room eligibility could not be verified. Try again shortly.', 503);
+  }
+  return currentPaidStudyRoomMembership(rows, user.id, Date.now());
+}
+
 async function reserveGradeAccess(request, env, gradingRequest, verifiedUser = null) {
   if (phase4AccessEnforced(env)) {
     const authenticatedUser = verifiedUser || await requireAuthenticatedUser(request, env);
@@ -10160,6 +10214,9 @@ const studyRoomHandlers = createStudyRoomHandlers({
   authenticate: authenticateStudyRoomUser,
   authorizeAdmin: studyRoomAdministratorAccess,
   authorizeMember: async (_env, user) => ({ allowed: Boolean(user?.id), basis: 'signed_in' }),
+  readCatalog: (env) => studyRoomCatalogRpc(env, 'study_room_catalog_v1', {}),
+  configureCatalog: (env, body) => studyRoomCatalogRpc(env, 'study_room_configure_v1', body),
+  verifyPaidMembership: studyRoomPaidMembership,
   parseJson: parseBoundedJson,
   rateLimit: enforceStudyRoomRateLimit,
   respond: jsonResponse,

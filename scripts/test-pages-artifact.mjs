@@ -275,7 +275,7 @@ assert.match(studyRoomPage, /Authorized testers can join open rooms/);
 assert.match(studyRoomPage, /camera and microphone remain off/i);
 assert.match(studyRoomPage, /assets\/vendor\/livekit-client\.umd\.js\?v=2\.22\.1/);
 assert.match(studyRoomPage, /study-room-backgrounds\.js\?v=study-room-background-processor-20260902-1/);
-assert.match(studyRoomPage, /study-room-live\.js\?v=study-room-meet-layout-20260902-6/);
+assert.match(studyRoomPage, /study-room-live\.js\?v=study-room-camera-fallback-20260908-1/);
 assert.match(studyRoomPage, /id="sr-toggle-backdrop"[\s\S]*aria-pressed="false"/u);
 assert.match(studyRoomLive, /\/study-room\/access/);
 assert.match(studyRoomLive, /\/study-room\/rooms/);

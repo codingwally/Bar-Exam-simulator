@@ -64,7 +64,7 @@ assert.doesNotMatch(page, /Virtual backgrounds|Coming after the quality test/iu)
 assert.match(page, /assets\/vendor\/livekit-client\.umd\.js\?v=2\.22\.1/);
 assert.match(page, /assets\/vendor\/livekit-track-processors\.iife\.js\?v=0\.7\.2/);
 assert.match(page, /study-room-backgrounds\.js\?v=study-room-background-processor-20260902-1/);
-assert.match(page, /study-room-live\.js\?v=study-room-meet-layout-20260902-6/);
+assert.match(page, /study-room-live\.js\?v=study-room-camera-fallback-20260908-1/);
 assert.match(page, /study-room-live\.css\?v=study-room-meet-layout-20260831-5/);
 assert.doesNotMatch(page, /facebook|fb\.com|recording is on|Recording enabled/i);
 
@@ -78,7 +78,7 @@ assert.match(client, /Authorization: `Bearer \$\{token\}`/);
 assert.match(client, /cache: 'no-store'/);
 assert.match(client, /new LiveKit\.Room/);
 assert.match(client, /bindRoomEvents\(room\);[\s\S]*await room\.connect/);
-assert.match(client, /const MEDIA_RELIABILITY_VERSION = 'study-room-meet-layout-20260902-6'/);
+assert.match(client, /const MEDIA_RELIABILITY_VERSION = 'study-room-camera-fallback-20260908-1'/);
 assert.match(client, /adaptiveStream:\s*\{[\s\S]*pixelDensity:\s*1[\s\S]*pauseVideoInBackground:\s*true/);
 assert.match(client, /dynacast: true/);
 assert.match(client, /width:\s*640,[\s\S]*height:\s*360,[\s\S]*frameRate:\s*15/);

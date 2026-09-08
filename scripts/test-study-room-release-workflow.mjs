@@ -32,6 +32,7 @@ const releaseAllowlist = new RegExp(allowlistSource, "u");
 for (const expectedReleaseFile of [
   ".github/workflows/deploy-pages-only.yml",
   ".github/workflows/release-study-room-admin-beta.yml",
+  ".github/workflows/validate-mandatory-early-access.yml",
   "assets/icons/community/image.svg",
   "assets/icons/navigation/hand.svg",
   "assets/icons/navigation/mic.svg",
@@ -51,6 +52,7 @@ for (const expectedReleaseFile of [
   "scripts/build-pages-artifact.mjs",
   "scripts/test-pages-artifact.mjs",
   "scripts/test-study-room-backgrounds.mjs",
+  "scripts/test-study-room-camera-fallback.mjs",
   "scripts/test-study-room-deployment-smoke.mjs",
   "scripts/test-study-room-hotfix-behavior.mjs",
   "scripts/test-study-room-live.mjs",
@@ -84,6 +86,8 @@ assert.match(workflow, /node --test worker\/\*\.test\.mjs/u);
 assert.match(workflow, /node scripts\/test-pages-artifact\.mjs/u);
 assert.match(workflow, /node scripts\/test-study-room-backgrounds\.mjs/u);
 assert.match(workflow, /node scripts\/test-study-room-hotfix-behavior\.mjs/u);
+assert.match(workflow, /node scripts\/test-study-room-camera-fallback\.mjs/u);
+assert.match(pagesOnlyWorkflow, /node scripts\/test-study-room-camera-fallback\.mjs/u);
 assert.match(workflow, /node --check assets\/study-room-backgrounds\.js/u);
 assert.match(
   workflow,
@@ -123,6 +127,7 @@ for (const expectedPagesFile of [
   "scripts/build-pages-artifact.mjs",
   "scripts/test-pages-artifact.mjs",
   "scripts/test-study-room-backgrounds.mjs",
+  "scripts/test-study-room-camera-fallback.mjs",
   "scripts/test-study-room-live.mjs",
   "study-room/index.html",
 ]) {
@@ -177,7 +182,7 @@ assert.ok(
 );
 const stagingAssetChecks = workflow.slice(stagingSmoke, stagingPositiveSmoke);
 for (const requiredStagingMarker of [
-  "study-room-meet-layout-20260902-6",
+  "study-room-camera-fallback-20260908-1",
   "study-room-background-processor-20260902-1",
   "workerRequest('/study-room/rooms'",
   "workerRequest('/study-room/join'",
@@ -330,7 +335,7 @@ assert.match(
 );
 assert.match(
   workflow.slice(pagesVerificationJob),
-  /study-room-meet-layout-20260902-6/u,
+  /study-room-camera-fallback-20260908-1/u,
 );
 assert.match(
   home,
@@ -375,7 +380,7 @@ for (const requiredProductionAsset of [
     `Pages-only production verification must check ${requiredProductionAsset}.`,
   );
 }
-assert.match(pagesOnlyWorkflow, /study-room-meet-layout-20260902-6/u);
+assert.match(pagesOnlyWorkflow, /study-room-camera-fallback-20260908-1/u);
 assert.match(
   pagesOnlyWorkflow,
   /study-room-background-processor-20260902-1/u,

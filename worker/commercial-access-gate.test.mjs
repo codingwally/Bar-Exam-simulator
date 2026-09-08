@@ -1,11 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
-import {
+import { createHash } from 'node:crypto';
+import coreWorker from './index.mjs';
+import commercialWorker, {
   REQUIRED_PAYMENT_VERIFIER_COUNT,
   bytesToBase64,
   normalizePaymentVerificationRecipients,
   sendPaymentVerificationEmail,
+  dispatchQueuedPaymentNotification,
+  drainPaymentNotificationQueue,
 } from './commercial-entry.mjs';
 
 const commercialMigration = readFileSync(new URL(
@@ -198,6 +202,143 @@ test('payment email remains suppressed unless its dedicated mode is enabled', as
     providerId: null,
     recipientCount: 0,
   });
+});
+
+const notificationPaymentId = '00000000-0000-4000-8000-000000000002';
+const suppressedNotificationModes = [undefined, null, '', ' ', 'suppressed', ' SUPPRESSED ', 'invalid', 'enable', false, true, 0, 1, {}, []];
+const inaccessiblePaymentContext = new Proxy({}, { get: () => assert.fail('Suppressed notification must not read private context') });
+
+test('suppressed/default/invalid verifier mode stops before any claim, Storage, recipient or provider request', async (t) => {
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', () => { calls++; assert.fail('Suppression must make zero transport calls'); });
+  for (const mode of suppressedNotificationModes) {
+    const env = new Proxy({}, { get: (_target, key) => {
+      if (key === 'PAYMENT_NOTIFICATION_EMAIL_MODE') return mode;
+      assert.fail('Suppression must not read transport configuration');
+    } });
+    assert.deepEqual(await sendPaymentVerificationEmail(env, inaccessiblePaymentContext),
+      { status: 'suppressed', providerId: null, recipientCount: 0 });
+    assert.deepEqual(await dispatchQueuedPaymentNotification(env, notificationPaymentId),
+      { status: 'suppressed', recipientCount: 0, paymentRequestId: notificationPaymentId });
+    assert.deepEqual(await dispatchQueuedPaymentNotification(env),
+      { status: 'suppressed', recipientCount: 0, paymentRequestId: null });
+  }
+  assert.equal(calls, 0);
+});
+
+test('suppressed verifier drain stops after one result without consuming queue attempts', async (t) => {
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', () => { calls++; assert.fail('Suppressed drain must not claim'); });
+  for (const mode of suppressedNotificationModes) {
+    assert.deepEqual(await drainPaymentNotificationQueue({ PAYMENT_NOTIFICATION_EMAIL_MODE: mode }, 10),
+      [{ status: 'suppressed', recipientCount: 0, paymentRequestId: null }]);
+  }
+  assert.equal(calls, 0);
+});
+
+test('actual scheduled wrapper keeps suppressed verifier and receipt drains transport-free', async (t) => {
+  let calls = 0; let coreCalls = 0;
+  t.mock.method(globalThis, 'fetch', () => { calls++; assert.fail('Suppressed scheduled notification must not fetch'); });
+  t.mock.method(coreWorker, 'scheduled', () => { coreCalls++; return 'unrelated-core-scheduled'; });
+  for (const mode of [undefined, 'suppressed', 'invalid']) {
+    const waiting = [];
+    assert.equal(commercialWorker.scheduled({}, {
+      PAYMENT_NOTIFICATION_EMAIL_MODE: mode, SUBSCRIPTION_RECEIPT_EMAIL_MODE: 'suppressed',
+    }, { waitUntil: promise => waiting.push(promise) }), 'unrelated-core-scheduled');
+    assert.deepEqual(await Promise.all(waiting), [
+      [{ status: 'suppressed', recipientCount: 0, paymentRequestId: null }],
+      [{ status: 'suppressed', paymentRequestId: null }],
+    ]);
+  }
+  assert.equal(coreCalls, 3); assert.equal(calls, 0);
+});
+
+test('enabled verifier keeps claim, original proof, recipient lookup, unchanged envelope/key and completion order', async (t) => {
+  const bytes = new TextEncoder().encode('original synthetic proof');
+  const proofHash = createHash('sha256').update(bytes).digest('hex');
+  const payment = {
+    id: notificationPaymentId, status: 'pending', submittedAt: '2026-09-08T00:00:00.000Z',
+    provisionalAccessExpiresAt: '2026-09-09T00:00:00.000Z', paymentMethod: 'bpi_instapay',
+    amountCentavos: 14900, planName: 'Regular Subscription', durationDays: 30,
+    proofObjectPath: 'synthetic-owner/original.png', proofBucket: 'payment-proofs',
+    proofOriginalName: 'original.png', proofMimeType: 'image/png', proofSizeBytes: bytes.length, proofSha256: proofHash,
+    user: { email: 'subscriber@example.test', displayName: 'Synthetic Subscriber' },
+  };
+  const recipients = ['one@example.test', 'two@example.test', 'three@example.test', 'four@example.test', 'five@example.test'];
+  const env = { PAYMENT_NOTIFICATION_EMAIL_MODE: 'enabled', SUPABASE_URL: 'https://project.example.test',
+    SUPABASE_SERVICE_ROLE_KEY: 'synthetic-service', PAYMENT_NOTIFICATION_EMAIL_FROM: 'Payments <payments@example.test>',
+    RESEND_API_KEY: 'synthetic-provider' };
+  // Reference the unchanged sender directly, then require the queued enabled path
+  // to emit precisely that same provider envelope and idempotency key.
+  let reference;
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    assert.equal(String(url), 'https://api.resend.com/emails');
+    reference = { body: JSON.parse(options.body), key: options.headers['Idempotency-Key'] };
+    return Response.json({ id: 'synthetic-accepted' });
+  });
+  await sendPaymentVerificationEmail(env, { payment, user: payment.user, fields: { paymentMethod: payment.paymentMethod },
+    recipients, proof: { bytes, hash: proofHash, name: 'original.png', type: 'image/png', size: bytes.length } });
+  const order = []; let queueState = 'pending'; let attempts = 0;
+  t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
+    const target = String(url); const body = options.body ? JSON.parse(options.body) : null;
+    if (target.endsWith('/rpc/phase4_claim_payment_notification')) {
+      order.push('claim'); assert.deepEqual(body, { p_payment_request_id: notificationPaymentId });
+      if (queueState !== 'pending') return Response.json(null);
+      queueState = 'sending'; attempts++; return Response.json(payment);
+    }
+    if (target.endsWith('/storage/v1/object/payment-proofs/synthetic-owner/original.png')) {
+      order.push('proof'); return new Response(bytes);
+    }
+    if (target.includes('/rest/v1/payment_verification_recipients?')) {
+      order.push('recipients'); return Response.json(recipients.map((email, i) => ({ email, display_order: i + 1 })));
+    }
+    if (target === 'https://api.resend.com/emails') {
+      order.push('provider'); assert.deepEqual(JSON.parse(options.body), reference.body);
+      assert.equal(options.headers['Idempotency-Key'], reference.key);
+      assert.equal(reference.key, `payment-verification-${notificationPaymentId}`);
+      return Response.json({ id: 'synthetic-accepted' });
+    }
+    if (target.endsWith('/rpc/phase4_complete_payment_notification')) {
+      order.push('complete');
+      assert.deepEqual(body, { p_payment_request_id: notificationPaymentId, p_status: 'sent',
+        p_provider_id: 'synthetic-accepted', p_error: null });
+      queueState = body.p_status; return Response.json(null);
+    }
+    assert.fail('Unexpected mocked notification request');
+  });
+  assert.deepEqual(await dispatchQueuedPaymentNotification(env, notificationPaymentId),
+    { status: 'sent', recipientCount: 5, paymentRequestId: notificationPaymentId });
+  assert.deepEqual(order, ['claim', 'proof', 'recipients', 'provider', 'complete']);
+  assert.equal(attempts, 1);
+  assert.deepEqual(await dispatchQueuedPaymentNotification(env, notificationPaymentId), { status: 'idle', recipientCount: 0 });
+  assert.equal(attempts, 1); assert.equal(order.filter(value => value === 'provider').length, 1);
+});
+
+test('enabled unreadable-proof failure still settles the existing failed outcome without calling provider', async (t) => {
+  const order = [];
+  t.mock.method(console, 'error', () => {});
+  t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
+    const target = String(url);
+    if (target.endsWith('/rpc/phase4_claim_payment_notification')) {
+      order.push('claim'); return Response.json({ id: notificationPaymentId,
+        proofObjectPath: 'synthetic-owner/missing.png', proofBucket: 'payment-proofs' });
+    }
+    if (target.endsWith('/storage/v1/object/payment-proofs/synthetic-owner/missing.png')) {
+      order.push('proof'); return new Response(null, { status: 400 });
+    }
+    if (target.endsWith('/rpc/phase4_complete_payment_notification')) {
+      order.push('complete'); assert.deepEqual(JSON.parse(options.body), {
+        p_payment_request_id: notificationPaymentId, p_status: 'failed', p_provider_id: null,
+        p_error: 'Canonical payment proof could not be read (400).',
+      }); return Response.json(null);
+    }
+    assert.fail('Proof failure must not reach recipient lookup or provider');
+  });
+  assert.deepEqual(await dispatchQueuedPaymentNotification({
+    PAYMENT_NOTIFICATION_EMAIL_MODE: 'enabled', SUPABASE_URL: 'https://project.example.test',
+    SUPABASE_SERVICE_ROLE_KEY: 'synthetic-service',
+  }, notificationPaymentId), { status: 'failed', recipientCount: 0, paymentRequestId: notificationPaymentId });
+  assert.deepEqual(order, ['claim', 'proof', 'complete']);
 });
 
 test('production Worker keeps the secure payment wrapper behind maintenance', () => {

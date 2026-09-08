@@ -35,6 +35,7 @@ test('new infrastructure is explicitly reviewed and tested but never enters prod
     'scripts/capture-staging-commercial-deployment.mjs', 'scripts/test-capture-staging-commercial-deployment.mjs',
     'scripts/test-staging-commercial-fixtures.mjs', 'scripts/test-staging-commercial-release-workflow.mjs',
     'docs/astra-staging-commercial-fixtures.md', 'worker/astra-staging-commercial-fixture-registration.test.mjs',
+    'worker/commercial-access-gate.test.mjs',
     'supabase/migrations/20260908070656_astra_staging_commercial_fixture_registration.sql'];
   for (const file of files) { assert.ok(release.includes(file), file); assert.ok(mandatory.includes(file), file); }
   const tests = 'node --test scripts/test-capture-staging-commercial-deployment.mjs scripts/test-staging-commercial-fixtures.mjs scripts/test-staging-commercial-release-workflow.mjs';

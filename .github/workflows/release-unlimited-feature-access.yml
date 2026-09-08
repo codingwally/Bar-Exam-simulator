@@ -315,6 +315,7 @@ jobs:
             worker/bar-forecast-routes.mjs \
             worker/bar-forecast-routes.test.mjs \
             worker/commercial-entry.mjs \
+            worker/commercial-access-gate.test.mjs \
             worker/examinations-core.mjs \
             worker/examinations-core.test.mjs \
             worker/examinations-routes.test.mjs \

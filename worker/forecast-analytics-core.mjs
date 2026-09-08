@@ -63,18 +63,20 @@ export function validateForecastAnalyticsScope(scope, ownerId, attempts = null) 
 export function periodLabel(scope) {
   return `${scope.filter.from ? manila(scope.filter.from) : 'First saved result'} to ${scope.filter.to ? `${manila(scope.filter.to)} (exclusive)` : 'Snapshot time'}`;
 }
-export function analyticsSummaryLines(scope) {
+export function analyticsSummaryLines(scope, { singularCounts = false } = {}) {
   const a = scope.analytics;
+  // PDF-only presentation opt-in. Preserve existing v1 email payload bytes and retries.
+  const attemptNoun = count => singularCounts && count === 1 ? 'attempt' : 'attempts';
   const lines = [
     `Subject: ${scope.filter.subject || 'All subjects'}`, `Period: ${periodLabel(scope)}`,
     `Saved snapshot: ${manila(scope.createdAt)}`,
-    `${a.completedAttempts} complete valid attempts | Average ${metric(a.averagePercentage, '%')}`,
+    `${a.completedAttempts} complete valid ${attemptNoun(a.completedAttempts)} | Average ${metric(a.averagePercentage, '%')}`,
     `Grammar ${metric(a.averageGrammarScore, ' / 5')} | Issue spotting ${metric(a.averageIssueSpottingScore, ' / 5')}`,
     'Grammar and issue spotting are separate diagnostics, not additions to the grade.',
     `${a.pendingAttempts} pending and ${a.failedAttempts} needing attention are excluded from grades.`,
     'Active writing time was not recorded. No writing-speed metric is estimated.',
   ];
-  for (const row of a.bySubject) lines.push(`${row.subject}: ${metric(row.averagePercentage, '%')} (${row.completedAttempts} complete attempts)`);
+  for (const row of a.bySubject) lines.push(`${row.subject}: ${metric(row.averagePercentage, '%')} (${row.completedAttempts} complete ${attemptNoun(row.completedAttempts)})`);
   return lines;
 }
 

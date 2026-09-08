@@ -42,7 +42,7 @@
         'assets/bar-forecast.css?v=access-flow-20260902-1&durable=astra-forecast-durable-20260907-r1&editor=astra-forecast-multiline-20260908-r1',
       ],
       scripts: [
-        'assets/bar-forecast.js?v=access-flow-20260902-1&unlimited=feature-access-20260902-1&loop=astra-20260907-1&durable=astra-forecast-durable-20260907-r1&entry=astra-forecast-cancel-20260907-r1&poll=astra-forecast-read-wait-20260907-r1&pdf=astra-browser-pdf-20260908-r1&editor=astra-forecast-multiline-20260908-r1&analytics=astra-analytics-browser-20260908-r1',
+        'assets/bar-forecast.js?v=access-flow-20260902-1&unlimited=feature-access-20260902-1&loop=astra-20260907-1&durable=astra-forecast-durable-20260907-r1&entry=astra-forecast-cancel-20260907-r1&poll=astra-forecast-read-wait-20260907-r1&pdf=astra-browser-pdf-20260908-r1&editor=astra-forecast-multiline-20260908-r1&analytics=astra-analytics-browser-20260908-r1&counts=astra-analytics-count-copy-20260908-r1',
       ],
     }),
   });

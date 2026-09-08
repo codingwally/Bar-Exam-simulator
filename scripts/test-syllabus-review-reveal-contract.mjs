@@ -625,7 +625,7 @@ for (const asset of [
     `${asset} must use the public reliability lazy-load cache-busting release`,
   );
 }
-assert.match(serviceWorker, /duediligence-shell-astra-late-proof-20260908-r1/);
+assert.match(serviceWorker, /duediligence-shell-astra-analytics-count-copy-20260908-r1/);
 assert.match(studyWorkspace, /service-worker\.js\?v=commercial-readiness-profile-analytics-offline-paid-expiry-20260827-1/);
 assert.ok(
   featureLoader.includes('assets/examinations.js?v=pedro-release2-20260827-1&baseline=public-reliability-20260827-1&hotfix=ian-provisional-reveal-20260828-1&recovery=subject-review-timeout-20260828-1'),

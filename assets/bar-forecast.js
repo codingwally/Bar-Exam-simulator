@@ -1482,7 +1482,7 @@
       guard();
       const origin = global.location.origin || new URL(global.location.href).origin;
       if (typeof global.Worker !== 'function') throw new Error('This browser cannot prepare the period PDF. Your saved reports remain available.');
-      worker = new global.Worker(`${origin}/assets/forecast-analytics-pdf-worker.js?v=astra-analytics-browser-20260908-r1`, { name: 'due-diligence-period-pdf' });
+      worker = new global.Worker(`${origin}/assets/forecast-analytics-pdf-worker.js?v=astra-analytics-browser-20260908-r1&counts=astra-analytics-count-copy-20260908-r1`, { name: 'due-diligence-period-pdf' });
       requestController.signal.addEventListener('abort', onAbort, { once: true });
       totalTimer = global.setTimeout(() => requestController.abort(), 180000);
       worker.onmessage = ({ data }) => {
@@ -1726,12 +1726,12 @@
           const rows = model.analytics[key];
           if (!Array.isArray(rows) || !rows.length) panel.append(element('p', '', 'No supported saved classifications in this scope.'));
           else for (const row of rows) panel.append(element('p', '',
-            `${row.subject} · ${field === 'topic' && row.unitId ? `${row.unitId} / ` : ''}${row[field]} · ${nullableMetric(row.averageScore)} / 5 · ${row.questionSamples} graded answers across ${row.completedAttempts} complete attempts`));
+            `${row.subject} · ${field === 'topic' && row.unitId ? `${row.unitId} / ` : ''}${row[field]} · ${nullableMetric(row.averageScore)} / 5 · ${row.questionSamples} graded ${row.questionSamples === 1 ? 'answer' : 'answers'} across ${row.completedAttempts} complete ${row.completedAttempts === 1 ? 'attempt' : 'attempts'}`));
         }
         const coverage = model.analytics.classificationCoverage;
         if (coverage) panel.append(element('p', 'analytics-panel-note',
           `${coverage.unitUnknownQuestions} answers have unknown unit classification; ${coverage.topicUnknownQuestions} have unknown topic classification. Unit and topic views overlap; they are not added together.`));
-        if (model.scope) panel.append(element('p', 'bf26-status', `Saved snapshot: ${forecastDate(model.scope.createdAt)} Philippine time · ${model.scope.manifest.length} complete reports. PDF, email and the scores below use this exact snapshot. Refresh creates a current view.`));
+        if (model.scope) panel.append(element('p', 'bf26-status', `Saved snapshot: ${forecastDate(model.scope.createdAt)} Philippine time · ${model.scope.manifest.length} complete ${model.scope.manifest.length === 1 ? 'report' : 'reports'}. PDF, email and the scores below use this exact snapshot. Refresh creates a current view.`));
         const actions = element('div', 'bf26-history-filters');
         for (const [kind, label] of [['pdf', 'Download period PDF'], ['email', 'Email period report']]) {
           const action = makeButton(label); action.disabled = loading || !model.analytics.completedAttempts

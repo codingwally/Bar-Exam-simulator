@@ -266,7 +266,12 @@ test('Forecast and loader cache identities advance together; other analytics rem
   assert.ok(/bar-forecast\.js\?[^']*analytics=astra-analytics-browser-20260908-r1/u.test(loader));
   assert.ok(/feature-loader\.js\?[^"\n]*analytics=astra-analytics-browser-20260908-r1/u.test(html));
   assert.ok(/FORECAST_PDF_WORKER = '\/assets\/forecast-result-pdf-worker\.js\?v=astra-browser-pdf-20260908-r1'/u.test(forecastSource));
-  assert.ok(/forecast-analytics-pdf-worker\.js\?v=astra-analytics-browser-20260908-r1/u.test(forecastSource));
+  assert.ok(/forecast-analytics-pdf-worker\.js\?v=astra-analytics-browser-20260908-r1&counts=astra-analytics-count-copy-20260908-r1/u.test(forecastSource));
+  const forecastUrl = loader.match(/'(assets\/bar-forecast\.js\?[^']+)'/u)?.[1];
+  const loaderUrl = html.match(/src="(assets\/feature-loader\.js\?[^"]+)"/u)?.[1]?.replaceAll('&amp;', '&');
+  for (const url of [forecastUrl, loaderUrl]) {
+    assert.equal(new URL(url, 'https://example.test').searchParams.get('counts'), 'astra-analytics-count-copy-20260908-r1');
+  }
   assert.match(html, /analytics: 'verdict'/);
   assert.match(html, /function openAnalytics\(\)[\s\S]*selectMainAnalyticsTab\(history\.state\?\.dueDiligenceAnalyticsTab/);
 });
@@ -422,7 +427,7 @@ test('period PDF reads each frozen member serially, sends no token to the worker
   assert.equal(c.calls.filter(row => row.body.operation === 'analytics_attempt').length, 4);
   assert.equal(c.calls.filter(row => row.body.operation === 'analytics_pdf').length, 0);
   assert.equal(c.calls.filter(row => row.body.operation === 'analytics_pdf_prepared').length, 2);
-  assert.equal(c.workers.every(worker => /^https:\/\/example\.test\/assets\/forecast-analytics-pdf-worker\.js\?v=astra-analytics-browser-20260908-r1$/u.test(worker.url)), true);
+  assert.equal(c.workers.every(worker => /^https:\/\/example\.test\/assets\/forecast-analytics-pdf-worker\.js\?v=astra-analytics-browser-20260908-r1&counts=astra-analytics-count-copy-20260908-r1$/u.test(worker.url)), true);
   assert.equal(await c.objectUrls[0].text(), await c.objectUrls[1].text());
   assert.doesNotMatch(JSON.stringify(c.messages), /access_token|Bearer synthetic|private-draft|Keep me/u);
   assert.equal(JSON.stringify(c.data), before); assert.equal(c.state.answers.get('private-draft'), 'Keep me'); assert.equal(c.storage.size, 0);

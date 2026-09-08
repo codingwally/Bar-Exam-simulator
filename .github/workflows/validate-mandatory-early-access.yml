@@ -258,6 +258,7 @@ on:
       - 'worker/forecast-analytics-pdf.mjs'
       - 'worker/forecast-analytics-export.mjs'
       - 'worker/forecast-analytics-export.test.mjs'
+      - 'worker/forecast-analytics-count-copy.test.mjs'
       - 'worker/forecast-analytics-test-fixture.mjs'
       - 'worker/forecast-analytics-browser-sql.test.mjs'
       - 'supabase/migrations/20260907222627_astra_forecast_analytics_browser_scopes.sql'

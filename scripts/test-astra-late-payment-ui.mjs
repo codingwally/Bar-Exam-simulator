@@ -20,7 +20,7 @@ test('late-proof asset versions, service-worker shell and ordered database bundl
   assert.match(index,/pricing-checkout-safety\.js[^\"]+review=astra-late-offer-20260908-r1/);
   assert.match(index,/phase2-experience\.js[^\"]+review=astra-late-offer-20260908-r1/);
   assert.match(admin,/admin\.js[^\"]+review=astra-late-offer-20260908-r1/);
-  assert.match(sw,/duediligence-shell-astra-late-proof-20260908-r1/);
+  assert.match(sw,/duediligence-shell-astra-analytics-count-copy-20260908-r1/);
   const contract=read('scripts/astra-release-database-contract.mjs');
   const names=[...contract.match(/ASTRA_MIGRATIONS = Object\.freeze\(\[([\s\S]*?)\]\)/)[1].matchAll(/'([^']+\.sql)'/g)].map(match=>match[1]);
   assert.equal(names.length,15);

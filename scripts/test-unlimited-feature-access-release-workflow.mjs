@@ -74,6 +74,7 @@ const newReviewedPaths = [
   'worker/forecast-analytics-pdf.mjs',
   'worker/forecast-analytics-export.mjs',
   'worker/forecast-analytics-export.test.mjs',
+  'worker/forecast-analytics-count-copy.test.mjs',
   'worker/forecast-analytics-test-fixture.mjs',
   'worker/forecast-analytics-browser-sql.test.mjs',
   'supabase/migrations/20260907222627_astra_forecast_analytics_browser_scopes.sql',
@@ -227,6 +228,8 @@ assert.match(workflow, /node --test --test-concurrency=1 worker\/\*\.test\.mjs/u
   'Release authorization must also execute both new Worker SQL/security suites.');
 assert.match(validation, /node --test --test-concurrency=1 worker\/\*\.test\.mjs/u,
   'Mandatory validation must execute the new administrator role SQL regression, not merely trigger on its path.');
+assert.ok(validation.includes("      - 'worker/forecast-*.mjs'"),
+  'The count-copy regression must trigger mandatory validation and run in both existing Worker wildcard suites.');
 assert.ok(workflow.indexOf('node scripts/verify-astra-forecast-staging.mjs --self-test-browser')
   < workflow.indexOf('node scripts/verify-astra-forecast-staging.mjs --execute-staging'));
 const worker = workflow.indexOf('\n  deploy_production_worker:');

@@ -228,7 +228,7 @@ assert.deepEqual(analyticsPdfWorker, Buffer.from(analyticsPdfBundle.code), 'Peri
 assert.ok(analyticsPdfWorker.length > 0 && analyticsPdfWorker.length < 3_000_000);
 assert.equal(analyticsPdfBundle.inputs.some(name => /fixture|\.test\.mjs|forecast-(?:result|analytics)-export\.mjs|forecast-attempt-store\.mjs|content\//u.test(name)), false);
 assert.doesNotMatch(analyticsPdfWorker.toString('utf8'), /SUPABASE_SERVICE_ROLE_KEY|RESEND_API_KEY|generativelanguage|gemini|Local synthetic resource fixture|Bearer /iu);
-assert.ok(barForecast.includes('/assets/forecast-analytics-pdf-worker.js?v=astra-analytics-browser-20260908-r1'));
+assert.ok(barForecast.includes('/assets/forecast-analytics-pdf-worker.js?v=astra-analytics-browser-20260908-r1&counts=astra-analytics-count-copy-20260908-r1'));
 const barForecastStyles = await readFile(path.join(output, 'assets/bar-forecast.css'), 'utf8');
 const barForecastPreview = await readFile(
   path.join(output, 'assets/bar-forecast/forecast-workspace-preview.webp'),

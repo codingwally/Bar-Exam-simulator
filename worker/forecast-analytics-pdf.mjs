@@ -71,9 +71,9 @@ export async function createForecastAnalyticsPdf({ scope: inputScope, ownerId, r
     if (typeof value === 'number' && value > 0) page.drawRectangle({ x: x + 9, y: y - 54, width: (w - 18) * value / max, height: 4, color: index === 0 ? NAVY : GOLD });
   });
   y -= 85;
-  for (const item of analyticsSummaryLines(scope)) line(item);
+  for (const item of analyticsSummaryLines(scope, { singularCounts: true })) line(item);
   line('SCORE TREND', 12, GOLD);
-  line(`Latest ${scope.analytics.trend.length} completed attempts in the saved scope, oldest to newest. Full-scope averages above are not limited to this trend.`);
+  line(`Latest ${scope.analytics.trend.length} completed ${scope.analytics.trend.length === 1 ? 'attempt' : 'attempts'} in the saved scope, oldest to newest. Full-scope averages above are not limited to this trend.`);
   if (scope.analytics.trend.length >= 2) {
     if (y < 225) newPage();
     const plotted = scope.analytics.trend.slice(-12); const step = width / plotted.length; const base = y - 105;
@@ -91,7 +91,7 @@ export async function createForecastAnalyticsPdf({ scope: inputScope, ownerId, r
     line(label, 12, GOLD);
     const rows = scope.analytics[key];
     if (!Array.isArray(rows) || !rows.length) line('No supported saved classifications are available for this scope.');
-    else for (const row of rows) line(`${row.subject} / ${field === 'topic' ? `${row.unitId} / ` : ''}${row[field]}: ${metric(row.averageScore, ' / 5')} (${row.questionSamples} graded answers across ${row.completedAttempts} complete attempts)`, 9);
+    else for (const row of rows) line(`${row.subject} / ${field === 'topic' ? `${row.unitId} / ` : ''}${row[field]}: ${metric(row.averageScore, ' / 5')} (${row.questionSamples} graded ${row.questionSamples === 1 ? 'answer' : 'answers'} across ${row.completedAttempts} complete ${row.completedAttempts === 1 ? 'attempt' : 'attempts'})`, 9);
   }
   const coverage = scope.analytics.classificationCoverage;
   if (coverage) line(`Unknown unit classification: ${coverage.unitUnknownQuestions} answers. Unknown topic classification: ${coverage.topicUnknownQuestions} answers. Unit and topic views overlap; they are not added together.`);

@@ -148,6 +148,15 @@ jobs:
             supabase/migrations/20260907223149_astra_staging_examination_fixture_registration.sql \
             scripts/staging-payment-fixtures.mjs \
             scripts/test-staging-payment-fixtures.mjs \
+            scripts/staging-commercial-fixtures.mjs \
+            scripts/staging-commercial-suppression.mjs \
+            scripts/capture-staging-commercial-deployment.mjs \
+            scripts/test-capture-staging-commercial-deployment.mjs \
+            scripts/test-staging-commercial-fixtures.mjs \
+            scripts/test-staging-commercial-release-workflow.mjs \
+            docs/astra-staging-commercial-fixtures.md \
+            worker/astra-staging-commercial-fixture-registration.test.mjs \
+            supabase/migrations/20260908070656_astra_staging_commercial_fixture_registration.sql \
             worker/astra-staging-payment-fixture-registration.test.mjs \
             supabase/migrations/20260907230740_astra_staging_payment_fixture_registration.sql \
             scripts/test-forecast-analytics-browser-pdf.mjs \
@@ -396,6 +405,7 @@ jobs:
           node scripts/test-astra-main-forecast-analytics.mjs
           node scripts/test-forecast-analytics-browser-pdf.mjs
           node --test scripts/test-astra-forecast-analytics-staging.mjs scripts/test-staging-examination-fixtures.mjs scripts/test-staging-payment-fixtures.mjs
+          node --test scripts/test-capture-staging-commercial-deployment.mjs scripts/test-staging-commercial-fixtures.mjs scripts/test-staging-commercial-release-workflow.mjs
           node scripts/test-astra-payment-lifecycle.mjs
           node scripts/test-astra-149-binding-compatibility.mjs
           node scripts/test-astra-late-payment-ui.mjs
@@ -524,13 +534,17 @@ jobs:
         run: node scripts/astra-release-database-contract.mjs --verify-attestation
 
       - name: Deploy the exact Worker and client to staging
+        id: staging_worker_deploy
         uses: cloudflare/wrangler-action@v3
+        env:
+          STAGING_COMMERCIAL_DEPLOYMENT_EVIDENCE: ${{ runner.temp }}/staging-commercial-deployment-${{ github.run_id }}-${{ github.run_attempt }}.json
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: worker
           wranglerVersion: "4.114.0"
-          command: deploy --config wrangler.staging.toml
+          command: deploy --config wrangler.staging.toml --message astra-commercial-stage:${{ github.run_id }}:${{ github.run_attempt }}:${{ github.sha }}
+          postCommands: node ../scripts/capture-staging-commercial-deployment.mjs
 
       - name: Verify the staging Forecast public boundary
         env:
@@ -541,6 +555,8 @@ jobs:
       - name: Verify staging payment, provisional unlimited access, and cleanup
         env:
           STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          STAGING_COMMERCIAL_DEPLOYMENT_EVIDENCE: ${{ runner.temp }}/staging-commercial-deployment-${{ github.run_id }}-${{ github.run_attempt }}.json
         run: node scripts/run-staging-e2e-suite.mjs complete-beta
 
       - name: Verify authenticated Forecast entry and manual recovery
@@ -575,6 +591,7 @@ jobs:
           path: |
             artifacts/staging-e2e/*.json
             artifacts/staging-e2e/*-cleanup-manifest.json.tmp
+            ${{ runner.temp }}/staging-commercial-deployment-${{ github.run_id }}-${{ github.run_attempt }}.json
           if-no-files-found: warn
           retention-days: 7
 

@@ -1,0 +1,13 @@
+# Commercial staging fixture safety
+
+The protected `release-unlimited-feature-access.yml` workflow is the supported caller. The four existing free/retry/founding/provisional scenarios and v2 business assertions are unchanged. This smoke does not prove real payment, uploaded proof, v4 late-proof approval, or receipt delivery.
+
+The optional `20260908070656_astra_staging_commercial_fixture_registration.sql` belongs only on independently verified staging `hlzqmreeoghbldnhlybr`, never in the production migration bundle. The operator must verify its exact source, function bodies/ACLs, protected registry and null-input denial before the workflow. It adds no customer access and does not modify the existing registrars.
+
+Before any Auth creation the workflow must prove the exact deployed Worker and payment-notification suppression. Wrangler 4.114.0 emits a version ID, not a deployment ID. Its action-owned fresh NDJSON output is bound to Cloudflare's actual active deployment using that immutable version at 100% and a unique run/attempt/source message. The collector saves only bounded scalar evidence, not raw output, tokens or author data. The commercial child independently rechecks deployment, version and effective bindings before its fixtures and before the synthetic payment. Missing evidence or changed deployment fails closed.
+
+Only this dedicated protected workflow is wired to generate the evidence. Older direct callers, including the legacy staging gate, must not fabricate or borrow an evidence file; without a fresh matching protected deployment they stop before commercial Auth creation. Do not dispatch the legacy 30-journey gate for this correction.
+
+Creation intent and the returned exact UUID are saved before registration and normal sign-in. Tokens and passwords are not in the manifest. Unknown outcomes are retained for operator review without automatic retries. Global sign-out precedes supported API cleanup. The synthetic pending payment is fenced using a full scalar-row compare-and-set before deletion: if any queue claim wins, the fixture is held. Exact never-attempted notification and invite rows are removed only under matching guards. Audit IDs are captured before Auth deletion and retained internal Pulse history is not erased.
+
+API success is not independent database cleanup proof. Retain the exact cleanup manifest and verify sessions, refresh tokens, owned graphs, captured audit IDs and internal Pulse/delivery scope directly on staging. Preserve unknown or non-matching rows. This does not retroactively prove cleanup for older runs lacking UUID manifests. Local SQL tests establish serial claim/CAS outcomes; mocked HTTP tests are not hosted REST or simultaneous-backend evidence.

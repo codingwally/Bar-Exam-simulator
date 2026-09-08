@@ -237,6 +237,15 @@ on:
       - 'supabase/migrations/20260907223149_astra_staging_examination_fixture_registration.sql'
       - 'scripts/staging-payment-fixtures.mjs'
       - 'scripts/test-staging-payment-fixtures.mjs'
+      - 'scripts/staging-commercial-fixtures.mjs'
+      - 'scripts/staging-commercial-suppression.mjs'
+      - 'scripts/capture-staging-commercial-deployment.mjs'
+      - 'scripts/test-capture-staging-commercial-deployment.mjs'
+      - 'scripts/test-staging-commercial-fixtures.mjs'
+      - 'scripts/test-staging-commercial-release-workflow.mjs'
+      - 'docs/astra-staging-commercial-fixtures.md'
+      - 'worker/astra-staging-commercial-fixture-registration.test.mjs'
+      - 'supabase/migrations/20260908070656_astra_staging_commercial_fixture_registration.sql'
       - 'worker/astra-staging-payment-fixture-registration.test.mjs'
       - 'supabase/migrations/20260907230740_astra_staging_payment_fixture_registration.sql'
       - 'scripts/test-forecast-analytics-browser-pdf.mjs'
@@ -304,6 +313,7 @@ jobs:
           node scripts/test-astra-main-forecast-analytics.mjs
           node scripts/test-forecast-analytics-browser-pdf.mjs
           node --test scripts/test-astra-forecast-analytics-staging.mjs scripts/test-staging-examination-fixtures.mjs scripts/test-staging-payment-fixtures.mjs
+          node --test scripts/test-capture-staging-commercial-deployment.mjs scripts/test-staging-commercial-fixtures.mjs scripts/test-staging-commercial-release-workflow.mjs
           node scripts/test-astra-payment-lifecycle.mjs
           node scripts/test-astra-149-binding-compatibility.mjs
           node scripts/test-astra-late-payment-ui.mjs

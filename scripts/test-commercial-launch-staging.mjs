@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { createCommercialFixtureLifecycle } from './staging-commercial-fixtures.mjs';
+import { createCommercialSuppressionVerifier } from './staging-commercial-suppression.mjs';
 import {
   completeMandatoryCommercialProfile,
   provisionMandatoryCommercialChoice,
@@ -21,7 +26,16 @@ assert.match(PUBLISHABLE_KEY, /^sb_publishable_[A-Za-z0-9_-]{20,}$/);
 const runId = `${Date.now().toString(36)}-${randomBytes(4).toString('hex')}`;
 const createdUsers = [];
 const createdInviteHashes = [];
-const createdNotificationIds = [];
+const sourceSha = String(process.env.GITHUB_SHA || '');
+assert.equal(execFileSync('git', ['rev-parse', 'HEAD'], { cwd: fileURLToPath(new URL('../', import.meta.url)), encoding:'utf8' }).trim(), sourceSha);
+const deploymentEvidence = JSON.parse(await readFile(process.env.STAGING_COMMERCIAL_DEPLOYMENT_EVIDENCE, 'utf8'));
+const verifySuppression = createCommercialSuppressionVerifier({
+  evidence: deploymentEvidence, sourceSha,
+  sourceText: await readFile(new URL('../worker/commercial-entry.mjs', import.meta.url), 'utf8'),
+  apiToken: process.env.CLOUDFLARE_API_TOKEN,
+});
+const fixtures = createCommercialFixtureLifecycle({ runId, supabaseUrl:SUPABASE_URL, workerUrl:WORKER_URL,
+  serviceRoleKey:SERVICE_ROLE_KEY, publishableKey:PUBLISHABLE_KEY, sourceSha, verifySuppression });
 let currentLegalPolicy = null;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -161,29 +175,9 @@ function accessEvidence(access) {
 }
 
 async function createUser(label) {
-  const email = `dd-commercial-${label}-${runId}@duediligence.ph`;
-  const password = `Dd!${randomBytes(24).toString('base64url')}9z`;
-  const user = (await jsonRequest(`${SUPABASE_URL}/auth/v1/admin/users`, {
-    method: 'POST',
-    headers: serviceHeaders,
-    body: JSON.stringify({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: { display_name: `Commercial ${label}` },
-    }),
-  }, [200, 201])).body;
+  const user = await fixtures.createUser(label);
   createdUsers.push(user.id);
-
-  const session = (await jsonRequest(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-    method: 'POST',
-    headers: {
-      apikey: PUBLISHABLE_KEY,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ email, password }),
-  })).body;
-  assert.ok(session.access_token);
+  const session = { access_token: user.token };
 
   assert.ok(currentLegalPolicy?.termsVersion);
   assert.ok(currentLegalPolicy?.privacyVersion);
@@ -202,14 +196,7 @@ async function createUser(label) {
       + '&select=id,accepted_at',
   );
   assert.equal(persisted.length, 1);
-  return { id: user.id, email, token: session.access_token };
-}
-
-async function deleteUser(userId) {
-  await jsonRequest(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
-    method: 'DELETE',
-    headers: serviceHeaders,
-  }, [200, 204]);
+  return user;
 }
 
 async function workerPost(path, payload, token = null) {
@@ -259,6 +246,7 @@ async function verifySoftLaunchStaging() {
 
 let outcome;
 try {
+  await fixtures.preflight();
   console.log('STAGING_GATE: verifying isolated soft-launch policy');
   await verifySoftLaunchStaging();
 
@@ -350,14 +338,16 @@ try {
   const foundingHash = createHash('sha256')
     .update(foundingUser.email.trim().toLowerCase())
     .digest('hex');
-  createdInviteHashes.push(foundingHash);
   const foundingExpiresAt = new Date(
     Date.parse(publicPricing.serverNow) + (24 * 60 * 60 * 1000),
   ).toISOString();
+  await fixtures.beforeInvite(foundingUser.id, foundingHash, foundingExpiresAt);
   await serviceWrite('founding_beta_invites', 'POST', {
     email_hash: foundingHash,
     access_ends_at: foundingExpiresAt,
   });
+  await fixtures.recordInvite(foundingUser.id);
+  createdInviteHashes.push(foundingHash);
   const founding = await accessSnapshot(foundingUser.id);
   assert.equal(founding.accessMode, 'founding_beta');
   assert.equal(founding.basis, 'founding_beta');
@@ -388,7 +378,9 @@ try {
       p_proof_size_bytes: 1024,
       p_proof_sha256: createHash('sha256').update(`payment-${runId}`).digest('hex'),
     };
+    await fixtures.beforePayment(paymentPayload);
     const payment = await serviceRpc('phase4_create_payment_request_v2', paymentPayload);
+    await fixtures.recordPayment(provisionalUser.id, payment.id);
     const paymentId = payment.id;
     assert.equal(payment.status, 'pending');
     assert.equal(payment.pricingRevisionId, paymentPricing.revisionId);
@@ -415,7 +407,6 @@ try {
       `outbound_notifications?related_resource_id=eq.${payment.id}&select=id`,
     );
     assert.equal(notifications.length, 1);
-    createdNotificationIds.push(...notifications.map((item) => item.id));
     const provisional = await accessSnapshot(provisionalUser.id);
     assert.equal(provisional.accessMode, 'provisional');
     assert.equal(provisional.basis, 'provisional_payment');
@@ -520,47 +511,7 @@ try {
   };
 } finally {
   console.log('STAGING_GATE: cleaning exact synthetic commercial records');
-  const cleanupErrors = [];
-  // Notifications intentionally do not cascade from payment requests. Discover
-  // them again before user deletion so even an assertion immediately after a
-  // successful payment cannot leave synthetic Admin inbox residue.
-  for (const userId of createdUsers) {
-    const paymentRows = await serviceGet(
-      `payment_requests?user_id=eq.${encodeURIComponent(userId)}&select=id`,
-    ).catch((error) => {
-      cleanupErrors.push(error);
-      return [];
-    });
-    for (const paymentRow of paymentRows) {
-      const notificationRows = await serviceGet(
-        `outbound_notifications?related_resource_id=eq.${encodeURIComponent(paymentRow.id)}&select=id`,
-      ).catch((error) => {
-        cleanupErrors.push(error);
-        return [];
-      });
-      createdNotificationIds.push(...notificationRows.map((item) => item.id));
-    }
-  }
-  for (const notificationId of [...new Set(createdNotificationIds)].reverse()) {
-    await serviceWrite(
-      `outbound_notifications?id=eq.${encodeURIComponent(notificationId)}`,
-      'DELETE',
-      undefined,
-    ).catch((error) => cleanupErrors.push(error));
-  }
-  for (const inviteHash of createdInviteHashes.reverse()) {
-    await serviceWrite(
-      `founding_beta_invites?email_hash=eq.${encodeURIComponent(inviteHash)}`,
-      'DELETE',
-      undefined,
-    ).catch((error) => cleanupErrors.push(error));
-  }
-  for (const userId of createdUsers.reverse()) {
-    await deleteUser(userId).catch((error) => cleanupErrors.push(error));
-  }
-  if (cleanupErrors.length) {
-    throw new AggregateError(cleanupErrors, 'Commercial staging cleanup failed.');
-  }
+  await fixtures.cleanup();
   console.log(`STAGING_GATE: synthetic_cleanup=true run_id=${runId}`);
 }
 

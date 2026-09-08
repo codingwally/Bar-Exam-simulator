@@ -124,5 +124,5 @@ test('online shell, lazy loader and cache-first service worker use matching new 
   const forecastCss = loader.match(/'(assets\/bar-forecast\.css\?[^']+)'/)?.[1];
   assert.ok(forecastCss.endsWith('editor=astra-forecast-multiline-20260908-r1'));
   assert.ok(serviceWorker.includes("'/" + forecastCss + "'"));
-  assert.match(serviceWorker, /const CACHE_VERSION = 'duediligence-shell-astra-simulator-presentation-20260908-r1';/);
+  assert.match(serviceWorker, /const CACHE_VERSION = 'duediligence-shell-astra-late-proof-20260908-r1';/);
 });

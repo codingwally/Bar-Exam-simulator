@@ -2123,13 +2123,16 @@
             durationDays: row.durationDays || null,
             verifiedPaidAt: row.verifiedPaidAt || null,
             activationBased,
-            requiresVerifiedPaidAt: row.entitlementMode === 'rolling_days' && !activationBased,
+            offerReviewRequired: row.offerReviewRequired === true,
+            offerValidFrom: row.offerValidFrom || null,
+            offerValidUntil: row.offerValidUntil || null,
+            requiresVerifiedPaidAt: row.offerReviewRequired === true || (row.entitlementMode === 'rolling_days' && !activationBased),
           };
           return [
             { html: true, value: `<strong>${escapeHtml(row.display_name || 'Not provided')}</strong>${studentDetails.length ? `<br><small>${escapeHtml(studentDetails.join(' · '))}</small>` : ''}` },
             { html: true, value: `<strong>₱${number(row.trusted_amount_php,2)}</strong><br><small>${escapeHtml(row.planName || commercialPlanLabel(row.plan_code))} · ${escapeHtml(row.payment_method || 'Not provided')}</small>` },
             { html: true, value: `${escapeHtml(row.verifiedPaidAt ? dateTime(row.verifiedPaidAt) : 'Not recorded')}${row.activatedAt ? `<br><small>Activated ${escapeHtml(dateTime(row.activatedAt))}</small>` : ''}` },
-            { html: true, value: `<span class="status ${row.status === 'approved' ? 'ok' : row.status === 'rejected' ? 'danger' : 'warn'}">${escapeHtml(commercialPaymentLabel(row.status))}</span>${row.provisional_access_expires_at ? `<br><small>Provisional until ${escapeHtml(dateTime(row.provisional_access_expires_at))}</small>` : ''}` },
+            { html: true, value: `<span class="status ${row.status === 'approved' ? 'ok' : row.status === 'rejected' ? 'danger' : 'warn'}">${escapeHtml(commercialPaymentLabel(row.status))}</span>${row.offerReviewRequired ? '<br><strong>Earlier offer: evidence review required. No access granted.</strong>' : ''}${row.provisional_access_expires_at ? `<br><small>Provisional until ${escapeHtml(dateTime(row.provisional_access_expires_at))}</small>` : ''}` },
             row.reviewed_by ? administratorIdentity(row.reviewed_by, directoryById) : 'Pending review',
             { html: true, value: `<span class="status ${notification.className}">${escapeHtml(notification.text)}</span>${row.verification_email_last_attempt_at ? `<br><small>${escapeHtml(dateTime(row.verification_email_last_attempt_at))}</small>` : ''}` },
             proofDetails.join(' · ') || 'Not available',
@@ -3892,9 +3895,11 @@
     state.action.payload.proofReviewReason = reason;
     const reasonField = $('#action-reason')?.closest('label');
     if (reasonField) reasonField.hidden = true;
-    $('#action-warning').textContent = 'Review the image and payment details together. Approval sends the user an electronic receipt with this exact proof attached.';
+    $('#action-warning').textContent = payload.offerReviewRequired
+      ? 'Earlier-offer proof: verify the original amount, channel and actual payment time. Continue to the guarded review form; no access is granted while this remains unresolved.'
+      : 'Review the image and payment details together. Approval sends the user an electronic receipt with this exact proof attached.';
     $('#action-confirm').hidden = !['pending', 'needs_information'].includes(payload.paymentStatus);
-    $('#action-confirm').textContent = 'Approve subscription';
+    $('#action-confirm').textContent = payload.offerReviewRequired ? 'Review earlier offer' : 'Approve subscription';
     $('#action-dialog-cancel').textContent = 'Done';
   }
 
@@ -3956,7 +3961,7 @@
       warning = 'This action changes the student’s access and may affect future billing records. Confirm the requested change and effective dates before continuing.';
     } else if (action === 'payment_review') {
       title = 'Approve subscription';
-      const verifiedPaymentField = payload.entitlementMode === 'rolling_days'
+      const verifiedPaymentField = payload.entitlementMode === 'rolling_days' || payload.offerReviewRequired
         ? actionField(
           `Verified payment time shown on proof${payload.requiresVerifiedPaidAt === true ? '' : ' (optional)'}`,
           'action-paid-at',
@@ -3970,6 +3975,10 @@
           <option value="needs_information"${payload.status === 'needs_information' ? ' selected' : ''}>Needs information</option>
           <option value="rejected"${payload.status === 'rejected' ? ' selected' : ''}>Decline</option>
         </select></label>${verifiedPaymentField}`;
+      if (payload.offerReviewRequired) {
+        fields = `<div class="notice danger"><strong>Earlier-offer proof held for review</strong><p>No access was granted. Verify the original amount and channel against the private proof. The actual payment must fall ${payload.offerValidFrom ? `on or after ${escapeHtml(dateTime(payload.offerValidFrom))}, and ` : ''}before ${escapeHtml(dateTime(payload.offerValidUntil))}. Leave Needs information if this cannot be established.</p></div>${fields}
+          <label class="field" id="action-offer-disposition-field"><span><input id="action-offer-disposition" type="checkbox"> I verified the original offer, amount, channel and payment time from the evidence. Honor that verified offer.</span></label>`;
+      }
       warning = 'Confirm the reviewed proof, decision, and reason. No automatic charge or renewal is scheduled.';
     } else if (action === 'payment_invalidate') {
       title = 'Mark approved proof invalid';
@@ -4173,7 +4182,9 @@
           ? payload.approvalOnly === true ? 'Confirm' : 'Approve subscription'
           : selected === 'rejected' ? 'Confirm decline' : 'Confirm needs information';
         $('#action-warning').textContent = isApproval
-          ? payload.activationBased === true
+          ? payload.offerReviewRequired === true
+            ? 'Approval requires the explicit verified-offer confirmation and an actual payment timestamp within the original offer window. Uncertain evidence must remain Needs information. The paid term starts at approval or the valid renewal base.'
+            : payload.activationBased === true
             ? 'Approval starts the 30-day purchased term now, or after existing finite access, and queues a receipt with the reviewed proof. A payment timestamp is optional and must come from the proof, never the upload time.'
             : payload.requiresVerifiedPaidAt === true
               ? 'Enter the payment time shown on the proof. The captured plan determines the purchased term. Approval queues a receipt with the reviewed proof.'
@@ -4184,6 +4195,8 @@
         const paidAtField = $('#action-paid-at')?.closest('label');
         if (paidAtField) paidAtField.hidden = !isApproval;
         if ($('#action-paid-at')) $('#action-paid-at').required = isApproval && payload.requiresVerifiedPaidAt === true;
+        if ($('#action-offer-disposition-field')) $('#action-offer-disposition-field').hidden = !isApproval;
+        if ($('#action-offer-disposition')) $('#action-offer-disposition').required = isApproval;
         syncActionConfirmation();
       };
       decision?.addEventListener('change', syncPaymentDecision);
@@ -4257,6 +4270,14 @@
     } else if (action === 'payment_review') {
       payload.status = payload.approvalOnly === true ? 'approved' : $('#action-status').value;
       delete payload.verifiedPaidAt;
+      delete payload.offerReviewDisposition;
+      if (payload.status === 'approved' && payload.offerReviewRequired) {
+        if (!$('#action-offer-disposition')?.checked) {
+          toast('Verify the earlier offer and payment time, or leave this proof under Needs information.');
+          return;
+        }
+        payload.offerReviewDisposition = 'honor_verified_offer';
+      }
       if (payload.status === 'approved' && ($('#action-paid-at')?.value || payload.requiresVerifiedPaidAt === true)) {
         payload.verifiedPaidAt = isoFromLocalInput($('#action-paid-at')?.value);
         if (!payload.verifiedPaidAt) {
@@ -4268,7 +4289,7 @@
           return;
         }
       }
-      const decisionFingerprint = JSON.stringify({ status: payload.status, verifiedPaidAt: payload.verifiedPaidAt || null, reason });
+      const decisionFingerprint = JSON.stringify({ status: payload.status, verifiedPaidAt: payload.verifiedPaidAt || null, offerReviewDisposition: payload.offerReviewDisposition || null, reason });
       if (state.action.paymentDecisionFingerprint && state.action.paymentDecisionFingerprint !== decisionFingerprint) {
         toast('Retry the same decision and reason. Close and refresh the queue before changing a submitted review.');
         return;

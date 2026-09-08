@@ -18,6 +18,23 @@ test('proof continuity is bound to the exact plan and payment channel', () => {
   );
 });
 
+test('historical review retains a frozen earlier binding and original file without rebinding to a new deal', () => {
+  const file = { name: 'receipt.png', size: 1024, type: 'image/png' };
+  const plan = { versionId: 'old-plan', priceCentavos: 14900 };
+  const method = { versionId: 'old-channel', channelCode: 'bpi_instapay' };
+  const selected = safety.captureProof(file, plan.versionId, method.versionId);
+  const draft = safety.retainHistoricalProof(selected, plan, method, 'owner-a');
+  plan.priceCentavos = 19900;
+  method.versionId = 'new-channel';
+  assert.equal(draft.plan.priceCentavos, 14900);
+  assert.equal(draft.method.versionId, 'old-channel');
+  assert.equal(draft.proof.file, file);
+  assert.equal(draft.userId, 'owner-a');
+  assert.equal(safety.reconcileProof(draft.proof, 'new-plan', 'new-channel').file, null);
+  assert.equal(safety.retainHistoricalProof(selected, plan, method, 'owner-a'), null);
+  assert.equal(safety.retainHistoricalProof(selected, draft.plan, draft.method, ''), null);
+});
+
 test('active checkout continuity requires the exact current revision, plan, and compatible QR method', () => {
   const plan = Object.freeze({
     versionId: 'plan-149-v1',

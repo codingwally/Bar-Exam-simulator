@@ -15,6 +15,19 @@ import {
 
 const salesCloseAt = '2026-10-01T00:00:00+08:00';
 
+test('historical payment approval preserves only an explicit verified disposition and actual timestamp', () => {
+  const action = { action: 'payment_review', targetId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    requestKey: 'historical-payment-review-0001', reason: 'Verified original offer against the actual proof.',
+    payload: { status: 'approved', offerReviewDisposition: 'honor_verified_offer', verifiedPaidAt: '2026-09-13T15:59:59Z' } };
+  assert.deepEqual(normalizePhase4AdminAction(action).payload, { status: 'approved',
+    offerReviewDisposition: 'honor_verified_offer', verifiedPaidAt: '2026-09-13T15:59:59.000Z' });
+  for (const payload of [
+    { status: 'approved', offerReviewDisposition: 'ignore_cutover', verifiedPaidAt: '2026-09-13T15:59:59Z' },
+    { status: 'approved', offerReviewDisposition: 'honor_verified_offer' },
+    { status: 'needs_information', offerReviewDisposition: 'honor_verified_offer', verifiedPaidAt: '2026-09-13T15:59:59Z' },
+  ]) assert.throws(() => normalizePhase4AdminAction({ ...action, payload }), PaymentValidationError);
+});
+
 test('commercial study completion RPCs are allowed through the Worker storage boundary', async () => {
   const worker = await readFile(new URL('./index.mjs', import.meta.url), 'utf8');
   for (const operation of [

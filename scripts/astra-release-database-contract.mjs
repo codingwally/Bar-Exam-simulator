@@ -12,7 +12,9 @@ export const ASTRA_MIGRATIONS = Object.freeze([
   '20260907120100_astra_payment_proof_evidence.sql',
   '20260907120200_astra_payment_invalidation.sql',
   '20260907130000_astra_simulator_access.sql',
+  '20260907130002_astra_late_payment_review.sql',
   '20260907133129_astra_149_binding_compatibility.sql',
+  '20260907143119_astra_late_149_binding_reconciliation.sql',
   '20260907172508_astra_forecast_summary_email.sql',
   '20260907173112_astra_browser_pdf_prepared_note.sql',
   '20260907181748_astra_admin_role_fail_closed.sql',
@@ -37,7 +39,7 @@ else if (mode === '--verify-attestation') {
     'Apply and read back this exact schema bundle and run its rollback probes on the target environment before deploying the Worker.');
   console.log('ASTRA_EXACT_DATABASE_BUNDLE_ATTESTED');
 } else if (mode === '--self-test') {
-  assert.equal(new Set(ASTRA_MIGRATIONS).size, 13);
+  assert.equal(new Set(ASTRA_MIGRATIONS).size, 15);
   assert.deepEqual(ASTRA_MIGRATIONS, [...ASTRA_MIGRATIONS].sort());
   assert.equal(normalizedSql('begin;\r\ncommit;\r\n\r\n'), 'begin;\ncommit;\n');
   assert.match(attestation, /^sha256:[a-f0-9]{64}$/u);

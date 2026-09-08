@@ -2031,7 +2031,7 @@ test('payment endpoint authenticates, verifies file bytes, uploads privately, an
       assert.equal(init.headers['Content-Type'], 'image/png');
       return Response.json({ Key: 'private-object' });
     }
-    if (target.endsWith('/rest/v1/rpc/phase4_create_payment_request_v3')) {
+    if (target.endsWith('/rest/v1/rpc/phase4_create_payment_request_v4')) {
       const body = JSON.parse(init.body);
       assert.equal(body.p_user_id, '11111111-1111-4111-8111-111111111111');
       assert.equal(body.p_plan_version_id, '33333333-3333-4333-8333-333333333333');
@@ -2087,6 +2087,8 @@ test('payment endpoint authenticates, verifies file bytes, uploads privately, an
     const payload = await response.json();
     assert.equal(response.status, 201);
     assert.equal(payload.payment.status, 'pending');
+    assert.equal(calls.filter((call) => call.target.endsWith('/rest/v1/rpc/phase4_create_payment_request_v4')).length, 1);
+    assert.equal(calls.filter((call) => call.target.endsWith('/rest/v1/rpc/phase4_create_payment_request_v3')).length, 0);
     assert.equal(calls.filter((call) => call.target.includes('/storage/v1/object/')).length, 1);
   } finally {
     globalThis.fetch = originalFetch;

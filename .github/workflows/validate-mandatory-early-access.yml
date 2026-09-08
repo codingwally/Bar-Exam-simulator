@@ -151,6 +151,17 @@ on:
       - 'scripts/test-phase2-contract.mjs'
       - 'scripts/test-pricing-*.mjs'
       - 'scripts/test-astra-149-binding-compatibility.mjs'
+      - 'scripts/test-astra-late-payment-ui.mjs'
+      - 'assets/pricing-checkout-safety.js'
+      - 'scripts/test-pricing-checkout-safety.mjs'
+      - 'worker/commercial-launch-access-payment.test.mjs'
+      - 'worker/index.test.mjs'
+      - 'worker/pricing-builder.test.mjs'
+      - 'worker/pricing-core.mjs'
+      - 'scripts/test-astra-late-149-binding-reconciliation.mjs'
+      - 'docs/ASTRA_LATE_149_BINDING_RECONCILIATION.md'
+      - 'supabase/migrations/20260907130002_astra_late_payment_review.sql'
+      - 'supabase/migrations/20260907143119_astra_late_149_binding_reconciliation.sql'
       - 'supabase/migrations/20260907133129_astra_149_binding_compatibility.sql'
       - 'scripts/test-admin-pricing-*.mjs'
       - 'scripts/probe-admin-pricing-release.sql'
@@ -305,6 +316,8 @@ jobs:
           node --test scripts/test-capture-staging-commercial-deployment.mjs scripts/test-staging-commercial-fixtures.mjs scripts/test-staging-commercial-release-workflow.mjs
           node scripts/test-astra-payment-lifecycle.mjs
           node scripts/test-astra-149-binding-compatibility.mjs
+          node scripts/test-astra-late-payment-ui.mjs
+          node scripts/test-astra-late-149-binding-reconciliation.mjs
           node scripts/test-astra-payment-cohort-repair.mjs
           node scripts/test-astra-payment-presentation.mjs
           node scripts/test-astra-staging-diagnostics.mjs

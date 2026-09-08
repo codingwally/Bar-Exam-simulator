@@ -51,6 +51,7 @@
     selectedPricingPlan: null,
     selectedPaymentMethod: null,
     selectedPaymentProof: null,
+    latePaymentReviewDraft: null,
     paymentQrReady: false,
     pricingRefreshTimer: null,
   };
@@ -2173,6 +2174,7 @@
     state.nativeViewScrollPosition = null;
     state.nativeViewClosing = false;
     state.selectedPaymentProof = null;
+    state.latePaymentReviewDraft = null;
     state.paymentQrReady = false;
     state.nativeViewSequence += 1;
     const nativeOverlay = document.getElementById('dd2-native-view');
@@ -2537,10 +2539,20 @@
       && String(plan?.entitlementMode || '').trim().toLowerCase() === 'rolling_days';
   }
 
+  function captureHistoricalPaymentProof() {
+    const proof = state.selectedPaymentProof, plan = state.selectedPricingPlan, method = state.selectedPaymentMethod;
+    if (!state.user?.id || !pricingCheckoutSafety?.reconcileProof?.(proof, plan?.versionId, method?.versionId)?.matched) return null;
+    // Still-cacheable helper versions have reconcileProof but no retain method.
+    return pricingCheckoutSafety.retainHistoricalProof?.(proof, plan, method, state.user.id)
+      || Object.freeze({ userId: state.user.id, proof,
+        plan: Object.freeze({ ...plan }), method: Object.freeze({ ...method }) });
+  }
+
   function renderCommercialPlanCards(payload, access = null) {
     const host = document.getElementById('dd2-pricing-page');
     if (!host) return;
     const legacyPaymentHost = document.getElementById('dd2-payment-host');
+    const previousProof = captureHistoricalPaymentProof();
     const hadLegacyPaymentForm = Boolean(
       legacyPaymentHost?.querySelector('#dd2-payment-form'),
     );
@@ -2565,12 +2577,25 @@
     }
     const pricing = normalizedCommercialPricing(payload);
     const safePlans = normalizedCommercialPlans(pricing);
+    if (previousProof) {
+      const refreshed = safePlans.find((plan) => plan.versionId === previousProof.plan.versionId);
+      const methods = refreshed ? (pricing.config?.paymentMethods || []).filter((method) => paymentMethodSupportsPlan(method, refreshed)) : [];
+      if (!refreshed || refreshed.checkoutOpen !== true || refreshed.checkoutEnabled === false
+          || !methods.some((method) => method.versionId === previousProof.method.versionId)) {
+        state.latePaymentReviewDraft = previousProof;
+      }
+    }
     if (!safePlans.length) {
       state.selectedPricingPlan = null;
       state.selectedPaymentMethod = null;
       state.selectedPaymentProof = null;
       state.paymentQrReady = false;
       if (hadLegacyPaymentForm) legacyPaymentHost?.replaceChildren();
+      if (state.latePaymentReviewDraft) {
+        host.innerHTML = '<p>There is no current checkout offer. Your earlier payment proof can still be submitted for review.</p>';
+        renderLatePaymentReview();
+        return;
+      }
       throw new Error('No published plan is currently visible.');
     }
     const subjectReviewAction = state.nativeViewMode === 'action'
@@ -2635,7 +2660,7 @@
         state.selectedPaymentProof = null;
         state.paymentQrReady = false;
         if (legacyPaymentHost && !regularPlan) {
-          legacyPaymentHost.innerHTML = '<div class="dd2-status is-error" role="alert">The payment offer changed while this page was open. Your proof was not submitted. Choose the current plan above and select your proof again.</div>';
+          legacyPaymentHost.innerHTML = '<div class="dd2-status is-error" role="alert">The payment offer changed while this page was open. Your proof was not submitted. If you already paid using the earlier offer, submit the retained proof for review below.</div>';
         }
       }
     }
@@ -2654,6 +2679,29 @@
         ?.getAttribute('data-payment-method-version-id') || '';
       renderPaymentForm(regularPlan, renderedMethodId, { embedded: true });
     }
+    renderLatePaymentReview();
+  }
+
+  function renderLatePaymentReview() {
+    document.getElementById('dd2-late-payment-review')?.remove();
+    const draft = state.latePaymentReviewDraft;
+    if (!draft || draft.userId !== state.user?.id) {
+      state.latePaymentReviewDraft = null;
+      return;
+    }
+    const host = document.getElementById('dd2-pricing-page');
+    if (!host) return;
+    const panel = document.createElement('section');
+    panel.id = 'dd2-late-payment-review';
+    panel.className = 'dd2-payment-panel';
+    panel.innerHTML = `<h3>Already paid using the earlier offer?</h3>
+      <p>Your selected proof is retained for ${escapeHtml(draft.plan.name || 'the earlier plan')} · ${escapeHtml(formatPhp(draft.plan.priceCentavos))}. It has not been submitted under the current price.</p>
+      <p>Submit it for review of the original payment. This review does not grant provisional or paid access. Keep your original file until receipt is confirmed.</p>
+      <p>${escapeHtml(draft.proof.file.name || 'Selected proof')}</p>
+      <div id="dd2-late-proof-status" class="dd2-status" role="status" aria-live="polite"></div>
+      <button id="dd2-late-proof-submit" type="button" class="dd2-button dd2-button-primary">Submit earlier payment proof for review</button>`;
+    host.append(panel);
+    panel.querySelector('button')?.addEventListener('click', (event) => submitCommercialPayment(event, draft));
   }
 
   function renderPaymentForm(selectedPlan, preferredMethodId = '', options = {}) {
@@ -2725,7 +2773,7 @@
               <img src="/assets/icons/navigation/shield-check.svg" width="34" height="34" alt="" aria-hidden="true">
               <span>Your proof is private and submitted securely.</span>
             </div>
-            <p class="dd2-proof-term">The payment date shown on your proof determines the 30-day term.</p>
+            <p class="dd2-proof-term">${escapeHtml(termCopy)}</p>
             <div class="dd2-status" id="dd2-payment-status" role="status" aria-live="polite"></div>
             <div class="dd2-upload-progress" id="dd2-upload-progress" role="progressbar" aria-label="Payment proof upload progress" hidden><span></span></div>
             <button class="dd2-button dd2-button-primary" id="dd2-payment-submit" type="submit" disabled>Submit proof securely</button>
@@ -2940,20 +2988,22 @@
     previewCommercialPaymentProof({ currentTarget: { files: [file] } });
   }
 
-  async function submitCommercialPayment(event) {
+  async function submitCommercialPayment(event, historicalReview = null) {
     event.preventDefault();
+    if (historicalReview && (historicalReview !== state.latePaymentReviewDraft
+        || historicalReview.userId !== state.user?.id)) return;
     const viewSequence = state.nativeViewSequence;
     const subjectReviewAction = state.nativeViewMode === 'action'
       && state.nativeViewContext?.reason === 'subject_reveal_review';
     const unlimitedFeatureAction = unlimitedFeatureActionContext();
-    const submit = document.getElementById('dd2-payment-submit');
-    const plan = state.selectedPricingPlan;
-    const paymentMethod = state.selectedPaymentMethod;
-    if (!plan?.versionId || !paymentMethod?.versionId || plan.checkoutOpen !== true) {
+    const submit = document.getElementById(historicalReview ? 'dd2-late-proof-submit' : 'dd2-payment-submit');
+    const plan = historicalReview?.plan || state.selectedPricingPlan;
+    const paymentMethod = historicalReview?.method || state.selectedPaymentMethod;
+    if (!plan?.versionId || !paymentMethod?.versionId || (!historicalReview && plan.checkoutOpen !== true)) {
       setStatus('dd2-payment-status', 'This offer is no longer current. Reload Plans & Pricing before submitting.', 'error');
       return;
     }
-    if (state.paymentQrReady !== true) {
+    if (!historicalReview && state.paymentQrReady !== true) {
       setStatus('dd2-payment-status', 'The payment QR is still loading. Wait a moment, then try again.', 'error');
       return;
     }
@@ -2966,7 +3016,7 @@
       });
       return;
     }
-    const proof = document.getElementById('dd2-payment-proof')?.files?.[0]
+    const proof = historicalReview?.proof?.file || document.getElementById('dd2-payment-proof')?.files?.[0]
       || state.selectedPaymentProof?.file;
     const proofValidation = validCommercialProof(proof);
     if (proofValidation) {
@@ -2976,6 +3026,7 @@
     const form = new FormData();
     form.set('planVersionId', plan.versionId);
     form.set('paymentChannelVersionId', paymentMethod.versionId);
+    form.set('paymentReviewContract', 'late-offer-review-v1');
     form.set('planCode', plan.planCode);
     form.set('paymentMethod', paymentMethod.channelCode);
     form.set('proof', proof);
@@ -2994,22 +3045,23 @@
       const unlimitedFeatureReady = Boolean(unlimitedFeatureAction)
         && unlimitedFeatureAccessActive(access);
       state.selectedPaymentProof = null;
+      state.latePaymentReviewDraft = null;
       state.paymentQrReady = false;
       if (state.nativeViewSequence !== viewSequence || state.nativeView !== 'pricing') {
         global.toast?.(`${plan.name} proof received securely.`, 'ok');
         return;
       }
-      const host = document.getElementById(isRegularSubscriptionPlan(plan)
+      const host = document.getElementById(historicalReview ? 'dd2-late-payment-review' : isRegularSubscriptionPlan(plan)
         ? 'dd2-regular-proof-host' : 'dd2-payment-host');
       if (host) host.innerHTML = `
         <section class="dd2-payment-success" role="status" aria-live="polite">
           <div class="dd2-view-kicker">Proof received</div>
-          <h3>Verification is pending.</h3>
-          <p>${escapeHtml(subjectReviewAction
+          <h3>${['approved', 'rejected', 'cancelled', 'refunded'].includes(result.payment?.status) ? 'Existing payment decision retrieved.' : result.payment?.offerReviewRequired ? 'Earlier payment needs review.' : 'Verification is pending.'}</h3>
+          <p>${escapeHtml(result.payment?.offerReviewRequired || ['approved', 'rejected', 'cancelled', 'refunded'].includes(result.payment?.status) ? result.message : subjectReviewAction
     ? `Your proof was received securely. Protected review material remains locked until ${plan.name} is approved.`
     : result.message || 'Your proof was stored securely. Provisional access is active while the payment is reviewed.')}</p>
-          ${subjectReviewAction ? '<p>Provisional access lets you continue practicing while payment is reviewed; Reveal Answer unlocks only after payment is verified.</p>' : ''}
-          ${access?.entitlementEndsAt && !subjectReviewAction ? `<p><strong>Provisional access through:</strong> ${escapeHtml(manilaDate(access.entitlementEndsAt, { includeTime: true }))} Philippine time</p>` : ''}
+          ${subjectReviewAction && result.payment?.provisionalAccessExpiresAt ? '<p>Provisional access lets you continue practicing while payment is reviewed; Reveal Answer unlocks only after payment is verified.</p>' : ''}
+          ${result.payment?.provisionalAccessExpiresAt && !subjectReviewAction ? `<p><strong>Provisional access through:</strong> ${escapeHtml(manilaDate(result.payment.provisionalAccessExpiresAt, { includeTime: true }))} Philippine time</p>` : ''}
           <p>You can review the verification state in your Profile.</p>
           <button class="dd2-button dd2-button-primary" id="dd2-payment-continue" type="button">${subjectReviewAction
     ? 'Return to my answer'
@@ -3037,11 +3089,11 @@
         .includes(String(error?.code || ''))) {
         const paymentHost = document.getElementById(isRegularSubscriptionPlan(plan)
           ? 'dd2-regular-proof-host' : 'dd2-payment-host');
-        if (paymentHost) paymentHost.innerHTML = '<div class="dd2-status is-error" role="alert">Pricing changed before submission. Nothing was charged or accepted. The current published plan is shown above.</div>';
+        if (paymentHost) paymentHost.innerHTML = '<div class="dd2-status is-error" role="alert">The selected offer could not be verified. No proof was accepted. Review the current offer and retain any earlier payment evidence.</div>';
         await loadCommercialPricing(viewSequence);
         return;
       }
-      setStatus('dd2-payment-status', error.message || 'The proof could not be submitted. No access change was made.', 'error');
+      setStatus(historicalReview ? 'dd2-late-proof-status' : 'dd2-payment-status', error.message || 'The proof could not be submitted. No access change was made.', 'error');
       submit.disabled = false;
       submit.textContent = 'Submit proof securely';
       if (progress) progress.hidden = true;
@@ -3179,6 +3231,7 @@
         <article class="dd2-record">
           <strong>${escapeHtml(payment.planName || (payment.planCode === 'early_access_beta' ? 'Legacy Early Access' : 'Paid access'))} · ${escapeHtml(formatPhp(Number(payment.amountCentavos) || Math.round(Number(payment.amountPhp || 0) * 100) || (payment.planCode === 'early_access_beta' ? 14900 : 0), { alwaysDecimals: true }))}</strong>
           <span class="dd2-record-status">${escapeHtml(String(payment.status || 'pending').replaceAll('_', ' '))}</span>
+          ${payment.offerReviewRequired ? '<p>Earlier-offer proof saved for review. This submission grants no provisional or paid access.</p>' : ''}
           <small>Submitted ${escapeHtml(manilaDate(payment.submittedAt, { includeTime: true }))} · ${escapeHtml(payment.method || '')}</small>
           ${payment.reviewReason ? `<p>${escapeHtml(payment.reviewReason)}</p>` : ''}
           ${payment.status === 'approved' && !refundedPaymentIds.has(payment.id)

@@ -274,6 +274,11 @@ export function paymentEmailText({ payment, fields = {}, user, proof, proofHash 
     'VERIFICATION RECORD',
     `Payment request ID: ${cleanSingleLine(payment?.id, 80) || 'Not available'}`,
     `Current status: ${cleanSingleLine(payment?.status, 40) || 'pending'}`,
+    ...(payment?.offerReviewRequired ? [
+      'Earlier-offer proof is held for review. This submission grants no provisional or paid access.',
+      `The verified payment must precede: ${philippineDateTime(payment.offerValidUntil)}.`,
+      'Approval requires an explicit verified-offer disposition and the actual payment time shown on the proof. If uncertain, leave Needs information.',
+    ] : []),
     `Provisional access expires: ${payment?.provisionalAccessExpiresAt
       ? philippineDateTime(payment.provisionalAccessExpiresAt)
       : 'No provisional period returned'}`,

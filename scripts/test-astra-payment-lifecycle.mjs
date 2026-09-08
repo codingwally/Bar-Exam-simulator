@@ -17,6 +17,7 @@ const originalAccess = read('20260730_005_phase4_access_subscriptions.sql');
 const activation = read('20260907120000_astra_payment_activation_terms.sql');
 const evidence = read('20260907120100_astra_payment_proof_evidence.sql');
 const invalidation = read('20260907120200_astra_payment_invalidation.sql');
+const lateProof = read('20260907130002_astra_late_payment_review.sql');
 const functionSql = (source, name) => {
   const result = source.match(new RegExp(`create or replace function public\\.${name}\\([\\s\\S]+?\\n\\$\\$;`));
   assert.ok(result, `Function ${name} exists in the baseline`);
@@ -28,7 +29,7 @@ const tableSql = (source, name) => {
   return result[0];
 };
 // Only the clock dependency is injected, keeping cutover tests deterministic.
-const withClock = (sql) => sql.replace(/\b(?:pg_catalog\.)?clock_timestamp\(\)/g, 'public.astra_test_now()');
+const withClock = (sql) => sql.replace(/\b(?:pg_catalog\.)?(?:clock_timestamp|statement_timestamp)\(\)/g, 'public.astra_test_now()');
 const exec = (sql) => db.exec(withClock(sql));
 const query = async (sql, params = []) => (await db.query(sql, params)).rows;
 const scalar = async (sql, params = []) => Object.values((await query(sql, params))[0])[0];
@@ -51,10 +52,11 @@ async function user() {
 const hash = (value = randomUUID()) => createHash('sha256').update(value).digest('hex');
 let newPlan;
 let newChannel;
+let paymentRpc='phase4_create_payment_request_v3';
 async function submit(id, options = {}) {
   const proofHash = options.hash || hash();
   const proofPath = `${id}/${randomUUID()}.png`;
-  const result = await scalar('select public.phase4_create_payment_request_v3($1,$2,$3,$4,$5,$6,$7,$8)', [
+  const result = await scalar(`select public.${options.rpc || paymentRpc}($1,$2,$3,$4,$5,$6,$7,$8)`, [
     id, options.plan || newPlan, options.channel || newChannel,
     'payment-proofs', proofPath, 'image/png', 1200, proofHash,
   ]);
@@ -76,9 +78,11 @@ try {
   await db.exec("set timezone='UTC'");
   await db.exec(`
     create role anon; create role authenticated; create role service_role;
-    create schema auth; create schema extensions;
+    create schema auth; create schema extensions; create schema private;
     create table auth.users(id uuid primary key,email text,is_anonymous boolean default false);
     create table public.profiles(id uuid primary key,display_name text);
+    create table public.free_beta_access(user_id uuid,enabled boolean,access_program text,expires_at timestamptz);
+    create function public.dd2026_is_admin(uuid) returns boolean language sql as 'select false';
     create table public.astra_test_clock(instant timestamptz not null);
     insert into public.astra_test_clock values('2026-09-07T06:00:00Z');
     create function public.astra_test_now() returns timestamptz language sql volatile as
@@ -128,6 +132,7 @@ try {
   for (const name of ['phase4_clone_pricing_revision','phase4_guard_pricing_revision_mutation','phase4_guard_pricing_child_mutation','phase4_enforce_live_subscription_plan','phase4_pricing_revision_snapshot','phase4_create_refund_request']) await exec(functionSql(pricing, name));
   await exec(functionSql(proof,'phase4_guard_payment_evidence_provenance'));
   await exec(functionSql(proof,'phase4_create_payment_request_v3'));
+  await exec(functionSql(pricing,'phase4_create_payment_request_v2'));
   await db.query('insert into auth.users(id,email) values($1,$2)', [actor,'founder@example.invalid']);
   await db.query(`insert into public.pricing_revisions(id,state,effective_at,published_at,page_config)
     values($1,'published','2026-08-31T00:00:00Z','2026-08-31T00:00:00Z',$2),
@@ -156,7 +161,10 @@ try {
     assert.equal(await scalar("select count(*)::int from information_schema.columns where table_name='payment_requests' and column_name='approved_activation_at'"),0);
     await db.query("update public.pricing_revisions set state='cancelled',effective_at=public.astra_test_now(),cancelled_at=public.astra_test_now() where id=$1",[draft]);
   });
-  await exec(activation); await exec(evidence); await exec(invalidation);
+  await exec(activation); await exec(evidence); await exec(invalidation); await exec(lateProof);
+  paymentRpc='phase4_create_payment_request_v4';
+  await exec(functionSql(read('20260902093000_fix_unlimited_forecast_entitlement_readonly.sql'),'dd2026_bar_forecast_access_allowed'));
+  await exec(read('20260907130000_astra_simulator_access.sql').match(/create or replace function private\.astra_simulator_entitlement[\s\S]+?\$function\$;/)[0]);
   newPlan=await scalar('select id from public.pricing_plan_versions where revision_id=$1',[newRevision]);
   newChannel=await scalar('select id from public.pricing_payment_channel_versions where revision_id=$1',[newRevision]);
   await check('Publication preserves authored copy, QR configuration, and future schedule',async()=>{
@@ -335,15 +343,67 @@ try {
   await check('Cutover preserves accepted149 replay/approval and applies199 only at the boundary',async()=>{
     await setTime('2026-09-13T15:59:59Z');
     const id=await user(),accepted=await submit(id);
+    const legacyCurrent=await submit(await user(),{rpc:'phase4_create_payment_request_v3'});
+    assert.equal(legacyCurrent.status,'pending'); assert.ok(legacyCurrent.provisionalAccessExpiresAt);
     await assert.rejects(submit(await user(),{plan:futurePlan,channel:futureChannel}),/not open for checkout/);
     await setTime('2026-09-13T16:00:00Z');
     const replay=await submit(id,{hash:accepted.proofHash}); assert.equal(replay.id,accepted.id); assert.equal(replay.replayed,true);
-    await assert.rejects(submit(await user()),/not open for checkout/);
+    const lateOwner=await user(),late=await submit(lateOwner);
+    assert.equal(late.status,'needs_information'); assert.equal(late.offerReviewRequired,true);
+    assert.equal(late.amountCentavos,14900); assert.equal(late.provisionalAccessExpiresAt,null);
+    assert.deepEqual(await scalar('select jsonb_build_array(payment_date,transaction_reference,paid_at,provisional_access_started_at,provisional_access_expires_at,subscription_id) from public.payment_requests where id=$1',[late.id]),[null,null,null,null,null,null]);
+    assert.equal(await scalar("select private.astra_simulator_entitlement($1)->>'allowed'",[lateOwner]),'false');
+    assert.equal(await scalar('select public.dd2026_bar_forecast_access_allowed($1)',[lateOwner]),false);
+    const heldBilling=await scalar('select public.phase4_student_billing_snapshot($1)',[lateOwner]);
+    assert.equal(heldBilling.payments[0].offerReviewRequired,true);
+    await assert.rejects(review(late.id,'approved',{actor:lateOwner}),/Founder access required/);
+    assert.equal((await submit(lateOwner,{hash:late.proofHash})).id,late.id);
+    await assert.rejects(submit(lateOwner,{hash:late.proofHash,rpc:'phase4_create_payment_request_v3'}),/PAYMENT_PROOF_SAVED_FOR_REVIEW/);
+    await assert.rejects(submit(await user(),{rpc:'phase4_create_payment_request_v3'}),/not open for checkout/);
+    assert.equal((await submit(id,{hash:accepted.proofHash,rpc:'phase4_create_payment_request_v3'})).id,accepted.id);
+    await assert.rejects(review(late.id,'approved'),/explicit verified disposition/);
+    await assert.rejects(review(late.id,'approved',{payload:{offerReviewDisposition:'honor_verified_offer'}}),/requires verifiedPaidAt/);
+    for(const when of ['2026-09-13T16:00:00Z','2026-09-13T16:00:01Z','2026-08-01T00:00:00Z']) {
+      await assert.rejects(review(late.id,'approved',{payload:{offerReviewDisposition:'honor_verified_offer',verifiedPaidAt:when}}),/historical offer window|cannot be in the future|cannot precede/);
+    }
+    await review(late.id,'needs_information');
+    assert.equal(await scalar('select provisional_access_started_at from public.payment_requests where id=$1',[late.id]),null);
+    const lateKey=randomUUID(),latePayload={offerReviewDisposition:'honor_verified_offer',verifiedPaidAt:'2026-09-13T15:59:59Z'};
+    const approvedLate=await review(late.id,'approved',{key:lateKey,payload:latePayload});
+    assert.equal(approvedLate.payment.trusted_amount_centavos,14900);
+    assert.equal(approvedLate.payment.purchasedStartsAt,'2026-09-13T16:00:00+00:00');
+    assert.equal(approvedLate.payment.purchasedEndsAt,'2026-10-13T16:00:00+00:00');
+    assert.equal((await review(late.id,'approved',{key:lateKey,payload:latePayload})).replayed,true);
+    await assert.rejects(review(late.id,'approved',{key:lateKey}),/original payment decision/);
+    await assert.rejects(review(late.id,'approved',{key:lateKey,payload:{...latePayload,verifiedPaidAt:'2026-09-13T15:59:58Z'}}),/original payment decision/);
+    await assert.rejects(submit(lateOwner,{hash:late.proofHash,plan:futurePlan,channel:futureChannel}),/already been submitted/);
     const laterApproval=await review(accepted.id,'approved'); assert.equal(laterApproval.payment.trusted_amount_centavos,14900);
     const future=await submit(await user(),{plan:futurePlan,channel:futureChannel});
     const result=await review(future.id,'approved');
     assert.equal(result.payment.trusted_amount_centavos,19900); assert.equal(result.payment.purchasedStartsAt,'2026-09-13T16:00:00+00:00');
     assert.equal(result.payment.purchasedEndsAt,'2026-10-13T16:00:00+00:00');
+  });
+  await check('Historical windows reject never-open revisions and proof reuse cannot escape a hold through another channel or owner',async()=>{
+    const owner=await user(),held=await submit(owner);
+    await review(held.id,'rejected');
+    const revision=randomUUID(),plan=randomUUID(),channel=randomUUID();
+    await db.query('insert into public.pricing_revisions(id) values($1)',[revision]);
+    await db.query("insert into public.pricing_plan_versions select (jsonb_populate_record(null::public.pricing_plan_versions,to_jsonb(p)||jsonb_build_object('id',$1::text,'revision_id',$2::text))).* from public.pricing_plan_versions p where id=$3",[plan,revision,futurePlan]);
+    await db.query("insert into public.pricing_payment_channel_versions select (jsonb_populate_record(null::public.pricing_payment_channel_versions,to_jsonb(c)||jsonb_build_object('id',$1::text,'revision_id',$2::text,'plan_version_id',$3::text,'channel_code','gcash'))).* from public.pricing_payment_channel_versions c where id=$4",[channel,revision,plan,futureChannel]);
+    assert.equal(await scalar('select public.phase4_payment_offer_window($1,$2,public.astra_test_now())',[plan,channel]),null);
+    await assert.rejects(submit(await user(),{plan,channel}),/not open for checkout/);
+    await db.query("update public.pricing_revisions set state='published',effective_at=public.astra_test_now(),published_at=public.astra_test_now() where id=$1",[revision]);
+    assert.equal((await scalar('select public.phase4_payment_offer_window($1,$2,public.astra_test_now())',[plan,channel])).late,false);
+    // The prior revision at the exact same effective instant lost ordering before it opened.
+    assert.equal(await scalar('select public.phase4_payment_offer_window($1,$2,public.astra_test_now())',[futurePlan,futureChannel]),null);
+    await assert.rejects(submit(owner,{hash:held.proofHash,plan,channel}),/already been submitted/);
+    await assert.rejects(submit(await user(),{hash:held.proofHash,plan,channel}),/already been submitted/);
+    await assert.rejects(submit(await user(),{hash:held.proofHash,plan,channel,rpc:'phase4_create_payment_request_v3'}),/PAYMENT_PROOF_SAVED_FOR_REVIEW/);
+    const legacyOwner=await user();
+    await assert.rejects(scalar('select public.phase4_create_payment_request_v2($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
+      [legacyOwner,plan,channel,'2026-09-14','actual-fixture-reference','payment-proofs',`${legacyOwner}/${randomUUID()}.png`,'image/png',1200,held.proofHash]),/PAYMENT_PROOF_SAVED_FOR_REVIEW/);
+    assert.equal((await submit(await user(),{plan,channel})).status,'pending');
+    await assert.rejects(submit(await user(),{plan:newPlan,channel}),/not open for checkout/);
   });
   await check('Billing, verifier, admin, and receipt projections agree on stored purchased term',async()=>{
     const billing=await scalar('select public.phase4_student_billing_snapshot($1)',[pendingOwner]);
@@ -358,11 +418,11 @@ try {
   await check('Migration reruns preserve accepted payments, subscription terms, and future pricing',async()=>{
     const before=await scalar('select jsonb_agg(to_jsonb(p) order by id) from public.payment_requests p');
     const subscriptions=await scalar('select jsonb_agg(to_jsonb(s) order by id) from public.subscriptions s');
-    await exec(activation); await exec(evidence); await exec(invalidation);
+    await exec(activation); await exec(evidence); await exec(invalidation); await exec(lateProof); await exec(lateProof);
     assert.deepEqual(await scalar('select jsonb_agg(to_jsonb(p) order by id) from public.payment_requests p'),before);
     assert.deepEqual(await scalar('select jsonb_agg(to_jsonb(s) order by id) from public.subscriptions s'),subscriptions);
     assert.deepEqual(await scalar('select to_jsonb(r) from public.pricing_revisions r where id=$1',[futureRevision]),scheduledBefore);
-    for(const signature of ['phase4_admin_review_payment(uuid,uuid,jsonb,text,text)','phase4_create_payment_request_v3(uuid,uuid,uuid,text,text,text,bigint,text)','phase4_admin_invalidate_payment(uuid,uuid,text,text)']) {
+    for(const signature of ['phase4_admin_review_payment(uuid,uuid,jsonb,text,text)','phase4_create_payment_request_v3(uuid,uuid,uuid,text,text,text,bigint,text)','phase4_create_payment_request_v4(uuid,uuid,uuid,text,text,text,bigint,text)','phase4_admin_invalidate_payment(uuid,uuid,text,text)','phase4_payment_offer_window(uuid,uuid,timestamptz)','phase4_payment_offer_review(payment_requests)']) {
       assert.equal(await scalar('select has_function_privilege(\'anon\',$1,\'execute\')',[signature]),false);
       assert.equal(await scalar('select has_function_privilege(\'authenticated\',$1,\'execute\')',[signature]),false);
     }

@@ -51,7 +51,7 @@ function adminHarness() {
     state,$:node,subscriptionActions:null,
     history:{state:null,pushState(){}},location:{href:'https://example.invalid/admin/payments'},
     actionField:(label,id,value='')=>`<label>${label}<input id="${id}" value="${value}"></label>`,
-    escapeHtml:String,number:String,localDateTimeValue:()=>'',isoFromLocalInput:(value)=>value ? new Date(value).toISOString() : null,
+    escapeHtml:String,number:String,dateTime:String,localDateTimeValue:()=>'',isoFromLocalInput:(value)=>value ? new Date(value).toISOString() : null,
     uuidKey:()=>`astra_payment_review_key_${++keys}`,toast:(message)=>messages.push(message),
     api:async(path,body)=>{
       calls.push({path,body:JSON.parse(JSON.stringify(body))});
@@ -130,6 +130,28 @@ test('Current approval accepts omitted verified-paid evidence and does not subst
   assert.match(h.node('#action-warning').textContent,/starts the 30-day purchased term now/);
 });
 
+test('Earlier-offer approval requires verified disposition and payment time in both admin entry paths',async()=>{
+  for(const viaProof of [false,true]) {
+    const h=adminHarness();
+    const payload={status:'approved',entitlementMode:'rolling_days',activationBased:true,
+      requiresVerifiedPaidAt:true,offerReviewRequired:true,planName:'Earlier offer',
+      offerValidFrom:'2020-01-01T00:00:00Z',offerValidUntil:'2020-02-01T00:00:00Z',
+      ...(viaProof ? {proofLoaded:true,proofReviewReason:'Private proof reviewed'} : {})};
+    h.context.openPayment(viaProof ? 'view_payment_proof' : 'payment_review',paymentId,payload);
+    h.node('#action-reason').value='Original amount and channel verified';
+    if(viaProof) await h.confirm();
+    h.node('#action-confirm-risk').checked=true;
+    await h.confirm(); assert.equal(h.calls.length,0);
+    h.node('#action-offer-disposition').checked=true;
+    await h.confirm(); assert.equal(h.calls.length,0);
+    h.node('#action-paid-at').value='2020-01-15T04:00:00Z';
+    await h.confirm(); assert.equal(h.calls.length,1);
+    assert.equal(h.calls[0].body.payload.offerReviewDisposition,'honor_verified_offer');
+    assert.equal(h.calls[0].body.payload.verifiedPaidAt,'2020-01-15T04:00:00.000Z');
+    assert.match(h.node('#action-warning').textContent,/Uncertain evidence must remain Needs information/);
+  }
+});
+
 test('Proof invalidation has a separate destructive confirmation and preserves its retry key and reason',async()=>{
   const normalized=normalizePhase4AdminAction({...request('approved',{subscriptionId:paymentId,expiresAt:'2000-01-01'}),action:'payment_invalidate'});
   assert.deepEqual(normalized.payload,{});
@@ -173,6 +195,10 @@ test('Verifier email explains activation without demanding fabricated payment ev
   assert.match(result,/30 days from access start after approval/);
   assert.match(result,/only if shown on the proof; never infer/);
   assert.doesNotMatch(result,/Enter that timestamp/);
+  const held=paymentEmailText({payment:{id:paymentId,status:'needs_information',offerReviewRequired:true,
+    offerValidUntil:'2026-09-13T16:00:00Z'},proof:{name:'proof.png',size:10},proofHash:'fixture'});
+  assert.match(held,/held for review/); assert.match(held,/no provisional or paid access/);
+  assert.match(held,/explicit verified-offer disposition/); assert.match(held,/leave Needs information/);
 });
 
 test('Manual Admin plan preview uses published names, amounts, and durations without fixed-date assumptions',()=>{

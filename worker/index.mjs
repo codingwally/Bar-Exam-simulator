@@ -3847,18 +3847,26 @@ async function commerceRpc(env, functionName, body) {
   if (response.ok) return result;
   const databaseMessage = String(result?.message || '');
   const authoritativeRejection = isAuthoritativeRpcRejectionStatus(response.status);
+  const missingV4 = /^Could not find the function public\.phase4_create_payment_request_v4\(([^()]*)\) in the schema cache$/.exec(databaseMessage);
+  if (functionName === 'phase4_create_payment_request_v4' && response.status === 404
+      && result?.code === 'PGRST202' && missingV4
+      && missingV4[1].split(',').map((key) => key.trim()).sort().join(',') === Object.keys(body).sort().join(',')) {
+    // Definitive missing-function response only. Unknown outcomes must never
+    // cross RPC versions and risk treating a committed hold as a new request.
+    return commerceRpc(env, 'phase4_create_payment_request_v3', body);
+  }
   console.error('Commerce storage request failed', {
     operation: functionName,
     status: response.status,
   });
   if (
     authoritativeRejection
-    && ['phase4_create_payment_request_v2', 'phase4_create_payment_request_v3'].includes(functionName)
+    && ['phase4_create_payment_request_v2', 'phase4_create_payment_request_v3', 'phase4_create_payment_request_v4'].includes(functionName)
     && /selected pricing plan is not open|payment method is not compatible/i.test(databaseMessage)
   ) {
     throw markRpcOutcome(new PaymentValidationError(
       'PRICING_OFFER_STALE',
-      'Pricing changed before submission. Nothing was charged or accepted. Reload Plans & Pricing.',
+      'This selection cannot be verified as an available payment offer. No proof was accepted. Reload Plans & Pricing.',
       409,
     ), response.status);
   }
@@ -3883,6 +3891,10 @@ async function commerceRpc(env, functionName, body) {
       'The previous payment details no longer match the published offer. Nothing was accepted. Reload Plans & Pricing.',
       409,
     ), response.status);
+  }
+  if (authoritativeRejection && databaseMessage.startsWith('PAYMENT_PROOF_SAVED_FOR_REVIEW:')) {
+    throw markRpcOutcome(new PaymentValidationError('PAYMENT_PROOF_SAVED_FOR_REVIEW',
+      'This proof is already safely saved for review. Check your Profile. No new provisional or paid access was granted.',409),response.status);
   }
   if (authoritativeRejection
       && /already been submitted|already exists|request key already used/i.test(databaseMessage)) {
@@ -9776,7 +9788,7 @@ async function handlePaymentSubmit(request, env, origin, allowedOrigin) {
   let result;
   try {
     result = hasVersionedSelection
-      ? await commerceRpc(env, 'phase4_create_payment_request_v3', {
+      ? await commerceRpc(env, 'phase4_create_payment_request_v4', {
         p_user_id: user.id,
         p_plan_version_id: fields.planVersionId,
         p_payment_channel_version_id: fields.paymentChannelVersionId,
@@ -9817,10 +9829,34 @@ async function handlePaymentSubmit(request, env, origin, allowedOrigin) {
     await deletePrivateProof(env, objectPath);
   }
   const payment = sanitizeTrustedPayment(result);
+  // Older cached Pages promise provisional access on every successful response.
+  // The proof is already durable here: give those clients a truthful visible
+  // review outcome without entering their unconditional pending presentation,
+  // including retries after the earlier-payment proof has a completed decision.
+  if ((payment.lateOfferProof || payment.offerReviewRequired)
+      && form.get('paymentReviewContract') !== 'late-offer-review-v1') {
+    const completedReviewMessages = {
+      approved: 'This proof was already approved. Your existing purchased term is unchanged. This retry grants no new access. Check the recorded decision in your Profile.',
+      rejected: 'This proof was already declined. This retry grants no new access. Check the recorded decision in your Profile.',
+      cancelled: 'This proof was already cancelled. This retry grants no new access. Check the recorded decision in your Profile.',
+      refunded: 'This proof was already refunded. This retry grants no new access. Check the recorded decision in your Profile.',
+    };
+    const completedReviewMessage = completedReviewMessages[payment.status];
+    return jsonResponse({ ok: false, payment, error: {
+      code: completedReviewMessage ? 'PAYMENT_PROOF_ALREADY_REVIEWED' : 'PAYMENT_PROOF_SAVED_FOR_REVIEW',
+      message: completedReviewMessage || 'Your earlier-payment proof is safely saved for review. This submission grants no provisional or paid access. Check the recorded request in your Profile, or reload this page.',
+    } }, 409, origin, allowedOrigin);
+  }
   return jsonResponse({
     ok: true,
     payment,
-    message: 'Payment proof submitted for secure verification under the published plan.',
+    message: ['rejected', 'cancelled', 'refunded'].includes(payment.status)
+      ? 'This proof already has a completed review. Check the recorded decision in your Profile. No new access was granted.'
+      : payment.status === 'approved'
+        ? 'This proof was already approved. Your existing purchased term is unchanged; see your Profile.'
+        : payment.offerReviewRequired
+      ? 'Your proof was saved for review of the earlier payment offer. This submission grants no provisional or paid access. Check the review state in your Profile.'
+      : 'Payment proof submitted for secure verification under the published plan.',
   }, 201, origin, allowedOrigin);
 }
 
@@ -9962,6 +9998,9 @@ async function handlePhase4AdminAction(request, env, origin, allowedOrigin, exec
         } else if (/request key|already in progress/i.test(message)) {
           code = 'PAYMENT_REVIEW_CONFLICT';
           safeMessage = 'This review was already submitted. Retry the original decision or refresh the queue before making another change.';
+        } else if (/historical offer|historical payment/i.test(message)) {
+          code = 'PAYMENT_OFFER_REVIEW_REQUIRED';
+          safeMessage = 'Keep this proof under review until the earlier offer and actual payment time can be verified. Approval requires the explicit historical-offer decision and a payment time within that offer. No access change was made.';
         } else if (/verifiedPaidAt|review reason/i.test(message)) {
           code = 'INVALID_PAYMENT_REVIEW'; status = 400;
           safeMessage = 'Check the review reason and any payment timestamp. Use only the time shown on the proof, never a future time or a time after proof submission.';

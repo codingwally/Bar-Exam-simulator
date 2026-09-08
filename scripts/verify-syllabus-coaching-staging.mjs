@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import { createExaminationFixtureLifecycle, EXAMINATION_FIXTURE_TARGET } from './staging-examination-fixtures.mjs';
-import { DEFAULT_MODEL, MODEL_FALLBACKS, RUBRIC_VERSION, modelAnswerSectionsForQuestion, resolveQuestionDemand } from '../worker/examiner-core.mjs';
+import { DEFAULT_MODEL, MODEL_FALLBACKS, RUBRIC_VERSION, modelAnswerSectionsForQuestion, resolveQuestionDemand, withSyllabusGradingPolicy } from '../worker/examiner-core.mjs';
 
 // Importing this file is inert. Only the explicit CLI flag enables hosted work.
 // The one-item synthetic answer proves transport/presentation, not legal accuracy.
@@ -73,7 +73,9 @@ export function validateSyllabusCoaching(verdict, { attemptId, questionId, promp
   const assessment = result.aiAssessment;
   assert.ok(assessment && typeof assessment.rationale === 'string' && assessment.rationale.trim(), 'Coaching is missing');
   for (const key of ['errors', 'improvements']) assert.ok(Array.isArray(assessment[key]), 'Coaching lists missing');
-  const context = { question: prompt, authority: 'curated-approved-examination-snapshot' };
+  // This harness starts an owned per_subject attempt through the real API; no
+  // returned question field or client-supplied track selects the expected policy.
+  const context = withSyllabusGradingPolicy({ question: prompt, authority: 'curated-approved-examination-snapshot' }, 'per_subject');
   const demand = resolveQuestionDemand(context);
   assert.equal(assessment.rubricBreakdown?.questionType, demand.questionType, 'Question type differs from exact prompt');
   assert.equal(assessment.rubricBreakdown?.applicationRequired, demand.applicationRequired, 'Application demand differs from exact prompt');

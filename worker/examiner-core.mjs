@@ -609,6 +609,40 @@ function acceptsQuestionDemandMetadata(context = {}) {
   return !context.authority || ['server_question_bank', 'curated-approved-examination-snapshot'].includes(context.authority);
 }
 
+export const SYLLABUS_GRADING_POLICY_VERSION = 'syllabus-results-20260909-v1';
+
+export function withSyllabusGradingPolicy(context, authorizedTrack) {
+  // The Worker passes the owner-bound authorization RPC result, never a request
+  // field or grading-question field. Other grading consumers keep their policy.
+  if (authorizedTrack !== 'per_subject' || context?.authority !== 'curated-approved-examination-snapshot') {
+    if (!context || (!Object.hasOwn(context, 'gradingTrack') && !Object.hasOwn(context, 'gradingPolicyVersion'))) return context;
+    const unscoped = { ...context };
+    delete unscoped.gradingTrack;
+    delete unscoped.gradingPolicyVersion;
+    return unscoped;
+  }
+  return { ...context, gradingTrack: 'per_subject', gradingPolicyVersion: SYLLABUS_GRADING_POLICY_VERSION };
+}
+
+function usesSyllabusGradingPolicy(context = {}) {
+  return context.authority === 'curated-approved-examination-snapshot'
+    && context.gradingTrack === 'per_subject'
+    && context.gradingPolicyVersion === SYLLABUS_GRADING_POLICY_VERSION;
+}
+
+function isFactFreeSyllabusDefinition(rawQuestion) {
+  const question = rawQuestion.replace(/\s+(?:explain|discuss)(?:\s+briefly)?[.!]?\s*$/i, '').trim();
+  const term = /^what\s+(?:is|are)\s+([^?!.\n]{2,120})\?$/i.exec(question)?.[1];
+  if (!term || /\d|['’]s\b/.test(term)) return false;
+  // Deliberately narrow: noun-phrase definitions, not a party's legal outcome,
+  // facts introduced after the noun, or a compound question disguised as one.
+  if (/\b(?:if|when|where|after|before|suppose|assume|given|following|these|those|this|here|whether|who|whose|which|because|despite|liable|entitled|valid|invalid|proper|allowed|agreed|arrested|charged|dismissed|entered|executed|filed|issued|leased|married|mortgaged|paid|refused|registered|resigned|sold|submitted|terminated|transferred|was|were|and|or)\b/i.test(term)) return false;
+  if (/\b(?:my|our|your|his|her|its|their|mine|ours|yours|hers|theirs|me|us|you|him|them)\b/i.test(term)
+    || /\b(?:liability|penalty|sentence|entitlement|remedies|responsibility)\s+(?:of|for|to)\b/i.test(term)) return false;
+  return /^[a-z][a-z\s-]*$/i.test(term)
+    && !/\b[A-Z][A-Za-z]*\b/.test(term.replace(/^(?:an?|the)\s+/i, '').replace(/^\S+\s*/, ''));
+}
+
 function isGeneralRuleQuestion(rawQuestion) {
   const question = rawQuestion.replace(/\s+(?:explain|discuss)(?:\s+(?:briefly|your answer|the rule))?[.!]?\s*$/i, '').trim();
   const genericActor = /^(?:can|may|must|should|does|do|is|are)\s+(?:an?|the|any|every|each)\s+(?:accused|person|party|candidate|applicant|employee|employer|lawyer|court|judge|prosecutor|plaintiff|defendant|petitioner|respondent)\b/i.test(question);
@@ -639,6 +673,7 @@ export function inferQuestionType(context = {}) {
   if (/^\s*(?:draft|prepare|write|formulate)\b/.test(question)) return 'practical';
   if (/^\s*(?:explain|discuss|state|describe|identify)\b/.test(question)) return 'explanation';
   if (isGeneralRuleQuestion(rawQuestion)) return 'explanation';
+  if (usesSyllabusGradingPolicy(context) && isFactFreeSyllabusDefinition(rawQuestion)) return 'definition';
   return 'problem';
 }
 
@@ -810,6 +845,60 @@ function hasAffirmativeWrongRuleFinding(finding) {
   });
 }
 
+function syllabusFindingClauses(finding) {
+  // A quoted proposition is not itself adopted criticism, but quoted noun labels
+  // ("Rule X", "material exception") remain available to an outside predicate.
+  const quoteContent = (match, content) => /\b(?:is|are|was|were|be|been|being|relies|rests|omits|omitted|fails|failed|creates|makes)\b/i.test(content)
+    ? ' '.repeat(match.length)
+    : ` ${content} `;
+  // Apostrophes in contractions and possessives are not quotation delimiters.
+  return String(finding || '').replace(/[’]/g, "'")
+    .replace(/["“`]([^"”`]*)["”`]/g, quoteContent)
+    .replace(/(^|[\s,(])['‘]([^'\n]*)'/g, (match, before, content) => before + quoteContent(match.slice(before.length), content))
+    // Citation abbreviations are not sentence boundaries ("Art. 4 is wrong").
+    .replace(/\b(?:Art|Arts|Sec|Secs|No|Nos|para|paras|v|vs)\.(?=\s)/gi, match => match.slice(0, -1) + '\u2024')
+    .replace(/\b(?:[A-Z]\.){2,}/g, match => match.replaceAll('.', '\u2024'))
+    .split(/[;\n]|[.!?](?:\s+|$)|\b(?:but|however|yet|nevertheless|whereas)\b|\band\s+(?=(?:(?:the|a|an|another|this|that|its|their)\s+)?(?:answer|response|student|second|third|other|governing|cited|citation|authority|rule|statute|legal\s+basis)\b)|\band(?:\s+then)?\s+(?=(?:relies|uses|cites|adopts|invokes|omits|fails|applies)\b)|,\s*and\s+/i);
+}
+
+function hasAffirmativeSyllabusFinding(finding, kind) {
+  const patterns = {
+    wrongRule: /\b(?:incorrect|wrong|irrelevant|unrelated|inapplicable)\s+(?:legal\s+basis|article|section|rule|statute|doctrine|authority)\b|\b(?:legal\s+basis|article|section|rule|statute|doctrine|authority)\b[\s\S]{0,80}?\b(?:incorrect|wrong|irrelevant|unrelated|inapplicable)\b/gi,
+    fabrication: /\b(?:false|fabricated|invented|non-?existent)\s+(?:case|citation|authority)\b|\b(?:case|citation|authority)\s+(?:is\s+)?(?:false|fabricated|invented|non-?existent)\b/gi,
+    centralGap: /\b(?:omit(?:ted|s)?|fail(?:ed|s)? to (?:state|mention|address|analy[sz]e|include|apply))[\s\S]{0,140}\b(?:majority|material (?:element|exception|qualification|requirement)|essential (?:element|exception|qualification|requirement)|controlling requirement|constitutional requirement|statutory requirement|procedural prerequisite|condition precedent|exception|qualification|voting threshold|outcome-determinative (?:element|exception|qualification|requirement|threshold|standard|prerequisite))\b/gi,
+  };
+  return syllabusFindingClauses(finding).some(clause => {
+    for (const candidate of clause.matchAll(patterns[kind])) {
+      const predicate = /\b(?:incorrect|wrong|irrelevant|unrelated|inapplicable|false|fabricated|invented|non-?existent|omit(?:ted|s)?|fail(?:ed|s)?)\b/i.exec(candidate[0]);
+      const before = clause.slice(0, candidate.index + predicate.index);
+      const after = clause.slice(candidate.index + candidate[0].length);
+      // Local grammatical negation; "not only wrong" remains affirmative.
+      if (/\b(?:not|no|neither|nor|never|cannot|isn't|wasn't|aren't|weren't|doesn't|didn't)\s+(?:(?:materially|legally|substantially|necessarily|clearly|actually|an?|the|any)\s+)*(?:(?:shown|found|proved|established|demonstrated|considered)\s+to\s+be\s+)?$/i.test(before)) continue;
+      if (/\bno\s+(?:(?:cited|governing|legal|controlling|material)\s+)*(?:case|citation|authority|basis|article|section|rule|statute|doctrine)\s+(?:is|was|are|were|has\s+been)\s*$/i.test(before)) continue;
+      if (/\b(?:not|never|doesn't|didn't|cannot)\s+(?:cite|use|rely\s+on|invoke|adopt|include|contain|state|employ|present|follow)\s+(?:(?:an?|any|the|confirmed)\s+)*$/i.test(before)) continue;
+      if (/\b(?:no\s+(?:evidence|indication|suggestion|finding)|not\s+(?:all|every))\b[^,;.!?]{0,100}$/i.test(before)) continue;
+      if (kind === 'centralGap' && /^(?:omit(?:ted|s)?|fail(?:ed|s)? to (?:state|mention|address|analy[sz]e|include|apply))\s+(?:no|neither|not\s+any)\b/i.test(candidate[0])) continue;
+      // A rejected/reported finding is not adopted criticism. Scope this to the
+      // candidate's clause so a separate real error is still independently read.
+      const rejected = /\b(?:reject(?:s|ed)?|refut(?:e|es|ed)|den(?:y|ies|ied)|avoid(?:s|ed)?|disagree(?:s|d)?\s+with)\b[^,;.!?]{0,100}$/i.exec(before);
+      if (rejected && !/\b(?:not|never|doesn't|didn't|cannot)\s+(?:correctly\s+)?$/i.test(before.slice(0, rejected.index))) continue;
+      const reporting = /\b(reported(?:ly)?|alleged(?:ly)?|supposedly|claimed|contended|argued|asserted|quoted|said)\b[^,;.!?]{0,120}$/i.exec(before);
+      if (reporting) {
+        const studentAdoption = /^(?:claimed|contended|argued|asserted|quoted|said)$/i.test(reporting[1])
+          && /\b(?:student|answer|response)\s+(?:(?:expressly|explicitly|incorrectly|wrongly|affirmatively)\s+)*$/i.test(before.slice(0, reporting.index));
+        if (!studentAdoption) continue;
+      }
+      if (/\b(?:another|earlier|prior|previous|former)\s+(?:reviewer|examiner|evaluator)\b[^,;.!?]{0,80}\b(?:found|called|described|identified|considered)\b[^,;.!?]{0,80}$/i.test(before)) continue;
+      if (/\b(?:false|untrue|mistaken|inaccurate|incorrect)\s+(?:that|to\s+(?:say|claim|assert|describe)|(?:claim|assertion|criticism|suggestion)\b)[^,;.!?]{0,120}$/i.test(before)) continue;
+      if (/^\s*(?:is|was|are|were|has been)\s+(?:expressly\s+|correctly\s+)?(?:false|untrue|mistaken|inaccurate|incorrect|rejected|refuted|denied|disputed)\b/i.test(after)) continue;
+      if (/^\s*(?:is|was|are|were|has been)\s+(?:not|never)\s+(?:used|cited|adopted|invoked|included|present|relied\s+(?:on|upon))\b/i.test(after)) continue;
+      if (kind === 'fabrication' && /\b(?:unverified|not verified|could not verify|unable to verify|verification unavailable)\b/i.test(clause)) continue;
+      return true;
+    }
+    return false;
+  });
+}
+
 function affirmativelyReliesOnIntentAlone(studentAnswer) {
   // This is a narrow high-confidence rule finding, not a new grading tier.
   // Quotations/rejections are not the student's adopted legal proposition.
@@ -844,6 +933,7 @@ function hasAffirmativeCentralRuleInsufficiencyFinding(finding) {
 }
 
 export function applyDeterministicScoreCap(assessment, studentAnswer, context = {}) {
+  const syllabusPolicy = usesSyllabusGradingPolicy(context);
   const analysis = analyzeStudentAnswer(studentAnswer, context);
   const resolvedAssessment = assessment?.rubricBreakdown
     ? { ...assessment, rubricBreakdown: {
@@ -911,9 +1001,13 @@ export function applyDeterministicScoreCap(assessment, studentAnswer, context = 
     || assessment?.authorityStatus === 'unverified';
   const confirmedFabricationFinding = explicitlyDisclaimedTestAuthority
     || assessment?.authorityStatus === 'confirmed_fabricated'
-    || (!unverifiedAuthorityFinding && /(?:false|fabricated|invented|non-?existent)\s+(?:case|citation|authority)|(?:case|citation|authority)\s+(?:is\s+)?(?:false|fabricated|invented|non-?existent)/i.test(examinerFindings));
+    || (syllabusPolicy
+      ? assessment?.authorityStatus !== 'unverified'
+        && [assessment?.rationale, assessment?.legalExplanation, ...examinerErrors].some(finding => hasAffirmativeSyllabusFinding(finding, 'fabrication'))
+      : !unverifiedAuthorityFinding && /(?:false|fabricated|invented|non-?existent)\s+(?:case|citation|authority)|(?:case|citation|authority)\s+(?:is\s+)?(?:false|fabricated|invented|non-?existent)/i.test(examinerFindings));
   const centralRequirementGapFinding = examinerErrors.some((finding) => (
-    /(?:omit(?:ted|s)?|fail(?:ed|s)? to (?:state|mention|address|analy[sz]e|include|apply))[\s\S]{0,140}\b(?:majority|material (?:element|exception|qualification|requirement)|essential (?:element|exception|qualification|requirement)|controlling requirement|constitutional requirement|statutory requirement|procedural prerequisite|condition precedent|exception|qualification|voting threshold|outcome-determinative (?:element|exception|qualification|requirement|threshold|standard|prerequisite))\b/i.test(finding)
+    syllabusPolicy ? hasAffirmativeSyllabusFinding(finding, 'centralGap')
+      : /(?:omit(?:ted|s)?|fail(?:ed|s)? to (?:state|mention|address|analy[sz]e|include|apply))[\s\S]{0,140}\b(?:majority|material (?:element|exception|qualification|requirement)|essential (?:element|exception|qualification|requirement)|controlling requirement|constitutional requirement|statutory requirement|procedural prerequisite|condition precedent|exception|qualification|voting threshold|outcome-determinative (?:element|exception|qualification|requirement|threshold|standard|prerequisite))\b/i.test(finding)
   ));
   const referenceAnswer = `${cleanText(context?.suggestedAnswer, MAX_ANSWER_LENGTH)} ${cleanText(context?.legalBasis, MAX_ANSWER_LENGTH)}`;
   const majorityOfAllMembers = /\b(?:absolute\s+majority|majority[\s\S]{0,48}\ball(?:\s+the)?\s+members)\b/i;
@@ -923,7 +1017,9 @@ export function applyDeterministicScoreCap(assessment, studentAnswer, context = 
     cleanText(assessment?.rationale, 2_000),
     cleanText(assessment?.legalExplanation, 2_000),
     ...examinerErrors,
-  ].some(hasAffirmativeWrongRuleFinding);
+  ].some(finding => syllabusPolicy
+    ? hasAffirmativeSyllabusFinding(finding, 'wrongRule')
+    : hasAffirmativeWrongRuleFinding(finding));
   const centralRuleInsufficiencyFinding = hasCentralRuleInsufficiencyFinding(examinerFindings);
   const rubricShowsCentralRuleFailure = Number(assessment?.rubricBreakdown?.legalBasis) <= 2
     && Number(assessment?.rubricBreakdown?.application) <= 2.5;

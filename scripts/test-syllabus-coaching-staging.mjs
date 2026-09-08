@@ -5,7 +5,7 @@ import test from 'node:test';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { EXAMINATION_FIXTURE_TARGET } from './staging-examination-fixtures.mjs';
-import { DEFAULT_MODEL, RUBRIC_VERSION, modelAnswerSectionsForQuestion, resolveQuestionDemand } from '../worker/examiner-core.mjs';
+import { DEFAULT_MODEL, RUBRIC_VERSION, modelAnswerSectionsForQuestion, resolveQuestionDemand, withSyllabusGradingPolicy } from '../worker/examiner-core.mjs';
 import { runSyllabusCoachingStaging, syllabusStagingConfig, syllabusStagingModelPolicy, SYNTHETIC_ANSWER } from './verify-syllabus-coaching-staging.mjs';
 
 const IDS = { admin: '10000000-0000-4000-8000-000000000001', student: '10000000-0000-4000-8000-000000000002',
@@ -33,13 +33,14 @@ function harness(options = {}) {
   let role = 'student', submission = null, revealAt = null, answer = null, graded = false;
   let authNumber = 0;
   const prompt = options.prompt || 'May an accused unilaterally demand plea bargaining? Explain.';
-  const demand = resolveQuestionDemand({ question: prompt, authority: 'curated-approved-examination-snapshot' });
+  const context = withSyllabusGradingPolicy({ question: prompt, authority: 'curated-approved-examination-snapshot' }, 'per_subject');
+  const demand = resolveQuestionDemand(context);
   const assessment = () => {
     const value = { score: 2.5, maxScore: 5, rationale: 'Controlled synthetic response assessment.', errors: ['The governing rule is incomplete.'],
       improvements: ['Identify the controlling rule.'], rubricVersion: RUBRIC_VERSION,
       rubricBreakdown: { responsiveness: 2, legalBasis: 2, application: 2, conclusion: 2, ...demand },
       modelAnswerALAC: { answer: 'Synthetic direct answer.', legalBasis: 'Synthetic supplied rule.', application: 'Synthetic explanation.', conclusion: 'Synthetic conclusion.' } };
-    value.modelAnswerSections = modelAnswerSectionsForQuestion(value, { question: prompt, authority: 'curated-approved-examination-snapshot' });
+    value.modelAnswerSections = modelAnswerSectionsForQuestion(value, context);
     return value;
   };
   const latest = () => artifacts.get('artifacts/syllabus-coaching/cleanup-manifest.json');
@@ -252,7 +253,7 @@ test('target and source/run provenance fail before any hosted action', () => {
   assert.throws(() => syllabusStagingConfig(env(), 'b'.repeat(40)));
 });
 
-for (const prompt of ['May an accused unilaterally demand plea bargaining? Explain.',
+for (const prompt of ['May an accused unilaterally demand plea bargaining? Explain.', 'What is a conditional duty?',
   'The accused submitted a proposal. The prosecutor refused it but the judge approved it despite that refusal. Was the approval proper?']) {
   test(`one real-flow mock retains demand and unassisted coaching/reveal: ${prompt.slice(0, 45)}`, async () => {
     const h = harness({ prompt }); const { summary, cleanupManifest } = await h.run();
@@ -260,7 +261,8 @@ for (const prompt of ['May an accused unilaterally demand plea bargaining? Expla
     assert.equal(summary.legalScoreAccuracyVerified, false); assert.equal(summary.boundedItems, 1);
     assert.equal(summary.coachingBeforeReveal, true); assert.equal(summary.explicitReveal, true);
     assert.equal(summary.assistedBeforeReveal, false); assert.equal(summary.assistedAfterReveal, false);
-    assert.equal(summary.result.applicationRequired, resolveQuestionDemand({ question: prompt }).applicationRequired);
+    assert.equal(summary.result.applicationRequired, resolveQuestionDemand(withSyllabusGradingPolicy({ question: prompt,
+      authority: 'curated-approved-examination-snapshot' }, 'per_subject')).applicationRequired);
     assert.equal(summary.result.model, 'gemini-3.5-flash-lite');
     assert.equal(summary.gradingModelPolicy.configuredModel, 'gemini-3.5-flash-lite');
     assert.ok(summary.gradingModelPolicy.allowedModels.includes(DEFAULT_MODEL));

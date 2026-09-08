@@ -68,8 +68,10 @@ assert.doesNotMatch(page, /Virtual backgrounds|Coming after the quality test/iu)
 assert.match(page, /assets\/vendor\/livekit-client\.umd\.js\?v=2\.22\.1/);
 assert.match(page, /assets\/vendor\/livekit-track-processors\.iife\.js\?v=0\.7\.2/);
 assert.match(page, /study-room-backgrounds\.js\?v=study-room-background-images-20260908-1/);
-assert.match(page, /study-room-live\.js\?v=study-room-always-open-20260908-1&amp;layout=stable-pins-20260908-1&amp;catalog=admin-room-manager-20260908-1&amp;join=free-join-20260909-1"/);
-assert.match(page, /study-room-live\.css\?v=study-room-admin-manager-20260908-1"/);
+assert.match(page, /study-room-live\.js\?v=study-room-always-open-20260908-1&amp;layout=stable-pins-20260908-1&amp;catalog=admin-room-manager-20260908-1&amp;join=free-join-20260909-1&amp;share=screen-recovery-20260909-1"/);
+assert.match(page, /study-room-live\.css\?v=study-room-admin-manager-20260908-1&amp;share=screen-recovery-20260909-1"/);
+assert.match(css, /\.sr-tile-placeholder\[data-sr-video-fallback="true"\]\s*\{[^}]*position:\s*absolute;[^}]*z-index:\s*1;/);
+assert.match(css, /\.sr-tile-placeholder\[data-sr-video-fallback="true"\]\[hidden\]\s*\{\s*display:\s*none;/);
 assert.doesNotMatch(page, /facebook|fb\.com|recording is on|Recording enabled/i);
 
 for (const endpoint of ['access', 'rooms', 'join', 'moderate']) {

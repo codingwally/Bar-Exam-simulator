@@ -420,6 +420,11 @@ for (const secret of ["LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET"]) {
   assert.match(stagingConfig, new RegExp(`required = \\[.*"${secret}"`, "u"));
 }
 assert.match(workflow, /--secrets-file "\$LIVEKIT_SECRET_FILE" --dry-run/u);
+const workerDeployCommands = workflow.split(/\r?\n/u).filter((line) => /wrangler@4\.114\.0 deploy\b/u.test(line));
+assert.equal(workerDeployCommands.length, 5, 'Review all staging and production Worker deploy commands.');
+for (const command of workerDeployCommands) {
+  assert.match(command, /--keep-vars\b/u, 'A Study Room release must preserve existing unrelated runtime variables.');
+}
 assert.match(workflow, /node worker\/livekit-credentials-smoke\.mjs/u);
 assert.match(workflow, /test-study-room-deployment-smoke\.mjs/u);
 assert.doesNotMatch(workflow, /wrangler@4\.114\.0 secret (?:put|bulk)/u);

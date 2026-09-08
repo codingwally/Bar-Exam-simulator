@@ -27,6 +27,7 @@
   const LAYOUT_STORAGE_KEY = 'duediligence.study-room.layout.v1';
   const MICROPHONE_STATS_INTERVAL_MS = 400;
   const MICROPHONE_STATS_ATTEMPTS = 10;
+  const VIDEO_PLAYBACK_RETRY_DELAYS = Object.freeze([500, 1500, 3000]);
   const STUDY_VIDEO_CAPTURE = Object.freeze({
     width: 640,
     height: 360,
@@ -1293,11 +1294,20 @@
 
   function detachTrackEntry(entry) {
     if (!entry) return;
+    entry.disposed = true;
+    entry.playRequest = (entry.playRequest || 0) + 1;
+    global.clearTimeout(entry.retryTimer);
+    entry.retryTimer = 0;
+    for (const [target, eventName, listener] of entry.listeners || []) {
+      target.removeEventListener?.(eventName, listener);
+    }
+    entry.listeners = [];
     try {
       entry.track?.detach?.(entry.element);
     } catch {
       entry.element?.remove?.();
     }
+    if (entry.kind === 'audio') syncAttachedAudioPlaybackState();
   }
 
   function restoreLayoutPreference() {
@@ -1338,13 +1348,13 @@
     byId('sr-audio-bin')?.replaceChildren();
   }
 
-  function videoTrackIsRenderable(track) {
+  function videoTrackIsRenderable(track, allowUpstreamPaused = false) {
     if (!track || typeof track.attach !== 'function' || track.isStopped === true) return false;
     const mediaStreamTrack = track.mediaStreamTrack;
     if (!mediaStreamTrack) return false;
     if (String(mediaStreamTrack.readyState || '').toLowerCase() !== 'live') return false;
     if (mediaStreamTrack.enabled === false) return false;
-    if (track.isUpstreamPaused === true) return false;
+    if (track.isUpstreamPaused === true && !allowUpstreamPaused) return false;
     return true;
   }
 
@@ -1352,7 +1362,7 @@
     return [...(container?.children || [])].find((child) => child?.dataset?.srVideoFallback === 'true') || null;
   }
 
-  function showVideoFallback(container) {
+  function showVideoFallback(container, message = 'Video unavailable. Retry video.') {
     if (!container) return;
     let fallback = findVideoFallback(container);
     if (!fallback) {
@@ -1360,12 +1370,15 @@
       fallback.className = 'sr-tile-placeholder';
       fallback.dataset.srVideoFallback = 'true';
       const copy = document.createElement('span');
-      copy.textContent = 'Video unavailable — reconnecting';
+      copy.dataset.srVideoMessage = 'true';
       fallback.append(copy);
       container.append(fallback);
     }
+    const copy = [...(fallback.children || [])].find((child) => child?.dataset?.srVideoMessage === 'true');
+    if (copy) copy.textContent = message;
     fallback.hidden = false;
     container.dataset.videoState = 'unavailable';
+    return fallback;
   }
 
   function hideVideoFallback(container) {
@@ -1374,45 +1387,90 @@
     if (container) container.dataset.videoState = 'live';
   }
 
-  function markVideoElementUnavailable(entry) {
-    if (!entry || entry.kind !== 'video' || !state.attachedTracks.includes(entry)) return;
-    entry.videoState = 'unavailable';
-    if (entry.element) entry.element.hidden = true;
-    showVideoFallback(entry.container);
-    const tileView = state.tileViews.get(entry.key);
-    if (tileView?.tile === entry.container && tileView.track === entry.track) {
-      // The next LiveKit track/stream event will retry the same stable key.
-      tileView.mediaVisible = false;
+  function videoEntryIsCurrent(entry) {
+    return Boolean(entry && !entry.disposed && entry.kind === 'video'
+      && entry.room === state.room && state.attachedTracks.includes(entry));
+  }
+
+  function videoElementHasFrame(entry, requirePlayback = false) {
+    const element = entry?.element;
+    return Boolean(element && !element.error && Number(element.readyState) >= 2
+      && Number(element.videoWidth) > 0 && Number(element.videoHeight) > 0
+      && (!requirePlayback || element.paused === false));
+  }
+
+  function scheduleVideoPlaybackRetry(entry) {
+    if (!videoEntryIsCurrent(entry) || entry.retryTimer || entry.streamPaused) return;
+    if (entry.retryAttempts >= VIDEO_PLAYBACK_RETRY_DELAYS.length) {
+      showVideoFallback(entry.container);
+      if (entry.retryButton) entry.retryButton.hidden = false;
+      return;
     }
+    const request = entry.playRequest;
+    const timer = global.setTimeout(() => {
+      if (entry.retryTimer !== timer) return;
+      entry.retryTimer = 0;
+      if (!videoEntryIsCurrent(entry) || request !== entry.playRequest || entry.streamPaused) return;
+      entry.retryAttempts += 1;
+      requestVideoPlayback(entry);
+    }, VIDEO_PLAYBACK_RETRY_DELAYS[entry.retryAttempts]);
+    entry.retryTimer = timer;
+  }
+
+  function markVideoElementUnavailable(entry, reason = '') {
+    if (!videoEntryIsCurrent(entry)) return;
+    // A static screen can legitimately stop producing frames. Preserve the last
+    // decoded frame instead of treating the browser's stalled event as a failure.
+    if ((reason === 'stalled' || reason === 'waiting') && videoElementHasFrame(entry, true)) return;
+    entry.videoState = 'unavailable';
+    // Never hide/detach the receiver on a transient playback failure. LiveKit's
+    // adaptive subscription needs this laid-out element to become visible again.
+    entry.element.hidden = false;
+    entry.container.dataset.mediaVisible = 'false';
+    showVideoFallback(entry.container, entry.streamPaused
+      ? 'Video paused. Waiting for stream…' : 'Waiting for video…');
+    scheduleVideoPlaybackRetry(entry);
   }
 
   function markVideoElementPlaying(entry) {
-    if (!entry || entry.kind !== 'video' || !state.attachedTracks.includes(entry)) return;
+    if (!videoEntryIsCurrent(entry) || entry.streamPaused || !videoElementHasFrame(entry, true)) return;
+    entry.playRequest += 1;
+    global.clearTimeout(entry.retryTimer);
+    entry.retryTimer = 0;
+    entry.retryAttempts = 0;
     entry.videoState = 'playing';
     if (entry.element) entry.element.hidden = false;
+    if (entry.retryButton) entry.retryButton.hidden = true;
     hideVideoFallback(entry.container);
-    const tileView = state.tileViews.get(entry.key);
-    if (tileView?.tile === entry.container && tileView.track === entry.track) {
-      tileView.mediaVisible = true;
-    }
+    entry.container.dataset.mediaVisible = 'true';
   }
 
   function requestVideoPlayback(entry) {
-    if (!entry?.element || entry.kind !== 'video' || typeof entry.element.play !== 'function') return;
+    if (!videoEntryIsCurrent(entry) || entry.streamPaused || typeof entry.element.play !== 'function') return;
+    if (!videoTrackIsRenderable(entry.track, !entry.isLocal)) return;
+    global.clearTimeout(entry.retryTimer);
+    entry.retryTimer = 0;
+    const request = ++entry.playRequest;
+    entry.element.hidden = false;
+    if (entry.retryButton) entry.retryButton.hidden = true;
     try {
       const playback = entry.element.play();
-      if (playback && typeof playback.catch === 'function') {
-        Promise.resolve(playback).then(
-          () => markVideoElementPlaying(entry),
-          () => markVideoElementUnavailable(entry),
-        );
-      }
+      Promise.resolve(playback).then(() => {
+        if (!videoEntryIsCurrent(entry) || request !== entry.playRequest) return;
+        if (videoElementHasFrame(entry, true)) markVideoElementPlaying(entry);
+        else markVideoElementUnavailable(entry);
+      }, () => {
+        if (videoEntryIsCurrent(entry) && request === entry.playRequest) markVideoElementUnavailable(entry);
+      });
     } catch {
       markVideoElementUnavailable(entry);
     }
+    // play() may remain pending, or resolve before the first decoded frame. Both
+    // paths receive the same finite watchdog, not an unlimited reconnect loop.
+    scheduleVideoPlaybackRetry(entry);
   }
 
-  function attachTrack(track, container, kind, isLocal = false, key = '') {
+  function attachTrack(track, container, kind, isLocal = false, key = '', streamPaused = false) {
     if (!track || !container || typeof track.attach !== 'function') return null;
     let element;
     try {
@@ -1440,32 +1498,54 @@
       }
       return null;
     }
-    const entry = { track, element, container, kind, key, videoState: kind === 'video' ? 'starting' : '' };
+    const entry = { track, element, container, kind, key, isLocal, room: state.room,
+      videoState: kind === 'video' ? 'starting' : '', streamPaused,
+      retryAttempts: 0, retryTimer: 0, playRequest: 0, listeners: [] };
     state.attachedTracks.push(entry);
     if (kind === 'video') {
-      const markUnavailable = () => markVideoElementUnavailable(entry);
-      const markPlaying = () => markVideoElementPlaying(entry);
-      element.addEventListener?.('error', markUnavailable);
-      element.addEventListener?.('stalled', markUnavailable);
-      element.addEventListener?.('emptied', markUnavailable);
-      element.addEventListener?.('loadeddata', markPlaying);
-      element.addEventListener?.('playing', markPlaying);
+      const listen = (target, eventName, listener) => {
+        target.addEventListener?.(eventName, listener);
+        entry.listeners.push([target, eventName, listener]);
+      };
+      const fallback = showVideoFallback(container, streamPaused ? 'Video paused. Waiting for stream…' : 'Waiting for video…');
+      const retry = document.createElement('button');
+      retry.type = 'button';
+      retry.className = 'sr-button sr-button-secondary';
+      retry.dataset.srVideoRetry = 'true';
+      retry.textContent = 'Retry video';
+      retry.hidden = true;
+      fallback.append(retry);
+      entry.retryButton = retry;
+      listen(retry, 'click', () => {
+        if (!videoEntryIsCurrent(entry) || entry.streamPaused) return;
+        entry.retryAttempts = 0;
+        requestVideoPlayback(entry);
+      });
+      for (const eventName of ['error', 'stalled', 'emptied', 'waiting']) {
+        listen(element, eventName, () => markVideoElementUnavailable(entry, eventName));
+      }
+      for (const eventName of ['loadeddata', 'playing', 'canplay']) {
+        listen(element, eventName, () => markVideoElementPlaying(entry));
+      }
       requestVideoPlayback(entry);
     }
     if (kind === 'audio' && typeof element.play === 'function') {
+      const request = entry.audioPlayRequest = (entry.audioPlayRequest || 0) + 1;
       try {
         Promise.resolve(element.play())
           .then(() => {
-            state.audioPlaybackBlocked = false;
-            updateAudioPrompt();
+            if (entry.disposed || request !== entry.audioPlayRequest || entry.room !== state.room || !state.attachedTracks.includes(entry)) return;
+            entry.audioPlaybackBlocked = false;
+            syncAttachedAudioPlaybackState();
           })
           .catch(() => {
-            state.audioPlaybackBlocked = true;
-            updateAudioPrompt();
+            if (entry.disposed || request !== entry.audioPlayRequest || entry.room !== state.room || !state.attachedTracks.includes(entry)) return;
+            entry.audioPlaybackBlocked = true;
+            syncAttachedAudioPlaybackState();
           });
       } catch {
-        state.audioPlaybackBlocked = true;
-        updateAudioPrompt();
+        entry.audioPlaybackBlocked = true;
+        syncAttachedAudioPlaybackState();
       }
     }
     return element;
@@ -1558,10 +1638,10 @@
 
   function tileViewState(view) {
     const localCameraProtected = localViewIsAllowed(view);
-    const streamPaused = String(view.publication?.streamState || '').toLowerCase().includes('paused')
+    const streamPaused = String(view.track?.streamState || view.publication?.streamState || '').toLowerCase().includes('paused')
       || view.publication?.isUpstreamPaused === true
       || view.track?.isUpstreamPaused === true;
-    const trackReady = videoTrackIsRenderable(view.track);
+    const trackReady = videoTrackIsRenderable(view.track, !view.participant.isLocal);
     const mediaVisible = Boolean(
       view.track
       && !view.publication?.isMuted
@@ -1620,7 +1700,7 @@
       scheduleLocalCameraGuard(state.room);
     }
     let attachedElement = null;
-    if (renderedState.mediaVisible && !renderedState.streamPaused) {
+    if (renderedState.mediaVisible) {
       const fallback = document.createElement('div');
       fallback.className = 'sr-tile-placeholder';
       fallback.dataset.srVideoFallback = 'true';
@@ -1629,10 +1709,11 @@
       avatar.className = 'sr-avatar';
       avatar.textContent = initials(displayName(participant));
       const copy = document.createElement('span');
+      copy.dataset.srVideoMessage = 'true';
       copy.textContent = 'Video unavailable — reconnecting';
       fallback.append(avatar, copy);
       tile.append(fallback);
-      attachedElement = attachTrack(view.track, tile, 'video', participant.isLocal, view.key);
+      attachedElement = attachTrack(view.track, tile, 'video', participant.isLocal, view.key, renderedState.streamPaused);
       if (!attachedElement) fallback.hidden = false;
     } else {
       const placeholder = document.createElement('div');
@@ -1717,6 +1798,7 @@
     const volume = Math.max(0, Math.min(100, Number(value) || 0));
     state.participantVolumes.set(participant.identity, volume);
     participant.setVolume?.(volume / 100);
+    participant.setVolume?.(volume / 100, LiveKit?.Track?.Source?.ScreenShareAudio || 'screen_share_audio');
   }
 
   async function setParticipantBlocked(participant, blocked) {
@@ -1912,7 +1994,6 @@
       existing
       && existing.track === view.track
       && existing.mediaVisible === renderedState.mediaVisible
-      && existing.streamPaused === renderedState.streamPaused
       && existing.source === view.source
     );
     if (!canReuse) {
@@ -1920,6 +2001,18 @@
       return createTile(view);
     }
     syncTile(existing.tile, view, renderedState);
+    const entry = state.attachedTracks.find((candidate) => candidate.kind === 'video'
+      && candidate.key === view.key && candidate.track === view.track);
+    if (entry && entry.streamPaused !== renderedState.streamPaused) {
+      entry.streamPaused = renderedState.streamPaused;
+      existing.streamPaused = renderedState.streamPaused;
+      entry.playRequest += 1;
+      global.clearTimeout(entry.retryTimer);
+      entry.retryTimer = 0;
+      if (entry.streamPaused) markVideoElementUnavailable(entry);
+      else requestVideoPlayback(entry);
+    }
+    if (entry && entry.videoState !== 'playing') existing.tile.dataset.mediaVisible = 'false';
     return existing.tile;
   }
 
@@ -1931,17 +2024,22 @@
         state.blockedParticipants.has(participant.identity)
         || state.localMutedParticipants.has(participant.identity)
       ) return;
-      const publication = publicationFor(participant, LiveKit?.Track?.Source?.Microphone || 'microphone');
-      if (publication?.track && !publication.isMuted) {
-        const key = `audio:${participant.identity}`;
-        desiredKeys.add(key);
-        const existing = state.attachedTracks.find((entry) => entry.kind === 'audio' && entry.key === key);
-        if (!existing || existing.track !== publication.track) {
-          detachTrackEntries((entry) => entry.kind === 'audio' && entry.key === key);
-          attachTrack(publication.track, audioBin, 'audio', false, key);
+      const sources = [
+        [LiveKit?.Track?.Source?.Microphone || 'microphone', `audio:${participant.identity}`],
+        [LiveKit?.Track?.Source?.ScreenShareAudio || 'screen_share_audio', `audio:${participant.identity}:screen_share_audio`],
+      ];
+      for (const [source, key] of sources) {
+        const publication = publicationFor(participant, source);
+        if (publication?.track && !publication.isMuted) {
+          desiredKeys.add(key);
+          const existing = state.attachedTracks.find((entry) => entry.kind === 'audio' && entry.key === key);
+          if (!existing || existing.track !== publication.track) {
+            detachTrackEntries((entry) => entry.kind === 'audio' && entry.key === key);
+            attachTrack(publication.track, audioBin, 'audio', false, key);
+          }
         }
-        setParticipantVolume(participant, state.participantVolumes.get(participant.identity) ?? 100);
       }
+      setParticipantVolume(participant, state.participantVolumes.get(participant.identity) ?? 100);
     });
     detachTrackEntries((entry) => entry.kind === 'audio' && !desiredKeys.has(entry.key));
   }
@@ -2153,17 +2251,32 @@
       || (!state.audioPlaybackBlocked && state.room.canPlaybackAudio !== false);
   }
 
+  function syncAttachedAudioPlaybackState() {
+    state.audioPlaybackBlocked = state.attachedTracks.some((entry) => entry.kind === 'audio'
+      && !entry.disposed && entry.room === state.room && entry.audioPlaybackBlocked);
+    updateAudioPrompt();
+  }
+
   async function startRoomAudioFromGesture(room = state.room) {
     try {
       await room?.startAudio?.();
-      const audioElements = state.attachedTracks
-        .filter(({ element }) => String(element?.tagName || '').toLowerCase() === 'audio')
-        .map(({ element }) => element);
-      await Promise.all(audioElements.map((element) => element.play?.()));
-      state.audioPlaybackBlocked = false;
-      updateAudioPrompt();
+      if (state.room !== room) return false;
+      const entries = state.attachedTracks.filter((entry) => entry.kind === 'audio' && !entry.disposed);
+      await Promise.all(entries.map(async (entry) => {
+        const request = entry.audioPlayRequest = (entry.audioPlayRequest || 0) + 1;
+        try {
+          await entry.element.play?.();
+          if (!entry.disposed && request === entry.audioPlayRequest && entry.room === state.room) entry.audioPlaybackBlocked = false;
+        } catch {
+          if (!entry.disposed && request === entry.audioPlayRequest && entry.room === state.room) entry.audioPlaybackBlocked = true;
+        }
+      }));
+      if (state.room !== room) return false;
+      syncAttachedAudioPlaybackState();
+      if (state.audioPlaybackBlocked) return false;
       return true;
     } catch {
+      if (state.room !== room) return false;
       state.audioPlaybackBlocked = true;
       updateAudioPrompt();
       return false;

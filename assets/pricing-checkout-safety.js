@@ -37,6 +37,12 @@
     });
   }
 
+  function retainHistoricalProof(selection, plan, method, userId) {
+    if (!cleanId(userId) || !reconcileProof(selection, plan?.versionId, method?.versionId).matched) return null;
+    return Object.freeze({ userId: cleanId(userId), proof: selection,
+      plan: Object.freeze({ ...plan }), method: Object.freeze({ ...method }) });
+  }
+
   function reconcileCheckoutBinding(binding, revisionId, plans, compatibleMethods) {
     if (!binding) {
       return Object.freeze({ matched: false, stale: false, plan: null, method: null });
@@ -108,6 +114,7 @@
     captureProof,
     reconcileProof,
     captureCheckoutBinding,
+    retainHistoricalProof,
     reconcileCheckoutBinding,
     nextServerMinuteDelay,
     imageReady,

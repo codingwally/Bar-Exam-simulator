@@ -22,7 +22,9 @@ const expectedMigrations = [
   '20260907120100_astra_payment_proof_evidence.sql',
   '20260907120200_astra_payment_invalidation.sql',
   '20260907130000_astra_simulator_access.sql',
+  '20260907130002_astra_late_payment_review.sql',
   '20260907133129_astra_149_binding_compatibility.sql',
+  '20260907143119_astra_late_149_binding_reconciliation.sql',
   '20260907172508_astra_forecast_summary_email.sql',
   '20260907173112_astra_browser_pdf_prepared_note.sql',
   '20260907181748_astra_admin_role_fail_closed.sql',
@@ -31,7 +33,7 @@ const expectedMigrations = [
 ];
 const actualMigrations = [...databaseContract.match(/ASTRA_MIGRATIONS = Object\.freeze\(\[([\s\S]*?)\]\)/u)[1]
   .matchAll(/'([^']+\.sql)'/gu)].map((match) => match[1]);
-assert.deepEqual(actualMigrations, expectedMigrations, 'Exactly the thirteen reviewed forward migrations must be attested.');
+assert.deepEqual(actualMigrations, expectedMigrations, 'Exactly the fifteen reviewed forward migrations must be attested.');
 assert.deepEqual(actualMigrations, [...actualMigrations].sort());
 for (const stagingOnly of [
   '20260907223149_astra_staging_examination_fixture_registration.sql',
@@ -39,6 +41,17 @@ for (const stagingOnly of [
 ]) assert.ok(!actualMigrations.includes(stagingOnly), 'Optional test registrars must stay outside the production database bundle.');
 
 const newReviewedPaths = [
+  'assets/pricing-checkout-safety.js',
+  'scripts/test-pricing-checkout-safety.mjs',
+  'worker/commercial-launch-access-payment.test.mjs',
+  'worker/index.test.mjs',
+  'worker/pricing-builder.test.mjs',
+  'worker/pricing-core.mjs',
+  'supabase/migrations/20260907130002_astra_late_payment_review.sql',
+  'supabase/migrations/20260907143119_astra_late_149_binding_reconciliation.sql',
+  'docs/ASTRA_LATE_149_BINDING_RECONCILIATION.md',
+  'scripts/test-astra-late-payment-ui.mjs',
+  'scripts/test-astra-late-149-binding-reconciliation.mjs',
   '.gitattributes',
   'assets/bar-forecast.js',
   'assets/bar-forecast.css',
@@ -174,6 +187,10 @@ assert.match(workflow.slice(0, staging), /uses: actions\/checkout@v4[\s\S]*?fetc
 assert.ok(validation.includes('Verify credential-free Linux Forecast browser wiring'));
 assert.ok(validation.includes('node scripts/verify-astra-forecast-staging.mjs --self-test-browser'));
 for (const source of [validation, workflow]) {
+  for (const command of ['node scripts/test-astra-late-payment-ui.mjs', 'node scripts/test-astra-late-149-binding-reconciliation.mjs']) {
+    assert.ok(source.includes('          ' + command + '\n') || source.includes('          ' + command + '\r\n'),
+      'Both workflows must execute the late-proof regression: ' + command);
+  }
   const simulatorCommand = 'node scripts/test-astra-simulator-source-presentation.mjs --sql --browser';
   assert.equal(source.split(simulatorCommand).length - 1, 1,
     'Require actual Simulator SQL and browser verification exactly once; neither gate may silently skip.');

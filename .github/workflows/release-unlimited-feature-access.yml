@@ -125,6 +125,13 @@ jobs:
             assets/examinations.js \
             assets/feature-loader.js \
             assets/phase2-experience.js \
+            assets/pricing-checkout-safety.js \
+            scripts/test-pricing-checkout-safety.mjs \
+            scripts/test-pricing-public-contract.mjs \
+            worker/commercial-launch-access-payment.test.mjs \
+            worker/index.test.mjs \
+            worker/pricing-builder.test.mjs \
+            worker/pricing-core.mjs \
             assets/phase4-experience.js \
             assets/private-beta-landing.js \
             assets/lex-forum.js \
@@ -251,6 +258,9 @@ jobs:
             scripts/test-astra-payment-cohort-repair.mjs \
             scripts/test-astra-payment-lifecycle.mjs \
             scripts/test-astra-149-binding-compatibility.mjs \
+            scripts/test-astra-late-payment-ui.mjs \
+            scripts/test-astra-late-149-binding-reconciliation.mjs \
+            docs/ASTRA_LATE_149_BINDING_RECONCILIATION.md \
             scripts/test-astra-payment-presentation.mjs \
             scripts/test-astra-simulator-access.mjs \
             scripts/test-astra-simulator-staging.sql \
@@ -280,7 +290,9 @@ jobs:
             supabase/migrations/20260907120100_astra_payment_proof_evidence.sql \
             supabase/migrations/20260907120200_astra_payment_invalidation.sql \
             supabase/migrations/20260907130000_astra_simulator_access.sql \
+            supabase/migrations/20260907130002_astra_late_payment_review.sql \
             supabase/migrations/20260907133129_astra_149_binding_compatibility.sql \
+            supabase/migrations/20260907143119_astra_late_149_binding_reconciliation.sql \
             supabase/migrations/20260907172508_astra_forecast_summary_email.sql \
             supabase/migrations/20260907173112_astra_browser_pdf_prepared_note.sql \
             supabase/migrations/20260907181748_astra_admin_role_fail_closed.sql \
@@ -386,6 +398,9 @@ jobs:
           node --test scripts/test-astra-forecast-analytics-staging.mjs scripts/test-staging-examination-fixtures.mjs scripts/test-staging-payment-fixtures.mjs
           node scripts/test-astra-payment-lifecycle.mjs
           node scripts/test-astra-149-binding-compatibility.mjs
+          node scripts/test-astra-late-payment-ui.mjs
+          node scripts/test-pricing-public-contract.mjs
+          node scripts/test-astra-late-149-binding-reconciliation.mjs
           node scripts/test-astra-payment-cohort-repair.mjs
           node scripts/test-astra-payment-presentation.mjs
           node scripts/test-astra-forecast-entry-diagnostics.mjs

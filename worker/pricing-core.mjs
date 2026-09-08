@@ -568,6 +568,11 @@ export function sanitizeTrustedPayment(value) {
     submittedAt: safeTimestamp(input.submittedAt),
     provisionalAccessExpiresAt: safeTimestamp(input.provisionalAccessExpiresAt),
     provisionalGrantReused: input.provisionalGrantReused === true,
+    lateOfferProof: input.lateOfferProof === true,
+    offerReviewRequired: input.offerReviewRequired === true,
+    offerReviewReason: input.offerReviewReason === 'late_first_submission' ? input.offerReviewReason : null,
+    offerValidFrom: safeTimestamp(input.offerValidFrom),
+    offerValidUntil: safeTimestamp(input.offerValidUntil),
     replayed: input.replayed === true,
   };
 }

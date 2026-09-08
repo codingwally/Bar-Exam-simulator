@@ -460,7 +460,7 @@ test('/payments/submit forwards only version IDs and lets the database return tr
     if (pathname.startsWith('/storage/v1/object/payment-proofs/')) {
       return new Response(null, { status: 200 });
     }
-    if (pathname === '/rest/v1/rpc/phase4_create_payment_request_v3') {
+    if (pathname === '/rest/v1/rpc/phase4_create_payment_request_v4') {
       paymentRpcBody = JSON.parse(init.body);
       return Response.json({
         id: PAYMENT_ID,
@@ -536,7 +536,7 @@ test('/payments/submit preserves its immutable proof when the committed RPC resp
         ? new Response(null, { status: 200 })
         : Response.json({ code: 'KeyAlreadyExists', message: 'Asset Already Exists' }, { status: 409 });
     }
-    if (pathname === '/rest/v1/rpc/phase4_create_payment_request_v3') {
+    if (pathname === '/rest/v1/rpc/phase4_create_payment_request_v4') {
       paymentCalls += 1;
       const body = JSON.parse(init.body);
       if (paymentCalls === 1) {
@@ -605,7 +605,7 @@ test('/payments/submit preserves its deterministic proof on an ambiguous databas
       storageMethods.push(init.method || 'GET');
       return new Response(null, { status: 200 });
     }
-    if (pathname === '/rest/v1/rpc/phase4_create_payment_request_v3') {
+    if (pathname === '/rest/v1/rpc/phase4_create_payment_request_v4') {
       return Response.json({ message: 'temporary database outage' }, { status: 500 });
     }
     throw new Error(`Unexpected fetch: ${url}`);
@@ -637,7 +637,7 @@ test('/payments/submit keeps the pre-cutover legacy form working through the fai
     if (pathname.startsWith('/storage/v1/object/payment-proofs/')) {
       return new Response(null, { status: 200 });
     }
-    if (pathname === '/rest/v1/rpc/phase4_create_payment_request_v3') {
+    if (pathname === '/rest/v1/rpc/phase4_create_payment_request_v4') {
       versionedRpcCalls += 1;
       throw new Error('The legacy form must not call the versioned RPC directly.');
     }
@@ -696,7 +696,7 @@ test('/payments/submit keeps the pre-cutover legacy form working through the fai
   }
 });
 
-test('/payments/submit reports a stale published selection and removes its unaccepted proof', async () => {
+test('/payments/submit rejects an unverifiable offer selection and removes its unaccepted proof', async () => {
   const originalFetch = globalThis.fetch;
   const storageMethods = [];
   globalThis.fetch = async (url, init = {}) => {
@@ -706,7 +706,7 @@ test('/payments/submit reports a stale published selection and removes its unacc
       storageMethods.push(init.method || 'GET');
       return new Response(null, { status: 200 });
     }
-    if (pathname === '/rest/v1/rpc/phase4_create_payment_request_v3') {
+    if (pathname === '/rest/v1/rpc/phase4_create_payment_request_v4') {
       return Response.json(
         { message: 'Selected pricing plan is not open for checkout' },
         { status: 400 },
@@ -727,11 +727,198 @@ test('/payments/submit reports a stale published selection and removes its unacc
     const payload = await response.json();
     assert.equal(response.status, 409, JSON.stringify(payload));
     assert.equal(payload.error.code, 'PRICING_OFFER_STALE');
-    assert.match(payload.error.message, /Nothing was charged or accepted/u);
+    assert.match(payload.error.message, /No proof was accepted/u);
     assert.deepEqual(storageMethods, ['POST', 'DELETE']);
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test('/payments/submit retains a historical proof and returns its same-ID review hold on retry', async () => {
+  const originalFetch = globalThis.fetch;
+  const storagePaths = [], storageMethods = [];
+  let calls = 0;
+  globalThis.fetch = async (url, init = {}) => {
+    const pathname = new URL(String(url)).pathname;
+    if (pathname === '/auth/v1/user') return authenticatedUserResponse();
+    if (pathname.startsWith('/storage/v1/object/payment-proofs/')) {
+      storagePaths.push(pathname); storageMethods.push(init.method);
+      return new Response(null, { status: storagePaths.length === 1 ? 200 : 409 });
+    }
+    if (pathname === '/rest/v1/rpc/phase4_create_payment_request_v4') {
+      const body = JSON.parse(init.body);
+      assert.equal(body.p_plan_version_id, PLAN_149_ID);
+      assert.equal('p_paid_at' in body, false);
+      return Response.json({ id: PAYMENT_ID, status: 'needs_information', planCode: 'early_access_beta',
+        planVersionId: PLAN_149_ID, paymentChannelVersionId: CHANNEL_ID, pricingRevisionId: REVISION_ID,
+        planName: 'Earlier 149 offer', amountCentavos: 14900, currency: 'PHP', durationDays: 30,
+        entitlementMode: 'rolling_days', submittedAt: '2026-09-13T16:00:00Z',
+        proofObjectPath: body.p_proof_path, provisionalAccessExpiresAt: null,
+        lateOfferProof: true, offerReviewRequired: true, offerReviewReason: 'late_first_submission',
+        offerValidUntil: '2026-09-13T16:00:00Z', replayed: calls++ > 0 });
+    }
+    throw new Error(`Unexpected fetch: ${url}`);
+  };
+  try {
+    for (let i=0; i<3; i++) {
+      const form = new FormData();
+      form.set('planVersionId', PLAN_149_ID); form.set('paymentChannelVersionId', CHANNEL_ID);
+      if (i < 2) form.set('paymentReviewContract', 'late-offer-review-v1');
+      form.set('proof', new Blob([pngBytes()], { type: 'image/png' }), 'proof.png');
+      const response = await coreWorker.fetch(request('/payments/submit', { method: 'POST',
+        headers: { Authorization: 'Bearer verified-test-token', 'CF-Connecting-IP': '203.0.113.74' }, body: form }), env, {});
+      const result = await response.json();
+      assert.equal(response.status, i < 2 ? 201 : 409); assert.equal(result.payment.id, PAYMENT_ID);
+      assert.equal(result.payment.offerReviewRequired, true); assert.equal(result.payment.replayed, i>0);
+      assert.equal(result.payment.provisionalAccessExpiresAt, null); assert.equal(result.payment.amountCentavos, 14900);
+      assert.equal('proofObjectPath' in result.payment, false);
+      assert.match(result.message || result.error.message, /saved for review/); assert.match(result.message || result.error.message, /no provisional or paid access/);
+      if (i===2) assert.equal(result.error.code,'PAYMENT_PROOF_SAVED_FOR_REVIEW');
+    }
+    assert.deepEqual(storageMethods, ['POST','POST','POST']); assert.equal(new Set(storagePaths).size,1);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+for (const [statusIndex, status] of [
+  'pending', 'needs_information', 'approved', 'rejected', 'cancelled', 'refunded',
+].entries()) {
+  for (const currentContract of [false, true]) {
+    test(`historical proof replay: ${status}, ${currentContract ? 'current' : 'cached'} Pages contract`, async () => {
+      const originalFetch = globalThis.fetch;
+      const storagePaths = [], storageMethods = [], rpcBodies = [];
+      const requiresReview = ['pending', 'needs_information'].includes(status);
+      globalThis.fetch = async (url, init = {}) => {
+        const pathname = new URL(String(url)).pathname;
+        if (pathname === '/auth/v1/user') return authenticatedUserResponse();
+        if (pathname.startsWith('/storage/v1/object/payment-proofs/')) {
+          storagePaths.push(pathname);
+          storageMethods.push(init.method);
+          assert.equal(init.headers['x-upsert'], 'false');
+          // A retry must reuse the already-stored object, never replace it.
+          return new Response(null, { status: 409 });
+        }
+        if (pathname === '/rest/v1/rpc/phase4_create_payment_request_v4') {
+          const body = JSON.parse(init.body);
+          rpcBodies.push(body);
+          return Response.json({
+            id: PAYMENT_ID, status, planCode: 'early_access_beta',
+            planVersionId: PLAN_149_ID, paymentChannelVersionId: CHANNEL_ID,
+            pricingRevisionId: REVISION_ID, planName: 'Earlier 149 offer',
+            amountCentavos: 14900, currency: 'PHP', durationDays: 30,
+            entitlementMode: 'rolling_days', submittedAt: '2026-09-13T16:00:00Z',
+            proofObjectPath: body.p_proof_path, provisionalAccessExpiresAt: null,
+            lateOfferProof: true, offerReviewRequired: requiresReview,
+            offerReviewReason: 'late_first_submission',
+            offerValidUntil: '2026-09-13T16:00:00Z', replayed: true,
+          });
+        }
+        // No approval, entitlement, email, or second-version RPC is permitted.
+        throw new Error(`Unexpected payment replay request: ${pathname}`);
+      };
+      try {
+        const responses = [];
+        for (let retry = 0; retry < 2; retry++) {
+          const form = new FormData();
+          form.set('planVersionId', PLAN_149_ID);
+          form.set('paymentChannelVersionId', CHANNEL_ID);
+          if (currentContract) form.set('paymentReviewContract', 'late-offer-review-v1');
+          form.set('proof', new Blob([pngBytes()], { type: 'image/png' }), 'proof.png');
+          const response = await coreWorker.fetch(request('/payments/submit', {
+            method: 'POST', body: form,
+            headers: { Authorization: 'Bearer verified-test-token',
+              'CF-Connecting-IP': `203.0.113.${180 + statusIndex * 2 + Number(currentContract)}` },
+          }), env, {});
+          const payload = await response.json();
+          assert.equal(response.status, currentContract ? 201 : 409, JSON.stringify(payload));
+          assert.equal(payload.ok, currentContract);
+          assert.equal(payload.payment.id, PAYMENT_ID);
+          assert.equal(payload.payment.status, status);
+          assert.equal(payload.payment.replayed, true);
+          assert.equal(payload.payment.lateOfferProof, true);
+          assert.equal(payload.payment.offerReviewRequired, requiresReview);
+          assert.equal(payload.payment.provisionalAccessExpiresAt, null);
+          assert.equal(payload.payment.amountCentavos, 14900);
+          assert.equal(payload.payment.durationDays, 30);
+          assert.equal('proofObjectPath' in payload.payment, false);
+          const message = currentContract ? payload.message : payload.error.message;
+          assert.doesNotMatch(message, /could not be submitted|No proof was accepted|Verification is pending|access is active/iu);
+          if (requiresReview) {
+            assert.match(message, /saved for review/u);
+            assert.match(message, /no provisional or paid access/u);
+          } else if (!currentContract) {
+            const decision = { approved: 'approved', rejected: 'declined', cancelled: 'cancelled', refunded: 'refunded' }[status];
+            assert.match(message, new RegExp(`already ${decision}`));
+            assert.match(message, /retry grants no new access/u);
+            assert.doesNotMatch(message, /saved for review|awaiting|pending|no provisional or paid access/iu);
+            if (status === 'approved') assert.match(message, /existing purchased term is unchanged/u);
+          } else {
+            assert.match(message, status === 'approved' ? /already approved/ : /completed review/);
+          }
+          if (!currentContract) {
+            assert.equal(payload.error.code, requiresReview
+              ? 'PAYMENT_PROOF_SAVED_FOR_REVIEW' : 'PAYMENT_PROOF_ALREADY_REVIEWED');
+          } else assert.equal(payload.error, undefined);
+          responses.push(payload);
+        }
+        assert.deepEqual(responses[0], responses[1], 'repeated response preserves the same review and term');
+        assert.deepEqual(storageMethods, ['POST', 'POST'], 'no proof delete or replacement');
+        assert.equal(new Set(storagePaths).size, 1);
+        assert.equal(rpcBodies.length, 2, 'one authoritative intake RPC per replay');
+        assert.deepEqual(rpcBodies[0], rpcBodies[1], 'no timestamp or offer mutation on retry');
+        assert.equal(rpcBodies[0].p_plan_version_id, PLAN_149_ID);
+        assert.equal(rpcBodies[0].p_payment_channel_version_id, CHANNEL_ID);
+        assert.equal('p_paid_at' in rpcBodies[0], false);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+  }
+}
+
+test('v4 falls back only for its exact authoritative missing-function signature', async () => {
+  const originalFetch = globalThis.fetch;
+  const parameters = 'p_payment_channel_version_id, p_plan_version_id, p_proof_bucket, p_proof_mime_type, p_proof_path, p_proof_sha256, p_proof_size_bytes, p_user_id';
+  const missing = `Could not find the function public.phase4_create_payment_request_v4(${parameters}) in the schema cache`;
+  const cases = [
+    { status:404, code:'PGRST202', message:missing, fallback:true },
+    { status:404, code:'PGRST202', message:missing.replace('_v4(', '_v5(') },
+    { status:404, code:'PGRST202', message:missing.replace('p_user_id','p_actor_id') },
+    { status:404, code:'PGRST202', message:`Unavailable; ${missing}` },
+    { status:404, code:'OTHER', message:missing },
+    ...[400,401,403,500,503].map(status=>({status,code:'PGRST202',message:missing})),
+    { uncertain:true },
+  ];
+  try {
+    for (const [i,fixture] of cases.entries()) {
+      let v3Calls=0; const storageMethods=[];
+      globalThis.fetch = async (url,init={}) => {
+        const pathname=new URL(String(url)).pathname;
+        if(pathname==='/auth/v1/user') return authenticatedUserResponse();
+        if(pathname.startsWith('/storage/v1/object/payment-proofs/')) {
+          storageMethods.push(init.method); return new Response(null,{status:200});
+        }
+        if(pathname==='/rest/v1/rpc/phase4_create_payment_request_v4') {
+          if(fixture.uncertain) throw new TypeError('Outcome unknown after transport loss');
+          return Response.json({code:fixture.code,message:fixture.message},{status:fixture.status});
+        }
+        if(pathname==='/rest/v1/rpc/phase4_create_payment_request_v3') {
+          v3Calls++;
+          return Response.json({id:PAYMENT_ID,status:'pending',planCode:'early_access_beta',
+            planVersionId:PLAN_149_ID,paymentChannelVersionId:CHANNEL_ID,pricingRevisionId:REVISION_ID,
+            amountCentavos:14900,currency:'PHP',durationDays:30,entitlementMode:'rolling_days'});
+        }
+        throw new Error(`Unexpected fetch: ${url}`);
+      };
+      const form=new FormData(); form.set('planVersionId',PLAN_149_ID); form.set('paymentChannelVersionId',CHANNEL_ID);
+      form.set('proof',new Blob([pngBytes()],{type:'image/png'}),'proof.png');
+      const response=await coreWorker.fetch(request('/payments/submit',{method:'POST',body:form,
+        headers:{Authorization:'Bearer verified-test-token','CF-Connecting-IP':`203.0.113.${100+i}`}}),env,{});
+      assert.equal(v3Calls,fixture.fallback ? 1 : 0,`case ${i}`);
+      if(fixture.fallback) assert.equal(response.status,201);
+      else assert.notEqual(response.status,201);
+      if(fixture.uncertain || fixture.status>=500) assert.deepEqual(storageMethods,['POST']);
+    }
+  } finally { globalThis.fetch=originalFetch; }
 });
 
 test('ordinary administrators are denied from the pricing editor before pricing RPC access', async () => {

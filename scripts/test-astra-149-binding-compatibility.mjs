@@ -29,8 +29,15 @@ async function compatibilityCases() {
   const originalV2 = await scalar("select pg_get_functiondef('public.phase4_create_payment_request_v2(uuid,uuid,uuid,date,text,text,text,text,bigint,text)'::regprocedure)");
   const originalV3 = await scalar("select pg_get_functiondef('public.phase4_create_payment_request_v3(uuid,uuid,uuid,text,text,text,bigint,text)'::regprocedure)");
   await exec(compatibilitySql);
+  // The shared lifecycle now installs historical v4 before this boundary. Keep
+  // the full release dependency installed, but explicitly exercise this suite's
+  // original v3 admission/rejection contract instead of inheriting its v4 default.
+  await exec(read('20260907143119_astra_late_149_binding_reconciliation.sql'));
+  paymentRpc = 'phase4_create_payment_request_v3';
   await setTime('2026-09-07T06:01:00Z');
+  assert.equal((await scalar('select public.phase4_payment_offer_window($1,$2,public.astra_test_now())', [oldPlan,oldChannel])).late, false);
   const projected = await snapshot();
+  const clientSourceEvidence = [];
   await check('Exact public snapshot uses one statement snapshot; a VOLATILE counterfactual switches bindings', async () => {
     const volatility = (signature) => scalar('select provolatile from pg_proc where oid=$1::regprocedure', [signature]);
     assert.equal(await volatility('public.phase4_pricing_snapshot()'), 's');
@@ -88,13 +95,21 @@ async function compatibilityCases() {
     assert.equal(adminLive.plans[0].entitlementMode, 'rolling_days');
   });
 
-  await check('Actual cached production and current Pages refresh retains selected file despite changed public hash/terms', async () => {
+  await check('Cached production, committed HEAD and WORKTREE Pages refresh retain selected file despite changed public hash/terms', async () => {
     const root = new URL('../', TEST_URL);
     const productionSha = '8fd31bf8cccbc21b142035eba50d747c5559b800';
-    for (const revision of [productionSha, 'HEAD']) {
-      const source = execFileSync('git', ['show', `${revision}:assets/phase2-experience.js`], { cwd: root, encoding: 'utf8' });
-      const safetySource = execFileSync('git', ['show', `${revision}:assets/pricing-checkout-safety.js`], { cwd: root, encoding: 'utf8' });
-      const pricingCore = execFileSync('git', ['show', `${revision}:worker/pricing-core.mjs`], { cwd: root, encoding: 'utf8' });
+    for (const revision of [productionSha, 'HEAD', 'WORKTREE']) {
+      const loadSource = (path) => revision === 'WORKTREE'
+        ? readFileSync(new URL(path, root), 'utf8')
+        : execFileSync('git', ['show', `${revision}:${path}`], { cwd: root, encoding: 'utf8' });
+      const source = loadSource('assets/phase2-experience.js');
+      const safetySource = loadSource('assets/pricing-checkout-safety.js');
+      const pricingCore = loadSource('worker/pricing-core.mjs');
+      clientSourceEvidence.push({ revision,
+        resolvedCommit: revision === 'WORKTREE' ? null : execFileSync('git', ['rev-parse', revision], { cwd: root, encoding:'utf8' }).trim(),
+        phase2Sha256: createHash('sha256').update(source).digest('hex'),
+        safetySha256: createHash('sha256').update(safetySource).digest('hex'),
+        pricingCoreSha256: createHash('sha256').update(pricingCore).digest('hex') });
       const { sanitizePublicPricingSnapshot } = await import('data:text/javascript;base64,'+Buffer.from(pricingCore).toString('base64'));
       const publicBefore = sanitizePublicPricingSnapshot(before);
       const publicProjected = sanitizePublicPricingSnapshot(projected);
@@ -110,7 +125,8 @@ async function compatibilityCases() {
         return source.slice(start, start + 3 + end);
       };
       const proofFile = Object.freeze({ name: 'internal-proof.png', size: 1200, type: 'image/png' });
-      const state = { pricingSnapshot: publicBefore, selectedPricingPlan: publicBefore.plans[0],
+      const state = { user: { id: '70000000-0000-4000-8000-000000000099' },
+        pricingSnapshot: publicBefore, selectedPricingPlan: publicBefore.plans[0],
         selectedPaymentMethod: publicBefore.paymentMethods[0], selectedPaymentProof: null };
       const input = { files: [] };
       const formHost = { querySelector: () => ({}), replaceChildren() {}, innerHTML: '' };
@@ -121,7 +137,8 @@ async function compatibilityCases() {
           'dd2-payment-proof': input })[id] || null },
         DataTransfer: class { constructor() { this.files = []; this.items = { add: (f) => this.files.push(f) }; } },
         unlimitedFeatureActionContext: () => null, isRegularSubscriptionPlan: () => false,
-        normalizedCommercialPricing: (x) => x, normalizedCommercialPlans: (x) => x.plans,
+        normalizedCommercialPricing: (x) => ({ ...x, config: { plans:x.plans, paymentMethods:x.paymentMethods } }),
+        normalizedCommercialPlans: (x) => x.plans,
         commercialPaymentMethods: () => state.pricingSnapshot.paymentMethods,
         commercialQrUrl: (x) => x?.qrUrl || '',
         previewCommercialPaymentProof: () => { restored = input.files[0]; },
@@ -132,6 +149,11 @@ async function compatibilityCases() {
       context.global = { DueDiligencePricingRenderer: { render() {} }, DataTransfer: context.DataTransfer };
       state.selectedPaymentProof = context.pricingCheckoutSafety.captureProof(proofFile, oldPlan, oldChannel);
       vm.runInContext(extract('restoreCommercialPaymentProof'), context);
+      // Run new dependencies when present, including uncommitted candidate bytes.
+      // The unchanged binding must never create a historical-review draft.
+      for (const name of ['paymentMethodSupportsPlan','captureHistoricalPaymentProof','renderLatePaymentReview']) {
+        if (source.includes(`  function ${name}(`)) vm.runInContext(extract(name), context);
+      }
       // DOM construction is stubbed; actual production restore/file-binding logic runs.
       context.renderPaymentForm = (plan, methodId) => {
         state.selectedPricingPlan = plan;
@@ -144,6 +166,7 @@ async function compatibilityCases() {
       assert.equal(restored, proofFile, revision);
       assert.equal(state.selectedPricingPlan.versionId, oldPlan);
       assert.equal(state.selectedPaymentMethod.versionId, oldChannel);
+      assert.equal(state.latePaymentReviewDraft ?? null, null, revision);
     }
   });
 
@@ -270,8 +293,9 @@ async function compatibilityCases() {
     assert.ok(originalV3.includes('Accepted retries resolve before'));
   });
   console.log(JSON.stringify({ passed: checks.length, engine: 'actual PGlite PostgreSQL', remoteWrites: false,
-    uiEvidence: 'actual production/current render and file restoration functions with DOM/File API test doubles',
-    limits: ['No browser or live staging run', 'No true concurrent backend test', 'Unmodified later late-proof migration requires reconciliation before integration'] }));
+    paymentRpc, lateReconciliationInstalled:true, clientSourceEvidence,
+    uiEvidence: 'actual cached production, committed HEAD and WORKTREE render/file restoration functions with DOM/File API and normalizer test doubles',
+    limits: ['No browser or live staging run', 'No true concurrent backend test', 'Historical v4 and both installation orders are covered by the separate reconciliation suite'] }));
 }
 
 const code = prefix + '\nconst BRIDGE_NAME=' + JSON.stringify(migrationName[0])

@@ -296,6 +296,15 @@ export function normalizePhase4AdminAction(payload) {
       throw new PaymentValidationError('INVALID_ADMIN_ACTION', 'Select a valid payment decision.');
     }
     actionPayload = { status };
+    if (rawActionPayload.offerReviewDisposition != null) {
+      if (status !== 'approved' || rawActionPayload.offerReviewDisposition !== 'honor_verified_offer') {
+        throw new PaymentValidationError('INVALID_ADMIN_ACTION', 'Select a valid historical payment review decision.');
+      }
+      actionPayload.offerReviewDisposition = 'honor_verified_offer';
+      if (!rawActionPayload.verifiedPaidAt) {
+        throw new PaymentValidationError('INVALID_ADMIN_ACTION', 'Historical offer approval requires the actual payment time shown on the proof.');
+      }
+    }
     if (status === 'approved' && rawActionPayload.verifiedPaidAt) {
       const date = new Date(String(rawActionPayload.verifiedPaidAt));
       if (!Number.isFinite(date.getTime())) {

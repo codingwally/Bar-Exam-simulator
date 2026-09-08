@@ -48,7 +48,9 @@ assert.match(html, /Dimasalang/);
 assert.match(html, /Live accountability/);
 assert.match(html, /Nickname privacy/);
 assert.match(html, /Separate-window study/);
-assert.match(html, /Admin beta currently in testing/);
+assert.match(html, /Open to all signed-in members/);
+assert.match(html, /Available to all signed-in Due Diligence members, free and paid\./);
+assert.doesNotMatch(html, /Study Room is being tested with admins|Subscribe to Due Diligence and follow the launch/);
 assert.match(html, /Interface preview only\. No camera or microphone is active\./);
 assert.match(html, /Turn the backdrop off with one click for a lighter, faster video mode\./);
 assert.match(html, /aria-label="Backdrop can be turned off"/);
@@ -70,12 +72,11 @@ assert.match(css, /dd-study-room-mute[\s\S]*min-height:\s*44px/);
 assert.match(css, /dd-study-room-mute:focus-visible/);
 
 assert.match(client, /ADMIN_ROLES/);
-assert.match(client, /DueDiligenceSubscriptionCta\?\.isAudienceEligible\?\.\(value\) === true/);
-assert.match(client, /const subscribed = known && !eligible && !liveAccess/);
-assert.match(client, /subscribe\.disabled = !eligible/);
-assert.match(client, /liveAccess \? 'Live access enabled' : subscribed \? 'Subscription active' : 'Subscribe now'/);
-assert.match(client, /subscribed \? 'Study Room access is not yet available during testing' : 'Opens Plans & Pricing'/);
-assert.match(client, /hasLiveRoomAccess\(access\)[\s\S]*accessResolutionFailed[\s\S]*return openLiveRoom\(\)/);
+assert.doesNotMatch(client, /DueDiligenceSubscriptionCta|isFoundingBetaTester|headerShowsAdmin/);
+assert.match(client, /subscribe\.disabled = accessIsResolving\(\)/);
+assert.match(client, /liveAccess \? 'Open Study Room' : 'Sign in to join'/);
+assert.match(client, /Available to all signed-in members, free and paid/);
+assert.match(client, /hasLiveRoomAccess\(\)[\s\S]*return openLiveRoom\(\)/);
 assert.match(client, /new URL\('\/study-room\/', global\.location\.origin\)/);
 assert.match(client, /global\.open\([\s\S]*roomUrl\.href[\s\S]*popup=yes[\s\S]*toolbar=no[\s\S]*location=no/);
 assert.match(client, /popup\.opener = null/);
@@ -86,10 +87,11 @@ assert.match(client, /if \(!popup\) \{[\s\S]*global\.location\.assign\(roomUrl\.
 assert.match(client, /try \{[\s\S]*popup = global\.open\([\s\S]*\} catch \{[\s\S]*global\.location\.assign\(roomUrl\.href\)/);
 assert.doesNotMatch(client, /Allow pop-ups for Due Diligence/);
 assert.match(client, /return openMarketingPreview\(trigger\)/);
-assert.match(client, /target\?\.click\(\)/);
+assert.match(client, /DueDiligencePhase2\.openSignIn\(\{ allowDismiss: true \}\)/);
+assert.match(client, /getElementById\('btn-signin'\)\?\.click\(\)/);
 assert.match(client, /study_room_preview_opened/);
 assert.match(html, /study-room-preview\.css\?v=study-room-launch-20260830-1/);
-assert.match(html, /study-room-preview\.js\?v=study-room-launch-20260830-1/);
+assert.match(html, /study-room-preview\.js\?v=study-room-all-members-20260908-1/);
 
 function extractNamedFunction(source, name) {
   const start = source.indexOf(`function ${name}(`);
@@ -104,40 +106,61 @@ function extractNamedFunction(source, name) {
   throw new Error(`Unterminated function ${name}.`);
 }
 
-const subscriptionContext = vm.createContext({});
-vm.runInContext(
-  await readFile(path.join(root, 'assets/subscription-cta.js'), 'utf8'),
-  subscriptionContext,
-);
 const accessContext = vm.createContext({
   ADMIN_ROLES: new Set(['admin', 'administrator', 'super admin', 'founder admin']),
-  global: subscriptionContext,
+  session: null,
 });
 for (const name of [
   'normalized',
   'isAdmin',
-  'isSubscriptionEligible',
-  'isFoundingBetaTester',
+  'signedIn',
   'hasLiveRoomAccess',
 ]) {
   vm.runInContext(extractNamedFunction(client, name), accessContext);
 }
 assert.equal(vm.runInContext("isAdmin({ role: 'founder_admin' })", accessContext), true);
 assert.equal(vm.runInContext("isAdmin({ role: 'member' })", accessContext), false);
-assert.equal(vm.runInContext("isSubscriptionEligible({ role: 'founder_admin' })", accessContext), false);
-assert.equal(vm.runInContext("isSubscriptionEligible({ basis: 'founding_beta', freeBeta: { active: true }, unlimited: true })", accessContext), true);
-assert.equal(vm.runInContext("isSubscriptionEligible({ basis: 'introductory', introductoryTokensEligible: true, unlimited: true })", accessContext), true);
-assert.equal(vm.runInContext("isSubscriptionEligible({ subscription: { status: 'active', planCode: 'early_access_beta' } })", accessContext), false);
-assert.equal(vm.runInContext("isSubscriptionEligible({ paidSubscriptionExpired: true, subscription: { status: 'expired' } })", accessContext), true);
-assert.equal(vm.runInContext("isSubscriptionEligible({ globalBeta: { active: true }, unlimited: false })", accessContext), false);
-assert.equal(vm.runInContext("isSubscriptionEligible({ basis: 'complimentary', unlimited: true })", accessContext), false);
-assert.equal(vm.runInContext("isSubscriptionEligible({ role: 'member', subscription: null })", accessContext), true);
-assert.equal(vm.runInContext("isSubscriptionEligible(null)", accessContext), false);
-assert.equal(vm.runInContext("hasLiveRoomAccess({ role: 'admin' })", accessContext), true);
-assert.equal(vm.runInContext("hasLiveRoomAccess({ allowed: true, basis: 'founding_beta' })", accessContext), true);
-assert.equal(vm.runInContext("hasLiveRoomAccess({ allowed: false, basis: 'founding_beta' })", accessContext), false);
-assert.equal(vm.runInContext("hasLiveRoomAccess({ allowed: true, subscription: { status: 'active', planCode: 'early_access_beta' } })", accessContext), false);
-assert.equal(vm.runInContext("hasLiveRoomAccess({ allowed: true, basis: 'introductory', introductoryTokensEligible: true })", accessContext), false);
+for (const missingSession of [null, {}, { user: { id: 'inert-member' } }, { access_token: '' }, { access_token: '  ' }, { access_token: true }, { role: 'admin' }]) {
+  accessContext.candidate = missingSession;
+  assert.equal(vm.runInContext('hasLiveRoomAccess(candidate)', accessContext), false, 'Profile or role metadata alone must not count as a session.');
+}
+assert.equal(vm.runInContext("hasLiveRoomAccess({ access_token: 'inert-token', user: { id: 'inert-member' } })", accessContext), true);
+
+const memberAccessCases = [
+  ['free', { role: 'member', allowed: false, subscription: null }],
+  ['paid', { role: 'member', allowed: true, subscription: { status: 'active' } }],
+  ['exhausted', { role: 'member', allowed: false, remainingTokens: 0 }],
+  ['expired', { role: 'member', allowed: false, paidSubscriptionExpired: true, subscription: { status: 'expired' } }],
+  ['founding beta', { role: 'member', allowed: true, basis: 'founding_beta' }],
+  ['loading or failed access', null],
+];
+let launchCases = 0;
+for (const [label, value] of memberAccessCases) {
+  for (const authSettled of [false, true]) {
+    let currentSession = { access_token: 'inert-token', user: { id: 'inert-member' } };
+    let launches = 0;
+    let previews = 0;
+    const context = vm.createContext({
+      session: null, access: value, authSettled,
+      global: { DueDiligencePhase4: { getSession: () => currentSession } },
+      accessWithVerifiedRole: () => value,
+      openLiveRoom: () => { launches += 1; return true; },
+      openMarketingPreview: () => { previews += 1; return true; },
+    });
+    for (const name of ['signedIn', 'hasLiveRoomAccess', 'runtimeSession', 'accessIsResolving', 'open']) {
+      vm.runInContext(extractNamedFunction(client, name), context);
+    }
+    assert.equal(vm.runInContext('open()', context), true, `${label}: open must complete synchronously.`);
+    assert.equal(launches, 1, `${label}: subscription state must not prevent signed-in launch.`);
+    assert.equal(previews, 0);
+    currentSession = null;
+    context.authSettled = true;
+    assert.equal(vm.runInContext('open()', context), true);
+    assert.equal(launches, 1, `${label}: a removed browser session must not reopen using cached identity.`);
+    assert.equal(previews, 1);
+    launchCases += 1;
+  }
+}
 
 const liveWindowFunction = extractNamedFunction(client, 'openLiveRoom');
 assert.doesNotMatch(liveWindowFunction, /openMarketingPreview/);
@@ -146,8 +169,9 @@ const openFunction = extractNamedFunction(client, 'open');
 assert.doesNotMatch(openFunction, /await|\.then\(/, 'Study Room click routing must stay synchronous for popup user activation.');
 assert.match(openFunction, /accessIsResolving\(\)[\s\S]*return false/);
 
-assert.match(client, /function accessIsResolving\(\)[\s\S]*!authSettled[\s\S]*signedIn\(\) && !access/);
-assert.match(client, /accessResolutionFailed[\s\S]*signedIn\(\) && headerShowsAdmin\(\)/);
+assert.equal(extractNamedFunction(client, 'accessIsResolving').includes('return !authSettled && !signedIn();'), true);
+assert.doesNotMatch(extractNamedFunction(client, 'hasLiveRoomAccess'), /isAdmin\(|\.allowed|\.basis|subscription|remainingTokens/);
+assert.doesNotMatch(client, /access_token: 'authenticated-session'/, 'An event without a real runtime session must not synthesize a token.');
 assert.match(client, /querySelectorAll\('\[data-study-room-trigger\]'\)[\s\S]*trigger\.disabled = busy/);
 assert.match(client, /setAttribute\('aria-busy', String\(busy\)\)/);
 assert.match(client, /setAttribute\('aria-disabled', String\(busy\)\)/);
@@ -172,7 +196,7 @@ for (const forbidden of [
   /\bWebSocket\b/,
   /\bMediaRecorder\b/,
 ]) {
-  assert.doesNotMatch(client, forbidden, 'Phase one must remain a local marketing preview without live-room infrastructure.');
+  assert.doesNotMatch(client, forbidden, 'The launcher must not acquire media or replace the live page server authorization.');
 }
 assert.doesNotMatch(css, /study-room-demo|home-current/);
 assert.doesNotMatch(html, /study-room-demo|home-current|assets\/study-room\/[^"'\s>]+\.png/);
@@ -199,5 +223,5 @@ const sizes = await Promise.all(
 const totalImageBytes = sizes.reduce((total, size) => total + size, 0);
 assert.ok(totalImageBytes <= 1.5 * 1024 * 1024, 'Study Room preview images must total at most 1.5 MiB.');
 
-console.log('Study Room phase-one marketing contract tests passed.');
+console.log(`Study Room signed-in launch contract tests passed (${launchCases} access/auth combinations plus missing-session guards).`);
 console.log('Optimized WebP total: ' + totalImageBytes + ' bytes.');

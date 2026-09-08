@@ -5296,8 +5296,8 @@ async function privateBetaCapabilityExempt(request, pathname) {
   if (pathname === '/pedro/message' || pathname === '/pedro/query') {
     return true;
   }
-  // Study Room routes re-authenticate the user and enforce either a verified
-  // administrator role or the explicitly authorized Founding Beta test cohort.
+  // Study Room routes re-authenticate active accounts independently of paid,
+  // introductory-credit, or Beta entitlements; moderation stays admin-only.
   if (pathname === '/study-room' || pathname.startsWith('/study-room/')) {
     return true;
   }
@@ -5367,14 +5367,48 @@ async function phase4SetupAccessForUser(env, userId) {
   });
 }
 
-function studyRoomMemberAccess(access) {
-  const basis = String(access?.basis || '').trim().toLowerCase();
-  const allowed = access?.allowed === true
-    && access?.termsRequired !== true
-    && access?.reauthenticationRequired !== true
-    && access?.paidSubscriptionExpired !== true
-    && basis === 'founding_beta';
-  return { ...access, allowed };
+async function authenticateStudyRoomUser(request, env) {
+  const authorization = String(request.headers.get('Authorization') || '').trim();
+  if (!authorization) return null;
+  if (!/^Bearer\s+\S+$/i.test(authorization)) {
+    throw new GuestAccessError('INVALID_SESSION', 'Your session is invalid. Please sign in again.', 401);
+  }
+  const baseUrl = configuredSupabaseUrl(env);
+  const claims = validatedSupabaseJwtClaims(authorization, baseUrl, Date.now());
+  // Use the same bounded Auth verifier, once, without the shared cross-request
+  // cache: that cache intentionally omits current account restriction fields.
+  // No billing lookup or introductory-credit activation is involved.
+  const verification = await fetchAuthenticatedUserVerification(
+    authorization,
+    env,
+    baseUrl,
+    claims?.subject || null,
+  );
+  const current = verification.user;
+  if (!current) {
+    throw new GuestAccessError('INVALID_SESSION', 'Your session expired. Please sign in again.', 401);
+  }
+  const bannedUntil = current?.banned_until;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(String(current.id || ''))
+      || current.is_anonymous === true
+      || (current.is_anonymous != null && current.is_anonymous !== false)
+      || current.deleted_at
+      || (bannedUntil != null && bannedUntil !== ''
+        && (!Number.isFinite(Date.parse(bannedUntil)) || Date.parse(bannedUntil) > Date.now()))) {
+    throw new StudyRoomError(
+      'STUDY_ROOM_ACCOUNT_UNAVAILABLE',
+      'This account cannot enter the Study Room. Sign in with an active account.',
+      403,
+    );
+  }
+  return {
+    id: String(current.id).trim(),
+    email: String(current.email || '').trim().toLowerCase() || null,
+    displayName: safeSingleLine(current.user_metadata?.full_name || current.user_metadata?.name, 120) || null,
+    createdAt: safeSingleLine(current.created_at, 40) || null,
+    provider: safeSingleLine(current.app_metadata?.provider, 40) || null,
+    ...verifiedAccessTokenContext(authorization),
+  };
 }
 
 async function studyRoomAdministratorAccess(env, user) {
@@ -10123,11 +10157,9 @@ async function enforceStudyRoomRateLimit(request, env, scope) {
 }
 
 const studyRoomHandlers = createStudyRoomHandlers({
-  authenticate: verifiedAuthenticatedUser,
+  authenticate: authenticateStudyRoomUser,
   authorizeAdmin: studyRoomAdministratorAccess,
-  authorizeMember: async (env, user) => studyRoomMemberAccess(
-    await phase4AccessForUser(env, user.id),
-  ),
+  authorizeMember: async (_env, user) => ({ allowed: Boolean(user?.id), basis: 'signed_in' }),
   parseJson: parseBoundedJson,
   rateLimit: enforceStudyRoomRateLimit,
   respond: jsonResponse,

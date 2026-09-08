@@ -23,20 +23,10 @@
     return ADMIN_ROLES.has(normalized(value?.role));
   }
 
-  function isSubscriptionEligible(value = access) {
-    if (!value || typeof value !== 'object' || isAdmin(value)) return false;
-    return global.DueDiligenceSubscriptionCta?.isAudienceEligible?.(value) === true;
-  }
-
-  function isFoundingBetaTester(value = access) {
-    return normalized(value?.basis) === 'founding beta';
-  }
-
-  function hasLiveRoomAccess(value = access) {
-    return Boolean(value && typeof value === 'object' && (
-      isAdmin(value)
-      || (value.allowed === true && isFoundingBetaTester(value))
-    ));
+  function hasLiveRoomAccess(value = session) {
+    // The live page verifies normal Auth and server-owned room permissions.
+    // Subscription access and grading quota do not gate a signed-in launch.
+    return signedIn(value);
   }
 
   function runtimeSession() {
@@ -59,16 +49,11 @@
   }
 
   function signedIn(value = session) {
-    return Boolean(value?.access_token || value?.user);
+    return typeof value?.access_token === 'string' && value.access_token.trim().length > 0;
   }
 
   function accessIsResolving() {
-    return !authSettled || (signedIn() && !access && !accessResolutionFailed);
-  }
-
-  function headerShowsAdmin() {
-    const headerRole = normalized(document.getElementById('dd2-header-role-label')?.textContent);
-    return ADMIN_ROLES.has(headerRole);
+    return !authSettled && !signedIn();
   }
 
   function syncTriggerVisibility(overrides = {}) {
@@ -97,20 +82,11 @@
     const subscribe = document.getElementById('dd-study-room-subscribe');
     const note = document.getElementById('dd-study-room-subscribe-note');
     if (!subscribe || !note) return;
-    const known = Boolean(access && typeof access === 'object');
-    const eligible = isSubscriptionEligible(access);
-    const liveAccess = hasLiveRoomAccess(access);
-    const subscribed = known && !eligible && !liveAccess;
-    subscribe.disabled = !eligible;
-    subscribe.classList.toggle('is-subscribed', subscribed);
-    subscribe.querySelector('span').textContent = !known
-      ? 'Checking access…'
-      : liveAccess ? 'Live access enabled' : subscribed ? 'Subscription active' : 'Subscribe now';
-    note.textContent = !known
-      ? 'Confirming your account status'
-      : liveAccess
-        ? 'Authorized test access'
-        : subscribed ? 'Study Room access is not yet available during testing' : 'Opens Plans & Pricing';
+    const liveAccess = hasLiveRoomAccess();
+    subscribe.disabled = accessIsResolving();
+    subscribe.classList.toggle('is-subscribed', false);
+    subscribe.querySelector('span').textContent = liveAccess ? 'Open Study Room' : 'Sign in to join';
+    note.textContent = 'Available to all signed-in members, free and paid';
   }
 
   function hydratePreviewImages() {
@@ -141,9 +117,7 @@
     document.body.classList.add('dd-study-room-open');
     global.requestAnimationFrame(() => document.getElementById('dd-study-room-close')?.focus({ preventScroll: true }));
     global.DueDiligenceAnalytics?.track?.('study_room_preview_opened', {
-      access: isAdmin(access)
-        ? 'admin'
-        : (isFoundingBetaTester(access) ? 'test_cohort' : (isSubscriptionEligible(access) ? 'eligible' : 'subscribed')),
+      access: signedIn() ? 'signed_in' : 'signed_out',
     });
     return true;
   }
@@ -177,16 +151,16 @@
     }
     popup.focus?.();
     global.DueDiligenceAnalytics?.track?.('study_room_window_opened', {
-      audience: isAdmin(access) ? 'admin' : 'test_cohort',
+      audience: isAdmin(access) ? 'admin' : 'signed_in',
     });
     return true;
   }
 
   function open(trigger = null) {
+    session = runtimeSession();
     if (accessIsResolving()) return false;
     access = accessWithVerifiedRole() || access;
-    if (hasLiveRoomAccess(access)
-        || (accessResolutionFailed && signedIn() && headerShowsAdmin())) {
+    if (hasLiveRoomAccess()) {
       return openLiveRoom();
     }
     return openMarketingPreview(trigger);
@@ -205,13 +179,14 @@
     return true;
   }
 
-  function openPricing() {
-    if (!isSubscriptionEligible(access)) return;
+  function openEntry() {
+    if (signedIn(runtimeSession())) return open();
     close({ restoreFocus: false });
-    const target = document.getElementById('dd2-header-pricing-button')
-      || document.getElementById('spa-pricing');
-    target?.click();
-    global.DueDiligenceAnalytics?.track?.('study_room_preview_pricing_opened');
+    if (typeof global.DueDiligencePhase2?.openSignIn === 'function') {
+      global.DueDiligencePhase2.openSignIn({ allowDismiss: true });
+    } else {
+      document.getElementById('btn-signin')?.click();
+    }
   }
 
   function setPreviewStatus(message) {
@@ -232,7 +207,7 @@
       button.addEventListener('click', () => {
         const action = button.dataset.studyRoomControl;
         if (action === 'leave') {
-          setPreviewStatus('The live room is still in admin testing. No call was started.');
+          setPreviewStatus('This is an interface preview. No call was started.');
           return;
         }
         const pressed = button.getAttribute('aria-pressed') !== 'true';
@@ -246,7 +221,7 @@
     });
 
     document.getElementById('dd-study-room-window')?.addEventListener('click', () => {
-      setPreviewStatus('The live room will open in a separate window during the next testing phase.');
+      setPreviewStatus('Sign in to open the live room in a separate window.');
     });
   }
 
@@ -265,7 +240,7 @@
         close();
         return;
       }
-      if (event.target.closest?.('#dd-study-room-subscribe')) openPricing();
+      if (event.target.closest?.('#dd-study-room-subscribe')) openEntry();
     });
 
     overlay?.addEventListener('click', (event) => {
@@ -323,7 +298,7 @@
       ? null
       : (hasExplicitSession
         ? detail.session
-        : (runtimeSession() || (detail?.authenticated === true ? { access_token: 'authenticated-session' } : null)));
+        : runtimeSession());
     const previousUserId = String(session?.user?.id || '');
     const nextUserId = String(nextSession?.user?.id || '');
     const changedAccount = signedIn(nextSession)

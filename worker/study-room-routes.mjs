@@ -11,7 +11,7 @@ import {
 
 const STUDY_ROOM_ADMIN_ROLES = new Set(['admin', 'founder_admin', 'super_admin']);
 const STUDY_ROOM_PRIVILEGED_MODERATOR_ROLES = new Set(['founder_admin', 'super_admin']);
-const STUDY_ROOM_TEST_ACCESS_BASIS = 'founding_beta';
+const STUDY_ROOM_MEMBER_ACCESS_BASIS = 'signed_in';
 
 function normalizedAdministratorRole(value) {
   return String(value || '').trim().toLowerCase();
@@ -24,9 +24,9 @@ function authorizedAdministrator(authorization) {
     : null;
 }
 
-function authorizedTestMember(access) {
+function authorizedSignedInMember(access) {
   const basis = String(access?.basis || '').trim().toLowerCase();
-  return access?.allowed === true && basis === STUDY_ROOM_TEST_ACCESS_BASIS
+  return access?.allowed === true && basis === STUDY_ROOM_MEMBER_ACCESS_BASIS
     ? access
     : null;
 }
@@ -112,13 +112,13 @@ export function createStudyRoomHandlers(dependencies) {
         'Open the Study Room from the signed-in website instead.',
       );
     }
-    const memberAccess = authorizedTestMember(await authorizeMember(env, user));
+    const memberAccess = authorizedSignedInMember(await authorizeMember(env, user));
     if (!memberAccess) {
       throw new StudyRoomError(
-        'STUDY_ROOM_PRIVATE_TEST_REQUIRED',
-        'The Study Room is currently limited to authorized testers.',
+        'STUDY_ROOM_ACCOUNT_UNAVAILABLE',
+        'This account cannot enter the Study Room.',
         403,
-        'This account is not yet eligible while testing continues.',
+        'Sign in with an active Due Diligence account and try again.',
       );
     }
     return {

@@ -30,10 +30,11 @@ const expectedMigrations = [
   '20260907181748_astra_admin_role_fail_closed.sql',
   '20260907222627_astra_forecast_analytics_browser_scopes.sql',
   '20260907223228_astra_simulator_verified_source_presentation.sql',
+  '20260908105314_astra_internal_payment_fixture_mail_isolation.sql',
 ];
 const actualMigrations = [...databaseContract.match(/ASTRA_MIGRATIONS = Object\.freeze\(\[([\s\S]*?)\]\)/u)[1]
   .matchAll(/'([^']+\.sql)'/gu)].map((match) => match[1]);
-assert.deepEqual(actualMigrations, expectedMigrations, 'Exactly the fifteen reviewed forward migrations must be attested.');
+assert.deepEqual(actualMigrations, expectedMigrations, 'Exactly the sixteen reviewed forward migrations must be attested.');
 assert.deepEqual(actualMigrations, [...actualMigrations].sort());
 for (const stagingOnly of [
   '20260907223149_astra_staging_examination_fixture_registration.sql',
@@ -41,6 +42,8 @@ for (const stagingOnly of [
 ]) assert.ok(!actualMigrations.includes(stagingOnly), 'Optional test registrars must stay outside the production database bundle.');
 
 const newReviewedPaths = [
+  'supabase/migrations/20260908105314_astra_internal_payment_fixture_mail_isolation.sql',
+  'scripts/test-astra-internal-payment-fixture-mail-isolation.mjs',
   'assets/pricing-checkout-safety.js',
   'scripts/test-pricing-checkout-safety.mjs',
   'worker/commercial-launch-access-payment.test.mjs',
@@ -187,6 +190,9 @@ assert.match(workflow.slice(0, staging), /uses: actions\/checkout@v4[\s\S]*?fetc
 assert.ok(validation.includes('Verify credential-free Linux Forecast browser wiring'));
 assert.ok(validation.includes('node scripts/verify-astra-forecast-staging.mjs --self-test-browser'));
 for (const source of [validation, workflow]) {
+  const fixtureIsolationCommand = '          node scripts/test-astra-internal-payment-fixture-mail-isolation.mjs';
+  assert.equal(source.replaceAll('\r\n', '\n').split('\n').filter((line) => line === fixtureIsolationCommand).length, 1,
+    'Both workflows must execute exactly one local actual-SQL fixture-mail isolation test.');
   for (const command of ['node scripts/test-astra-late-payment-ui.mjs', 'node scripts/test-astra-late-149-binding-reconciliation.mjs']) {
     assert.ok(source.includes('          ' + command + '\n') || source.includes('          ' + command + '\r\n'),
       'Both workflows must execute the late-proof regression: ' + command);

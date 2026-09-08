@@ -272,6 +272,7 @@ jobs:
             scripts/test-public-release1-reliability.mjs \
             scripts/test-astra-payment-cohort-repair.mjs \
             scripts/test-astra-payment-lifecycle.mjs \
+            scripts/test-astra-internal-payment-fixture-mail-isolation.mjs \
             scripts/test-astra-149-binding-compatibility.mjs \
             scripts/test-astra-late-payment-ui.mjs \
             scripts/test-astra-late-149-binding-reconciliation.mjs \
@@ -311,6 +312,7 @@ jobs:
             supabase/migrations/20260907172508_astra_forecast_summary_email.sql \
             supabase/migrations/20260907173112_astra_browser_pdf_prepared_note.sql \
             supabase/migrations/20260907181748_astra_admin_role_fail_closed.sql \
+            supabase/migrations/20260908105314_astra_internal_payment_fixture_mail_isolation.sql \
             worker/astra-admin-role-fail-closed.test.mjs \
             worker/astra-rubric-reconciliation.test.mjs \
             worker/astra-support-privacy.test.mjs \
@@ -415,6 +417,7 @@ jobs:
           node --test scripts/test-capture-staging-commercial-deployment.mjs scripts/test-staging-commercial-fixtures.mjs scripts/test-staging-commercial-release-workflow.mjs
           node --test scripts/test-staging-current-payment-proof.mjs scripts/test-staging-current-payment-proof-cleanup.mjs
           node scripts/test-astra-payment-lifecycle.mjs
+          node scripts/test-astra-internal-payment-fixture-mail-isolation.mjs
           node scripts/test-astra-149-binding-compatibility.mjs
           node scripts/test-astra-late-payment-ui.mjs
           node scripts/test-pricing-public-contract.mjs

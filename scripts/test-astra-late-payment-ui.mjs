@@ -23,7 +23,8 @@ test('late-proof asset versions, service-worker shell and ordered database bundl
   assert.match(sw,/duediligence-shell-astra-late-proof-20260908-r1/);
   const contract=read('scripts/astra-release-database-contract.mjs');
   const names=[...contract.match(/ASTRA_MIGRATIONS = Object\.freeze\(\[([\s\S]*?)\]\)/)[1].matchAll(/'([^']+\.sql)'/g)].map(match=>match[1]);
-  assert.equal(names.length,15);
+  assert.equal(names.length,16);
+  assert.equal(names.at(-1),'20260908105314_astra_internal_payment_fixture_mail_isolation.sql');
   for(const prerequisite of ['20260907120200_astra_payment_invalidation.sql','20260907130002_astra_late_payment_review.sql','20260907133129_astra_149_binding_compatibility.sql']) {
     assert.ok(names.includes(prerequisite));
     assert.ok(names.indexOf(prerequisite)<names.indexOf('20260907143119_astra_late_149_binding_reconciliation.sql'));

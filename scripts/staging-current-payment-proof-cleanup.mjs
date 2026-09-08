@@ -96,7 +96,8 @@ export async function cleanupCurrentPaymentProof({manifest:m,persist,request=fet
   async function http(route,options={},statuses=[200],binary=false) {
     assert.ok(route.startsWith('/auth/v1/')||route.startsWith('/rest/v1/')||route.startsWith('/storage/v1/'));
     const response=await request(supabaseUrl+route,{...options,redirect:'error',signal:AbortSignal.timeout(30000),
-      headers:{apikey:serviceRoleKey,Authorization:`Bearer ${serviceRoleKey}`,'Content-Type':'application/json',...options.headers}});
+      headers:{apikey:serviceRoleKey,Authorization:`Bearer ${serviceRoleKey}`,
+        ...(options.body==null?{}:{'Content-Type':'application/json'}),...options.headers}});
     assert.ok(statuses.includes(response.status));
     const max=binary?m.proof.proofSizeBytes:2*1024*1024;
     const declared=response.headers.get('content-length');

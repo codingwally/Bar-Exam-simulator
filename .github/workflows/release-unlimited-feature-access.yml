@@ -545,9 +545,9 @@ jobs:
         id: staging_worker_deploy
         uses: cloudflare/wrangler-action@v3
         env:
-          # The action installs its pinned CLI; never rewrite the reviewed checkout.
+          # Install the pinned CLI without rewriting manifests; honor existing locked dependencies.
           NPM_CONFIG_SAVE: "false"
-          NPM_CONFIG_PACKAGE_LOCK: "false"
+          NPM_CONFIG_PACKAGE_LOCK: "true"
           STAGING_COMMERCIAL_DEPLOYMENT_EVIDENCE: ${{ runner.temp }}/staging-commercial-deployment-${{ github.run_id }}-${{ github.run_attempt }}.json
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}

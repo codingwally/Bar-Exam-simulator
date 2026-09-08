@@ -16,7 +16,8 @@ test('exact staging deployment captures its own version and command-associated d
   assert.ok(deploy.includes('id: staging_worker_deploy'));
   assert.ok(deploy.includes('wranglerVersion: "4.114.0"'));
   assert.ok(deploy.includes('NPM_CONFIG_SAVE: "false"'));
-  assert.ok(deploy.includes('NPM_CONFIG_PACKAGE_LOCK: "false"'));
+  assert.ok(deploy.includes('NPM_CONFIG_PACKAGE_LOCK: "true"'));
+  assert.doesNotMatch(deploy, /NPM_CONFIG_PACKAGE_LOCK: "false"/u);
   const sourceSha = 'a'.repeat(40);
   assert.doesNotThrow(() => assertCheckoutContract(sourceSha, sourceSha, ''));
   assert.throws(() => assertCheckoutContract(sourceSha, sourceSha, ' M worker/package-lock.json'),

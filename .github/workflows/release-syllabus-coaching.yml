@@ -561,6 +561,29 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
+  verify_production:
+    needs: deploy_production_pages
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      deployments: read
+    # The Pages environment reports success only after its publishing job ends.
+    # This read-only job must not own that environment or wait on its own status.
+    steps:
+      - name: Checkout the published candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.product_sha }}
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install reviewed dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+      - name: Rebuild the exact published Pages artifact for byte verification
+        run: node scripts/build-pages-artifact.mjs
+
       - name: Verify exact live Pages bytes and preserved Study Room markers
         env:
           GH_TOKEN: ${{ github.token }}

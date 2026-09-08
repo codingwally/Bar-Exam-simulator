@@ -27,13 +27,13 @@ function block(name) {
   return matches[0][1].replace(/^\s*import [^\n]+;\n/gmu, '');
 }
 
-async function execute(name, dependencies = {}) {
+async function execute(name, dependencies = {}, source = block(name)) {
   const deny = (...args) => { throw new Error(`Unexpected tool call: ${args[0]}`); };
   const values = {
     assert, createHash, isDeepStrictEqual, Buffer, process: { env: clone(env) }, execFileSync: deny,
     readFileSync: deny, writeFileSync: deny, mkdirSync: deny, fetch: deny, ...dependencies,
   };
-  return new AsyncFunction(...Object.keys(values), block(name))(...Object.values(values));
+  return new AsyncFunction(...Object.keys(values), source)(...Object.values(values));
 }
 
 const ciAdditions = [
@@ -345,6 +345,66 @@ test('public probes exercise real Syllabus catalog and Study Room signed-out bou
   };
   await execute('public-boundaries', { fetch }); assert.equal(calls.length, 8);
   await assert.rejects(execute('public-boundaries', { fetch: async () => ({ status: 200 }) }));
+});
+
+test('live verification runs after the Pages environment job completes and cannot own or mutate it', () => {
+  const jobs = workflow.slice(workflow.indexOf('\njobs:\n'));
+  const job = name => {
+    const match = jobs.match(new RegExp(`^  ${name}:\\n([\\s\\S]*?)(?=^  [a-z_]+:|$(?![\\s\\S]))`, 'mu'));
+    assert.ok(match, `Missing ${name} job`); return match[1];
+  };
+  const publish = job('deploy_production_pages'), verify = job('verify_production');
+  assert.match(publish, /^    environment:\n      name: github-pages$/mu);
+  assert.ok(publish.trimEnd().endsWith('uses: actions/deploy-pages@v4'), 'The publishing job must end with deployment so its environment can complete.');
+  assert.doesNotMatch(publish, /BEGIN live-pages|Verify exact live Pages bytes/u);
+  assert.match(verify, /^    needs: deploy_production_pages$/mu);
+  assert.doesNotMatch(verify, /^    environment:|^    if:|continue-on-error:|\b(?:pages|id-token):\s*write|actions\/deploy-pages|wrangler@/mu);
+  assert.match(verify, /^    permissions:\n      contents: read\n      deployments: read$/mu);
+  assert.match(verify, /ref: \$\{\{ inputs\.product_sha \}\}/u);
+  assert.match(verify, /npm ci --prefix worker --ignore-scripts --no-audit --no-fund/u);
+  assert.match(verify, /node scripts\/build-pages-artifact\.mjs/u);
+  assert.match(verify, /BEGIN live-pages/u);
+  assert.match(verify, /BEGIN public-boundaries/u, 'The independent verifier must retain post-publish API checks.');
+});
+
+function livePagesFixture({ state = 'success', sha = product, changedAsset } = {}) {
+  const calls = { api: 0, fetch: 0, waits: 0 };
+  const bytes = path => Buffer.from(path === '.well-known/duediligence-release.txt' ? `${product}\n`
+    : path === 'study-room/index.html' ? 'layout=stable-pins-20260908-1 join=free-join-20260909-1' : path);
+  return {
+    calls,
+    execFileSync(command, args) {
+      assert.equal(command, 'gh'); calls.api++;
+      return JSON.stringify(args[1].includes('deployments?') ? [{ id: 1, sha }] : state ? [{ state }] : []);
+    },
+    readFileSync(path) { assert.ok(path.startsWith('.pages-dist/')); return bytes(path.slice('.pages-dist/'.length)); },
+    fetch: async url => {
+      calls.fetch++;
+      const parsed = new URL(url), path = parsed.pathname.slice(1);
+      assert.equal(parsed.origin, 'https://duediligence.ph');
+      assert.equal(parsed.searchParams.get('release'), product);
+      return { status: 200, arrayBuffer: async () => path === changedAsset ? Buffer.from('unexpected live bytes') : bytes(path) };
+    },
+    setTimeout(callback) { calls.waits++; callback(); },
+  };
+}
+
+test('actual live Pages verifier accepts completed publication and rejects incomplete status or mismatched bytes', async () => {
+  // Execute the shipped Pages status/byte checks; the following API probe is
+  // executed independently above, avoiding real dynamic-import network calls.
+  const source = block('live-pages').split('// Recheck both API boundaries')[0];
+  const completed = livePagesFixture();
+  await execute('live-pages', completed, source);
+  assert.equal(completed.calls.fetch, 14);
+  assert.equal(completed.calls.waits, 0);
+  for (const state of ['in_progress', 'queued', 'pending', 'failure', 'error', null]) {
+    const fixture = livePagesFixture({ state });
+    await assert.rejects(execute('live-pages', fixture, source), `State ${state} must not be claimed as verified publication.`);
+    assert.equal(fixture.calls.fetch, 0, 'Incomplete deployment metadata must fail before asset reads.');
+    assert.equal(fixture.calls.waits, 11, 'Only the existing bounded retries are permitted.');
+  }
+  await assert.rejects(execute('live-pages', livePagesFixture({ sha: baseline }), source));
+  await assert.rejects(execute('live-pages', livePagesFixture({ changedAsset: 'assets/examinations.js' }), source));
 });
 
 test('workflow ordering retains exact proof before the marker and prevents unrelated mutations', () => {

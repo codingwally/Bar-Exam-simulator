@@ -149,6 +149,7 @@ jobs:
             scripts/staging-payment-fixtures.mjs \
             scripts/test-staging-payment-fixtures.mjs \
             scripts/staging-commercial-fixtures.mjs \
+            scripts/test-commercial-launch-staging.mjs \
             scripts/staging-commercial-suppression.mjs \
             scripts/capture-staging-commercial-deployment.mjs \
             scripts/test-capture-staging-commercial-deployment.mjs \

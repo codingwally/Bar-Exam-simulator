@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
+import { createServer } from 'node:http';
 import { cleanupCurrentPaymentProof } from './staging-current-payment-proof-cleanup.mjs';
 import { PAYMENT_FIXTURE_TARGET, paymentFixtureIdentity } from './staging-payment-fixtures.mjs';
 
@@ -78,6 +79,7 @@ function harness(options={}){
    const u=new URL(url),method=opts.method||'GET',body=opts.body?JSON.parse(opts.body):null;
    assert.equal(u.origin,PAYMENT_FIXTURE_TARGET.supabaseUrl);assert.equal(opts.redirect,'error');assert.ok(opts.signal instanceof AbortSignal);
    assert.equal(opts.headers.apikey,SECRET);assert.equal(opts.headers.Authorization,`Bearer ${SECRET}`);
+   assert.equal(new Headers(opts.headers).get('content-type'),opts.body==null?null:'application/json');
    calls.push(`${method} ${u.pathname}`);
    const checkpoint=m.cleanup?.state;
    if(u.pathname===`/auth/v1/admin/users/${ID}`){
@@ -207,6 +209,58 @@ for(const stage of ['snapshots-captured','payment-fence-requested','notice-delet
 test('successful cleanup cannot be invoked a second time',async()=>{
  const h=harness();await h.run();const count=h.calls.length;await assert.rejects(h.run,/CURRENT_PAYMENT_PROOF_CLEANUP_HELD/);assert.equal(h.calls.length,count);assert.equal(h.m.cleanupComplete,true);
 });
+test('real loopback HTTP preserves JSON POST/PATCH and omits JSON headers on bodyless DELETE', {timeout:10000}, async()=>{
+ const h=harness(),backing=h.args.request,observed=[],serverErrors=[];
+ // Source-grounded narrow Fastify-style parser, not an assertion of the hosted
+ // Storage version. Fastify v5.11.2 handle-request.js selects parsing when a
+ // body-capable request declares Content-Type; content-type-parser.js rejects
+ // an empty JSON body with FST_ERR_CTP_EMPTY_JSON_BODY before route execution.
+ // https://github.com/fastify/fastify/blob/v5.11.2/lib/handle-request.js
+ // https://github.com/fastify/fastify/blob/v5.11.2/lib/content-type-parser.js
+ // Supabase Storage deleteObject.ts registers DELETE /:bucketName/* without a body.
+ const server=createServer(async(req,res)=>{
+  try {
+   const chunks=[];for await(const chunk of req)chunks.push(chunk);
+   const body=Buffer.concat(chunks),contentType=req.headers['content-type'];
+   observed.push({method:req.method,path:new URL(req.url,'http://127.0.0.1').pathname,contentType,bytes:body.length});
+   if(['DELETE','POST','PATCH'].includes(req.method)&&contentType==='application/json'&&body.length===0){
+    res.writeHead(400,{'Content-Type':'application/json'});res.end(JSON.stringify({code:'FST_ERR_CTP_EMPTY_JSON_BODY'}));return;
+   }
+   if(body.length){assert.equal(contentType,'application/json');assert.doesNotThrow(()=>JSON.parse(body.toString('utf8')));}
+   const headers={apikey:req.headers.apikey,Authorization:req.headers.authorization};
+   if(req.headers.prefer!==undefined)headers.Prefer=req.headers.prefer;
+   if(contentType!==undefined)headers['Content-Type']=contentType;
+   const response=await backing(PAYMENT_FIXTURE_TARGET.supabaseUrl+req.url,{method:req.method,headers,
+    redirect:'error',signal:AbortSignal.timeout(5000),...(body.length?{body:body.toString('utf8')}:{})});
+   res.writeHead(response.status,Object.fromEntries(response.headers));res.end(Buffer.from(await response.arrayBuffer()));
+  }catch(error){serverErrors.push(error);res.writeHead(500);res.end();}
+ });
+ try {
+  await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});
+  const origin=`http://127.0.0.1:${server.address().port}`;
+  // The old request shape is rejected on the actual HTTP wire without entering
+  // any fake Storage handler or altering its proof. No remote endpoint is used.
+  const rejected=await fetch(origin+'/storage/v1/object/payment-proofs/inert-control.png',{
+   method:'DELETE',headers:{'Content-Type':'application/json'},signal:AbortSignal.timeout(5000)});
+  assert.equal(rejected.status,400);assert.deepEqual(await rejected.json(),{code:'FST_ERR_CTP_EMPTY_JSON_BODY'});
+  assert.deepEqual(h.calls,[]);assert.equal(h.stored,true);assert.equal(h.exists,true);observed.length=0;
+  h.args.request=async(url,options)=>{
+   const target=new URL(url);assert.equal(target.origin,PAYMENT_FIXTURE_TARGET.supabaseUrl);
+   return fetch(origin+target.pathname+target.search,options);
+  };
+  assert.deepEqual(await h.run(),{cleanupComplete:true,independentDatabaseReadbackRequired:true});
+  assert.deepEqual(serverErrors,[]);
+  const deletes=observed.filter(r=>r.method==='DELETE');assert.equal(deletes.length,3);
+  assert.ok(deletes.every(r=>r.contentType===undefined&&r.bytes===0));
+  const jsonWrites=observed.filter(r=>r.method==='POST'||r.method==='PATCH');
+  assert.ok(jsonWrites.some(r=>r.method==='POST'&&r.path==='/storage/v1/object/list/payment-proofs'));
+  assert.equal(jsonWrites.filter(r=>r.method==='PATCH'&&r.path==='/rest/v1/payment_requests').length,1);
+  assert.ok(jsonWrites.every(r=>r.contentType==='application/json'&&r.bytes>0));
+  assert.ok(observed.filter(r=>r.method==='GET').every(r=>r.contentType===undefined&&r.bytes===0));
+  assert.equal(h.stored,false);assert.equal(h.exists,false);
+ }finally{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
+});
+
 test('module stays inert and reuses exact corrected scalar CAS with no SQL Storage mutation or new registrar',async()=>{
  const source=await readFile(new URL('./staging-current-payment-proof-cleanup.mjs',import.meta.url),'utf8');
  assert.match(source,/import \{ exactCommercialRowFilter \} from '\.\/staging-commercial-fixtures\.mjs'/u);

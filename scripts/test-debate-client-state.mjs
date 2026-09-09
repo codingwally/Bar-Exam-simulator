@@ -97,7 +97,7 @@ function harness() {
     activeElement: null,
     getElementById(id) { if (!elements.has(id)) { const element = new Element(); element.id = id; elements.set(id, element); } return elements.get(id); },
     createElement(tagName) { return new Element(tagName); },
-    querySelectorAll(selector) { if (selector === '#event-tabs button') return []; throw new Error(`Unexpected document selector ${selector}`); },
+    querySelectorAll(selector) { if (selector === '#event-tabs button' || selector === '[data-live-tool]') return []; throw new Error(`Unexpected document selector ${selector}`); },
   };
   class MediaBoundary {
     constructor() { this.videos = new Map(); this.audioTracks = new Map(); this.credential = null; this.joined = false; this.leaveCalls = 0; }
@@ -153,6 +153,15 @@ function addSecret(h, id, text = 'PRIVATE_OLD_PERSON_SCORE') {
   const node = new Element('input'); node.textContent = text; h.element(id).append(node); return node;
 }
 const viewChanged = error => error.code === 'VIEW_CHANGED' && error.status === 409;
+
+test('sign-out closes the supporting native dialog and clears its private forms', async () => {
+  const h = harness(); openFixture(h); const { fields } = privateDrafts(h);
+  const tools = h.element('live-tools-dialog'); tools.open = true;
+  await h.signOutCleanup();
+  assert.equal(tools.open, false);
+  assert.equal(tools.closed, 1);
+  assertDraftsCleared(fields);
+});
 
 const expiredMatch = id => ({ id, title: 'Archived match', phase: 'expired', officialRecordsExpired: true });
 function privateLiveView(h) {

@@ -36,7 +36,7 @@ for (const file of [...new Set(sourceFiles)].sort()) sourceHashes[file] = create
 const workerTests = (await readdir(path.join(root, 'worker'))).filter(file => /^(debate-.*|study-room(?:-.*)?)\.test\.mjs$/.test(file)).map(file => 'worker/' + file);
 const groups = [
   ['server-domain-database', ['--test', '--test-concurrency=1', ...workerTests]],
-  ['client-state-media-dates', ['--test', 'scripts/test-debate-client-state.mjs', 'scripts/test-debate-media.mjs', 'scripts/test-debate-dates.mjs', 'scripts/test-debate-entry.mjs']],
+  ['client-state-media-dates', ['--test', 'scripts/test-debate-client-state.mjs', 'scripts/test-debate-desktop-layout.mjs', 'scripts/test-debate-media.mjs', 'scripts/test-debate-dates.mjs', 'scripts/test-debate-entry.mjs']],
   ['study-admission-sql', ['scripts/test-study-room-admission-sql.mjs']],
   ...['always-open', 'backgrounds', 'background-picker', 'hotfix-behavior', 'live'].map(name => ['study-' + name, ['scripts/test-study-room-' + name + '.mjs']]),
   ['local-http-boundaries', ['--test', 'scripts/test-debate-rehearsal-server.mjs']],

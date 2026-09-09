@@ -293,15 +293,48 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
     const relative = `screenshots/${String(report.screenshots.length + 1).padStart(2, '0')}-${name}.png`;
     await page.screenshot({ path: path.join(OUTPUT, relative), fullPage: true }); report.screenshots.push(relative);
   };
-  const checkLiveMediaLayout = async width => {
-    await host.setViewportSize({ width, height: 900 });
+  const checkLiveToolPanels = async () => {
+    const originalTile = await host.locator('#affirmative-tiles .tile').first().elementHandle();
+    await host.locator('[data-live-tool=conversation]').click();
+    await host.locator('#tool-conversation').waitFor({ state: 'visible' });
+    await host.locator('#message-form textarea').fill('Unsent layout check');
+    await host.keyboard.press('Escape');
+    await host.locator('#live-tools-dialog').waitFor({ state: 'hidden' });
+    check('Escape closes the room tool and returns keyboard focus', await host.locator('[data-live-tool=conversation]').evaluate(element => element === document.activeElement));
+    await host.locator('[data-live-tool=conversation]').click();
+    check('Opening and closing Conversation preserves an unsent draft', await host.locator('#message-form textarea').inputValue() === 'Unsent layout check');
+    await host.locator('#message-form textarea').fill(''); await host.locator('#live-tools-close').click();
+    await host.locator('[data-live-tool=evidence]').click();
+    await host.locator('#evidence-form [name=title]').fill('Unsent evidence layout check');
+    await host.locator('#live-tools-close').click(); await host.locator('[data-live-tool=evidence]').click();
+    check('Opening and closing Evidence preserves its unsent form', await host.locator('#evidence-form [name=title]').inputValue() === 'Unsent evidence layout check');
+    await host.locator('#evidence-form [name=title]').fill(''); await host.locator('#live-tools-close').click();
+    await host.locator('[data-live-tool=stages]').click();
+    check('Stages opens the complete current run of show', await host.locator('#tool-stages').isVisible()
+      && await host.locator('#run-of-show li').count() === matchFor(host).runOfShow.length);
+    await host.locator('#live-tools-close').click(); await host.locator('[data-live-tool=rooms]').click();
+    check('Rooms exposes private-room choices and the ruling or help request', await host.locator('#private-space-controls').isVisible()
+      && await host.locator('#request-help').isVisible());
+    await host.locator('#live-tools-close').click();
+    check('Room tool panels preserve the subscribed participant tile node', await host.locator('#affirmative-tiles .tile').first().evaluate((element, previous) => element === previous, originalTile));
+    await originalTile.dispose();
+    await host.locator('.timer-options summary').click();
+    for (const name of ['return-stage', 'technical-pause', 'reset-clock', 'edit-clock']) await host.locator('.timer-options [data-action="' + name + '"]').hover({ trial: true });
+    check('Timer options expose all four existing secondary controls without running an action', true);
+    await host.locator('.timer-options summary').click();
+  };
+  const checkLiveMediaLayout = async (width, height = 900) => {
+    await host.setViewportSize({ width, height });
     await host.locator('.site-header').scrollIntoViewIfNeeded();
     const selectors = ['.media-dock', '#arena', '.judges-rail', '#affirmative-name', '#negative-name'];
     const boxes = await Promise.all(selectors.map(selector => host.locator(selector).boundingBox()));
     check(`Live room layout exposes the media controls, arena and headings at ${width}px`, boxes.every(box => box && box.width > 0 && box.height > 0));
     const [dock, arena, ...headings] = boxes;
-    check(`Media controls stay above the arena without covering team or adjudicator headings at ${width}px`, dock.y + dock.height <= arena.y + 1
-      && headings.every(box => dock.y + dock.height <= box.y + 1), { width, geometry: Object.fromEntries(selectors.map((selector, index) => [selector, boxes[index]])) });
+    const desktop = width >= 1100 && height >= 650;
+    check(`Media controls remain separate from the arena and headings at ${width}px`, desktop
+      ? arena.y + arena.height <= dock.y + 1 && headings.every(box => box.y + box.height <= dock.y + 1)
+      : dock.y + dock.height <= arena.y + 1 && headings.every(box => dock.y + dock.height <= box.y + 1),
+      { width, height, position: desktop ? 'bottom' : 'above arena', geometry: Object.fromEntries(selectors.map((selector, index) => [selector, boxes[index]])) });
     const ids = ['join-media', 'mic', 'camera', 'share', 'devices', 'audio', 'leave-media'];
     const controls = await Promise.all(ids.map(async id => ({ id, box: await host.locator(`.media-dock #${id}`).boundingBox(),
       disabled: await host.locator(`.media-dock #${id}`).isDisabled() })));
@@ -318,6 +351,36 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
     for (const id of ids) await host.locator(`.media-dock #${id}`).hover({ trial: true });
     check(`Every media control passes browser hit-target checks at ${width}px`, true, { width, controlIds: ids, action: 'hover trial only' });
     await host.locator('.site-header').scrollIntoViewIfNeeded();
+    if (desktop) {
+      const viewport = { x: 0, y: 0, width, height }, items = [];
+      for (const selector of ['#live-motion', '#active-match', '.affirmative', '.negative', '.judges-rail', '.observers', '#clock', '#stage-controls', '.media-dock', '.live-tool-actions']) {
+        const box = await host.locator(selector).boundingBox();
+        check(selector + ' fits in the desktop window', contained(box, viewport) && box.width > 0 && box.height > 0, { width, height, box });
+        items.push({ selector, box });
+      }
+      for (const selector of ['#affirmative-tiles .tile', '#negative-tiles .tile', '#judge-tiles .tile', '#observer-tiles .tile']) {
+        const count = await host.locator(selector).count();
+        check(selector + ' has its assigned visible bench', count > 0 && (!selector.includes('affirmative') && !selector.includes('negative') || count === 3));
+        for (let index = 0; index < count; index++) {
+          const tile = host.locator(selector).nth(index), box = await tile.boundingBox(), caption = await tile.locator('.caption').boundingBox();
+          check(selector + ' participant and caption fit without page scrolling', contained(box, viewport) && contained(caption, box) && box.height >= 64, { width, height, index, box, caption });
+        }
+      }
+      for (const selector of ['#stage-controls>button', '.live-tool-actions button', '#observers-prev', '#observers-next']) {
+        const count = await host.locator(selector).count();
+        for (let index = 0; index < count; index++) {
+          const control = host.locator(selector).nth(index), box = await control.boundingBox();
+          check(selector + ' is reachable in the desktop window', contained(box, viewport) && box.height >= 44 && box.width >= 44, { width, height, index, box });
+          await control.hover({ trial: true });
+        }
+      }
+      const floorScroll = await host.locator('.floor').evaluate(element => ({ height: element.clientHeight, scrollHeight: element.scrollHeight }));
+      check('The clock and main timer controls fit together without inner scrolling', floorScroll.scrollHeight <= floorScroll.height + 1, { width, height, floorScroll });
+      const scroll = await host.locator('html').evaluate(element => ({ width: element.clientWidth, height: element.clientHeight,
+        scrollWidth: element.scrollWidth, scrollHeight: element.scrollHeight, x: window.scrollX, y: window.scrollY }));
+      check('Desktop live view has no outer page scroll at ' + width + 'x' + height,
+        scroll.scrollWidth <= scroll.width + 1 && scroll.scrollHeight <= scroll.height + 1 && scroll.x === 0 && scroll.y === 0, { width, height, scroll, items });
+    }
     if (width === 320) {
       const tiles = [];
       for (const selector of ['.judge-tiles .tile', '.observer-tiles .tile']) {
@@ -334,7 +397,7 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
       }
       check('Narrow adjudicator and observer tiles reserve separate Pin, initials and caption areas', true, { width, tiles });
     }
-    await screenshot(host, `live-media-controls-${width}px`);
+    await screenshot(host, `live-media-controls-${width}x${height}`);
   };
   const observe = page => {
     page.on('framenavigated', frame => { if (frame === page.mainFrame()) report.navigation.push({ actorId: actorIds.get(page),
@@ -592,7 +655,7 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
       await field(host, 'text').fill(`This house would expand access to community learning resources, rehearsal motion ${n}.`); await submit(host, 'add_motion');
     }
     await tab(host, 'schedule'); await open(host, 'fixtures', 'Generate pairings'); await field(host, 'format').selectOption('round_robin'); await submit(host, 'generate_fixtures');
-    await textIncludes(host, '#schedule-content', 'Review draft fixtures'); await screenshot(host, 'reviewed-fixture');
+    await textIncludes(host, '#schedule-content', 'Review draft pairings'); await screenshot(host, 'reviewed-fixture');
     await open(host, 'publish-fixtures', 'Publish reviewed pairings'); await host.locator('#dialog-fields input[type="checkbox"]').check(); await submit(host, 'publish_fixtures');
     await open(host, 'fixture-match', 'Set up scheduled match');
     check('Published fixture fixes both teams and motion in the dialog', await field(host, 'affirmative').isDisabled() && await field(host, 'negative').isDisabled() && await field(host, 'motionId').isDisabled());
@@ -603,15 +666,16 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
     await command(host, 'start_match', () => action(host, 'start-match').click()); await tab(host, 'live');
     assertHostedDefaultRunOfShow(matchFor(host).runOfShow);
     check('Independent V3 oracle confirms every default stage, question pair and duration', true);
-    await checkLiveMediaLayout(1365); await checkLiveMediaLayout(320); await host.setViewportSize({ width: 1365, height: 900 });
+    await checkLiveMediaLayout(1365, 768); await checkLiveMediaLayout(1280, 720); await checkLiveMediaLayout(1920, 1080); await checkLiveMediaLayout(320); await host.setViewportSize({ width: 1365, height: 900 }); await checkLiveToolPanels();
     check('Default preparation loads READY for 15 minutes', matchFor(host).timer.state === 'READY' && matchFor(host).timer.durationMs === 900000);
     const first = matchFor(host), aCaptain = first.captains.affirmative, nCaptain = first.captains.negative;
-    await useGuest(aCaptain); await tab(guest, 'live'); await guest.locator('#channel').selectOption('team');
+    await useGuest(aCaptain); await tab(guest, 'live'); await guest.locator('[data-live-tool=conversation]').click(); await guest.locator('#channel').selectOption('team');
     await guest.locator('#message-form textarea').fill(PRIVATE_TEAM); await command(guest, 'send_message', () => guest.locator('#message-form button[type="submit"]').click());
     await textIncludes(guest, '#messages', PRIVATE_TEAM);
-    const privateCutoff = trafficSequence; await useGuest(nCaptain); await tab(guest, 'live'); await guest.locator('#channel').selectOption('team');
+    const privateCutoff = trafficSequence; await useGuest(nCaptain); await tab(guest, 'live'); await guest.locator('[data-live-tool=conversation]').click(); await guest.locator('#channel').selectOption('team');
     await assertPrivateAbsent(guest, [PRIVATE_TEAM], privateCutoff);
     await guest.locator('#message-form textarea').fill('CI negative team preparation'); await command(guest, 'send_message', () => guest.locator('#message-form button[type="submit"]').click());
+    await guest.locator('#live-tools-close').click(); await guest.locator('[data-live-tool=evidence]').click();
     await guest.locator('#evidence-form [name="title"]').fill('Synthetic community reference');
     await guest.locator('#evidence-form [name="sourceUrl"]').fill('https://example.test/not-fetched-ci-evidence');
     await guest.locator('#evidence-form [name="description"]').fill('Synthetic PDF and link metadata; external source fetch is forbidden in this rehearsal.');
@@ -620,7 +684,7 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
     await guest.locator('#evidence-form [name="file"]').setInputFiles({ name: 'hosted-control-evidence.pdf', mimeType: 'application/pdf', buffer: evidenceBytes });
     await command(guest, 'share_evidence', () => guest.locator('#evidence-form button[type="submit"]').click(),
       { upload: { mimeType: 'application/pdf', size: evidenceBytes.length, sha256: sha(evidenceBytes) } });
-    await fresh(host); await tab(host, 'live'); await textIncludes(host, '#evidence-list', 'Synthetic community reference');
+    await fresh(host); await tab(host, 'live'); await host.locator('[data-live-tool=evidence]').click(); await textIncludes(host, '#evidence-list', 'Synthetic community reference'); await host.locator('#live-tools-close').click();
     const storedEvidence = matchFor(host).evidence.find(item => item.title === 'Synthetic community reference');
     check('Actual hosted upload retains a verified PDF digest', storedEvidence?.attachment?.digest === sha(evidenceBytes) && storedEvidence.attachment.size === evidenceBytes.length);
     await closeGuest();

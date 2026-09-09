@@ -19,7 +19,7 @@ const host = () => !!state.event && (state.event.ownerId === state.event.myId ||
 const moderationOfficial = () => { const m=currentMatch(); return m && (host() || [m.moderatorId,m.chiefId].includes(state.event.myId)); };
 const official = () => { const m=currentMatch(); return m && (host() || [m.moderatorId,m.timekeeperId,m.chiefId].includes(state.event.myId)); };
 const panelAdmin = () => host() || currentMatch()?.chiefId===state.event?.myId;
-const clearSensitiveViews = () => {state.viewGeneration++;for(const form of ['message-form','evidence-form'])$(form).reset();for(const name of ['judge-content','results-content','messages','evidence-list','live-motion','stage-controls','active-match','stage-label','speaker-label','run-of-show','private-space-controls','affirmative-name','negative-name','next-stage','presentation','stage-announcement'])$(name).replaceChildren();delete $('stage-controls').dataset.renderKey;for(const tile of state.tiles.values())tile.remove();state.tiles.clear();};
+const clearSensitiveViews = () => {closeLiveTools();state.viewGeneration++;for(const form of ['message-form','evidence-form'])$(form).reset();for(const name of ['judge-content','results-content','messages','evidence-list','live-motion','stage-controls','active-match','stage-label','speaker-label','run-of-show','private-space-controls','affirmative-name','negative-name','next-stage','presentation','stage-announcement'])$(name).replaceChildren();delete $('stage-controls').dataset.renderKey;for(const tile of state.tiles.values())tile.remove();state.tiles.clear();};
 const mediaIdentity = personId => currentMatch()?.mediaParticipants?.find(p=>p.userId===personId)?.identity || '';
 const personName = personId => state.event?.members.find(p=>p.id === personId)?.displayName || 'Unassigned';
 const sideName = side => side === 'affirmative' ? 'Affirmative' : side === 'negative' ? 'Negative' : 'Unresolved';
@@ -60,7 +60,7 @@ function adopt(event,force=false) {
   state.event=event; state.matchId=currentMatch()?.id || null;
   if(event.awaitingAdmission){clearSensitiveViews();state.messageHistory.clear();state.historyDone.clear();state.panel='overview';state.judgeDirty=false;clearTimeout(state.draftTimer);media.leave();for(const tile of state.tiles.values())tile.remove();state.tiles.clear();for(const name of ['judge-content','results-content','messages','evidence-list'])$(name).replaceChildren();}
   document.querySelectorAll('#event-tabs button').forEach(b=>b.disabled=!!event.awaitingAdmission&&b.dataset.panel!=='overview');
-  $('event').hidden=false; $('lobby').hidden=true; $('event-title').textContent=event.title;
+  $('event').hidden=false; $('lobby').hidden=true; $('event-title').textContent=event.title;$('event-title').title=event.title;
   $('event-meta').textContent=`${event.language} · ${event.timezone} · ${event.status}`;
   $('rehearsal-banner').hidden=!event.rehearsal;
   const fragment=new URLSearchParams({event:event.id}); if(state.matchId)fragment.set('match',state.matchId);
@@ -103,7 +103,21 @@ async function openEvent(eventId) {
   const view=state.viewGeneration,account=state.accountGeneration;await leaveCurrentMedia();if(view!==state.viewGeneration||account!==state.accountGeneration)return;clearSensitiveViews();$('context-change-note').hidden=true; state.judgeDirty=false;
   const result=await request(`/debate-room/snapshot?eventId=${encodeURIComponent(eventId)}`); state.event=null; adopt(result.event,true); status('Event opened.');
 }
+function closeLiveTools() {
+  const dialog=$('live-tools-dialog');if(dialog?.open)dialog.close();
+  document.querySelectorAll('[data-live-tool]').forEach(button=>button.setAttribute('aria-expanded','false'));
+}
+function openLiveTool(tool) {
+  const titles={conversation:'Conversation',evidence:'Shared evidence',stages:'Run of show',rooms:'Private rooms'};
+  if(!Object.hasOwn(titles,tool)||!state.event||state.event.awaitingAdmission)return;
+  const dialog=$('live-tools-dialog');
+  document.querySelectorAll('[data-tool-panel]').forEach(panel=>panel.hidden=panel.dataset.toolPanel!==tool);
+  document.querySelectorAll('[data-live-tool]').forEach(button=>button.setAttribute('aria-expanded',String(button.dataset.liveTool===tool)));
+  $('live-tools-title').textContent=titles[tool];
+  if(!dialog.open)dialog.showModal();
+}
 function openDialog(title,fields,onSubmit,submitLabel='Save') {
+  closeLiveTools();
   $('dialog-title').textContent=title; $('dialog-fields').innerHTML=fields; $('dialog-status').textContent=''; $('dialog-submit').textContent=submitLabel;
   $('dialog-form').onsubmit=async event=>{event.preventDefault(); $('dialog-submit').disabled=true; try { await onSubmit(new FormData(event.currentTarget)); $('dialog').close(); }catch(error){$('dialog-status').textContent=publicErrorMessage(error.message);}finally{$('dialog-submit').disabled=false;}};
   if(!$('dialog').open)$('dialog').showModal();
@@ -113,6 +127,7 @@ function reasonDialog(title,action,extra={},reasonField='reason') { openDialog(t
 
 function renderPanel() {
   if(!state.event)return;
+  if(state.panel!=='live')closeLiveTools();
   document.querySelectorAll('#event-tabs button').forEach(b=>b.setAttribute('aria-current',b.dataset.panel===state.panel?'page':'false'));
   document.querySelectorAll('section.panel').forEach(panel=>panel.hidden=panel.id!==`panel-${state.panel}`);
   ({overview:renderOverview,participants:renderPeople,rules:renderRules,live:renderLive,judge:renderJudge,vote:renderVote,results:renderResults,schedule:renderSchedule,help:renderHelp})[state.panel]?.();
@@ -147,7 +162,7 @@ function ensureTile(key,label,parent,identity,seat) {
   tile.dataset.identity=identity || ''; tile.dataset.seat=seat || '';
   tile.classList.toggle('pinned',state.pinnedTile===key);
   let pin=tile.querySelector('.tile-pin');if(!pin){pin=document.createElement('button');pin.type='button';pin.className='tile-pin';pin.onclick=()=>{state.pinnedTile=state.pinnedTile===key?null:key;renderLive();};tile.append(pin);}pin.textContent=state.pinnedTile===key?'Unpin':'Pin';pin.setAttribute('aria-label',(state.pinnedTile===key?'Unpin ':'Pin ')+label);pin.setAttribute('aria-pressed',String(state.pinnedTile===key));
-  tile.querySelector('.caption span').textContent=label;
+  tile.querySelector('.caption span').textContent=label;tile.querySelector('.caption span').title=label;
   tile.querySelector('.initials').textContent=label.split(/\s+/).slice(0,2).map(x=>x[0]).join('');
   if(tile.parentElement!==parent)parent.append(tile);
   const existing=[...media.videos.values()].find(v=>v.identity===identity && v.source==='camera');
@@ -178,7 +193,7 @@ function renderLive() {
   $('speaker-label').textContent=floorSeats.length?floorSeats.map(seat=>`${seat} · ${personName(m.seats[seat])}`).join(' ↔ '):m.phase==='setup'?'Complete readiness to begin':'Private preparation / deliberation';
   const next=m.runOfShow?.[m.currentStageIndex+1];$('next-stage').textContent=next?`Next: ${next.label || next.kind}`:'No next speaking stage';
   $('run-of-show').innerHTML=(m.runOfShow || []).map((s,i)=>`<li class="${i===m.currentStageIndex?'current':''}">${esc(s.label || `${s.id} ${s.kind}`)} · ${s.durationMs == null?'Untimed':`${s.durationMs/60000} min`}</li>`).join('');
-  const controlsKey=JSON.stringify([m.id,m.currentStageIndex,m.timer?.state,official()]);if($('stage-controls').dataset.renderKey!==controlsKey){$('stage-controls').dataset.renderKey=controlsKey;$('stage-controls').innerHTML=!m.timer?(moderationOfficial()&&m.phase==='setup'?button('Start match','start-match'): '<p>No active speech clock. Continue on the Judge or Results tab when the speaking phase is complete.</p>'):official()?`${button('Take timer control','claim-clock')}${m.timer?button('Start','timer','data-type="START"')+button(m.timer.state==='PAUSED'?'Resume':'Pause','timer',`data-type="${m.timer.state==='PAUSED'?'RESUME':'PAUSE'}"`)+button('Finish stage','timer','data-type="FINISH"')+button('Next stage','next-stage')+button('Return to stage','return-stage')+button('Technical pause','technical-pause')+button('Reset timer','reset-clock')+button('Change duration','edit-clock'):''}`:'';}
+  const controlsKey=JSON.stringify([m.id,m.currentStageIndex,m.timer?.state,official()]);if($('stage-controls').dataset.renderKey!==controlsKey){$('stage-controls').dataset.renderKey=controlsKey;$('stage-controls').innerHTML=!m.timer?(moderationOfficial()&&m.phase==='setup'?button('Start match','start-match'): '<p>No active speech clock. Continue on the Judge or Results tab when the speaking phase is complete.</p>'):official()?`${button('Take timer control','claim-clock')}${m.timer?button('Start','timer','data-type="START"')+button(m.timer.state==='PAUSED'?'Resume':'Pause','timer',`data-type="${m.timer.state==='PAUSED'?'RESUME':'PAUSE'}"`)+button('Finish stage','timer','data-type="FINISH"')+button('Next stage','next-stage')+`<details class="timer-options"><summary>Timer options</summary><div>${button('Return to stage','return-stage')}${button('Technical pause','technical-pause')}${button('Reset timer','reset-clock')}${button('Change duration','edit-clock')}</div></details>`:''}`:'';}
   $('private-space-controls').innerHTML=['main','affirmative','negative','judges'].map(space=>button(space==='main'?'Main room':space==='judges'?'Judge deliberation':`${sideName(space)} preparation`,'space',`data-space="${space}"`)).join('')+['affirmative','negative','judges'].filter(space=>space==='judges'?m.phase==='deliberation'&&m.judgeIds.includes(state.event.myId):['preparation','break'].includes(m.phase)&&m.captains?.[space]===state.event.myId).map(space=>button('Invite moderator to '+(space==='judges'?'judges':sideName(space)),'invite-private',`data-space="${space}"`)).join('')+(m.privateRoomInvitations||[]).map(invite=>`<p>${esc(personName(invite.moderatorId))} · ${esc(humanState(invite.space))} · ${esc(humanState(invite.status))} · ${esc(invite.reason)} ${invite.status==='ACTIVE'&&(host()||invite.moderatorId===state.event.myId||invite.space==='judges'&&m.judgeIds.includes(state.event.myId)||m.captains?.[invite.space]===state.event.myId)?button('Revoke invitation','revoke-private',`data-invitation="${esc(invite.id)}"`):''}</p>`).join('');
   if(state.lastStage!==stage?.id){state.lastStage=stage?.id;$('stage-announcement').textContent=`${$('stage-label').textContent}. ${$('speaker-label').textContent}`;}
   renderMessages();applyPersonalAudio();
@@ -340,12 +355,14 @@ async function boot(){
   if(invite&&eventId){history.replaceState(null,'',`${location.pathname}#event=${encodeURIComponent(eventId)}`);const result=await request('/debate-room/claim',{eventId,secret:invite,idempotencyKey:id()});adopt(result.event,true);}else if(eventId)await openEvent(eventId);
 }
 
-document.addEventListener('click',event=>{const b=event.target.closest('[data-action]');if(b)guarded(()=>actions[b.dataset.action]?.(b));});
+document.addEventListener('click',event=>{const tool=event.target.closest('[data-live-tool]');if(tool){openLiveTool(tool.dataset.liveTool);return;}const b=event.target.closest('[data-action]');if(b)guarded(()=>actions[b.dataset.action]?.(b));});
 $('event-tabs').addEventListener('click',event=>{const b=event.target.closest('[data-panel]');if(!b)return;guarded(async()=>{if(state.judgeDirty)await saveDraft();state.panel=b.dataset.panel;renderPanel();});});
 $('create-event').onclick=()=>guarded(()=>{if(!state.session)throw new Error('Sign in before creating your event.');eventDialog();});
 $('back-lobby').onclick=()=>{const view=state.viewGeneration,account=state.accountGeneration;return guarded(async()=>{if(state.judgeDirty)await saveDraft();await leaveCurrentMedia();if(view!==state.viewGeneration||account!==state.accountGeneration)return;discardEventView();await loadEvents();});};
 $('refresh').onclick=refresh;$('check-in').onclick=()=>guarded(()=>command('check_in',currentMatch()?matchPayload():{}));
 $('dialog-close').onclick=$('dialog-cancel').onclick=()=>$('dialog').close();
+$('live-tools-close').onclick=closeLiveTools;
+$('live-tools-dialog').addEventListener('close',closeLiveTools);
 $('open-rulebook').onclick=()=>openDialog('Rules and quick-start',rulebook(),async()=>{},'Done');
 $('join-form').onsubmit=event=>{event.preventDefault();guarded(async()=>{const form=new FormData(event.currentTarget);let eventId=String(form.get('eventId')).trim(),secret=String(form.get('secret')).trim();try{const link=new URL(eventId);if(link.origin!==location.origin)throw new Error();const p=new URLSearchParams(link.hash.slice(1));eventId=p.get('event');secret=p.get('invite')||secret;}catch{}if(!eventId||!secret)throw new Error('Paste the full invitation link, or enter both the event ID and invitation code.');const result=await request('/debate-room/claim',{eventId,secret,idempotencyKey:id()});adopt(result.event,true);});};
 $('account').onclick=()=>guarded(async()=>{if(state.session)return; if(!state.client)throw new Error('Sign-in is unavailable. Return to the main Due Diligence page.');sessionStorage.setItem('duediligence.debate.auth-return.v3',JSON.stringify({path:`${location.pathname}${location.search}${location.hash}`,at:Date.now()}));const {error}=await state.client.auth.signInWithOAuth({provider:'google',options:{redirectTo:config.supabase.oauthRedirectUrl || `${location.origin}/?auth=callback`}});if(error)throw error;});

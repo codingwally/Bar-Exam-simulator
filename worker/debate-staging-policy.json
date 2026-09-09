@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "baseConfig": "worker/wrangler.staging.toml",
+  "workerName": "duediligence-examinations-staging",
+  "publicUrl": "https://duediligence-examinations-staging.wallyesteban1993.workers.dev",
+  "supabaseProjectRef": "hlzqmreeoghbldnhlybr",
+  "compatibilityDate": "2026-07-26",
+  "compatibilityFlags": ["nodejs_compat"],
+  "placementRegion": "gcp:us-east4",
+  "crons": ["*/2 * * * *"],
+  "requiredSecretNames": ["SUPABASE_SERVICE_ROLE_KEY", "LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET"],
+  "migrations": [
+    "supabase/migrations/20260909080139_debate_room_v3.sql",
+    "supabase/migrations/20260909080143_study_room_admission_v3.sql"
+  ],
+  "debateVars": {
+    "DEBATE_ROOM_ENABLED": "false",
+    "DEBATE_MEDIA_ENABLED": "false",
+    "DEBATE_SWEEPER_ENABLED": "false",
+    "DEBATE_RESULTS_EMAIL_MODE": "suppressed",
+    "DEBATE_INVITATION_EMAIL_MODE": "suppressed",
+    "DEBATE_APPROVED_MAX_PARTICIPANTS": "0"
+  }
+}

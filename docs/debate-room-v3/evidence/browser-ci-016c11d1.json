@@ -1,0 +1,2678 @@
+{
+  "recordedAt": "2026-09-09T11:31:48.231Z",
+  "candidate": "016c11d1cfca5b9514f0b924fc86f488523b29e3",
+  "tree": "9b2b8a065cf0efa3b70541ca49371fd0b54b6f92",
+  "runId": "34343107711",
+  "url": "https://github.com/codingwally/Bar-Exam-simulator/actions/runs/34343107711",
+  "status": "PARTIAL_OR_FAILED_CI_EVIDENCE",
+  "reports": {
+    "debate": {
+      "path": "browser-organizer-ci/report.json",
+      "sha256": "b6e23a75e6aab227715dd9ae11542646c22b06f5fb96f1d92573ee0134712ecc",
+      "verifiedGitSourceHashes": 16,
+      "report": {
+        "kind": "ISOLATED_CI_SYNTHETIC_BROWSER_ORGANIZER",
+        "state": "FAIL",
+        "startedAt": "2026-09-09T10:59:56.197Z",
+        "head": "e59340a21edd901f7fa48c49b844acc90283571a",
+        "testSha256": "5c29440295e6e7584bd4d1cc382cb628112dea57cdb38dcd0ef8c1955d3740c9",
+        "checks": [
+          {
+            "name": "New event survives actual browser reload",
+            "status": "PASS"
+          },
+          {
+            "name": "Invitation contains a complete same-origin event and secret link",
+            "status": "PASS"
+          },
+          {
+            "name": "Unadmitted identity receives only its own waiting snapshot",
+            "status": "PASS"
+          },
+          {
+            "name": "Waiting participant cannot open other workspaces",
+            "status": "PASS"
+          },
+          {
+            "name": "Host admission unlocks People after a real refresh",
+            "status": "PASS"
+          },
+          {
+            "name": "Invitation contains a complete same-origin event and secret link",
+            "status": "PASS"
+          },
+          {
+            "name": "Unadmitted identity receives only its own waiting snapshot",
+            "status": "PASS"
+          },
+          {
+            "name": "Waiting participant cannot open other workspaces",
+            "status": "PASS"
+          },
+          {
+            "name": "Host admission unlocks People after a real refresh",
+            "status": "PASS"
+          },
+          {
+            "name": "Invitation contains a complete same-origin event and secret link",
+            "status": "PASS"
+          },
+          {
+            "name": "Unadmitted identity receives only its own waiting snapshot",
+            "status": "PASS"
+          },
+          {
+            "name": "Waiting participant cannot open other workspaces",
+            "status": "PASS"
+          },
+          {
+            "name": "Host admission unlocks People after a real refresh",
+            "status": "PASS"
+          },
+          {
+            "name": "Invitation contains a complete same-origin event and secret link",
+            "status": "PASS"
+          },
+          {
+            "name": "Unadmitted identity receives only its own waiting snapshot",
+            "status": "PASS"
+          },
+          {
+            "name": "Waiting participant cannot open other workspaces",
+            "status": "PASS"
+          },
+          {
+            "name": "Host admission unlocks People after a real refresh",
+            "status": "PASS"
+          },
+          {
+            "name": "Invitation contains a complete same-origin event and secret link",
+            "status": "PASS"
+          },
+          {
+            "name": "Unadmitted identity receives only its own waiting snapshot",
+            "status": "PASS"
+          },
+          {
+            "name": "Waiting participant cannot open other workspaces",
+            "status": "PASS"
+          },
+          {
+            "name": "Host admission unlocks People after a real refresh",
+            "status": "PASS"
+          },
+          {
+            "name": "Invitation contains a complete same-origin event and secret link",
+            "status": "PASS"
+          },
+          {
+            "name": "Unadmitted identity receives only its own waiting snapshot",
+            "status": "PASS"
+          },
+          {
+            "name": "Waiting participant cannot open other workspaces",
+            "status": "PASS"
+          },
+          {
+            "name": "Host admission unlocks People after a real refresh",
+            "status": "PASS"
+          },
+          {
+            "name": "Invitation contains a complete same-origin event and secret link",
+            "status": "PASS"
+          },
+          {
+            "name": "Unadmitted identity receives only its own waiting snapshot",
+            "status": "PASS"
+          },
+          {
+            "name": "Waiting participant cannot open other workspaces",
+            "status": "PASS"
+          },
+          {
+            "name": "Host admission unlocks People after a real refresh",
+            "status": "PASS"
+          },
+          {
+            "name": "Invitation contains a complete same-origin event and secret link",
+            "status": "PASS"
+          },
+          {
+            "name": "Unadmitted identity receives only its own waiting snapshot",
+            "status": "PASS"
+          },
+          {
+            "name": "Waiting participant cannot open other workspaces",
+            "status": "PASS"
+          },
+          {
+            "name": "Host admission unlocks People after a real refresh",
+            "status": "PASS"
+          },
+          {
+            "name": "Invitation contains a complete same-origin event and secret link",
+            "status": "PASS"
+          },
+          {
+            "name": "Unadmitted identity receives only its own waiting snapshot",
+            "status": "PASS"
+          },
+          {
+            "name": "Waiting participant cannot open other workspaces",
+            "status": "PASS"
+          },
+          {
+            "name": "Host admission unlocks People after a real refresh",
+            "status": "PASS"
+          },
+          {
+            "name": "Published fixture fixes both teams and motion in the dialog",
+            "status": "PASS"
+          },
+          {
+            "name": "Current match readiness is saved and rendered",
+            "status": "PASS"
+          },
+          {
+            "name": "Default preparation loads READY for 15 minutes",
+            "status": "PASS"
+          },
+          {
+            "name": "Private marker absent from unauthorized DOM: CI_AFFIRMATIVE_PRIVATE_STRATEGY_DO_NOT_DISCLOSE",
+            "status": "PASS"
+          },
+          {
+            "name": "Private marker absent from unauthorized snapshots: CI_AFFIRMATIVE_PRIVATE_STRATEGY_DO_NOT_DISCLOSE",
+            "status": "PASS"
+          },
+          {
+            "name": "preparation begins READY without automatic start",
+            "status": "PASS"
+          },
+          {
+            "name": "preparation runs into visible overtime without auto-advance",
+            "status": "PASS"
+          },
+          {
+            "name": "stage-01 begins READY without automatic start",
+            "status": "PASS"
+          },
+          {
+            "name": "Paused browser clock preserves elapsed time",
+            "status": "PASS"
+          },
+          {
+            "name": "stage-01 runs into visible overtime without auto-advance",
+            "status": "PASS"
+          },
+          {
+            "name": "stage-02 begins READY without automatic start",
+            "status": "PASS"
+          },
+          {
+            "name": "stage-02 runs into visible overtime without auto-advance",
+            "status": "PASS"
+          },
+          {
+            "name": "stage-03 begins READY without automatic start",
+            "status": "PASS"
+          },
+          {
+            "name": "stage-03 runs into visible overtime without auto-advance",
+            "status": "PASS"
+          },
+          {
+            "name": "stage-04 begins READY without automatic start",
+            "status": "PASS"
+          },
+          {
+            "name": "stage-04 runs into visible overtime without auto-advance",
+            "status": "PASS"
+          },
+          {
+            "name": "stage-05 begins READY without automatic start",
+            "status": "PASS"
+          },
+          {
+            "name": "stage-05 runs into visible overtime without auto-advance",
+            "status": "PASS"
+          },
+          {
+            "name": "stage-06 begins READY without automatic start",
+            "status": "PASS"
+          },
+          {
+            "name": "stage-06 runs into visible overtime without auto-advance",
+            "status": "PASS"
+          },
+          {
+            "name": "stage-07 begins READY without automatic start",
+            "status": "PASS"
+          },
+          {
+            "name": "stage-07 runs into visible overtime without auto-advance",
+            "status": "PASS"
+          },
+          {
+            "name": "stage-08 begins READY without automatic start",
+            "status": "PASS"
+          },
+          {
+            "name": "stage-08 runs into visible overtime without auto-advance",
+            "status": "PASS"
+          },
+          {
+            "name": "stage-09 begins READY without automatic start",
+            "status": "PASS"
+          },
+          {
+            "name": "stage-09 runs into visible overtime without auto-advance",
+            "status": "PASS"
+          },
+          {
+            "name": "stage-10 begins READY without automatic start",
+            "status": "PASS"
+          },
+          {
+            "name": "stage-10 runs into visible overtime without auto-advance",
+            "status": "PASS"
+          },
+          {
+            "name": "stage-11 begins READY without automatic start",
+            "status": "PASS"
+          },
+          {
+            "name": "stage-11 runs into visible overtime without auto-advance",
+            "status": "PASS"
+          },
+          {
+            "name": "stage-12 begins READY without automatic start",
+            "status": "PASS"
+          },
+          {
+            "name": "stage-12 runs into visible overtime without auto-advance",
+            "status": "PASS"
+          },
+          {
+            "name": "closing-break begins READY without automatic start",
+            "status": "PASS"
+          },
+          {
+            "name": "closing-break runs into visible overtime without auto-advance",
+            "status": "PASS"
+          },
+          {
+            "name": "stage-13 begins READY without automatic start",
+            "status": "PASS"
+          },
+          {
+            "name": "stage-13 runs into visible overtime without auto-advance",
+            "status": "PASS"
+          },
+          {
+            "name": "stage-14 begins READY without automatic start",
+            "status": "PASS"
+          },
+          {
+            "name": "stage-14 runs into visible overtime without auto-advance",
+            "status": "PASS"
+          },
+          {
+            "name": "All fourteen speaking stages and both preparation periods completed through the DOM",
+            "status": "PASS"
+          },
+          {
+            "name": "Full scorecard exposes all 26 numeric controls",
+            "status": "PASS"
+          },
+          {
+            "name": "Private judge draft restores after a real page reload",
+            "status": "PASS"
+          },
+          {
+            "name": "Observer has no private score form",
+            "status": "PASS"
+          },
+          {
+            "name": "Private marker absent from unauthorized DOM: CI_JUDGE_PRIVATE_NOTE_DO_NOT_DISCLOSE",
+            "status": "PASS"
+          },
+          {
+            "name": "Private marker absent from unauthorized snapshots: CI_JUDGE_PRIVATE_NOTE_DO_NOT_DISCLOSE",
+            "status": "PASS"
+          },
+          {
+            "name": "Private marker absent from unauthorized DOM: CI_AFFIRMATIVE_PRIVATE_STRATEGY_DO_NOT_DISCLOSE",
+            "status": "PASS"
+          },
+          {
+            "name": "Private marker absent from unauthorized snapshots: CI_AFFIRMATIVE_PRIVATE_STRATEGY_DO_NOT_DISCLOSE",
+            "status": "PASS"
+          },
+          {
+            "name": "Audience Choice records one current negative vote",
+            "status": "PASS"
+          },
+          {
+            "name": "Correction preserves a superseded published version",
+            "status": "PASS"
+          },
+          {
+            "name": "Full scorecard exposes all 26 numeric controls",
+            "status": "PASS"
+          },
+          {
+            "name": "Corrected final version retains independent judging and nominated award",
+            "status": "PASS"
+          },
+          {
+            "name": "Final results fit a narrow viewport without page-level overflow",
+            "status": "PASS"
+          },
+          {
+            "name": "rules browser download matches the real generated artifact",
+            "status": "PASS"
+          },
+          {
+            "name": "rules has a parseable nonempty PDF",
+            "status": "PASS"
+          },
+          {
+            "name": "scorecard browser download matches the real generated artifact",
+            "status": "PASS"
+          },
+          {
+            "name": "scorecard has a parseable nonempty PDF",
+            "status": "PASS"
+          },
+          {
+            "name": "result browser download matches the real generated artifact",
+            "status": "PASS"
+          },
+          {
+            "name": "result has a parseable nonempty PDF",
+            "status": "PASS"
+          },
+          {
+            "name": "event_report browser download matches the real generated artifact",
+            "status": "PASS"
+          },
+          {
+            "name": "event_report has a parseable nonempty PDF",
+            "status": "PASS"
+          },
+          {
+            "name": "csv browser download matches the real generated artifact",
+            "status": "PASS"
+          },
+          {
+            "name": "CSV has actual rows",
+            "status": "PASS"
+          },
+          {
+            "name": "certificate browser download matches the real generated artifact",
+            "status": "PASS"
+          },
+          {
+            "name": "certificate has a parseable nonempty PDF",
+            "status": "PASS"
+          },
+          {
+            "name": "Observer cannot download another actor’s private exports",
+            "status": "PASS"
+          },
+          {
+            "name": "Private marker absent from unauthorized DOM: CI_JUDGE_PRIVATE_NOTE_DO_NOT_DISCLOSE",
+            "status": "PASS"
+          },
+          {
+            "name": "Private marker absent from unauthorized snapshots: CI_JUDGE_PRIVATE_NOTE_DO_NOT_DISCLOSE",
+            "status": "PASS"
+          },
+          {
+            "name": "Private marker absent from unauthorized DOM: CI_AFFIRMATIVE_PRIVATE_STRATEGY_DO_NOT_DISCLOSE",
+            "status": "PASS"
+          },
+          {
+            "name": "Private marker absent from unauthorized snapshots: CI_AFFIRMATIVE_PRIVATE_STRATEGY_DO_NOT_DISCLOSE",
+            "status": "PASS"
+          },
+          {
+            "name": "Private marker absent from unauthorized DOM: CI_TEAM_A_FEEDBACK_PRIVATE",
+            "status": "PASS"
+          },
+          {
+            "name": "Private marker absent from unauthorized snapshots: CI_TEAM_A_FEEDBACK_PRIVATE",
+            "status": "PASS"
+          },
+          {
+            "name": "Private marker absent from unauthorized DOM: CI_TEAM_N_FEEDBACK_PRIVATE",
+            "status": "PASS"
+          },
+          {
+            "name": "Private marker absent from unauthorized snapshots: CI_TEAM_N_FEEDBACK_PRIVATE",
+            "status": "PASS"
+          },
+          {
+            "name": "Current match readiness is saved and rendered",
+            "status": "PASS"
+          },
+          {
+            "name": "Next three-judge match starts without changing prior attempts or results",
+            "status": "PASS"
+          },
+          {
+            "name": "Actual saved first match has all fourteen finished speaking attempts",
+            "status": "PASS"
+          },
+          {
+            "name": "Fixture finalization recorded its exact saved winner",
+            "status": "PASS"
+          },
+          {
+            "name": "No unexpected application network destinations",
+            "status": "PASS"
+          },
+          {
+            "name": "No uncaught browser JavaScript errors",
+            "status": "PASS"
+          }
+        ],
+        "actions": [
+          {
+            "command": "create_event",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "92cb339c-692c-4e2f-9977-518b492f80e1",
+            "revision": 1,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "f2d42b80-027a-43bb-8da4-b8df3aa80804",
+            "revision": 2,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "create_invite",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "29b7d55f-d1dc-4993-ae93-b2443029add0",
+            "revision": 3,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "claim_invite",
+            "actorId": "10000000-0000-4000-8000-000000000002",
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "revision": 4,
+            "via": "invitation-link DOM form"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000002",
+            "receiptId": "1ac5bc0c-a52a-4bf7-8c3f-1812d3bf5649",
+            "revision": 5,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "admit_member",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "bdecbd92-9e91-418b-8001-b4827fa080fc",
+            "revision": 6,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "create_invite",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "e93c7b57-2567-4544-8b0b-83a62a933e3e",
+            "revision": 7,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "claim_invite",
+            "actorId": "10000000-0000-4000-8000-000000000003",
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "revision": 8,
+            "via": "invitation-link DOM form"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000003",
+            "receiptId": "bdd53868-74bf-43b0-a2ce-f5bd7c675dda",
+            "revision": 9,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "admit_member",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "55188ab2-2d6c-4e5b-85d5-c8d90d93558d",
+            "revision": 10,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "create_invite",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "8128ade2-19a6-444a-8af9-e14b7a4e633e",
+            "revision": 11,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "claim_invite",
+            "actorId": "10000000-0000-4000-8000-000000000004",
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "revision": 12,
+            "via": "invitation-link DOM form"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000004",
+            "receiptId": "bb2f91bb-2360-4f09-977c-dc153487fe0e",
+            "revision": 13,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "admit_member",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "cacbc7ee-033f-4777-a981-e94bf4681a4c",
+            "revision": 14,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "create_invite",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "1109ada3-5114-49a0-8739-e7f237a827e5",
+            "revision": 15,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "claim_invite",
+            "actorId": "10000000-0000-4000-8000-000000000005",
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "revision": 16,
+            "via": "invitation-link DOM form"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000005",
+            "receiptId": "de5b478f-04e9-4a51-87ba-3b12bddfb333",
+            "revision": 17,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "admit_member",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "b38dc68f-be32-44fa-986a-627555241cba",
+            "revision": 18,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "create_invite",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "c36e521b-1b03-424e-8d97-9f745c4fada0",
+            "revision": 19,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "claim_invite",
+            "actorId": "10000000-0000-4000-8000-000000000006",
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "revision": 20,
+            "via": "invitation-link DOM form"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000006",
+            "receiptId": "cb32e006-c3b7-43ef-8645-388d84236967",
+            "revision": 21,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "admit_member",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "371b304f-bbe6-4198-9d5d-194434934a1e",
+            "revision": 22,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "create_invite",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "47581035-efca-4c59-88d7-72248630ee02",
+            "revision": 23,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "claim_invite",
+            "actorId": "10000000-0000-4000-8000-000000000007",
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "revision": 24,
+            "via": "invitation-link DOM form"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000007",
+            "receiptId": "c050b4c7-53e3-4f8f-a668-3f3cd179898b",
+            "revision": 25,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "admit_member",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "4087cb6b-6c62-41be-b411-9bd3c65f636f",
+            "revision": 26,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "create_invite",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "745f2681-f3b0-4fce-94e1-0306bc4033b3",
+            "revision": 27,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "claim_invite",
+            "actorId": "10000000-0000-4000-8000-000000000008",
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "revision": 28,
+            "via": "invitation-link DOM form"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000008",
+            "receiptId": "2f9597d7-840a-41d2-bdfb-18cf9e10364c",
+            "revision": 29,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "admit_member",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "ef6d2e68-2908-448a-915c-d91bc8704398",
+            "revision": 30,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "create_invite",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "b653d3cd-7c5b-48c3-9f75-fe2602389648",
+            "revision": 31,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "claim_invite",
+            "actorId": "10000000-0000-4000-8000-000000000009",
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "revision": 32,
+            "via": "invitation-link DOM form"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000009",
+            "receiptId": "99d0ff86-50e8-4fed-bf69-b066c80c34cd",
+            "revision": 33,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "admit_member",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "91f14b56-8a0f-465e-af33-14a5090e633b",
+            "revision": 34,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "create_invite",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "26575f95-948f-436c-9a02-8cc0687a869d",
+            "revision": 35,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "claim_invite",
+            "actorId": "10000000-0000-4000-8000-000000000010",
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "revision": 36,
+            "via": "invitation-link DOM form"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000010",
+            "receiptId": "ad273e8f-9fc0-4cff-a8c8-2ae69f9db281",
+            "revision": 37,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "admit_member",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "69353260-f88d-4c1d-8949-78a804e65e98",
+            "revision": 38,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "confirm_roster",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "46064b3a-5811-4f08-8f11-876deff5f776",
+            "revision": 39,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "confirm_roster",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "43234f74-997b-485b-bf5e-ed71e44059d8",
+            "revision": 40,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "add_motion",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "b098f434-6252-4abb-9bae-073e0a1e8690",
+            "revision": 41,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "add_motion",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "e1217d28-9eed-414b-8943-d92229e5615c",
+            "revision": 42,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "add_motion",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "4fdade93-a536-4161-aaad-c899ffb2c669",
+            "revision": 43,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "add_motion",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "e920b29b-df10-4171-819b-400441092a5e",
+            "revision": 44,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "add_motion",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "907f6904-c2e2-44f4-919b-585ff5faf5a5",
+            "revision": 45,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "generate_fixtures",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "74a1dd09-f5c6-453f-a0d6-381df08d6fd9",
+            "revision": 46,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "publish_fixtures",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "05ae59cc-a95f-49d1-aafd-0fbafb202323",
+            "revision": 47,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "create_match",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "73b60cca-ae1b-4aa3-8c98-213b8547a1d1",
+            "revision": 48,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000005",
+            "receiptId": "80737aa1-422d-49d9-b8f6-23170f26a42f",
+            "revision": 49,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "acknowledge_rules",
+            "actorId": "10000000-0000-4000-8000-000000000005",
+            "receiptId": "3890566e-99a0-4682-8f3b-c977f37e79ad",
+            "revision": 50,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000006",
+            "receiptId": "cd053f30-f36e-44d7-88d2-c4d09daa0249",
+            "revision": 51,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000007",
+            "receiptId": "9655140e-0287-4b4d-9175-a3fdd8040d79",
+            "revision": 52,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000002",
+            "receiptId": "2f70596b-bbee-4406-8b1a-acfb89c6fe32",
+            "revision": 53,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "acknowledge_rules",
+            "actorId": "10000000-0000-4000-8000-000000000002",
+            "receiptId": "cc6d9b5d-b3e2-4fbe-9e87-f96de22af909",
+            "revision": 54,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000003",
+            "receiptId": "c88d3566-9169-4650-ba30-b3161393995b",
+            "revision": 55,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000004",
+            "receiptId": "31852394-a4b4-477e-98a0-d46824e4ff8f",
+            "revision": 56,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "record_device_check",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "d2085fe6-0f2c-4bd3-b90a-fdcf5de9784c",
+            "revision": 57,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "record_device_check",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "d5f75d1e-5d11-4339-a394-352a7b5632b2",
+            "revision": 58,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "record_device_check",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "92c453e3-4df0-4e4d-b87f-98d362165489",
+            "revision": 59,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "record_device_check",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "25218dff-5183-4831-844d-a35ea0ecb967",
+            "revision": 60,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "record_device_check",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "605319d1-612c-452a-8267-69da52136d3d",
+            "revision": 61,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "record_device_check",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "94eb657f-d432-4c88-99cd-03d111fe7cc2",
+            "revision": 62,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "release_motion",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "234e791e-106d-45fd-9f24-c79d01e1eebf",
+            "revision": 63,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "start_match",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "897d2eef-975d-4215-b301-eb287ee1d28e",
+            "revision": 64,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "send_message",
+            "actorId": "10000000-0000-4000-8000-000000000005",
+            "receiptId": "ff247c41-d952-4a00-817e-8fe42a9cc404",
+            "revision": 65,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "send_message",
+            "actorId": "10000000-0000-4000-8000-000000000002",
+            "receiptId": "7df65a01-fa61-4b97-8509-8fea4f42b5c4",
+            "revision": 66,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "share_evidence",
+            "actorId": "10000000-0000-4000-8000-000000000002",
+            "receiptId": "dff1ed46-3d8b-4f06-8270-b778420865ae",
+            "revision": 67,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "0329d445-3ede-4d6c-ae85-e88d0e332111",
+            "revision": 68,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "312b2f63-19f9-4d98-9935-f5d401f8f9f2",
+            "revision": 69,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "82baef64-f1a2-4780-8c22-9b846f052968",
+            "revision": 70,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "0d161a15-85a0-4b90-ac1c-456e502b423b",
+            "revision": 71,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "next_stage",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "328c9257-a635-4ea8-9c4c-00dcf67b0167",
+            "revision": 72,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "b9e317bc-c41d-4b9f-b9df-41467393162e",
+            "revision": 73,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "51259398-c0a4-4e1f-a858-5cccc29e1cf7",
+            "revision": 74,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "cae7b7a5-bb68-4e03-b21e-8c5d7fbd90ed",
+            "revision": 75,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "e3b9f401-6bbc-4846-a68d-20147dac5e29",
+            "revision": 76,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "21349bfe-0d7e-4c19-9d69-0380f0dbca4e",
+            "revision": 77,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "49aaa749-4001-41af-9040-6799361cf290",
+            "revision": 78,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "7cbfcecf-d61d-451a-a580-e84eca8a2612",
+            "revision": 79,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "51f29bd9-86bc-46c6-a8ce-789a65047801",
+            "revision": 80,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "next_stage",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "4428c6dc-b795-44d0-aab3-1fe6b24b0330",
+            "revision": 81,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "ff20781d-aa66-4fe8-92fc-383e16ff5bd5",
+            "revision": 82,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "8b3d74f0-468a-46ee-8500-14ceead1d8ef",
+            "revision": 83,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "e9e854a3-2ffa-46dc-8c5f-7951787601e3",
+            "revision": 84,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "67a18bfb-60e8-4d20-a260-b6cf4d296219",
+            "revision": 85,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "next_stage",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "048dfe05-77dd-4e7e-a3b4-0456f347e331",
+            "revision": 86,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "ae0de556-f962-46a3-96e3-ba36c8749ff4",
+            "revision": 87,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "bb2a73d7-f0c1-43b3-a635-44d90293cdbe",
+            "revision": 88,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "b94e242c-cb06-46ad-8719-0c71c45d0c7b",
+            "revision": 89,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "22e2f308-7e09-4e1f-aa1f-ff8d2a957fab",
+            "revision": 90,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "next_stage",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "67d3fe2e-dce8-4003-ba86-32c2e5f34e5f",
+            "revision": 91,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "5140ea09-226e-4878-8469-05b0677f161e",
+            "revision": 92,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "f38f71fb-ddf5-42d4-ba73-6ddbc331f841",
+            "revision": 93,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "a1396941-25a2-49e8-8c26-f34696541dd9",
+            "revision": 94,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "0980137c-c110-423f-b4e1-3e9d4c8a0fcc",
+            "revision": 95,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "next_stage",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "52f14b87-7e35-48e1-9ad8-0923339b325c",
+            "revision": 96,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "6a83552f-99c3-401d-a518-ac2b3d923b19",
+            "revision": 97,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "fc9f3a4f-797e-4274-8431-0022f654562a",
+            "revision": 98,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "cf27a874-e5d1-4910-935a-08a469276d42",
+            "revision": 99,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "58a9709f-3215-4c9a-b926-faab694b3368",
+            "revision": 100,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "next_stage",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "d77facb7-aef9-417c-b017-afb9f8225393",
+            "revision": 101,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "07a2aa36-8440-47e7-b7ff-3b3bf8faab97",
+            "revision": 102,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "8b343e7b-efba-4c01-87b8-8bf0e61ec841",
+            "revision": 103,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "02515b79-a94e-494f-bd11-2ef70980e333",
+            "revision": 104,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "9ee559bb-50e6-40d3-83eb-9b3d4ac70c7a",
+            "revision": 105,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "next_stage",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "4429304c-8e55-4f6e-8fc0-cff077a513a9",
+            "revision": 106,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "bae6ccc1-98ec-4407-9abb-48832652a20b",
+            "revision": 107,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "ac1e66f0-623c-42e7-9287-b5cf4b53f291",
+            "revision": 108,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "84159f96-25bb-487b-a273-6666883362b8",
+            "revision": 109,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "5908b28f-c014-4505-b7e4-6f16de978068",
+            "revision": 110,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "next_stage",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "b54da0d4-dd4e-48b1-8678-0c04a185233b",
+            "revision": 111,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "2622441e-cd7a-4c2f-812a-c6ce3e57deb5",
+            "revision": 112,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "485fd600-4c94-4eb9-b633-10336d9e6e1d",
+            "revision": 113,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "ce3a7346-c829-41d5-90ef-bd9d282e2767",
+            "revision": 114,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "499f45fb-166c-47d8-be3c-68d271b17eb1",
+            "revision": 115,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "next_stage",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "ebc7151a-6504-41f9-9202-119ded7e32f7",
+            "revision": 116,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "84a30650-5c9b-4d30-be59-0f0ebea6e908",
+            "revision": 117,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "56f24199-d96d-4282-8985-922c3656c87d",
+            "revision": 118,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "bfaf9e09-8767-4b3c-87cd-8b2b3164b06f",
+            "revision": 119,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "7f3ab228-70eb-4c16-9b03-323fd96f6316",
+            "revision": 120,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "next_stage",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "01e5bdfd-5c17-46a5-8f97-a1b65607abe5",
+            "revision": 121,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "5c6272b3-657f-4aa1-a83d-1fcf853d90c1",
+            "revision": 122,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "728cf293-eff1-4eae-b7cc-84c4c12802f8",
+            "revision": 123,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "33c3e252-1f19-4794-8a50-205e9b3d9515",
+            "revision": 124,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "d25c6d73-fd60-4688-93ea-00ad17486c53",
+            "revision": 125,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "next_stage",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "dbf1fb83-c0f2-44bc-a634-dc680b2d2e2e",
+            "revision": 126,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "70a12289-6ef7-4816-bbdf-28f253b05c2c",
+            "revision": 127,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "a8a06cb9-a376-41c1-8d35-c5a57e83a402",
+            "revision": 128,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "15655338-5fed-447b-879b-cef9103d6110",
+            "revision": 129,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "31fb8065-4024-43a9-a643-fcac11750325",
+            "revision": 130,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "next_stage",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "11eb13c2-e5df-4a7d-a21c-5c24e2a5b982",
+            "revision": 131,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "fc0a4e06-dcd7-412e-bff7-3b047a2dfb15",
+            "revision": 132,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "88d1b906-96cb-4ced-a27a-54c4a7150d33",
+            "revision": 133,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "59ae3b74-640f-4f20-81c5-c38d87cb87d9",
+            "revision": 134,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "fc56f199-b981-4d1b-a99c-865bd3ca955f",
+            "revision": 135,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "next_stage",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "5d747519-ff4f-404d-92c0-ae68ee0cc458",
+            "revision": 136,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "e8dfc910-04fe-4b27-b033-7df397d40052",
+            "revision": 137,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "25129c1f-293a-4d54-9ff9-9c274c3179f4",
+            "revision": 138,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "b0e7039f-3343-4755-8f09-38b406272bdf",
+            "revision": 139,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "384d8e55-09da-4798-8e93-e656b33b4957",
+            "revision": 140,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "next_stage",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "ce5e0e8f-ce82-4a57-b570-df93e61818d5",
+            "revision": 141,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "853988a8-d4a8-49e0-b61a-a5493eee79c2",
+            "revision": 142,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "3ecb3919-7617-40de-8d75-bbe2fd3c9999",
+            "revision": 143,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "19021132-5a47-4e42-b4d9-59bffd272d37",
+            "revision": 144,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "472ae3ad-58ef-4e9b-8b82-983c08a1ed31",
+            "revision": 145,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "next_stage",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "3c791751-5514-4f0c-ba07-6be835e8c4f2",
+            "revision": 146,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "9c2bec10-1c44-48b2-bd8b-75471626bb57",
+            "revision": 147,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "3b209bd5-77ca-4111-867e-e599763f016e",
+            "revision": 148,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "9456147a-52f9-48c8-a649-ac42eca76d66",
+            "revision": 149,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "237083da-be30-41d1-b531-a020deb2b9f8",
+            "revision": 150,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "next_stage",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "887c73dd-96e6-473a-b61b-19c5f0b661f4",
+            "revision": 151,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "save_draft",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "830ce1e3-2303-4d2d-801c-167e4df12e2b",
+            "revision": 152,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "open_ballots",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "eddc4d3c-dd2a-40b8-9fc8-2144048639ef",
+            "revision": 153,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "submit_ballot",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "0f41f1e3-a493-4443-8e05-ca08693fb0dc",
+            "revision": 154,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "close_ballots",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "006ec222-59cc-4fea-a5e6-7e76f454f1dd",
+            "revision": 155,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "nominate_award",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "f5f10285-386c-4512-bdc2-17c2d6a2806e",
+            "revision": 156,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "open_poll",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "9d0c6c94-2787-4924-9e2b-6801928a68bd",
+            "revision": 157,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "vote",
+            "actorId": "10000000-0000-4000-8000-000000000010",
+            "receiptId": "d7620a0a-4d49-430a-a521-db9dc92f14a2",
+            "revision": 158,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "withdraw_vote",
+            "actorId": "10000000-0000-4000-8000-000000000010",
+            "receiptId": "ff6baa0a-988a-46a3-93ea-105caad36cee",
+            "revision": 159,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "vote",
+            "actorId": "10000000-0000-4000-8000-000000000010",
+            "receiptId": "31fedc06-e506-4934-8cd6-acecd0b371e9",
+            "revision": 160,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "close_poll",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "c4efe078-f3af-4a54-857c-a8dde7faae23",
+            "revision": 161,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "publish_poll",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "9cd0a9e9-90a6-4ae0-bb2f-5e5d61cec42d",
+            "revision": 162,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "publish_result",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "3ec78301-d98e-4a24-bf93-4e372eec1e1a",
+            "revision": 163,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "protest_result",
+            "actorId": "10000000-0000-4000-8000-000000000005",
+            "receiptId": "59a80e75-01a1-45dd-8ff9-8fe05f99b81f",
+            "revision": 164,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "resolve_protest",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "476a542d-b5ba-4526-ad48-d64df8e3d7b3",
+            "revision": 165,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "correct_result",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "4e246cf6-ff06-432a-9b01-c9fe0d8bdc34",
+            "revision": 166,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "save_draft",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "a4bcecd4-952a-41b7-8cfd-0146aa48179f",
+            "revision": 167,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "open_ballots",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "8fa20a6d-fc43-4e8b-ba2b-330af8724127",
+            "revision": 168,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "submit_ballot",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "9474b4df-826c-43ba-925e-eaf693a31c2a",
+            "revision": 169,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "close_ballots",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "4170e74b-eb87-47fb-b307-c0f23028473c",
+            "revision": 170,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "publish_result",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "ba268984-4c86-4c26-a5ca-0f6566601f1a",
+            "revision": 171,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "finalize_result",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "f7453807-e7f5-410e-ab66-8f0f9b9613ce",
+            "revision": 172,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "create_export",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "7e953a1a-1607-43fc-b81b-7ff5850cb967",
+            "revision": 174,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "create_export",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "91f580d0-9e4e-4003-adaf-b1ed675d72b5",
+            "revision": 176,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "create_export",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "5f4288b5-088d-441c-9667-305eb44971cd",
+            "revision": 178,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "create_export",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "29ccdb0d-b52c-442e-b898-9164b07c7c88",
+            "revision": 180,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "create_export",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "610f391c-74ba-4374-a7b5-25bd5a652d18",
+            "revision": 182,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "create_export",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "33d90bfd-6f77-4f50-a43c-60cf815465d2",
+            "revision": 184,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "create_match",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "85c79cbd-578b-49a7-b694-c1b15180b920",
+            "revision": 185,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": null
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000005",
+            "receiptId": "1087a9c7-2128-47f9-9469-758dec1f9024",
+            "revision": 186,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "7bfccb3f-07c8-4f0a-991a-0a77db429980"
+          },
+          {
+            "command": "acknowledge_rules",
+            "actorId": "10000000-0000-4000-8000-000000000005",
+            "receiptId": "72011b4e-c19e-421a-887f-ea1887e926f5",
+            "revision": 187,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "7bfccb3f-07c8-4f0a-991a-0a77db429980"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000006",
+            "receiptId": "b0f75557-2eb1-4bbc-9cae-7578f5703876",
+            "revision": 188,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "7bfccb3f-07c8-4f0a-991a-0a77db429980"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000007",
+            "receiptId": "38cf8150-c8b8-40f3-820b-ab7bf103d4fb",
+            "revision": 189,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "7bfccb3f-07c8-4f0a-991a-0a77db429980"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000002",
+            "receiptId": "e93e652f-8686-44fa-b3df-06d3b12fca75",
+            "revision": 190,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "7bfccb3f-07c8-4f0a-991a-0a77db429980"
+          },
+          {
+            "command": "acknowledge_rules",
+            "actorId": "10000000-0000-4000-8000-000000000002",
+            "receiptId": "91f4a472-50c8-4ef6-a0c5-9bd7dd6c681c",
+            "revision": 191,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "7bfccb3f-07c8-4f0a-991a-0a77db429980"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000003",
+            "receiptId": "82105377-332b-4eea-a860-66e173061d57",
+            "revision": 192,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "7bfccb3f-07c8-4f0a-991a-0a77db429980"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000004",
+            "receiptId": "58133eb8-e03b-4890-aaff-5a78e32fd618",
+            "revision": 193,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "7bfccb3f-07c8-4f0a-991a-0a77db429980"
+          },
+          {
+            "command": "record_device_check",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "0d46d551-ac4b-4f1d-be3d-5e19eac3b5db",
+            "revision": 194,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "7bfccb3f-07c8-4f0a-991a-0a77db429980"
+          },
+          {
+            "command": "record_device_check",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "10aeb0f8-6659-4750-b51b-7026637a1418",
+            "revision": 195,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "7bfccb3f-07c8-4f0a-991a-0a77db429980"
+          },
+          {
+            "command": "record_device_check",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "dc4eb912-2505-4a72-b255-cdef6c0687bd",
+            "revision": 196,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "7bfccb3f-07c8-4f0a-991a-0a77db429980"
+          },
+          {
+            "command": "record_device_check",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "01e29d49-7e33-44b0-ab74-3fd7b3ea0fc7",
+            "revision": 197,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "7bfccb3f-07c8-4f0a-991a-0a77db429980"
+          },
+          {
+            "command": "record_device_check",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "f00b35f1-5e98-420d-bd72-427f54f087e9",
+            "revision": 198,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "7bfccb3f-07c8-4f0a-991a-0a77db429980"
+          },
+          {
+            "command": "record_device_check",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "f7589b94-ff12-403d-9db3-83a8b485d792",
+            "revision": 199,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "7bfccb3f-07c8-4f0a-991a-0a77db429980"
+          },
+          {
+            "command": "release_motion",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "1e1b3037-3482-4a74-b539-460337021347",
+            "revision": 200,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "7bfccb3f-07c8-4f0a-991a-0a77db429980"
+          },
+          {
+            "command": "advance_match",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "d1633366-c555-4ea1-a2a0-8219c1db7cd9",
+            "revision": 201,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d"
+          },
+          {
+            "command": "start_match",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "c742b142-c21a-42bb-be0d-6b26acec86b1",
+            "revision": 202,
+            "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+            "matchId": "7bfccb3f-07c8-4f0a-991a-0a77db429980"
+          }
+        ],
+        "stages": [
+          {
+            "id": "preparation",
+            "kind": "preparation",
+            "seats": [],
+            "attemptId": "8d0bced2-2033-4210-8f6f-fba3f5bdf3db",
+            "state": "FINISHED",
+            "durationMs": 900000
+          },
+          {
+            "id": "stage-01",
+            "kind": "constructive",
+            "seats": [
+              "A1"
+            ],
+            "attemptId": "322f95f1-6533-4e19-a28c-3e844dd6724e",
+            "state": "FINISHED",
+            "durationMs": 300000
+          },
+          {
+            "id": "stage-02",
+            "kind": "interpellation",
+            "seats": [
+              "N1",
+              "A1"
+            ],
+            "attemptId": "0d10f54c-4293-435a-9274-1f3d4e2303c9",
+            "state": "FINISHED",
+            "durationMs": 180000
+          },
+          {
+            "id": "stage-03",
+            "kind": "constructive",
+            "seats": [
+              "N1"
+            ],
+            "attemptId": "096ea759-e78b-4a5a-a84a-d07fe3fd6193",
+            "state": "FINISHED",
+            "durationMs": 300000
+          },
+          {
+            "id": "stage-04",
+            "kind": "interpellation",
+            "seats": [
+              "A1",
+              "N1"
+            ],
+            "attemptId": "f1f3267a-d3ad-49ed-9429-b115a8673a79",
+            "state": "FINISHED",
+            "durationMs": 180000
+          },
+          {
+            "id": "stage-05",
+            "kind": "constructive",
+            "seats": [
+              "A2"
+            ],
+            "attemptId": "e24f9e7f-f98b-40b1-98f6-6e6c1f708033",
+            "state": "FINISHED",
+            "durationMs": 300000
+          },
+          {
+            "id": "stage-06",
+            "kind": "interpellation",
+            "seats": [
+              "N2",
+              "A2"
+            ],
+            "attemptId": "19c4cd3c-b2bb-4d1f-b57c-60b057b2a8b4",
+            "state": "FINISHED",
+            "durationMs": 180000
+          },
+          {
+            "id": "stage-07",
+            "kind": "constructive",
+            "seats": [
+              "N2"
+            ],
+            "attemptId": "b45d1806-1338-4ead-8ee0-9acbdbbe118d",
+            "state": "FINISHED",
+            "durationMs": 300000
+          },
+          {
+            "id": "stage-08",
+            "kind": "interpellation",
+            "seats": [
+              "A2",
+              "N2"
+            ],
+            "attemptId": "5914cf5d-f607-4461-82b7-cb0efab6b8e0",
+            "state": "FINISHED",
+            "durationMs": 180000
+          },
+          {
+            "id": "stage-09",
+            "kind": "constructive",
+            "seats": [
+              "A3"
+            ],
+            "attemptId": "1105713f-9290-4c87-b870-40ba08c4f3dc",
+            "state": "FINISHED",
+            "durationMs": 300000
+          },
+          {
+            "id": "stage-10",
+            "kind": "interpellation",
+            "seats": [
+              "N3",
+              "A3"
+            ],
+            "attemptId": "6b815511-a32b-4f56-b7c9-274c707ceabb",
+            "state": "FINISHED",
+            "durationMs": 180000
+          },
+          {
+            "id": "stage-11",
+            "kind": "constructive",
+            "seats": [
+              "N3"
+            ],
+            "attemptId": "13f5154d-1f5e-412a-ac22-12dd99d17134",
+            "state": "FINISHED",
+            "durationMs": 300000
+          },
+          {
+            "id": "stage-12",
+            "kind": "interpellation",
+            "seats": [
+              "A3",
+              "N3"
+            ],
+            "attemptId": "24467581-e103-4c71-b795-de14d41d56c9",
+            "state": "FINISHED",
+            "durationMs": 180000
+          },
+          {
+            "id": "closing-break",
+            "kind": "break",
+            "seats": [],
+            "attemptId": "81f304d5-b9bc-4717-a2e4-0092a93b327f",
+            "state": "FINISHED",
+            "durationMs": 300000
+          },
+          {
+            "id": "stage-13",
+            "kind": "rebuttal",
+            "seats": [
+              "N1"
+            ],
+            "attemptId": "f594b6ed-f2bc-4399-a92a-0cd723d6da57",
+            "state": "FINISHED",
+            "durationMs": 300000
+          },
+          {
+            "id": "stage-14",
+            "kind": "rebuttal",
+            "seats": [
+              "A1"
+            ],
+            "attemptId": "d564466c-5684-48b6-8553-fc17ed3868f2",
+            "state": "FINISHED",
+            "durationMs": 300000
+          }
+        ],
+        "downloads": [
+          {
+            "kind": "rules",
+            "jobId": "8de98139-616f-405d-956a-b6d28ff43f53",
+            "file": "downloads/rules-duediligence-debate-ci-full-browser-debate-2026-09-09t11-00-00-319z-rules-r1.pdf",
+            "bytes": 14823,
+            "sha256": "416493a2b736f5483b095e4786a95371e4fa626c434948172dff06ec22b85040",
+            "pages": 2
+          },
+          {
+            "kind": "scorecard",
+            "jobId": "c8608d13-a43e-4215-b145-78ff8f700bdd",
+            "file": "downloads/scorecard-duediligence-debate-ci-full-browser-debate-2026-09-09t11-00-00-319z-scorecard-r1.pdf",
+            "bytes": 12984,
+            "sha256": "d2093c04c9d9d0d7725360e5dfa977fff799ea17b6a92b15b79d2e612f7a30a5",
+            "pages": 2
+          },
+          {
+            "kind": "result",
+            "jobId": "0786a89c-93ba-42b4-bcf7-e2b3535db0a1",
+            "file": "downloads/result-duediligence-debate-ci-full-browser-debate-2026-09-09t11-00-00-319z-result-r2.pdf",
+            "bytes": 13524,
+            "sha256": "3a05d52ac926098e3cd4128a855a8e37e751b963f27fcb5eb39bf6aa29eed9cc",
+            "pages": 2,
+            "resultVersion": "a379077b-180e-4388-9b9e-7ca3256be7c8"
+          },
+          {
+            "kind": "event_report",
+            "jobId": "ee20ca7f-e4d9-4d3d-a9fc-6b3b11c268f3",
+            "file": "downloads/event_report-duediligence-debate-ci-full-browser-debate-2026-09-09t11-00-00-319z-event-report-r2.pdf",
+            "bytes": 14107,
+            "sha256": "a947d5c2027ed64d5ad14174f9281ecb7fa55195b5f20ef3238cccf992c8b2d7",
+            "pages": 2,
+            "resultVersion": "a379077b-180e-4388-9b9e-7ca3256be7c8"
+          },
+          {
+            "kind": "csv",
+            "jobId": "9758c813-5ea4-4854-b7c3-b349f047f494",
+            "file": "downloads/csv-duediligence-debate-ci-full-browser-debate-2026-09-09t11-00-00-319z-csv-r2.csv",
+            "bytes": 2102,
+            "sha256": "bfc1b5101efb66f13b2490ffe616236b5e18b12f53f5b0d1282b77b2a48f6905",
+            "pages": null,
+            "resultVersion": "a379077b-180e-4388-9b9e-7ca3256be7c8"
+          },
+          {
+            "kind": "certificate",
+            "jobId": "e924390d-154e-4eea-8fae-6dbb705fea54",
+            "file": "downloads/certificate-duediligence-debate-ci-full-browser-debate-2026-09-09t11-00-00-319z-certificate-r2.pdf",
+            "bytes": 10987,
+            "sha256": "d4bcd26841132793f606a491571f40969473b1468266bf5d40ea500cf3f550a2",
+            "pages": 1,
+            "resultVersion": "a379077b-180e-4388-9b9e-7ca3256be7c8"
+          }
+        ],
+        "screenshots": [
+          "screenshots/01-observer-waiting.png",
+          "screenshots/02-reviewed-fixture.png",
+          "screenshots/03-ready-with-explicit-accommodations.png",
+          "screenshots/04-questioning-overtime.png",
+          "screenshots/05-corrected-final-result.png",
+          "screenshots/06-narrow-final-result.png",
+          "screenshots/07-final-fixture-and-standings.png",
+          "screenshots/08-next-match-ready.png",
+          "screenshots/09-failure-host.png",
+          "screenshots/10-failure-guest.png"
+        ],
+        "unexpectedNetwork": [],
+        "pageErrors": [],
+        "consoleErrors": [
+          {
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "message": "Failed to load resource: the server responded with a status of 409 (Conflict)",
+            "location": "http://127.0.0.1:35705/debate-room/command",
+            "at": 1788951611684,
+            "expectedResourceRejection": true
+          },
+          {
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "message": "Failed to load resource: the server responded with a status of 400 (Bad Request)",
+            "location": "http://127.0.0.1:35705/debate-room/command",
+            "at": 1788951620745,
+            "expectedResourceRejection": false
+          },
+          {
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "message": "Failed to load resource: the server responded with a status of 400 (Bad Request)",
+            "location": "http://127.0.0.1:35705/debate-room/command",
+            "at": 1788951633225,
+            "expectedResourceRejection": true
+          }
+        ],
+        "expectedRejections": [
+          {
+            "command": "start_match",
+            "code": "MATCH_NOT_READY",
+            "status": 409,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "at": 1788951611684,
+            "url": "http://127.0.0.1:35705/debate-room/command"
+          },
+          {
+            "command": "finalize_result",
+            "code": "CORRECTION_WINDOW_OPEN",
+            "status": 400,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "at": 1788951633226,
+            "url": "http://127.0.0.1:35705/debate-room/command"
+          }
+        ],
+        "claims": {
+          "actualBrowserDom": true,
+          "actualLocalSql": true,
+          "syntheticIdentity": true,
+          "actualHostedAuth": false,
+          "mainWorkerBootstrap": false,
+          "studyRoomUi": false,
+          "physicalMedia": false,
+          "providerMedia": false,
+          "realEmail": false,
+          "nativePostgresConcurrency": false,
+          "endurance90Minutes": false,
+          "hostedDeployment": false
+        },
+        "gaps": [
+          "Local HTML deliberately replaces hosted auth and removes provider scripts; this is not the main Worker or real Supabase sign-in path.",
+          "Study Room UI has a separate test; Debate waiting state does not prove Study admission.",
+          "No microphone, camera, provider, real email, native multi-connection Postgres, 90-minute endurance or hosted deployment is exercised.",
+          "The next three-judge match is started, not played to another final decision; tournament awards remain rehearsal-excluded.",
+          "PDF signatures, page counts and exact downloaded bytes are checked; PDF page layout requires the separate visual export review."
+        ],
+        "sourceHashes": {
+          "worker/debate-sanctions.mjs": "f43af5803e097b26836b217086d3e6d93c6e769c0867a2aaaeb6ef05f642119b",
+          "worker/debate-domain.mjs": "669430db23c9b62429722cf58d41c5a97aa483f25056f299c2c1819a6a14d63b",
+          "worker/debate-tournament.mjs": "f03907752aa76f2cd45b6747dcf0270eb6abdc004a260742a475fc0963258d2e",
+          "worker/debate-fixtures.mjs": "d61f350b70f57a9d6e4fc2fad2593e6ca99e70cc70cbba4e14f5c4590a112c5c",
+          "worker/debate-service.mjs": "0a9d665f58c47f0adb78901822dce625ab2df7ca5dd5bb2a7c4212b5868cdd58",
+          "worker/debate-store.mjs": "08340dc8a0f5a1a9ccb19827a146dd5d788a8227d0393e90983574bd4431a31a",
+          "worker/debate-routes.mjs": "d566a262f7ffbbc3c0ea94e57444eac386b565bf5f9536925c485a2f45cf86b9",
+          "worker/debate-schema-draft.sql": "89d4f46b1e1b2991202880114387a1356b5eedfcf562129079de83d55a94b53c",
+          "worker/debate-documents.mjs": "3dd08cb71074921527dfe4536459af1a613dd087774eab032886278be0918d6f",
+          "assets/debate-room.js": "1c1c245f2d23f12e4f546ae33c57dc5613b927fd6417c157de6ab992cc4eed6e",
+          "assets/debate-media.js": "ed33b1126087c531423840fb241afb9e95682bcfcd7c8ec8caafb8ae142593b2",
+          "assets/debate-dates.js": "7549422128267aff3d7de4aafc535b5f40290df456a33fd5b85ddd4f7fcd0b12",
+          "assets/debate-room.css": "737e96d48bfc94f56d99b9440e64af313d684174d82cb3c5c26a2f332539c192",
+          "debate-room/index.html": "b1fabb157c260d841e2a2d0551678da4a2c1d798a7011a6dcd172cf1e483e4ff",
+          "scripts/serve-debate-rehearsal.mjs": "a4089e4a043259acd57894804083f89215200a79728a0e26473b2f34d9895590",
+          "scripts/test-debate-organizer-rehearsal.mjs": "4f95b5a2d010948bd5b2dbbd7ab381c2c899f263ba19b5d423ceeebf63a45a41"
+        },
+        "serverUrl": "http://127.0.0.1:35705/debate-room/",
+        "browser": {
+          "version": "152.0.7977.64",
+          "channel": "chrome",
+          "headless": true,
+          "node": "v22.23.2",
+          "platform": "linux"
+        },
+        "eventTitle": "CI full browser Debate 2026-09-09T11:00:00.319Z",
+        "eventId": "de-bb7ce340697abafe2fcf9b65dd2bd8f1",
+        "matchId": "a195f4b3-cfe5-4e96-b3e7-6909087e4d3d",
+        "simulatedAdvanceMs": 5603835,
+        "finalResult": {
+          "id": "a379077b-180e-4388-9b9e-7ca3256be7c8",
+          "revision": 2,
+          "state": "FINAL",
+          "winner": "affirmative"
+        },
+        "nextMatchId": "7bfccb3f-07c8-4f0a-991a-0a77db429980",
+        "failure": {
+          "name": "AssertionError",
+          "message": "No unexpected browser console errors",
+          "stack": "AssertionError [ERR_ASSERTION]: No unexpected browser console errors\n    at check (file:///home/runner/work/Bar-Exam-simulator/Bar-Exam-simulator/scripts/test-debate-browser-organizer.mjs:45:60)\n    at runBrowserOrganizer (file:///home/runner/work/Bar-Exam-simulator/Bar-Exam-simulator/scripts/test-debate-browser-organizer.mjs:373:5)"
+        },
+        "finishedAt": "2026-09-09T11:00:48.183Z",
+        "actualDurationMs": 51986
+      }
+    },
+    "study": {
+      "path": "study-browser-ci/report.json",
+      "sha256": "34ea1a3d3591e26de8a40070bcd0debc74b8fffe54ab3ba556eb413892b19693",
+      "verifiedGitSourceHashes": 10,
+      "report": {
+        "status": "PASS_SYNTHETIC_STUDY_BROWSER",
+        "synthetic": true,
+        "actualDOM": true,
+        "actualRoutes": true,
+        "actualSQL": true,
+        "browserVersion": "152.0.7977.64",
+        "hostedAuth": false,
+        "providerPresence": false,
+        "physicalMedia": false,
+        "realMail": false,
+        "productionChanges": false,
+        "checks": [
+          "Actual admin editor saves four policies and defaults a new room to All; Inner Chamber stays fixed",
+          "DOM pending state persists in SQL without issuing a JWT or creating a media room",
+          "Outside admin and admin in another room cannot inspect the waiting queue",
+          "Same-room admin manually admits; approval alone never connects the member",
+          "Only the member’s explicit Enter obtains an authorized JWT and connects the inert transport",
+          "Admin removal disconnects the synthetic member and durable denial blocks later join",
+          "Actual Cancel request persists cancellation and leaves devices off",
+          "Late request after account switch cancels under the original identity and cannot enter for the new account",
+          "Every browser remained free of capture, publication, WebRTC, WebSocket and external network"
+        ],
+        "errors": [],
+        "sourceHashes": {
+          "study-room/index.html": "54c96a2eff695deacd935fad05cc0d44413c4e7144adcd4c44e40f84f3c31bc8",
+          "assets/study-room-live.js": "18233c7e451d4af50a4b71254ae93d68ceb0316b0b7a1cd4b4d880bd32542450",
+          "assets/study-room-live.css": "b03ee186567cf1f027b699cc12979dcad4f89279d7563e11d8fe91218f1520c2",
+          "worker/study-room-routes.mjs": "12e502a8271e1af0f2d0e7a54fa4fabde9037e612dc4c12eec2f57edf9d850a7",
+          "worker/study-room-core.mjs": "7b8bdab0d8d545cc9acba564268dd4a8250c5e126fbc1238848682b1d0ddae04",
+          "worker/study-room-admission.mjs": "d82c8c031b5c013f2a953b6e0dc350f6a266116e691b08d8608a7c1933c5346d",
+          "supabase/migrations/20260908144814_astra_study_room_persisted_catalog.sql": "f5eb0739f36fca4d1cd574fdc7bd30a299351f8cc892a7896742f247fc496ebc",
+          "supabase/migrations/20260909080143_study_room_admission_v3.sql": "5ca7d139bb925b00c82d391aab4f566446d5d1bdd25e0b1b271fde614cb11637",
+          "scripts/serve-study-room-rehearsal.mjs": "207765224cdbdcbf25f7ad12af3ff9b2af7812c1a81c7eb62aaa4a5ceceb907e",
+          "scripts/test-study-room-browser.mjs": "95f857102208180dd7a542061e798051b176b3d2f2b694b661d356debc90e941"
+        },
+        "substitutions": [
+          "HTML replaces external SDK/config/auth/background scripts with synthetic auth and inert SDK transport; actual Study live.js is unchanged.",
+          "CSS external font imports removed for isolated rendering; no production bootstrap or font-loading claim.",
+          "Admin authorization helper and prerequisite auth tables match the existing local SQL fixture; no hosted authentication.",
+          "LiveKit active presence/revocation is a JWT-backed inert registry; no provider behavior or rate-limit capacity claim."
+        ],
+        "metrics": {
+          "signedCredentials": 3,
+          "connections": 3,
+          "revoked": 1,
+          "providerCalls": 0,
+          "rpcCalls": 111
+        },
+        "finishedAt": "2026-09-09T11:00:58.679Z"
+      }
+    },
+    "studyHttp": {
+      "path": "study-browser-ci/harness-only/report.json",
+      "sha256": "f2498f2915faf37be049dfb76e443681e6d53a4210784820edeff10b2e83ca83",
+      "verifiedGitSourceHashes": 10,
+      "report": {
+        "status": "PASS_SYNTHETIC_STUDY_HTTP_SQL",
+        "synthetic": true,
+        "actualDOM": false,
+        "actualRoutes": true,
+        "actualSQL": true,
+        "browserVersion": null,
+        "hostedAuth": false,
+        "providerPresence": false,
+        "physicalMedia": false,
+        "realMail": false,
+        "productionChanges": false,
+        "checks": [
+          "Catalog defaults All users and preserves private Inner Chamber",
+          "Pending cannot obtain a credential, and absent admin cannot list",
+          "Actual SQL approval enables one actor-bound signed-token connection",
+          "Revocation rejects stale JWT and later join; absent administrator loses queue access",
+          "Cancellation persists in actual service-role SQL"
+        ],
+        "errors": [],
+        "sourceHashes": {
+          "study-room/index.html": "54c96a2eff695deacd935fad05cc0d44413c4e7144adcd4c44e40f84f3c31bc8",
+          "assets/study-room-live.js": "18233c7e451d4af50a4b71254ae93d68ceb0316b0b7a1cd4b4d880bd32542450",
+          "assets/study-room-live.css": "b03ee186567cf1f027b699cc12979dcad4f89279d7563e11d8fe91218f1520c2",
+          "worker/study-room-routes.mjs": "12e502a8271e1af0f2d0e7a54fa4fabde9037e612dc4c12eec2f57edf9d850a7",
+          "worker/study-room-core.mjs": "7b8bdab0d8d545cc9acba564268dd4a8250c5e126fbc1238848682b1d0ddae04",
+          "worker/study-room-admission.mjs": "d82c8c031b5c013f2a953b6e0dc350f6a266116e691b08d8608a7c1933c5346d",
+          "supabase/migrations/20260908144814_astra_study_room_persisted_catalog.sql": "f5eb0739f36fca4d1cd574fdc7bd30a299351f8cc892a7896742f247fc496ebc",
+          "supabase/migrations/20260909080143_study_room_admission_v3.sql": "5ca7d139bb925b00c82d391aab4f566446d5d1bdd25e0b1b271fde614cb11637",
+          "scripts/serve-study-room-rehearsal.mjs": "207765224cdbdcbf25f7ad12af3ff9b2af7812c1a81c7eb62aaa4a5ceceb907e",
+          "scripts/test-study-room-browser.mjs": "95f857102208180dd7a542061e798051b176b3d2f2b694b661d356debc90e941"
+        },
+        "substitutions": [
+          "HTML replaces external SDK/config/auth/background scripts with synthetic auth and inert SDK transport; actual Study live.js is unchanged.",
+          "CSS external font imports removed for isolated rendering; no production bootstrap or font-loading claim.",
+          "Admin authorization helper and prerequisite auth tables match the existing local SQL fixture; no hosted authentication.",
+          "LiveKit active presence/revocation is a JWT-backed inert registry; no provider behavior or rate-limit capacity claim."
+        ],
+        "metrics": {
+          "signedCredentials": 3,
+          "connections": 2,
+          "revoked": 1,
+          "providerCalls": 0,
+          "rpcCalls": 71
+        },
+        "finishedAt": "2026-09-09T11:00:50.463Z"
+      }
+    }
+  },
+  "files": [
+    {
+      "path": "browser-organizer-ci/downloads/certificate-duediligence-debate-ci-full-browser-debate-2026-09-09t11-00-00-319z-certificate-r2.pdf",
+      "bytes": 10987,
+      "sha256": "d4bcd26841132793f606a491571f40969473b1468266bf5d40ea500cf3f550a2"
+    },
+    {
+      "path": "browser-organizer-ci/downloads/csv-duediligence-debate-ci-full-browser-debate-2026-09-09t11-00-00-319z-csv-r2.csv",
+      "bytes": 2102,
+      "sha256": "bfc1b5101efb66f13b2490ffe616236b5e18b12f53f5b0d1282b77b2a48f6905"
+    },
+    {
+      "path": "browser-organizer-ci/downloads/event_report-duediligence-debate-ci-full-browser-debate-2026-09-09t11-00-00-319z-event-report-r2.pdf",
+      "bytes": 14107,
+      "sha256": "a947d5c2027ed64d5ad14174f9281ecb7fa55195b5f20ef3238cccf992c8b2d7"
+    },
+    {
+      "path": "browser-organizer-ci/downloads/result-duediligence-debate-ci-full-browser-debate-2026-09-09t11-00-00-319z-result-r2.pdf",
+      "bytes": 13524,
+      "sha256": "3a05d52ac926098e3cd4128a855a8e37e751b963f27fcb5eb39bf6aa29eed9cc"
+    },
+    {
+      "path": "browser-organizer-ci/downloads/rules-duediligence-debate-ci-full-browser-debate-2026-09-09t11-00-00-319z-rules-r1.pdf",
+      "bytes": 14823,
+      "sha256": "416493a2b736f5483b095e4786a95371e4fa626c434948172dff06ec22b85040"
+    },
+    {
+      "path": "browser-organizer-ci/downloads/scorecard-duediligence-debate-ci-full-browser-debate-2026-09-09t11-00-00-319z-scorecard-r1.pdf",
+      "bytes": 12984,
+      "sha256": "d2093c04c9d9d0d7725360e5dfa977fff799ea17b6a92b15b79d2e612f7a30a5"
+    },
+    {
+      "path": "browser-organizer-ci/guest-failure-dom.html",
+      "bytes": 19091,
+      "sha256": "64d677e3338c267c2d4440e9dd68c2e5a95540c9612c1bea6e810c4a656e3f15"
+    },
+    {
+      "path": "browser-organizer-ci/host-failure-dom.html",
+      "bytes": 31877,
+      "sha256": "c9ef7f6c573a0d9224d999a69c2c65d277f5e50b0aefa3d6bbb3291714758bf7"
+    },
+    {
+      "path": "browser-organizer-ci/manifest.json",
+      "bytes": 2396,
+      "sha256": "93be958b5162df0cb25009fc80fee4d0a7a2451d6c951ebe4e3a82104de1981c"
+    },
+    {
+      "path": "browser-organizer-ci/report.json",
+      "bytes": 80482,
+      "sha256": "b6e23a75e6aab227715dd9ae11542646c22b06f5fb96f1d92573ee0134712ecc"
+    },
+    {
+      "path": "browser-organizer-ci/request-log.jsonl",
+      "bytes": 86005,
+      "sha256": "b78ca84ad9cce0898fa3fc2bc2db8bd161a14e68df48700198f8dd7c547d2ee0"
+    },
+    {
+      "path": "browser-organizer-ci/screenshots/01-observer-waiting.png",
+      "bytes": 94029,
+      "sha256": "1f51d9fc791f753737ac4dffc7b5eabf22918e36227c0918d1fd1f9c0db3114e"
+    },
+    {
+      "path": "browser-organizer-ci/screenshots/02-reviewed-fixture.png",
+      "bytes": 139218,
+      "sha256": "fe12b8e13b0a84bc3b8431359744efb326f6ecce3c90f0344a9c4e1cbceef789"
+    },
+    {
+      "path": "browser-organizer-ci/screenshots/03-ready-with-explicit-accommodations.png",
+      "bytes": 179578,
+      "sha256": "2abc24346537ae0eccfd337ada87b2075a107e033a0d999a9220d9e16e810519"
+    },
+    {
+      "path": "browser-organizer-ci/screenshots/04-questioning-overtime.png",
+      "bytes": 282733,
+      "sha256": "0a651ac05e76bdd41c76ad1565b89187521de9e8e025b74325ba1c548565e3a8"
+    },
+    {
+      "path": "browser-organizer-ci/screenshots/05-corrected-final-result.png",
+      "bytes": 217658,
+      "sha256": "3130eddb512db58cc2658433f87ca40e83c8043eeaa51a06cc8cb53fcc90b908"
+    },
+    {
+      "path": "browser-organizer-ci/screenshots/06-narrow-final-result.png",
+      "bytes": 221455,
+      "sha256": "4b9cd8db75063aac5d4bcc561bd7697abb92799e79eb35eed10ea60626fc2d67"
+    },
+    {
+      "path": "browser-organizer-ci/screenshots/07-final-fixture-and-standings.png",
+      "bytes": 161615,
+      "sha256": "23551785f5af0edcb920342545a30b052b24ce2d7330c410b671420682814cbb"
+    },
+    {
+      "path": "browser-organizer-ci/screenshots/08-next-match-ready.png",
+      "bytes": 258762,
+      "sha256": "2425192134bc17b01d5774f67cf775a74aaa4adddf816419d47083c16b9a33b1"
+    },
+    {
+      "path": "browser-organizer-ci/screenshots/09-failure-host.png",
+      "bytes": 258762,
+      "sha256": "2425192134bc17b01d5774f67cf775a74aaa4adddf816419d47083c16b9a33b1"
+    },
+    {
+      "path": "browser-organizer-ci/screenshots/10-failure-guest.png",
+      "bytes": 176538,
+      "sha256": "aadf263fa4fbd349f92bbfd6979f3d418fbe962ee1882eaf185ec031f9731342"
+    },
+    {
+      "path": "study-browser-ci/admin-waiting-room.png",
+      "bytes": 372553,
+      "sha256": "b04a88b1ba2f5c613669ac712fbfe8f1ef7ca6222765bda6b23749d08d9de9a1"
+    },
+    {
+      "path": "study-browser-ci/final-0.png",
+      "bytes": 371042,
+      "sha256": "851f7cf5744045b23c2ac8b2a44a57df450c984047df463c4b0985dd10d4b09b"
+    },
+    {
+      "path": "study-browser-ci/final-1.png",
+      "bytes": 518295,
+      "sha256": "7791180e2757ddf368541d42bc37d7941f78f33fa02be54cdd4db8d9f3e229cf"
+    },
+    {
+      "path": "study-browser-ci/final-2.png",
+      "bytes": 532253,
+      "sha256": "16765273e10207149376badd3832b0df25205727da6fd0e00eed18cabe935da7"
+    },
+    {
+      "path": "study-browser-ci/harness-only/harness.json",
+      "bytes": 2025,
+      "sha256": "c890fdeebe093d5ceb61465fd3f70a21970f2e9caf242074343bce15090cae07"
+    },
+    {
+      "path": "study-browser-ci/harness-only/report.json",
+      "bytes": 2548,
+      "sha256": "f2498f2915faf37be049dfb76e443681e6d53a4210784820edeff10b2e83ca83"
+    },
+    {
+      "path": "study-browser-ci/harness-only/request-log.jsonl",
+      "bytes": 3313,
+      "sha256": "977b508310f3f7787feee4a586d8ddefc07de5a91716fcec26a9fb56f2242b03"
+    },
+    {
+      "path": "study-browser-ci/harness.json",
+      "bytes": 2026,
+      "sha256": "69a048efe25560d1cefb8cbd8cb86f403a88393fa0a322f43c234abe383ce059"
+    },
+    {
+      "path": "study-browser-ci/member-explicit-entry.png",
+      "bytes": 288368,
+      "sha256": "855ff1dc293938bb6eeba2ef53929634e8a93b3125d433ef885fe976a0e61f47"
+    },
+    {
+      "path": "study-browser-ci/report.json",
+      "bytes": 3026,
+      "sha256": "34ea1a3d3591e26de8a40070bcd0debc74b8fffe54ab3ba556eb413892b19693"
+    },
+    {
+      "path": "study-browser-ci/request-log.jsonl",
+      "bytes": 14113,
+      "sha256": "56426949ee4794675979571bf2c9f0ddf46657b8bd267df0421cf07c6b5e0653"
+    }
+  ],
+  "limits": [
+    "Synthetic Linux CI browsers with isolated local SQL and identity/bootstrap/media substitutions",
+    "No hosted authentication or deployment in these runs",
+    "No physical media, real 90-minute endurance, capacity, mail or inbox proof",
+    "Public launch remains unapproved"
+  ],
+  "run": {
+    "conclusion": "failure",
+    "headSha": "016c11d1cfca5b9514f0b924fc86f488523b29e3",
+    "status": "completed",
+    "url": "https://github.com/codingwally/Bar-Exam-simulator/actions/runs/34343107711"
+  },
+  "testedCheckout": "e59340a21edd901f7fa48c49b844acc90283571a",
+  "shared": {
+    "conclusion": "success",
+    "headSha": "016c11d1cfca5b9514f0b924fc86f488523b29e3",
+    "status": "completed",
+    "url": "https://github.com/codingwally/Bar-Exam-simulator/actions/runs/34343107841"
+  },
+  "unrelatedMedia": {
+    "conclusion": "failure",
+    "headSha": "016c11d1cfca5b9514f0b924fc86f488523b29e3",
+    "status": "completed",
+    "url": "https://github.com/codingwally/Bar-Exam-simulator/actions/runs/34343107796"
+  }
+}

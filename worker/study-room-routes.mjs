@@ -10,6 +10,7 @@ import {
   renameStudyRoomParticipant,
   studyRoomDescriptor,
 } from './study-room-core.mjs';
+import { createStudyRoomAdmission } from './study-room-admission.mjs';
 
 const STUDY_ROOM_ADMIN_ROLES = new Set(['admin', 'founder_admin', 'super_admin']);
 const STUDY_ROOM_MEMBER_ACCESS_BASIS = 'signed_in';
@@ -78,6 +79,9 @@ export function createStudyRoomHandlers(dependencies) {
     readCatalog,
     configureCatalog,
     verifyPaidMembership,
+    admissionRpc,
+    admissionPresence,
+    admissionRevokeToken,
     describeRoom = studyRoomDescriptor,
     listRooms = listStudyRooms,
     createRoom = createStudyRoom,
@@ -87,6 +91,8 @@ export function createStudyRoomHandlers(dependencies) {
     removeParticipant = removeStudyRoomParticipant,
     renameParticipant = renameStudyRoomParticipant,
   } = dependencies;
+  const admission = createStudyRoomAdmission({ rpc: admissionRpc,
+    presence: admissionPresence, revokeToken: admissionRevokeToken });
 
   async function currentCatalog(env) {
     if (typeof readCatalog !== 'function') {
@@ -104,6 +110,8 @@ export function createStudyRoomHandlers(dependencies) {
       isAdministrator: context.isAdministrator,
       isPaidMember: !context.isAdministrator && checkPaid ? await paid() : false,
       verifyPaidMembership: paid,
+      ...(typeof admissionRpc === 'function' ? { authorizeAdmission: (slot, nickname, version) =>
+        admission.authorize(env, context.user, slot, nickname, version) } : {}),
       configureCatalog: (body) => {
         if (typeof configureCatalog !== 'function') throw new StudyRoomError('STUDY_ROOM_CATALOG_UNAVAILABLE', 'Room configuration is unavailable.', 503);
         return configureCatalog(env, body);
@@ -112,7 +120,7 @@ export function createStudyRoomHandlers(dependencies) {
   }
 
   async function authorizedContext(request, env, scope) {
-    await rateLimit(request, env, scope);
+    if (scope !== 'admission') await rateLimit(request, env, scope);
     const user = await authenticate(request, env);
     if (!user) {
       throw new StudyRoomError(
@@ -122,6 +130,9 @@ export function createStudyRoomHandlers(dependencies) {
         'Return to Due Diligence, sign in, then open the Study Room again.',
       );
     }
+    // Waiting-list polling is actor-scoped; a school's shared IP must not turn
+    // one user's request budget into a denial for everyone in the room.
+    if (scope === 'admission') await rateLimit(request, env, scope, user);
     const authorization = authorizedAdministrator(await authorizeAdmin(env, user));
     if (authorization) {
       return {
@@ -159,6 +170,13 @@ export function createStudyRoomHandlers(dependencies) {
   }
 
   return Object.freeze({
+    async admission(request, env, origin, allowedOrigin) {
+      const context = await authorizedContext(request, env, 'admission');
+      const body = await parseJson(request, 4096);
+      const result = await admission.command(env, context.user, body,
+        await roomOptions(env, context, await currentCatalog(env)));
+      return respond(result, 200, origin, allowedOrigin);
+    },
     async access(request, env, origin, allowedOrigin) {
       const context = await authorizedContext(request, env, 'access');
       const room = describeRoom(env, { catalog: await currentCatalog(env) });
@@ -271,7 +289,15 @@ export function createStudyRoomHandlers(dependencies) {
         );
       } else if (operation === 'remove') {
         requirePrivilegedModerator(context.authorization);
+        if (typeof admissionRpc === 'function') {
+          const slot = options.catalog.rooms.find((room) => room.roomKey === String(roomKey));
+          await admission.command(env, context.user, { operation: 'revoke', roomKey,
+            accessRevision: slot?.accessRevision, participantIdentity: body?.participantIdentity,
+            commandId: body?.commandId }, options);
+          result = { action: 'removed', roomKey, participantIdentity: body?.participantIdentity };
+        } else {
         result = await removeParticipant(env, roomKey, body?.participantIdentity, options);
+        }
       } else {
         throw new StudyRoomError(
           'STUDY_ROOM_OPERATION_UNSUPPORTED',

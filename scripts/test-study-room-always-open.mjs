@@ -9,7 +9,7 @@ const source = await readFile(new URL('../assets/study-room-live.js', import.met
 const marker = '  global.DueDiligenceStudyRoom = Object.freeze({';
 assert.equal(source.split(marker).length, 2, 'Unique non-production test-hook insertion point required.');
 const noops = [
-  'stopDeviceTest', 'bindRoomEvents', 'syncConnectionState', 'renderParticipants',
+  'bindRoomEvents', 'syncConnectionState', 'renderParticipants',
   'closePanel', 'installStudyRoomLayoutObserver', 'syncInteractiveControls',
   'syncBrandedBackdropState', 'startFocusClock', 'updateAudioPrompt',
   'removeLocalCameraPublishGuard', 'detachTracks', 'updateUnreadBadges',
@@ -25,7 +25,7 @@ const instrumented = source.replace(marker, `
   isLocalSourceEnabled = () => false;
   toast = (message) => global.__observations.toasts.push(message);
   global.__hooks = { state, normalizeRoomCatalog, activeRoom, selectedRoom,
-    syncJoinButton, selectRoom, createRoomCard, renderRoomCatalog,
+    syncJoinButton, selectRoom, openEntryDialog, closeEntryDialog, createRoomCard, renderRoomCatalog,
     renderRoomSelector, joinRoom, createRoomSlot, switchToRoom, bindControls,
     openRoomEditor, closeRoomEditor, saveRoomConfiguration, reloadRoomEditor,
     refreshRoomCatalog, renderRoomAdministration };
@@ -57,6 +57,9 @@ class Element {
     };
   }
   setAttribute(name, value) { this.attributes.set(name, String(value)); }
+  removeAttribute(name) { this.attributes.delete(name); }
+  showModal() { this.open = true; }
+  close() { this.open = false; }
   getAttribute(name) { return this.attributes.get(name) ?? null; }
   append(...children) { this.children.push(...children); }
   replaceChildren(...children) { this.replacements += 1; this.children = [...children]; }
@@ -71,6 +74,7 @@ class Element {
   }
   closest() { return null; }
   focus() { this.focused = true; }
+  pause() {}
   scrollIntoView() {}
   addEventListener(type, callback) {
     const handlers = this.listeners.get(type) || [];
@@ -127,7 +131,7 @@ function harness({ admin = false, rooms = catalog(admin), joinGate = null, signe
     document, location: { hostname: 'fixture.invalid', search: '' },
     DueDiligencePhase2Config: { workerUrl: 'https://study-room.fixture.invalid' },
     LivekitClient: { Room }, localStorage: { getItem: () => null, setItem() {} },
-    addEventListener() {}, clearInterval() {}, clearTimeout() {},
+    addEventListener() {}, clearInterval() {}, clearTimeout() {}, setTimeout: () => 1,
     __observations: observations,
     async fetch(url, options) {
       const parsed = new URL(url);
@@ -136,7 +140,7 @@ function harness({ admin = false, rooms = catalog(admin), joinGate = null, signe
       assert.equal(options.headers.Authorization, 'Bearer inert-session');
       const body = JSON.parse(options.body);
       observations.requests.push({ path: parsed.pathname, body });
-      assert.ok(['/study-room/join', '/study-room/rooms', '/admin/study-room/rooms'].includes(parsed.pathname));
+      assert.ok(['/study-room/join', '/study-room/rooms', '/admin/study-room/rooms', '/study-room/admission'].includes(parsed.pathname));
       if (parsed.pathname === '/study-room/join' && joinGate) await joinGate.promise;
       let data = parsed.pathname === '/study-room/join' ? {
         room_key: body.roomKey, server_url: 'wss://rtc.fixture.invalid',
@@ -146,6 +150,10 @@ function harness({ admin = false, rooms = catalog(admin), joinGate = null, signe
       if (parsed.pathname === '/study-room/rooms') {
         if (transport.listFailure) return { ok:false, status:503, json:async()=>({ok:false,error:{code:'STUDY_ROOM_CATALOG_UNAVAILABLE'}}) };
         data = { rooms: structuredClone(transport.rooms), schemaVersion:1, maxRooms:24 };
+      }
+      if (parsed.pathname === '/study-room/admission') {
+        assert.equal(admin,true); assert.equal(body.operation,'list');
+        data={roomKey:body.roomKey,accessRevision:body.accessRevision,queue:[]};
       }
       if (parsed.pathname === '/admin/study-room/rooms') {
         if (mutationGate) await mutationGate.promise;
@@ -189,7 +197,7 @@ for (const key of ['1', '2', '3', '4', '6']) {
     assert.equal(h.state.rooms.length, 6);
     assert.equal(h.get('sr-room-lobby-count').textContent, '5 rooms available');
     assert.equal(h.activeRoom(key)?.roomKey, key);
-    assert.equal(h.selectRoom(key), true);
+    assert.equal(h.openEntryDialog(key), true);
     assert.equal(h.get('sr-join').disabled, false);
     await h.joinRoom();
     assert.deepEqual(h.observations.requests.map((x) => x.path), ['/study-room/join']);
@@ -199,7 +207,7 @@ for (const key of ['1', '2', '3', '4', '6']) {
   });
 }
 
-test('first select preserves card identity, focus and listeners for native double-click', async () => {
+test('pointer and double-click preserve one dialog and require explicit entry', async () => {
   const h = harness();
   const button = h.card('3');
   const replacements = h.get('sr-room-card-grid').replacements;
@@ -213,6 +221,9 @@ test('first select preserves card identity, focus and listeners for native doubl
   assert.equal(h.observations.requests.length, 0);
   await button.emit('click', { detail: 2 });
   await button.emit('dblclick', { detail: 2 });
+  assert.equal(h.state.entryOpen, true);
+  assert.equal(h.observations.requests.length, 0, 'Double-click never bypasses the consent dialog.');
+  await h.get('sr-join').emit('click');
   await settled(h);
   assert.equal(h.state.currentRoomKey, '3');
   assert.equal(h.observations.connects.length, 1);
@@ -223,11 +234,13 @@ test('repeated double-click while join is pending and after connection never dup
   const h = harness({ joinGate: gate });
   const button = h.card('2');
   await button.emit('dblclick', { detail: 2 });
+  const joining = h.joinRoom();
   assert.equal(h.state.joining, true);
   await button.emit('dblclick', { detail: 2 });
   await h.joinRoom();
   assert.equal(h.observations.requests.length, 1);
   gate.resolve();
+  await joining;
   await settled(h);
   await button.emit('dblclick', { detail: 2 });
   assert.equal(h.observations.constructions, 1);
@@ -244,13 +257,16 @@ test('mobile single tap selects, then explicit Join connects the selected room o
   assert.equal(h.observations.connects.length, 1);
 });
 
-test('native button Enter activation (click detail zero) selects and joins', async () => {
+test('native button Enter activation opens dialog without joining', async () => {
   const h = harness();
   const button = h.card('2');
   assert.equal(button.tagName, 'BUTTON');
   assert.equal(button.type, 'button');
   // VM supplies the browser-generated activation event, not a physical keypress.
   await button.emit('click', { detail: 0 });
+  assert.equal(h.observations.requests.length, 0);
+  assert.equal(h.state.entryOpen, true);
+  await h.get('sr-join').emit('click');
   await settled(h);
   assert.equal(h.state.currentRoomKey, '2');
   assert.equal(h.observations.connects.length, 1);
@@ -276,7 +292,7 @@ test('restricted active room cannot disconnect or switch an existing connection'
   rooms[4].active = true;
   rooms[4].alwaysOpen = true;
   const h = harness({ rooms });
-  h.selectRoom('2');
+  h.openEntryDialog('2');
   await h.joinRoom();
   const connection = h.state.room;
   const selected = h.state.selectedRoomKey;
@@ -291,10 +307,10 @@ test('restricted active room cannot disconnect or switch an existing connection'
 
 test('administrator must still create an inactive private room before joining', async () => {
   const h = harness({ admin: true });
-  h.selectRoom('5');
-  assert.match(h.get('sr-join').textContent, /^Create and join/);
+  h.openEntryDialog('5');
+  assert.match(h.get('sr-join').textContent, /^Open and enter/);
   await h.joinRoom();
-  assert.deepEqual(h.observations.requests.map((x) => x.path), ['/admin/study-room/rooms', '/study-room/rooms', '/study-room/join']);
+  assert.deepEqual(h.observations.requests.map((x) => x.path), ['/admin/study-room/rooms', '/study-room/rooms', '/study-room/join', '/study-room/admission']);
   assert.equal(h.state.currentRoomKey, '5');
 });
 
@@ -311,11 +327,11 @@ test('inactive room without explicit create permission remains closed even for a
 test('public administrator join never creates a room and Library selection disables microphone', async () => {
   const h = harness({ admin: true });
   h.state.joinWithMicrophone = true;
-  h.selectRoom('1');
+  h.openEntryDialog('1');
   assert.equal(h.state.joinWithMicrophone, false);
   assert.equal(h.get('sr-join-microphone').disabled, true);
   await h.joinRoom();
-  assert.deepEqual(h.observations.requests.map((x) => x.path), ['/study-room/join']);
+  assert.deepEqual(h.observations.requests.map((x) => x.path), ['/study-room/join', '/study-room/admission']);
 });
 
 test('missing catalog never invents always-open availability or normal-user create authority', async () => {
@@ -376,7 +392,8 @@ test('only canonical dynamic rooms are rendered and renamed labels reach cards, 
   const rows=catalog();rows.push({...rows[1],roomKey:'24',label:'Reading Circle'});
   const h=harness({rooms:rows});assert.equal(h.state.rooms.length,7);assert.ok(h.card('24'));assert.equal(h.card('7'),undefined);
   assert.match(h.card('24').getAttribute('aria-label'),/^Reading Circle,/);
-  h.selectRoom('24');assert.equal(h.get('sr-join').textContent,'Join Reading Circle');
+  h.openEntryDialog('24');assert.equal(h.get('sr-join').textContent,'Enter room');
+  assert.equal(h.get('sr-entry-title').textContent,'Reading Circle');
   assert.ok(h.get('sr-room-selector-menu').children.some((node)=>node.textContent==='Reading Circle · 0'));
   await h.joinRoom();assert.equal(h.observations.requests[0].body.roomKey,'24');
 });
@@ -384,7 +401,7 @@ test('unknown or denied paid eligibility never becomes membership and Inner Cham
   const rows=catalog();rows[1]={...rows[1],audience:'paid'};delete rows[1].canJoin;
   rows[4]={...rows[4],audience:'all',adminOnly:false,canJoin:true,alwaysOpen:true};
   const h=harness({rooms:rows});assert.equal(h.card('2').disabled,true);
-  assert.match(h.card('2').getAttribute('aria-label'),/Paying users · Access unavailable/);
+  assert.match(h.card('2').getAttribute('aria-label'),/Paid users · Access unavailable/);
   assert.equal(h.state.rooms[4].audience,'admin');assert.equal(h.card('5').disabled,true);
   assert.equal(h.state.rooms[4].alwaysOpen,false);assert.equal(h.selectRoom('5'),false);
 });
@@ -437,7 +454,7 @@ test('bounded validation refuses invalid input without changing current catalog'
 });
 test('add uses one vacant physical key and cannot duplicate during an in-flight save',async()=>{
   const gate=deferred();const h=harness({admin:true,mutationGate:gate});h.openRoomEditor();
-  assert.equal(h.state.roomEditor.roomKey,'7');assert.equal(h.get('sr-room-audience').value,'admin');
+  assert.equal(h.state.roomEditor.roomKey,'7');assert.equal(h.get('sr-room-audience').value,'all');
   h.get('sr-room-label').value='Small Group';const saving=h.saveRoomConfiguration();
   assert.equal(await h.saveRoomConfiguration(),false);assert.equal(h.openRoomEditor(),false);
   assert.equal(h.state.rooms.some((room)=>room.roomKey==='7'),false);assert.equal(mutations(h).length,1);
@@ -489,4 +506,43 @@ test('catalog capacity caps at24 and no add slot is guessed beyond current canon
   const rows=catalog(true);for(let key=7;key<=24;key++)rows.push({...rows[1],roomKey:String(key),label:`Study Room ${key}`});
   const h=harness({admin:true,rooms:rows});assert.equal(h.state.rooms.length,24);assert.equal(h.get('sr-room-add').disabled,true);
   assert.equal(h.openRoomEditor(),false);assert.equal(mutations(h).length,0);
+});
+
+test('dialog close stops preview, restores trigger focus and prevents hidden Enter from joining', async () => {
+  const h = harness(); const trigger = h.card('2');
+  await trigger.emit('click');
+  let stopped = 0;
+  h.state.previewStream = { getTracks: () => [{ stop: () => { stopped += 1; } }] };
+  assert.equal(h.get('sr-entry-dialog').open, true);
+  assert.equal(h.get('sr-entry-occupancy').textContent, '0 of 12 places occupied');
+  assert.equal(h.state.joinWithCamera, false); assert.equal(h.state.joinWithMicrophone, false);
+  await h.get('sr-entry-close').emit('click');
+  assert.equal(stopped, 1); assert.equal(h.state.previewStream, null);
+  assert.equal(h.get('sr-entry-dialog').open, false); assert.equal(trigger.focused, true);
+  await h.joinRoom(); assert.equal(h.observations.requests.length, 0);
+});
+
+test('Escape while credential response is pending invalidates consent and never connects or publishes', async () => {
+  const gate = deferred(); const h = harness({ joinGate: gate });
+  h.openEntryDialog('2'); const joining = h.joinRoom();
+  assert.equal(h.observations.requests.length, 1);
+  await h.get('sr-entry-dialog').emit('cancel');
+  gate.resolve(); await joining;
+  assert.equal(h.observations.connects.length, 0); assert.equal(h.state.room, null);
+  assert.equal(h.state.entryOpen, false); assert.equal(h.state.joining, false);
+});
+
+test('room switch keeps current meeting through cancel and applies Library policy only on explicit entry', async () => {
+  const h = harness(); h.openEntryDialog('2'); await h.joinRoom();
+  const first = h.state.room;
+  await h.switchToRoom('1');
+  assert.equal(h.state.room, first); assert.equal(h.observations.disconnects, 0);
+  h.closeEntryDialog(); assert.equal(h.state.room, first);
+  await h.switchToRoom('1'); await h.joinRoom();
+  assert.equal(h.state.currentRoomKey, '1'); assert.equal(h.state.currentRoomMicrophoneAllowed, false);
+  assert.equal(h.state.joinWithMicrophone, false); assert.equal(h.observations.disconnects, 1);
+  await h.switchToRoom('2'); await h.joinRoom();
+  assert.equal(h.state.currentRoomKey, '2'); assert.equal(h.state.currentRoomMicrophoneAllowed, true);
+  assert.equal(h.get('sr-join-microphone').disabled, false);
+  assert.equal(h.observations.connects.length, 3); assert.equal(h.observations.disconnects, 2);
 });

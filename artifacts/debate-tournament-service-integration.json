@@ -1,0 +1,568 @@
+{
+  "environment": "Actual service commands using explicit test MemoryStore; not SQL evidence.",
+  "eventId": "de-f13426803be370bf50f5888c270103bf",
+  "eventAwards": {
+    "eventId": "de-f13426803be370bf50f5888c270103bf",
+    "minimumMatches": 2,
+    "scope": "TOURNAMENT",
+    "rehearsal": false,
+    "realCompetitionEligible": true,
+    "sourceResults": [
+      {
+        "matchId": "a376aed6-d477-41c8-8f74-e5e1b505d2aa",
+        "resultId": "635d7f8f-cc53-424f-8235-bf9467996a58",
+        "resultRevision": 1,
+        "rulesVersion": 1,
+        "rubric": "evidence:2500:Evidence / argument support:Evaluate the relevance and support of the arguments and evidence.|delivery:3000:Delivery / clarity:Evaluate comprehensibility and organization with disclosed accommodations; do not substitute accent, disability, appearance, camera quality or network failure for delivery quality.|questioning:1500:Questioning:Evaluate the clarity, relevance and analytical quality of questions.|responding:1500:Responding:Evaluate responsive, reasoned answers and fair clarification.|closing:1500:Closing rebuttal:Evaluate comparative closing analysis and rebuilding of the existing case under the accepted evidence policy."
+      },
+      {
+        "matchId": "533dfb70-3149-4a5a-bf81-db5c4eed7a8d",
+        "resultId": "157a2d30-2a74-46da-ba24-e696e7ebdcdb",
+        "resultRevision": 1,
+        "rulesVersion": 1,
+        "rubric": "evidence:2500:Evidence / argument support:Evaluate the relevance and support of the arguments and evidence.|delivery:3000:Delivery / clarity:Evaluate comprehensibility and organization with disclosed accommodations; do not substitute accent, disability, appearance, camera quality or network failure for delivery quality.|questioning:1500:Questioning:Evaluate the clarity, relevance and analytical quality of questions.|responding:1500:Responding:Evaluate responsive, reasoned answers and fair clarification.|closing:1500:Closing rebuttal:Evaluate comparative closing analysis and rebuilding of the existing case under the accepted evidence policy."
+      }
+    ],
+    "exclusions": [],
+    "invalidatedRunoffs": [],
+    "comparableGroups": [
+      {
+        "rubric": "evidence:2500:Evidence / argument support:Evaluate the relevance and support of the arguments and evidence.|delivery:3000:Delivery / clarity:Evaluate comprehensibility and organization with disclosed accommodations; do not substitute accent, disability, appearance, camera quality or network failure for delivery quality.|questioning:1500:Questioning:Evaluate the clarity, relevance and analytical quality of questions.|responding:1500:Responding:Evaluate responsive, reasoned answers and fair clarification.|closing:1500:Closing rebuttal:Evaluate comparative closing analysis and rebuilding of the existing case under the accepted evidence policy.",
+        "matchIds": [
+          "a376aed6-d477-41c8-8f74-e5e1b505d2aa",
+          "533dfb70-3149-4a5a-bf81-db5c4eed7a8d"
+        ],
+        "bestDebater": {
+          "status": "AWARDED",
+          "winners": [
+            "fixture-person-1"
+          ],
+          "candidates": [
+            {
+              "id": "fixture-person-1",
+              "score": {
+                "numerator": 100,
+                "denominator": 2
+              },
+              "display": "50.00",
+              "displayName": "Fixture speaker 1"
+            },
+            {
+              "id": "fixture-person-2",
+              "score": {
+                "numerator": 100,
+                "denominator": 2
+              },
+              "display": "50.00",
+              "displayName": "Fixture speaker 2"
+            },
+            {
+              "id": "fixture-person-3",
+              "score": {
+                "numerator": 0,
+                "denominator": 2
+              },
+              "display": "0.00",
+              "displayName": "Fixture speaker 3"
+            },
+            {
+              "id": "fixture-person-4",
+              "score": {
+                "numerator": 0,
+                "denominator": 2
+              },
+              "display": "0.00",
+              "displayName": "Fixture speaker 4"
+            },
+            {
+              "id": "fixture-person-5",
+              "score": {
+                "numerator": 0,
+                "denominator": 2
+              },
+              "display": "0.00",
+              "displayName": "Fixture speaker 5"
+            },
+            {
+              "id": "fixture-person-6",
+              "score": {
+                "numerator": 0,
+                "denominator": 2
+              },
+              "display": "0.00",
+              "displayName": "Fixture speaker 6"
+            }
+          ],
+          "definition": "Mean judge nomination share per comparable scored match, with each match weighted equally; one top-candidate runoff before a persistent-tie co-award.",
+          "runoffCounts": {
+            "fixture-person-1": 1,
+            "fixture-person-2": 0
+          },
+          "eligibility": [
+            {
+              "id": "fixture-person-1",
+              "matchCount": 2,
+              "eligible": true,
+              "displayName": "Fixture speaker 1",
+              "reason": null
+            },
+            {
+              "id": "fixture-person-2",
+              "matchCount": 2,
+              "eligible": true,
+              "displayName": "Fixture speaker 2",
+              "reason": null
+            },
+            {
+              "id": "fixture-person-3",
+              "matchCount": 2,
+              "eligible": true,
+              "displayName": "Fixture speaker 3",
+              "reason": null
+            },
+            {
+              "id": "fixture-person-4",
+              "matchCount": 2,
+              "eligible": true,
+              "displayName": "Fixture speaker 4",
+              "reason": null
+            },
+            {
+              "id": "fixture-person-5",
+              "matchCount": 2,
+              "eligible": true,
+              "displayName": "Fixture speaker 5",
+              "reason": null
+            },
+            {
+              "id": "fixture-person-6",
+              "matchCount": 2,
+              "eligible": true,
+              "displayName": "Fixture speaker 6",
+              "reason": null
+            }
+          ],
+          "eligibleRunoffJudgeIds": [
+            "fixture-host"
+          ],
+          "scope": "TOURNAMENT",
+          "winnerParticipants": [
+            {
+              "id": "fixture-person-1",
+              "displayName": "Fixture speaker 1"
+            }
+          ]
+        },
+        "bestSpeaker": {
+          "status": "COAWARD",
+          "winners": [
+            "fixture-person-1",
+            "fixture-person-2",
+            "fixture-person-3"
+          ],
+          "candidates": [
+            {
+              "id": "fixture-person-1",
+              "score": {
+                "numerator": 200,
+                "denominator": 2
+              },
+              "display": "100.00",
+              "displayName": "Fixture speaker 1"
+            },
+            {
+              "id": "fixture-person-2",
+              "score": {
+                "numerator": 200,
+                "denominator": 2
+              },
+              "display": "100.00",
+              "displayName": "Fixture speaker 2"
+            },
+            {
+              "id": "fixture-person-3",
+              "score": {
+                "numerator": 200,
+                "denominator": 2
+              },
+              "display": "100.00",
+              "displayName": "Fixture speaker 3"
+            },
+            {
+              "id": "fixture-person-4",
+              "score": {
+                "numerator": 3200,
+                "denominator": 34
+              },
+              "display": "94.12",
+              "displayName": "Fixture speaker 4"
+            },
+            {
+              "id": "fixture-person-5",
+              "score": {
+                "numerator": 3200,
+                "denominator": 34
+              },
+              "display": "94.12",
+              "displayName": "Fixture speaker 5"
+            },
+            {
+              "id": "fixture-person-6",
+              "score": {
+                "numerator": 3200,
+                "denominator": 34
+              },
+              "display": "94.12",
+              "displayName": "Fixture speaker 6"
+            }
+          ],
+          "definition": "Average each match first, then average comparable matches equally.",
+          "eligibility": [
+            {
+              "id": "fixture-person-1",
+              "matchCount": 2,
+              "eligible": true,
+              "displayName": "Fixture speaker 1",
+              "reason": null
+            },
+            {
+              "id": "fixture-person-2",
+              "matchCount": 2,
+              "eligible": true,
+              "displayName": "Fixture speaker 2",
+              "reason": null
+            },
+            {
+              "id": "fixture-person-3",
+              "matchCount": 2,
+              "eligible": true,
+              "displayName": "Fixture speaker 3",
+              "reason": null
+            },
+            {
+              "id": "fixture-person-4",
+              "matchCount": 2,
+              "eligible": true,
+              "displayName": "Fixture speaker 4",
+              "reason": null
+            },
+            {
+              "id": "fixture-person-5",
+              "matchCount": 2,
+              "eligible": true,
+              "displayName": "Fixture speaker 5",
+              "reason": null
+            },
+            {
+              "id": "fixture-person-6",
+              "matchCount": 2,
+              "eligible": true,
+              "displayName": "Fixture speaker 6",
+              "reason": null
+            }
+          ],
+          "scope": "TOURNAMENT",
+          "winnerParticipants": [
+            {
+              "id": "fixture-person-1",
+              "displayName": "Fixture speaker 1"
+            },
+            {
+              "id": "fixture-person-2",
+              "displayName": "Fixture speaker 2"
+            },
+            {
+              "id": "fixture-person-3",
+              "displayName": "Fixture speaker 3"
+            }
+          ]
+        },
+        "bestInterpellator": {
+          "status": "COAWARD",
+          "winners": [
+            "fixture-person-1",
+            "fixture-person-2",
+            "fixture-person-3",
+            "fixture-person-4",
+            "fixture-person-5",
+            "fixture-person-6"
+          ],
+          "candidates": [
+            {
+              "id": "fixture-person-1",
+              "score": {
+                "numerator": 200,
+                "denominator": 2
+              },
+              "display": "100.00",
+              "displayName": "Fixture speaker 1"
+            },
+            {
+              "id": "fixture-person-2",
+              "score": {
+                "numerator": 200,
+                "denominator": 2
+              },
+              "display": "100.00",
+              "displayName": "Fixture speaker 2"
+            },
+            {
+              "id": "fixture-person-3",
+              "score": {
+                "numerator": 200,
+                "denominator": 2
+              },
+              "display": "100.00",
+              "displayName": "Fixture speaker 3"
+            },
+            {
+              "id": "fixture-person-4",
+              "score": {
+                "numerator": 200,
+                "denominator": 2
+              },
+              "display": "100.00",
+              "displayName": "Fixture speaker 4"
+            },
+            {
+              "id": "fixture-person-5",
+              "score": {
+                "numerator": 200,
+                "denominator": 2
+              },
+              "display": "100.00",
+              "displayName": "Fixture speaker 5"
+            },
+            {
+              "id": "fixture-person-6",
+              "score": {
+                "numerator": 200,
+                "denominator": 2
+              },
+              "display": "100.00",
+              "displayName": "Fixture speaker 6"
+            }
+          ],
+          "definition": "Average each match first, then average comparable matches equally.",
+          "eligibility": [
+            {
+              "id": "fixture-person-1",
+              "matchCount": 2,
+              "eligible": true,
+              "displayName": "Fixture speaker 1",
+              "reason": null
+            },
+            {
+              "id": "fixture-person-2",
+              "matchCount": 2,
+              "eligible": true,
+              "displayName": "Fixture speaker 2",
+              "reason": null
+            },
+            {
+              "id": "fixture-person-3",
+              "matchCount": 2,
+              "eligible": true,
+              "displayName": "Fixture speaker 3",
+              "reason": null
+            },
+            {
+              "id": "fixture-person-4",
+              "matchCount": 2,
+              "eligible": true,
+              "displayName": "Fixture speaker 4",
+              "reason": null
+            },
+            {
+              "id": "fixture-person-5",
+              "matchCount": 2,
+              "eligible": true,
+              "displayName": "Fixture speaker 5",
+              "reason": null
+            },
+            {
+              "id": "fixture-person-6",
+              "matchCount": 2,
+              "eligible": true,
+              "displayName": "Fixture speaker 6",
+              "reason": null
+            }
+          ],
+          "scope": "TOURNAMENT",
+          "winnerParticipants": [
+            {
+              "id": "fixture-person-1",
+              "displayName": "Fixture speaker 1"
+            },
+            {
+              "id": "fixture-person-2",
+              "displayName": "Fixture speaker 2"
+            },
+            {
+              "id": "fixture-person-3",
+              "displayName": "Fixture speaker 3"
+            },
+            {
+              "id": "fixture-person-4",
+              "displayName": "Fixture speaker 4"
+            },
+            {
+              "id": "fixture-person-5",
+              "displayName": "Fixture speaker 5"
+            },
+            {
+              "id": "fixture-person-6",
+              "displayName": "Fixture speaker 6"
+            }
+          ]
+        },
+        "bestRebuttalSpeaker": {
+          "status": "AWARDED",
+          "winners": [
+            "fixture-person-1"
+          ],
+          "candidates": [
+            {
+              "id": "fixture-person-1",
+              "score": {
+                "numerator": 200,
+                "denominator": 2
+              },
+              "display": "100.00",
+              "displayName": "Fixture speaker 1"
+            },
+            {
+              "id": "fixture-person-4",
+              "score": {
+                "numerator": 160,
+                "denominator": 2
+              },
+              "display": "80.00",
+              "displayName": "Fixture speaker 4"
+            }
+          ],
+          "definition": "Average each match first, then average comparable matches equally.",
+          "eligibility": [
+            {
+              "id": "fixture-person-1",
+              "matchCount": 2,
+              "eligible": true,
+              "displayName": "Fixture speaker 1",
+              "reason": null
+            },
+            {
+              "id": "fixture-person-2",
+              "matchCount": 0,
+              "eligible": false,
+              "displayName": "Fixture speaker 2",
+              "reason": "Requires at least the minimum number of actual closing performances under this rubric."
+            },
+            {
+              "id": "fixture-person-3",
+              "matchCount": 0,
+              "eligible": false,
+              "displayName": "Fixture speaker 3",
+              "reason": "Requires at least the minimum number of actual closing performances under this rubric."
+            },
+            {
+              "id": "fixture-person-4",
+              "matchCount": 2,
+              "eligible": true,
+              "displayName": "Fixture speaker 4",
+              "reason": null
+            },
+            {
+              "id": "fixture-person-5",
+              "matchCount": 0,
+              "eligible": false,
+              "displayName": "Fixture speaker 5",
+              "reason": "Requires at least the minimum number of actual closing performances under this rubric."
+            },
+            {
+              "id": "fixture-person-6",
+              "matchCount": 0,
+              "eligible": false,
+              "displayName": "Fixture speaker 6",
+              "reason": "Requires at least the minimum number of actual closing performances under this rubric."
+            }
+          ],
+          "scope": "TOURNAMENT",
+          "winnerParticipants": [
+            {
+              "id": "fixture-person-1",
+              "displayName": "Fixture speaker 1"
+            }
+          ]
+        },
+        "sourceResults": [
+          {
+            "matchId": "a376aed6-d477-41c8-8f74-e5e1b505d2aa",
+            "resultId": "635d7f8f-cc53-424f-8235-bf9467996a58",
+            "resultRevision": 1,
+            "rulesVersion": 1
+          },
+          {
+            "matchId": "533dfb70-3149-4a5a-bf81-db5c4eed7a8d",
+            "resultId": "157a2d30-2a74-46da-ba24-e696e7ebdcdb",
+            "resultRevision": 1,
+            "rulesVersion": 1
+          }
+        ],
+        "participants": [
+          {
+            "id": "fixture-person-1",
+            "displayName": "Fixture speaker 1",
+            "completedMatchCount": 2
+          },
+          {
+            "id": "fixture-person-2",
+            "displayName": "Fixture speaker 2",
+            "completedMatchCount": 2
+          },
+          {
+            "id": "fixture-person-3",
+            "displayName": "Fixture speaker 3",
+            "completedMatchCount": 2
+          },
+          {
+            "id": "fixture-person-4",
+            "displayName": "Fixture speaker 4",
+            "completedMatchCount": 2
+          },
+          {
+            "id": "fixture-person-5",
+            "displayName": "Fixture speaker 5",
+            "completedMatchCount": 2
+          },
+          {
+            "id": "fixture-person-6",
+            "displayName": "Fixture speaker 6",
+            "completedMatchCount": 2
+          }
+        ]
+      }
+    ],
+    "nonComparableRubrics": false,
+    "status": "CALCULATED"
+  },
+  "commands": {
+    "matchNomination": {
+      "command": "nominate_award",
+      "payload": {
+        "matchId": "a376aed6-d477-41c8-8f74-e5e1b505d2aa",
+        "nomineeId": "A1",
+        "reason": "Reasoned choice",
+        "runoff": true
+      }
+    },
+    "tournamentRunoff": {
+      "command": "nominate_tournament_award",
+      "payload": {
+        "rubric": "evidence:2500:Evidence / argument support:Evaluate the relevance and support of the arguments and evidence.|delivery:3000:Delivery / clarity:Evaluate comprehensibility and organization with disclosed accommodations; do not substitute accent, disability, appearance, camera quality or network failure for delivery quality.|questioning:1500:Questioning:Evaluate the clarity, relevance and analytical quality of questions.|responding:1500:Responding:Evaluate responsive, reasoned answers and fair clarification.|closing:1500:Closing rebuttal:Evaluate comparative closing analysis and rebuilding of the existing case under the accepted evidence policy.",
+        "nomineeId": "fixture-person-1",
+        "reason": "Reasoned choice",
+        "confirmed": true
+      }
+    }
+  }
+}

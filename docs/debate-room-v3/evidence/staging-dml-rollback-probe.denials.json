@@ -1,0 +1,43 @@
+{
+  "kind": "PREPARED_NOT_EXECUTED_EXPECTED_ERROR_PROBES",
+  "targetProject": "hlzqmreeoghbldnhlybr",
+  "execution": "Each complete query is a separate batch. Record the actual SQLSTATE, not merely HTTP status. A failing statement aborts its transaction; confirm rollback or connection closure, then run the independent readback. Do not run fragments or continue an uncertain transaction.",
+  "probes": [
+    {
+      "name": "ANON_TABLE_SELECT_DENIED",
+      "expectedSqlstate": "42501",
+      "query": "BEGIN; SET LOCAL lock_timeout = '5s'; SET LOCAL statement_timeout = '10s'; SET LOCAL idle_in_transaction_session_timeout = '10s'; SET LOCAL ROLE anon; SELECT id FROM public.debate_v3_events WHERE false; ROLLBACK;"
+    },
+    {
+      "name": "AUTHENTICATED_TABLE_SELECT_DENIED",
+      "expectedSqlstate": "42501",
+      "query": "BEGIN; SET LOCAL lock_timeout = '5s'; SET LOCAL statement_timeout = '10s'; SET LOCAL idle_in_transaction_session_timeout = '10s'; SET LOCAL ROLE authenticated; SELECT id FROM public.debate_v3_events WHERE false; ROLLBACK;"
+    },
+    {
+      "name": "ANON_DEBATE_RPC_DENIED",
+      "expectedSqlstate": "42501",
+      "query": "BEGIN; SET LOCAL statement_timeout = '10s'; SET LOCAL idle_in_transaction_session_timeout = '10s'; SET LOCAL ROLE anon; SELECT public.debate_v3_read('de-69ddcb067b431a666ff395d98d00473d'); ROLLBACK;"
+    },
+    {
+      "name": "AUTHENTICATED_STUDY_RPC_DENIED",
+      "expectedSqlstate": "42501",
+      "query": "BEGIN; SET LOCAL statement_timeout = '10s'; SET LOCAL idle_in_transaction_session_timeout = '10s'; SET LOCAL ROLE authenticated; SELECT public.study_room_catalog_v2(); ROLLBACK;"
+    },
+    {
+      "name": "SERVICE_AUDIT_UPDATE_DENIED_WITH_ZERO_ROW_PREDICATE",
+      "expectedSqlstate": "42501",
+      "query": "BEGIN; SET LOCAL lock_timeout = '5s'; SET LOCAL statement_timeout = '10s'; SET LOCAL idle_in_transaction_session_timeout = '10s'; SET LOCAL ROLE service_role; UPDATE public.debate_v3_audit SET record=record WHERE false; ROLLBACK;"
+    },
+    {
+      "name": "SERVICE_INVALID_STUDY_COMMAND_REJECTED",
+      "expectedSqlstate": "PT400",
+      "query": "BEGIN; SET LOCAL statement_timeout = '10s'; SET LOCAL idle_in_transaction_session_timeout = '10s'; SET LOCAL ROLE service_role; SELECT public.study_room_admission_v1('{}'::jsonb); ROLLBACK;"
+    }
+  ],
+  "limits": [
+    "No actual TRUNCATE attempt: the main DML batch checks the exact missing TRUNCATE privilege through catalog functions.",
+    "The audit UPDATE has WHERE false and can affect no records even if an unexpected grant exists; an unexpected successful query is a failed privilege test.",
+    "These expected errors are separate from the no-error DML rollback batch and are not passing evidence until actually executed and recorded.",
+    "No Study request, token issuance, admission, account role assignment, provider call, or hosted Auth session is tested here."
+  ]
+}

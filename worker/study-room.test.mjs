@@ -870,7 +870,7 @@ test('production Worker route re-verifies Supabase admin authorization and retur
         app_metadata: { provider: 'email' },
       });
     }
-    if (url.pathname === '/rest/v1/rpc/study_room_catalog_v1') return Response.json(TEST_CATALOG);
+    if (url.pathname === '/rest/v1/rpc/study_room_catalog_v2') return Response.json(TEST_CATALOG);
     if (url.pathname === '/rest/v1/rpc/admin_authorization_context') {
       return Response.json({ authorized: true, role: 'founder_admin' });
     }
@@ -906,7 +906,7 @@ test('production Worker route re-verifies Supabase admin authorization and retur
     assert.deepEqual(upstreamCalls, [
       ['/auth/v1/user', 'GET'],
       ['/rest/v1/rpc/admin_authorization_context', 'POST'],
-      ['/rest/v1/rpc/study_room_catalog_v1', 'POST'],
+      ['/rest/v1/rpc/study_room_catalog_v2', 'POST'],
     ]);
   } finally {
     globalThis.fetch = originalFetch;
@@ -931,7 +931,12 @@ test('production Worker gives all active signed-in accounts access and room-scop
             user_metadata: { full_name: 'Member Tester', commercialState: state },
             app_metadata: { provider: 'email' },
           });
-          if (url.pathname === '/rest/v1/rpc/study_room_catalog_v1') return Response.json(TEST_CATALOG);
+          if (url.pathname === '/rest/v1/rpc/study_room_catalog_v2') return Response.json(TEST_CATALOG);
+          if (url.pathname === '/rest/v1/rpc/study_room_admission_v1') {
+            const command=JSON.parse(init.body).p_command;
+            assert.equal(command.actor,TEST_USER_ID); assert.equal(command.operation,'authorize');
+            return Response.json({ok:true,allowed:true,admission:{status:'approved',version:1,expiresAt:new Date(Date.now()+600000).toISOString()}});
+          }
           if (url.pathname === '/rest/v1/rpc/admin_authorization_context') return Response.json(
             { message: 'Administrator authorization required' }, { status: 403 });
           if (url.pathname === '/twirp/livekit.RoomService/ListRooms') return Response.json({
@@ -965,10 +970,12 @@ test('production Worker gives all active signed-in accounts access and room-scop
         assert.equal(calls.some(([p]) => p.includes('access_snapshot') || p.includes('reserve')), false);
         if (pathname.endsWith('/join')) {
           assert.deepEqual(calls.slice(2), [
-            ['/rest/v1/rpc/study_room_catalog_v1', 'POST'],
+            ['/rest/v1/rpc/study_room_catalog_v2', 'POST'],
+            ['/rest/v1/rpc/study_room_admission_v1', 'POST'],
             ['/twirp/livekit.RoomService/ListRooms', 'POST'],
             ['/twirp/livekit.RoomService/CreateRoom', 'POST'],
-            ['/rest/v1/rpc/study_room_catalog_v1', 'POST'],
+            ['/rest/v1/rpc/study_room_admission_v1', 'POST'],
+            ['/rest/v1/rpc/study_room_catalog_v2', 'POST'],
           ]);
           const claims = await new TokenVerifier(TEST_ENV.LIVEKIT_API_KEY, TEST_ENV.LIVEKIT_API_SECRET)
             .verify(body.participant_token);
@@ -1059,7 +1066,7 @@ test('active free members cannot create rooms, moderate, or use any legacy admin
       const calls = [];
       globalThis.fetch = async (input) => {
         const pathname = new URL(String(input)).pathname; calls.push(pathname);
-        if (pathname === '/rest/v1/rpc/study_room_catalog_v1') return Response.json(TEST_CATALOG);
+        if (pathname === '/rest/v1/rpc/study_room_catalog_v2') return Response.json(TEST_CATALOG);
         if (pathname === '/auth/v1/user') return Response.json({ id: TEST_USER_ID, is_anonymous: false,
           user_metadata: { role: 'super_admin', administrator: true }, app_metadata: { provider: 'email' } });
         if (pathname === '/rest/v1/rpc/admin_authorization_context') return Response.json(
@@ -1073,7 +1080,7 @@ test('active free members cannot create rooms, moderate, or use any legacy admin
         SUPABASE_SERVICE_ROLE_KEY: 'test_service_role', GUEST_USAGE_HMAC_KEY: 'test_rate_limit_key' });
       assert.equal(response.status, 403, pathname);
       assert.deepEqual(calls, ['/auth/v1/user', '/rest/v1/rpc/admin_authorization_context',
-        ...(pathname === '/study-room/join' ? ['/rest/v1/rpc/study_room_catalog_v1'] : [])]);
+        ...(pathname === '/study-room/join' ? ['/rest/v1/rpc/study_room_catalog_v2'] : [])]);
       assert.equal('participant_token' in await response.json(), false);
     }
   } finally { globalThis.fetch = originalFetch; }

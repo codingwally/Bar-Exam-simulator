@@ -8,4 +8,5 @@
 node_modules/
 .pages-dist/
 .staging-dist/
+artifacts/debate-local-rehearsal/
 

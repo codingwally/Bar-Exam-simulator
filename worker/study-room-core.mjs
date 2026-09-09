@@ -111,7 +111,7 @@ export function normalizeStudyRoomCatalog(value) {
   const seen = new Set();
   const rooms = value.rooms.map((row) => {
     if (typeof row?.roomKey !== 'string' || !ROOM_KEY_PATTERN.test(row.roomKey)
-      || seen.has(row.roomKey) || !['admin', 'paid', 'all'].includes(row.audience)
+      || seen.has(row.roomKey) || !['admin', 'paid', 'all', 'approval'].includes(row.audience)
       || !Number.isSafeInteger(row.revision) || row.revision < 1 || row.revision > 2_147_483_646
       || !Number.isSafeInteger(row.accessRevision) || row.accessRevision < 1 || row.accessRevision > row.revision
       || (row.roomKey === '5' && row.audience !== 'admin')) throw catalogError();
@@ -450,7 +450,8 @@ function publicRoomDescriptor(slot, room = null, options = {}) {
     accessRevision: slot.accessRevision,
     alwaysOpen: !slot.adminOnly,
     canCreate: slot.adminOnly && isAdministrator,
-    canJoin: isAdministrator || slot.audience === 'all' || (slot.audience === 'paid' && options.isPaidMember === true),
+    requiresApproval: slot.audience === 'approval' && !isAdministrator,
+    canJoin: isAdministrator || ['all', 'approval'].includes(slot.audience) || (slot.audience === 'paid' && options.isPaidMember === true),
   });
   if (!room) {
     return Object.freeze({
@@ -543,7 +544,7 @@ export async function configureStudyRoom(env, user, body, options = {}) {
   const label = normalizeStudyRoomLabel(body?.label);
   const audience = body?.audience;
   const expectedRevision = body?.expectedRevision;
-  if (!['add', 'update'].includes(operation) || !['admin', 'paid', 'all'].includes(audience)
+  if (!['add', 'update'].includes(operation) || !['admin', 'paid', 'all', 'approval'].includes(audience)
     || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0 || expectedRevision > 2_147_483_646
     || (roomKey === '5' && audience !== 'admin') || (operation === 'add' && Number(roomKey) < 7)) {
     throw new StudyRoomError('STUDY_ROOM_CONFIG_INVALID', 'Refresh the room configuration and check its name and access choice.', 400);
@@ -603,6 +604,17 @@ export async function createStudyRoomJoinCredential(env, user, roomKey, nickname
   if (slot.audience === 'paid' && !isAdministrator && options.isPaidMember !== true) {
     throw new StudyRoomError('STUDY_ROOM_PAID_ROOM_REQUIRED', 'This room requires a current paid membership.', 403);
   }
+  if (slot.audience === 'approval') requireStudyRoomTokenRevocation(env);
+  let admission = null;
+  if (typeof options.authorizeAdmission === 'function') {
+    admission = await options.authorizeAdmission(slot, normalizedNickname);
+    if (!Number.isSafeInteger(admission?.version) || admission.version < 1
+      || !Number.isFinite(Date.parse(admission?.expiresAt)) || Date.parse(admission.expiresAt) <= Date.now()) {
+      throw new StudyRoomError('STUDY_ROOM_ADMISSION_UNAVAILABLE', 'Room admission could not be confirmed.', 503);
+    }
+  } else if (slot.audience === 'approval') {
+    throw new StudyRoomError('STUDY_ROOM_ADMISSION_UNAVAILABLE', 'Room admission is temporarily unavailable.', 503);
+  }
   let room;
   if (slot.adminOnly) {
     const activeRooms = await liveKitCall('join_room_lookup', () => service.listRooms([slot.roomName]));
@@ -625,7 +637,8 @@ export async function createStudyRoomJoinCredential(env, user, roomKey, nickname
   const token = new AccessToken(configuration.apiKey, configuration.apiSecret, {
     identity,
     name: normalizedNickname,
-    ttl: STUDY_ROOM_TOKEN_TTL_SECONDS,
+    ttl: admission ? Math.max(1, Math.min(STUDY_ROOM_TOKEN_TTL_SECONDS,
+      Math.floor((Date.parse(admission.expiresAt) - Date.now()) / 1000))) : STUDY_ROOM_TOKEN_TTL_SECONDS,
   });
   token.addGrant({
     room: slot.roomName,
@@ -644,6 +657,7 @@ export async function createStudyRoomJoinCredential(env, user, roomKey, nickname
       : [TrackSource.CAMERA, TrackSource.SCREEN_SHARE],
   });
   const participantToken = await token.toJwt();
+  if (admission) await options.authorizeAdmission(slot, normalizedNickname, admission.version);
   if (slot.audience === 'paid' && !isAdministrator
     && (typeof options.verifyPaidMembership !== 'function' || await options.verifyPaidMembership() !== true)) {
     throw new StudyRoomError('STUDY_ROOM_PAID_ROOM_REQUIRED', 'This room requires a current paid membership.', 403);
@@ -673,6 +687,43 @@ export async function createStudyRoomJoinCredential(env, user, roomKey, nickname
     focusStartedAt: focusStartedAtForRoom(room),
     expiresInSeconds: STUDY_ROOM_TOKEN_TTL_SECONDS,
   };
+}
+
+export function requireStudyRoomTokenRevocation(env) {
+  const configuration = safeLiveKitConfiguration(env);
+  if (!new URL(configuration.websocketUrl).hostname.endsWith('.livekit.cloud')) {
+    throw new StudyRoomError('STUDY_ROOM_REVOCATION_UNAVAILABLE', 'Approval rooms require verified token revocation support.', 503);
+  }
+}
+
+export async function requireStudyRoomAdministratorPresence(env, userId, roomKey, options = {}) {
+  if (options.isAdministrator !== true) throw new StudyRoomError('STUDY_ROOM_ADMIN_REQUIRED', 'Only an administrator can manage admission.', 403);
+  const configuration = safeLiveKitConfiguration(env);
+  const slot = resolveStudyRoomSlot(env, roomKey, options);
+  const identity = await participantIdentity(userId, configuration.apiSecret);
+  let participant;
+  try { participant = await resolvedService(configuration, options).getParticipant(slot.roomName, identity); }
+  catch { throw new StudyRoomError('STUDY_ROOM_ADMIN_NOT_PRESENT', 'Enter this room before managing its waiting list.', 403); }
+  // LiveKit ACTIVE is enum 2. A joining/disconnected participant is not inside.
+  if (participant?.identity !== identity || ![2, 'ACTIVE'].includes(participant?.state)) {
+    throw new StudyRoomError('STUDY_ROOM_ADMIN_NOT_PRESENT', 'Enter this room before managing its waiting list.', 403);
+  }
+  return { identity, roomName: slot.roomName };
+}
+
+export async function revokeStudyRoomParticipantToken(env, roomKey, identity, options = {}) {
+  requireStudyRoomTokenRevocation(env);
+  const configuration = safeLiveKitConfiguration(env);
+  const slot = resolveStudyRoomSlot(env, roomKey, options);
+  const targetIdentity = validateStudyRoomParticipantIdentity(identity);
+  // Explicit cutoff also revokes an identity that already left. LiveKit Cloud
+  // applies the documented one-minute buffer; never mint around that cutoff.
+  const cutoff = options.revokedAt == null ? Date.now() : Date.parse(options.revokedAt);
+  if (!Number.isFinite(cutoff) || cutoff > Date.now() + 2000) {
+    throw new StudyRoomError('STUDY_ROOM_ADMISSION_INVALID', 'The room revocation could not be confirmed.', 503);
+  }
+  await liveKitCall('revoke_admission', () => resolvedService(configuration, options)
+    .removeParticipant(slot.roomName, targetIdentity, { revokeTokenTs: BigInt(Math.floor(cutoff / 1000)) }));
 }
 
 export async function muteStudyRoomParticipant(env, roomKey, identity, trackSid, options = {}) {

@@ -1,0 +1,161 @@
+{
+  "recordedAt": "2026-09-09T11:56:49.394Z",
+  "projectRef": "hlzqmreeoghbldnhlybr",
+  "status": "NEW_OBJECTS_REVIEWED_DENY_ALL_RLS_EXPECTED",
+  "findings": [
+    {
+      "name": "rls_enabled_no_policy",
+      "level": "INFO",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy",
+      "object": {
+        "name": "study_room_admission_commands",
+        "type": "table",
+        "schema": "private"
+      },
+      "observedAt": "2026-09-09T11:56:17.442Z"
+    },
+    {
+      "name": "rls_enabled_no_policy",
+      "level": "INFO",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy",
+      "object": {
+        "name": "study_room_admissions",
+        "type": "table",
+        "schema": "private"
+      },
+      "observedAt": "2026-09-09T11:56:17.442Z"
+    },
+    {
+      "name": "rls_enabled_no_policy",
+      "level": "INFO",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy",
+      "object": {
+        "name": "debate_v3_audit",
+        "type": "table",
+        "schema": "public"
+      },
+      "observedAt": "2026-09-09T11:56:17.442Z"
+    },
+    {
+      "name": "rls_enabled_no_policy",
+      "level": "INFO",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy",
+      "object": {
+        "name": "debate_v3_ballots",
+        "type": "table",
+        "schema": "public"
+      },
+      "observedAt": "2026-09-09T11:56:17.442Z"
+    },
+    {
+      "name": "rls_enabled_no_policy",
+      "level": "INFO",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy",
+      "object": {
+        "name": "debate_v3_events",
+        "type": "table",
+        "schema": "public"
+      },
+      "observedAt": "2026-09-09T11:56:17.442Z"
+    },
+    {
+      "name": "rls_enabled_no_policy",
+      "level": "INFO",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy",
+      "object": {
+        "name": "debate_v3_maintenance",
+        "type": "table",
+        "schema": "public"
+      },
+      "observedAt": "2026-09-09T11:56:17.442Z"
+    },
+    {
+      "name": "rls_enabled_no_policy",
+      "level": "INFO",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy",
+      "object": {
+        "name": "debate_v3_match_versions",
+        "type": "table",
+        "schema": "public"
+      },
+      "observedAt": "2026-09-09T11:56:17.442Z"
+    },
+    {
+      "name": "rls_enabled_no_policy",
+      "level": "INFO",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy",
+      "object": {
+        "name": "debate_v3_outbox",
+        "type": "table",
+        "schema": "public"
+      },
+      "observedAt": "2026-09-09T11:56:17.442Z"
+    },
+    {
+      "name": "rls_enabled_no_policy",
+      "level": "INFO",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy",
+      "object": {
+        "name": "debate_v3_rate_limits",
+        "type": "table",
+        "schema": "public"
+      },
+      "observedAt": "2026-09-09T11:56:17.442Z"
+    },
+    {
+      "name": "rls_enabled_no_policy",
+      "level": "INFO",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy",
+      "object": {
+        "name": "debate_v3_receipts",
+        "type": "table",
+        "schema": "public"
+      },
+      "observedAt": "2026-09-09T11:56:17.442Z"
+    },
+    {
+      "name": "rls_enabled_no_policy",
+      "level": "INFO",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy",
+      "object": {
+        "name": "debate_v3_uploads",
+        "type": "table",
+        "schema": "public"
+      },
+      "observedAt": "2026-09-09T11:56:17.442Z"
+    },
+    {
+      "name": "rls_enabled_no_policy",
+      "level": "INFO",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy",
+      "object": {
+        "name": "debate_v3_votes",
+        "type": "table",
+        "schema": "public"
+      },
+      "observedAt": "2026-09-09T11:56:17.442Z"
+    }
+  ],
+  "assessment": "The new tables intentionally have no browser RLS policies and revoke direct anon/authenticated access. Actual SQLSTATE42501 tests and service-only grants were separately verified. No policy was broadened to remove an informational linter finding.",
+  "unrelatedAdvisories": [
+    {
+      "name": "anon_security_definer_function_executable",
+      "level": "WARN",
+      "count": 1,
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable"
+    },
+    {
+      "name": "authenticated_security_definer_function_executable",
+      "level": "WARN",
+      "count": 11,
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable"
+    },
+    {
+      "name": "auth_leaked_password_protection",
+      "level": "WARN",
+      "count": 1,
+      "remediation": "https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection"
+    }
+  ],
+  "scope": "Existing unrelated functions and Auth password configuration were not changed."
+}

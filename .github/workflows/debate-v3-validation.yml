@@ -1,0 +1,128 @@
+name: Debate V3 local validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'assets/debate-*'
+      - 'assets/study-room-*'
+      - 'debate-room/**'
+      - 'study-room/**'
+      - 'worker/debate-*'
+      - 'worker/study-room*'
+      - 'worker/index.mjs'
+      - 'worker/wrangler.toml'
+      - 'worker/wrangler.staging.toml'
+      - 'scripts/*debate*'
+      - 'scripts/*study-room*'
+      - 'scripts/build-pages-artifact.mjs'
+      - 'scripts/test-worker-cpu-limit-contract.mjs'
+      - 'supabase/migrations/20260909*'
+      - 'index.html'
+      - '.github/workflows/debate-v3-validation.yml'
+      - '.github/workflows/debate-v3-capture.yml'
+      - '.github/workflows/debate-v3-staging.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  wrangler-metadata:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install the existing exact pinned Wrangler in isolation
+        run: npm install --prefix artifacts/debate-local-rehearsal/staging-tooling --no-save --no-package-lock --ignore-scripts --no-audit --no-fund wrangler@4.114.0
+      - name: Verify actual upload metadata without credentials or network access
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo -n unshare --net -- env -i PATH="$PATH" DEBATE_HOST_NETWORK_NAMESPACE="$(readlink /proc/self/ns/net)" node scripts/test-debate-wrangler-metadata.mjs
+      - name: Preserve only sanitized metadata verification
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debate-v3-wrangler-metadata
+          path: artifacts/debate-local-rehearsal/wrangler-metadata/report.json
+          if-no-files-found: warn
+          retention-days: 14
+  local-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install locked local test dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+      - name: Run local competition and Study regression suites
+        run: node scripts/test-debate-v3.mjs
+      - name: Build the complete Pages artifact
+        run: |
+          node scripts/build-pages-artifact.mjs
+          node scripts/test-debate-artifact.mjs
+          node scripts/test-pages-artifact.mjs
+      - name: Install existing pinned CI browser tooling
+        id: browser_tooling
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+        run: npm install --no-save --no-package-lock playwright@1.54.2
+      - name: Rehearse the organizer journey through an isolated browser
+        timeout-minutes: 10
+        env:
+          DEBATE_SYNTHETIC_BROWSER_CI: '1'
+        run: node scripts/test-debate-browser-organizer.mjs
+      - name: Verify Study waiting and administrator approval through the UI
+        if: ${{ !cancelled() && steps.browser_tooling.outcome == 'success' }}
+        timeout-minutes: 5
+        env:
+          DEBATE_SYNTHETIC_BROWSER_CI: '1'
+        run: |
+          node scripts/test-study-room-browser.mjs --harness-only
+          node scripts/test-study-room-browser.mjs
+      - name: Preserve synthetic browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debate-v3-synthetic-browser-evidence
+          path: |
+            artifacts/debate-local-rehearsal/browser-organizer-ci/report.json
+            artifacts/debate-local-rehearsal/browser-organizer-ci/screenshots/*
+            artifacts/debate-local-rehearsal/browser-organizer-ci/downloads/*
+            artifacts/debate-local-rehearsal/browser-organizer-ci/trace*.zip
+            artifacts/debate-local-rehearsal/browser-organizer-ci/*-failure-dom.html
+            artifacts/debate-local-rehearsal/browser-organizer-ci/request-log.jsonl
+            artifacts/debate-local-rehearsal/browser-organizer-ci/manifest.json
+            artifacts/debate-local-rehearsal/study-browser-ci/report.json
+            artifacts/debate-local-rehearsal/study-browser-ci/screenshots/*
+            artifacts/debate-local-rehearsal/study-browser-ci/downloads/*
+            artifacts/debate-local-rehearsal/study-browser-ci/trace*.zip
+            artifacts/debate-local-rehearsal/study-browser-ci/synthetic-trace-*.zip
+            artifacts/debate-local-rehearsal/study-browser-ci/final-*.png
+            artifacts/debate-local-rehearsal/study-browser-ci/admin-waiting-room.png
+            artifacts/debate-local-rehearsal/study-browser-ci/member-explicit-entry.png
+            artifacts/debate-local-rehearsal/study-browser-ci/*-failure-dom.html
+            artifacts/debate-local-rehearsal/study-browser-ci/request-log.jsonl
+            artifacts/debate-local-rehearsal/study-browser-ci/manifest.json
+            artifacts/debate-local-rehearsal/study-browser-ci/harness.json
+            artifacts/debate-local-rehearsal/study-browser-ci/harness-only/report.json
+            artifacts/debate-local-rehearsal/study-browser-ci/harness-only/request-log.jsonl
+            artifacts/debate-local-rehearsal/study-browser-ci/harness-only/manifest.json
+            artifacts/debate-local-rehearsal/study-browser-ci/harness-only/harness.json
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Preserve local verification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debate-v3-local-evidence
+          path: |
+            artifacts/debate-local-rehearsal/suite-*/*
+            artifacts/debate-local-rehearsal/staging-dml-probe-ci/report.json
+          if-no-files-found: warn
+          retention-days: 14

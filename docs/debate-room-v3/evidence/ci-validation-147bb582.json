@@ -1,0 +1,445 @@
+{
+  "status": "PASS_SOURCE_BOUND_CI_NOT_HOSTED_OR_FULL_ACCEPTANCE",
+  "candidate": "147bb582e3ed4f0136f5e46f7d9a67412b404630",
+  "tree": "f9cac5d63100cb383454f37b1701b19a62572021",
+  "testedCheckout": "a9ef0d1a5bcd09a139a0a8b27c6bc72aa814f539",
+  "identicalCandidateTree": true,
+  "recordedAt": "2026-09-09T11:50:18.392Z",
+  "debate": {
+    "runId": "34346204988",
+    "url": "https://github.com/codingwally/Bar-Exam-simulator/actions/runs/34346204988",
+    "status": "success",
+    "suite": {
+      "path": "artifacts/debate-local-rehearsal/ci-34346204988/suite-2026-09-09T11-33-56.495Z/report.json",
+      "sha256": "c94dd145190fbd50921b9c571f763fc0ac9d827ea51c91fd51984db0fd2012b9",
+      "report": {
+        "startedAt": "2026-09-09T11:33:56.627Z",
+        "environment": "Local Node / disposable PGlite / inert media; no provider or real mail",
+        "head": "a9ef0d1a5bcd09a139a0a8b27c6bc72aa814f539",
+        "gitStatus": "",
+        "sourceHashes": {
+          ".github/workflows/debate-v3-staging.yml": "77e3f2fa46caa7e116fb5f6906a3e6e0f6f7f684c29c9668b60900748deb6907",
+          "assets/debate-dates.js": "7549422128267aff3d7de4aafc535b5f40290df456a33fd5b85ddd4f7fcd0b12",
+          "assets/debate-entry.js": "81fc674a29b4c4997b8bdd40fe5e49b56e37592cbd573b26675274a9d7894563",
+          "assets/debate-media.js": "ed33b1126087c531423840fb241afb9e95682bcfcd7c8ec8caafb8ae142593b2",
+          "assets/debate-room.css": "c2f6095a0bda20771101763ed631fc171b3a0fb43515f31cd228f8e7c6743c70",
+          "assets/debate-room.js": "1c1c245f2d23f12e4f546ae33c57dc5613b927fd6417c157de6ab992cc4eed6e",
+          "assets/feature-loader.js": "e93faeb186624afc009998303597f2dba9f4dd2e883c47ea0f325ba7b89eefc8",
+          "assets/phase2-config.js": "6ac37e57756468da4b20e5982b82490c437b92f8b0b5a91c19bf07416fef2357",
+          "assets/phase2-experience.js": "60f59903d92240b4869e9cb7edbbdfb2a1f72a0ce2229790b562f85815375edc",
+          "assets/phase2.css": "daa402e9e2cc6142f38a024f50b410a7e04396547288c5d6ebdefd9ff0b5a965",
+          "assets/study-room-backgrounds.js": "b31ccb7e600c81ac2aaf6a40a58f088245acd6de48171af537fbc69c237a3443",
+          "assets/study-room-live.css": "b03ee186567cf1f027b699cc12979dcad4f89279d7563e11d8fe91218f1520c2",
+          "assets/study-room-live.js": "18233c7e451d4af50a4b71254ae93d68ceb0316b0b7a1cd4b4d880bd32542450",
+          "assets/study-room-preview.css": "31716c4a5af8400dfdc6555dba20452958299a0c2ebd75667414f02c4d002e9d",
+          "assets/study-room-preview.js": "00477d0c99c0df301beed26eeea970facdc9094766984f3deefad716eb3d9a7d",
+          "assets/vendor/supabase-2.49.8.umd.js": "522e844a8554c84631063fa630d0b824b8042f346a0222da04460f81d942dcf8",
+          "debate-room/index.html": "b7722b53d25db83d381aea95480031b481522ce46cb7e29f7fca431dd02d647e",
+          "index.html": "dee34326f415a2589c9f7bf8a36eadabcccddbcca8020963d34d5dbe9c66820b",
+          "scripts/build-pages-artifact.mjs": "7bc03d99b13833bc409759e0729998c1bbda6d57f450d35eeba234edb69d2a69",
+          "scripts/build-staging-artifact.mjs": "b458f6b85480d4652d964b8d19c3e3031b2380c7c3eda704245ac184d3c1ddf5",
+          "scripts/debate-staging-release.mjs": "046e2d4dec52564cf5bb170590e07007082ecb58b8fbfc65d9a4896ae1d2f13d",
+          "scripts/serve-debate-rehearsal.mjs": "a4089e4a043259acd57894804083f89215200a79728a0e26473b2f34d9895590",
+          "scripts/serve-study-room-rehearsal.mjs": "207765224cdbdcbf25f7ad12af3ff9b2af7812c1a81c7eb62aaa4a5ceceb907e",
+          "scripts/test-debate-artifact.mjs": "5da93ee36e90a6f691c8e36eedda5a1216362741b90c57f730fdd1c61afe4c7f",
+          "scripts/test-debate-browser-organizer.mjs": "500ae076bc1d548f212eea276a7d78c262c58d840506e78ac7a95e7aff29af46",
+          "scripts/test-debate-client-state.mjs": "547ff5cefa69d8edcc37e948d25579a7f6b0a3c6660a55b01f7d2292e1cac258",
+          "scripts/test-debate-dates.mjs": "90d41cbb3ef24231c43811187382cd19edaee914cadb02c74e74e27046eb0caf",
+          "scripts/test-debate-media.mjs": "38d50a98408d5ce968e7e291f150e0143635dea52fadeed7f749fdda2f4cc536",
+          "scripts/test-debate-organizer-rehearsal.mjs": "4f95b5a2d010948bd5b2dbbd7ab381c2c899f263ba19b5d423ceeebf63a45a41",
+          "scripts/test-debate-rehearsal-server.mjs": "79498de7959d887298c760f6182c3f6d12754ca34bd506849565f895aae2d2b7",
+          "scripts/test-debate-staging-release.mjs": "87829ee6a7347c3abce17c1d174152e6eb91c5e7a09cf598fe5802ef3f77bdd4",
+          "scripts/test-debate-tournament-export.mjs": "0fc1995ea959955b2fb7bc8d8e69cf7601ebd487869a96b60c114ba792241f6b",
+          "scripts/test-debate-v3.mjs": "7d3fe7922ed9b9fbaacc39c9842cd85fdae0e753070fd2b8e54e41f5c80c8423",
+          "scripts/test-feature-decommission-boundary.mjs": "5ab0752a5716a6ea4b916f32dc0aaadb218b0a0f84ec711317b614875ba7fa31",
+          "scripts/test-study-room-admission-sql.mjs": "901ef21f715cc6151bba2d1eac6bc51a3f958c9d44db0fbdc1869ff73f9b259a",
+          "scripts/test-study-room-always-open.mjs": "d069f9b467a238c0e85dbcca072dde501cf137dff62b7647ecbe58c6b3e6886b",
+          "scripts/test-study-room-background-picker.mjs": "e29c5a2520ad014b7842a8d5f86dacb03c49f66a0f5240adb7545292906c1e71",
+          "scripts/test-study-room-backgrounds.mjs": "893f7cb4e847d97bc32995870ddb8d92bab0a89b3f9314551dd959a3da5a998a",
+          "scripts/test-study-room-browser.mjs": "95f857102208180dd7a542061e798051b176b3d2f2b694b661d356debc90e941",
+          "scripts/test-study-room-catalog-sql.mjs": "c3ea5a5f21b2f7bfac4a72b7a190516f6b220a91599404aa0d8053c5c74caf95",
+          "scripts/test-study-room-deployment-smoke.mjs": "2d4690adf5244780bffe02d00a5de271bad04c62c8f39b00bca2771641fc25ad",
+          "scripts/test-study-room-fixture-safety.mjs": "19106a281305d7e73329022d801dfdd3616210d90ac4de42bf2a6ad428bbf651",
+          "scripts/test-study-room-hotfix-behavior.mjs": "1549aca242deb8b0dff504687830e240d771a092b9c23538f511f59c6d274896",
+          "scripts/test-study-room-live.mjs": "61fb8dd0549c5cb3e935680d2bd1e359376f6eb42b93dc7a26dcee649c53221b",
+          "scripts/test-study-room-preview.mjs": "dc525f4935caff59e48a384c5c834c01462861ace2ca132b4b8f3963f3680d5a",
+          "scripts/test-study-room-release-workflow.mjs": "de7975dac786c584cba18d52b64f1af009fd2ed4b67be798b8c3290e34a6152b",
+          "scripts/test-worker-cpu-limit-contract.mjs": "614f172ee30fe9d3cbcac0555f7a0f1c5e7736cece5e3943c2a2cb9811087e21",
+          "study-room/index.html": "54c96a2eff695deacd935fad05cc0d44413c4e7144adcd4c44e40f84f3c31bc8",
+          "supabase/migrations/20260909080139_debate_room_v3.sql": "89d4f46b1e1b2991202880114387a1356b5eedfcf562129079de83d55a94b53c",
+          "supabase/migrations/20260909080143_study_room_admission_v3.sql": "5ca7d139bb925b00c82d391aab4f566446d5d1bdd25e0b1b271fde614cb11637",
+          "worker/astra-staging-study-room-fixture-registration.test.mjs": "ce0b50652e430fa40da4b757e46be03b036ca707d19bbbddd00f48ce388a6209",
+          "worker/commercial-entry.mjs": "14ab1c194fb45bcbb288703e8a1fbe6c5fc9a0bad267ce97763689edcef85fb4",
+          "worker/debate-backend-contract.md": "6212b3de9313b318bf321e933106dbd0e383de30b38d97645fe0a371a553e4bb",
+          "worker/debate-delivery.mjs": "4418034f5428aec421c6d20cca02e1a089e7d36e1802fa0bade52afea93fbf3b",
+          "worker/debate-delivery.test.mjs": "e78542d6d30c9fe031a15a83ee2422bc94fe4abf3d61e34a07141fe9da2b60c4",
+          "worker/debate-documents.mjs": "3dd08cb71074921527dfe4536459af1a613dd087774eab032886278be0918d6f",
+          "worker/debate-domain.mjs": "669430db23c9b62429722cf58d41c5a97aa483f25056f299c2c1819a6a14d63b",
+          "worker/debate-domain.test.mjs": "2dc35510c213fae416f98deb27ddb4da792d3c0ce7ccf4beb739fb134ced4dd9",
+          "worker/debate-fixtures.mjs": "d61f350b70f57a9d6e4fc2fad2593e6ca99e70cc70cbba4e14f5c4590a112c5c",
+          "worker/debate-fixtures.test.mjs": "cc3351832a77bebbea941b33817883dd2331b0bd61f70879a8f5f9706a227244",
+          "worker/debate-integration.mjs": "cda808c3b4f30b0e37df7e7b6ad7ae4e2ccd36803c4c80f48652e87855f907e5",
+          "worker/debate-integration.test.mjs": "b45bc5737352e71cd565386f32ff8af0acb4b905e3f3349704d30f3b49876e34",
+          "worker/debate-media.mjs": "d7bb489967a0512b89cbe0db78adc215dd48447f49dad96db99ed8978f8fb784",
+          "worker/debate-media.test.mjs": "cf1553acb81fb43af16e321e968850e2ce01ed5f5b5efeefb3016990d61755a0",
+          "worker/debate-origin.test.mjs": "5294ae572284322046642097a1e8288edbaea6e21a6d0bac135539bb3290273d",
+          "worker/debate-procedures.test.mjs": "10c40af78310270b4960b8eaa9791e9470ac7f93422ae87ca9eb0322b48b4033",
+          "worker/debate-rosters.test.mjs": "b88129ddd2ab7801bddf224179eca2d2b59d3d43b4da367d5e66e8ac364623b2",
+          "worker/debate-routes.mjs": "d566a262f7ffbbc3c0ea94e57444eac386b565bf5f9536925c485a2f45cf86b9",
+          "worker/debate-sanctions.mjs": "f43af5803e097b26836b217086d3e6d93c6e769c0867a2aaaeb6ef05f642119b",
+          "worker/debate-sanctions.test.mjs": "3277c86e03a4f9c17df4c3afbe544805bab8045c488afb7830937fa2022f234e",
+          "worker/debate-schema-draft.sql": "89d4f46b1e1b2991202880114387a1356b5eedfcf562129079de83d55a94b53c",
+          "worker/debate-service.mjs": "0a9d665f58c47f0adb78901822dce625ab2df7ca5dd5bb2a7c4212b5868cdd58",
+          "worker/debate-service.test.mjs": "b7b8d39082838d43144bc83828ebee617ad328a8f3c29d5d29582e5633a829e8",
+          "worker/debate-staging-policy.json": "4c8217966c8b2426acab90bfdb6e268e51d4c9878fc6e1d152cf56797cbc84ef",
+          "worker/debate-standings-sanctions.test.mjs": "acfe7e60a1c8916fcc249e5b895b6522bc7615211c76c82bb45ef5fd953cbcee",
+          "worker/debate-store-sql.test.mjs": "319dda1b5be2de02d48a2bbe04f9af86b2ca9674e14727a094ce64a03f211f0e",
+          "worker/debate-store.mjs": "08340dc8a0f5a1a9ccb19827a146dd5d788a8227d0393e90983574bd4431a31a",
+          "worker/debate-substitutions.test.mjs": "09186830e14c88bce8939a371c0c45ac1607263896a9c229c24c791f6ab0f988",
+          "worker/debate-tournament.mjs": "f03907752aa76f2cd45b6747dcf0270eb6abdc004a260742a475fc0963258d2e",
+          "worker/debate-tournament.test.mjs": "d18c2d37931fecacb012ed380437b29279175d825980c7c1149b2dbe966de8a3",
+          "worker/index.mjs": "e7e201629d320450b372a1d964c2237daccc7be6775af1fff02b3a174c279df6",
+          "worker/package-lock.json": "630a53a5c2d768ca56b43a049f5a365432081562ed0d4acf547d33a214db8184",
+          "worker/package.json": "0f8f309064930ca8c2b9987fa390eda563ba6bbcc9eb38aa5df83de5aaadeb2f",
+          "worker/study-room-admission-schema-draft.sql": "5ca7d139bb925b00c82d391aab4f566446d5d1bdd25e0b1b271fde614cb11637",
+          "worker/study-room-admission.mjs": "d82c8c031b5c013f2a953b6e0dc350f6a266116e691b08d8608a7c1933c5346d",
+          "worker/study-room-admission.test.mjs": "7a45b10d869ba42567f5fa91a6ffb9b541d3b7e507569473b88b930cfa54706c",
+          "worker/study-room-catalog.test.mjs": "efbf8f5f31f0e20c97429cbdf80d75db88a3ff4d53b385f71d4ceee58afb5463",
+          "worker/study-room-core.mjs": "7b8bdab0d8d545cc9acba564268dd4a8250c5e126fbc1238848682b1d0ddae04",
+          "worker/study-room-routes.mjs": "12e502a8271e1af0f2d0e7a54fa4fabde9037e612dc4c12eec2f57edf9d850a7",
+          "worker/study-room.test.mjs": "f53f259ef50bf4264b980b0044e32344a3fd32238e3d49e37dc251731dbf88a5",
+          "worker/wrangler.staging.toml": "e93d72892b472843119f573e377ee374ef4c436e5efe380c622da694858000f2",
+          "worker/wrangler.toml": "caf7faec44745efe4cf8abbfbfec51ce181e3aec0687c0d37aebc83f6334d0ae"
+        },
+        "groups": [
+          {
+            "name": "server-domain-database",
+            "command": [
+              "node",
+              "--test",
+              "--test-concurrency=1",
+              "worker/debate-delivery.test.mjs",
+              "worker/debate-domain.test.mjs",
+              "worker/debate-fixtures.test.mjs",
+              "worker/debate-integration.test.mjs",
+              "worker/debate-media.test.mjs",
+              "worker/debate-origin.test.mjs",
+              "worker/debate-procedures.test.mjs",
+              "worker/debate-rosters.test.mjs",
+              "worker/debate-sanctions.test.mjs",
+              "worker/debate-service.test.mjs",
+              "worker/debate-standings-sanctions.test.mjs",
+              "worker/debate-store-sql.test.mjs",
+              "worker/debate-substitutions.test.mjs",
+              "worker/debate-tournament.test.mjs",
+              "worker/study-room-admission.test.mjs",
+              "worker/study-room-catalog.test.mjs",
+              "worker/study-room.test.mjs"
+            ],
+            "startedAt": "2026-09-09T11:33:56.627Z",
+            "finishedAt": "2026-09-09T11:34:11.240Z",
+            "status": "PASS",
+            "exitCode": 0,
+            "log": "server-domain-database.txt"
+          },
+          {
+            "name": "client-state-media-dates",
+            "command": [
+              "node",
+              "--test",
+              "scripts/test-debate-client-state.mjs",
+              "scripts/test-debate-media.mjs",
+              "scripts/test-debate-dates.mjs"
+            ],
+            "startedAt": "2026-09-09T11:34:11.240Z",
+            "finishedAt": "2026-09-09T11:34:11.376Z",
+            "status": "PASS",
+            "exitCode": 0,
+            "log": "client-state-media-dates.txt"
+          },
+          {
+            "name": "study-admission-sql",
+            "command": [
+              "node",
+              "scripts/test-study-room-admission-sql.mjs"
+            ],
+            "startedAt": "2026-09-09T11:34:11.376Z",
+            "finishedAt": "2026-09-09T11:34:12.922Z",
+            "status": "PASS",
+            "exitCode": 0,
+            "log": "study-admission-sql.txt"
+          },
+          {
+            "name": "study-always-open",
+            "command": [
+              "node",
+              "scripts/test-study-room-always-open.mjs"
+            ],
+            "startedAt": "2026-09-09T11:34:12.922Z",
+            "finishedAt": "2026-09-09T11:34:13.051Z",
+            "status": "PASS",
+            "exitCode": 0,
+            "log": "study-always-open.txt"
+          },
+          {
+            "name": "study-backgrounds",
+            "command": [
+              "node",
+              "scripts/test-study-room-backgrounds.mjs"
+            ],
+            "startedAt": "2026-09-09T11:34:13.051Z",
+            "finishedAt": "2026-09-09T11:34:13.101Z",
+            "status": "PASS",
+            "exitCode": 0,
+            "log": "study-backgrounds.txt"
+          },
+          {
+            "name": "study-background-picker",
+            "command": [
+              "node",
+              "scripts/test-study-room-background-picker.mjs"
+            ],
+            "startedAt": "2026-09-09T11:34:13.101Z",
+            "finishedAt": "2026-09-09T11:34:13.185Z",
+            "status": "PASS",
+            "exitCode": 0,
+            "log": "study-background-picker.txt"
+          },
+          {
+            "name": "study-hotfix-behavior",
+            "command": [
+              "node",
+              "scripts/test-study-room-hotfix-behavior.mjs"
+            ],
+            "startedAt": "2026-09-09T11:34:13.185Z",
+            "finishedAt": "2026-09-09T11:34:13.382Z",
+            "status": "PASS",
+            "exitCode": 0,
+            "log": "study-hotfix-behavior.txt"
+          },
+          {
+            "name": "study-live",
+            "command": [
+              "node",
+              "scripts/test-study-room-live.mjs"
+            ],
+            "startedAt": "2026-09-09T11:34:13.382Z",
+            "finishedAt": "2026-09-09T11:34:13.431Z",
+            "status": "PASS",
+            "exitCode": 0,
+            "log": "study-live.txt"
+          },
+          {
+            "name": "local-http-boundaries",
+            "command": [
+              "node",
+              "--test",
+              "scripts/test-debate-rehearsal-server.mjs"
+            ],
+            "startedAt": "2026-09-09T11:34:13.431Z",
+            "finishedAt": "2026-09-09T11:34:15.305Z",
+            "status": "PASS",
+            "exitCode": 0,
+            "log": "local-http-boundaries.txt"
+          },
+          {
+            "name": "accelerated-organizer",
+            "command": [
+              "node",
+              "scripts/test-debate-organizer-rehearsal.mjs"
+            ],
+            "startedAt": "2026-09-09T11:34:15.305Z",
+            "finishedAt": "2026-09-09T11:34:20.236Z",
+            "status": "PASS",
+            "exitCode": 0,
+            "log": "accelerated-organizer.txt"
+          },
+          {
+            "name": "eligible-tournament-exports",
+            "command": [
+              "node",
+              "scripts/test-debate-tournament-export.mjs"
+            ],
+            "startedAt": "2026-09-09T11:34:20.236Z",
+            "finishedAt": "2026-09-09T11:34:25.646Z",
+            "status": "PASS",
+            "exitCode": 0,
+            "log": "eligible-tournament-exports.txt"
+          },
+          {
+            "name": "staging-preflight-gates",
+            "command": [
+              "node",
+              "--test",
+              "scripts/test-debate-staging-release.mjs"
+            ],
+            "startedAt": "2026-09-09T11:34:25.646Z",
+            "finishedAt": "2026-09-09T11:34:25.854Z",
+            "status": "PASS",
+            "exitCode": 0,
+            "log": "staging-preflight-gates.txt"
+          },
+          {
+            "name": "worker-configuration-contract",
+            "command": [
+              "node",
+              "--test",
+              "scripts/test-worker-cpu-limit-contract.mjs"
+            ],
+            "startedAt": "2026-09-09T11:34:25.855Z",
+            "finishedAt": "2026-09-09T11:34:25.923Z",
+            "status": "PASS",
+            "exitCode": 0,
+            "log": "worker-configuration-contract.txt"
+          }
+        ],
+        "limitations": [
+          "Not a physical camera/audio test",
+          "Not a90-minute endurance run",
+          "Not native multi-connection PostgreSQL load",
+          "No hosted migration, approved capacity ramp, real mail delivery or deployment proof"
+        ],
+        "finishedAt": "2026-09-09T11:34:25.923Z",
+        "status": "PASS_LOCAL_SUITE",
+        "changedDuringRun": []
+      }
+    },
+    "logs": [
+      {
+        "group": "server-domain-database",
+        "path": "artifacts/debate-local-rehearsal/ci-34346204988/suite-2026-09-09T11-33-56.495Z/server-domain-database.txt",
+        "sha256": "fdbddc8bae11b689a4dc8f718377762b4b855e80e9a2a23fa9f7853670294e4f",
+        "tests": 260,
+        "pass": 260,
+        "fail": 0
+      },
+      {
+        "group": "client-state-media-dates",
+        "path": "artifacts/debate-local-rehearsal/ci-34346204988/suite-2026-09-09T11-33-56.495Z/client-state-media-dates.txt",
+        "sha256": "821d3ed2e922c17c13cedc678e794d43c6eb9c7ca64ea6e8f8c783fbc2471ad6",
+        "tests": 38,
+        "pass": 38,
+        "fail": 0
+      },
+      {
+        "group": "study-admission-sql",
+        "path": "artifacts/debate-local-rehearsal/ci-34346204988/suite-2026-09-09T11-33-56.495Z/study-admission-sql.txt",
+        "sha256": "3af76676cc762baa727f1e3ebb50395f41ceb71af44d65f44398c0d4d639efd1",
+        "tests": 11,
+        "pass": 11,
+        "fail": 0
+      },
+      {
+        "group": "study-always-open",
+        "path": "artifacts/debate-local-rehearsal/ci-34346204988/suite-2026-09-09T11-33-56.495Z/study-always-open.txt",
+        "sha256": "54bbe9656e18778c5c07b0ad97b6a058ae630bc980e4332e004d299d0705ee41",
+        "tests": 37,
+        "pass": 37,
+        "fail": 0
+      },
+      {
+        "group": "study-backgrounds",
+        "path": "artifacts/debate-local-rehearsal/ci-34346204988/suite-2026-09-09T11-33-56.495Z/study-backgrounds.txt",
+        "sha256": "2f52319466632f7ed6eaabd8a4d0b85cd82828be4db0671dda50b58126ee12ed",
+        "tests": null,
+        "pass": null,
+        "fail": null
+      },
+      {
+        "group": "study-background-picker",
+        "path": "artifacts/debate-local-rehearsal/ci-34346204988/suite-2026-09-09T11-33-56.495Z/study-background-picker.txt",
+        "sha256": "6ec8098da5464aadd912dd8571d084857d1ad4a38389284d2944caf3f48f80f9",
+        "tests": 23,
+        "pass": 23,
+        "fail": 0
+      },
+      {
+        "group": "study-hotfix-behavior",
+        "path": "artifacts/debate-local-rehearsal/ci-34346204988/suite-2026-09-09T11-33-56.495Z/study-hotfix-behavior.txt",
+        "sha256": "5d6d8407e3833ab3770d853a89da9c46c80c0c74e62271cb7f8776098b2e04bf",
+        "tests": null,
+        "pass": null,
+        "fail": null
+      },
+      {
+        "group": "study-live",
+        "path": "artifacts/debate-local-rehearsal/ci-34346204988/suite-2026-09-09T11-33-56.495Z/study-live.txt",
+        "sha256": "c7c7d5758717512822b87ef645ba140324edc2eaf52a0bcd91d455d6fcf1069f",
+        "tests": null,
+        "pass": null,
+        "fail": null
+      },
+      {
+        "group": "local-http-boundaries",
+        "path": "artifacts/debate-local-rehearsal/ci-34346204988/suite-2026-09-09T11-33-56.495Z/local-http-boundaries.txt",
+        "sha256": "5789993267bdd9b3f43d132b246e37ed38486a03560cf63f6f67d34358d1e94b",
+        "tests": 2,
+        "pass": 2,
+        "fail": 0
+      },
+      {
+        "group": "accelerated-organizer",
+        "path": "artifacts/debate-local-rehearsal/ci-34346204988/suite-2026-09-09T11-33-56.495Z/accelerated-organizer.txt",
+        "sha256": "a2ac79c58a70ef80516a277ce87ce2281ad8aaf0c2dd57dc590da7cd028d1177",
+        "tests": null,
+        "pass": null,
+        "fail": null
+      },
+      {
+        "group": "eligible-tournament-exports",
+        "path": "artifacts/debate-local-rehearsal/ci-34346204988/suite-2026-09-09T11-33-56.495Z/eligible-tournament-exports.txt",
+        "sha256": "21fa04e5678db89eda1fb5fe14b72f720f285af88bd0daf4b1000729cd5d4ebd",
+        "tests": null,
+        "pass": null,
+        "fail": null
+      },
+      {
+        "group": "staging-preflight-gates",
+        "path": "artifacts/debate-local-rehearsal/ci-34346204988/suite-2026-09-09T11-33-56.495Z/staging-preflight-gates.txt",
+        "sha256": "2faa4e83a47a43fa5683b286e4a6ac87043f19324bf1213fb7fd92f17edc8a6e",
+        "tests": 12,
+        "pass": 12,
+        "fail": 0
+      },
+      {
+        "group": "worker-configuration-contract",
+        "path": "artifacts/debate-local-rehearsal/ci-34346204988/suite-2026-09-09T11-33-56.495Z/worker-configuration-contract.txt",
+        "sha256": "a2190b14355b086a90c7ba983c1020447e4260a03589b07476d8629d82ece78e",
+        "tests": 4,
+        "pass": 4,
+        "fail": 0
+      }
+    ]
+  },
+  "sourceVerification": {
+    "mode": "Exact Git blob bytes at candidate SHA, not current Windows worktree bytes",
+    "checked": 92,
+    "mismatches": []
+  },
+  "browserEvidence": {
+    "path": "docs/debate-room-v3/evidence/browser-ci-147bb582.json",
+    "sha256": "f42fdeaf3de4b27ceee758e4270e1b1f35d4e2c580cc5a826f2584ee07970a91",
+    "status": "PASS_SYNTHETIC_BROWSER_JOURNEYS_NOT_FULL_ACCEPTANCE"
+  },
+  "shared": {
+    "conclusion": "success",
+    "headSha": "147bb582e3ed4f0136f5e46f7d9a67412b404630",
+    "status": "completed",
+    "url": "https://github.com/codingwally/Bar-Exam-simulator/actions/runs/34346204950"
+  },
+  "unrelated": {
+    "conclusion": "failure",
+    "headSha": "147bb582e3ed4f0136f5e46f7d9a67412b404630",
+    "status": "completed",
+    "url": "https://github.com/codingwally/Bar-Exam-simulator/actions/runs/34346204970",
+    "reason": "Existing narration fetch returned HTTP404; curl exit22 verified from run34346204970 failed-step log.",
+    "workflowChanged": false
+  },
+  "limits": [
+    "Synthetic Linux CI browsers with isolated local SQL and identity/bootstrap/media substitutions",
+    "No hosted authentication or deployment in these runs",
+    "No physical media, real 90-minute endurance, capacity, mail or inbox proof",
+    "Public launch remains unapproved"
+  ],
+  "successorWork": "Subsequent fixture/capture/probe work is outside this candidate and needs separate validation; no hosted mutation or deployment is attested."
+}

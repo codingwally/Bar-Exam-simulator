@@ -1,0 +1,124 @@
+name: Debate V3 restricted staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Capture is read-only; prepare-auth creates and cleans test identities; deploy also changes the existing staging Worker
+        required: true
+        type: choice
+        default: capture
+        options: [capture, prepare-auth, deploy]
+      candidate_sha:
+        description: Exact current main SHA reviewed for this staging release
+        required: true
+        type: string
+      expected_baseline_sha256:
+        description: Reviewed fingerprint from this workflow's earlier read-only baseline capture
+        required: false
+        type: string
+      expected_version_id:
+        description: Complete active Worker version UUID from that reviewed baseline
+        required: false
+        type: string
+      review_evidence_json:
+        description: Reviewed JSON matching docs/debate-v3-staging-release.md, including manually applied database proof
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+# Also used by the existing staging gate; never interrupt another staging owner.
+concurrency:
+  group: duediligence-staging-worker
+  cancel-in-progress: false
+
+jobs:
+  staging:
+    if: github.repository == 'codingwally/Bar-Exam-simulator' && github.ref == 'refs/heads/main' && github.actor != 'dependabot[bot]'
+    environment: staging-e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      DEBATE_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+      DEBATE_EXPECTED_BASELINE_SHA256: ${{ inputs.expected_baseline_sha256 }}
+      DEBATE_EXPECTED_VERSION_ID: ${{ inputs.expected_version_id }}
+      DEBATE_RELEASE_REVIEW: ${{ inputs.review_evidence_json }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify exact trusted checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$DEBATE_CANDIDATE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$DEBATE_CANDIDATE_SHA"
+          test "$GITHUB_SHA" = "$DEBATE_CANDIDATE_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
+      - name: Read-only current staging backup
+        if: inputs.operation == 'capture'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/debate-staging-release.mjs capture
+      - name: Install locked dependencies without install scripts
+        if: inputs.operation != 'capture'
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+      - name: Verify the complete candidate and release gates
+        if: inputs.operation != 'capture'
+        run: |
+          node --test scripts/test-debate-staging-release.mjs
+          node scripts/test-feature-decommission-boundary.mjs
+          node scripts/test-debate-v3.mjs
+          node -e "const fs=require('fs'),p='artifacts/debate-local-rehearsal';const names=fs.readdirSync(p).filter(n=>n.startsWith('suite-')).sort();if(names.length!==1)throw Error('Expected one fresh suite');fs.appendFileSync(process.env.GITHUB_ENV,'DEBATE_LOCAL_SUITE_REPORT='+p+'/'+names[0]+'/report.json\n');"
+      - name: Resolve the existing audited staging public configuration
+        if: inputs.operation != 'capture'
+        env:
+          CONFIGURED_STAGING_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          node --input-type=module -e "import {resolveStagingPublishableKey} from './scripts/debate-staging-release.mjs';import {appendFileSync} from 'node:fs';const {key}=await resolveStagingPublishableKey({configuredKey:process.env.CONFIGURED_STAGING_PUBLISHABLE_KEY});console.log('::add-mask::'+key);appendFileSync(process.env.GITHUB_ENV,'STAGING_SUPABASE_PUBLISHABLE_KEY='+key+'\n');"
+      - name: Build the existing target-locked sanitized staging artifact
+        if: inputs.operation != 'capture'
+        env:
+          STAGING_PUBLIC_URL: https://duediligence-examinations-staging.wallyesteban1993.workers.dev
+          STAGING_WORKER_URL: https://duediligence-examinations-staging.wallyesteban1993.workers.dev
+          STAGING_SUPABASE_URL: https://hlzqmreeoghbldnhlybr.supabase.co
+          STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ env.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          node scripts/build-staging-artifact.mjs
+          node scripts/test-debate-artifact.mjs
+      - name: Install the existing pinned staging deploy tool in an isolated directory
+        if: inputs.operation != 'capture'
+        run: npm install --prefix artifacts/debate-local-rehearsal/staging-tooling --no-save --no-package-lock --ignore-scripts --no-audit --no-fund wrangler@4.114.0
+      - name: Verify actual upload metadata before provisioning any test account
+        if: inputs.operation != 'capture'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo -n unshare --net -- env -i PATH="$PATH" DEBATE_HOST_NETWORK_NAMESPACE="$(readlink /proc/self/ns/net)" node scripts/test-debate-wrangler-metadata.mjs
+      - name: Verify gates, provision scoped test sessions, execute requested operation and clean exact fixtures
+        if: inputs.operation != 'capture'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+          STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ env.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+          REQUESTED_STAGING_OPERATION: ${{ inputs.operation }}
+        run: node scripts/run-debate-staging-auth.mjs "$REQUESTED_STAGING_OPERATION"
+      - name: Retain sanitized release evidence even when a gate fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debate-v3-staging-release-${{ github.sha }}
+          path: |
+            artifacts/debate-local-rehearsal/staging-release/*.json
+            artifacts/debate-local-rehearsal/suite-*/report.json
+            artifacts/debate-local-rehearsal/staging-dml-probe-ci/report.json
+            artifacts/debate-local-rehearsal/wrangler-metadata/report.json
+          if-no-files-found: warn
+          retention-days: 14

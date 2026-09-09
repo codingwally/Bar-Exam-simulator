@@ -1,0 +1,106 @@
+name: Debate V3 read-only staging capture
+
+on:
+  pull_request:
+    types: [labeled]
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Scope and owner authority: docs/debate-v3-staging-release.md. The owner's
+# exact-head label requests GET-only inventory, not a deployment or public launch.
+concurrency:
+  group: duediligence-staging-worker
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    if: >-
+      github.repository == 'codingwally/Bar-Exam-simulator' &&
+      github.event.pull_request.number == 356 &&
+      github.event.pull_request.head.repo.full_name == 'codingwally/Bar-Exam-simulator' &&
+      github.event.pull_request.head.ref == 'codex/debate-room-v3-20260909' &&
+      github.actor == 'codingwally' &&
+      github.triggering_actor == 'codingwally' &&
+      github.event.label.name == format('dv3-c-{0}', github.event.pull_request.head.sha)
+    environment: staging-e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DEBATE_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Checkout the exact owner-labeled candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify owner authority, exact checkout and locked staging target
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {readFileSync} from 'node:fs';
+          import {execFileSync} from 'node:child_process';
+          import {TARGET, parseBase, validatePolicy, validateCaptureRequest} from './scripts/debate-staging-release.mjs';
+          const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
+          const git = args => execFileSync('git', args, {encoding: 'utf8'}).trim();
+          validateCaptureRequest({event, env: process.env, head: git(['rev-parse', 'HEAD']), gitStatus: git(['status', '--porcelain', '--untracked-files=all'])});
+          const policy = JSON.parse(readFileSync('worker/debate-staging-policy.json', 'utf8'));
+          validatePolicy(policy);
+          const base = parseBase(readFileSync(policy.baseConfig, 'utf8'));
+          assert.equal(TARGET.worker, 'duediligence-examinations-staging');
+          assert.equal(TARGET.origin, 'https://duediligence-examinations-staging.wallyesteban1993.workers.dev');
+          assert.equal(TARGET.project, 'hlzqmreeoghbldnhlybr');
+          assert.equal(base.region, 'gcp:us-east4');
+          assert.equal(policy.placementRegion, base.region);
+          assert.equal(base.compatibilityDate, policy.compatibilityDate);
+          assert.deepEqual(base.compatibilityFlags, policy.compatibilityFlags);
+          assert.deepEqual(base.crons, policy.crons);
+          console.log('PASS_OWNER_LABELED_EXACT_CANDIDATE_READ_ONLY_STAGING_SCOPE');
+          NODE
+      - name: Capture only existing staging settings through GET requests
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/debate-staging-release.mjs capture
+      - name: Bind sanitized inventory to its actual owner request and source
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {readFileSync, writeFileSync} from 'node:fs';
+          import {hash, TARGET} from './scripts/debate-staging-release.mjs';
+          const file = 'artifacts/debate-local-rehearsal/staging-release/baseline.json';
+          const baseline = JSON.parse(readFileSync(file, 'utf8'));
+          assert.equal(baseline.secretValuesStored, false);
+          assert.equal(baseline.fingerprint, hash(baseline.state));
+          assert.equal(baseline.state.worker, TARGET.worker);
+          assert.equal(baseline.state.origin, TARGET.origin);
+          assert.equal(baseline.state.projectRef, TARGET.project);
+          assert.ok(baseline.state.bindings.every(binding => JSON.stringify(Object.keys(binding).sort()) === '["name","type"]'));
+          assert.ok(Object.keys(baseline.state.vars).every(name => !/(?:KEY|SECRET|TOKEN|PASSWORD|PEPPER|RECIPIENT|VAPID|HMAC)/i.test(name)));
+          baseline.captureAuthorization = {
+            operation: 'READ_ONLY_GET_INVENTORY', repository: process.env.GITHUB_REPOSITORY,
+            actor: process.env.GITHUB_ACTOR, triggeringActor: process.env.GITHUB_TRIGGERING_ACTOR,
+            pullRequest: 356, label: 'dv3-c-' + process.env.DEBATE_CANDIDATE_SHA,
+            candidateSha: process.env.DEBATE_CANDIDATE_SHA, workflowMergeSha: process.env.GITHUB_SHA,
+            runId: process.env.GITHUB_RUN_ID, runAttempt: process.env.GITHUB_RUN_ATTEMPT,
+            authorityReference: 'docs/debate-v3-staging-release.md',
+            sourceHashes: Object.fromEntries(['.github/workflows/debate-v3-capture.yml', 'scripts/debate-staging-release.mjs', 'worker/debate-staging-policy.json', 'worker/wrangler.staging.toml'].map(source => [source, hash(readFileSync(source))])),
+            deploymentPerformed: false, databaseWritesPerformed: false, secretWritesPerformed: false,
+          };
+          writeFileSync(file, JSON.stringify(baseline, null, 2) + '\n');
+          console.log('PASS_SANITIZED_BASELINE_ONLY');
+          NODE
+      - name: Retain only the sanitized baseline
+        uses: actions/upload-artifact@v4
+        with:
+          name: debate-v3-staging-baseline-${{ github.event.pull_request.head.sha }}
+          path: artifacts/debate-local-rehearsal/staging-release/baseline.json
+          if-no-files-found: error
+          retention-days: 14

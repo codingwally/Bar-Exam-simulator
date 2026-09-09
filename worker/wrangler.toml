@@ -69,7 +69,9 @@ enabled = true
 enabled = true
 
 [triggers]
-crons = ["*/2 * * * *"]
+crons = ["*/2 * * * *", "* * * * *"]
+# The separate minute trigger handles Debate Room only; its sweeper remains
+# inactive until DEBATE_SWEEPER_ENABLED=true is released with verified media.
 
 # GEMINI_API_KEY, RESEND_API_KEY, SUPABASE_SERVICE_ROLE_KEY, and
 # MAINTENANCE_SIGNING_KEY must remain Cloudflare secrets. The signing key is

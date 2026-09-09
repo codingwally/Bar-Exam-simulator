@@ -32,6 +32,16 @@ const instrumentedLiveClient = liveClient.replace(
     setParticipantVolume,
     syncSelfMediaState,
     testDevices,
+    openEntryDialog,
+    closeEntryDialog,
+    joinRoom,
+    runEntryAdmission,
+    refreshWaitingQueue,
+    decideWaitingAdmission,
+    stopDeviceTest,
+    handleAuthSession,
+    attachRemoteAudio,
+    setLocalSourceEnabled,
     toggleLocalTrack,
     attachTrack,
     detachTracks,
@@ -922,15 +932,15 @@ async function eventually(check, message) {
     'Automatic device discovery did not complete.',
   );
 
-  assert.equal(permissionCalls, 1, 'Automatic discovery should use one combined permission request when both devices exist.');
+  assert.equal(permissionCalls, 0, 'Opening the lobby must never acquire camera or microphone.');
   assert.equal(harness.deviceChangeHandlers.length, 1, 'Authorized admins must receive automatic hot-plug refreshes.');
-  assert.ok(enumerateCalls >= 2, 'Device names must be refreshed after permission is granted.');
-  assert.deepEqual(stoppedTracks.sort(), ['audio', 'video'], 'All temporary permission tracks must stop immediately.');
-  assert.equal(harness.document.getElementById('sr-camera-select').children[0].label, 'Integrated HD Camera');
-  assert.equal(harness.document.getElementById('sr-microphone-select').children[0].label, 'Laptop Array Microphone');
-  assert.equal(harness.document.getElementById('sr-speaker-select').children[0].label, 'Laptop Speakers');
-  assert.equal(harness.document.getElementById('sr-live-camera-select').children[0].label, 'Integrated HD Camera');
-  assert.equal(harness.document.getElementById('sr-live-microphone-select').children[0].label, 'Laptop Array Microphone');
+  assert.ok(enumerateCalls >= 1, 'Device enumeration remains available without capture.');
+  assert.deepEqual(stoppedTracks, [], 'There are no implicitly acquired tracks.');
+  assert.equal(harness.document.getElementById('sr-camera-select').children[0].label, 'System default camera');
+  assert.equal(harness.document.getElementById('sr-microphone-select').children[0].label, 'System default microphone');
+  assert.equal(harness.document.getElementById('sr-speaker-select').children[0].label, 'System default speaker');
+  assert.equal(harness.document.getElementById('sr-live-camera-select').children[0].label, 'System default camera');
+  assert.equal(harness.document.getElementById('sr-live-microphone-select').children[0].label, 'System default microphone');
   assert.equal(harness.document.getElementById('sr-join-camera').getAttribute('aria-pressed'), 'false');
   assert.equal(harness.document.getElementById('sr-join-microphone').getAttribute('aria-pressed'), 'false');
   assert.equal(harness.hooks.state.rooms.length, 6, 'The prejoin lobby must retain the six canonical seeded rooms.');
@@ -975,10 +985,10 @@ async function eventually(check, message) {
     },
   });
   await eventually(
-    () => harness.document.getElementById('sr-prejoin-status').textContent.includes('Allow device permission'),
-    'Permission denial did not produce a safe recovery message.',
+    () => harness.document.getElementById('sr-prejoin-status').textContent.includes('available devices were detected'),
+    'Passive discovery did not finish without invoking denied capture.',
   );
-  assert.equal(permissionCalls, 1);
+  assert.equal(permissionCalls, 0);
   assert.equal(harness.deviceChangeHandlers.length, 1);
   assert.equal(harness.document.getElementById('sr-join-camera').getAttribute('aria-pressed'), 'false');
   assert.equal(harness.document.getElementById('sr-join-microphone').getAttribute('aria-pressed'), 'false');
@@ -1085,6 +1095,9 @@ async function waitForAuthorizedPrejoin(harness) {
     () => harness.document.getElementById('sr-prejoin-status').textContent.includes('available devices were detected'),
     'The authorized Study Room prejoin did not finish loading.',
   );
+  // Ordinary conversation/device regressions explicitly choose a general room.
+  // Library now intentionally excludes microphone capture from device preview.
+  harness.hooks.openEntryDialog('2');
 }
 
 {
@@ -1131,7 +1144,8 @@ async function waitForAuthorizedPrejoin(harness) {
   assert.equal(h.document.getElementById('sr-room-card-grid').children.flatMap(descendants)
     .some((node) => node.className === 'sr-room-edit'), false);
   assert.equal(h.document.getElementById('sr-join').disabled, false);
-  assert.equal(h.document.getElementById('sr-join').textContent, 'Join Library');
+  assert.equal(h.document.getElementById('sr-join').textContent, 'Enter room');
+  h.hooks.openEntryDialog('1');
   // A real click reaches the existing visible SDK-load guard; no fake RTC is used.
   await h.document.getElementById('sr-join').emit('click');
   assert.match(h.document.getElementById('sr-prejoin-status').textContent, /secure video library could not load/);
@@ -1140,7 +1154,7 @@ async function waitForAuthorizedPrejoin(harness) {
   h.hooks.state.selectedRoomKey = '5';
   h.hooks.syncJoinButton();
   assert.equal(h.document.getElementById('sr-join').disabled, true);
-  assert.match(h.document.getElementById('sr-join').textContent, /Admin only/);
+  assert.match(h.document.getElementById('sr-join').textContent, /Inner Chamber · Admin/);
 
   const originalGuard = 'Object.prototype.hasOwnProperty.call(ROOM_AUDIENCES, audience)';
   const normalizationSource = h.hooks.normalizeRoomCatalog.toString();
@@ -2981,11 +2995,13 @@ for (const operation of ['mute', 'remove']) {
   const button = descendantWithText(row, operation === 'mute' ? 'Mute for room' : 'Remove');
   assert.equal(button.disabled, false);
   await button.emit('click');
-  assert.deepEqual(h.requests, [{ operation, roomKey: '2', participantIdentity: h.participant.identity,
-    ...(operation === 'mute' ? { trackSid: 'TR_inert_microphone' } : {}) }]);
+  const moderationRequests = h.requests.filter(body => body.operation === operation);
+  assert.deepEqual(moderationRequests, [{ operation, roomKey: '2', participantIdentity: h.participant.identity,
+    ...(operation === 'mute' ? { trackSid: 'TR_inert_microphone' } : { commandId: moderationRequests[0].commandId }) }]);
+  if (operation === 'remove') assert.match(moderationRequests[0].commandId,/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   assert.equal(h.confirmations.length, operation === 'remove' ? 1 : 0);
-  if (operation === 'remove') assert.match(h.confirmations[0], /They can rejoin; this is not a permanent block/);
-  assert.equal(h.toastNode.textContent, operation === 'mute' ? 'Microphone muted for the room.' : 'Removed from the room. They can rejoin.');
+  if (operation === 'remove') assert.match(h.confirmations[0], /revoke their room access/);
+  assert.equal(h.toastNode.textContent, operation === 'mute' ? 'Microphone muted for the room.' : 'Removed. Room access has been revoked.');
   assert.equal(h.publication.isMuted, false, 'Server acknowledgement must not forge a local LiveKit track event.');
   assert.equal(h.room.remoteParticipants.get(h.participant.identity), h.participant, 'Removal awaits authoritative RTC state.');
   assert.equal(h.state.pendingModeration.size, 0);
@@ -3104,3 +3120,178 @@ for (const guard of ['member', 'self', 'missing-room', 'replaced-participant', '
 
 console.log(`Study Room administrator moderation: ${moderationCases} inert actual-function cases passed.`);
 console.log('Study Room admin-window, device, microphone, and local-control behavioral tests passed.');
+
+// V3 Library and preview cancellation exercise actual frontend functions with
+// inert devices; these are not physical-media acceptance evidence.
+{
+  const calls = [];
+  const track = { kind: 'video', stopped: false, stop() { this.stopped = true; } };
+  const h = createLiveHarness({ fetch: async () => authorizedResponse(), enumerateDevices: async () => labeledDevices,
+    getUserMedia: async (constraints) => { calls.push(constraints); return new FakeMediaStream([track]); },
+    liveKit: { Track: { Source: liveKitSources } }, MediaStream: FakeMediaStream });
+  await waitForAuthorizedPrejoin(h);
+  h.hooks.closeEntryDialog(); h.hooks.openEntryDialog('1');
+  assert.equal(calls.length, 0, 'Opening Library does not request any media.');
+  await h.hooks.testDevices();
+  assert.equal(calls.length, 1); assert.equal(calls[0].audio, false);
+  assert.equal(h.hooks.state.previewStream.getAudioTracks().length, 0);
+  assert.match(h.document.getElementById('sr-prejoin-status').textContent, /Library does not request/);
+  h.hooks.closeEntryDialog(); assert.equal(track.stopped, true); assert.equal(h.hooks.state.previewStream, null);
+}
+{
+  let deliver;
+  const track = { kind: 'video', stopped: false, stop() { this.stopped = true; } };
+  const h = createLiveHarness({ fetch: async () => authorizedResponse(), enumerateDevices: async () => labeledDevices,
+    getUserMedia: async () => new Promise(resolve => { deliver = resolve; }),
+    liveKit: { Track: { Source: liveKitSources } }, MediaStream: FakeMediaStream });
+  await waitForAuthorizedPrejoin(h);
+  const preview = h.hooks.testDevices();
+  await eventually(() => Boolean(deliver), 'Device request did not start.');
+  h.hooks.closeEntryDialog();
+  deliver(new FakeMediaStream([track])); await preview;
+  assert.equal(track.stopped, true, 'Permission completing after close must stop its unowned tracks.');
+  assert.equal(h.hooks.state.previewStream, null);
+  assert.equal(h.document.getElementById('sr-local-preview').srcObject, null);
+}
+{
+  const h = createLiveHarness({ fetch: async () => authorizedResponse(), enumerateDevices: async () => labeledDevices,
+    getUserMedia: async () => { throw new Error('Library must not capture'); }, liveKit: { Track: { Source: liveKitSources } } });
+  await waitForAuthorizedPrejoin(h);
+  let starts = 0; let published = 0; let shares;
+  const subscriptions = [];
+  const local = { setMicrophoneEnabled: async () => { published += 1; },
+    getTrackPublication: () => null, setScreenShareEnabled: async (_enabled, options) => { shares = options; } };
+  h.hooks.state.room = { localParticipant: local, canPlaybackAudio: false, startAudio: async () => { starts += 1; } };
+  h.hooks.state.currentRoomMicrophoneAllowed = false;
+  const remote = { identity: 'unexpected-audio', isLocal: false, getTrackPublication: source => ({
+    setSubscribed: async enabled => subscriptions.push([source, enabled]), track: { attach() { throw new Error('Must not attach Library audio.'); } },
+  }) };
+  h.hooks.attachRemoteAudio([remote]);
+  assert.equal(subscriptions.length, 2); assert.ok(subscriptions.every(([, enabled]) => enabled === false));
+  assert.equal(await h.hooks.startRoomAudioFromGesture(), false); assert.equal(starts, 0);
+  assert.equal(h.document.getElementById('sr-audio-prompt').hidden, true);
+  await assert.rejects(h.hooks.setLocalSourceEnabled('microphone', true), /Library is silent/);
+  assert.equal(published, 0);
+  // Share capture is independently silent; rendering may inspect only inert data.
+  await h.hooks.toggleScreenShare(); assert.equal(shares.audio, false);
+  h.hooks.state.currentRoomMicrophoneAllowed = true;
+  assert.equal(await h.hooks.startRoomAudioFromGesture(), true); assert.equal(starts, 1);
+}
+{
+  const h = createLiveHarness({ fetch: async () => authorizedResponse(), enumerateDevices: async () => labeledDevices,
+    getUserMedia: async () => { throw new Error('No capture'); }, liveKit: { Track: { Source: liveKitSources } } });
+  await waitForAuthorizedPrejoin(h);
+  const { state } = h.hooks; let disconnected = 0; let stopped = 0;
+  state.session = { user: { id: 'account-one' }, access_token: 'one' };
+  state.room = { localParticipant: {}, disconnect: async () => { disconnected += 1; } };
+  state.previewStream = new FakeMediaStream([{ kind: 'video', stop() { stopped += 1; } }]);
+  state.chatMessages = [{ text: 'private prior message' }]; state.blockedParticipants.add('prior-person');
+  await h.hooks.handleAuthSession({ user: { id: 'account-two' }, access_token: 'two' });
+  assert.equal(disconnected, 1); assert.equal(stopped, 1); assert.equal(state.room, null);
+  assert.equal(state.entryOpen, false); assert.equal(state.chatMessages.length, 0);
+  assert.equal(state.blockedParticipants.size, 0); assert.equal(state.isAdministrator, false);
+  assert.equal(state.rooms.length, 0); assert.equal(state.session.user.id, 'account-two');
+  assert.equal(h.document.getElementById('sr-experience').hidden, true);
+}
+console.log('Study Room V3: Library camera-only preview/source/playback, late preview cancellation, and account-switch privacy passed (inert devices).');
+
+async function approvalHarness(respond) {
+  const calls = []; let captures = 0; let rooms = 0;
+  const h = createLiveHarness({ fetch: async (url,options) => {
+    if (String(url).includes('/study-room/admission') || String(url).includes('/study-room/join')) {
+      const body = JSON.parse(options.body); calls.push({ path:String(url),body,token:options.headers.Authorization });
+      return respond(body,String(url));
+    }
+    return authorizedResponse();
+  }, enumerateDevices: async () => labeledDevices, getUserMedia: async () => {captures++; throw new Error('Waiting must not capture');},
+  liveKit: { Track: { Source:liveKitSources }, Room: class {constructor(){rooms++;} async disconnect(){} } } });
+  await waitForAuthorizedPrejoin(h); h.hooks.closeEntryDialog();
+  h.hooks.state.session={access_token:'member-token',user:{id:'member-one'}};
+  h.hooks.state.isAdministrator=false;
+  h.hooks.state.rooms=h.hooks.state.rooms.map(r=>r.roomKey==='2'?{...r,audience:'approval',accessRevision:2}:r);
+  return {...h,calls,captures:()=>captures,rooms:()=>rooms};
+}
+const admissionResponse = admission => response({ok:true,status:200,payload:{ok:true,admission}});
+const admissionRecord = status => ({requestId:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',roomKey:'2',accessRevision:2,
+  identity:'sr_111111111111111111111111',nickname:'Partner',status,version:status==='pending'?1:2,
+  expiresAt:new Date(Date.now()+900000).toISOString(),notBefore:new Date(Date.now()-1000).toISOString(),revokePending:false});
+{
+ let record=null;
+ const h=await approvalHarness(async body=>{if(body.operation==='request')record=admissionRecord('pending');if(body.operation==='cancel')record=admissionRecord('cancelled');return admissionResponse(record);});
+ h.hooks.openEntryDialog('2');await eventually(()=>h.calls.length===1&&!h.hooks.state.entryAdmission.busy,'Initial status did not settle');
+ assert.equal(h.calls[0].body.operation,'status');assert.equal(h.rooms(),0);assert.equal(h.captures(),0);
+ assert.equal(h.document.getElementById('sr-join').textContent,'Ask to enter');
+ await h.hooks.joinRoom();await h.hooks.testDevices();
+ assert.equal(h.calls.filter(c=>c.body.operation==='request').length,1);
+ assert.equal(h.hooks.state.entryAdmission.record.status,'pending');assert.equal(h.document.getElementById('sr-join').disabled,true);
+ assert.equal(h.document.getElementById('sr-test-devices').disabled,true);assert.equal(h.rooms(),0);assert.equal(h.captures(),0);
+ assert.ok(h.calls.every(c=>c.path.endsWith('/admission')),'Waiting never requests JWT/connect/media');
+ record=admissionRecord('approved');await h.hooks.runEntryAdmission('status');
+ assert.equal(h.document.getElementById('sr-join').textContent,'Enter room');assert.equal(h.rooms(),0,'Admission does not auto-connect');
+ assert.equal(h.hooks.state.joinWithMicrophone,false);assert.equal(h.hooks.state.joinWithCamera,false);
+ h.hooks.closeEntryDialog();await eventually(()=>h.calls.some(c=>c.body.operation==='cancel'),'Closing approved entry cancels unused grant');
+ assert.equal(h.hooks.state.entryAdmission,null);
+}
+{
+ let deliver;let record=null;
+ const h=await approvalHarness(async body=>{if(body.operation==='request')return new Promise(resolve=>{deliver=()=>{record=admissionRecord('pending');resolve(admissionResponse(record));};});return admissionResponse(record);});
+ h.hooks.openEntryDialog('2');await eventually(()=>!h.hooks.state.entryAdmission.busy,'Status did not settle');
+ const first=h.hooks.joinRoom();await eventually(()=>Boolean(deliver),'Request did not begin');await h.hooks.joinRoom();
+ assert.equal(h.calls.filter(c=>c.body.operation==='request').length,1,'Duplicate activation does not create duplicate requests');
+ await h.hooks.handleAuthSession({access_token:'new-account-token',user:{id:'member-two'}});
+ deliver();await first;
+ await eventually(()=>h.calls.some(c=>c.body.operation==='cancel'),'Late old-account request must be cancelled');
+ assert.equal(h.calls.find(c=>c.body.operation==='cancel').token,'Bearer member-token','Cleanup uses original actor, never the new account');
+ assert.equal(h.hooks.state.entryAdmission,null);assert.equal(h.hooks.state.room,null);assert.equal(h.rooms(),0);assert.equal(h.captures(),0);
+}
+{
+ let attempts=0;let record=null;
+ const h=await approvalHarness(async body=>{if(body.operation==='request'){attempts++;if(attempts===1)throw new Error('Uncertain response');record=admissionRecord('pending');}return admissionResponse(record);});
+ h.hooks.openEntryDialog('2');await eventually(()=>!h.hooks.state.entryAdmission.busy,'Status did not settle');
+ await h.hooks.joinRoom();const first=h.calls.find(c=>c.body.operation==='request').body;
+ assert.ok(h.hooks.state.entryAdmission.command);await h.hooks.runEntryAdmission('status');
+ const retried=h.calls.filter(c=>c.body.operation==='request');assert.equal(retried.length,2);assert.deepEqual(retried[1].body,first);
+ assert.equal(h.hooks.state.entryAdmission.record.status,'pending');assert.equal(h.rooms(),0);
+}
+{
+ let record=admissionRecord('pending');let deliver;
+ const h=await approvalHarness(async body=>{
+  if(body.operation==='list')return response({ok:true,status:200,payload:{ok:true,roomKey:'2',accessRevision:2,queue:[record]}});
+  if(body.operation==='admit')return new Promise(resolve=>{deliver=()=>{record=admissionRecord('approved');resolve(admissionResponse(record));};});
+  return admissionResponse(record);
+ });
+ const state=h.hooks.state;state.isAdministrator=true;state.currentRoomKey='2';state.room={localParticipant:{identity:'admin-identity'},remoteParticipants:new Map()};
+ await h.hooks.refreshWaitingQueue();assert.equal(state.waitingQueue.length,1);
+ const first=h.hooks.decideWaitingAdmission(record,'admit');await eventually(()=>Boolean(deliver),'Decision did not start');
+ await h.hooks.decideWaitingAdmission(record,'admit');assert.equal(h.calls.filter(c=>c.body.operation==='admit').length,1);
+ const decision=h.calls.find(c=>c.body.operation==='admit').body;assert.equal(decision.requestId,record.requestId);assert.equal(decision.expectedVersion,1);
+ assert.equal(Object.hasOwn(decision,'actor'),false);assert.equal(Object.hasOwn(decision,'presence'),false,'Browser does not attest administrator presence');
+ deliver();await first;assert.equal(state.waitingQueue[0].status,'approved');
+ state.isAdministrator=false;const count=h.calls.length;await h.hooks.decideWaitingAdmission(record,'deny');assert.equal(h.calls.length,count);
+}
+console.log('Study Room approval UI: pending zero-media, manual approved entry, close/account cleanup, duplicate/idempotent retry and in-room admin decisions passed.');
+
+{
+ const h=await approvalHarness(async()=>admissionResponse(admissionRecord('approved')));
+ h.hooks.state.room={localParticipant:{},disconnect:async()=>assert.fail('Closing the current-room dialog must preserve its active call')};
+ h.hooks.state.currentRoomKey='2';h.hooks.openEntryDialog('2');
+ assert.equal(h.hooks.state.entryAdmission,null);assert.equal(h.document.getElementById('sr-join').textContent,'Return to room');
+ await h.hooks.joinRoom();assert.equal(h.hooks.state.entryOpen,false);assert.equal(h.calls.length,0,'Current-room return cannot cancel an already-used admission');
+}
+
+{
+  let rejectCapture; let calls = 0;
+  const h = createLiveHarness({ fetch: async () => authorizedResponse(), enumerateDevices: async () => labeledDevices,
+    getUserMedia: async () => { calls += 1; return new Promise((_resolve, reject) => { rejectCapture = reject; }); },
+    liveKit: { Track: { Source: liveKitSources } }, MediaStream: FakeMediaStream });
+  await waitForAuthorizedPrejoin(h);
+  const preview = h.hooks.testDevices();
+  await eventually(() => Boolean(rejectCapture), 'Preview capture did not begin.');
+  await h.hooks.testDevices(); assert.equal(calls, 1, 'Duplicate preview action cannot acquire a second stream.');
+  h.hooks.closeEntryDialog();
+  const error = new Error('Camera removed'); error.name = 'NotReadableError';
+  rejectCapture(error); await preview;
+  assert.equal(calls, 1, 'A late failed permission request must not start device fallback after consent closes.');
+  assert.equal(h.hooks.state.previewBusy, false);
+  assert.equal(h.document.getElementById('sr-test-devices').disabled, false);
+}

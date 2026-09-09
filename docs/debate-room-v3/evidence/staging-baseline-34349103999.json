@@ -1,0 +1,423 @@
+{
+  "schemaVersion": 2,
+  "capturedAt": "2026-09-09T12:06:18.137Z",
+  "state": {
+    "worker": "duediligence-examinations-staging",
+    "origin": "https://duediligence-examinations-staging.wallyesteban1993.workers.dev",
+    "projectRef": "hlzqmreeoghbldnhlybr",
+    "deploymentId": "dd3d86fb-5826-4a5b-9ab0-15db98fd0764",
+    "versionId": "b134ccc7-0c7f-4d00-89e0-d7314e0f1dd9",
+    "trafficPercent": 100,
+    "bindings": [
+      {
+        "name": "ADMIN_DIRECTORY_EMAIL_FROM",
+        "type": "plain_text"
+      },
+      {
+        "name": "ADMIN_DIRECTORY_EMAIL_MODE",
+        "type": "plain_text"
+      },
+      {
+        "name": "ADMIN_PULSE_ENABLED",
+        "type": "plain_text"
+      },
+      {
+        "name": "ADMIN_PULSE_VAPID_PRIVATE_KEY",
+        "type": "secret_text"
+      },
+      {
+        "name": "ADMIN_PULSE_VAPID_PUBLIC_KEY",
+        "type": "plain_text"
+      },
+      {
+        "name": "ADMIN_PULSE_VAPID_SUBJECT",
+        "type": "plain_text"
+      },
+      {
+        "name": "ADMIN_PULSE_WEB_PUSH_ENABLED",
+        "type": "plain_text"
+      },
+      {
+        "name": "AI_PREPARED_BETA_BADGE",
+        "type": "plain_text"
+      },
+      {
+        "name": "ALLOW_LEGACY_GUESTS",
+        "type": "plain_text"
+      },
+      {
+        "name": "ALLOWED_ORIGIN",
+        "type": "plain_text"
+      },
+      {
+        "name": "ANCHOR_CASE_DIGESTS_ENABLED",
+        "type": "plain_text"
+      },
+      {
+        "name": "BAR_EASY_ENABLED",
+        "type": "plain_text"
+      },
+      {
+        "name": "BAR_EXAM_SIMULATION_RANDOMIZATION_V1_ENABLED",
+        "type": "plain_text"
+      },
+      {
+        "name": "BAR_EXAM_SIMULATION_RANDOMIZATION_V1_SCHEMA_READY",
+        "type": "plain_text"
+      },
+      {
+        "name": "BAR_QUESTION_PRACTICE_RANDOMIZATION_V2_ENABLED",
+        "type": "plain_text"
+      },
+      {
+        "name": "CHAIR_CASES_ENABLED",
+        "type": "plain_text"
+      },
+      {
+        "name": "CONTENT_HUMAN_REVIEW_REQUIRED",
+        "type": "plain_text"
+      },
+      {
+        "name": "DOCTRINES_ENABLED",
+        "type": "plain_text"
+      },
+      {
+        "name": "EXAM_ROOM_STUDENT_CODE_KEY_V1",
+        "type": "secret_text"
+      },
+      {
+        "name": "EXAMINATION_ROOM_ADMIN_EMAILS",
+        "type": "secret_text"
+      },
+      {
+        "name": "EXAMINATION_ROOM_BACKUP_MASTER_KEY_V1",
+        "type": "secret_text"
+      },
+      {
+        "name": "EXAMINATION_ROOM_EMAIL_MODE",
+        "type": "plain_text"
+      },
+      {
+        "name": "EXAMINATION_ROOM_ENABLED",
+        "type": "plain_text"
+      },
+      {
+        "name": "EXAMINATION_ROOM_KEY_PEPPER",
+        "type": "secret_text"
+      },
+      {
+        "name": "EXAMINATION_ROOM_OWNER_DATA_KEY_V1",
+        "type": "secret_text"
+      },
+      {
+        "name": "EXAMINATION_ROOM_RECOVERY_MODE",
+        "type": "plain_text"
+      },
+      {
+        "name": "FORECAST_RESULTS_EMAIL_FROM",
+        "type": "plain_text"
+      },
+      {
+        "name": "FORECAST_RESULTS_EMAIL_MODE",
+        "type": "plain_text"
+      },
+      {
+        "name": "GEMINI_API_KEY",
+        "type": "secret_text"
+      },
+      {
+        "name": "GEMINI_GROUNDING_ENABLED",
+        "type": "plain_text"
+      },
+      {
+        "name": "GEMINI_MODEL",
+        "type": "plain_text"
+      },
+      {
+        "name": "GOOGLE_OAUTH_CLIENT_ID",
+        "type": "secret_text"
+      },
+      {
+        "name": "GOOGLE_OAUTH_CLIENT_SECRET",
+        "type": "secret_text"
+      },
+      {
+        "name": "GOOGLE_OAUTH_REFRESH_TOKEN",
+        "type": "secret_text"
+      },
+      {
+        "name": "GUEST_USAGE_HMAC_KEY",
+        "type": "secret_text"
+      },
+      {
+        "name": "LIVEKIT_API_KEY",
+        "type": "secret_text"
+      },
+      {
+        "name": "LIVEKIT_API_SECRET",
+        "type": "secret_text"
+      },
+      {
+        "name": "LIVEKIT_URL",
+        "type": "secret_text"
+      },
+      {
+        "name": "OUTBOUND_EMAIL_MODE",
+        "type": "plain_text"
+      },
+      {
+        "name": "PHASE4_ACCESS_ENFORCEMENT",
+        "type": "plain_text"
+      },
+      {
+        "name": "PHASE4_MODEL_QUALITY_ENFORCEMENT",
+        "type": "plain_text"
+      },
+      {
+        "name": "PRIVATE_BETA_DISCLOSURE_VERSION",
+        "type": "plain_text"
+      },
+      {
+        "name": "PRIVATE_BETA_GATE_ENABLED",
+        "type": "plain_text"
+      },
+      {
+        "name": "REQUIRE_AUTHENTICATED_SUBMISSIONS",
+        "type": "plain_text"
+      },
+      {
+        "name": "SIGN_IN_NOTIFICATION_EMAIL_FROM",
+        "type": "plain_text"
+      },
+      {
+        "name": "SIGN_IN_NOTIFICATION_EMAIL_MODE",
+        "type": "plain_text"
+      },
+      {
+        "name": "STUDY_ROOM_ENABLED",
+        "type": "plain_text"
+      },
+      {
+        "name": "STUDY_ROOM_NAME",
+        "type": "plain_text"
+      },
+      {
+        "name": "SUBSCRIPTION_RECEIPT_EMAIL_MODE",
+        "type": "plain_text"
+      },
+      {
+        "name": "SUPABASE_SERVICE_ROLE_KEY",
+        "type": "secret_text"
+      },
+      {
+        "name": "SUPABASE_URL",
+        "type": "plain_text"
+      },
+      {
+        "name": "SUPPORT_NOTIFICATION_EMAIL_FROM",
+        "type": "plain_text"
+      },
+      {
+        "name": "SUPPORT_NOTIFICATION_EMAIL_MODE",
+        "type": "plain_text"
+      },
+      {
+        "name": "SYLLABUS_BASED_REVIEW_RANDOMIZATION_V2_ENABLED",
+        "type": "plain_text"
+      },
+      {
+        "name": "VERDICT_PDF_ENABLED",
+        "type": "plain_text"
+      },
+      {
+        "name": "VERDICT_PDF_PREMIUM_REQUIRED",
+        "type": "plain_text"
+      }
+    ],
+    "vars": {
+      "ADMIN_DIRECTORY_EMAIL_FROM": "Due Diligence Administration <support@duediligence.ph>",
+      "ADMIN_DIRECTORY_EMAIL_MODE": "suppressed",
+      "ADMIN_PULSE_ENABLED": "true",
+      "ADMIN_PULSE_WEB_PUSH_ENABLED": "true",
+      "AI_PREPARED_BETA_BADGE": "false",
+      "ALLOWED_ORIGIN": "https://duediligence-examinations-staging.wallyesteban1993.workers.dev",
+      "ALLOW_LEGACY_GUESTS": "false",
+      "ANCHOR_CASE_DIGESTS_ENABLED": "true",
+      "BAR_EASY_ENABLED": "true",
+      "BAR_EXAM_SIMULATION_RANDOMIZATION_V1_ENABLED": "true",
+      "BAR_EXAM_SIMULATION_RANDOMIZATION_V1_SCHEMA_READY": "true",
+      "BAR_QUESTION_PRACTICE_RANDOMIZATION_V2_ENABLED": "true",
+      "CHAIR_CASES_ENABLED": "true",
+      "CONTENT_HUMAN_REVIEW_REQUIRED": "false",
+      "DOCTRINES_ENABLED": "true",
+      "EXAMINATION_ROOM_EMAIL_MODE": "suppressed",
+      "EXAMINATION_ROOM_ENABLED": "true",
+      "EXAMINATION_ROOM_RECOVERY_MODE": "supabase_storage",
+      "FORECAST_RESULTS_EMAIL_FROM": "Due Diligence Results <support@duediligence.ph>",
+      "FORECAST_RESULTS_EMAIL_MODE": "suppressed",
+      "GEMINI_GROUNDING_ENABLED": "false",
+      "GEMINI_MODEL": "gemini-3.5-flash-lite",
+      "OUTBOUND_EMAIL_MODE": "suppressed",
+      "PHASE4_ACCESS_ENFORCEMENT": "true",
+      "PHASE4_MODEL_QUALITY_ENFORCEMENT": "true",
+      "PRIVATE_BETA_DISCLOSURE_VERSION": "beta-disclosure-v1-2026-07-31",
+      "PRIVATE_BETA_GATE_ENABLED": "false",
+      "REQUIRE_AUTHENTICATED_SUBMISSIONS": "true",
+      "SIGN_IN_NOTIFICATION_EMAIL_FROM": "Due Diligence Sign-in Notice <support@duediligence.ph>",
+      "SIGN_IN_NOTIFICATION_EMAIL_MODE": "suppressed",
+      "STUDY_ROOM_ENABLED": "true",
+      "STUDY_ROOM_NAME": "dd-study-room-admin-beta-staging-v1",
+      "SUBSCRIPTION_RECEIPT_EMAIL_MODE": "suppressed",
+      "SUPABASE_URL": "https://hlzqmreeoghbldnhlybr.supabase.co",
+      "SUPPORT_NOTIFICATION_EMAIL_FROM": "Due Diligence Support <support@duediligence.ph>",
+      "SUPPORT_NOTIFICATION_EMAIL_MODE": "suppressed",
+      "SYLLABUS_BASED_REVIEW_RANDOMIZATION_V2_ENABLED": "true",
+      "VERDICT_PDF_ENABLED": "true",
+      "VERDICT_PDF_PREMIUM_REQUIRED": "false"
+    },
+    "undisclosedVariableHashes": {
+      "ADMIN_PULSE_VAPID_PUBLIC_KEY": "813e95db580c53ff5cb9d6c737cb129e87f02723d42de2be409662dee6ffbe7d",
+      "ADMIN_PULSE_VAPID_SUBJECT": "fc6e33d51d04f62af306498e2ed10496d90a3ef3629f660e1191845018c86c16"
+    },
+    "compatibilityDate": "2026-07-26",
+    "compatibilityFlags": [
+      "nodejs_compat"
+    ],
+    "placement": {
+      "mode": "targeted",
+      "target": [
+        10
+      ]
+    },
+    "observability": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "redact_query_string": false,
+      "logs": {
+        "enabled": true,
+        "head_sampling_rate": 1,
+        "persist": true,
+        "invocation_logs": true
+      },
+      "traces": {
+        "enabled": false,
+        "persist": true,
+        "head_sampling_rate": 1
+      }
+    },
+    "logpush": false,
+    "tailConsumers": [],
+    "limits": null,
+    "usageModel": "standard",
+    "cache": null,
+    "cacheSource": null,
+    "captureSources": {
+      "schemaVersion": 1,
+      "settings": {
+        "presentFields": [
+          "annotations",
+          "bindings",
+          "compatibility_date",
+          "compatibility_flags",
+          "logpush",
+          "observability",
+          "placement",
+          "tags",
+          "tail_consumers",
+          "usage_model"
+        ],
+        "placement": {
+          "mode": "targeted",
+          "target": [
+            10
+          ]
+        },
+        "placementMode": null,
+        "cacheOptions": null,
+        "cacheOptionsPresentFields": [],
+        "exports": null
+      },
+      "runtime": {
+        "presentFields": [
+          "assets",
+          "compatibility_date",
+          "compatibility_flags",
+          "usage_model"
+        ],
+        "placement": null,
+        "placementMode": null,
+        "cacheOptions": null,
+        "cacheOptionsPresentFields": [],
+        "exports": null
+      },
+      "service": {
+        "defaultEnvironment": "production",
+        "script": {
+          "presentFields": [
+            "compatibility_date",
+            "compatibility_flags",
+            "created_on",
+            "deployment_id",
+            "etag",
+            "handlers",
+            "has_assets",
+            "has_modules",
+            "id",
+            "last_deployed_from",
+            "logpush",
+            "modified_on",
+            "named_handlers",
+            "observability",
+            "placement",
+            "placement_mode",
+            "tag",
+            "tags",
+            "tail_consumers",
+            "usage_model"
+          ],
+          "placement": {
+            "mode": "targeted",
+            "target": [
+              {
+                "region": "gcp:us-east4"
+              }
+            ]
+          },
+          "placementMode": "targeted",
+          "cacheOptions": null,
+          "cacheOptionsPresentFields": [],
+          "exports": null
+        }
+      }
+    },
+    "crons": [
+      "*/2 * * * *"
+    ],
+    "workersDev": true,
+    "previewUrls": true
+  },
+  "fingerprint": "038011196f012d3bde90af6e1a57a3feda15f58ffdd35d201378cc3c3f7b6f0f",
+  "secretValuesStored": false,
+  "captureAuthorization": {
+    "operation": "READ_ONLY_GET_INVENTORY",
+    "repository": "codingwally/Bar-Exam-simulator",
+    "actor": "codingwally",
+    "triggeringActor": "codingwally",
+    "pullRequest": 356,
+    "label": "dv3-c-3597b221f1f39bbac8c257fd99ea8b9fd215cbe7",
+    "candidateSha": "3597b221f1f39bbac8c257fd99ea8b9fd215cbe7",
+    "workflowMergeSha": "99c57458a5e004bd9c7b45a0f0f12844b30ad9d2",
+    "runId": "34349103999",
+    "runAttempt": "1",
+    "authorityReference": "docs/debate-v3-staging-release.md",
+    "sourceHashes": {
+      ".github/workflows/debate-v3-capture.yml": "0b3602b4cc6310d3999eba615707f2fb33fd5a5c8e58a7579ae54ed954abeeac",
+      "scripts/debate-staging-release.mjs": "c670c2e93aa72ea392d204488b008864b8dc48d5bb8a808efd485caad84a82fa",
+      "worker/debate-staging-policy.json": "4c8217966c8b2426acab90bfdb6e268e51d4c9878fc6e1d152cf56797cbc84ef",
+      "worker/wrangler.staging.toml": "e93d72892b472843119f573e377ee374ef4c436e5efe380c622da694858000f2"
+    },
+    "deploymentPerformed": false,
+    "databaseWritesPerformed": false,
+    "secretWritesPerformed": false
+  }
+}

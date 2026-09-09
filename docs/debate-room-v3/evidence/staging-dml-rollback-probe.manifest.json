@@ -1,0 +1,28 @@
+{
+  "kind": "PREPARED_NOT_EXECUTED_DML_ROLLBACK_PROBE",
+  "targetProject": "hlzqmreeoghbldnhlybr",
+  "sourceHashes": {
+    "debate": "89d4f46b1e1b2991202880114387a1356b5eedfcf562129079de83d55a94b53c",
+    "study": "5ca7d139bb925b00c82d391aab4f566446d5d1bdd25e0b1b271fde614cb11637"
+  },
+  "sqlSha256": "7c828bd9b0784532f20a2881c8b9af317f76f877be3e274f560686d8eb11cc76",
+  "readbackSha256": "3df9e67986d99daba6e861f89398d140ed44f67619154678087f71e05ba46691",
+  "fixtureSha256": "02be235d5758910ab4c2382ca815b582fd04ee666217b08a5648ed325152bcfb",
+  "eventId": "de-69ddcb067b431a666ff395d98d00473d",
+  "actorId": "10000000-0000-4000-8000-000000009909",
+  "outsiderActorId": "10000000-0000-4000-8000-000000009908",
+  "jobId": "de-69ddcb067b431a666ff395d98d00473d:rollback-only-job",
+  "statements": 98,
+  "assertions": 64,
+  "functionBodies": 22,
+  "claims": {
+    "generatedFromActualService": true,
+    "localSqlExecuted": false,
+    "hostedSqlExecuted": false,
+    "schemaInstallRollback": false,
+    "authAccountsCreated": false,
+    "providerCalls": false,
+    "actualPermissionErrorProbes": false,
+    "nativeConcurrentConnections": false
+  }
+}

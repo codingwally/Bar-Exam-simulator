@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en-PH">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="referrer" content="same-origin"><meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="theme-color" content="#06182b"><title>Debate Room — Due Diligence</title>
+  <link rel="icon" href="../assets/brand/favicon.ico"><link rel="stylesheet" href="../assets/debate-room.css?v=debate-v3-20260909">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to Debate Room</a>
+  <header class="site-header"><a class="brand" href="../#quorum"><img src="../assets/brand/icon-192.png" width="38" height="38" alt="">Due Diligence</a>
+    <nav aria-label="Room navigation"><a href="../study-room/">Study Room</a><a href="./" aria-current="page">Debate Room</a><button id="account" class="quiet" type="button">Sign in</button></nav></header>
+  <main id="main">
+    <p id="context-change-note" class="notice" role="status" hidden></p><div id="rehearsal-banner" class="notice" hidden>Rehearsal event · Practice records do not enter real competition standings.</div>
+    <p id="status" class="status" role="status" aria-live="polite">Opening Debate Room. Your microphone and camera are off.</p>
+    <section id="lobby" aria-labelledby="lobby-title">
+      <div class="page-heading"><div><p class="eyebrow">The Commons</p><h1 id="lobby-title">Debate Room</h1><p>Prepare your case. Test the argument. Hear the decision.</p></div><button id="create-event" class="primary" type="button">Create debate</button></div>
+      <div class="lobby-columns"><section><h2>My events</h2><div id="events" class="event-list"><p>Sign in to open your events.</p></div></section>
+        <aside><h2>Join a debate</h2><form id="join-form"><label>Invitation link or event ID<input name="eventId" required maxlength="512" autocomplete="off"></label><label>Invitation code (only needed with an event ID)<input name="secret" minlength="12" maxlength="180" autocomplete="off"></label><button type="submit">Join with link or code</button></form><hr><p>Two teams. Three speakers per team. One shared floor.</p><p class="muted">The Due Diligence 5/3/5 preset includes private preparation, all 14 stages, judging, optional Audience Choice, results and exports.</p><button id="open-rulebook" class="quiet" type="button">Read the rules and role guide</button></aside></div>
+    <section aria-labelledby="discover-heading"><h2 id="discover-heading">Open events</h2><p class="muted">Signed-in members may request entry. The host admits waiting observers.</p><div id="discover-events" class="event-list"></div><button id="discover-more" type="button" hidden>More open events</button></section>
+    </section>
+    <section id="event" hidden aria-labelledby="event-title">
+      <div class="page-heading"><div><button id="back-lobby" type="button" class="quiet">← My events</button><p id="event-meta" class="eyebrow"></p><h1 id="event-title"></h1></div><div class="actions"><button id="check-in" type="button">Check in</button><button id="refresh" type="button">Refresh</button></div></div>
+      <nav id="event-tabs" class="tabs" aria-label="Event workspaces">
+        <button type="button" data-panel="overview" aria-current="page">Overview</button><button type="button" data-panel="participants">People</button><button type="button" data-panel="rules">Rules &amp; motion</button><button type="button" data-panel="live">Debate</button><button type="button" data-panel="judge">Judge</button><button type="button" data-panel="vote">Vote</button><button type="button" data-panel="results">Results</button><button type="button" data-panel="schedule">Matches</button><button type="button" data-panel="help">Help</button>
+      </nav>
+      <section id="panel-overview" class="panel"><div id="overview-content"></div></section>
+      <section id="panel-participants" class="panel" hidden><div id="participants-content"></div></section>
+      <section id="panel-rules" class="panel" hidden><div id="rules-content"></div></section>
+      <section id="panel-live" class="panel" hidden>
+        <div class="live-heading"><div><p id="motion-label" class="eyebrow">Motion</p><h2 id="live-motion">Awaiting motion release</h2></div><select id="active-match" aria-label="Active match"></select></div>
+        <div id="media-status" class="notice">You have not entered live media. Camera and microphone are off.</div>
+        <div class="media-dock" aria-label="Personal media controls"><button id="join-media" type="button" class="primary">Enter room</button><button id="mic" type="button" aria-pressed="false">Mic off</button><button id="camera" type="button" aria-pressed="false">Camera off</button><button id="share" type="button" aria-pressed="false">Share</button><button id="devices" type="button">Devices &amp; background</button><button id="audio" type="button">Enable sound</button><button id="leave-media" type="button">Leave</button></div>
+        <div class="arena" id="arena">
+          <section class="judges-rail" aria-label="Adjudication panel"><h3>Adjudicators</h3><div id="judge-tiles" class="judge-tiles"></div></section>
+          <section class="team-rail affirmative" aria-label="Affirmative team"><h3 id="affirmative-name">Affirmative</h3><div id="affirmative-tiles"></div></section>
+          <section class="floor" aria-label="Shared debate floor"><p id="stage-label" class="eyebrow">Ready</p><h2 id="speaker-label">The floor is waiting</h2><div id="clock" class="clock" role="timer" aria-live="off">05:00</div><p id="clock-status">Ready</p><p id="next-stage" class="muted"></p><div id="stage-controls" class="actions"></div><div id="presentation" class="presentation" hidden></div><details><summary>Run of show</summary><ol id="run-of-show"></ol></details></section>
+          <section class="team-rail negative" aria-label="Negative team"><h3 id="negative-name">Negative</h3><div id="negative-tiles"></div></section>
+          <section class="observers" aria-label="Observers"><div class="section-heading"><h3>Observers</h3><div class="actions"><button id="observers-prev" type="button" aria-label="Previous observers">←</button><button id="observers-next" type="button" aria-label="Next observers">→</button></div></div><div id="observer-tiles" class="observer-tiles"></div></section>
+        </div>
+        <div class="live-tools"><section><div class="section-heading"><h3>Conversation</h3><select id="channel" aria-label="Message audience"><option value="main">Main room</option><option value="team">My team</option><option value="judges">Judges</option></select></div><p id="channel-policy" class="muted"></p><button id="load-older" data-action="load-history" type="button">Load older messages</button><ol id="messages" class="messages" aria-live="polite"></ol><form id="message-form"><label>Message <textarea name="text" maxlength="2000" required rows="2"></textarea></label><button type="submit">Send to selected audience</button></form></section><section><h3>Shared evidence</h3><div id="evidence-list"></div><form id="evidence-form"><label>Title<input name="title" required maxlength="160"></label><label>Source link<input name="sourceUrl" type="url" maxlength="2000"></label><label>Description<textarea name="description" maxlength="2000" rows="2"></textarea></label><label>Official ruling (required for late evidence after closing begins)<textarea name="ruling" maxlength="2000" rows="2"></textarea></label><label>File (PDF, PNG or JPEG, up to 10 MB)<input name="file" type="file" accept="application/pdf,image/png,image/jpeg"></label><label>Audience<select name="channel"><option value="public">All admitted participants</option><option value="team">My team</option></select></label><p class="muted">Files download privately. Type checks do not certify a file is free of malware.</p><button type="submit">Share evidence</button></form><hr><div id="private-space-controls" class="actions"></div><button id="request-help" type="button">Request ruling or technical help</button></section></div>
+      </section>
+      <section id="panel-judge" class="panel" hidden><div id="judge-content"></div></section>
+      <section id="panel-vote" class="panel" hidden><div id="vote-content"></div></section>
+      <section id="panel-results" class="panel" hidden><div id="results-content"></div></section>
+      <section id="panel-schedule" class="panel" hidden><div id="schedule-content"></div></section>
+      <section id="panel-help" class="panel" hidden><div id="help-content"></div></section>
+    </section>
+  </main>
+  <dialog id="dialog" aria-labelledby="dialog-title"><form id="dialog-form"><div class="section-heading"><h2 id="dialog-title"></h2><button id="dialog-close" type="button" aria-label="Close">×</button></div><div id="dialog-fields"></div><p id="dialog-status" role="status"></p><div class="actions"><button id="dialog-cancel" type="button">Cancel</button><button id="dialog-submit" class="primary" type="submit">Save</button></div></form></dialog>
+  <div id="stage-announcement" class="sr-only" aria-live="polite"></div><div id="audio-elements" hidden></div>
+  <script src="../assets/vendor/supabase-2.49.8.umd.js?v=access-recovery-20260909-1" crossorigin="anonymous"></script>
+  <script src="../assets/phase2-config.js?v=provider-neutral-release2-20260827-1"></script><script src="../assets/auth-session-storage.js?v=auth-persistence-20260812-1"></script>
+  <script>if(!Object.hasOwn)Object.defineProperty(Object,'hasOwn',{value:function(o,p){return Object.prototype.hasOwnProperty.call(o,p)}});</script>
+  <script src="../assets/vendor/livekit-client.umd.js?v=2.22.1"></script><script src="../assets/vendor/livekit-track-processors.iife.js?v=0.7.2-study-room-background-images-20260908-1"></script><script src="../assets/study-room-backgrounds.js?v=study-room-background-images-20260908-1"></script>
+  <script type="module" src="../assets/debate-room.js?v=debate-v3-20260909"></script>
+</body></html>

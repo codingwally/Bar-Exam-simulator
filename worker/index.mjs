@@ -215,6 +215,7 @@ import { sendForecastResultEmail, resolveForecastEmailUser, assertForecastResult
 import { createAuxiliaryWritingDiagnosticsHandlers } from './auxiliary-writing-diagnostics-routes.mjs';
 import { StudyRoomError, currentPaidStudyRoomMembership } from './study-room-core.mjs';
 import { createStudyRoomHandlers } from './study-room-routes.mjs';
+import { createDebateIntegration } from './debate-integration.mjs';
 import {
   EXAMINATION_ROOM_V1_PATHS,
   ExaminationRoomV1RouteError,
@@ -294,6 +295,7 @@ const studyRoomAccessRateWindows = new Map();
 const studyRoomRoomsRateWindows = new Map();
 const studyRoomJoinRateWindows = new Map();
 const studyRoomModerationRateWindows = new Map();
+const studyRoomAdmissionRateWindows = new Map();
 const guestStatusRateWindows = new Map();
 const paymentRateWindows = new Map();
 const partnershipRateWindows = new Map();
@@ -330,8 +332,9 @@ function corsHeaders(origin, allowedOrigin) {
       'X-DD-Page-Area',
       'X-DD-Beta-Access',
       'X-DD-Beta-Flow-ID',
+      'X-Debate-Filename',
     ].join(', '),
-    'Access-Control-Expose-Headers': 'Retry-After, Content-Disposition, X-Admin-Data-Scope',
+    'Access-Control-Expose-Headers': 'Retry-After, Content-Disposition, X-Admin-Data-Scope, X-Debate-Filename',
     'Access-Control-Max-Age': '86400',
     'Vary': 'Origin',
   };
@@ -355,6 +358,32 @@ function assertOrigin(request, allowedOrigin) {
     throw new ExaminerError('ORIGIN_NOT_ALLOWED', 'This grading origin is not allowed.', 403);
   }
   return origin;
+}
+
+const SAME_ORIGIN_DEBATE_READ_PATHS = new Set([
+  '/debate-room/access', '/debate-room/events', '/debate-room/discover',
+  '/debate-room/snapshot', '/debate-room/messages', '/debate-room/download',
+  '/debate-room/evidence/download',
+]);
+
+function isAllowedSameOriginDebateRead(request, allowedOrigin, pathname) {
+  // Fetch §3.2 omits Origin on ordinary same-origin GET. Fetch Metadata §2.3
+  // supplies a browser-controlled same-origin assertion; this never grants a role.
+  // https://fetch.spec.whatwg.org/#origin-header
+  // https://www.w3.org/TR/fetch-metadata/#sec-fetch-site-header
+  if (request.method !== 'GET' || request.headers.has('Origin')
+      || !SAME_ORIGIN_DEBATE_READ_PATHS.has(pathname)
+      || new URL(request.url).origin !== allowedOrigin
+      || request.headers.get('Sec-Fetch-Site') !== 'same-origin') return false;
+  // Referrer policy/privacy controls can omit Referer. A supplied conflicting
+  // value is rejected; neither Referer alone nor missing metadata is sufficient.
+  if (request.headers.has('Referer')) {
+    try {
+      const referrer = new URL(request.headers.get('Referer'));
+      if (referrer.origin !== allowedOrigin || referrer.username || referrer.password) return false;
+    } catch { return false; }
+  }
+  return true;
 }
 
 async function transientRateKey(request, env, scope) {
@@ -5405,6 +5434,7 @@ async function authenticateStudyRoomUser(request, env) {
   return {
     id: String(current.id).trim(),
     email: String(current.email || '').trim().toLowerCase() || null,
+    emailVerified: Boolean(current.email_confirmed_at && Number.isFinite(Date.parse(current.email_confirmed_at))),
     displayName: safeSingleLine(current.user_metadata?.full_name || current.user_metadata?.name, 120) || null,
     createdAt: safeSingleLine(current.created_at, 40) || null,
     provider: safeSingleLine(current.app_metadata?.provider, 40) || null,
@@ -5419,7 +5449,7 @@ async function studyRoomAdministratorAccess(env, user) {
 }
 
 async function studyRoomCatalogRpc(env, operation, body) {
-  if (!['study_room_catalog_v1', 'study_room_configure_v1'].includes(operation)) {
+  if (!['study_room_catalog_v1', 'study_room_configure_v1', 'study_room_catalog_v2', 'study_room_configure_v2', 'study_room_admission_v1'].includes(operation)) {
     throw new StudyRoomError('STUDY_ROOM_CONFIG_INVALID', 'Unsupported room configuration request.', 400);
   }
   let response;
@@ -5436,12 +5466,16 @@ async function studyRoomCatalogRpc(env, operation, body) {
     throw new StudyRoomError('STUDY_ROOM_CATALOG_UNAVAILABLE', 'The room configuration could not be confirmed. Reload the catalog before retrying.', 503);
   }
   if (!response.ok) {
-    const known = operation === 'study_room_configure_v1' ? {
+    const known = ['study_room_configure_v1','study_room_configure_v2'].includes(operation) ? {
       PT409: ['STUDY_ROOM_CONFIG_CONFLICT', 'The room changed. Reload the catalog before saving.', 409],
       PT400: ['STUDY_ROOM_CONFIG_INVALID', 'Check the room name and access choice.', 400],
       '42501': ['STUDY_ROOM_ADMIN_REQUIRED', 'Only an administrator can configure rooms.', 403],
     }[result?.code] : null;
     if (known) throw new StudyRoomError(...known);
+    if (operation === 'study_room_admission_v1') {
+      const admissionErrors = { PT400: ['STUDY_ROOM_ADMISSION_INVALID', 'Check this admission action.', 400], PT409: ['STUDY_ROOM_ADMISSION_CONFLICT', 'Room admission changed. Refresh the waiting list before retrying.', 409], PT429: ['STUDY_ROOM_REQUEST_LIMIT', 'The waiting room is full or this request reached its retry limit. Try again later.', 429], '42501': ['STUDY_ROOM_ADMIN_REQUIRED', 'Your room permission could not be confirmed.', 403] };
+      if (admissionErrors[result?.code]) throw new StudyRoomError(...admissionErrors[result.code]);
+    }
     throw new StudyRoomError('STUDY_ROOM_CATALOG_UNAVAILABLE', 'The room catalog is temporarily unavailable.', 503);
   }
   return result;
@@ -10191,7 +10225,12 @@ async function resolveVerdictQuestion(questionId, env) {
   return questionFromBankRow(records.get(String(questionId || '')));
 }
 
-async function enforceStudyRoomRateLimit(request, env, scope) {
+async function enforceStudyRoomRateLimit(request, env, scope, verifiedUser) {
+  if (scope === 'admission') {
+    if (!verifiedUser?.id) throw new StudyRoomError('STUDY_ROOM_SIGN_IN_REQUIRED', 'Sign in to request entry.', 401);
+    enforceWindow(studyRoomAdmissionRateWindows, `study-admission:${verifiedUser.id}`, 120, 'Too many admission requests. Wait briefly and retry.');
+    return;
+  }
   const policies = {
     access: [studyRoomAccessRateWindows, 60],
     rooms: [studyRoomRoomsRateWindows, 30],
@@ -10218,8 +10257,9 @@ const studyRoomHandlers = createStudyRoomHandlers({
   authenticate: authenticateStudyRoomUser,
   authorizeAdmin: studyRoomAdministratorAccess,
   authorizeMember: async (_env, user) => ({ allowed: Boolean(user?.id), basis: 'signed_in' }),
-  readCatalog: (env) => studyRoomCatalogRpc(env, 'study_room_catalog_v1', {}),
-  configureCatalog: (env, body) => studyRoomCatalogRpc(env, 'study_room_configure_v1', body),
+  readCatalog: (env) => studyRoomCatalogRpc(env, 'study_room_catalog_v2', {}),
+  configureCatalog: (env, body) => studyRoomCatalogRpc(env, 'study_room_configure_v2', body),
+  admissionRpc: (env, body) => studyRoomCatalogRpc(env, 'study_room_admission_v1', body),
   verifyPaidMembership: studyRoomPaidMembership,
   parseJson: parseBoundedJson,
   rateLimit: enforceStudyRoomRateLimit,
@@ -10454,9 +10494,25 @@ export default {
           allowedOrigin,
         );
       }
-      const origin = assertOrigin(request, allowedOrigin);
+      const origin = isAllowedSameOriginDebateRead(request, allowedOrigin, pathname)
+        ? allowedOrigin : assertOrigin(request, allowedOrigin);
       if (request.method === 'OPTIONS') {
         return new Response(null, { status: 204, headers: corsHeaders(origin, allowedOrigin) });
+      }
+      // Debate endpoints own their current identity/role checks and never consult billing.
+      // Keep this narrow method exception after origin/OPTIONS verification.
+      if (pathname.startsWith('/debate-room/')) {
+        const debate = createDebateIntegration({ env, context: ctx,
+          authenticate: async incoming => { const user = await authenticateStudyRoomUser(incoming, env); return user ? { id: user.id, email: user.email, displayName: user.displayName, verified: user.emailVerified === true } : null; },
+          rpc: (name, args) => protectedSupabaseRpc(env, name, args),
+        });
+        const response = await debate.handle(request);
+        if (response) {
+          const headers = new Headers(response.headers);
+          for (const [key, value] of Object.entries(corsHeaders(origin, allowedOrigin))) if (key !== 'Vary') headers.set(key, value);
+          headers.set('Vary', 'Origin, Sec-Fetch-Site, Referer, Authorization, Cookie');
+          return new Response(response.body, { status: response.status, headers });
+        }
       }
       if (request.method !== 'POST') {
         throw new ExaminerError('METHOD_NOT_ALLOWED', 'Only POST requests are accepted.', 405);
@@ -10701,6 +10757,9 @@ export default {
       if (pathname === '/admin/pulse/push-subscription') {
         return await handleAdminPulsePushSubscription(request, env, origin, allowedOrigin);
       }
+      if (pathname === '/study-room/admission' || pathname === '/admin/study-room/admission') {
+        return await studyRoomHandlers.admission(request, env, origin, allowedOrigin);
+      }
       if (pathname === '/admin/study-room/access') {
         return await studyRoomHandlers.access(request, env, origin, allowedOrigin);
       }
@@ -10860,6 +10919,19 @@ export default {
   },
   scheduled(_controller, env, ctx) {
     const runtimeEnv = normalizedRuntimeSecrets(env);
+    // The Debate cadence is separate; existing two-minute recovery work is unchanged.
+    if (_controller?.cron === '* * * * *') {
+      const operation = createDebateIntegration({ env: runtimeEnv, authenticate: async () => null,
+        rpc: (name, args) => protectedSupabaseRpc(runtimeEnv, name, args),
+      }).sweep().then(result => {
+        if (result.backlog || result.outcomes?.some(item => item.error || item.outcomes?.some(job => job.status === 'failed'))) {
+          console.error('Debate reconciliation needs attention', { backlog: result.backlog, events: result.outcomes?.length || 0 });
+        }
+        return result;
+      });
+      if (ctx?.waitUntil) { ctx.waitUntil(operation); return; }
+      return operation;
+    }
     const recovery = drainExaminationRoomRecovery(runtimeEnv).catch((error) => {
       console.error('Scheduled Examination Room recovery drain failed', {
         code: String(error?.code || 'EXAM_ROOM_V1_RECOVERY_DRAIN_FAILED').slice(0, 80),

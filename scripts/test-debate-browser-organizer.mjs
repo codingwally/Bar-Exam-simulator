@@ -338,10 +338,10 @@ export async function runBrowserOrganizer() {
       await open(host, 'motion', 'Add private motion'); await field(host, 'title').fill('CI motion ' + n);
       await field(host, 'text').fill(`This house would expand access to community learning resources, rehearsal motion ${n}.`); await submit(host, 'add_motion');
     }
-    await tab(host, 'schedule'); await open(host, 'fixtures', 'Generate fixtures'); await field(host, 'format').selectOption('round_robin'); await submit(host, 'generate_fixtures');
+    await tab(host, 'schedule'); await open(host, 'fixtures', 'Generate pairings'); await field(host, 'format').selectOption('round_robin'); await submit(host, 'generate_fixtures');
     await textIncludes(host, '#schedule-content', 'Review draft fixtures'); await screenshot(host, 'reviewed-fixture');
-    await open(host, 'publish-fixtures', 'Publish reviewed fixtures'); await host.locator('#dialog-fields input[type="checkbox"]').check(); await submit(host, 'publish_fixtures');
-    await open(host, 'fixture-match', 'Set up published fixture');
+    await open(host, 'publish-fixtures', 'Publish reviewed pairings'); await host.locator('#dialog-fields input[type="checkbox"]').check(); await submit(host, 'publish_fixtures');
+    await open(host, 'fixture-match', 'Set up scheduled match');
     check('Published fixture fixes both teams and motion in the dialog', await field(host, 'affirmative').isDisabled() && await field(host, 'negative').isDisabled() && await field(host, 'motionId').isDisabled());
     await field(host, 'title').fill('CI default complete fixture match'); await field(host, 'judge1').selectOption(ACTOR(0));
     const madeMatch = await submit(host, 'create_match'); matchId = madeMatch.receipt.result.matchId; report.matchId = matchId;

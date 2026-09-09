@@ -25,6 +25,7 @@ docs/debate-room-v3/evidence/staging-dml-rollback-probe.readback.sql -text
 docs/debate-room-v3/evidence/staging-dml-rollback-probe.fixtures.json -text
 docs/debate-room-v3/evidence/staging-dml-rollback-probe.manifest.json -text
 docs/debate-room-v3/evidence/staging-dml-rollback-probe.denials.json -text
+docs/debate-room-v3/evidence/production-dml-rollback-probe-20260910.sql -text
 docs/debate-room-v3/evidence/staging-prepare-hosted-34358904483-reconciliation.sql -text
 docs/debate-room-v3/evidence/staging-hosted-rehearsal-34363892777-auth-reconciliation.sql -text
 docs/debate-room-v3/evidence/*.json -text

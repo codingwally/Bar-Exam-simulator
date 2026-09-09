@@ -36,7 +36,7 @@ for (const file of [...new Set(sourceFiles)].sort()) sourceHashes[file] = create
 const workerTests = (await readdir(path.join(root, 'worker'))).filter(file => /^(debate-.*|study-room(?:-.*)?)\.test\.mjs$/.test(file)).map(file => 'worker/' + file);
 const groups = [
   ['server-domain-database', ['--test', '--test-concurrency=1', ...workerTests]],
-  ['client-state-media-dates', ['--test', 'scripts/test-debate-client-state.mjs', 'scripts/test-debate-media.mjs', 'scripts/test-debate-dates.mjs']],
+  ['client-state-media-dates', ['--test', 'scripts/test-debate-client-state.mjs', 'scripts/test-debate-media.mjs', 'scripts/test-debate-dates.mjs', 'scripts/test-debate-entry.mjs']],
   ['study-admission-sql', ['scripts/test-study-room-admission-sql.mjs']],
   ...['always-open', 'backgrounds', 'background-picker', 'hotfix-behavior', 'live'].map(name => ['study-' + name, ['scripts/test-study-room-' + name + '.mjs']]),
   ['local-http-boundaries', ['--test', 'scripts/test-debate-rehearsal-server.mjs']],
@@ -44,7 +44,7 @@ const groups = [
   ['eligible-tournament-exports', ['scripts/test-debate-tournament-export.mjs']],
   ['staging-preflight-gates', ['--test', 'scripts/test-debate-staging-release.mjs', 'scripts/test-debate-staging-fixtures.mjs', 'scripts/test-debate-staging-dml-probe.mjs',
     'scripts/test-debate-hosted-cleanup.mjs', 'scripts/test-debate-hosted-fixtures.mjs', 'scripts/test-debate-hosted-driver.mjs',
-    'scripts/test-debate-hosted-browser-safety.mjs', 'scripts/test-debate-hosted-preparation.mjs']],
+    'scripts/test-debate-hosted-browser-safety.mjs', 'scripts/test-debate-hosted-preparation.mjs', 'scripts/test-debate-production-preview.mjs']],
   ['worker-configuration-contract', ['--test', 'scripts/test-worker-cpu-limit-contract.mjs']],
 ];
 const report = { startedAt: new Date().toISOString(), environment: 'Local Node / disposable PGlite / inert media; no provider or real mail', head: head.stdout.trim(), gitStatus: status.stdout.trim(), sourceHashes, groups: [], limitations: ['Not a physical camera/audio test', 'Not a90-minute endurance run', 'Not native multi-connection PostgreSQL load', 'No hosted migration, approved capacity ramp, real mail delivery or deployment proof'] };

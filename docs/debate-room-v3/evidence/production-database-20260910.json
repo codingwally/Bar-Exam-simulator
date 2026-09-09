@@ -1,0 +1,330 @@
+{
+  "schemaVersion": 1,
+  "projectRef": "hbllomlijfznnuudpdvr",
+  "reviewedBy": "Codex /root",
+  "recordedAt": "2026-09-09T18:25:15.963258+00:00",
+  "status": "PASS_ADDITIVE_APPLICATION_DML_ROLLBACK_PERMISSIONS_AND_PRIVATE_BUCKET_CONFIGURATION",
+  "approvalReference": "Owner explicitly requested publication for all users, paying and non-paying, on 2026-09-10 Asia/Manila. Superior recovery task explicitly released its hold. Public access does not authorize new spending or external mail.",
+  "applicationRecords": [
+    {
+      "path": "supabase/migrations/20260909080139_debate_room_v3.sql",
+      "sha256": "89d4f46b1e1b2991202880114387a1356b5eedfcf562129079de83d55a94b53c",
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"success\":true}"
+          }
+        ],
+        "isError": false
+      }
+    },
+    {
+      "path": "supabase/migrations/20260909080143_study_room_admission_v3.sql",
+      "sha256": "5ca7d139bb925b00c82d391aab4f566446d5d1bdd25e0b1b271fde614cb11637",
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"success\":true}"
+          }
+        ],
+        "isError": false
+      }
+    }
+  ],
+  "ledger": [
+    {
+      "version": "20260909182458",
+      "name": "debate_room_v3",
+      "stored_sql_sha256": "89d4f46b1e1b2991202880114387a1356b5eedfcf562129079de83d55a94b53c"
+    },
+    {
+      "version": "20260909182504",
+      "name": "study_room_admission_v3",
+      "stored_sql_sha256": "5ca7d139bb925b00c82d391aab4f566446d5d1bdd25e0b1b271fde614cb11637"
+    }
+  ],
+  "exactStoredMigrationSqlMatchesReviewedSources": true,
+  "before": {
+    "tables": {
+      "debate": null,
+      "catalog": "private.study_room_catalog",
+      "admissions": null,
+      "admission_commands": null
+    },
+    "checked_at": "2026-09-09T18:19:54.003399+00:00",
+    "catalog_rows": 6,
+    "catalog_columns": [
+      {
+        "name": "room_key",
+        "type": "smallint"
+      },
+      {
+        "name": "label",
+        "type": "text"
+      },
+      {
+        "name": "audience",
+        "type": "text"
+      },
+      {
+        "name": "revision",
+        "type": "integer"
+      },
+      {
+        "name": "access_revision",
+        "type": "integer"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone"
+      },
+      {
+        "name": "created_by",
+        "type": "uuid"
+      },
+      {
+        "name": "updated_by",
+        "type": "uuid"
+      }
+    ],
+    "postgres_version": "PostgreSQL 17.6 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 15.2.0, 64-bit",
+    "catalog_constraint": "CHECK ((audience = ANY (ARRAY['admin'::text, 'paid'::text, 'all'::text])))",
+    "catalog_fingerprint": "62428b7c100215284a1ba56566caa524",
+    "catalog_audit_fingerprint": "d0ebb64f6389d34bdaca2aacc3f1ee22"
+  },
+  "after": {
+    "tables": {
+      "debate": "debate_v3_events",
+      "catalog": "private.study_room_catalog",
+      "admissions": "private.study_room_admissions",
+      "admission_commands": "private.study_room_admission_commands"
+    },
+    "checked_at": "2026-09-09T18:25:15.963258+00:00",
+    "catalog_rows": 6,
+    "catalog_columns": [
+      {
+        "name": "room_key",
+        "type": "smallint"
+      },
+      {
+        "name": "label",
+        "type": "text"
+      },
+      {
+        "name": "audience",
+        "type": "text"
+      },
+      {
+        "name": "revision",
+        "type": "integer"
+      },
+      {
+        "name": "access_revision",
+        "type": "integer"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone"
+      },
+      {
+        "name": "created_by",
+        "type": "uuid"
+      },
+      {
+        "name": "updated_by",
+        "type": "uuid"
+      }
+    ],
+    "postgres_version": "PostgreSQL 17.6 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 15.2.0, 64-bit",
+    "catalog_constraint": "CHECK ((audience = ANY (ARRAY['all'::text, 'paid'::text, 'admin'::text, 'approval'::text])))",
+    "catalog_fingerprint": "62428b7c100215284a1ba56566caa524",
+    "catalog_audit_fingerprint": "d0ebb64f6389d34bdaca2aacc3f1ee22"
+  },
+  "hostedDmlRollback": {
+    "status": "PASS",
+    "assertions": 64,
+    "functionFingerprints": 22,
+    "sourceArtifact": "docs/debate-room-v3/evidence/production-dml-rollback-probe-20260910.sql",
+    "originalStagingArtifact": "docs/debate-room-v3/evidence/staging-dml-rollback-probe.sql",
+    "adaptations": [
+      "Fixed target changed to hbllomlijfznnuudpdvr.",
+      "Existing Study catalog migration version pinned to actual production 20260908164557.",
+      {
+        "reason": "Existing production admin authorization function uses LF; staged function uses CRLF. Complete definitions match after line-ending normalization only.",
+        "stagingDefinitionMd5": "51ea270969dd6283a3e29b8fbff10561",
+        "productionDefinitionMd5": "81198e9114a40c1126ba1e0b18c7625b"
+      }
+    ],
+    "initialAttempt": {
+      "status": "FAIL_ROLLED_BACK",
+      "cause": "Existing admin authorization function fingerprint uses LF in production versus CRLF in staging.",
+      "readback": [
+        {
+          "rollback_probe": {
+            "actorId": "10000000-0000-4000-8000-000000009909",
+            "eventId": "de-69ddcb067b431a666ff395d98d00473d",
+            "checkpoint": "DML_ROLLBACK_ROWS_ABSENT",
+            "ledgerHash": "394d57bc6e40eb3e3b51c02576ef6eb2",
+            "catalogHash": "62428b7c100215284a1ba56566caa524",
+            "providerCalls": 0,
+            "admissionsHash": "d751713988987e9331980363e24189ce",
+            "catalog_auditHash": "d0ebb64f6389d34bdaca2aacc3f1ee22",
+            "debateFunctionCount": 16,
+            "admission_commandsHash": "d751713988987e9331980363e24189ce",
+            "actualPermissionErrorProbes": false,
+            "nativeConcurrentConnections": false,
+            "targetProjectMustBeVerifiedExternally": "hbllomlijfznnuudpdvr"
+          }
+        }
+      ]
+    },
+    "observed": [
+      {
+        "rollback_probe": {
+          "actorId": "10000000-0000-4000-8000-000000009909",
+          "eventId": "de-69ddcb067b431a666ff395d98d00473d",
+          "checkpoint": "DML_ROLLBACK_ROWS_ABSENT",
+          "ledgerHash": "394d57bc6e40eb3e3b51c02576ef6eb2",
+          "catalogHash": "62428b7c100215284a1ba56566caa524",
+          "providerCalls": 0,
+          "admissionsHash": "d751713988987e9331980363e24189ce",
+          "catalog_auditHash": "d0ebb64f6389d34bdaca2aacc3f1ee22",
+          "debateFunctionCount": 16,
+          "admission_commandsHash": "d751713988987e9331980363e24189ce",
+          "actualPermissionErrorProbes": false,
+          "nativeConcurrentConnections": false,
+          "targetProjectMustBeVerifiedExternally": "hbllomlijfznnuudpdvr"
+        }
+      }
+    ],
+    "independentReadback": [
+      {
+        "rollback_probe": {
+          "actorId": "10000000-0000-4000-8000-000000009909",
+          "eventId": "de-69ddcb067b431a666ff395d98d00473d",
+          "checkpoint": "DML_ROLLBACK_ROWS_ABSENT",
+          "ledgerHash": "394d57bc6e40eb3e3b51c02576ef6eb2",
+          "catalogHash": "62428b7c100215284a1ba56566caa524",
+          "providerCalls": 0,
+          "admissionsHash": "d751713988987e9331980363e24189ce",
+          "catalog_auditHash": "d0ebb64f6389d34bdaca2aacc3f1ee22",
+          "debateFunctionCount": 16,
+          "admission_commandsHash": "d751713988987e9331980363e24189ce",
+          "actualPermissionErrorProbes": false,
+          "nativeConcurrentConnections": false,
+          "targetProjectMustBeVerifiedExternally": "hbllomlijfznnuudpdvr"
+        }
+      }
+    ]
+  },
+  "expectedDenials": [
+    {
+      "name": "ANON_TABLE_SELECT_DENIED",
+      "expectedSqlstate": "42501",
+      "observedSqlstate": "42501",
+      "status": "PASS_EXPECTED_DENIAL",
+      "actualError": "Failed to run sql query: ERROR:  42501: permission denied for table debate_v3_events\nHINT:  Grant the required privileges to the current role with: GRANT SELECT ON public.debate_v3_events TO anon;\n"
+    },
+    {
+      "name": "AUTHENTICATED_TABLE_SELECT_DENIED",
+      "expectedSqlstate": "42501",
+      "observedSqlstate": "42501",
+      "status": "PASS_EXPECTED_DENIAL",
+      "actualError": "Failed to run sql query: ERROR:  42501: permission denied for table debate_v3_events\nHINT:  Grant the required privileges to the current role with: GRANT SELECT ON public.debate_v3_events TO authenticated;\n"
+    },
+    {
+      "name": "ANON_DEBATE_RPC_DENIED",
+      "expectedSqlstate": "42501",
+      "observedSqlstate": "42501",
+      "status": "PASS_EXPECTED_DENIAL",
+      "actualError": "Failed to run sql query: ERROR:  42501: permission denied for function debate_v3_read\n"
+    },
+    {
+      "name": "AUTHENTICATED_STUDY_RPC_DENIED",
+      "expectedSqlstate": "42501",
+      "observedSqlstate": "42501",
+      "status": "PASS_EXPECTED_DENIAL",
+      "actualError": "Failed to run sql query: ERROR:  42501: permission denied for function study_room_catalog_v2\n"
+    },
+    {
+      "name": "SERVICE_AUDIT_UPDATE_DENIED_WITH_ZERO_ROW_PREDICATE",
+      "expectedSqlstate": "42501",
+      "observedSqlstate": "42501",
+      "status": "PASS_EXPECTED_DENIAL",
+      "actualError": "Failed to run sql query: ERROR:  42501: permission denied for table debate_v3_audit\nHINT:  Grant the required privileges to the current role with: GRANT UPDATE ON public.debate_v3_audit TO service_role;\n"
+    },
+    {
+      "name": "SERVICE_INVALID_STUDY_COMMAND_REJECTED",
+      "expectedSqlstate": "PT400",
+      "observedSqlstate": "PT400",
+      "status": "PASS_EXPECTED_DENIAL",
+      "actualError": "Failed to run sql query: ERROR:  PT400: STUDY_ROOM_ADMISSION_INVALID\nCONTEXT:  PL/pgSQL function private.study_room_admission_v1(jsonb) line 29 at RAISE\nSQL function \"study_room_admission_v1\" statement 1\n"
+    }
+  ],
+  "connectionRecovery": [
+    {
+      "current_user": "postgres",
+      "current_role": "postgres",
+      "transaction_read_only": "off"
+    }
+  ],
+  "storage": {
+    "method": "Documented Supabase SQL bucket creation",
+    "documentation": "https://supabase.com/docs/guides/storage/buckets/creating-buckets",
+    "created": [
+      {
+        "id": "debate-private-v3",
+        "name": "debate-private-v3",
+        "public": false,
+        "file_size_limit": 10485760,
+        "allowed_mime_types": [
+          "application/pdf",
+          "image/jpeg",
+          "image/png",
+          "text/csv"
+        ],
+        "created_at": "2026-09-09 18:32:11.573077+00"
+      }
+    ],
+    "independentReadback": [
+      {
+        "id": "debate-private-v3",
+        "name": "debate-private-v3",
+        "public": false,
+        "file_size_limit": 10485760,
+        "allowed_mime_types": [
+          "application/pdf",
+          "image/jpeg",
+          "image/png",
+          "text/csv"
+        ],
+        "objects": 0
+      }
+    ],
+    "configurationVerified": true,
+    "storageApiUploadDownloadVerified": false
+  },
+  "exactApplicationVerified": true,
+  "dmlRollbackVerified": true,
+  "privilegesVerified": true,
+  "studyPreserved": true,
+  "privateBucketVerified": true,
+  "privateBucket": "debate-private-v3",
+  "fullAcceptance": false,
+  "limits": [
+    "No production schema-installation rollback was executed.",
+    "No production account or debate fixture was created.",
+    "Worker, Pages, signed-in public route, upload/download, live media and full-duration rehearsal are separate evidence.",
+    "Existing provider plan and available media allowance remain unverified; provider media and mail remain disabled."
+  ]
+}

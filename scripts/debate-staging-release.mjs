@@ -252,6 +252,7 @@ export const CRITICAL_SOURCES = Object.freeze([
   'worker/study-room-core.mjs', 'worker/study-room-routes.mjs', 'worker/study-room-admission.mjs', 'worker/study-room-admission-schema-draft.sql',
   'supabase/migrations/20260909080139_debate_room_v3.sql', 'supabase/migrations/20260909080143_study_room_admission_v3.sql',
   '.github/workflows/debate-v3-staging.yml', 'scripts/debate-staging-release.mjs', 'scripts/test-debate-staging-release.mjs',
+  '.github/workflows/debate-v3-production-preview.yml', 'scripts/debate-production-preview.mjs', 'scripts/test-debate-production-preview.mjs', 'scripts/test-debate-entry.mjs',
   'scripts/test-debate-v3.mjs', 'scripts/build-pages-artifact.mjs', 'scripts/build-staging-artifact.mjs',
   'scripts/test-feature-decommission-boundary.mjs', 'scripts/test-debate-artifact.mjs', 'scripts/test-worker-cpu-limit-contract.mjs',
   'scripts/test-debate-client-state.mjs', 'scripts/test-debate-media.mjs', 'scripts/test-debate-dates.mjs',

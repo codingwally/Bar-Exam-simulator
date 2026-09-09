@@ -5,6 +5,8 @@
   const loadedStyles = new Map();
   const featurePromises = new Map();
   const prefetchedAssets = new Set();
+  const STYLE_ATTEMPT_TIMEOUT_MS = 10000;
+  let styleRetrySequence = 0;
 
   const manifests = Object.freeze({
     quorum: Object.freeze({
@@ -143,18 +145,63 @@
       loadedStyles.set(href, ready);
       return ready;
     }
-    const pending = new Promise((resolve, reject) => {
-      const link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = href;
-      link.dataset.ddFeatureAsset = 'style';
-      link.addEventListener('load', resolve, { once: true });
-      link.addEventListener('error', () => {
-        if (loadedStyles.get(href) === pending) loadedStyles.delete(href);
-        link.remove();
-        reject(new Error(`Unable to load ${href}`));
-      }, { once: true });
-      document.head.append(link);
+    // Register the shared promise before starting either attempt. Only styles
+    // are retried: retrying a script could execute feature initialization twice.
+    const pending = Promise.resolve().then(async () => {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        let requestHref = href;
+        if (attempt > 0) {
+          const retryUrl = new URL(href, location.href);
+          retryUrl.searchParams.set('_dd_style_retry', `${Date.now()}-${++styleRetrySequence}`);
+          requestHref = retryUrl.href;
+        }
+        try {
+          await new Promise((resolve, reject) => {
+            const link = document.createElement('link');
+            let settled = false;
+            let timer = null;
+            const finish = (error) => {
+              if (settled) return;
+              settled = true;
+              global.clearTimeout(timer);
+              link.removeEventListener('load', onLoad);
+              link.removeEventListener('error', onError);
+              if (error) {
+                link.remove();
+                reject(error);
+              } else {
+                resolve();
+              }
+            };
+            const onLoad = () => finish();
+            const onError = () => finish(new Error('Stylesheet request failed.'));
+            link.rel = 'stylesheet';
+            link.href = requestHref;
+            link.dataset.ddFeatureAsset = 'style';
+            link.addEventListener('load', onLoad, { once: true });
+            link.addEventListener('error', onError, { once: true });
+            timer = global.setTimeout(
+              () => finish(new Error('Stylesheet request timed out.')),
+              STYLE_ATTEMPT_TIMEOUT_MS,
+            );
+            try {
+              document.head.append(link);
+            } catch (error) {
+              finish(error);
+            }
+          });
+          return;
+        } catch (cause) {
+          if (attempt === 0) continue;
+          const error = new Error('This page could not finish loading. Please try again.');
+          error.asset = href;
+          error.cause = cause;
+          throw error;
+        }
+      }
+    }).catch((error) => {
+      if (loadedStyles.get(href) === pending) loadedStyles.delete(href);
+      throw error;
     });
     loadedStyles.set(href, pending);
     return pending;

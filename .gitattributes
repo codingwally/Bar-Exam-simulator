@@ -3,6 +3,9 @@
 *.jpg binary
 *.jpeg binary
 *.mp4 binary
+assets/vendor/supabase-2.49.8.umd.js -text
+assets/vendor/591.supabase.js -text
+assets/vendor/supabase-2.49.8.LICENSE.txt -text
 supabase/migrations/20260907130002_astra_late_payment_review.sql -text
 supabase/migrations/20260907133129_astra_149_binding_compatibility.sql -text
 supabase/migrations/20260907143119_astra_late_149_binding_reconciliation.sql -text

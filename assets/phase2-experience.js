@@ -11,6 +11,10 @@
     user: null,
     profile: null,
     initialized: false,
+    authInitialized: false,
+    authInitializationPromise: null,
+    authListenerRegistered: false,
+    authSdkRetryCount: 0,
     onboardingBusy: false,
     nativeView: null,
     previousFocus: null,
@@ -1050,10 +1054,19 @@
 
   async function signInWithGoogle() {
     if (state.authInFlight) return true;
-    if (!state.client) {
-      announceGoogleSignInStatus('Sign-in is temporarily unavailable. Please try again shortly.', 'error');
-      return false;
+    if (!state.authInitialized) {
+      if (!await initializeAuth()) {
+        announceGoogleSignInStatus('Sign-in is temporarily unavailable. Please try again shortly.', 'error');
+        return false;
+      }
+      // Bootstrap recovery may restore the existing session. It must not start
+      // another OAuth flow merely because the SDK was unavailable at startup.
+      if (state.session?.access_token) {
+        closeEntry();
+        return true;
+      }
     }
+    if (state.authInFlight) return true;
     if (!navigator.onLine) {
       announceGoogleSignInStatus('You appear to be offline. Reconnect and try again.', 'error');
       return false;
@@ -3518,27 +3531,85 @@
     }
   }
 
+  function recoverAuthSdk() {
+    if (global.supabase?.createClient) return Promise.resolve(true);
+    return new Promise((resolve) => {
+      const script = document.createElement('script');
+      let settled = false;
+      const finish = (loaded) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        script.onload = null;
+        script.onerror = null;
+        script.remove();
+        resolve(loaded && Boolean(global.supabase?.createClient));
+      };
+      const timeout = setTimeout(() => finish(false), 6_000);
+      script.async = true;
+      script.src = `/assets/vendor/supabase-2.49.8.umd.js?retry=auth-bootstrap-20260909-1&attempt=${Date.now()}-${++state.authSdkRetryCount}`;
+      script.onload = () => finish(true);
+      script.onerror = () => finish(false);
+      try {
+        document.head.appendChild(script);
+      } catch {
+        finish(false);
+      }
+    });
+  }
+
   async function initializeAuth() {
-    if (!global.supabase?.createClient) {
-      syncAuthUi();
-      return;
+    if (state.authInitialized) return true;
+    if (!state.authInitializationPromise) {
+      const pending = (async () => {
+        // An early sign-in click must obey the same maintenance boundary as
+        // ordinary startup. Only a missing SDK gets one same-origin request.
+        await waitForMaintenanceAccess();
+        if (!state.client && !await recoverAuthSdk()) {
+          syncAuthUi();
+          return false;
+        }
+        await initializeAuthClient();
+        state.authInitialized = true;
+        return true;
+      })().catch(() => false);
+      state.authInitializationPromise = pending;
+      pending.then(() => {
+        if (state.authInitializationPromise === pending) state.authInitializationPromise = null;
+      });
     }
-    const authStorage = global.DueDiligenceAuthSessionStorage?.prepare?.(config.supabase.url)
-      || global.localStorage
-      || global.sessionStorage;
-    state.client = global.supabase.createClient(
-      config.supabase.url,
-      config.supabase.publishableKey,
-      {
-        auth: {
-          flowType: 'pkce',
-          persistSession: true,
-          storage: authStorage,
-          autoRefreshToken: true,
-          detectSessionInUrl: true,
+    let timeout;
+    try {
+      // Bound the UI wait, not the SDK operation: a late completion still owns
+      // this one client, and a retry cannot duplicate its session read/listener.
+      return await Promise.race([
+        state.authInitializationPromise,
+        new Promise((resolve) => { timeout = setTimeout(() => resolve(false), 8_000); }),
+      ]);
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  async function initializeAuthClient() {
+    if (!state.client) {
+      const authStorage = global.DueDiligenceAuthSessionStorage?.prepare?.(config.supabase.url)
+        || global.localStorage
+        || global.sessionStorage;
+      state.client = global.supabase.createClient(
+        config.supabase.url,
+        config.supabase.publishableKey,
+        {
+          auth: {
+            flowType: 'pkce',
+            persistSession: true,
+            storage: authStorage,
+            autoRefreshToken: true,
+            detectSessionInUrl: true,
+          },
         },
-      },
-    );
+      );
+    }
     const { data, error: sessionError } = await state.client.auth.getSession();
     state.session = sessionError ? null : data?.session || null;
     state.user = state.session?.user || null;
@@ -3553,7 +3624,10 @@
       resetGoogleSignIn('Google sign-in was not completed. You can try again now.', 'error');
     }
 
-    state.client.auth.onAuthStateChange(handleAuthStateChange);
+    if (!state.authListenerRegistered) {
+      state.client.auth.onAuthStateChange(handleAuthStateChange);
+      state.authListenerRegistered = true;
+    }
 
     if (state.user) await loadUserState();
     if (new URLSearchParams(location.search).has('auth')

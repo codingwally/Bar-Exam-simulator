@@ -20,9 +20,19 @@ on:
         description: "Exact reviewed frontend release source SHA"
         required: true
         type: string
+      validation_run_id:
+        description: "Successful mandatory pull-request validation for the exact merged candidate tree"
+        required: true
+        type: string
+      staging_preview_url:
+        description: "Exact isolated asset-recovery static preview URL; not an authenticated backend smoke"
+        required: true
+        type: string
 
 permissions:
+  actions: read
   contents: read
+  pull-requests: read
   pages: write
   id-token: write
 
@@ -55,12 +65,15 @@ jobs:
           set -euo pipefail
           test "$CONFIRM_PRODUCTION" = "true"
           test -n "${APPROVAL_REFERENCE//[[:space:]]/}"
+          [[ "$EXPECTED_BASE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$EXPECTED_SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]
           test "$GITHUB_SHA" = "$EXPECTED_SOURCE_SHA"
           git cat-file -e "$EXPECTED_BASE_SHA^{commit}"
           git merge-base --is-ancestor "$EXPECTED_BASE_SHA" "$EXPECTED_SOURCE_SHA"
 
           allowed='^(\.github/workflows/deploy-pages-only\.yml|assets/feature-loader\.js|assets/icons/(community/image|navigation/(circle-check|cloud-upload|hand|mic|monitor-up|pin|settings|shield-check))\.svg|assets/lex-forum\.css|assets/lex-forum\.js|assets/payments/(bpi-instapay-199-qr\.png|bpi-mark\.png)|assets/pedro-navigation\.js|assets/phase2-experience\.js|assets/phase4-experience\.js|assets/phase2\.css|assets/pricing-checkout-safety\.js|assets/pricing-renderer\.(css|js)|assets/private-beta-landing\.js|assets/study-room-backgrounds\.js|assets/study-room-live\.(css|js)|assets/study-room-preview\.(css|js)|assets/study-room/(dimasalang-library|participant-2-tropical|participant-3-bedroom|participant-4-condo|virtual-background-due-diligence-branded|virtual-background-due-diligence-polished-20260908)\.webp|assets/subscription-cta\.css|assets/subscription-cta\.js|assets/vendor/mediapipe/(LICENSE|PROVENANCE)\.txt|assets/vendor/mediapipe/selfie_segmenter-float16-2023-05-07\.tflite|design-qa\.md|index\.html|scripts/build-pages-artifact\.mjs|scripts/test-approved-renovation-shell\.mjs|scripts/test-auth-session-persistence\.mjs|scripts/test-bar-forecast-frontend\.mjs|scripts/test-design-correction-release\.mjs|scripts/test-home-post-collapse\.mjs|scripts/test-lex-forum\.mjs|scripts/test-login-loop-p0\.mjs|scripts/test-mobile-responsive-hotfix\.mjs|scripts/test-pages-artifact\.mjs|scripts/test-pedro-navigation\.mjs|scripts/test-pedro-release2-integration\.mjs|scripts/test-phase4-release1\.mjs|scripts/test-pricing-checkout-safety\.mjs|scripts/test-public-home-responsive-css\.mjs|scripts/test-public-release1-reliability\.mjs|scripts/test-quorum\.mjs|scripts/test-september-pricing-(sql|ui)-contract\.mjs|scripts/test-study-room-(always-open|background-picker|backgrounds|catalog-sql|hotfix-behavior|live|preview)\.mjs|scripts/test-syllabus-review-reveal-contract\.mjs|service-worker\.js|study-room/index\.html)$'
-          unexpected="$(git diff --name-only "$EXPECTED_BASE_SHA..$EXPECTED_SOURCE_SHA" | grep -Ev "$allowed" || true)"
+          recovery_allowed='^(\.gitattributes|admin/index\.html|admin-pulse/index\.html|examination-room/index\.html|assets/vendor/(supabase-2\.49\.8\.(umd\.js|LICENSE\.txt|PROVENANCE\.txt)|591\.supabase\.js)|scripts/test-(phase2-contract|unlimited-feature-access|forecast-poll-rate-contract)\.mjs)$'
+          unexpected="$(git diff --name-only "$EXPECTED_BASE_SHA..$EXPECTED_SOURCE_SHA" | grep -Ev "$allowed|$recovery_allowed" || true)"
           if [[ -n "$unexpected" ]]; then
             echo "The frontend-only release contains files outside the approved isolation boundary:" >&2
             printf '%s\n' "$unexpected" >&2
@@ -84,9 +97,11 @@ jobs:
           node --check assets/study-room-live.js
           node --check assets/study-room-preview.js
           node --check assets/phase2-experience.js
+          node --check assets/feature-loader.js
           node --check assets/phase4-experience.js
           node --check assets/private-beta-landing.js
           node scripts/test-auth-session-persistence.mjs
+          node scripts/test-phase2-contract.mjs
           node scripts/test-phase4-release1.mjs
           node scripts/test-bar-forecast-frontend.mjs
           node scripts/test-study-room-backgrounds.mjs
@@ -109,6 +124,85 @@ jobs:
 
       - name: Build and verify the sanitized Pages artifact
         run: node scripts/test-pages-artifact.mjs
+
+      - name: Require exact main, mandatory validation, live baseline, and static preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_BASE_SHA: ${{ inputs.expected_base_sha }}
+          EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha }}
+          VALIDATION_RUN_ID: ${{ inputs.validation_run_id }}
+          STAGING_PREVIEW_URL: ${{ inputs.staging_preview_url }}
+        run: |
+          node --input-type=module <<'NODE'
+          // BEGIN asset-recovery-source-gate
+          import assert from 'node:assert/strict';
+          import { execFileSync } from 'node:child_process';
+          import { createHash } from 'node:crypto';
+          import { readFileSync } from 'node:fs';
+          const env = process.env;
+          const git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim();
+          const api = (route) => JSON.parse(execFileSync('gh', ['api', `repos/${env.GITHUB_REPOSITORY}/${route}`], { encoding: 'utf8' }));
+          const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
+          assert.equal(env.GITHUB_REPOSITORY, 'codingwally/Bar-Exam-simulator');
+          assert.equal(env.GITHUB_REF, 'refs/heads/main');
+          assert.notEqual(env.GITHUB_ACTOR, 'dependabot[bot]');
+          assert.match(env.EXPECTED_BASE_SHA, /^[a-f0-9]{40}$/u);
+          assert.match(env.EXPECTED_SOURCE_SHA, /^[a-f0-9]{40}$/u);
+          assert.match(env.VALIDATION_RUN_ID, /^[1-9][0-9]{0,19}$/u);
+          assert.equal(env.EXPECTED_SOURCE_SHA, env.GITHUB_SHA);
+          assert.equal(git('rev-parse', 'HEAD'), env.GITHUB_SHA);
+          assert.equal(api('git/ref/heads/main').object.sha, env.GITHUB_SHA);
+          const run = api(`actions/runs/${env.VALIDATION_RUN_ID}`);
+          assert.equal(run.event, 'pull_request');
+          assert.equal(run.path, '.github/workflows/validate-mandatory-early-access.yml');
+          assert.equal(run.status, 'completed');
+          assert.equal(run.conclusion, 'success');
+          assert.match(run.head_sha, /^[a-f0-9]{40}$/u);
+          let number = run.pull_requests?.[0]?.number;
+          if (!number) {
+            const candidates = api(`commits/${run.head_sha}/pulls`).filter(pr => pr.base.ref === 'main'
+              && pr.head.sha === run.head_sha && pr.head.repo.full_name === env.GITHUB_REPOSITORY);
+            assert.equal(candidates.length, 1); number = candidates[0].number;
+          }
+          assert.ok(Number.isSafeInteger(number) && number > 0);
+          const pr = api(`pulls/${number}`);
+          assert.equal(pr.base.ref, 'main');
+          assert.equal(pr.base.repo.full_name, env.GITHUB_REPOSITORY);
+          assert.equal(pr.head.repo.full_name, env.GITHUB_REPOSITORY);
+          assert.equal(pr.head.sha, run.head_sha);
+          assert.equal(pr.merged, true);
+          git('fetch', '--no-tags', 'origin', `pull/${number}/head:refs/remotes/origin/asset-recovery-validation-head`);
+          assert.equal(git('rev-parse', 'refs/remotes/origin/asset-recovery-validation-head'), run.head_sha);
+          assert.equal(git('rev-parse', `${run.head_sha}^{tree}`), git('rev-parse', `${env.GITHUB_SHA}^{tree}`));
+          git('diff', '--quiet', run.head_sha, env.GITHUB_SHA, '--', '.');
+          assert.equal(env.STAGING_PREVIEW_URL, 'https://duediligence-asset-recovery-preview.wallyesteban1993.workers.dev');
+          // Public GETs deliberately carry no GitHub/environment credentials.
+          const publicBytes = async (origin, file) => {
+            const publicPath = file.replace(/index\.html$/u, '');
+            const response = await fetch(`${origin}/${publicPath}?release=${env.GITHUB_SHA}`, {
+              redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(20_000),
+            });
+            assert.equal(response.status, 200, `Public asset unavailable: ${file}`);
+            return Buffer.from(await response.arrayBuffer());
+          };
+          const marker = '.well-known/duediligence-release.txt';
+          assert.equal((await publicBytes('https://duediligence.ph', marker)).toString().trim(), env.EXPECTED_BASE_SHA);
+          assert.equal((await publicBytes(env.STAGING_PREVIEW_URL, marker)).toString().trim(), env.GITHUB_SHA);
+          const criticalAssets = [
+            'index.html', 'admin/index.html', 'admin-pulse/index.html',
+            'study-room/index.html', 'examination-room/index.html',
+            'assets/phase2-experience.js', 'assets/feature-loader.js', 'service-worker.js',
+            'assets/vendor/supabase-2.49.8.umd.js', 'assets/vendor/591.supabase.js',
+            'assets/examinations.css',
+          ];
+          await Promise.all(criticalAssets.map(async file => {
+            const expected = sha256(execFileSync('git', ['show', `${env.GITHUB_SHA}:${file}`]));
+            assert.equal(sha256(readFileSync(`.pages-dist/${file}`)), expected, `Built asset differs: ${file}`);
+            assert.equal(sha256(await publicBytes(env.STAGING_PREVIEW_URL, file)), expected, `Static preview differs: ${file}`);
+          }));
+          console.log(`Exact merged validation, live baseline and static preview verified (${criticalAssets.length} assets). Authenticated backend behavior is not asserted.`);
+          // END asset-recovery-source-gate
+          NODE
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
@@ -228,3 +322,50 @@ jobs:
             sleep 5
           done
           test "$verified" = "true"
+
+      - name: Verify exact critical recovery assets on the canonical origin
+        run: |
+          node --input-type=module <<'NODE'
+          // BEGIN asset-recovery-live-gate
+          import assert from 'node:assert/strict';
+          import { execFileSync } from 'node:child_process';
+          import { createHash } from 'node:crypto';
+          import { setTimeout as pause } from 'node:timers/promises';
+          const sha = process.env.GITHUB_SHA;
+          assert.match(sha, /^[a-f0-9]{40}$/u);
+          const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
+          const criticalAssets = [
+            'index.html', 'admin/index.html', 'admin-pulse/index.html',
+            'study-room/index.html', 'examination-room/index.html',
+            'assets/phase2-experience.js', 'assets/feature-loader.js', 'service-worker.js',
+            'assets/vendor/supabase-2.49.8.umd.js', 'assets/vendor/591.supabase.js',
+            'assets/examinations.css',
+          ];
+          const expectedHashes = new Map(criticalAssets.map(file => [file,
+            sha256(execFileSync('git', ['show', `${sha}:${file}`]))]));
+          const publicBytes = async file => {
+            const publicPath = file.replace(/index\.html$/u, '');
+            const response = await fetch(`https://duediligence.ph/${publicPath}?release=${sha}`, {
+              redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(20_000),
+            });
+            assert.equal(response.status, 200, `Public asset unavailable: ${file}`);
+            return Buffer.from(await response.arrayBuffer());
+          };
+          let verified = false;
+          for (let attempt = 0; attempt < 12; attempt += 1) {
+            try {
+              assert.equal((await publicBytes('.well-known/duediligence-release.txt')).toString().trim(), sha);
+              await Promise.all(criticalAssets.map(async file => {
+                assert.equal(sha256(await publicBytes(file)), expectedHashes.get(file), `Live asset differs: ${file}`);
+              }));
+              verified = true;
+              break;
+            } catch (error) {
+              if (attempt === 11) throw error;
+              await pause(5_000);
+            }
+          }
+          assert.equal(verified, true);
+          console.log(`Canonical release marker and ${criticalAssets.length} critical assets match exact Git blobs. No authenticated backend smoke was performed.`);
+          // END asset-recovery-live-gate
+          NODE

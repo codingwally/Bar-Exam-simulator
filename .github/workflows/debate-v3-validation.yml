@@ -15,6 +15,7 @@ on:
       - 'worker/wrangler.toml'
       - 'worker/wrangler.staging.toml'
       - 'scripts/*debate*'
+      - 'scripts/fixtures/debate-delivery-workerd-*.mjs'
       - 'scripts/*study-room*'
       - 'scripts/build-pages-artifact.mjs'
       - 'scripts/test-worker-cpu-limit-contract.mjs'
@@ -83,12 +84,32 @@ jobs:
         run: |
           set -euo pipefail
           sudo -n unshare --net -- env -i PATH="$PATH" DEBATE_HOST_NETWORK_NAMESPACE="$(readlink /proc/self/ns/net)" node scripts/test-debate-wrangler-metadata.mjs
+      - name: Install existing locked adapter dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+      - name: Execute the unchanged delivery adapter in isolated workerd with fake Storage
+        shell: bash
+        run: |
+          set -euo pipefail
+          task_host_namespace="$(readlink /proc/self/ns/net)"
+          sudo -n unshare --net -- sh -c '
+            set -eu
+            ip link set lo up
+            exec env -i PATH="$1" DEBATE_HOST_NETWORK_NAMESPACE="$2" node scripts/test-debate-delivery-workerd.mjs
+          ' sh "$PATH" "$task_host_namespace"
       - name: Preserve only sanitized metadata verification
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: debate-v3-wrangler-metadata
           path: artifacts/debate-local-rehearsal/wrangler-metadata/report.json
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Preserve only sanitized isolated delivery-runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debate-v3-delivery-workerd
+          path: artifacts/debate-local-rehearsal/delivery-workerd/report.json
           if-no-files-found: warn
           retention-days: 14
   local-validation:

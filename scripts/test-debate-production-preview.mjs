@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { TARGET, RELEASE_FLAGS, MIGRATIONS, OWN_SOURCES, parseProductionBase, sanitizeScript,
   validateBaseAgainstRemote, buildProductionConfig, validatePreservation, validateDatabaseProof,
   validateStorageEvidence, validateRun, validateStagingDriver, validateSuite,
-  validateSerializedMetadata, validateExternalDatabaseRecord, validateExternalStorageRecord, captureProduction } from './debate-production-preview.mjs';
+  validateSerializedMetadata, summarizeSerializedBindings, validateExternalDatabaseRecord, validateExternalStorageRecord, captureProduction } from './debate-production-preview.mjs';
 import { hash, CRITICAL_SOURCES, REQUIRED_SUITE_GROUPS } from './debate-staging-release.mjs';
 
 const base = parseProductionBase(await readFile(new URL('../worker/wrangler.toml',import.meta.url),'utf8'));
@@ -97,13 +97,52 @@ test('actual serialized metadata must preserve complete observations and only th
     const metadata={compatibility_date:b.date,compatibility_flags:b.flags,observability:structuredClone(logs),keep_bindings:['secret_text','plain_text','secret_key','json'],
       ...(b.region ? {placement:{mode:'targeted',region:b.region}} : {}),
       bindings:b.alias ? [{name:'DUE_DILIGENCE_APPLICATION',type:'service',service:TARGET.worker}] :
-        Object.entries({...b.vars,...additions}).map(([name,text])=>({name,type:'plain_text',text}))};
+        [...['LIVEKIT_URL','LIVEKIT_API_KEY','LIVEKIT_API_SECRET'].map(name=>({name,type:'inherit'})),
+          ...Object.entries({...b.vars,...additions}).map(([name,text])=>({name,type:'plain_text',text}))]};
     assert.equal(validateSerializedMetadata(metadata,b,s,additions),true);
     for(const mutate of [m=>m.observability.logs.persist=false,m=>m.keep_bindings=[],m=>m.cache_options={enabled:false},
       m=>m.bindings.push({name:'UNREVIEWED',type:'plain_text',text:'new'})]) {
       const changed=structuredClone(metadata);mutate(changed);assert.throws(()=>validateSerializedMetadata(changed,b,s,additions));
     }
   }
+});
+test('only the three currently declared and preexisting secret_text bindings may be inherited',()=>{
+  const s=state(base), metadata={compatibility_date:base.date,compatibility_flags:base.flags,observability:structuredClone(logs),
+    keep_bindings:['secret_text','plain_text','secret_key','json'],placement:{mode:'targeted',region:base.region},
+    bindings:[...['LIVEKIT_URL','LIVEKIT_API_KEY','LIVEKIT_API_SECRET'].map(name=>({name,type:'inherit'})),
+      ...Object.entries({...base.vars,...RELEASE_FLAGS}).map(([name,text])=>({name,type:'plain_text',text}))]};
+  assert.equal(validateSerializedMetadata(metadata,base,s,RELEASE_FLAGS),true);
+  for(const mutate of [m=>m.bindings.shift(),m=>m.bindings.push({...m.bindings[0]}),
+    m=>m.bindings[0].name='UNREVIEWED_SECRET',m=>m.bindings[0].text='secret-canary',
+    m=>m.bindings[0].value='secret-canary',m=>m.bindings[0].unexpected=true,
+    m=>m.bindings[0].type='secret_text']) {
+    const changed=structuredClone(metadata);mutate(changed);assert.throws(()=>validateSerializedMetadata(changed,base,s,RELEASE_FLAGS));
+  }
+  for(const mutate of [r=>r.bindings=r.bindings.filter(b=>b.name!=='LIVEKIT_URL'),
+    r=>r.bindings.find(b=>b.name==='LIVEKIT_URL').type='plain_text',
+    r=>r.bindings.push({name:'LIVEKIT_URL',type:'secret_text'})]) {
+    const changed=structuredClone(s);mutate(changed);error(()=>validateSerializedMetadata(metadata,base,changed,RELEASE_FLAGS),'SERIALIZED_INHERITED_SECRET_CHANGED');
+  }
+  const aliasMetadata={...metadata,compatibility_flags:alias.flags,placement:undefined,bindings:[
+    {name:'DUE_DILIGENCE_APPLICATION',type:'service',service:TARGET.worker},{name:'LIVEKIT_URL',type:'inherit'}]};
+  error(()=>validateSerializedMetadata(aliasMetadata,alias,state(alias),{}),'SERIALIZED_INHERITED_SECRET_CHANGED');
+});
+test('secret declaration drift is rejected before configuration generation',()=>{
+  for(const source of [base.source.replace('"LIVEKIT_URL", ',''),base.source.replace('"LIVEKIT_URL"','"NEW_SECRET"'),
+    base.source.replace('"LIVEKIT_URL"','"LIVEKIT_URL", "LIVEKIT_URL"'),base.source.replace('[secrets]','[other]'),
+    base.source.replace('[secrets]','[secrets]\nextra = "unreviewed"')]) {
+    error(()=>parseProductionBase(source),'REQUIRED_SECRET_DECLARATION_CHANGED');
+  }
+  error(()=>parseProductionBase(alias.source+'\n[secrets]\nrequired = ["LIVEKIT_URL"]\n',true),'REQUIRED_SECRET_DECLARATION_CHANGED');
+});
+test('pre-validation binding diagnostics retain identifiers and field names, never values',()=>{
+  const diagnostic=summarizeSerializedBindings({bindings:[{name:'LIVEKIT_URL',type:'inherit',value:'private-canary-secret'},
+    {name:'SOME_VAR',type:'plain_text',text:'private-canary-text'},
+    {name:'https://private.example/token',type:'invalid\ntoken',secret:'private-canary-value'}]});
+  assert.deepEqual(diagnostic.bindings[0],{name:'LIVEKIT_URL',type:'inherit',fields:['name','type','value']});
+  assert.deepEqual(diagnostic.bindings[2],{name:'[invalid]',type:'[invalid]',fields:['name','secret','type']});
+  assert.equal(diagnostic.valuesStored,false);assert.doesNotMatch(JSON.stringify(diagnostic),/private-canary|private\.example/);
+  assert.equal(summarizeSerializedBindings({bindings:Array.from({length:201},()=>({name:'BOUND',type:'inherit'}))}).bindings.length,200);
 });
 test('production DB proof separates actual application, transaction rollback and preserved Study evidence',()=>{
   const hashes=Object.fromEntries(MIGRATIONS.map(file=>[file,digest]));

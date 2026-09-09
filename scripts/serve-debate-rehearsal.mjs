@@ -17,7 +17,8 @@ export const REHEARSAL_ACTORS = Object.freeze(labels.map((label, index) => Objec
   displayName: `${label} (local rehearsal)`, label, email: `debate-local-${index + 1}@example.test`, verified: true,
 })));
 const RPC_NAMES = new Set(['debate_v3_read','debate_v3_list','debate_v3_receipt','debate_v3_rate_limit','debate_v3_commit','debate_v3_claim_jobs','debate_v3_finish_job','debate_v3_read_job','debate_v3_active_events','debate_v3_discover','debate_v3_reserve_upload','debate_v3_read_upload','debate_v3_complete_upload','debate_v3_fail_upload','debate_v3_expired_jobs']);
-const SOURCE_FILES = ['worker/debate-sanctions.mjs','worker/debate-domain.mjs','worker/debate-tournament.mjs','worker/debate-fixtures.mjs','worker/debate-service.mjs','worker/debate-store.mjs','worker/debate-routes.mjs','worker/debate-schema-draft.sql','worker/debate-documents.mjs','assets/debate-room.js','assets/debate-media.js','assets/debate-dates.js','assets/debate-room.css','debate-room/index.html','scripts/serve-debate-rehearsal.mjs','scripts/test-debate-organizer-rehearsal.mjs'];
+const FONT_FILES = ['fraunces-v38-latin-ext.woff2','fraunces-v38-latin.woff2','inter-v20-latin-ext.woff2','inter-v20-latin.woff2'].map(file => 'assets/vendor/debate-fonts/' + file);
+const SOURCE_FILES = ['worker/debate-sanctions.mjs','worker/debate-domain.mjs','worker/debate-tournament.mjs','worker/debate-fixtures.mjs','worker/debate-service.mjs','worker/debate-store.mjs','worker/debate-routes.mjs','worker/debate-schema-draft.sql','worker/debate-documents.mjs','assets/debate-room.js','assets/debate-media.js','assets/debate-dates.js','assets/debate-room.css','debate-room/index.html','scripts/serve-debate-rehearsal.mjs','scripts/test-debate-organizer-rehearsal.mjs', ...FONT_FILES];
 const fail = (code, message) => { throw new DebateServiceError(code, message); };
 const escape = value => String(value).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 const isInside = (base, target) => target === base || target.startsWith(`${base}${path.sep}`);
@@ -105,14 +106,16 @@ async function buildLocalSite(runtime) {
   const esbuild = requireWorker('esbuild');
   await esbuild.build({ entryPoints: [path.join(ROOT, 'assets/debate-room.js')], outfile: path.join(site, 'assets/debate-room.js'), bundle: true, format: 'esm', platform: 'browser', target: 'es2022', logLevel: 'silent',
     plugins: [{ name: 'local-domain-source', setup(build) { build.onResolve({ filter: /(?:^|\/)debate-domain\.js$/ }, () => ({ path: path.join(ROOT, 'worker/debate-domain.mjs') })); } }], });
-  const css = (await readFile(path.join(ROOT, 'assets/debate-room.css'), 'utf8')).replace(/@import\s+url\([^)]*\)\s*;/g, '');
+  const css = await readFile(path.join(ROOT, 'assets/debate-room.css'), 'utf8');
   await writeFile(path.join(site, 'assets/debate-room.css'), css);
+  await mkdir(path.join(site, 'assets/vendor/debate-fonts'), { recursive: true });
+  for (const file of FONT_FILES) await copyFile(path.join(ROOT, file), path.join(site, file));
   for (const filename of ['icon-192.png','favicon.ico']) await copyFile(path.join(ROOT, 'assets/brand', filename), path.join(site, 'assets/brand', filename));
   let html = await readFile(path.join(ROOT, 'debate-room/index.html'), 'utf8');
   // Local actor auth and disconnected media need no SDK/CDN/runtime-secret configuration.
   html = html.replace(/<script\b[^>]*src="[^"]*(?:supabase|phase2-config|auth-session-storage|vendor\/livekit|study-room-backgrounds)[^"]*"[^>]*><\/script>/g, '');
   html = html.replace('</head>', `<script>globalThis.DEBATE_LOCAL_REHEARSAL=true;</script></head>`);
-  const toolbar = `<aside id="local-rehearsal-tools" aria-label="Local software rehearsal controls" style="padding:12px 18px;border-bottom:2px solid #c5a059;background:#102c44;display:flex;flex-wrap:wrap;gap:12px;align-items:center;font:14px sans-serif"><strong>LOCAL SOFTWARE REHEARSAL</strong><span>No media, real email or provider traffic. Local font fallback.</span><label style="margin:0">Act as <select id="local-actor" style="max-width:280px">${REHEARSAL_ACTORS.map(actor => `<option value="${actor.id}">${escape(actor.label)}</option>`).join('')}</select></label><button id="local-setup" type="button">Prepare a real rehearsal event</button><button id="local-minute" type="button">Advance simulated time 1 minute</button><span id="local-clock-label"></span><span id="local-tool-status" role="status"></span></aside>
+  const toolbar = `<aside id="local-rehearsal-tools" aria-label="Local software rehearsal controls" style="padding:12px 18px;border-bottom:2px solid #c5a059;background:#102c44;display:flex;flex-wrap:wrap;gap:12px;align-items:center;font:14px sans-serif"><strong>LOCAL SOFTWARE REHEARSAL</strong><span>No media, real email or provider traffic. Same local font files as staging.</span><label style="margin:0">Act as <select id="local-actor" style="max-width:280px">${REHEARSAL_ACTORS.map(actor => `<option value="${actor.id}">${escape(actor.label)}</option>`).join('')}</select></label><button id="local-setup" type="button">Prepare a real rehearsal event</button><button id="local-minute" type="button">Advance simulated time 1 minute</button><span id="local-clock-label"></span><span id="local-tool-status" role="status"></span></aside>
   <script>
   (async()=>{const status=document.getElementById('local-tool-status'),selector=document.getElementById('local-actor');
     const call=async(path,body)=>{const r=await fetch(path,{method:body?'POST':'GET',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined,cache:'no-store'});const j=await r.json();if(!r.ok)throw new Error(j.error?.message||'Local action failed');return j;};
@@ -127,6 +130,7 @@ async function buildLocalSite(runtime) {
     ['/debate-room/', 'debate-room/index.html'], ['/debate-room/index.html', 'debate-room/index.html'],
     ['/assets/debate-room.js', 'assets/debate-room.js'], ['/assets/debate-room.css', 'assets/debate-room.css'],
     ['/assets/brand/icon-192.png', 'assets/brand/icon-192.png'], ['/assets/brand/favicon.ico', 'assets/brand/favicon.ico'],
+    ...FONT_FILES.map(file => ['/' + file, file]),
   ]) };
 }
 
@@ -193,7 +197,7 @@ export async function startLocalDebateServer({ port = 4178, ...options } = {}) {
         if(pathname==='/'&&request.method==='GET'){response.writeHead(302,{...headers,Location:'/debate-room/'});return response.end();}
         const relative=allowed.get(pathname);if(!relative||!['GET','HEAD'].includes(request.method))return json(response,{ok:false,error:{code:'NOT_FOUND',message:'Only the built Debate Room is served here.'}},404);
         const target=path.resolve(site,relative);if(!isInside(site,await realpath(target)))throw new Error('Unsafe static path.');
-        const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.png':'image/png','.ico':'image/x-icon'}[path.extname(target)];
+        const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.png':'image/png','.ico':'image/x-icon','.woff2':'font/woff2'}[path.extname(target)];
         response.writeHead(200,{...headers,'Content-Type':mime});response.end(request.method==='HEAD'?undefined:await readFile(target));
       }catch(error){await runtime.log({kind:'HTTP_REJECTED',code:error.code||'UNEXPECTED_ERROR'});json(response,{ok:false,error:{code:error.code||'LOCAL_SERVER_ERROR',message:error.code?error.message:'The local rehearsal request failed; saved local state remains available.'}},error.code==='AUTH_REQUIRED'?401:/FORBIDDEN|NOT_MEMBER|ORIGIN/.test(error.code||'')?403:400);}
     });

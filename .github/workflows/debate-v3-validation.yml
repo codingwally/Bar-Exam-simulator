@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - 'assets/debate-*'
+      - 'assets/vendor/debate-fonts/**'
       - 'assets/study-room-*'
       - 'debate-room/**'
       - 'study-room/**'
@@ -18,6 +19,7 @@ on:
       - 'scripts/build-pages-artifact.mjs'
       - 'scripts/test-worker-cpu-limit-contract.mjs'
       - 'supabase/migrations/20260909*'
+      - 'supabase/staging/debate-hosted-cleanup.sql'
       - 'index.html'
       - '.github/workflows/debate-v3-validation.yml'
       - '.github/workflows/debate-v3-capture.yml'
@@ -27,6 +29,43 @@ permissions:
   contents: read
 
 jobs:
+  hosted-cleanup-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    services:
+      postgres:
+        image: postgres:17.6
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: debate_ci_only
+          POSTGRES_DB: debate_cleanup_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d debate_cleanup_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify staging-only cleanup on an isolated PostgreSQL 17.6 database
+        env:
+          DEBATE_HOSTED_SQL_CI: '1'
+          PGHOST: 127.0.0.1
+          PGPORT: '5432'
+          PGUSER: postgres
+          PGDATABASE: debate_cleanup_ci
+          PGPASSWORD: debate_ci_only
+        run: node scripts/test-debate-hosted-atomic-cleanup.mjs
+      - name: Preserve native cleanup evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debate-v3-native-cleanup-evidence
+          path: artifacts/debate-local-rehearsal/hosted-atomic-cleanup-ci/report.json
+          if-no-files-found: warn
+          retention-days: 14
   wrangler-metadata:
     runs-on: ubuntu-latest
     timeout-minutes: 5

@@ -1,0 +1,215 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS_ACTUAL_STAGING_ASSETS_AND_ANONYMOUS_BOUNDARIES_ONLY",
+  "observedAt": "2026-09-09T12:50:41.162Z",
+  "target": {
+    "worker": "duediligence-examinations-staging",
+    "origin": "https://duediligence-examinations-staging.wallyesteban1993.workers.dev",
+    "project": "hlzqmreeoghbldnhlybr"
+  },
+  "candidateSha": "f0c4d6be4203d0a3688521694145d86a0462f2a4",
+  "deploymentRunId": "34352333268",
+  "deployedVersionId": "1be1d9c5-af54-4f89-b48c-d941968849ab",
+  "manifestSha256": "df56d234c0a445dd704aeb012f447cd6a7c3fa646218f9bbe95c8dedebd0ecd7",
+  "method": "GET",
+  "credentialsUsed": false,
+  "assets": [
+    {
+      "file": "index.html",
+      "pathname": "/",
+      "status": 200,
+      "expectedSha256": "d0c18888e5424b6113b30950466304fe6bfcca4089610dba1b1e8be01bf81b19",
+      "actualSha256": "d0c18888e5424b6113b30950466304fe6bfcca4089610dba1b1e8be01bf81b19",
+      "matched": true
+    },
+    {
+      "file": "debate-room/index.html",
+      "pathname": "/debate-room/",
+      "status": 200,
+      "expectedSha256": "b7722b53d25db83d381aea95480031b481522ce46cb7e29f7fca431dd02d647e",
+      "actualSha256": "b7722b53d25db83d381aea95480031b481522ce46cb7e29f7fca431dd02d647e",
+      "matched": true
+    },
+    {
+      "file": "study-room/index.html",
+      "pathname": "/study-room/",
+      "status": 200,
+      "expectedSha256": "54c96a2eff695deacd935fad05cc0d44413c4e7144adcd4c44e40f84f3c31bc8",
+      "actualSha256": "54c96a2eff695deacd935fad05cc0d44413c4e7144adcd4c44e40f84f3c31bc8",
+      "matched": true
+    },
+    {
+      "file": "assets/debate-room.js",
+      "pathname": "/assets/debate-room.js",
+      "status": 200,
+      "expectedSha256": "1c1c245f2d23f12e4f546ae33c57dc5613b927fd6417c157de6ab992cc4eed6e",
+      "actualSha256": "1c1c245f2d23f12e4f546ae33c57dc5613b927fd6417c157de6ab992cc4eed6e",
+      "matched": true
+    },
+    {
+      "file": "assets/debate-domain.js",
+      "pathname": "/assets/debate-domain.js",
+      "status": 200,
+      "expectedSha256": "a024c94b56e708ce395d2bef8e19566cfac69719a8a580637819ff4b8b1707bc",
+      "actualSha256": "a024c94b56e708ce395d2bef8e19566cfac69719a8a580637819ff4b8b1707bc",
+      "matched": true
+    },
+    {
+      "file": "assets/debate-sanctions.js",
+      "pathname": "/assets/debate-sanctions.js",
+      "status": 200,
+      "expectedSha256": "f43af5803e097b26836b217086d3e6d93c6e769c0867a2aaaeb6ef05f642119b",
+      "actualSha256": "f43af5803e097b26836b217086d3e6d93c6e769c0867a2aaaeb6ef05f642119b",
+      "matched": true
+    },
+    {
+      "file": "assets/debate-media.js",
+      "pathname": "/assets/debate-media.js",
+      "status": 200,
+      "expectedSha256": "ed33b1126087c531423840fb241afb9e95682bcfcd7c8ec8caafb8ae142593b2",
+      "actualSha256": "ed33b1126087c531423840fb241afb9e95682bcfcd7c8ec8caafb8ae142593b2",
+      "matched": true
+    },
+    {
+      "file": "assets/debate-dates.js",
+      "pathname": "/assets/debate-dates.js",
+      "status": 200,
+      "expectedSha256": "7549422128267aff3d7de4aafc535b5f40290df456a33fd5b85ddd4f7fcd0b12",
+      "actualSha256": "7549422128267aff3d7de4aafc535b5f40290df456a33fd5b85ddd4f7fcd0b12",
+      "matched": true
+    },
+    {
+      "file": "assets/debate-entry.js",
+      "pathname": "/assets/debate-entry.js",
+      "status": 200,
+      "expectedSha256": "81fc674a29b4c4997b8bdd40fe5e49b56e37592cbd573b26675274a9d7894563",
+      "actualSha256": "81fc674a29b4c4997b8bdd40fe5e49b56e37592cbd573b26675274a9d7894563",
+      "matched": true
+    },
+    {
+      "file": "assets/debate-room.css",
+      "pathname": "/assets/debate-room.css",
+      "status": 200,
+      "expectedSha256": "c2f6095a0bda20771101763ed631fc171b3a0fb43515f31cd228f8e7c6743c70",
+      "actualSha256": "c2f6095a0bda20771101763ed631fc171b3a0fb43515f31cd228f8e7c6743c70",
+      "matched": true
+    },
+    {
+      "file": "assets/study-room-live.js",
+      "pathname": "/assets/study-room-live.js",
+      "status": 200,
+      "expectedSha256": "18233c7e451d4af50a4b71254ae93d68ceb0316b0b7a1cd4b4d880bd32542450",
+      "actualSha256": "18233c7e451d4af50a4b71254ae93d68ceb0316b0b7a1cd4b4d880bd32542450",
+      "matched": true
+    },
+    {
+      "file": "assets/study-room-live.css",
+      "pathname": "/assets/study-room-live.css",
+      "status": 200,
+      "expectedSha256": "b03ee186567cf1f027b699cc12979dcad4f89279d7563e11d8fe91218f1520c2",
+      "actualSha256": "b03ee186567cf1f027b699cc12979dcad4f89279d7563e11d8fe91218f1520c2",
+      "matched": true
+    },
+    {
+      "file": "assets/study-room-preview.js",
+      "pathname": "/assets/study-room-preview.js",
+      "status": 200,
+      "expectedSha256": "00477d0c99c0df301beed26eeea970facdc9094766984f3deefad716eb3d9a7d",
+      "actualSha256": "00477d0c99c0df301beed26eeea970facdc9094766984f3deefad716eb3d9a7d",
+      "matched": true
+    },
+    {
+      "file": "assets/phase2-experience.js",
+      "pathname": "/assets/phase2-experience.js",
+      "status": 200,
+      "expectedSha256": "60f59903d92240b4869e9cb7edbbdfb2a1f72a0ce2229790b562f85815375edc",
+      "actualSha256": "60f59903d92240b4869e9cb7edbbdfb2a1f72a0ce2229790b562f85815375edc",
+      "matched": true
+    },
+    {
+      "file": "assets/feature-loader.js",
+      "pathname": "/assets/feature-loader.js",
+      "status": 200,
+      "expectedSha256": "e93faeb186624afc009998303597f2dba9f4dd2e883c47ea0f325ba7b89eefc8",
+      "actualSha256": "e93faeb186624afc009998303597f2dba9f4dd2e883c47ea0f325ba7b89eefc8",
+      "matched": true
+    },
+    {
+      "file": "assets/phase2.css",
+      "pathname": "/assets/phase2.css",
+      "status": 200,
+      "expectedSha256": "daa402e9e2cc6142f38a024f50b410a7e04396547288c5d6ebdefd9ff0b5a965",
+      "actualSha256": "daa402e9e2cc6142f38a024f50b410a7e04396547288c5d6ebdefd9ff0b5a965",
+      "matched": true
+    },
+    {
+      "file": "assets/vendor/supabase-2.49.8.umd.js",
+      "pathname": "/assets/vendor/supabase-2.49.8.umd.js",
+      "status": 200,
+      "expectedSha256": "522e844a8554c84631063fa630d0b824b8042f346a0222da04460f81d942dcf8",
+      "actualSha256": "522e844a8554c84631063fa630d0b824b8042f346a0222da04460f81d942dcf8",
+      "matched": true
+    },
+    {
+      "file": "assets/phase2-config.js",
+      "pathname": "/assets/phase2-config.js",
+      "status": 200,
+      "expectedSha256": "54d8bb9ce3eb0e13df023257bb07c084d00f1a1c1250c1cbcfe9b76492f3384c",
+      "actualSha256": "54d8bb9ce3eb0e13df023257bb07c084d00f1a1c1250c1cbcfe9b76492f3384c",
+      "matched": true
+    }
+  ],
+  "canonicalIndexRedirects": [
+    {
+      "pathname": "/index.html",
+      "status": 307,
+      "location": "/",
+      "expectedPathname": "/",
+      "matched": true
+    },
+    {
+      "pathname": "/debate-room/index.html",
+      "status": 307,
+      "location": "/debate-room/",
+      "expectedPathname": "/debate-room/",
+      "matched": true
+    },
+    {
+      "pathname": "/study-room/index.html",
+      "status": 307,
+      "location": "/study-room/",
+      "expectedPathname": "/study-room/",
+      "matched": true
+    }
+  ],
+  "authChecks": [
+    {
+      "pathname": "/debate-room/access",
+      "status": 200,
+      "body": {
+        "ok": true,
+        "enabled": false,
+        "signInRequired": true
+      },
+      "passed": true
+    },
+    {
+      "pathname": "/debate-room/events",
+      "status": 401,
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "AUTH_REQUIRED",
+          "message": "Sign in to use Debate Room."
+        }
+      },
+      "passed": true
+    }
+  ],
+  "authenticatedAllowedOrExcludedAccounts": false,
+  "physicalMedia": false,
+  "endurance90Minutes": false,
+  "fullAcceptance": false,
+  "publicLaunch": false,
+  "completedAt": "2026-09-09T12:50:52.103Z"
+}

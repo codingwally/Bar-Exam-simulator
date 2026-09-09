@@ -260,6 +260,16 @@ export const CRITICAL_SOURCES = Object.freeze([
   'scripts/test-study-room-background-picker.mjs', 'scripts/test-study-room-hotfix-behavior.mjs', 'scripts/test-study-room-live.mjs',
   '.github/workflows/debate-v3-capture.yml', 'scripts/debate-staging-fixtures.mjs', 'scripts/run-debate-staging-auth.mjs',
   'scripts/test-debate-wrangler-metadata.mjs',
+  'scripts/debate-hosted-cleanup.mjs', 'scripts/debate-hosted-fixtures.mjs', 'scripts/run-debate-hosted-rehearsal.mjs',
+  'scripts/test-debate-hosted-cleanup.mjs', 'scripts/test-debate-hosted-fixtures.mjs', 'scripts/test-debate-hosted-driver.mjs',
+  'scripts/test-debate-browser-hosted-organizer.mjs', 'scripts/test-debate-hosted-browser-safety.mjs',
+  'scripts/resolve-debate-hosted-preparation.mjs', 'scripts/test-debate-hosted-preparation.mjs',
+  'supabase/staging/debate-hosted-cleanup.sql', 'scripts/test-debate-hosted-atomic-cleanup.mjs',
+  '.github/workflows/debate-v3-validation.yml',
+  'assets/vendor/debate-fonts/fraunces-v38-latin-ext.woff2', 'assets/vendor/debate-fonts/fraunces-v38-latin.woff2',
+  'assets/vendor/debate-fonts/inter-v20-latin-ext.woff2', 'assets/vendor/debate-fonts/inter-v20-latin.woff2',
+  'assets/vendor/debate-fonts/Fraunces.OFL.txt', 'assets/vendor/debate-fonts/Inter.OFL.txt',
+  'assets/vendor/debate-fonts/manifest.json', 'assets/vendor/debate-fonts/google-fonts-source.css.txt', 'assets/vendor/debate-fonts/SOURCE.md',
   'scripts/test-debate-staging-fixtures.mjs', 'scripts/debate-staging-dml-probe.mjs', 'scripts/test-debate-staging-dml-probe.mjs',
   'docs/debate-room-v3/evidence/staging-dml-rollback-probe.sql', 'docs/debate-room-v3/evidence/staging-dml-rollback-probe.readback.sql',
   'docs/debate-room-v3/evidence/staging-dml-rollback-probe.fixtures.json', 'docs/debate-room-v3/evidence/staging-dml-rollback-probe.manifest.json',
@@ -288,7 +298,9 @@ export function validateEvidence({ review, suite, candidate, changedPaths, migra
   need(equal(proof.localInstallationRollback.migrationHashes, migrationHashes) && equal(proof.hostedApplication.migrationHashes, migrationHashes), 'MIGRATION_DRIFT', 'Local installation and actual hosted application must both identify the exact two migration bodies.');
 }
 
-export const CRITICAL_ASSETS = Object.freeze(['index.html','debate-room/index.html','study-room/index.html','assets/debate-room.js','assets/debate-domain.js','assets/debate-sanctions.js','assets/debate-media.js','assets/debate-dates.js','assets/debate-entry.js','assets/debate-room.css','assets/study-room-live.js','assets/study-room-live.css','assets/study-room-preview.js','assets/phase2-experience.js','assets/feature-loader.js','assets/phase2.css','assets/vendor/supabase-2.49.8.umd.js','assets/phase2-config.js']);
+export const CRITICAL_ASSETS = Object.freeze(['index.html','debate-room/index.html','study-room/index.html','assets/debate-room.js','assets/debate-domain.js','assets/debate-sanctions.js','assets/debate-media.js','assets/debate-dates.js','assets/debate-entry.js','assets/debate-room.css','assets/study-room-live.js','assets/study-room-live.css','assets/study-room-preview.js','assets/phase2-experience.js','assets/feature-loader.js','assets/phase2.css','assets/vendor/supabase-2.49.8.umd.js','assets/phase2-config.js',
+  'assets/vendor/debate-fonts/fraunces-v38-latin-ext.woff2', 'assets/vendor/debate-fonts/fraunces-v38-latin.woff2',
+  'assets/vendor/debate-fonts/inter-v20-latin-ext.woff2', 'assets/vendor/debate-fonts/inter-v20-latin.woff2']);
 const RETIRED_PUBLIC_FILES = ['assets/examination-room-2-store.js','assets/examination-room-renovation.js','assets/examination-room-renovation.css','assets/examination-room-beadle-class-list-template.xlsx','assets/feature-previews/examination-room.png','content/duediligence-2026/exam-room-schema.json'];
 export async function inspectArtifact(directory, root = ROOT) {
   const files = [], walk = async (dir, prefix = '') => { for (const item of await readdir(dir, { withFileTypes: true })) { const name = prefix + item.name; need(!item.isSymbolicLink(), 'ARTIFACT_PRIVATE_FILE', 'Symlinks cannot enter the staging artifact.'); if (item.isDirectory()) await walk(path.join(dir, item.name), name + '/'); else files.push(name); } }; await walk(directory);
@@ -343,7 +355,15 @@ export async function smokeStaging({ allowedToken, deniedToken, manifest, fetche
   // Model a fetch from the same-origin staging page: browsers omit Origin for
   // this GET. Supplying it here would hide an incompatible Worker boundary.
   const get = async (pathname, token) => fetcher(TARGET.origin + pathname, { method: 'GET', redirect: 'error', cache: 'no-store', headers: { 'Sec-Fetch-Site': 'same-origin', 'Sec-Fetch-Mode': 'cors', 'Sec-Fetch-Dest': 'empty', Referer: TARGET.origin + '/debate-room/', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, signal: AbortSignal.timeout(20000) });
-  for (const [file, digest] of Object.entries(manifest.hashes)) { const response = await get('/' + file); need(response.ok && hash(new Uint8Array(await response.arrayBuffer())) === digest, 'DEPLOYED_ASSET_MISMATCH', `Hosted candidate asset differs: ${file}`); }
+  // Static Assets serves directory indexes at their canonical trailing-slash
+  // URLs. Request those directly; retain redirect:error so neither asset nor
+  // authenticated requests can silently leave the reviewed origin.
+  for (const [file, digest] of Object.entries(manifest.hashes)) {
+    need(CRITICAL_ASSETS.includes(file) && HASH.test(digest), 'INVALID_SMOKE_MANIFEST', 'Smoke assets must be reviewed candidate paths and SHA-256 hashes.');
+    const pathname = '/' + file.replace(/(^|\/)index\.html$/, '$1');
+    const response = await get(pathname);
+    need(response.ok && hash(new Uint8Array(await response.arrayBuffer())) === digest, 'DEPLOYED_ASSET_MISMATCH', `Hosted candidate asset differs: ${file}`);
+  }
   const access = await get('/debate-room/access'); const accessBody = await access.json(); need(access.ok && accessBody.enabled === false, 'PUBLIC_ACCESS_OPEN', 'Debate public access must remain closed.');
   const anonymous = await get('/debate-room/events'); need(anonymous.status === 401, 'AUTH_SMOKE_FAILED', 'Anonymous event access must be denied.');
   const denied = await get('/debate-room/events', deniedToken), deniedBody = await denied.json(); need(denied.status === 403 && deniedBody.error?.code === 'DEBATE_PREVIEW_RESTRICTED', 'AUTH_SMOKE_FAILED', 'A real excluded account must fail the preview allowlist.');

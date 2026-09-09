@@ -1,0 +1,1262 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-09T12:53:34.252Z",
+  "status": "STAGING_DEPLOYED_PRESERVATION_PASS_SMOKE_FAILED",
+  "run": {
+    "id": 34352333268,
+    "url": "https://github.com/codingwally/Bar-Exam-simulator/actions/runs/34352333268",
+    "event": "workflow_dispatch",
+    "headSha": "f0c4d6be4203d0a3688521694145d86a0462f2a4",
+    "tree": "fc19d28b7acf1d643e53ebf7498aded9493114c7",
+    "conclusion": "failure",
+    "createdAt": "2026-09-09T12:39:52Z",
+    "updatedAt": "2026-09-09T12:42:07Z",
+    "workflow": ".github/workflows/debate-v3-staging.yml",
+    "provenance": "Run metadata independently read through GitHub API by clock_ci; exact tree independently resolved from local Git object. Embedded reports are the actual sanitized downloaded run artifacts."
+  },
+  "target": {
+    "worker": "duediligence-examinations-staging",
+    "origin": "https://duediligence-examinations-staging.wallyesteban1993.workers.dev",
+    "project": "hlzqmreeoghbldnhlybr"
+  },
+  "observations": {
+    "registeredBeforeFirstSignIn": 2,
+    "realSignedInActors": 2,
+    "realStudyAccess": {
+      "method": "POST",
+      "body": {},
+      "role": "member",
+      "joinedRoom": false
+    },
+    "knownSessionsProjectVerified": 2,
+    "fixtureCleanup": {
+      "status": "EXACT_FIXTURES_DELETED",
+      "deletedIds": [
+        "dae52adb-3481-465c-b824-4e0d03f66a82",
+        "ca470e1e-227e-4171-b588-53ce23f2e0bf"
+      ],
+      "oldSessionsDeniedAfterAuthDeletion": true,
+      "immediatePostLogoutDenialBeforeAuthDeletion": "NOT_PROVED_BY_THIS_PAIR_LIFECYCLE"
+    },
+    "deploymentState": "VERSION_AND_PRESERVATION_VERIFIED",
+    "steps": [
+      {
+        "label": "prepare",
+        "status": "PASS",
+        "durationMs": 1498
+      },
+      {
+        "label": "deploy",
+        "status": "PASS",
+        "durationMs": 13385
+      },
+      {
+        "label": "postflight",
+        "status": "PASS",
+        "durationMs": 932
+      },
+      {
+        "label": "smoke",
+        "status": "FAIL",
+        "durationMs": 112
+      }
+    ],
+    "stagingDeployment": {
+      "versionId": "1be1d9c5-af54-4f89-b48c-d941968849ab",
+      "deploymentId": "4ce2a2ea-95d5-4320-84b7-88bb7d6f7359",
+      "trafficPercent": 100,
+      "fingerprint": "11ade1db738b752ea4f8b6b049f3290bb2ae50e4c112fd17a630bd9f2ada72ad",
+      "preservation": "PASS_ACTUAL_POSTFLIGHT",
+      "observedAfterFailure": {
+        "versionId": "1be1d9c5-af54-4f89-b48c-d941968849ab",
+        "fingerprint": "11ade1db738b752ea4f8b6b049f3290bb2ae50e4c112fd17a630bd9f2ada72ad",
+        "capturedAt": "2026-09-09T12:42:04.072Z"
+      }
+    },
+    "smoke": {
+      "status": "FAIL",
+      "failureCode": "RESTRICTED_SMOKE_FAILED",
+      "authenticatedDebateAllowDeny": "NOT_REACHED"
+    }
+  },
+  "reports": {
+    "2026-09-09T12-41-00.609Z-deploy-driver.json": {
+      "path": "artifacts/debate-local-rehearsal/staging-34352333268/staging-release/2026-09-09T12-41-00.609Z-deploy-driver.json",
+      "sha256": "c26fa8b5ee97e87d706eaca461cfa8e94def7d7288679fc45eaec9435087b52e",
+      "bytes": 5945,
+      "report": {
+        "schemaVersion": 1,
+        "mode": "deploy",
+        "status": "FAIL_RESTRICTED_STAGING",
+        "startedAt": "2026-09-09T12:41:00.609Z",
+        "sourceSha": "f0c4d6be4203d0a3688521694145d86a0462f2a4",
+        "target": {
+          "worker": "duediligence-examinations-staging",
+          "origin": "https://duediligence-examinations-staging.wallyesteban1993.workers.dev",
+          "project": "hlzqmreeoghbldnhlybr"
+        },
+        "staticPreflight": {
+          "status": "PASS_STATIC_GATES_BEFORE_ACCOUNT_CREATION",
+          "candidateSha": "f0c4d6be4203d0a3688521694145d86a0462f2a4",
+          "reviewedBaseSha": "3a9f46b54ca4f926440e402e3831e578ffcb2022",
+          "baselineFingerprint": "038011196f012d3bde90af6e1a57a3feda15f58ffdd35d201378cc3c3f7b6f0f",
+          "previousVersionId": "b134ccc7-0c7f-4d00-89e0-d7314e0f1dd9",
+          "migrationHashes": {
+            "supabase/migrations/20260909080139_debate_room_v3.sql": "89d4f46b1e1b2991202880114387a1356b5eedfcf562129079de83d55a94b53c",
+            "supabase/migrations/20260909080143_study_room_admission_v3.sql": "5ca7d139bb925b00c82d391aab4f566446d5d1bdd25e0b1b271fde614cb11637"
+          },
+          "suiteSha256": "9a3d1a8f5388cf132cee09847e92c33b1cb20bae9d9415f307592dd8d7d69560",
+          "artifactHashes": {
+            "index.html": "d0c18888e5424b6113b30950466304fe6bfcca4089610dba1b1e8be01bf81b19",
+            "debate-room/index.html": "b7722b53d25db83d381aea95480031b481522ce46cb7e29f7fca431dd02d647e",
+            "study-room/index.html": "54c96a2eff695deacd935fad05cc0d44413c4e7144adcd4c44e40f84f3c31bc8",
+            "assets/debate-room.js": "1c1c245f2d23f12e4f546ae33c57dc5613b927fd6417c157de6ab992cc4eed6e",
+            "assets/debate-domain.js": "a024c94b56e708ce395d2bef8e19566cfac69719a8a580637819ff4b8b1707bc",
+            "assets/debate-sanctions.js": "f43af5803e097b26836b217086d3e6d93c6e769c0867a2aaaeb6ef05f642119b",
+            "assets/debate-media.js": "ed33b1126087c531423840fb241afb9e95682bcfcd7c8ec8caafb8ae142593b2",
+            "assets/debate-dates.js": "7549422128267aff3d7de4aafc535b5f40290df456a33fd5b85ddd4f7fcd0b12",
+            "assets/debate-entry.js": "81fc674a29b4c4997b8bdd40fe5e49b56e37592cbd573b26675274a9d7894563",
+            "assets/debate-room.css": "c2f6095a0bda20771101763ed631fc171b3a0fb43515f31cd228f8e7c6743c70",
+            "assets/study-room-live.js": "18233c7e451d4af50a4b71254ae93d68ceb0316b0b7a1cd4b4d880bd32542450",
+            "assets/study-room-live.css": "b03ee186567cf1f027b699cc12979dcad4f89279d7563e11d8fe91218f1520c2",
+            "assets/study-room-preview.js": "00477d0c99c0df301beed26eeea970facdc9094766984f3deefad716eb3d9a7d",
+            "assets/phase2-experience.js": "60f59903d92240b4869e9cb7edbbdfb2a1f72a0ce2229790b562f85815375edc",
+            "assets/feature-loader.js": "e93faeb186624afc009998303597f2dba9f4dd2e883c47ea0f325ba7b89eefc8",
+            "assets/phase2.css": "daa402e9e2cc6142f38a024f50b410a7e04396547288c5d6ebdefd9ff0b5a965",
+            "assets/vendor/supabase-2.49.8.umd.js": "522e844a8554c84631063fa630d0b824b8042f346a0222da04460f81d942dcf8",
+            "assets/phase2-config.js": "54d8bb9ce3eb0e13df023257bb07c084d00f1a1c1250c1cbcfe9b76492f3384c"
+          },
+          "publicKeySource": "existing-ci-configuration",
+          "publicKeyValidation": {
+            "status": "PASS_FIXED_STAGING_AUTH_SETTINGS",
+            "projectRef": "hlzqmreeoghbldnhlybr",
+            "httpStatus": 200,
+            "emailProviderEnabled": true,
+            "checkedAt": "2026-09-09T12:40:59.784Z",
+            "userRecordsRead": false,
+            "credentialsStored": false
+          },
+          "wrangler": {
+            "version": "4.114.0",
+            "entrySha256": "780661a508810f3b65786895b1ca9aacbc4f55d329ae6b8c1e49ec8433569f77"
+          },
+          "publicLaunch": false,
+          "mediaEnabled": false,
+          "mailEnabled": false
+        },
+        "deploymentState": "VERSION_AND_PRESERVATION_VERIFIED",
+        "steps": [
+          {
+            "label": "prepare",
+            "status": "PASS",
+            "exitCode": 0,
+            "startedAt": "2026-09-09T12:41:12.524Z",
+            "endedAt": "2026-09-09T12:41:14.022Z",
+            "stdoutSha256": "2a6f055f594e1076e1502fd15d94e98ab918cc5e36d61168d3356cb9083b9838",
+            "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "rawOutputStored": false
+          },
+          {
+            "label": "deploy",
+            "status": "PASS",
+            "exitCode": 0,
+            "startedAt": "2026-09-09T12:41:14.025Z",
+            "endedAt": "2026-09-09T12:41:27.410Z",
+            "stdoutSha256": "5bd7a195a2152a1ace894e90379ab49d9b1b52b1ad2505f715a823f3ed9f5a8b",
+            "stderrSha256": "7cde0e06ee58a7f3b5501e913e2df9da748abbbd7c49538e536b672b7f7b9f6c",
+            "rawOutputStored": false
+          },
+          {
+            "label": "postflight",
+            "status": "PASS",
+            "exitCode": 0,
+            "startedAt": "2026-09-09T12:41:27.412Z",
+            "endedAt": "2026-09-09T12:41:28.344Z",
+            "stdoutSha256": "6e75b2e07921f220938ee7775e967888c9700225eaf47a46569f7f450c1481f8",
+            "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "rawOutputStored": false
+          },
+          {
+            "label": "smoke",
+            "status": "FAIL",
+            "exitCode": 1,
+            "signal": null,
+            "startedAt": "2026-09-09T12:41:28.391Z",
+            "endedAt": "2026-09-09T12:41:28.503Z",
+            "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderrSha256": "9e3455d587efdb556b7466f816fc19ee508c2f9b0b691bc10876b494af97cdce",
+            "rawOutputStored": false,
+            "outcomeUnconfirmed": false
+          }
+        ],
+        "cleanup": "EXACT_FIXTURES_DELETED",
+        "credentialsStored": false,
+        "authenticatedAccounts": 2,
+        "sessionScope": {
+          "status": "PASS_STAGING_SESSION_SCOPE",
+          "verifiedAccounts": 2,
+          "tokensStored": false
+        },
+        "deployedVersionId": "1be1d9c5-af54-4f89-b48c-d941968849ab",
+        "deployedFingerprint": "11ade1db738b752ea4f8b6b049f3290bb2ae50e4c112fd17a630bd9f2ada72ad",
+        "failureCode": "RESTRICTED_SMOKE_FAILED",
+        "observedAfterFailure": {
+          "versionId": "1be1d9c5-af54-4f89-b48c-d941968849ab",
+          "fingerprint": "11ade1db738b752ea4f8b6b049f3290bb2ae50e4c112fd17a630bd9f2ada72ad",
+          "capturedAt": "2026-09-09T12:42:04.072Z"
+        },
+        "completedAt": "2026-09-09T12:42:04.072Z"
+      }
+    },
+    "2026-09-09T12-41-00.609Z-deploy-fixtures.json": {
+      "path": "artifacts/debate-local-rehearsal/staging-34352333268/staging-release/2026-09-09T12-41-00.609Z-deploy-fixtures.json",
+      "sha256": "2a85d45c3d4245b155d3aa955827a72d9e33b275dac729cb997bb14657553187",
+      "bytes": 2273,
+      "report": {
+        "schemaVersion": 1,
+        "purpose": "Study Room regression and Debate restricted-auth smoke",
+        "projectRef": "hlzqmreeoghbldnhlybr",
+        "sourceSha": "f0c4d6be4203d0a3688521694145d86a0462f2a4",
+        "startedAt": "2026-09-09T12:41:00.610Z",
+        "noMail": true,
+        "noProvider": true,
+        "noDebateWrites": true,
+        "credentialsStored": false,
+        "registration": "existing-astra-staging-study-room-v1-before-first-sign-in",
+        "classificationRetention": "Auth deletion cascades registry; sanitized registration receipts retained here",
+        "cleanupComplete": true,
+        "fixtures": [
+          {
+            "purpose": "allowed",
+            "runId": "dv3study-e40ef694",
+            "label": "student",
+            "id": "dae52adb-3481-465c-b824-4e0d03f66a82",
+            "createdAt": "2026-09-09T12:41:03.389761Z",
+            "creationState": "recorded",
+            "registrationState": "confirmed",
+            "signInState": "confirmed",
+            "signOutState": "confirmed",
+            "cleanupState": "auth_deleted_verified",
+            "registrationReceipt": {
+              "registered": true,
+              "fixtureUserId": "dae52adb-3481-465c-b824-4e0d03f66a82",
+              "dataScope": "internal_test",
+              "registrationVersion": "astra-staging-study-room-v1"
+            },
+            "studyAccess": "PASS_STUDENT_ACCESS_NO_JOIN",
+            "studyAccessRole": "member",
+            "retainedAuditIds": [],
+            "oldSessionDenied": true
+          },
+          {
+            "purpose": "excluded",
+            "runId": "dv3study-6ce0876d",
+            "label": "student",
+            "id": "ca470e1e-227e-4171-b588-53ce23f2e0bf",
+            "createdAt": "2026-09-09T12:41:08.676537Z",
+            "creationState": "recorded",
+            "registrationState": "confirmed",
+            "signInState": "confirmed",
+            "signOutState": "confirmed",
+            "cleanupState": "auth_deleted_verified",
+            "registrationReceipt": {
+              "registered": true,
+              "fixtureUserId": "ca470e1e-227e-4171-b588-53ce23f2e0bf",
+              "dataScope": "internal_test",
+              "registrationVersion": "astra-staging-study-room-v1"
+            },
+            "studyAccess": "PASS_STUDENT_ACCESS_NO_JOIN",
+            "studyAccessRole": "member",
+            "retainedAuditIds": [],
+            "oldSessionDenied": true
+          }
+        ],
+        "suppression": {
+          "projectRef": "hlzqmreeoghbldnhlybr",
+          "outboundEmailMode": "suppressed",
+          "checkedAt": "2026-09-09T12:41:01.462Z"
+        }
+      }
+    },
+    "artifact.json": {
+      "path": "artifacts/debate-local-rehearsal/staging-34352333268/staging-release/artifact.json",
+      "sha256": "df56d234c0a445dd704aeb012f447cd6a7c3fa646218f9bbe95c8dedebd0ecd7",
+      "bytes": 1921,
+      "report": {
+        "status": "PASS_ARTIFACT_ONLY",
+        "hashes": {
+          "index.html": "d0c18888e5424b6113b30950466304fe6bfcca4089610dba1b1e8be01bf81b19",
+          "debate-room/index.html": "b7722b53d25db83d381aea95480031b481522ce46cb7e29f7fca431dd02d647e",
+          "study-room/index.html": "54c96a2eff695deacd935fad05cc0d44413c4e7144adcd4c44e40f84f3c31bc8",
+          "assets/debate-room.js": "1c1c245f2d23f12e4f546ae33c57dc5613b927fd6417c157de6ab992cc4eed6e",
+          "assets/debate-domain.js": "a024c94b56e708ce395d2bef8e19566cfac69719a8a580637819ff4b8b1707bc",
+          "assets/debate-sanctions.js": "f43af5803e097b26836b217086d3e6d93c6e769c0867a2aaaeb6ef05f642119b",
+          "assets/debate-media.js": "ed33b1126087c531423840fb241afb9e95682bcfcd7c8ec8caafb8ae142593b2",
+          "assets/debate-dates.js": "7549422128267aff3d7de4aafc535b5f40290df456a33fd5b85ddd4f7fcd0b12",
+          "assets/debate-entry.js": "81fc674a29b4c4997b8bdd40fe5e49b56e37592cbd573b26675274a9d7894563",
+          "assets/debate-room.css": "c2f6095a0bda20771101763ed631fc171b3a0fb43515f31cd228f8e7c6743c70",
+          "assets/study-room-live.js": "18233c7e451d4af50a4b71254ae93d68ceb0316b0b7a1cd4b4d880bd32542450",
+          "assets/study-room-live.css": "b03ee186567cf1f027b699cc12979dcad4f89279d7563e11d8fe91218f1520c2",
+          "assets/study-room-preview.js": "00477d0c99c0df301beed26eeea970facdc9094766984f3deefad716eb3d9a7d",
+          "assets/phase2-experience.js": "60f59903d92240b4869e9cb7edbbdfb2a1f72a0ce2229790b562f85815375edc",
+          "assets/feature-loader.js": "e93faeb186624afc009998303597f2dba9f4dd2e883c47ea0f325ba7b89eefc8",
+          "assets/phase2.css": "daa402e9e2cc6142f38a024f50b410a7e04396547288c5d6ebdefd9ff0b5a965",
+          "assets/vendor/supabase-2.49.8.umd.js": "522e844a8554c84631063fa630d0b824b8042f346a0222da04460f81d942dcf8",
+          "assets/phase2-config.js": "54d8bb9ce3eb0e13df023257bb07c084d00f1a1c1250c1cbcfe9b76492f3384c"
+        },
+        "fileCount": 177,
+        "candidateSha": "f0c4d6be4203d0a3688521694145d86a0462f2a4"
+      }
+    },
+    "auth-preflight.json": {
+      "path": "artifacts/debate-local-rehearsal/staging-34352333268/staging-release/auth-preflight.json",
+      "sha256": "4e690f2d88074b5f39b8abe963dcc5f1290c9b565d00910eba0f2cb45234c38a",
+      "bytes": 94,
+      "report": {
+        "status": "PASS_STAGING_SESSION_SCOPE",
+        "verifiedAccounts": 2,
+        "tokensStored": false
+      }
+    },
+    "deployed-baseline.json": {
+      "path": "artifacts/debate-local-rehearsal/staging-34352333268/staging-release/deployed-baseline.json",
+      "sha256": "6a90246132ec2ed2ad0fbbada7b46fbe6184f9e3727835a4f4701eabdea08568",
+      "bytes": 11827,
+      "report": {
+        "schemaVersion": 2,
+        "capturedAt": "2026-09-09T12:41:28.331Z",
+        "state": {
+          "worker": "duediligence-examinations-staging",
+          "origin": "https://duediligence-examinations-staging.wallyesteban1993.workers.dev",
+          "projectRef": "hlzqmreeoghbldnhlybr",
+          "deploymentId": "4ce2a2ea-95d5-4320-84b7-88bb7d6f7359",
+          "versionId": "1be1d9c5-af54-4f89-b48c-d941968849ab",
+          "trafficPercent": 100,
+          "bindings": [
+            {
+              "name": "ADMIN_DIRECTORY_EMAIL_FROM",
+              "type": "plain_text"
+            },
+            {
+              "name": "ADMIN_DIRECTORY_EMAIL_MODE",
+              "type": "plain_text"
+            },
+            {
+              "name": "ADMIN_PULSE_ENABLED",
+              "type": "plain_text"
+            },
+            {
+              "name": "ADMIN_PULSE_VAPID_PRIVATE_KEY",
+              "type": "secret_text"
+            },
+            {
+              "name": "ADMIN_PULSE_VAPID_PUBLIC_KEY",
+              "type": "plain_text"
+            },
+            {
+              "name": "ADMIN_PULSE_VAPID_SUBJECT",
+              "type": "plain_text"
+            },
+            {
+              "name": "ADMIN_PULSE_WEB_PUSH_ENABLED",
+              "type": "plain_text"
+            },
+            {
+              "name": "AI_PREPARED_BETA_BADGE",
+              "type": "plain_text"
+            },
+            {
+              "name": "ALLOW_LEGACY_GUESTS",
+              "type": "plain_text"
+            },
+            {
+              "name": "ALLOWED_ORIGIN",
+              "type": "plain_text"
+            },
+            {
+              "name": "ANCHOR_CASE_DIGESTS_ENABLED",
+              "type": "plain_text"
+            },
+            {
+              "name": "BAR_EASY_ENABLED",
+              "type": "plain_text"
+            },
+            {
+              "name": "BAR_EXAM_SIMULATION_RANDOMIZATION_V1_ENABLED",
+              "type": "plain_text"
+            },
+            {
+              "name": "BAR_EXAM_SIMULATION_RANDOMIZATION_V1_SCHEMA_READY",
+              "type": "plain_text"
+            },
+            {
+              "name": "BAR_QUESTION_PRACTICE_RANDOMIZATION_V2_ENABLED",
+              "type": "plain_text"
+            },
+            {
+              "name": "CHAIR_CASES_ENABLED",
+              "type": "plain_text"
+            },
+            {
+              "name": "CONTENT_HUMAN_REVIEW_REQUIRED",
+              "type": "plain_text"
+            },
+            {
+              "name": "DEBATE_APPROVED_MAX_PARTICIPANTS",
+              "type": "plain_text"
+            },
+            {
+              "name": "DEBATE_INVITATION_EMAIL_MODE",
+              "type": "plain_text"
+            },
+            {
+              "name": "DEBATE_MEDIA_ENABLED",
+              "type": "plain_text"
+            },
+            {
+              "name": "DEBATE_PREVIEW_ACTOR_IDS",
+              "type": "plain_text"
+            },
+            {
+              "name": "DEBATE_RESULTS_EMAIL_MODE",
+              "type": "plain_text"
+            },
+            {
+              "name": "DEBATE_ROOM_ENABLED",
+              "type": "plain_text"
+            },
+            {
+              "name": "DEBATE_SWEEPER_ENABLED",
+              "type": "plain_text"
+            },
+            {
+              "name": "DOCTRINES_ENABLED",
+              "type": "plain_text"
+            },
+            {
+              "name": "EXAM_ROOM_STUDENT_CODE_KEY_V1",
+              "type": "secret_text"
+            },
+            {
+              "name": "EXAMINATION_ROOM_ADMIN_EMAILS",
+              "type": "secret_text"
+            },
+            {
+              "name": "EXAMINATION_ROOM_BACKUP_MASTER_KEY_V1",
+              "type": "secret_text"
+            },
+            {
+              "name": "EXAMINATION_ROOM_EMAIL_MODE",
+              "type": "plain_text"
+            },
+            {
+              "name": "EXAMINATION_ROOM_ENABLED",
+              "type": "plain_text"
+            },
+            {
+              "name": "EXAMINATION_ROOM_KEY_PEPPER",
+              "type": "secret_text"
+            },
+            {
+              "name": "EXAMINATION_ROOM_OWNER_DATA_KEY_V1",
+              "type": "secret_text"
+            },
+            {
+              "name": "EXAMINATION_ROOM_RECOVERY_MODE",
+              "type": "plain_text"
+            },
+            {
+              "name": "FORECAST_RESULTS_EMAIL_FROM",
+              "type": "plain_text"
+            },
+            {
+              "name": "FORECAST_RESULTS_EMAIL_MODE",
+              "type": "plain_text"
+            },
+            {
+              "name": "GEMINI_API_KEY",
+              "type": "secret_text"
+            },
+            {
+              "name": "GEMINI_GROUNDING_ENABLED",
+              "type": "plain_text"
+            },
+            {
+              "name": "GEMINI_MODEL",
+              "type": "plain_text"
+            },
+            {
+              "name": "GOOGLE_OAUTH_CLIENT_ID",
+              "type": "secret_text"
+            },
+            {
+              "name": "GOOGLE_OAUTH_CLIENT_SECRET",
+              "type": "secret_text"
+            },
+            {
+              "name": "GOOGLE_OAUTH_REFRESH_TOKEN",
+              "type": "secret_text"
+            },
+            {
+              "name": "GUEST_USAGE_HMAC_KEY",
+              "type": "secret_text"
+            },
+            {
+              "name": "LIVEKIT_API_KEY",
+              "type": "secret_text"
+            },
+            {
+              "name": "LIVEKIT_API_SECRET",
+              "type": "secret_text"
+            },
+            {
+              "name": "LIVEKIT_URL",
+              "type": "secret_text"
+            },
+            {
+              "name": "OUTBOUND_EMAIL_MODE",
+              "type": "plain_text"
+            },
+            {
+              "name": "PHASE4_ACCESS_ENFORCEMENT",
+              "type": "plain_text"
+            },
+            {
+              "name": "PHASE4_MODEL_QUALITY_ENFORCEMENT",
+              "type": "plain_text"
+            },
+            {
+              "name": "PRIVATE_BETA_DISCLOSURE_VERSION",
+              "type": "plain_text"
+            },
+            {
+              "name": "PRIVATE_BETA_GATE_ENABLED",
+              "type": "plain_text"
+            },
+            {
+              "name": "REQUIRE_AUTHENTICATED_SUBMISSIONS",
+              "type": "plain_text"
+            },
+            {
+              "name": "SIGN_IN_NOTIFICATION_EMAIL_FROM",
+              "type": "plain_text"
+            },
+            {
+              "name": "SIGN_IN_NOTIFICATION_EMAIL_MODE",
+              "type": "plain_text"
+            },
+            {
+              "name": "STUDY_ROOM_ENABLED",
+              "type": "plain_text"
+            },
+            {
+              "name": "STUDY_ROOM_NAME",
+              "type": "plain_text"
+            },
+            {
+              "name": "SUBSCRIPTION_RECEIPT_EMAIL_MODE",
+              "type": "plain_text"
+            },
+            {
+              "name": "SUPABASE_SERVICE_ROLE_KEY",
+              "type": "secret_text"
+            },
+            {
+              "name": "SUPABASE_URL",
+              "type": "plain_text"
+            },
+            {
+              "name": "SUPPORT_NOTIFICATION_EMAIL_FROM",
+              "type": "plain_text"
+            },
+            {
+              "name": "SUPPORT_NOTIFICATION_EMAIL_MODE",
+              "type": "plain_text"
+            },
+            {
+              "name": "SYLLABUS_BASED_REVIEW_RANDOMIZATION_V2_ENABLED",
+              "type": "plain_text"
+            },
+            {
+              "name": "VERDICT_PDF_ENABLED",
+              "type": "plain_text"
+            },
+            {
+              "name": "VERDICT_PDF_PREMIUM_REQUIRED",
+              "type": "plain_text"
+            }
+          ],
+          "vars": {
+            "ADMIN_DIRECTORY_EMAIL_FROM": "Due Diligence Administration <support@duediligence.ph>",
+            "ADMIN_DIRECTORY_EMAIL_MODE": "suppressed",
+            "ADMIN_PULSE_ENABLED": "true",
+            "ADMIN_PULSE_WEB_PUSH_ENABLED": "true",
+            "AI_PREPARED_BETA_BADGE": "false",
+            "ALLOWED_ORIGIN": "https://duediligence-examinations-staging.wallyesteban1993.workers.dev",
+            "ALLOW_LEGACY_GUESTS": "false",
+            "ANCHOR_CASE_DIGESTS_ENABLED": "true",
+            "BAR_EASY_ENABLED": "true",
+            "BAR_EXAM_SIMULATION_RANDOMIZATION_V1_ENABLED": "true",
+            "BAR_EXAM_SIMULATION_RANDOMIZATION_V1_SCHEMA_READY": "true",
+            "BAR_QUESTION_PRACTICE_RANDOMIZATION_V2_ENABLED": "true",
+            "CHAIR_CASES_ENABLED": "true",
+            "CONTENT_HUMAN_REVIEW_REQUIRED": "false",
+            "DEBATE_APPROVED_MAX_PARTICIPANTS": "0",
+            "DEBATE_INVITATION_EMAIL_MODE": "suppressed",
+            "DEBATE_MEDIA_ENABLED": "false",
+            "DEBATE_PREVIEW_ACTOR_IDS": "dae52adb-3481-465c-b824-4e0d03f66a82",
+            "DEBATE_RESULTS_EMAIL_MODE": "suppressed",
+            "DEBATE_ROOM_ENABLED": "false",
+            "DEBATE_SWEEPER_ENABLED": "false",
+            "DOCTRINES_ENABLED": "true",
+            "EXAMINATION_ROOM_EMAIL_MODE": "suppressed",
+            "EXAMINATION_ROOM_ENABLED": "true",
+            "EXAMINATION_ROOM_RECOVERY_MODE": "supabase_storage",
+            "FORECAST_RESULTS_EMAIL_FROM": "Due Diligence Results <support@duediligence.ph>",
+            "FORECAST_RESULTS_EMAIL_MODE": "suppressed",
+            "GEMINI_GROUNDING_ENABLED": "false",
+            "GEMINI_MODEL": "gemini-3.5-flash-lite",
+            "OUTBOUND_EMAIL_MODE": "suppressed",
+            "PHASE4_ACCESS_ENFORCEMENT": "true",
+            "PHASE4_MODEL_QUALITY_ENFORCEMENT": "true",
+            "PRIVATE_BETA_DISCLOSURE_VERSION": "beta-disclosure-v1-2026-07-31",
+            "PRIVATE_BETA_GATE_ENABLED": "false",
+            "REQUIRE_AUTHENTICATED_SUBMISSIONS": "true",
+            "SIGN_IN_NOTIFICATION_EMAIL_FROM": "Due Diligence Sign-in Notice <support@duediligence.ph>",
+            "SIGN_IN_NOTIFICATION_EMAIL_MODE": "suppressed",
+            "STUDY_ROOM_ENABLED": "true",
+            "STUDY_ROOM_NAME": "dd-study-room-admin-beta-staging-v1",
+            "SUBSCRIPTION_RECEIPT_EMAIL_MODE": "suppressed",
+            "SUPABASE_URL": "https://hlzqmreeoghbldnhlybr.supabase.co",
+            "SUPPORT_NOTIFICATION_EMAIL_FROM": "Due Diligence Support <support@duediligence.ph>",
+            "SUPPORT_NOTIFICATION_EMAIL_MODE": "suppressed",
+            "SYLLABUS_BASED_REVIEW_RANDOMIZATION_V2_ENABLED": "true",
+            "VERDICT_PDF_ENABLED": "true",
+            "VERDICT_PDF_PREMIUM_REQUIRED": "false"
+          },
+          "undisclosedVariableHashes": {
+            "ADMIN_PULSE_VAPID_PUBLIC_KEY": "813e95db580c53ff5cb9d6c737cb129e87f02723d42de2be409662dee6ffbe7d",
+            "ADMIN_PULSE_VAPID_SUBJECT": "fc6e33d51d04f62af306498e2ed10496d90a3ef3629f660e1191845018c86c16"
+          },
+          "compatibilityDate": "2026-07-26",
+          "compatibilityFlags": [
+            "nodejs_compat"
+          ],
+          "placement": {
+            "mode": "targeted",
+            "target": [
+              10
+            ]
+          },
+          "observability": {
+            "enabled": true,
+            "head_sampling_rate": 1,
+            "redact_query_string": false,
+            "logs": {
+              "enabled": true,
+              "head_sampling_rate": 1,
+              "persist": true,
+              "invocation_logs": true
+            },
+            "traces": {
+              "enabled": false,
+              "persist": true,
+              "head_sampling_rate": 1
+            }
+          },
+          "logpush": false,
+          "tailConsumers": [],
+          "limits": null,
+          "usageModel": "standard",
+          "cache": null,
+          "cacheSource": null,
+          "captureSources": {
+            "schemaVersion": 1,
+            "settings": {
+              "presentFields": [
+                "annotations",
+                "bindings",
+                "compatibility_date",
+                "compatibility_flags",
+                "logpush",
+                "observability",
+                "placement",
+                "tags",
+                "tail_consumers",
+                "usage_model"
+              ],
+              "placement": {
+                "mode": "targeted",
+                "target": [
+                  10
+                ]
+              },
+              "placementMode": null,
+              "cacheOptions": null,
+              "cacheOptionsPresentFields": [],
+              "exports": null
+            },
+            "runtime": {
+              "presentFields": [
+                "assets",
+                "compatibility_date",
+                "compatibility_flags",
+                "usage_model"
+              ],
+              "placement": null,
+              "placementMode": null,
+              "cacheOptions": null,
+              "cacheOptionsPresentFields": [],
+              "exports": null
+            },
+            "service": {
+              "defaultEnvironment": "production",
+              "script": {
+                "presentFields": [
+                  "compatibility_date",
+                  "compatibility_flags",
+                  "created_on",
+                  "deployment_id",
+                  "etag",
+                  "handlers",
+                  "has_assets",
+                  "has_modules",
+                  "id",
+                  "last_deployed_from",
+                  "logpush",
+                  "modified_on",
+                  "named_handlers",
+                  "observability",
+                  "placement",
+                  "placement_mode",
+                  "tag",
+                  "tags",
+                  "tail_consumers",
+                  "usage_model"
+                ],
+                "placement": {
+                  "mode": "targeted",
+                  "target": [
+                    {
+                      "region": "gcp:us-east4"
+                    }
+                  ]
+                },
+                "placementMode": "targeted",
+                "cacheOptions": null,
+                "cacheOptionsPresentFields": [],
+                "exports": null
+              }
+            }
+          },
+          "crons": [
+            "*/2 * * * *"
+          ],
+          "workersDev": true,
+          "previewUrls": true
+        },
+        "fingerprint": "11ade1db738b752ea4f8b6b049f3290bb2ae50e4c112fd17a630bd9f2ada72ad",
+        "secretValuesStored": false
+      }
+    },
+    "predeploy-baseline.json": {
+      "path": "artifacts/debate-local-rehearsal/staging-34352333268/staging-release/predeploy-baseline.json",
+      "sha256": "420b8e302fb516b73ad6176cd988cc1ada3efa4cab1a4d7f42a650ab5eef7a81",
+      "bytes": 10855,
+      "report": {
+        "schemaVersion": 2,
+        "capturedAt": "2026-09-09T12:41:13.329Z",
+        "state": {
+          "worker": "duediligence-examinations-staging",
+          "origin": "https://duediligence-examinations-staging.wallyesteban1993.workers.dev",
+          "projectRef": "hlzqmreeoghbldnhlybr",
+          "deploymentId": "dd3d86fb-5826-4a5b-9ab0-15db98fd0764",
+          "versionId": "b134ccc7-0c7f-4d00-89e0-d7314e0f1dd9",
+          "trafficPercent": 100,
+          "bindings": [
+            {
+              "name": "ADMIN_DIRECTORY_EMAIL_FROM",
+              "type": "plain_text"
+            },
+            {
+              "name": "ADMIN_DIRECTORY_EMAIL_MODE",
+              "type": "plain_text"
+            },
+            {
+              "name": "ADMIN_PULSE_ENABLED",
+              "type": "plain_text"
+            },
+            {
+              "name": "ADMIN_PULSE_VAPID_PRIVATE_KEY",
+              "type": "secret_text"
+            },
+            {
+              "name": "ADMIN_PULSE_VAPID_PUBLIC_KEY",
+              "type": "plain_text"
+            },
+            {
+              "name": "ADMIN_PULSE_VAPID_SUBJECT",
+              "type": "plain_text"
+            },
+            {
+              "name": "ADMIN_PULSE_WEB_PUSH_ENABLED",
+              "type": "plain_text"
+            },
+            {
+              "name": "AI_PREPARED_BETA_BADGE",
+              "type": "plain_text"
+            },
+            {
+              "name": "ALLOW_LEGACY_GUESTS",
+              "type": "plain_text"
+            },
+            {
+              "name": "ALLOWED_ORIGIN",
+              "type": "plain_text"
+            },
+            {
+              "name": "ANCHOR_CASE_DIGESTS_ENABLED",
+              "type": "plain_text"
+            },
+            {
+              "name": "BAR_EASY_ENABLED",
+              "type": "plain_text"
+            },
+            {
+              "name": "BAR_EXAM_SIMULATION_RANDOMIZATION_V1_ENABLED",
+              "type": "plain_text"
+            },
+            {
+              "name": "BAR_EXAM_SIMULATION_RANDOMIZATION_V1_SCHEMA_READY",
+              "type": "plain_text"
+            },
+            {
+              "name": "BAR_QUESTION_PRACTICE_RANDOMIZATION_V2_ENABLED",
+              "type": "plain_text"
+            },
+            {
+              "name": "CHAIR_CASES_ENABLED",
+              "type": "plain_text"
+            },
+            {
+              "name": "CONTENT_HUMAN_REVIEW_REQUIRED",
+              "type": "plain_text"
+            },
+            {
+              "name": "DOCTRINES_ENABLED",
+              "type": "plain_text"
+            },
+            {
+              "name": "EXAM_ROOM_STUDENT_CODE_KEY_V1",
+              "type": "secret_text"
+            },
+            {
+              "name": "EXAMINATION_ROOM_ADMIN_EMAILS",
+              "type": "secret_text"
+            },
+            {
+              "name": "EXAMINATION_ROOM_BACKUP_MASTER_KEY_V1",
+              "type": "secret_text"
+            },
+            {
+              "name": "EXAMINATION_ROOM_EMAIL_MODE",
+              "type": "plain_text"
+            },
+            {
+              "name": "EXAMINATION_ROOM_ENABLED",
+              "type": "plain_text"
+            },
+            {
+              "name": "EXAMINATION_ROOM_KEY_PEPPER",
+              "type": "secret_text"
+            },
+            {
+              "name": "EXAMINATION_ROOM_OWNER_DATA_KEY_V1",
+              "type": "secret_text"
+            },
+            {
+              "name": "EXAMINATION_ROOM_RECOVERY_MODE",
+              "type": "plain_text"
+            },
+            {
+              "name": "FORECAST_RESULTS_EMAIL_FROM",
+              "type": "plain_text"
+            },
+            {
+              "name": "FORECAST_RESULTS_EMAIL_MODE",
+              "type": "plain_text"
+            },
+            {
+              "name": "GEMINI_API_KEY",
+              "type": "secret_text"
+            },
+            {
+              "name": "GEMINI_GROUNDING_ENABLED",
+              "type": "plain_text"
+            },
+            {
+              "name": "GEMINI_MODEL",
+              "type": "plain_text"
+            },
+            {
+              "name": "GOOGLE_OAUTH_CLIENT_ID",
+              "type": "secret_text"
+            },
+            {
+              "name": "GOOGLE_OAUTH_CLIENT_SECRET",
+              "type": "secret_text"
+            },
+            {
+              "name": "GOOGLE_OAUTH_REFRESH_TOKEN",
+              "type": "secret_text"
+            },
+            {
+              "name": "GUEST_USAGE_HMAC_KEY",
+              "type": "secret_text"
+            },
+            {
+              "name": "LIVEKIT_API_KEY",
+              "type": "secret_text"
+            },
+            {
+              "name": "LIVEKIT_API_SECRET",
+              "type": "secret_text"
+            },
+            {
+              "name": "LIVEKIT_URL",
+              "type": "secret_text"
+            },
+            {
+              "name": "OUTBOUND_EMAIL_MODE",
+              "type": "plain_text"
+            },
+            {
+              "name": "PHASE4_ACCESS_ENFORCEMENT",
+              "type": "plain_text"
+            },
+            {
+              "name": "PHASE4_MODEL_QUALITY_ENFORCEMENT",
+              "type": "plain_text"
+            },
+            {
+              "name": "PRIVATE_BETA_DISCLOSURE_VERSION",
+              "type": "plain_text"
+            },
+            {
+              "name": "PRIVATE_BETA_GATE_ENABLED",
+              "type": "plain_text"
+            },
+            {
+              "name": "REQUIRE_AUTHENTICATED_SUBMISSIONS",
+              "type": "plain_text"
+            },
+            {
+              "name": "SIGN_IN_NOTIFICATION_EMAIL_FROM",
+              "type": "plain_text"
+            },
+            {
+              "name": "SIGN_IN_NOTIFICATION_EMAIL_MODE",
+              "type": "plain_text"
+            },
+            {
+              "name": "STUDY_ROOM_ENABLED",
+              "type": "plain_text"
+            },
+            {
+              "name": "STUDY_ROOM_NAME",
+              "type": "plain_text"
+            },
+            {
+              "name": "SUBSCRIPTION_RECEIPT_EMAIL_MODE",
+              "type": "plain_text"
+            },
+            {
+              "name": "SUPABASE_SERVICE_ROLE_KEY",
+              "type": "secret_text"
+            },
+            {
+              "name": "SUPABASE_URL",
+              "type": "plain_text"
+            },
+            {
+              "name": "SUPPORT_NOTIFICATION_EMAIL_FROM",
+              "type": "plain_text"
+            },
+            {
+              "name": "SUPPORT_NOTIFICATION_EMAIL_MODE",
+              "type": "plain_text"
+            },
+            {
+              "name": "SYLLABUS_BASED_REVIEW_RANDOMIZATION_V2_ENABLED",
+              "type": "plain_text"
+            },
+            {
+              "name": "VERDICT_PDF_ENABLED",
+              "type": "plain_text"
+            },
+            {
+              "name": "VERDICT_PDF_PREMIUM_REQUIRED",
+              "type": "plain_text"
+            }
+          ],
+          "vars": {
+            "ADMIN_DIRECTORY_EMAIL_FROM": "Due Diligence Administration <support@duediligence.ph>",
+            "ADMIN_DIRECTORY_EMAIL_MODE": "suppressed",
+            "ADMIN_PULSE_ENABLED": "true",
+            "ADMIN_PULSE_WEB_PUSH_ENABLED": "true",
+            "AI_PREPARED_BETA_BADGE": "false",
+            "ALLOWED_ORIGIN": "https://duediligence-examinations-staging.wallyesteban1993.workers.dev",
+            "ALLOW_LEGACY_GUESTS": "false",
+            "ANCHOR_CASE_DIGESTS_ENABLED": "true",
+            "BAR_EASY_ENABLED": "true",
+            "BAR_EXAM_SIMULATION_RANDOMIZATION_V1_ENABLED": "true",
+            "BAR_EXAM_SIMULATION_RANDOMIZATION_V1_SCHEMA_READY": "true",
+            "BAR_QUESTION_PRACTICE_RANDOMIZATION_V2_ENABLED": "true",
+            "CHAIR_CASES_ENABLED": "true",
+            "CONTENT_HUMAN_REVIEW_REQUIRED": "false",
+            "DOCTRINES_ENABLED": "true",
+            "EXAMINATION_ROOM_EMAIL_MODE": "suppressed",
+            "EXAMINATION_ROOM_ENABLED": "true",
+            "EXAMINATION_ROOM_RECOVERY_MODE": "supabase_storage",
+            "FORECAST_RESULTS_EMAIL_FROM": "Due Diligence Results <support@duediligence.ph>",
+            "FORECAST_RESULTS_EMAIL_MODE": "suppressed",
+            "GEMINI_GROUNDING_ENABLED": "false",
+            "GEMINI_MODEL": "gemini-3.5-flash-lite",
+            "OUTBOUND_EMAIL_MODE": "suppressed",
+            "PHASE4_ACCESS_ENFORCEMENT": "true",
+            "PHASE4_MODEL_QUALITY_ENFORCEMENT": "true",
+            "PRIVATE_BETA_DISCLOSURE_VERSION": "beta-disclosure-v1-2026-07-31",
+            "PRIVATE_BETA_GATE_ENABLED": "false",
+            "REQUIRE_AUTHENTICATED_SUBMISSIONS": "true",
+            "SIGN_IN_NOTIFICATION_EMAIL_FROM": "Due Diligence Sign-in Notice <support@duediligence.ph>",
+            "SIGN_IN_NOTIFICATION_EMAIL_MODE": "suppressed",
+            "STUDY_ROOM_ENABLED": "true",
+            "STUDY_ROOM_NAME": "dd-study-room-admin-beta-staging-v1",
+            "SUBSCRIPTION_RECEIPT_EMAIL_MODE": "suppressed",
+            "SUPABASE_URL": "https://hlzqmreeoghbldnhlybr.supabase.co",
+            "SUPPORT_NOTIFICATION_EMAIL_FROM": "Due Diligence Support <support@duediligence.ph>",
+            "SUPPORT_NOTIFICATION_EMAIL_MODE": "suppressed",
+            "SYLLABUS_BASED_REVIEW_RANDOMIZATION_V2_ENABLED": "true",
+            "VERDICT_PDF_ENABLED": "true",
+            "VERDICT_PDF_PREMIUM_REQUIRED": "false"
+          },
+          "undisclosedVariableHashes": {
+            "ADMIN_PULSE_VAPID_PUBLIC_KEY": "813e95db580c53ff5cb9d6c737cb129e87f02723d42de2be409662dee6ffbe7d",
+            "ADMIN_PULSE_VAPID_SUBJECT": "fc6e33d51d04f62af306498e2ed10496d90a3ef3629f660e1191845018c86c16"
+          },
+          "compatibilityDate": "2026-07-26",
+          "compatibilityFlags": [
+            "nodejs_compat"
+          ],
+          "placement": {
+            "mode": "targeted",
+            "target": [
+              10
+            ]
+          },
+          "observability": {
+            "enabled": true,
+            "head_sampling_rate": 1,
+            "redact_query_string": false,
+            "logs": {
+              "enabled": true,
+              "head_sampling_rate": 1,
+              "persist": true,
+              "invocation_logs": true
+            },
+            "traces": {
+              "enabled": false,
+              "persist": true,
+              "head_sampling_rate": 1
+            }
+          },
+          "logpush": false,
+          "tailConsumers": [],
+          "limits": null,
+          "usageModel": "standard",
+          "cache": null,
+          "cacheSource": null,
+          "captureSources": {
+            "schemaVersion": 1,
+            "settings": {
+              "presentFields": [
+                "annotations",
+                "bindings",
+                "compatibility_date",
+                "compatibility_flags",
+                "logpush",
+                "observability",
+                "placement",
+                "tags",
+                "tail_consumers",
+                "usage_model"
+              ],
+              "placement": {
+                "mode": "targeted",
+                "target": [
+                  10
+                ]
+              },
+              "placementMode": null,
+              "cacheOptions": null,
+              "cacheOptionsPresentFields": [],
+              "exports": null
+            },
+            "runtime": {
+              "presentFields": [
+                "assets",
+                "compatibility_date",
+                "compatibility_flags",
+                "usage_model"
+              ],
+              "placement": null,
+              "placementMode": null,
+              "cacheOptions": null,
+              "cacheOptionsPresentFields": [],
+              "exports": null
+            },
+            "service": {
+              "defaultEnvironment": "production",
+              "script": {
+                "presentFields": [
+                  "compatibility_date",
+                  "compatibility_flags",
+                  "created_on",
+                  "deployment_id",
+                  "etag",
+                  "handlers",
+                  "has_assets",
+                  "has_modules",
+                  "id",
+                  "last_deployed_from",
+                  "logpush",
+                  "modified_on",
+                  "named_handlers",
+                  "observability",
+                  "placement",
+                  "placement_mode",
+                  "tag",
+                  "tags",
+                  "tail_consumers",
+                  "usage_model"
+                ],
+                "placement": {
+                  "mode": "targeted",
+                  "target": [
+                    {
+                      "region": "gcp:us-east4"
+                    }
+                  ]
+                },
+                "placementMode": "targeted",
+                "cacheOptions": null,
+                "cacheOptionsPresentFields": [],
+                "exports": null
+              }
+            }
+          },
+          "crons": [
+            "*/2 * * * *"
+          ],
+          "workersDev": true,
+          "previewUrls": true
+        },
+        "fingerprint": "038011196f012d3bde90af6e1a57a3feda15f58ffdd35d201378cc3c3f7b6f0f",
+        "secretValuesStored": false
+      }
+    },
+    "preflight.json": {
+      "path": "artifacts/debate-local-rehearsal/staging-34352333268/staging-release/preflight.json",
+      "sha256": "fb46e6ad5ec6bc3064579afa81ad17bdb9029d0fb7b57683d0acedee68f6e9cc",
+      "bytes": 1097,
+      "report": {
+        "status": "READY_FOR_AUTHORIZED_STAGING_DEPLOY_ONLY",
+        "candidateSha": "f0c4d6be4203d0a3688521694145d86a0462f2a4",
+        "baselineFingerprint": "038011196f012d3bde90af6e1a57a3feda15f58ffdd35d201378cc3c3f7b6f0f",
+        "previousVersionId": "b134ccc7-0c7f-4d00-89e0-d7314e0f1dd9",
+        "configHash": "a4575ffcc154f2c715f7c5ae7c207801f8aff3af6252460add0a1fb262563e4e",
+        "baseConfigHash": "e93d72892b472843119f573e377ee374ef4c436e5efe380c622da694858000f2",
+        "migrationHashes": {
+          "supabase/migrations/20260909080139_debate_room_v3.sql": "89d4f46b1e1b2991202880114387a1356b5eedfcf562129079de83d55a94b53c",
+          "supabase/migrations/20260909080143_study_room_admission_v3.sql": "5ca7d139bb925b00c82d391aab4f566446d5d1bdd25e0b1b271fde614cb11637"
+        },
+        "approvalReference": "Owner direct V3 implementation/controlled-testing/protected-preview request and autonomous staging-account instruction; superior task released incident hold. Scope: docs/debate-room-v3/evidence/staging-scope-review-20260909.md. No public-launch or spending approval.",
+        "publicLaunch": false,
+        "authenticatedSmokePending": true
+      }
+    }
+  },
+  "credentialsStored": false,
+  "publicLaunch": false,
+  "fullAcceptance": false,
+  "limitations": [
+    "Only two temporary ordinary internal-test identities; no paid/admin promotion, Study room join or provider connection.",
+    "Old-session denial was verified after exact Auth deletion; immediate post-global-logout invalidation is not established.",
+    "No hosted organizer event, private-storage/outbox lifecycle, physical media, real 90-minute rehearsal, capacity ramp or actual email delivery was verified.",
+    "No production release or public launch is established.",
+    "The deployed preview allowlist references the run-owned allowed UUID, which was deleted during cleanup; this is not an ongoing owner-accessible preview.",
+    "The workflow remains failed at smoke; deployment/preservation success must not turn it into a successful end-to-end release."
+  ],
+  "independentCleanupReadback": {
+    "status": "PASS_EXACT_IDS_ABSENT",
+    "executedBy": "Root coordinator using supported staging SQL readback; reported to clock_ci in the active task on 2026-09-09",
+    "observedAt": null,
+    "projectRef": "hlzqmreeoghbldnhlybr",
+    "actorIds": [
+      "dae52adb-3481-465c-b824-4e0d03f66a82",
+      "ca470e1e-227e-4171-b588-53ce23f2e0bf"
+    ],
+    "counts": {
+      "auth.users": 0,
+      "auth.sessions": 0,
+      "public.user_roles": 0,
+      "public.debate_v3_events.owner_id": 0
+    },
+    "limitation": "Attribution to the independent coordinator readback; this child did not repeat the live query or invent a raw connector response/timestamp."
+  },
+  "followupDiagnosis": {
+    "status": "ROOT_CONFIRMED_HTML_CANONICALIZATION_MISMATCH",
+    "executedBy": "Root coordinator independent anonymous GETs reported in active task on 2026-09-09",
+    "observedAt": null,
+    "redirects": [
+      {
+        "from": "/index.html",
+        "to": "/",
+        "status": 307,
+        "canonicalStatus": 200,
+        "canonicalAssetHashMatched": true
+      },
+      {
+        "from": "/debate-room/index.html",
+        "to": "/debate-room/",
+        "status": 307,
+        "canonicalStatus": 200,
+        "canonicalAssetHashMatched": true
+      },
+      {
+        "from": "/study-room/index.html",
+        "to": "/study-room/",
+        "status": 307,
+        "canonicalStatus": 200,
+        "canonicalAssetHashMatched": true
+      }
+    ],
+    "reason": "Smoke requests source index.html paths with redirect:error; default Worker asset HTML handling redirects them. Root is correcting only asset URL mapping while retaining redirect rejection.",
+    "anonymousBoundaries": {
+      "access": {
+        "httpStatus": 200,
+        "enabled": false
+      },
+      "events": {
+        "httpStatus": 401,
+        "errorCode": "AUTH_REQUIRED"
+      }
+    },
+    "dedicatedReadbackReceipt": {
+      "path": "docs/debate-room-v3/evidence/staging-anonymous-readback-34352333268.json",
+      "sha256": "90561ec1cac8ca8296bef9ab2c846dfa63dcf85475b2720f902d2d3b8b5e7867",
+      "status": "PASS_18_ASSET_HASHES_AND_ANONYMOUS_PUBLIC_BOUNDARIES",
+      "authenticatedDebateAllowDeny": "NOT_PROVED"
+    }
+  }
+}

@@ -309,14 +309,19 @@ test('actual candidate assets remain byte-identical; sanitized target, dependenc
 });
 
 test('hosted smoke requires exact assets plus genuine allow/deny-shaped authenticated responses and never claims full acceptance', async () => {
-  const manifest = { hashes: { 'debate-room/index.html': hash('exact candidate bytes') } }, calls = [];
+  const manifest = { hashes: { 'index.html': hash('home candidate bytes'), 'debate-room/index.html': hash('exact candidate bytes'), 'study-room/index.html': hash('study candidate bytes'), 'assets/debate-room.js': hash('candidate script bytes') } }, calls = [];
   const fetcher = async (url, options) => {
     calls.push({ url, options }); assert.ok(url.startsWith(TARGET.origin + '/'));
     assert.equal(new Headers(options.headers).has('Origin'), false, 'Do not invent a header omitted by same-origin browser GET');
     assert.equal(options.headers['Sec-Fetch-Site'], 'same-origin');
     assert.equal(options.headers['Sec-Fetch-Mode'], 'cors');
     assert.equal(new URL(options.headers.Referer).origin, TARGET.origin);
-    if (url.endsWith('index.html')) return new Response('exact candidate bytes');
+    assert.equal(options.redirect, 'error', 'Never follow an unexpected redirect with a staging credential');
+    assert.ok(!url.endsWith('index.html'), 'Cloudflare redirects noncanonical index filenames before serving bytes');
+    if (url === TARGET.origin + '/') return new Response('home candidate bytes');
+    if (url === TARGET.origin + '/debate-room/') return new Response('exact candidate bytes');
+    if (url === TARGET.origin + '/study-room/') return new Response('study candidate bytes');
+    if (url === TARGET.origin + '/assets/debate-room.js') return new Response('candidate script bytes');
     if (url.endsWith('/access')) return Response.json({ ok: true, enabled: false });
     const token = options.headers.Authorization;
     if (!token) return Response.json({ ok: false }, { status: 401 });
@@ -326,8 +331,11 @@ test('hosted smoke requires exact assets plus genuine allow/deny-shaped authenti
   const result = await smokeStaging({ allowedToken: 'allowed', deniedToken: 'excluded', manifest, fetcher });
   assert.equal(result.status, 'PASS_STAGING_ASSETS_AND_AUTH_ONLY'); assert.equal(result.fullOrganizerJourney, false); assert.equal(result.physicalMedia, false); assert.equal(result.publicLaunch, false);
   assert.ok(calls.every(call => call.options.method === 'GET'));
+  assert.deepEqual(calls.slice(0, 4).map(call => new URL(call.url).pathname), ['/', '/debate-room/', '/study-room/', '/assets/debate-room.js']);
+  assert.ok(calls.slice(0, 4).every(call => !call.options.headers.Authorization), 'Asset checks carry no bearer');
   await assert.rejects(smokeStaging({ allowedToken: 'same', deniedToken: 'same', manifest, fetcher }), { code: 'SMOKE_CREDENTIAL_MISSING' });
   await assert.rejects(smokeStaging({ allowedToken: 'allowed', deniedToken: 'excluded', manifest, fetcher: async () => new Response('wrong deployed source') }), { code: 'DEPLOYED_ASSET_MISMATCH' });
+  await assert.rejects(smokeStaging({ allowedToken: 'allowed', deniedToken: 'excluded', manifest: { hashes: { '../foreign': hash('bad') } }, fetcher }), { code: 'INVALID_SMOKE_MANIFEST' });
 });
 
 test('predeploy session verification rejects expired and wrongly scoped real-account responses before mutation', async () => {

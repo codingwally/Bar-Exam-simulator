@@ -150,6 +150,10 @@ export async function runBrowserOrganizer() {
         for (let index = 0; index < count; index++) {
           const tile = host.locator(selector).nth(index), box = await tile.boundingBox(), caption = await tile.locator('.caption').boundingBox();
           check(selector + ' participant and caption fit without page scrolling', contained(box, viewport) && contained(caption, box) && box.height >= 64, { width, height, index, box, caption });
+          const pin = await tile.locator('.tile-pin').boundingBox(), initials = await tile.locator('.initials').boundingBox();
+          check(selector + ' keeps the desktop Pin, initials and caption separate', contained(pin, box) && contained(initials, box)
+            && pin.width >= 44 && pin.height >= 44 && disjoint(pin, initials) && disjoint(pin, caption) && disjoint(initials, caption),
+            { width, height, index, box, pin, initials, caption });
         }
       }
       for (const selector of ['#stage-controls>button', '.live-tool-actions button', '#observers-prev', '#observers-next']) {

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createHostedDebateFixtureLifecycle } from './debate-hosted-fixtures.mjs';
 import { FIXTURE_TARGET } from './debate-staging-fixtures.mjs';
-import { HOSTED_BUCKET } from './debate-hosted-cleanup.mjs';
+import { HOSTED_BUCKET, hostedHash } from './debate-hosted-cleanup.mjs';
 import { createStudyRoomHandlers } from '../worker/study-room-routes.mjs';
 
 const NOW = Date.parse('2026-09-09T14:00:00Z'), clone = value => structuredClone(value);
@@ -40,6 +40,13 @@ function harness(overrides = {}) {
       if (u.pathname === '/rest/v1/rpc/astra_register_staging_study_room_fixture') {
         assert.equal(body.p_label, 'student'); assert.ok(users.has(body.p_user_id)); registered.add(body.p_user_id);
         return reply({ registered: true, fixtureUserId: body.p_user_id, dataScope: 'internal_test', registrationVersion: 'astra-staging-study-room-v1' });
+      }
+      if (u.pathname === '/rest/v1/rpc/astra_staging_debate_cleanup_v1') {
+        const counts = Object.fromEntries(['events','uploads','outbox','receipts','audit','match_versions','ballots','votes','rate_limits'].map(table => [table, 0]));
+        const snapshot = { version: 1, manifestSha256: hostedHash(body.p_manifest), snapshotSha256: hostedHash(counts), counts, storageKeys: [] };
+        assert.equal(body.p_manifest.fixtures.length, 11); assert.ok(body.p_manifest.fixtures.every(f => revoked.has(f.id)));
+        if (!body.p_expected) return reply({ status: 'CAPTURED', snapshot });
+        assert.deepEqual(body.p_expected, snapshot); return reply({ status: 'DELETED_ATOMICALLY', snapshot, deletedCounts: counts });
       }
       if (u.pathname === '/auth/v1/token') {
         const grant = u.searchParams.get('grant_type');
@@ -84,6 +91,8 @@ test('eleven registered students are classified before signin, ten preview ident
   assert.ok([...h.roles.values()].every(role => role.role === 'student'));
   const cleanup = await h.lifecycle.cleanup(); assert.equal(cleanup.complete, true); assert.equal(h.users.size, 0); assert.equal(h.revoked.size, 11);
   assert.ok(h.lifecycle.snapshot().fixtures.every(f => f.oldSessionDenied && f.workerDeniedBeforeCleanup));
+  assert.equal(h.lifecycle.snapshot().atomicCleanupHelperVerified, true);
+  assert.equal(h.calls.filter(call => call.url.pathname.endsWith('/astra_staging_debate_cleanup_v1')).length, 2);
 });
 test('actual session material stays in memory, refreshes after an hour, and is revoked before Auth deletion', async () => {
   const h = harness(); await h.lifecycle.provision(); const before = await h.lifecycle.sessionFor('host');
@@ -145,6 +154,22 @@ test('fixture-only preparation records a missing immediate fence but safely dele
   await h.lifecycle.provision(); const result = await h.lifecycle.cleanup(); assert.equal(result.complete, true);
   assert.equal(result.fixtureFencingVerified, false); assert.equal(h.lifecycle.snapshot().immediateLogoutFencingVerified, false);
   assert.equal(h.users.size, 0); assert.ok(h.lifecycle.snapshot().fixtures.every(record => record.oldSessionDenied && record.immediateFenceWorkerStatus === 200));
+});
+
+test('missing actual helper cannot pass preparation even though exact empty Auth fixtures can be cleaned', async () => {
+  const h = harness({ intercept: call => call.url.pathname.endsWith('/astra_staging_debate_cleanup_v1') ? reply(null, 404) : null });
+  await h.lifecycle.provision(); const result = await h.lifecycle.cleanup();
+  assert.equal(result.complete, true); assert.equal(h.users.size, 0);
+  assert.equal(h.lifecycle.snapshot().atomicCleanupHelperVerified, false);
+  assert.equal(h.lifecycle.snapshot().dataCleanup.failureCode, 'FIXTURE_REMOTE_CONTRACT');
+});
+
+test('an unconfirmed empty delete response never becomes actual helper verification from absence alone', async () => {
+  const h = harness({ intercept: call => call.url.pathname.endsWith('/astra_staging_debate_cleanup_v1') && call.body.p_expected ? reply(null, 503) : null });
+  await h.lifecycle.provision(); assert.equal((await h.lifecycle.cleanup()).complete, true);
+  assert.equal(h.lifecycle.snapshot().atomicCleanupHelperVerified, false);
+  assert.equal(h.lifecycle.snapshot().dataCleanup.atomic.state, 'ABSENCE_RECONCILED_AFTER_UNCERTAIN_RESPONSE');
+  assert.equal(h.users.size, 0);
 });
 test('missing immediate fence holds an event-intent run before event or Auth deletion', async () => {
   const h = harness({ intercept: call => call.url.pathname === '/debate-room/events' ? reply({ ok: true }, 200) : null });

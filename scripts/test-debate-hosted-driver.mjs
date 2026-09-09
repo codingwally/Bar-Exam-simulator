@@ -50,15 +50,20 @@ async function fixture(options = {}) {
     publicKey: { key: 'sb_publishable_inert_driver_public_key_1234567890' }, artifact: { hashes: { 'index.html': hash('exact-test-artifact') } },
     wrangler: { file: tooling, version: '4.114.0', entrySha256: hash(await readFile(tooling)) } };
   if (options.mode !== 'prepare' && options.preparation !== 'missing') {
+    // Inert receipt within this disposable test root only; never a hosted proof.
     const prior = { schemaVersion: 1, kind: 'HOSTED_DEBATE_ORGANIZER_REHEARSAL_DRIVER', mode: 'prepare',
       status: 'PASS_HOSTED_FIXTURE_PREPARATION_ONLY', sourceSha, target: TARGET,
       baselineFingerprint: baseline.fingerprint, previousVersionId: beforeVersion,
       startedAt: new Date(wall - 120000).toISOString(), completedAt: new Date(wall - 1000).toISOString(),
       deploymentState: 'NOT_REQUESTED', steps: [], authenticatedAccounts: 11, allowedAccounts: 10,
       cleanup: 'EXACT_FIXTURES_DELETED_AND_KNOWN_SESSIONS_DENIED', immediateLogoutFencingVerified: true,
+      atomicCleanupHelperVerified: true,
       publicLaunch: false, physicalMedia: false, providerMedia: false, realMail: false, fullAcceptance: false,
       credentialsStored: false, rawOutputStored: false, tracesStored: false };
     if (options.preparation === 'fence') prior.immediateLogoutFencingVerified = false;
+    if (options.preparation === 'atomic-helper') prior.atomicCleanupHelperVerified = false;
+    if (options.preparation === 'atomic-helper-missing') delete prior.atomicCleanupHelperVerified;
+    if (options.preparation === 'atomic-helper-string') prior.atomicCleanupHelperVerified = 'true';
     if (options.preparation === 'source') prior.sourceSha = 'c'.repeat(40);
     if (options.preparation === 'baseline') prior.baselineFingerprint = 'c'.repeat(64);
     if (options.preparation === 'cleanup') prior.cleanup = 'EXACT_ID_RECONCILIATION_REQUIRED';
@@ -104,7 +109,16 @@ async function fixture(options = {}) {
       assert.equal(parameters.sourceSha, sourceSha); assert.equal(parameters.workerUrl, TARGET.origin);
       assert.equal(parameters.supabaseUrl, `https://${TARGET.project}.supabase.co`);
       lifecycle = {
-        snapshot: () => ({ immediateLogoutFencingVerified: cleanupCalls ? Object.hasOwn(options, 'immediateFence') ? options.immediateFence : true : null }),
+        snapshot: () => {
+          stage('snapshot');
+          const fence = cleanupCalls ? Object.hasOwn(options, 'immediateFence') ? options.immediateFence : true : null;
+          return {
+            immediateLogoutFencingVerified: fence,
+            atomicCleanupHelperVerified: cleanupCalls
+              ? Object.hasOwn(options, 'atomicHelper') ? options.atomicHelper : fence === true
+              : false,
+          };
+        },
         preflightStorage: async () => { stage('storage-preflight'); await parameters.persist({ runTag: 'inert-owned-run', cleanupComplete: false, credentialsStored: false });
           return { status: options.storageState || 'ABSENT', rawIgnored: 'never-save-this-field' }; },
         ensureStorage: async () => { stage('storage-ensure'); return { status: 'MATCHING_PRIVATE_BUCKET' }; },
@@ -218,6 +232,8 @@ test('hosted driver orders exact gates, private storage, eleven fresh accounts, 
     assert.ok(run.report.browser.measuredDurationMs >= 93 * 60000); assert.equal(run.report.browser.minimumDurationMet, true);
     assert.equal(run.report.deploymentState, 'VERSION_AND_PRESERVATION_VERIFIED');
     assert.equal(run.report.preparationEvidence.immediateLogoutFencingVerified, true);
+    assert.equal(run.report.preparationEvidence.atomicCleanupHelperVerified, true);
+    assert.equal(run.report.atomicCleanupHelperVerified, true);
     assert.equal(run.report.preparationEvidence.sha256, run.f.env.DEBATE_HOSTED_PREPARATION_SHA256);
   } finally { await run.f.dispose(); }
 });
@@ -234,6 +250,7 @@ test('prepare mode verifies all fixture prerequisites then cleans up without gen
     assert.equal(run.error, undefined); assert.equal(run.result.status, 'PASS_HOSTED_FIXTURE_PREPARATION_ONLY');
     assert.equal(run.result.mode, 'prepare'); assert.equal(run.result.deployedVersionId, null);
     assert.equal(run.result.cleanupComplete, true); assert.equal(run.result.immediateLogoutFencingVerified, true);
+    assert.equal(run.result.atomicCleanupHelperVerified, true); assert.equal(run.report.atomicCleanupHelperVerified, true);
     assert.equal(run.f.preflights, 1); assert.equal(run.f.cleanupCalls, 1); assert.equal(run.f.browserCalls, 0);
     const order = ['preflight','factory','storage-preflight','storage-ensure','provision','sessions','cleanup'];
     for (let i = 1; i < order.length; i++) assert.ok(run.f.events.indexOf(order[i - 1]) < run.f.events.indexOf(order[i]));
@@ -244,6 +261,7 @@ test('prepare mode verifies all fixture prerequisites then cleans up without gen
     const output = path.dirname(run.result.outputDir);
     assert.deepEqual(await readdir(output), [path.basename(run.result.outputDir)]);
     assert.deepEqual((await readdir(run.result.outputDir)).sort(), ['driver.json','fixtures.json']);
+    assert.ok(run.f.events.indexOf('cleanup') < run.f.events.indexOf('snapshot'));
   } finally { await run.f.dispose(); }
 });
 
@@ -252,13 +270,37 @@ for (const immediateFence of [false, null]) test(`prepare completion reports ${i
   try {
     assert.equal(run.error, undefined); assert.equal(run.result.status, 'PASS_HOSTED_FIXTURE_PREPARATION_ONLY');
     assert.equal(run.result.cleanupComplete, true); assert.equal(run.result.immediateLogoutFencingVerified, immediateFence);
+    assert.equal(run.result.atomicCleanupHelperVerified, false); assert.equal(run.report.atomicCleanupHelperVerified, false);
     assert.equal(run.report.verificationGap, 'IMMEDIATE_LOGOUT_FENCING_NOT_VERIFIED_BEFORE_AUTH_DELETION');
     assert.equal(run.report.cleanup, 'EXACT_FIXTURES_DELETED_AND_KNOWN_SESSIONS_DENIED');
     assert.equal(run.report.deploymentState, 'NOT_REQUESTED'); assert.equal(run.f.browserCalls, 0);
   } finally { await run.f.dispose(); }
 });
 
-for (const preparation of ['missing','hash','path','fence','source','baseline','cleanup','mode','deployment','provider','future']) {
+for (const atomicHelper of [false, null, undefined, 'true']) test(`prepare refuses unverified atomic helper ${String(atomicHelper)} even after complete Auth cleanup`, async () => {
+  const run = await exercise({ mode: 'prepare', atomicHelper });
+  try {
+    assert.equal(run.error.code, 'HOSTED_ATOMIC_CLEANUP_HELPER_UNVERIFIED'); assert.equal(run.result, undefined);
+    assert.equal(run.report.status, 'FAIL_HOSTED_REHEARSAL'); assert.equal(run.report.atomicCleanupHelperVerified, false);
+    assert.equal(run.report.immediateLogoutFencingVerified, true);
+    assert.equal(run.report.cleanup, 'EXACT_FIXTURES_DELETED_AND_KNOWN_SESSIONS_DENIED');
+    assert.equal(run.report.deploymentState, 'NOT_REQUESTED'); assert.deepEqual(run.report.steps, []);
+    assert.equal(run.f.cleanupCalls, 1); assert.equal(run.f.browserCalls, 0);
+  } finally { await run.f.dispose(); }
+});
+
+test('run cannot report success when its own atomic cleanup observation is missing despite a valid prior preparation', async () => {
+  const run = await exercise({ atomicHelper: false });
+  try {
+    assert.equal(run.error.code, 'HOSTED_ATOMIC_CLEANUP_HELPER_UNVERIFIED'); assert.equal(run.result, undefined);
+    assert.equal(run.report.preparationEvidence.atomicCleanupHelperVerified, true);
+    assert.equal(run.report.atomicCleanupHelperVerified, false); assert.equal(run.report.status, 'FAIL_HOSTED_REHEARSAL');
+    assert.equal(run.report.cleanup, 'EXACT_FIXTURES_DELETED_AND_KNOWN_SESSIONS_DENIED');
+    assert.equal(run.report.observedAfterFailure.versionId, afterVersion);
+  } finally { await run.f.dispose(); }
+});
+
+for (const preparation of ['missing','hash','path','fence','atomic-helper','atomic-helper-missing','atomic-helper-string','source','baseline','cleanup','mode','deployment','provider','future']) {
   test(`run rejects ${preparation} preparation evidence before storage or accounts`, async () => {
     const run = await exercise({ preparation });
     try {

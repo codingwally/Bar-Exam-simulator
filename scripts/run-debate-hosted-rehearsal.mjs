@@ -72,13 +72,15 @@ async function verifyPreparationReceipt({ env, root, checked, clock }) {
     && Array.isArray(previous.steps) && previous.steps.length === 0
     && previous.authenticatedAccounts === 11 && previous.allowedAccounts === 10
     && previous.cleanup === 'EXACT_FIXTURES_DELETED_AND_KNOWN_SESSIONS_DENIED'
-    && previous.immediateLogoutFencingVerified === true && previous.verificationGap == null
+    && previous.immediateLogoutFencingVerified === true && previous.atomicCleanupHelperVerified === true
+    && previous.verificationGap == null
     && ['publicLaunch','physicalMedia','providerMedia','realMail','fullAcceptance','credentialsStored','rawOutputStored','tracesStored']
       .every(key => previous[key] === false)
     && Number.isFinite(started) && Number.isFinite(completed) && completed >= started && completed <= clock(),
   'HOSTED_PREPARATION_EVIDENCE_INVALID');
   return { reportPath: path.relative(root, filename).replaceAll(path.sep, '/'), sha256: hash(bytes),
-    sourceSha: previous.sourceSha, completedAt: previous.completedAt, immediateLogoutFencingVerified: true };
+    sourceSha: previous.sourceSha, completedAt: previous.completedAt, immediateLogoutFencingVerified: true,
+    atomicCleanupHelperVerified: true };
 }
 
 export async function runHostedDebateRehearsal({ mode = 'run', env = process.env, root = ROOT, fetcher = fetch,
@@ -109,7 +111,7 @@ export async function runHostedDebateRehearsal({ mode = 'run', env = process.env
     sourceSha: checked.candidate, target: TARGET, startedAt: instant(clock), baselineFingerprint: checked.baseline.fingerprint,
     previousVersionId: checked.baseline.state.versionId, minimumBrowserDurationMs: MINIMUM_HOSTED_REHEARSAL_MS,
     deploymentState: 'NOT_REQUESTED', storage: 'NOT_REQUESTED', steps: [], cleanup: 'NOT_STARTED',
-    immediateLogoutFencingVerified: null,
+    immediateLogoutFencingVerified: null, atomicCleanupHelperVerified: false,
     credentialsStored: false, rawOutputStored: false, tracesStored: false, publicLaunch: false,
     physicalMedia: false, providerMedia: false, realMail: false, fullAcceptance: false };
   if (preparationEvidence) report.preparationEvidence = preparationEvidence;
@@ -241,14 +243,20 @@ export async function runHostedDebateRehearsal({ mode = 'run', env = process.env
       // Snapshot is an explicit observation from the lifecycle, not inferred
       // from Auth deletion or the eventual rejection of an old bearer.
       try {
-        const observed = lifecycle.snapshot().immediateLogoutFencingVerified;
-        report.immediateLogoutFencingVerified = typeof observed === 'boolean' ? observed : null;
-      } catch { report.immediateLogoutFencingVerified = null; }
+        const observed = lifecycle.snapshot();
+        report.immediateLogoutFencingVerified = typeof observed.immediateLogoutFencingVerified === 'boolean'
+          ? observed.immediateLogoutFencingVerified : null;
+        report.atomicCleanupHelperVerified = observed.atomicCleanupHelperVerified === true;
+      } catch { report.immediateLogoutFencingVerified = null; report.atomicCleanupHelperVerified = false; }
       if (report.immediateLogoutFencingVerified !== true)
         report.verificationGap = 'IMMEDIATE_LOGOUT_FENCING_NOT_VERIFIED_BEFORE_AUTH_DELETION';
       if (cleanup?.complete !== true) {
         if (failure) report.originalFailureCode = codeFor(failure);
         failure = Object.assign(new Error('HOSTED_FIXTURE_CLEANUP_UNCONFIRMED'), { code: 'HOSTED_FIXTURE_CLEANUP_UNCONFIRMED' });
+      } else if (!failure && report.immediateLogoutFencingVerified === true && !report.atomicCleanupHelperVerified) {
+        // Event-free cleanup alone does not prove the service RPC can capture and
+        // atomically delete its exact scope. Only the lifecycle's live probe does.
+        failure = Object.assign(new Error('HOSTED_ATOMIC_CLEANUP_HELPER_UNVERIFIED'), { code: 'HOSTED_ATOMIC_CLEANUP_HELPER_UNVERIFIED' });
       }
     }
   }
@@ -269,6 +277,7 @@ export async function runHostedDebateRehearsal({ mode = 'run', env = process.env
   return { status: report.status, mode, reportPath, manifestPath, outputDir, deploymentState: report.deploymentState,
     deployedVersionId: report.deployedVersionId || null, cleanupComplete: true, publicLaunch: false,
     immediateLogoutFencingVerified: report.immediateLogoutFencingVerified,
+    atomicCleanupHelperVerified: report.atomicCleanupHelperVerified,
     physicalMedia: false, providerMedia: false, realMail: false, fullAcceptance: false };
 }
 

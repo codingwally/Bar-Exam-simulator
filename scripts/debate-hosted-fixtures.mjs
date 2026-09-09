@@ -25,7 +25,7 @@ export function createHostedDebateFixtureLifecycle({ sourceSha, supabaseUrl, wor
     runTag: `dv3host-${random(8).toString('hex')}`, noMail: true, noMediaProvider: true, noPublicLaunch: true, credentialsStored: false,
     registration: 'existing-astra-staging-study-room-v1-before-first-sign-in',
     classificationRetention: 'Auth deletion cascades registry; sanitized registration receipts retained here',
-    cleanupComplete: false, immediateLogoutFencingVerified: null, fixtures: [], eventIntents: [], dataCleanup: {} };
+    cleanupComplete: false, immediateLogoutFencingVerified: null, atomicCleanupHelperVerified: false, fixtures: [], eventIntents: [], dataCleanup: {} };
   const snapshot = () => clone(manifest);
   const save = async () => persist(snapshot());
   async function transport(origin, route, options = {}, expected = [200], key = serviceRoleKey) {
@@ -322,12 +322,15 @@ export function createHostedDebateFixtureLifecycle({ sourceSha, supabaseUrl, wor
       }
       if (activeFixtures.length) {
         try { need(fenced, 'HOSTED_SESSIONS_NOT_FENCED');
-          await safety.cleanupEvents(manifest.dataCleanup, { fixtures: activeFixtures, runTag: manifest.runTag, eventIntents: manifest.eventIntents, sessionsFenced: true }); }
+          await safety.cleanupEvents(manifest.dataCleanup, { fixtures: activeFixtures, runTag: manifest.runTag, eventIntents: manifest.eventIntents,
+            sessionsFenced: true, forceAtomicProbe: activeFixtures.length === 11 });
+          manifest.atomicCleanupHelperVerified = manifest.dataCleanup.helperVerified === true; }
         catch (error) { manifest.dataCleanup.failureCode = error?.code || 'HOSTED_DATA_CLEANUP_UNCONFIRMED'; await save().catch(() => {}); }
       }
       for (const record of [...manifest.fixtures].reverse()) {
         if (record.cleanupState === 'auth_deleted_verified') continue;
-        try { await cleanupOne(record, { allowUnfencedAuthDelete: noEventRunConfirmed }); }
+        try { need(manifest.dataCleanup.atomic?.state !== 'DELETE_REQUESTED', 'HOSTED_ATOMIC_OUTCOME_UNRESOLVED');
+          await cleanupOne(record, { allowUnfencedAuthDelete: noEventRunConfirmed }); }
         catch (error) { record.cleanupState = 'held'; record.failureCode = error?.code || 'FIXTURE_CLEANUP_UNCONFIRMED';
           failures.push({ purpose: record.purpose, code: record.failureCode }); await save().catch(() => {}); }
       }

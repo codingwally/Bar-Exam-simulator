@@ -1,6 +1,6 @@
 {
   "summary": {
-    "updatedAt": "2026-09-09T12:55:51.894Z",
+    "updatedAt": "2026-09-09T13:23:16.655Z",
     "sourceSha256": "14ddbb8173dc27c2ab869f593f4315989c33b88be1bf4e0f94d8f98ad121ab09",
     "state": "RESTRICTED_STAGING_DEPLOYED_PRESERVATION_PASS_SMOKE_FAILED_NOT_FULL_ACCEPTANCE",
     "scope": "Full V3 plus current owner Study admission directive. A linked test is coverage, not evidence of complete acceptance.",
@@ -1673,6 +1673,42 @@
         "head": "f0c4d6be4203d0a3688521694145d86a0462f2a4",
         "observation": "Root independent GET-only readback matched all18 f0c4d6b artifact hashes, documented three307 canonical HTML redirects, public access enabled:false and anonymous events401 AUTH_REQUIRED.",
         "limitations": "No credentials or protected navigation/event lifecycle; this readback does not upgrade the failed authenticated smoke or prove allowed/excluded account authorization."
+      },
+      "CI_85193_SUITE": {
+        "id": "CI_85193_SUITE",
+        "status": "PASS_13_GROUPS_WITH_SEPARATE_NATIVE_JOB_FAILURE",
+        "path": "docs/debate-room-v3/evidence/ci-validation-85193a75.json",
+        "sha256": "d365861548e7636425a6955a66c164b2410d27d505fa5b42c46d99a94913c503",
+        "head": "85193a759dbf119dc9dd908cb0b6590196883ad3",
+        "observation": "Exact85193a75 tree809822024296e5143afd4b8f6ed60afcbccc6640 equals tested merge acd79649. All126 suite source hashes independently match Git bytes; all13 groups, build and shared34355666128 passed. Unrelatedmedia34355666098 remains HTTP404/curl22.",
+        "limitations": "Overall Debate workflow34355666171 remains failed from the separate native harness error. No hosted/physical acceptance upgrade."
+      },
+      "CI_85193_BROWSER": {
+        "id": "CI_85193_BROWSER",
+        "status": "PASS_SYNTHETIC_BROWSER_AND_TWO_FONT_LAYOUT_SCREENSHOTS",
+        "path": "docs/debate-room-v3/evidence/browser-ci-85193a75.json",
+        "sha256": "9769adb56c226013425411ecceb0ae5a7d6123a3041284f5fafaab3bdb12a3a8",
+        "head": "85193a759dbf119dc9dd908cb0b6590196883ad3",
+        "observation": "Debate156 checks/196 actions/16 stages/6 byte-verified downloads and next3judge startup passed in69451 real milliseconds; Study5HTTP+9DOM passed. Root viewed1365px/320px screenshots: self-hosted font layout coherent, media aboveArena, headings exposed and narrow wrapping within viewport.",
+        "limitations": "Synthetic bootstrap/inert media; no hosted Auth or90 real minutes. Only two new screenshots reviewed. Historical147bb582 visual proof retained."
+      },
+      "CI_85193_METADATA": {
+        "id": "CI_85193_METADATA",
+        "status": "PASS_11_PINNED_WRANGLER_SERIALIZATION_CHECKS",
+        "path": "docs/debate-room-v3/evidence/wrangler-metadata-ci-85193a75.json",
+        "sha256": "bc911a1e70a90f907be3919eef1efde30264a0a54694b9e31bf7ac9fe099296d",
+        "head": "85193a759dbf119dc9dd908cb0b6590196883ad3",
+        "observation": "All11 actual Wrangler4.114.0 offline multipart checks passed for85193a75; all6 source hashes independently verified.",
+        "limitations": "Inert Worker, no full runtime or provider request; separate native test failure keeps overall workflow failed."
+      },
+      "CI_85193_NATIVE_FAILURE": {
+        "id": "CI_85193_NATIVE_FAILURE",
+        "status": "FAIL_NATIVE_SQL_TEST_RESTORE_OPERATOR_AMBIGUITY",
+        "path": "docs/debate-room-v3/evidence/native-cleanup-ci-85193a75.json",
+        "sha256": "f8c84643c2ed1668f303b04719002d114a57b0ae219921c9c4ef2145ec66185b",
+        "head": "85193a759dbf119dc9dd908cb0b6590196883ad3",
+        "observation": "Actual isolated PostgreSQL17.6 installed unchanged helper/migration and passed15 named assertions, including full-row receipt drift and privilege/ownership guards, then failed42725 in the test restore expression.",
+        "limitations": "Contention and positive final deletion were NOT_REACHED. The embedded preinitialized nativeConcurrentConnections:true is not execution proof. No hosted helper installation or session-fence proof."
       }
     },
     "release": {
@@ -1786,7 +1822,7 @@
         "debate": 16,
         "study": 10
       },
-      "evidenceCatalogHashesChecked": 36,
+      "evidenceCatalogHashesChecked": 40,
       "hostedDatabaseMappedRows": 15,
       "successorSourceHashesChecked": 103,
       "successorSourceHashMismatches": [],
@@ -1908,6 +1944,30 @@
         "url": "https://github.com/codingwally/Bar-Exam-simulator/actions/runs/34347346911"
       },
       "visualReviewAnchor": "147bb582e3ed4f0136f5e46f7d9a67412b404630"
+    },
+    "latestReviewedCandidateCi": {
+      "candidate": "85193a759dbf119dc9dd908cb0b6590196883ad3",
+      "tree": "809822024296e5143afd4b8f6ed60afcbccc6640",
+      "testedCheckout": "acd796490fd04dfc7280b6c4c00cea7bfee7a532",
+      "overallWorkflow": "FAIL_NATIVE_TEST_HARNESS_42725",
+      "suiteGroupsPassed": 13,
+      "sourceHashesIndependentlyVerified": 126,
+      "browser": "PASS_SYNTHETIC_156_DEBATE_9_STUDY_DOM_5_STUDY_HTTP",
+      "metadata": "PASS_11_ACTUAL_OFFLINE",
+      "nativeCleanup": "FAIL_15_CHECKS_THEN_HARNESS_RESTORE_CONTENTION_NOT_REACHED",
+      "evidence": "docs/debate-room-v3/evidence/ci-validation-85193a75.json"
+    },
+    "latestVisualReview": {
+      "candidate": "85193a759dbf119dc9dd908cb0b6590196883ad3",
+      "evidence": "docs/debate-room-v3/evidence/browser-ci-85193a75.json",
+      "reviewedBy": "Root coordinator",
+      "screenshots": 2,
+      "widths": [
+        1365,
+        320
+      ],
+      "scope": "Self-hosted fonts, media dock/heading geometry and narrow wrapping only",
+      "historicalAnchor": "docs/debate-room-v3/evidence/browser-ci-147bb582.json"
     }
   },
   "requirements": [

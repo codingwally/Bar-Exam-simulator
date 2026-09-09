@@ -2,6 +2,8 @@
 
 Updated 2026-09-09T12:55:51.894Z. **RESTRICTED STAGING DEPLOYED; preservation PASS, authenticated smoke FAILED before authorization. No full acceptance or production release.**
 
+[PR 358 candidate 85193a75](evidence/ci-validation-85193a75.json) passed all 13 suite groups, build, both synthetic browsers, all 11 actual Wrangler serialization checks and shared validation; 126 source hashes match the exact tested Git tree. [New browser evidence](evidence/browser-ci-85193a75.json) retains 156 Debate checks / 196 actions / 16 stages/six downloads and Study 5 HTTP + 9 DOM checks. Root reviewed exactly two 1365px / 320px screenshots with the bundled fonts; controls remain above the arena and headings, with narrow content wrapping within the viewport. Historical 147bb582 review is preserved. **The overall CI run remains failed:** [native PostgreSQL 17.6 testing](evidence/native-cleanup-ci-85193a75.json) stopped after 15 successful checks on a harness restore-expression error 42725, before contention and positive final-deletion tests. Its correction and the new hosted lifecycle gates need their own candidate CI; no hosted cleanup or full acceptance is inferred.
+
 All **315 rows** remain individually mapped: 267 source clauses, 44 acceptance IDs and four owner directives. Bounded states remain **61 LOCAL_VERIFIED / 230 PARTIAL / 24 UNVERIFIED**; complete acceptance passes remain **zero**. The documentation refresh preserves every original requirement/source span/test ID/procedure and adds precise synthetic browser contributions to 140 rows.
 
 PR 356 merged the implementation to main 30a90e85b56b72c8da53b857e70b2db428809eb3; PR 357 merged the narrow fixture-client correction to f0c4d6be4203d0a3688521694145d86a0462f2a4. The separate restricted staging deployment is recorded below. Neither repository merge nor staging release establishes production deployment or public launch.
@@ -297,7 +299,7 @@ SHA-256: `f42fdeaf3de4b27ceee758e4270e1b1f35d4e2c580cc5a826f2584ee07970a91`
 
 **HISTORICAL_FAILED_016C_BROWSER_RUN** — [docs/debate-room-v3/evidence/browser-ci-016c11d1.json](../../docs/debate-room-v3/evidence/browser-ci-016c11d1.json)
 
-CI 34343107711 completed115 Debate checks/196 commands/16 stages/six downloads but failed its final console-error classifier for a real 400 CONTROLLER_LEASE_REQUIRED after deliberate clock expiry. Study HTTP/DOM passed independently. The run remains failed.147bb582 verifies exact expired-lease/request matching and explicit DOM recovery, without weakening CSP or runtime leases.
+CI 34343107711 completed115 Debate checks/196 commands / 16 stages/six downloads but failed its final console-error classifier for a real 400 CONTROLLER_LEASE_REQUIRED after deliberate clock expiry. Study HTTP/DOM passed independently. The run remains failed.147bb582 verifies exact expired-lease/request matching and explicit DOM recovery, without weakening CSP or runtime leases.
 
 Limit: The earlier red run is historical. Its visual review also identified the media-control overlap fixed in 147bb582; it does not prove the later fix.
 
@@ -412,6 +414,46 @@ Root independent GET-only readback matched all18 f0c4d6b artifact hashes, docume
 Limit: No credentials or protected navigation/event lifecycle; this readback does not upgrade the failed authenticated smoke or prove allowed/excluded account authorization.
 
 SHA-256: `90561ec1cac8ca8296bef9ab2c846dfa63dcf85475b2720f902d2d3b8b5e7867`
+
+### Evidence CI_85193_SUITE
+
+**PASS_13_GROUPS_WITH_SEPARATE_NATIVE_JOB_FAILURE** — [docs/debate-room-v3/evidence/ci-validation-85193a75.json](../../docs/debate-room-v3/evidence/ci-validation-85193a75.json)
+
+Exact85193a75 tree809822024296e5143afd4b8f6ed60afcbccc6640 equals tested merge acd79649. All126 suite source hashes independently match Git bytes; all13 groups, build and shared34355666128 passed. Unrelatedmedia34355666098 remains HTTP404/curl22.
+
+Limit: Overall Debate workflow34355666171 remains failed from the separate native harness error. No hosted/physical acceptance upgrade.
+
+SHA-256: `d365861548e7636425a6955a66c164b2410d27d505fa5b42c46d99a94913c503`
+
+### Evidence CI_85193_BROWSER
+
+**PASS_SYNTHETIC_BROWSER_AND_TWO_FONT_LAYOUT_SCREENSHOTS** — [docs/debate-room-v3/evidence/browser-ci-85193a75.json](../../docs/debate-room-v3/evidence/browser-ci-85193a75.json)
+
+Debate156 checks / 196 actions / 16 stages/6 byte-verified downloads and next3judge startup passed in69451 real milliseconds; Study 5 HTTP + 9 DOM passed. Root viewed1365px/320px screenshots: self-hosted font layout coherent, media aboveArena, headings exposed and narrow wrapping within viewport.
+
+Limit: Synthetic bootstrap/inert media; no hosted Auth or90 real minutes. Only two new screenshots reviewed. Historical 147bb582 visual proof retained.
+
+SHA-256: `9769adb56c226013425411ecceb0ae5a7d6123a3041284f5fafaab3bdb12a3a8`
+
+### Evidence CI_85193_METADATA
+
+**PASS_11_PINNED_WRANGLER_SERIALIZATION_CHECKS** — [docs/debate-room-v3/evidence/wrangler-metadata-ci-85193a75.json](../../docs/debate-room-v3/evidence/wrangler-metadata-ci-85193a75.json)
+
+All11 actual Wrangler4.114.0 offline multipart checks passed for85193a75; all6 source hashes independently verified.
+
+Limit: Inert Worker, no full runtime or provider request; separate native test failure keeps overall workflow failed.
+
+SHA-256: `bc911a1e70a90f907be3919eef1efde30264a0a54694b9e31bf7ac9fe099296d`
+
+### Evidence CI_85193_NATIVE_FAILURE
+
+**FAIL_NATIVE_SQL_TEST_RESTORE_OPERATOR_AMBIGUITY** — [docs/debate-room-v3/evidence/native-cleanup-ci-85193a75.json](../../docs/debate-room-v3/evidence/native-cleanup-ci-85193a75.json)
+
+Actual isolated PostgreSQL 17.6 installed unchanged helper/migration and passed15 named assertions, including full-row receipt drift and privilege/ownership guards, then failed42725 in the test restore expression.
+
+Limit: Contention and positive final deletion were NOT_REACHED. The embedded preinitialized nativeConcurrentConnections:true is not execution proof. No hosted helper installation or session-fence proof.
+
+SHA-256: `f8c84643c2ed1668f303b04719002d114a57b0ae219921c9c4ef2145ec66185b`
 
 ## Current staging state
 

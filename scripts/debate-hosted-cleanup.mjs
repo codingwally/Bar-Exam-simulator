@@ -124,10 +124,35 @@ export function createHostedDataSafety({ supabaseUrl, service, persist, clock = 
     need(absent.status === 404 || (absent.status === 400 && (String(absent.body?.statusCode) === '404' || ['NoSuchKey', 'not_found'].includes(absent.body?.code))), 'HOSTED_FILE_DELETE_UNVERIFIED');
     record.state = 'DELETED_ABSENCE_VERIFIED'; await persist();
   }
-  async function cleanupEvents(record, { fixtures, runTag, eventIntents, sessionsFenced }) {
-    need(record.atomic?.state !== 'DELETE_REQUESTED', 'HOSTED_ATOMIC_OUTCOME_UNRESOLVED');
+  async function verifyAbsence({ fixtures, eventIds, storageKeys }) {
+    for (const id of eventIds) {
+      need((await rows('debate_v3_events', { id: `eq.${id}` }, 1)).length === 0, 'HOSTED_EVENT_REMAINS');
+      for (const table of ['uploads','outbox','receipts','audit','match_versions','ballots','votes'])
+        need((await rows(`debate_v3_${table}`, { event_id: `eq.${id}` })).length === 0, 'HOSTED_EVENT_CHILD_REMAINS');
+    }
+    for (const fixture of fixtures) {
+      need((await rows('debate_v3_events', { owner_id: `eq.${fixture.id}` }, 2)).length === 0, 'HOSTED_EVENT_REMAINS');
+      need((await rows('debate_v3_events', { state: `cs.${JSON.stringify({ members: { [fixture.id]: {} } })}` }, 2)).length === 0, 'HOSTED_EVENT_MEMBERSHIP_REMAINS');
+      for (const [table, column] of [['uploads','actor_id'],['outbox','actor_id'],['receipts','actor_id'],['audit','actor_id'],
+        ['ballots','judge_id'],['votes','actor_id'],['rate_limits','actor_id']])
+        need((await rows(`debate_v3_${table}`, { [column]: `eq.${fixture.id}` })).length === 0, 'HOSTED_ACTOR_DATA_REMAINS');
+    }
+    for (const key of storageKeys) {
+      const response = await service(`/storage/v1/object/info/${HOSTED_BUCKET.id}/${key}`, {}, [200, 400, 404]);
+      need(response.status === 404 || (response.status === 400 && (String(response.body?.statusCode) === '404' ||
+        ['NoSuchKey', 'not_found'].includes(response.body?.code))), 'HOSTED_FILE_DELETE_UNVERIFIED');
+    }
+  }
+  async function cleanupEvents(record, { fixtures, runTag, eventIntents, sessionsFenced, forceAtomicProbe = false }) {
     need(!(record.files || []).some(file => file.state === 'DELETE_REQUESTED'), 'HOSTED_STORAGE_OUTCOME_UNRESOLVED');
     need(sessionsFenced === true && fixtures.every(f => f.signOutState === 'confirmed' && f.authDeniedBeforeCleanup && f.workerDeniedBeforeCleanup), 'HOSTED_SESSIONS_NOT_FENCED');
+    validateFixtureSet(fixtures);
+    if (record.atomic?.state === 'DELETE_REQUESTED') {
+      need(same(record.atomic.fixtureIds, fixtures.map(f => f.id).sort()) && record.atomic.eventIds.every(id => eventIntents.some(intent => intent.id === id)), 'HOSTED_RECONCILIATION_SCOPE');
+      await verifyAbsence({ fixtures, eventIds: record.atomic.eventIds, storageKeys: record.atomic.snapshot.storageKeys });
+      record.atomic.originalResponseState = 'UNCONFIRMED'; record.atomic.state = 'ABSENCE_RECONCILED_AFTER_UNCERTAIN_RESPONSE';
+      record.atomic.reconciledAt = new Date(clock()).toISOString(); record.complete = true; await persist(); return record;
+    }
     record.events ||= []; record.deletions ||= []; record.files ||= [];
     const events = await collectOwnedEvents({ fixtures, runTag, eventIntents }), frozenEvents = [];
     for (const { event, intent } of events) {
@@ -163,7 +188,7 @@ export function createHostedDataSafety({ supabaseUrl, service, persist, clock = 
       }), 'HOSTED_RATE_LIMIT_SCOPE');
       frozenRates.push({ fixture, rates });
     }
-    if (!frozenEvents.length && frozenRates.every(value => value.rates.length === 0)) {
+    if (!forceAtomicProbe && !frozenEvents.length && frozenRates.every(value => value.rates.length === 0)) {
       record.complete = true; await persist(); return record;
     }
     const rpcManifest = { projectRef: FIXTURE_TARGET.projectRef, runTag,
@@ -186,21 +211,23 @@ export function createHostedDataSafety({ supabaseUrl, service, persist, clock = 
       need(reread.length === 1 && same(await eventData(reread[0], ownership), frozen), 'HOSTED_CHANGED_DURING_ATOMIC_CAPTURE');
     }
     for (const { fixture, rates } of frozenRates) need(same(await rows('debate_v3_rate_limits', { actor_id: `eq.${fixture.id}` }), rates), 'HOSTED_CHANGED_DURING_ATOMIC_CAPTURE');
-    record.atomic = { state: 'CAPTURED', snapshot, lockScope: 'nine Debate tables only; SHARE ROW EXCLUSIVE',
+    record.atomic = { state: 'CAPTURED', snapshot, fixtureIds: fixtures.map(f => f.id).sort(), eventIds: frozenEvents.map(({ frozen }) => frozen.event.id),
+      lockScope: 'nine Debate tables only; SHARE ROW EXCLUSIVE',
       lockTimeoutMs: 5000, configuredStatementTimeoutMs: 20000, hostedPostgrestTimeoutHoistingVerified: false,
       targetIdentityVerifiedBy: 'fixed external staging transport' }; await persist();
     for (const key of expectedKeys) await removeFile(key, record.files);
     record.atomic.state = 'DELETE_REQUESTED'; await persist();
-    const removed = await service(endpoint, { method: 'POST', body: JSON.stringify({ p_manifest: rpcManifest, p_expected: snapshot }) });
-    need(removed.body?.status === 'DELETED_ATOMICALLY' && same(removed.body.snapshot, snapshot) &&
-      same(removed.body.deletedCounts, expectedCounts), 'HOSTED_ATOMIC_DELETE_UNCONFIRMED');
-    for (const { frozen, intent } of frozenEvents) {
-      need((await rows('debate_v3_events', { id: `eq.${frozen.event.id}` }, 1)).length === 0, 'HOSTED_EVENT_REMAINS');
-      for (const table of Object.keys(frozen.tables)) need((await rows(`debate_v3_${table}`, { event_id: `eq.${frozen.event.id}` })).length === 0, 'HOSTED_EVENT_CHILD_REMAINS');
-      intent.cleanupState = 'EVENT_AND_FILES_ABSENT';
-    }
-    for (const { fixture } of frozenRates) need((await rows('debate_v3_rate_limits', { actor_id: `eq.${fixture.id}` })).length === 0, 'HOSTED_RATE_REMAINS');
-    record.atomic.state = 'DELETED_ABSENCE_VERIFIED';
+    let confirmed = false;
+    try {
+      const removed = await service(endpoint, { method: 'POST', body: JSON.stringify({ p_manifest: rpcManifest, p_expected: snapshot }) });
+      confirmed = removed.body?.status === 'DELETED_ATOMICALLY' && same(removed.body.snapshot, snapshot) && same(removed.body.deletedCounts, expectedCounts);
+    } catch { /* Retain only the unknown-response fact, never provider error text. */ }
+    record.atomic.originalResponseState = confirmed ? 'CONFIRMED' : 'UNCONFIRMED'; await persist();
+    await verifyAbsence({ fixtures, eventIds: record.atomic.eventIds, storageKeys: expectedKeys });
+    for (const { intent } of frozenEvents) intent.cleanupState = 'EVENT_AND_FILES_ABSENT';
+    record.helperVerified = confirmed;
+    record.atomic.state = confirmed ? 'DELETED_ABSENCE_VERIFIED' : 'ABSENCE_RECONCILED_AFTER_UNCERTAIN_RESPONSE';
+    if (!confirmed) record.atomic.reconciledAt = new Date(clock()).toISOString();
     record.complete = true; await persist(); return record;
   }
   return Object.freeze({ rows, bucketPreflight, ensureBucket, collectOwnedEvents, validateEvent, eventData, cleanupEvents });

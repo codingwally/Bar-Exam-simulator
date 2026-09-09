@@ -34,7 +34,7 @@ test('native PostgreSQL17.6 atomic owned cleanup, full-row drift denial, privile
   const sqlSource = (await readFile(sourceUrl, 'utf8')).replaceAll('\r\n', '\n');
   const debateMigration = (await readFile(new URL('../supabase/migrations/20260909080139_debate_room_v3.sql', import.meta.url), 'utf8')).replaceAll('\r\n', '\n');
   const report = { kind: 'NATIVE_CI_POSTGRES17_STAGING_CLEANUP', status: 'RUNNING', hostedExecuted: false,
-    sourceSha256: hash(sqlSource), adaptations: [], nativeConcurrentConnections: true, providerCalls: 0,
+    sourceSha256: hash(sqlSource), adaptations: [], nativeConcurrentConnections: false, providerCalls: 0,
     dependencySchemaScope: 'Inert reduced Auth/Storage/billing fixtures; unmodified real Debate migration/helper SQL; no Auth server or Storage API.',
     sourceHashes: { helper: hash(sqlSource), debateMigration: hash(debateMigration), harness: hash((await readFile(new URL(import.meta.url), 'utf8')).replaceAll('\r\n', '\n')) },
     identityBoundary: 'Only the external target-pinned coordinator proves hosted project identity; payload ref is context.',
@@ -159,7 +159,7 @@ test('native PostgreSQL17.6 atomic owned cleanup, full-row drift denial, privile
       ['billing data', `insert into public.payment_requests values(${quote(host)})`, `delete from public.payment_requests where user_id=${quote(host)}`],
       ['embedded provider job type', `update public.debate_v3_outbox set job=jsonb_set(job,'{type}','"mail"') where id=${quote(exportId)}`, `update public.debate_v3_outbox set job=jsonb_set(job,'{type}','"export"') where id=${quote(exportId)}`],
       ['running delivery claim', `update public.debate_v3_outbox set status='running' where id=${quote(exportId)}`, `update public.debate_v3_outbox set status='completed' where id=${quote(exportId)}`],
-      ['foreign event member', `update public.debate_v3_events set state=jsonb_set(state,'{members}',state->'members'||${json({ [ID(999)]: { id: ID(999) } })}) where id=${quote(eventId)}`, `update public.debate_v3_events set state=jsonb_set(state,'{members}',state->'members'-${quote(ID(999))}) where id=${quote(eventId)}`],
+      ['foreign event member', `update public.debate_v3_events set state=jsonb_set(state,'{members}',(state->'members')||${json({ [ID(999)]: { id: ID(999) } })}) where id=${quote(eventId)}`, `update public.debate_v3_events set state=jsonb_set(state,'{members}',(state->'members')-${quote(ID(999))}::text) where id=${quote(eventId)}`],
     ]) {
       await run(`${mutate};`); await run(asService(rpc(null)), { expectedCode: 'P0001' });
       await run(asService(rpc(initial.snapshot)), { expectedCode: 'P0001' });
@@ -190,6 +190,7 @@ test('native PostgreSQL17.6 atomic owned cleanup, full-row drift denial, privile
     await run(`set statement_timeout='12s'; ${asService(rpc(initial.snapshot))}`, { expectedCode: '55P03' });
     await blocker;
     check('Five-second lock contention fails with no partial deletion or retry', JSON.stringify(await counts()) === JSON.stringify(beforeDrift));
+    report.nativeConcurrentConnections = true;
     const result = await scalar(asService(rpc(initial.snapshot)));
     check('Exact captured event, export/evidence records, receipts, audit and rate rows delete in one transaction', result.status === 'DELETED_ATOMICALLY');
     const after = await counts(); check('All scoped Debate data absent and all11 Auth identities retained for lifecycle cleanup',

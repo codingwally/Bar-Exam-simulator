@@ -1,0 +1,991 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-09T13:18:55.226Z",
+  "status": "PASS_13_GROUP_SUITE_WITH_SEPARATE_NATIVE_JOB_FAILURE",
+  "provenance": {
+    "candidate": "85193a759dbf119dc9dd908cb0b6590196883ad3",
+    "candidateTree": "809822024296e5143afd4b8f6ed60afcbccc6640",
+    "testedCheckout": "acd796490fd04dfc7280b6c4c00cea7bfee7a532",
+    "testedCheckoutTree": "809822024296e5143afd4b8f6ed60afcbccc6640",
+    "testedCheckoutParents": [
+      "f0c4d6be4203d0a3688521694145d86a0462f2a4",
+      "85193a759dbf119dc9dd908cb0b6590196883ad3"
+    ],
+    "treeVerification": "Exact candidate Git tree independently resolved locally; tested checkout tree/parents independently read from GitHub Git commit API.",
+    "run": {
+      "id": 34355666171,
+      "url": "https://github.com/codingwally/Bar-Exam-simulator/actions/runs/34355666171",
+      "status": "completed",
+      "conclusion": "failure",
+      "reason": "Native cleanup test harness failed; local-validation and Wrangler metadata jobs passed independently."
+    },
+    "job": {
+      "id": 102479576504,
+      "name": "local-validation",
+      "conclusion": "success",
+      "startedAt": "2026-09-09T13:12:57Z",
+      "completedAt": "2026-09-09T13:15:32Z"
+    }
+  },
+  "sourceVerification": [
+    {
+      "path": ".github/workflows/debate-v3-capture.yml",
+      "sha256": "0b3602b4cc6310d3999eba615707f2fb33fd5a5c8e58a7579ae54ed954abeeac"
+    },
+    {
+      "path": ".github/workflows/debate-v3-staging.yml",
+      "sha256": "de1981ac2cfbb786b9b9c40056e5fc8a4ca28641db0a9b6dc8d97252c95aa89e"
+    },
+    {
+      "path": ".github/workflows/debate-v3-validation.yml",
+      "sha256": "74f05e2b2f57d7341b27d5a5488ca0e41a3293f047d68cd34ad82eb8c30654ea"
+    },
+    {
+      "path": "assets/debate-dates.js",
+      "sha256": "7549422128267aff3d7de4aafc535b5f40290df456a33fd5b85ddd4f7fcd0b12"
+    },
+    {
+      "path": "assets/debate-entry.js",
+      "sha256": "81fc674a29b4c4997b8bdd40fe5e49b56e37592cbd573b26675274a9d7894563"
+    },
+    {
+      "path": "assets/debate-media.js",
+      "sha256": "ed33b1126087c531423840fb241afb9e95682bcfcd7c8ec8caafb8ae142593b2"
+    },
+    {
+      "path": "assets/debate-room.css",
+      "sha256": "bc752e89280753a0e80dd489229e2c2b9f3f4e1bc15a9b70d6a95291eab681bd"
+    },
+    {
+      "path": "assets/debate-room.js",
+      "sha256": "1c1c245f2d23f12e4f546ae33c57dc5613b927fd6417c157de6ab992cc4eed6e"
+    },
+    {
+      "path": "assets/feature-loader.js",
+      "sha256": "e93faeb186624afc009998303597f2dba9f4dd2e883c47ea0f325ba7b89eefc8"
+    },
+    {
+      "path": "assets/phase2-config.js",
+      "sha256": "6ac37e57756468da4b20e5982b82490c437b92f8b0b5a91c19bf07416fef2357"
+    },
+    {
+      "path": "assets/phase2-experience.js",
+      "sha256": "60f59903d92240b4869e9cb7edbbdfb2a1f72a0ce2229790b562f85815375edc"
+    },
+    {
+      "path": "assets/phase2.css",
+      "sha256": "daa402e9e2cc6142f38a024f50b410a7e04396547288c5d6ebdefd9ff0b5a965"
+    },
+    {
+      "path": "assets/study-room-backgrounds.js",
+      "sha256": "b31ccb7e600c81ac2aaf6a40a58f088245acd6de48171af537fbc69c237a3443"
+    },
+    {
+      "path": "assets/study-room-live.css",
+      "sha256": "b03ee186567cf1f027b699cc12979dcad4f89279d7563e11d8fe91218f1520c2"
+    },
+    {
+      "path": "assets/study-room-live.js",
+      "sha256": "18233c7e451d4af50a4b71254ae93d68ceb0316b0b7a1cd4b4d880bd32542450"
+    },
+    {
+      "path": "assets/study-room-preview.css",
+      "sha256": "31716c4a5af8400dfdc6555dba20452958299a0c2ebd75667414f02c4d002e9d"
+    },
+    {
+      "path": "assets/study-room-preview.js",
+      "sha256": "00477d0c99c0df301beed26eeea970facdc9094766984f3deefad716eb3d9a7d"
+    },
+    {
+      "path": "assets/vendor/debate-fonts/Fraunces.OFL.txt",
+      "sha256": "bdf4c22802eaf804f998195871c6b8938aac2ac14b2d78a8bd66a6f1eced833b"
+    },
+    {
+      "path": "assets/vendor/debate-fonts/Inter.OFL.txt",
+      "sha256": "5b9321a4298cfeb6b34354164a1c3afc3db114569984c502b9b35d988fd58c57"
+    },
+    {
+      "path": "assets/vendor/debate-fonts/SOURCE.md",
+      "sha256": "facba396a48e5b85df9710658622411bda48d5fd25a0224ed577d4b877ffc13e"
+    },
+    {
+      "path": "assets/vendor/debate-fonts/fraunces-v38-latin-ext.woff2",
+      "sha256": "a21ecfbf41fbc393e24ef9b7e38532a27e8da5e0a074aa7d66802d1b5ccec2f0"
+    },
+    {
+      "path": "assets/vendor/debate-fonts/fraunces-v38-latin.woff2",
+      "sha256": "7f9d191d999336d3b9790afa72e1358e50a13b06d4f289341e92a311967a80f9"
+    },
+    {
+      "path": "assets/vendor/debate-fonts/google-fonts-source.css.txt",
+      "sha256": "a6194f5a78fd0ad22d96192e72e1b4d02f01503b5805a36e33e182fb285e277f"
+    },
+    {
+      "path": "assets/vendor/debate-fonts/inter-v20-latin-ext.woff2",
+      "sha256": "34b9c504cab7a73e37b746343a449132e56cf7b5481af2cb81dc74dcff25c956"
+    },
+    {
+      "path": "assets/vendor/debate-fonts/inter-v20-latin.woff2",
+      "sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62"
+    },
+    {
+      "path": "assets/vendor/debate-fonts/manifest.json",
+      "sha256": "18c84c81c4ef31215a592f51c0723285a3ab442d8093c75d76174a403627ac69"
+    },
+    {
+      "path": "assets/vendor/supabase-2.49.8.umd.js",
+      "sha256": "522e844a8554c84631063fa630d0b824b8042f346a0222da04460f81d942dcf8"
+    },
+    {
+      "path": "debate-room/index.html",
+      "sha256": "b7722b53d25db83d381aea95480031b481522ce46cb7e29f7fca431dd02d647e"
+    },
+    {
+      "path": "docs/debate-room-v3/evidence/staging-dml-rollback-probe.denials.json",
+      "sha256": "d310d66d656db355a485b51e4f323be360e0d662e069df12b06b66f5ee13a6b3"
+    },
+    {
+      "path": "docs/debate-room-v3/evidence/staging-dml-rollback-probe.fixtures.json",
+      "sha256": "02be235d5758910ab4c2382ca815b582fd04ee666217b08a5648ed325152bcfb"
+    },
+    {
+      "path": "docs/debate-room-v3/evidence/staging-dml-rollback-probe.manifest.json",
+      "sha256": "c81802893551d248d0ea5795ca21de2983f757989b3e06ae47d6e0d8cda14e78"
+    },
+    {
+      "path": "docs/debate-room-v3/evidence/staging-dml-rollback-probe.readback.sql",
+      "sha256": "3df9e67986d99daba6e861f89398d140ed44f67619154678087f71e05ba46691"
+    },
+    {
+      "path": "docs/debate-room-v3/evidence/staging-dml-rollback-probe.sql",
+      "sha256": "7c828bd9b0784532f20a2881c8b9af317f76f877be3e274f560686d8eb11cc76"
+    },
+    {
+      "path": "index.html",
+      "sha256": "dee34326f415a2589c9f7bf8a36eadabcccddbcca8020963d34d5dbe9c66820b"
+    },
+    {
+      "path": "scripts/build-pages-artifact.mjs",
+      "sha256": "55de1ba60173aa41cb94213af6dbfb15a2f444dbdc19ae167fd276de80e768e6"
+    },
+    {
+      "path": "scripts/build-staging-artifact.mjs",
+      "sha256": "b458f6b85480d4652d964b8d19c3e3031b2380c7c3eda704245ac184d3c1ddf5"
+    },
+    {
+      "path": "scripts/debate-hosted-cleanup.mjs",
+      "sha256": "08eb32b42123d58a8c7afa882ab254c3236a85cadde2025acd42f0b67007be03"
+    },
+    {
+      "path": "scripts/debate-hosted-fixtures.mjs",
+      "sha256": "21535c0dc04f837b325568698c1bc65b534aa3204d42ff83e553db2bee5785cd"
+    },
+    {
+      "path": "scripts/debate-staging-dml-probe.mjs",
+      "sha256": "39856d79fa6382b7fbc5fa4d5bd4ce790995724bfa1f34e30a11429f97f42ad9"
+    },
+    {
+      "path": "scripts/debate-staging-fixtures.mjs",
+      "sha256": "e1704034c13de91e2973116e138fb4d3018253f488a348218873e68d21098fbd"
+    },
+    {
+      "path": "scripts/debate-staging-release.mjs",
+      "sha256": "78651b2edda2e120a341db551f61cc3ef55f2ab8b2b9f2c85c94a39b785527f8"
+    },
+    {
+      "path": "scripts/resolve-debate-hosted-preparation.mjs",
+      "sha256": "bcfa8bbd5f845a12add7fb1b1dfda74d2cd245a2533c4e5f9ffce56f781f68f2"
+    },
+    {
+      "path": "scripts/run-debate-hosted-rehearsal.mjs",
+      "sha256": "2609d2ef85b138c6e9e2de4eb6ffc26312518ee4eef2bd73d3ed9100c3edd1f4"
+    },
+    {
+      "path": "scripts/run-debate-staging-auth.mjs",
+      "sha256": "8c97a87b14499ca3b85c2fb0dad1be8503246c8a40ad77d37b96fc98115e30d4"
+    },
+    {
+      "path": "scripts/serve-debate-rehearsal.mjs",
+      "sha256": "8b3db6ccf3aff8f4ae4165f07df4c810b4ffa892f5f63968f0ee5aeb3127070d"
+    },
+    {
+      "path": "scripts/serve-study-room-rehearsal.mjs",
+      "sha256": "207765224cdbdcbf25f7ad12af3ff9b2af7812c1a81c7eb62aaa4a5ceceb907e"
+    },
+    {
+      "path": "scripts/test-debate-artifact.mjs",
+      "sha256": "9084b190c625696e26d081bdb7291bf2a1e1f174c2f2101e1217c9bf74149d96"
+    },
+    {
+      "path": "scripts/test-debate-browser-hosted-organizer.mjs",
+      "sha256": "74a99e1c06423b812fc5d92d09312ce22edf5088a5f8061dcd1947752f8b0a4c"
+    },
+    {
+      "path": "scripts/test-debate-browser-organizer.mjs",
+      "sha256": "500ae076bc1d548f212eea276a7d78c262c58d840506e78ac7a95e7aff29af46"
+    },
+    {
+      "path": "scripts/test-debate-client-state.mjs",
+      "sha256": "547ff5cefa69d8edcc37e948d25579a7f6b0a3c6660a55b01f7d2292e1cac258"
+    },
+    {
+      "path": "scripts/test-debate-dates.mjs",
+      "sha256": "90d41cbb3ef24231c43811187382cd19edaee914cadb02c74e74e27046eb0caf"
+    },
+    {
+      "path": "scripts/test-debate-hosted-atomic-cleanup.mjs",
+      "sha256": "286e0348f04e5e4a9bbb1ada38e37640679021eece056951cba14410b1d9a22d"
+    },
+    {
+      "path": "scripts/test-debate-hosted-browser-safety.mjs",
+      "sha256": "8e44a80ec69d16c68832ad0ffc33f1820fb3efa8bff98ec383d2f08649bc12dc"
+    },
+    {
+      "path": "scripts/test-debate-hosted-cleanup.mjs",
+      "sha256": "8f14d94370f45931d2f7e943b9c3c563abe954ddf2c68f814a4bbe6425b7e89b"
+    },
+    {
+      "path": "scripts/test-debate-hosted-driver.mjs",
+      "sha256": "10cbefbf67ada1769a1d960df2bbf1c47ff3fa4e3d860d9bce89022d59753744"
+    },
+    {
+      "path": "scripts/test-debate-hosted-fixtures.mjs",
+      "sha256": "ec3aaadc181a4347627061f7a2601c151ec7091c32dc37a30ce6da2bb58246d6"
+    },
+    {
+      "path": "scripts/test-debate-hosted-preparation.mjs",
+      "sha256": "30b96ac2291ee2b82dd3506447300d7ea893667e7ba4bac382fdf27fc8aa8589"
+    },
+    {
+      "path": "scripts/test-debate-media.mjs",
+      "sha256": "38d50a98408d5ce968e7e291f150e0143635dea52fadeed7f749fdda2f4cc536"
+    },
+    {
+      "path": "scripts/test-debate-organizer-rehearsal.mjs",
+      "sha256": "4f95b5a2d010948bd5b2dbbd7ab381c2c899f263ba19b5d423ceeebf63a45a41"
+    },
+    {
+      "path": "scripts/test-debate-rehearsal-server.mjs",
+      "sha256": "e53cba5ba904fde8656049c7f923847e7b75d7eea9c68f216e991d58cf66b6c0"
+    },
+    {
+      "path": "scripts/test-debate-staging-dml-probe.mjs",
+      "sha256": "d3600ad7843c8c34099ca510bd1622714c958061f204b113f6152bff2cb215ad"
+    },
+    {
+      "path": "scripts/test-debate-staging-fixtures.mjs",
+      "sha256": "e2056b3404b31f8e405bd740a64f81affd4e7662cd8070347aa24dd1e063e306"
+    },
+    {
+      "path": "scripts/test-debate-staging-release.mjs",
+      "sha256": "9e34dfacd97708909b3604a9a8326147da93481a2fe68fd740d45e6163f3e67f"
+    },
+    {
+      "path": "scripts/test-debate-tournament-export.mjs",
+      "sha256": "0fc1995ea959955b2fb7bc8d8e69cf7601ebd487869a96b60c114ba792241f6b"
+    },
+    {
+      "path": "scripts/test-debate-v3.mjs",
+      "sha256": "8c716bcc228a84169c9cb95b57030241c553296c8ccef83b95439d700f49ee06"
+    },
+    {
+      "path": "scripts/test-debate-wrangler-metadata.mjs",
+      "sha256": "58fa62bd03c1e189dd31df1cafe6c9feeff401589e589e157c37a28bec9f63b4"
+    },
+    {
+      "path": "scripts/test-feature-decommission-boundary.mjs",
+      "sha256": "5ab0752a5716a6ea4b916f32dc0aaadb218b0a0f84ec711317b614875ba7fa31"
+    },
+    {
+      "path": "scripts/test-study-room-admission-sql.mjs",
+      "sha256": "901ef21f715cc6151bba2d1eac6bc51a3f958c9d44db0fbdc1869ff73f9b259a"
+    },
+    {
+      "path": "scripts/test-study-room-always-open.mjs",
+      "sha256": "d069f9b467a238c0e85dbcca072dde501cf137dff62b7647ecbe58c6b3e6886b"
+    },
+    {
+      "path": "scripts/test-study-room-background-picker.mjs",
+      "sha256": "e29c5a2520ad014b7842a8d5f86dacb03c49f66a0f5240adb7545292906c1e71"
+    },
+    {
+      "path": "scripts/test-study-room-backgrounds.mjs",
+      "sha256": "893f7cb4e847d97bc32995870ddb8d92bab0a89b3f9314551dd959a3da5a998a"
+    },
+    {
+      "path": "scripts/test-study-room-browser.mjs",
+      "sha256": "95f857102208180dd7a542061e798051b176b3d2f2b694b661d356debc90e941"
+    },
+    {
+      "path": "scripts/test-study-room-catalog-sql.mjs",
+      "sha256": "c3ea5a5f21b2f7bfac4a72b7a190516f6b220a91599404aa0d8053c5c74caf95"
+    },
+    {
+      "path": "scripts/test-study-room-deployment-smoke.mjs",
+      "sha256": "2d4690adf5244780bffe02d00a5de271bad04c62c8f39b00bca2771641fc25ad"
+    },
+    {
+      "path": "scripts/test-study-room-fixture-safety.mjs",
+      "sha256": "19106a281305d7e73329022d801dfdd3616210d90ac4de42bf2a6ad428bbf651"
+    },
+    {
+      "path": "scripts/test-study-room-hotfix-behavior.mjs",
+      "sha256": "1549aca242deb8b0dff504687830e240d771a092b9c23538f511f59c6d274896"
+    },
+    {
+      "path": "scripts/test-study-room-live.mjs",
+      "sha256": "61fb8dd0549c5cb3e935680d2bd1e359376f6eb42b93dc7a26dcee649c53221b"
+    },
+    {
+      "path": "scripts/test-study-room-preview.mjs",
+      "sha256": "dc525f4935caff59e48a384c5c834c01462861ace2ca132b4b8f3963f3680d5a"
+    },
+    {
+      "path": "scripts/test-study-room-release-workflow.mjs",
+      "sha256": "de7975dac786c584cba18d52b64f1af009fd2ed4b67be798b8c3290e34a6152b"
+    },
+    {
+      "path": "scripts/test-worker-cpu-limit-contract.mjs",
+      "sha256": "614f172ee30fe9d3cbcac0555f7a0f1c5e7736cece5e3943c2a2cb9811087e21"
+    },
+    {
+      "path": "study-room/index.html",
+      "sha256": "54c96a2eff695deacd935fad05cc0d44413c4e7144adcd4c44e40f84f3c31bc8"
+    },
+    {
+      "path": "supabase/migrations/20260909080139_debate_room_v3.sql",
+      "sha256": "89d4f46b1e1b2991202880114387a1356b5eedfcf562129079de83d55a94b53c"
+    },
+    {
+      "path": "supabase/migrations/20260909080143_study_room_admission_v3.sql",
+      "sha256": "5ca7d139bb925b00c82d391aab4f566446d5d1bdd25e0b1b271fde614cb11637"
+    },
+    {
+      "path": "supabase/staging/debate-hosted-cleanup.sql",
+      "sha256": "d4f7c239564d6f4634a2fa8415dd4cb9eebb37b76bb98a5f02d3175774184a14"
+    },
+    {
+      "path": "worker/astra-staging-study-room-fixture-registration.test.mjs",
+      "sha256": "ce0b50652e430fa40da4b757e46be03b036ca707d19bbbddd00f48ce388a6209"
+    },
+    {
+      "path": "worker/commercial-entry.mjs",
+      "sha256": "14ab1c194fb45bcbb288703e8a1fbe6c5fc9a0bad267ce97763689edcef85fb4"
+    },
+    {
+      "path": "worker/debate-backend-contract.md",
+      "sha256": "6212b3de9313b318bf321e933106dbd0e383de30b38d97645fe0a371a553e4bb"
+    },
+    {
+      "path": "worker/debate-delivery.mjs",
+      "sha256": "4418034f5428aec421c6d20cca02e1a089e7d36e1802fa0bade52afea93fbf3b"
+    },
+    {
+      "path": "worker/debate-delivery.test.mjs",
+      "sha256": "e78542d6d30c9fe031a15a83ee2422bc94fe4abf3d61e34a07141fe9da2b60c4"
+    },
+    {
+      "path": "worker/debate-documents.mjs",
+      "sha256": "3dd08cb71074921527dfe4536459af1a613dd087774eab032886278be0918d6f"
+    },
+    {
+      "path": "worker/debate-domain.mjs",
+      "sha256": "669430db23c9b62429722cf58d41c5a97aa483f25056f299c2c1819a6a14d63b"
+    },
+    {
+      "path": "worker/debate-domain.test.mjs",
+      "sha256": "2dc35510c213fae416f98deb27ddb4da792d3c0ce7ccf4beb739fb134ced4dd9"
+    },
+    {
+      "path": "worker/debate-fixtures.mjs",
+      "sha256": "d61f350b70f57a9d6e4fc2fad2593e6ca99e70cc70cbba4e14f5c4590a112c5c"
+    },
+    {
+      "path": "worker/debate-fixtures.test.mjs",
+      "sha256": "cc3351832a77bebbea941b33817883dd2331b0bd61f70879a8f5f9706a227244"
+    },
+    {
+      "path": "worker/debate-integration.mjs",
+      "sha256": "cda808c3b4f30b0e37df7e7b6ad7ae4e2ccd36803c4c80f48652e87855f907e5"
+    },
+    {
+      "path": "worker/debate-integration.test.mjs",
+      "sha256": "b45bc5737352e71cd565386f32ff8af0acb4b905e3f3349704d30f3b49876e34"
+    },
+    {
+      "path": "worker/debate-media.mjs",
+      "sha256": "d7bb489967a0512b89cbe0db78adc215dd48447f49dad96db99ed8978f8fb784"
+    },
+    {
+      "path": "worker/debate-media.test.mjs",
+      "sha256": "cf1553acb81fb43af16e321e968850e2ce01ed5f5b5efeefb3016990d61755a0"
+    },
+    {
+      "path": "worker/debate-origin.test.mjs",
+      "sha256": "5294ae572284322046642097a1e8288edbaea6e21a6d0bac135539bb3290273d"
+    },
+    {
+      "path": "worker/debate-procedures.test.mjs",
+      "sha256": "10c40af78310270b4960b8eaa9791e9470ac7f93422ae87ca9eb0322b48b4033"
+    },
+    {
+      "path": "worker/debate-rosters.test.mjs",
+      "sha256": "b88129ddd2ab7801bddf224179eca2d2b59d3d43b4da367d5e66e8ac364623b2"
+    },
+    {
+      "path": "worker/debate-routes.mjs",
+      "sha256": "d566a262f7ffbbc3c0ea94e57444eac386b565bf5f9536925c485a2f45cf86b9"
+    },
+    {
+      "path": "worker/debate-sanctions.mjs",
+      "sha256": "f43af5803e097b26836b217086d3e6d93c6e769c0867a2aaaeb6ef05f642119b"
+    },
+    {
+      "path": "worker/debate-sanctions.test.mjs",
+      "sha256": "3277c86e03a4f9c17df4c3afbe544805bab8045c488afb7830937fa2022f234e"
+    },
+    {
+      "path": "worker/debate-schema-draft.sql",
+      "sha256": "89d4f46b1e1b2991202880114387a1356b5eedfcf562129079de83d55a94b53c"
+    },
+    {
+      "path": "worker/debate-service.mjs",
+      "sha256": "0a9d665f58c47f0adb78901822dce625ab2df7ca5dd5bb2a7c4212b5868cdd58"
+    },
+    {
+      "path": "worker/debate-service.test.mjs",
+      "sha256": "b7b8d39082838d43144bc83828ebee617ad328a8f3c29d5d29582e5633a829e8"
+    },
+    {
+      "path": "worker/debate-staging-policy.json",
+      "sha256": "4c8217966c8b2426acab90bfdb6e268e51d4c9878fc6e1d152cf56797cbc84ef"
+    },
+    {
+      "path": "worker/debate-standings-sanctions.test.mjs",
+      "sha256": "acfe7e60a1c8916fcc249e5b895b6522bc7615211c76c82bb45ef5fd953cbcee"
+    },
+    {
+      "path": "worker/debate-store-sql.test.mjs",
+      "sha256": "319dda1b5be2de02d48a2bbe04f9af86b2ca9674e14727a094ce64a03f211f0e"
+    },
+    {
+      "path": "worker/debate-store.mjs",
+      "sha256": "08340dc8a0f5a1a9ccb19827a146dd5d788a8227d0393e90983574bd4431a31a"
+    },
+    {
+      "path": "worker/debate-substitutions.test.mjs",
+      "sha256": "09186830e14c88bce8939a371c0c45ac1607263896a9c229c24c791f6ab0f988"
+    },
+    {
+      "path": "worker/debate-tournament.mjs",
+      "sha256": "f03907752aa76f2cd45b6747dcf0270eb6abdc004a260742a475fc0963258d2e"
+    },
+    {
+      "path": "worker/debate-tournament.test.mjs",
+      "sha256": "d18c2d37931fecacb012ed380437b29279175d825980c7c1149b2dbe966de8a3"
+    },
+    {
+      "path": "worker/index.mjs",
+      "sha256": "e7e201629d320450b372a1d964c2237daccc7be6775af1fff02b3a174c279df6"
+    },
+    {
+      "path": "worker/package-lock.json",
+      "sha256": "630a53a5c2d768ca56b43a049f5a365432081562ed0d4acf547d33a214db8184"
+    },
+    {
+      "path": "worker/package.json",
+      "sha256": "0f8f309064930ca8c2b9987fa390eda563ba6bbcc9eb38aa5df83de5aaadeb2f"
+    },
+    {
+      "path": "worker/study-room-admission-schema-draft.sql",
+      "sha256": "5ca7d139bb925b00c82d391aab4f566446d5d1bdd25e0b1b271fde614cb11637"
+    },
+    {
+      "path": "worker/study-room-admission.mjs",
+      "sha256": "d82c8c031b5c013f2a953b6e0dc350f6a266116e691b08d8608a7c1933c5346d"
+    },
+    {
+      "path": "worker/study-room-admission.test.mjs",
+      "sha256": "7a45b10d869ba42567f5fa91a6ffb9b541d3b7e507569473b88b930cfa54706c"
+    },
+    {
+      "path": "worker/study-room-catalog.test.mjs",
+      "sha256": "efbf8f5f31f0e20c97429cbdf80d75db88a3ff4d53b385f71d4ceee58afb5463"
+    },
+    {
+      "path": "worker/study-room-core.mjs",
+      "sha256": "7b8bdab0d8d545cc9acba564268dd4a8250c5e126fbc1238848682b1d0ddae04"
+    },
+    {
+      "path": "worker/study-room-routes.mjs",
+      "sha256": "12e502a8271e1af0f2d0e7a54fa4fabde9037e612dc4c12eec2f57edf9d850a7"
+    },
+    {
+      "path": "worker/study-room.test.mjs",
+      "sha256": "f53f259ef50bf4264b980b0044e32344a3fd32238e3d49e37dc251731dbf88a5"
+    },
+    {
+      "path": "worker/wrangler.staging.toml",
+      "sha256": "e93d72892b472843119f573e377ee374ef4c436e5efe380c622da694858000f2"
+    },
+    {
+      "path": "worker/wrangler.toml",
+      "sha256": "caf7faec44745efe4cf8abbfbfec51ce181e3aec0687c0d37aebc83f6334d0ae"
+    }
+  ],
+  "sourceHashCount": 126,
+  "groupsPassed": 13,
+  "cleanTestedCheckout": true,
+  "changedDuringRun": [],
+  "evidence": {
+    "path": "artifacts/debate-local-rehearsal/ci-34355666171/debate-v3-local-evidence/suite-2026-09-09T13-13-10.690Z/report.json",
+    "sha256": "4b5140a11fc5433f7324371f74808713a6220be8204a13b9ded3ecdcef4d1d74",
+    "report": {
+      "startedAt": "2026-09-09T13:13:10.951Z",
+      "environment": "Local Node / disposable PGlite / inert media; no provider or real mail",
+      "head": "acd796490fd04dfc7280b6c4c00cea7bfee7a532",
+      "gitStatus": "",
+      "sourceHashes": {
+        ".github/workflows/debate-v3-capture.yml": "0b3602b4cc6310d3999eba615707f2fb33fd5a5c8e58a7579ae54ed954abeeac",
+        ".github/workflows/debate-v3-staging.yml": "de1981ac2cfbb786b9b9c40056e5fc8a4ca28641db0a9b6dc8d97252c95aa89e",
+        ".github/workflows/debate-v3-validation.yml": "74f05e2b2f57d7341b27d5a5488ca0e41a3293f047d68cd34ad82eb8c30654ea",
+        "assets/debate-dates.js": "7549422128267aff3d7de4aafc535b5f40290df456a33fd5b85ddd4f7fcd0b12",
+        "assets/debate-entry.js": "81fc674a29b4c4997b8bdd40fe5e49b56e37592cbd573b26675274a9d7894563",
+        "assets/debate-media.js": "ed33b1126087c531423840fb241afb9e95682bcfcd7c8ec8caafb8ae142593b2",
+        "assets/debate-room.css": "bc752e89280753a0e80dd489229e2c2b9f3f4e1bc15a9b70d6a95291eab681bd",
+        "assets/debate-room.js": "1c1c245f2d23f12e4f546ae33c57dc5613b927fd6417c157de6ab992cc4eed6e",
+        "assets/feature-loader.js": "e93faeb186624afc009998303597f2dba9f4dd2e883c47ea0f325ba7b89eefc8",
+        "assets/phase2-config.js": "6ac37e57756468da4b20e5982b82490c437b92f8b0b5a91c19bf07416fef2357",
+        "assets/phase2-experience.js": "60f59903d92240b4869e9cb7edbbdfb2a1f72a0ce2229790b562f85815375edc",
+        "assets/phase2.css": "daa402e9e2cc6142f38a024f50b410a7e04396547288c5d6ebdefd9ff0b5a965",
+        "assets/study-room-backgrounds.js": "b31ccb7e600c81ac2aaf6a40a58f088245acd6de48171af537fbc69c237a3443",
+        "assets/study-room-live.css": "b03ee186567cf1f027b699cc12979dcad4f89279d7563e11d8fe91218f1520c2",
+        "assets/study-room-live.js": "18233c7e451d4af50a4b71254ae93d68ceb0316b0b7a1cd4b4d880bd32542450",
+        "assets/study-room-preview.css": "31716c4a5af8400dfdc6555dba20452958299a0c2ebd75667414f02c4d002e9d",
+        "assets/study-room-preview.js": "00477d0c99c0df301beed26eeea970facdc9094766984f3deefad716eb3d9a7d",
+        "assets/vendor/debate-fonts/Fraunces.OFL.txt": "bdf4c22802eaf804f998195871c6b8938aac2ac14b2d78a8bd66a6f1eced833b",
+        "assets/vendor/debate-fonts/Inter.OFL.txt": "5b9321a4298cfeb6b34354164a1c3afc3db114569984c502b9b35d988fd58c57",
+        "assets/vendor/debate-fonts/SOURCE.md": "facba396a48e5b85df9710658622411bda48d5fd25a0224ed577d4b877ffc13e",
+        "assets/vendor/debate-fonts/fraunces-v38-latin-ext.woff2": "a21ecfbf41fbc393e24ef9b7e38532a27e8da5e0a074aa7d66802d1b5ccec2f0",
+        "assets/vendor/debate-fonts/fraunces-v38-latin.woff2": "7f9d191d999336d3b9790afa72e1358e50a13b06d4f289341e92a311967a80f9",
+        "assets/vendor/debate-fonts/google-fonts-source.css.txt": "a6194f5a78fd0ad22d96192e72e1b4d02f01503b5805a36e33e182fb285e277f",
+        "assets/vendor/debate-fonts/inter-v20-latin-ext.woff2": "34b9c504cab7a73e37b746343a449132e56cf7b5481af2cb81dc74dcff25c956",
+        "assets/vendor/debate-fonts/inter-v20-latin.woff2": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62",
+        "assets/vendor/debate-fonts/manifest.json": "18c84c81c4ef31215a592f51c0723285a3ab442d8093c75d76174a403627ac69",
+        "assets/vendor/supabase-2.49.8.umd.js": "522e844a8554c84631063fa630d0b824b8042f346a0222da04460f81d942dcf8",
+        "debate-room/index.html": "b7722b53d25db83d381aea95480031b481522ce46cb7e29f7fca431dd02d647e",
+        "docs/debate-room-v3/evidence/staging-dml-rollback-probe.denials.json": "d310d66d656db355a485b51e4f323be360e0d662e069df12b06b66f5ee13a6b3",
+        "docs/debate-room-v3/evidence/staging-dml-rollback-probe.fixtures.json": "02be235d5758910ab4c2382ca815b582fd04ee666217b08a5648ed325152bcfb",
+        "docs/debate-room-v3/evidence/staging-dml-rollback-probe.manifest.json": "c81802893551d248d0ea5795ca21de2983f757989b3e06ae47d6e0d8cda14e78",
+        "docs/debate-room-v3/evidence/staging-dml-rollback-probe.readback.sql": "3df9e67986d99daba6e861f89398d140ed44f67619154678087f71e05ba46691",
+        "docs/debate-room-v3/evidence/staging-dml-rollback-probe.sql": "7c828bd9b0784532f20a2881c8b9af317f76f877be3e274f560686d8eb11cc76",
+        "index.html": "dee34326f415a2589c9f7bf8a36eadabcccddbcca8020963d34d5dbe9c66820b",
+        "scripts/build-pages-artifact.mjs": "55de1ba60173aa41cb94213af6dbfb15a2f444dbdc19ae167fd276de80e768e6",
+        "scripts/build-staging-artifact.mjs": "b458f6b85480d4652d964b8d19c3e3031b2380c7c3eda704245ac184d3c1ddf5",
+        "scripts/debate-hosted-cleanup.mjs": "08eb32b42123d58a8c7afa882ab254c3236a85cadde2025acd42f0b67007be03",
+        "scripts/debate-hosted-fixtures.mjs": "21535c0dc04f837b325568698c1bc65b534aa3204d42ff83e553db2bee5785cd",
+        "scripts/debate-staging-dml-probe.mjs": "39856d79fa6382b7fbc5fa4d5bd4ce790995724bfa1f34e30a11429f97f42ad9",
+        "scripts/debate-staging-fixtures.mjs": "e1704034c13de91e2973116e138fb4d3018253f488a348218873e68d21098fbd",
+        "scripts/debate-staging-release.mjs": "78651b2edda2e120a341db551f61cc3ef55f2ab8b2b9f2c85c94a39b785527f8",
+        "scripts/resolve-debate-hosted-preparation.mjs": "bcfa8bbd5f845a12add7fb1b1dfda74d2cd245a2533c4e5f9ffce56f781f68f2",
+        "scripts/run-debate-hosted-rehearsal.mjs": "2609d2ef85b138c6e9e2de4eb6ffc26312518ee4eef2bd73d3ed9100c3edd1f4",
+        "scripts/run-debate-staging-auth.mjs": "8c97a87b14499ca3b85c2fb0dad1be8503246c8a40ad77d37b96fc98115e30d4",
+        "scripts/serve-debate-rehearsal.mjs": "8b3db6ccf3aff8f4ae4165f07df4c810b4ffa892f5f63968f0ee5aeb3127070d",
+        "scripts/serve-study-room-rehearsal.mjs": "207765224cdbdcbf25f7ad12af3ff9b2af7812c1a81c7eb62aaa4a5ceceb907e",
+        "scripts/test-debate-artifact.mjs": "9084b190c625696e26d081bdb7291bf2a1e1f174c2f2101e1217c9bf74149d96",
+        "scripts/test-debate-browser-hosted-organizer.mjs": "74a99e1c06423b812fc5d92d09312ce22edf5088a5f8061dcd1947752f8b0a4c",
+        "scripts/test-debate-browser-organizer.mjs": "500ae076bc1d548f212eea276a7d78c262c58d840506e78ac7a95e7aff29af46",
+        "scripts/test-debate-client-state.mjs": "547ff5cefa69d8edcc37e948d25579a7f6b0a3c6660a55b01f7d2292e1cac258",
+        "scripts/test-debate-dates.mjs": "90d41cbb3ef24231c43811187382cd19edaee914cadb02c74e74e27046eb0caf",
+        "scripts/test-debate-hosted-atomic-cleanup.mjs": "286e0348f04e5e4a9bbb1ada38e37640679021eece056951cba14410b1d9a22d",
+        "scripts/test-debate-hosted-browser-safety.mjs": "8e44a80ec69d16c68832ad0ffc33f1820fb3efa8bff98ec383d2f08649bc12dc",
+        "scripts/test-debate-hosted-cleanup.mjs": "8f14d94370f45931d2f7e943b9c3c563abe954ddf2c68f814a4bbe6425b7e89b",
+        "scripts/test-debate-hosted-driver.mjs": "10cbefbf67ada1769a1d960df2bbf1c47ff3fa4e3d860d9bce89022d59753744",
+        "scripts/test-debate-hosted-fixtures.mjs": "ec3aaadc181a4347627061f7a2601c151ec7091c32dc37a30ce6da2bb58246d6",
+        "scripts/test-debate-hosted-preparation.mjs": "30b96ac2291ee2b82dd3506447300d7ea893667e7ba4bac382fdf27fc8aa8589",
+        "scripts/test-debate-media.mjs": "38d50a98408d5ce968e7e291f150e0143635dea52fadeed7f749fdda2f4cc536",
+        "scripts/test-debate-organizer-rehearsal.mjs": "4f95b5a2d010948bd5b2dbbd7ab381c2c899f263ba19b5d423ceeebf63a45a41",
+        "scripts/test-debate-rehearsal-server.mjs": "e53cba5ba904fde8656049c7f923847e7b75d7eea9c68f216e991d58cf66b6c0",
+        "scripts/test-debate-staging-dml-probe.mjs": "d3600ad7843c8c34099ca510bd1622714c958061f204b113f6152bff2cb215ad",
+        "scripts/test-debate-staging-fixtures.mjs": "e2056b3404b31f8e405bd740a64f81affd4e7662cd8070347aa24dd1e063e306",
+        "scripts/test-debate-staging-release.mjs": "9e34dfacd97708909b3604a9a8326147da93481a2fe68fd740d45e6163f3e67f",
+        "scripts/test-debate-tournament-export.mjs": "0fc1995ea959955b2fb7bc8d8e69cf7601ebd487869a96b60c114ba792241f6b",
+        "scripts/test-debate-v3.mjs": "8c716bcc228a84169c9cb95b57030241c553296c8ccef83b95439d700f49ee06",
+        "scripts/test-debate-wrangler-metadata.mjs": "58fa62bd03c1e189dd31df1cafe6c9feeff401589e589e157c37a28bec9f63b4",
+        "scripts/test-feature-decommission-boundary.mjs": "5ab0752a5716a6ea4b916f32dc0aaadb218b0a0f84ec711317b614875ba7fa31",
+        "scripts/test-study-room-admission-sql.mjs": "901ef21f715cc6151bba2d1eac6bc51a3f958c9d44db0fbdc1869ff73f9b259a",
+        "scripts/test-study-room-always-open.mjs": "d069f9b467a238c0e85dbcca072dde501cf137dff62b7647ecbe58c6b3e6886b",
+        "scripts/test-study-room-background-picker.mjs": "e29c5a2520ad014b7842a8d5f86dacb03c49f66a0f5240adb7545292906c1e71",
+        "scripts/test-study-room-backgrounds.mjs": "893f7cb4e847d97bc32995870ddb8d92bab0a89b3f9314551dd959a3da5a998a",
+        "scripts/test-study-room-browser.mjs": "95f857102208180dd7a542061e798051b176b3d2f2b694b661d356debc90e941",
+        "scripts/test-study-room-catalog-sql.mjs": "c3ea5a5f21b2f7bfac4a72b7a190516f6b220a91599404aa0d8053c5c74caf95",
+        "scripts/test-study-room-deployment-smoke.mjs": "2d4690adf5244780bffe02d00a5de271bad04c62c8f39b00bca2771641fc25ad",
+        "scripts/test-study-room-fixture-safety.mjs": "19106a281305d7e73329022d801dfdd3616210d90ac4de42bf2a6ad428bbf651",
+        "scripts/test-study-room-hotfix-behavior.mjs": "1549aca242deb8b0dff504687830e240d771a092b9c23538f511f59c6d274896",
+        "scripts/test-study-room-live.mjs": "61fb8dd0549c5cb3e935680d2bd1e359376f6eb42b93dc7a26dcee649c53221b",
+        "scripts/test-study-room-preview.mjs": "dc525f4935caff59e48a384c5c834c01462861ace2ca132b4b8f3963f3680d5a",
+        "scripts/test-study-room-release-workflow.mjs": "de7975dac786c584cba18d52b64f1af009fd2ed4b67be798b8c3290e34a6152b",
+        "scripts/test-worker-cpu-limit-contract.mjs": "614f172ee30fe9d3cbcac0555f7a0f1c5e7736cece5e3943c2a2cb9811087e21",
+        "study-room/index.html": "54c96a2eff695deacd935fad05cc0d44413c4e7144adcd4c44e40f84f3c31bc8",
+        "supabase/migrations/20260909080139_debate_room_v3.sql": "89d4f46b1e1b2991202880114387a1356b5eedfcf562129079de83d55a94b53c",
+        "supabase/migrations/20260909080143_study_room_admission_v3.sql": "5ca7d139bb925b00c82d391aab4f566446d5d1bdd25e0b1b271fde614cb11637",
+        "supabase/staging/debate-hosted-cleanup.sql": "d4f7c239564d6f4634a2fa8415dd4cb9eebb37b76bb98a5f02d3175774184a14",
+        "worker/astra-staging-study-room-fixture-registration.test.mjs": "ce0b50652e430fa40da4b757e46be03b036ca707d19bbbddd00f48ce388a6209",
+        "worker/commercial-entry.mjs": "14ab1c194fb45bcbb288703e8a1fbe6c5fc9a0bad267ce97763689edcef85fb4",
+        "worker/debate-backend-contract.md": "6212b3de9313b318bf321e933106dbd0e383de30b38d97645fe0a371a553e4bb",
+        "worker/debate-delivery.mjs": "4418034f5428aec421c6d20cca02e1a089e7d36e1802fa0bade52afea93fbf3b",
+        "worker/debate-delivery.test.mjs": "e78542d6d30c9fe031a15a83ee2422bc94fe4abf3d61e34a07141fe9da2b60c4",
+        "worker/debate-documents.mjs": "3dd08cb71074921527dfe4536459af1a613dd087774eab032886278be0918d6f",
+        "worker/debate-domain.mjs": "669430db23c9b62429722cf58d41c5a97aa483f25056f299c2c1819a6a14d63b",
+        "worker/debate-domain.test.mjs": "2dc35510c213fae416f98deb27ddb4da792d3c0ce7ccf4beb739fb134ced4dd9",
+        "worker/debate-fixtures.mjs": "d61f350b70f57a9d6e4fc2fad2593e6ca99e70cc70cbba4e14f5c4590a112c5c",
+        "worker/debate-fixtures.test.mjs": "cc3351832a77bebbea941b33817883dd2331b0bd61f70879a8f5f9706a227244",
+        "worker/debate-integration.mjs": "cda808c3b4f30b0e37df7e7b6ad7ae4e2ccd36803c4c80f48652e87855f907e5",
+        "worker/debate-integration.test.mjs": "b45bc5737352e71cd565386f32ff8af0acb4b905e3f3349704d30f3b49876e34",
+        "worker/debate-media.mjs": "d7bb489967a0512b89cbe0db78adc215dd48447f49dad96db99ed8978f8fb784",
+        "worker/debate-media.test.mjs": "cf1553acb81fb43af16e321e968850e2ce01ed5f5b5efeefb3016990d61755a0",
+        "worker/debate-origin.test.mjs": "5294ae572284322046642097a1e8288edbaea6e21a6d0bac135539bb3290273d",
+        "worker/debate-procedures.test.mjs": "10c40af78310270b4960b8eaa9791e9470ac7f93422ae87ca9eb0322b48b4033",
+        "worker/debate-rosters.test.mjs": "b88129ddd2ab7801bddf224179eca2d2b59d3d43b4da367d5e66e8ac364623b2",
+        "worker/debate-routes.mjs": "d566a262f7ffbbc3c0ea94e57444eac386b565bf5f9536925c485a2f45cf86b9",
+        "worker/debate-sanctions.mjs": "f43af5803e097b26836b217086d3e6d93c6e769c0867a2aaaeb6ef05f642119b",
+        "worker/debate-sanctions.test.mjs": "3277c86e03a4f9c17df4c3afbe544805bab8045c488afb7830937fa2022f234e",
+        "worker/debate-schema-draft.sql": "89d4f46b1e1b2991202880114387a1356b5eedfcf562129079de83d55a94b53c",
+        "worker/debate-service.mjs": "0a9d665f58c47f0adb78901822dce625ab2df7ca5dd5bb2a7c4212b5868cdd58",
+        "worker/debate-service.test.mjs": "b7b8d39082838d43144bc83828ebee617ad328a8f3c29d5d29582e5633a829e8",
+        "worker/debate-staging-policy.json": "4c8217966c8b2426acab90bfdb6e268e51d4c9878fc6e1d152cf56797cbc84ef",
+        "worker/debate-standings-sanctions.test.mjs": "acfe7e60a1c8916fcc249e5b895b6522bc7615211c76c82bb45ef5fd953cbcee",
+        "worker/debate-store-sql.test.mjs": "319dda1b5be2de02d48a2bbe04f9af86b2ca9674e14727a094ce64a03f211f0e",
+        "worker/debate-store.mjs": "08340dc8a0f5a1a9ccb19827a146dd5d788a8227d0393e90983574bd4431a31a",
+        "worker/debate-substitutions.test.mjs": "09186830e14c88bce8939a371c0c45ac1607263896a9c229c24c791f6ab0f988",
+        "worker/debate-tournament.mjs": "f03907752aa76f2cd45b6747dcf0270eb6abdc004a260742a475fc0963258d2e",
+        "worker/debate-tournament.test.mjs": "d18c2d37931fecacb012ed380437b29279175d825980c7c1149b2dbe966de8a3",
+        "worker/index.mjs": "e7e201629d320450b372a1d964c2237daccc7be6775af1fff02b3a174c279df6",
+        "worker/package-lock.json": "630a53a5c2d768ca56b43a049f5a365432081562ed0d4acf547d33a214db8184",
+        "worker/package.json": "0f8f309064930ca8c2b9987fa390eda563ba6bbcc9eb38aa5df83de5aaadeb2f",
+        "worker/study-room-admission-schema-draft.sql": "5ca7d139bb925b00c82d391aab4f566446d5d1bdd25e0b1b271fde614cb11637",
+        "worker/study-room-admission.mjs": "d82c8c031b5c013f2a953b6e0dc350f6a266116e691b08d8608a7c1933c5346d",
+        "worker/study-room-admission.test.mjs": "7a45b10d869ba42567f5fa91a6ffb9b541d3b7e507569473b88b930cfa54706c",
+        "worker/study-room-catalog.test.mjs": "efbf8f5f31f0e20c97429cbdf80d75db88a3ff4d53b385f71d4ceee58afb5463",
+        "worker/study-room-core.mjs": "7b8bdab0d8d545cc9acba564268dd4a8250c5e126fbc1238848682b1d0ddae04",
+        "worker/study-room-routes.mjs": "12e502a8271e1af0f2d0e7a54fa4fabde9037e612dc4c12eec2f57edf9d850a7",
+        "worker/study-room.test.mjs": "f53f259ef50bf4264b980b0044e32344a3fd32238e3d49e37dc251731dbf88a5",
+        "worker/wrangler.staging.toml": "e93d72892b472843119f573e377ee374ef4c436e5efe380c622da694858000f2",
+        "worker/wrangler.toml": "caf7faec44745efe4cf8abbfbfec51ce181e3aec0687c0d37aebc83f6334d0ae"
+      },
+      "groups": [
+        {
+          "name": "server-domain-database",
+          "command": [
+            "node",
+            "--test",
+            "--test-concurrency=1",
+            "worker/debate-delivery.test.mjs",
+            "worker/debate-domain.test.mjs",
+            "worker/debate-fixtures.test.mjs",
+            "worker/debate-integration.test.mjs",
+            "worker/debate-media.test.mjs",
+            "worker/debate-origin.test.mjs",
+            "worker/debate-procedures.test.mjs",
+            "worker/debate-rosters.test.mjs",
+            "worker/debate-sanctions.test.mjs",
+            "worker/debate-service.test.mjs",
+            "worker/debate-standings-sanctions.test.mjs",
+            "worker/debate-store-sql.test.mjs",
+            "worker/debate-substitutions.test.mjs",
+            "worker/debate-tournament.test.mjs",
+            "worker/study-room-admission.test.mjs",
+            "worker/study-room-catalog.test.mjs",
+            "worker/study-room.test.mjs"
+          ],
+          "startedAt": "2026-09-09T13:13:10.952Z",
+          "finishedAt": "2026-09-09T13:13:32.285Z",
+          "status": "PASS",
+          "exitCode": 0,
+          "log": "server-domain-database.txt"
+        },
+        {
+          "name": "client-state-media-dates",
+          "command": [
+            "node",
+            "--test",
+            "scripts/test-debate-client-state.mjs",
+            "scripts/test-debate-media.mjs",
+            "scripts/test-debate-dates.mjs"
+          ],
+          "startedAt": "2026-09-09T13:13:32.285Z",
+          "finishedAt": "2026-09-09T13:13:32.488Z",
+          "status": "PASS",
+          "exitCode": 0,
+          "log": "client-state-media-dates.txt"
+        },
+        {
+          "name": "study-admission-sql",
+          "command": [
+            "node",
+            "scripts/test-study-room-admission-sql.mjs"
+          ],
+          "startedAt": "2026-09-09T13:13:32.488Z",
+          "finishedAt": "2026-09-09T13:13:34.828Z",
+          "status": "PASS",
+          "exitCode": 0,
+          "log": "study-admission-sql.txt"
+        },
+        {
+          "name": "study-always-open",
+          "command": [
+            "node",
+            "scripts/test-study-room-always-open.mjs"
+          ],
+          "startedAt": "2026-09-09T13:13:34.828Z",
+          "finishedAt": "2026-09-09T13:13:35.019Z",
+          "status": "PASS",
+          "exitCode": 0,
+          "log": "study-always-open.txt"
+        },
+        {
+          "name": "study-backgrounds",
+          "command": [
+            "node",
+            "scripts/test-study-room-backgrounds.mjs"
+          ],
+          "startedAt": "2026-09-09T13:13:35.019Z",
+          "finishedAt": "2026-09-09T13:13:35.091Z",
+          "status": "PASS",
+          "exitCode": 0,
+          "log": "study-backgrounds.txt"
+        },
+        {
+          "name": "study-background-picker",
+          "command": [
+            "node",
+            "scripts/test-study-room-background-picker.mjs"
+          ],
+          "startedAt": "2026-09-09T13:13:35.091Z",
+          "finishedAt": "2026-09-09T13:13:35.215Z",
+          "status": "PASS",
+          "exitCode": 0,
+          "log": "study-background-picker.txt"
+        },
+        {
+          "name": "study-hotfix-behavior",
+          "command": [
+            "node",
+            "scripts/test-study-room-hotfix-behavior.mjs"
+          ],
+          "startedAt": "2026-09-09T13:13:35.215Z",
+          "finishedAt": "2026-09-09T13:13:35.503Z",
+          "status": "PASS",
+          "exitCode": 0,
+          "log": "study-hotfix-behavior.txt"
+        },
+        {
+          "name": "study-live",
+          "command": [
+            "node",
+            "scripts/test-study-room-live.mjs"
+          ],
+          "startedAt": "2026-09-09T13:13:35.503Z",
+          "finishedAt": "2026-09-09T13:13:35.576Z",
+          "status": "PASS",
+          "exitCode": 0,
+          "log": "study-live.txt"
+        },
+        {
+          "name": "local-http-boundaries",
+          "command": [
+            "node",
+            "--test",
+            "scripts/test-debate-rehearsal-server.mjs"
+          ],
+          "startedAt": "2026-09-09T13:13:35.576Z",
+          "finishedAt": "2026-09-09T13:13:38.242Z",
+          "status": "PASS",
+          "exitCode": 0,
+          "log": "local-http-boundaries.txt"
+        },
+        {
+          "name": "accelerated-organizer",
+          "command": [
+            "node",
+            "scripts/test-debate-organizer-rehearsal.mjs"
+          ],
+          "startedAt": "2026-09-09T13:13:38.243Z",
+          "finishedAt": "2026-09-09T13:13:45.753Z",
+          "status": "PASS",
+          "exitCode": 0,
+          "log": "accelerated-organizer.txt"
+        },
+        {
+          "name": "eligible-tournament-exports",
+          "command": [
+            "node",
+            "scripts/test-debate-tournament-export.mjs"
+          ],
+          "startedAt": "2026-09-09T13:13:45.753Z",
+          "finishedAt": "2026-09-09T13:13:54.385Z",
+          "status": "PASS",
+          "exitCode": 0,
+          "log": "eligible-tournament-exports.txt"
+        },
+        {
+          "name": "staging-preflight-gates",
+          "command": [
+            "node",
+            "--test",
+            "scripts/test-debate-staging-release.mjs",
+            "scripts/test-debate-staging-fixtures.mjs",
+            "scripts/test-debate-staging-dml-probe.mjs",
+            "scripts/test-debate-hosted-cleanup.mjs",
+            "scripts/test-debate-hosted-fixtures.mjs",
+            "scripts/test-debate-hosted-driver.mjs",
+            "scripts/test-debate-hosted-browser-safety.mjs",
+            "scripts/test-debate-hosted-preparation.mjs"
+          ],
+          "startedAt": "2026-09-09T13:13:54.385Z",
+          "finishedAt": "2026-09-09T13:13:58.677Z",
+          "status": "PASS",
+          "exitCode": 0,
+          "log": "staging-preflight-gates.txt"
+        },
+        {
+          "name": "worker-configuration-contract",
+          "command": [
+            "node",
+            "--test",
+            "scripts/test-worker-cpu-limit-contract.mjs"
+          ],
+          "startedAt": "2026-09-09T13:13:58.677Z",
+          "finishedAt": "2026-09-09T13:13:58.781Z",
+          "status": "PASS",
+          "exitCode": 0,
+          "log": "worker-configuration-contract.txt"
+        }
+      ],
+      "limitations": [
+        "Not a physical camera/audio test",
+        "Not a90-minute endurance run",
+        "Not native multi-connection PostgreSQL load",
+        "No hosted migration, approved capacity ramp, real mail delivery or deployment proof"
+      ],
+      "finishedAt": "2026-09-09T13:13:58.781Z",
+      "status": "PASS_LOCAL_SUITE",
+      "changedDuringRun": []
+    }
+  },
+  "logs": [
+    {
+      "group": "server-domain-database",
+      "path": "artifacts/debate-local-rehearsal/ci-34355666171/debate-v3-local-evidence/suite-2026-09-09T13-13-10.690Z/server-domain-database.txt",
+      "bytes": 66991,
+      "sha256": "f9a5c1f4493a82ee65f0b6a22898cbbad7985909ba06efef0bfb35375e7a4d0d"
+    },
+    {
+      "group": "client-state-media-dates",
+      "path": "artifacts/debate-local-rehearsal/ci-34355666171/debate-v3-local-evidence/suite-2026-09-09T13-13-10.690Z/client-state-media-dates.txt",
+      "bytes": 9592,
+      "sha256": "b1e6d4ab3a05c91398b85ce31c9f23d921b510082360491d789f494d21f43b1f"
+    },
+    {
+      "group": "study-admission-sql",
+      "path": "artifacts/debate-local-rehearsal/ci-34355666171/debate-v3-local-evidence/suite-2026-09-09T13-13-10.690Z/study-admission-sql.txt",
+      "bytes": 2929,
+      "sha256": "97859d5d478ebb9224e8deb5fce034e07fbf27dd2ad0314b9d7a26bd94d6e026"
+    },
+    {
+      "group": "study-always-open",
+      "path": "artifacts/debate-local-rehearsal/ci-34355666171/debate-v3-local-evidence/suite-2026-09-09T13-13-10.690Z/study-always-open.txt",
+      "bytes": 8539,
+      "sha256": "2ec620dd69ce3e2bed739ab0ed1639c1719cb14e0d98a6930167b74f52d9dc84"
+    },
+    {
+      "group": "study-backgrounds",
+      "path": "artifacts/debate-local-rehearsal/ci-34355666171/debate-v3-local-evidence/suite-2026-09-09T13-13-10.690Z/study-backgrounds.txt",
+      "bytes": 56,
+      "sha256": "2f52319466632f7ed6eaabd8a4d0b85cd82828be4db0671dda50b58126ee12ed"
+    },
+    {
+      "group": "study-background-picker",
+      "path": "artifacts/debate-local-rehearsal/ci-34355666171/debate-v3-local-evidence/suite-2026-09-09T13-13-10.690Z/study-background-picker.txt",
+      "bytes": 5524,
+      "sha256": "e502f67555de2b5e391628f185d8a33f2b31396f80fd1cf2460eab812dccd8aa"
+    },
+    {
+      "group": "study-hotfix-behavior",
+      "path": "artifacts/debate-local-rehearsal/ci-34355666171/debate-v3-local-evidence/suite-2026-09-09T13-13-10.690Z/study-hotfix-behavior.txt",
+      "bytes": 1057,
+      "sha256": "5d6d8407e3833ab3770d853a89da9c46c80c0c74e62271cb7f8776098b2e04bf"
+    },
+    {
+      "group": "study-live",
+      "path": "artifacts/debate-local-rehearsal/ci-34355666171/debate-v3-local-evidence/suite-2026-09-09T13-13-10.690Z/study-live.txt",
+      "bytes": 87,
+      "sha256": "c7c7d5758717512822b87ef645ba140324edc2eaf52a0bcd91d455d6fcf1069f"
+    },
+    {
+      "group": "local-http-boundaries",
+      "path": "artifacts/debate-local-rehearsal/ci-34355666171/debate-v3-local-evidence/suite-2026-09-09T13-13-10.690Z/local-http-boundaries.txt",
+      "bytes": 1036,
+      "sha256": "50958c17a8db78dec9a8290526211bf3a282b4cf19ceb910e6008d91ee142063"
+    },
+    {
+      "group": "accelerated-organizer",
+      "path": "artifacts/debate-local-rehearsal/ci-34355666171/debate-v3-local-evidence/suite-2026-09-09T13-13-10.690Z/accelerated-organizer.txt",
+      "bytes": 693,
+      "sha256": "c139f80a25d5c5a3898fabc2798ae3a02889c8e723a2d524730499c192ba21e1"
+    },
+    {
+      "group": "eligible-tournament-exports",
+      "path": "artifacts/debate-local-rehearsal/ci-34355666171/debate-v3-local-evidence/suite-2026-09-09T13-13-10.690Z/eligible-tournament-exports.txt",
+      "bytes": 1334,
+      "sha256": "0a85aae3f2fed49fe63ba4d0a48ad52440b88e027074529ad0e4f419f30749d1"
+    },
+    {
+      "group": "staging-preflight-gates",
+      "path": "artifacts/debate-local-rehearsal/ci-34355666171/debate-v3-local-evidence/suite-2026-09-09T13-13-10.690Z/staging-preflight-gates.txt",
+      "bytes": 32712,
+      "sha256": "353350e97389e9d57cdd0c13862535ef6e4e4e752a5a2e1acdb63ede87ab46bb"
+    },
+    {
+      "group": "worker-configuration-contract",
+      "path": "artifacts/debate-local-rehearsal/ci-34355666171/debate-v3-local-evidence/suite-2026-09-09T13-13-10.690Z/worker-configuration-contract.txt",
+      "bytes": 1034,
+      "sha256": "965ea963d2607c10767353d46b4551e02424636de6f55b13d62f6dbd01dbd6e9"
+    }
+  ],
+  "artifact": {
+    "id": 10105702845,
+    "name": "debate-v3-local-evidence",
+    "apiReportedArchiveDigest": "sha256:7f23e5cb81085d3d35ddbbf813ea9cf2ddcda3d39935a211ad90a9a1dcb020eb",
+    "archiveDigestIndependentlyVerified": false
+  },
+  "limitations": [
+    "This suite/job passed; the overall workflow remains failed by the separate native SQL harness error.",
+    "Disposable SQL, synthetic browser bootstrap and inert provider adapters do not establish hosted Auth/media, physical endurance, capacity, mail or complete acceptance."
+  ],
+  "fullAcceptance": false,
+  "publicLaunch": false,
+  "browserReceipt": {
+    "path": "docs/debate-room-v3/evidence/browser-ci-85193a75.json",
+    "sha256": "9769adb56c226013425411ecceb0ae5a7d6123a3041284f5fafaab3bdb12a3a8"
+  },
+  "sharedValidation": {
+    "id": 34355666128,
+    "url": "https://github.com/codingwally/Bar-Exam-simulator/actions/runs/34355666128",
+    "headSha": "85193a759dbf119dc9dd908cb0b6590196883ad3",
+    "status": "completed",
+    "conclusion": "success",
+    "verification": "Independently read exact run metadata through gh."
+  },
+  "unrelatedMedia": {
+    "id": 34355666098,
+    "url": "https://github.com/codingwally/Bar-Exam-simulator/actions/runs/34355666098",
+    "status": "completed",
+    "conclusion": "failure",
+    "logSha256": "54004ec875ebcb0903feb01a0f701a85a4368b52683fdd591928cdacbf3aa4ea",
+    "rawLogStored": false,
+    "http404Observed": true,
+    "curl22Observed": true,
+    "diagnosis": "Existing narration-download HTTP404/curl22; independently inspected this run failed log. No waiver or source change."
+  }
+}

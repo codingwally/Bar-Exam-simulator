@@ -158,8 +158,22 @@ test('unknown atomic and storage mutation outcomes never trigger blind retry on 
       if (stage === 'atomic' && url.pathname.endsWith('/astra_staging_debate_cleanup_v1') && JSON.parse(options.body).p_expected) throw new Error('UNKNOWN_ATOMIC_RESULT');
     } });
     await assert.rejects(h.safety.cleanupEvents(h.record, h.ownership));
-    const before = h.calls.length;
-    await assert.rejects(h.safety.cleanupEvents(h.record, h.ownership), /HOSTED_(?:ATOMIC|STORAGE)_OUTCOME_UNRESOLVED/);
-    assert.equal(h.calls.length, before); assert.equal(h.tables.debate_v3_events.length, 1);
+    const writesBefore = h.calls.filter(call => call.method !== 'GET').length;
+    await assert.rejects(h.safety.cleanupEvents(h.record, h.ownership), /HOSTED_(?:EVENT_REMAINS|STORAGE_OUTCOME_UNRESOLVED)/);
+    assert.equal(h.calls.filter(call => call.method !== 'GET').length, writesBefore); assert.equal(h.tables.debate_v3_events.length, 1);
   }
+});
+
+test('a lost successful atomic response is reconciled only by all exact event, child, actor and storage absence checks', async () => {
+  const h = harness({ intercept: ({ url, options, tables }) => {
+    if (url.pathname.endsWith('/astra_staging_debate_cleanup_v1') && JSON.parse(options.body).p_expected) {
+      for (const table of Object.keys(tables)) tables[table] = []; throw new Error('LOST_SUCCESS_RESPONSE');
+    }
+  } });
+  await h.safety.cleanupEvents(h.record, h.ownership);
+  assert.equal(h.record.complete, true); assert.equal(h.record.helperVerified, false);
+  assert.equal(h.record.atomic.originalResponseState, 'UNCONFIRMED');
+  assert.equal(h.record.atomic.state, 'ABSENCE_RECONCILED_AFTER_UNCERTAIN_RESPONSE');
+  assert.equal(h.calls.filter(call => call.route.endsWith('/astra_staging_debate_cleanup_v1') && JSON.parse(call.body).p_expected).length, 1);
+  assert.ok(h.calls.some(call => call.method === 'GET' && call.route.includes('debate_v3_match_versions')));
 });

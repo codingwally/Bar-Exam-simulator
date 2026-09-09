@@ -41,8 +41,10 @@ assert.match(page, /id="sr-toggle-microphone"[\s\S]*?<span class="sr-control-lab
 assert.doesNotMatch(page, /Turn mic on/iu);
 assert.match(page, /Camera and microphone are off/);
 assert.match(page, /Nothing is shared until you choose to join/);
-assert.match(page, /camera indicator may turn on briefly during this local check, but nothing is shared/);
-assert.match(page, /The check stops immediately; joining starts muted with camera off/);
+assert.match(page, /Device preview is optional and stays on this device/);
+assert.match(page, /<dialog[^>]*id="sr-entry-dialog"[^>]*aria-labelledby="sr-entry-title"/);
+assert.match(page, /id="sr-entry-close"/);
+assert.match(page, /Closing this window stops the preview/);
 assert.match(page, /Off when you join/g);
 assert.match(page, /Use a nickname\. Real names are not required\./);
 assert.match(page, /value="Participant #"/);
@@ -68,8 +70,8 @@ assert.doesNotMatch(page, /Virtual backgrounds|Coming after the quality test/iu)
 assert.match(page, /assets\/vendor\/livekit-client\.umd\.js\?v=2\.22\.1/);
 assert.match(page, /assets\/vendor\/livekit-track-processors\.iife\.js\?v=0\.7\.2/);
 assert.match(page, /study-room-backgrounds\.js\?v=study-room-background-images-20260908-1/);
-assert.match(page, /study-room-live\.js\?v=study-room-always-open-20260908-1&amp;layout=stable-pins-20260908-1&amp;catalog=admin-room-manager-20260908-1&amp;join=free-join-20260909-1&amp;share=screen-recovery-20260909-1"/);
-assert.match(page, /study-room-live\.css\?v=study-room-admin-manager-20260908-1&amp;share=screen-recovery-20260909-1"/);
+assert.match(page, /study-room-live\.js\?v=study-room-always-open-20260908-1&amp;layout=stable-pins-20260908-1&amp;catalog=admin-room-manager-20260908-1&amp;join=free-join-20260909-1&amp;share=screen-recovery-20260909-1&amp;entry=v3-20260909-1"/);
+assert.match(page, /study-room-live\.css\?v=study-room-admin-manager-20260908-1&amp;share=screen-recovery-20260909-1&amp;entry=v3-20260909-1"/);
 assert.match(css, /\.sr-tile-placeholder\[data-sr-video-fallback="true"\]\s*\{[^}]*position:\s*absolute;[^}]*z-index:\s*1;/);
 assert.match(css, /\.sr-tile-placeholder\[data-sr-video-fallback="true"\]\[hidden\]\s*\{\s*display:\s*none;/);
 assert.doesNotMatch(page, /facebook|fb\.com|recording is on|Recording enabled/i);
@@ -189,7 +191,8 @@ const discoverAfterAccess = client.indexOf('await discoverDevices()', verifyAcce
 assert.ok(permissionHelperStart >= 0 && temporaryMediaRequest > permissionHelperStart);
 assert.ok(stopTemporaryTracks > temporaryMediaRequest, 'automatic device discovery must immediately stop temporary media tracks');
 assert.ok(discoverDevicesStart > stopTemporaryTracks);
-assert.ok(discoverAfterAccess > verifyAccessStart, 'authorized prejoin must discover devices automatically');
+assert.equal(discoverAfterAccess, -1, 'Authorized lobby must never request capture automatically.');
+assert.ok(client.indexOf('await refreshDeviceLists()', verifyAccessStart) > verifyAccessStart, 'Lobby passively enumerates devices.');
 assert.ok(client.indexOf('bindDeviceChangeDetection()', verifyAccessStart) > verifyAccessStart);
 assert.match(client, /const noDevicesEnumerated = devices\.length === 0/);
 assert.match(client, /return `System default \$\{copy\.noun\}`/);

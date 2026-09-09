@@ -8,7 +8,7 @@
   <meta name="robots" content="noindex,nofollow,noarchive">
   <title>Study Room — Due Diligence</title>
   <link rel="icon" href="../assets/brand/favicon.ico" sizes="any">
-  <link rel="stylesheet" href="../assets/study-room-live.css?v=study-room-admin-manager-20260908-1&amp;share=screen-recovery-20260909-1">
+  <link rel="stylesheet" href="../assets/study-room-live.css?v=study-room-admin-manager-20260908-1&amp;share=screen-recovery-20260909-1&amp;entry=v3-20260909-1">
 </head>
 <body>
   <a class="sr-skip-link" href="#study-room-main">Skip to Study Room</a>
@@ -68,13 +68,13 @@
         </div>
       </header>
 
-      <section class="sr-prejoin" id="sr-prejoin" aria-labelledby="sr-prejoin-title">
+      <section class="sr-prejoin" id="sr-prejoin" aria-labelledby="sr-room-lobby-title">
         <section class="sr-room-lobby" id="sr-room-lobby" aria-labelledby="sr-room-lobby-title" data-max-rooms="24">
           <div class="sr-room-lobby-heading">
             <div>
               <p class="sr-panel-eyebrow">Room lobby</p>
               <h2 id="sr-room-lobby-title">Choose where to study</h2>
-              <p class="sr-lobby-entry-hint">Double-click a room to enter, or select it and choose Join. Camera and microphone start off.</p>
+              <p class="sr-lobby-entry-hint">Choose a room to review your devices, then enter. Camera and microphone start off.</p>
             </div>
             <span class="sr-room-capacity" id="sr-room-lobby-count">Checking rooms…</span>
           </div>
@@ -111,6 +111,12 @@
           <div class="sr-room-card-grid" id="sr-room-card-grid" role="group" aria-label="Available Study Rooms"></div>
         </section>
 
+      </section>
+        <dialog class="sr-entry-dialog" id="sr-entry-dialog" aria-labelledby="sr-entry-title" aria-describedby="sr-entry-purpose">
+          <header class="sr-entry-heading">
+            <div><h2 id="sr-entry-title">Enter Study Room</h2><p id="sr-entry-purpose"></p><p id="sr-entry-occupancy" role="status" aria-live="polite"></p></div>
+            <button class="sr-text-button sr-entry-close" id="sr-entry-close" type="button" aria-label="Close room entry">Close</button>
+          </header>
         <div class="sr-prejoin-layout">
           <div class="sr-preview-card">
             <div class="sr-preview-frame" id="sr-preview-frame">
@@ -124,13 +130,13 @@
             </div>
             <div class="sr-prejoin-safety">
               <strong>Your privacy comes first.</strong>
-              <span>Your browser may ask once for permission to identify available devices. Your camera indicator may turn on briefly during this local check, but nothing is shared. The check stops immediately; joining starts muted with camera off unless you change the options below.</span>
+              <span id="sr-entry-privacy-copy">Device preview is optional and stays on this device. Closing this window stops the preview. Nothing is published until you enter and opt in.</span>
             </div>
           </div>
 
           <aside class="sr-prejoin-panel">
             <p class="sr-panel-eyebrow">Before you enter</p>
-            <h2 id="sr-prejoin-title">Set up your study desk</h2>
+            <h3 id="sr-prejoin-title">Your devices</h3>
 
             <label class="sr-field" for="sr-nickname">
               <span>Screen name</span>
@@ -181,7 +187,7 @@
             <p class="sr-status" id="sr-prejoin-status" role="status" aria-live="polite">Camera and microphone are off.</p>
           </aside>
         </div>
-      </section>
+        </dialog>
 
       <section class="sr-live-room" id="sr-live-room" hidden tabindex="-1" aria-label="Live Study Room">
         <div class="sr-live-layout">
@@ -320,6 +326,7 @@
                     <span>Camera background</span>
                     <select id="sr-background-choice">
                       <option value="off">Off · smoother video</option>
+                      <option value="blur">Blur</option>
                       <option value="brand">Due Diligence</option>
                       <option value="custom" id="sr-background-custom-option" disabled>My image</option>
                     </select>
@@ -424,6 +431,6 @@
   <script src="../assets/vendor/livekit-client.umd.js?v=2.22.1"></script>
   <script src="../assets/vendor/livekit-track-processors.iife.js?v=0.7.2-study-room-background-images-20260908-1"></script>
   <script src="../assets/study-room-backgrounds.js?v=study-room-background-images-20260908-1"></script>
-  <script src="../assets/study-room-live.js?v=study-room-always-open-20260908-1&amp;layout=stable-pins-20260908-1&amp;catalog=admin-room-manager-20260908-1&amp;join=free-join-20260909-1&amp;share=screen-recovery-20260909-1"></script>
+  <script src="../assets/study-room-live.js?v=study-room-always-open-20260908-1&amp;layout=stable-pins-20260908-1&amp;catalog=admin-room-manager-20260908-1&amp;join=free-join-20260909-1&amp;share=screen-recovery-20260909-1&amp;entry=v3-20260909-1"></script>
 </body>
 </html>

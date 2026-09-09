@@ -260,3 +260,18 @@ test('active custom replacement and removal preserve one healthy processor/publi
   assert.equal(h.events.filter(x=>x.type==='switch').at(-1).imagePath,'/assets/study-room/virtual-background-due-diligence-polished-20260908.webp');
   assert.equal(h.counters.maxPublications,1);assert.equal(h.counters.processors,1);assert.equal(h.counters.rawStarts,0);
 });
+
+test('Blur is applied before publication and twenty effect transitions retain one protected camera',async()=>{
+  const h=harness();
+  await h.hooks.applyBackgroundChoice('blur');
+  assert.equal(h.counters.publishes,0);
+  await h.hooks.setLocalSourceEnabled('camera',true);
+  const publication=h.local().getTrackPublication('camera');
+  assert.equal(h.events.find(x=>x.type==='publish').mode,'background-blur');
+  for(let index=0;index<20;index++){
+    await h.hooks.applyBackgroundChoice(index%2?'blur':'brand');
+    assert.equal(h.local().getTrackPublication('camera'),publication);
+  }
+  assert.equal(h.counters.processors,1);assert.equal(h.counters.maxPublications,1);assert.equal(h.counters.rawStarts,0);
+  assert.equal(h.events.filter(x=>x.type==='switch').at(-1).mode,'background-blur');
+});

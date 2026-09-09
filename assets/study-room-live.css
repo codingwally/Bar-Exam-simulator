@@ -598,6 +598,33 @@ a {
   align-items: stretch;
 }
 
+.sr-entry-dialog {
+  width: min(760px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  box-sizing: border-box;
+  padding: 20px;
+  color: var(--sr-ink);
+  background: var(--sr-navy-900);
+  border: 1px solid rgba(195, 211, 226, 0.4);
+  border-radius: 10px;
+  overflow: auto;
+}
+.sr-entry-dialog::backdrop { background: rgba(3, 13, 24, 0.76); }
+.sr-entry-heading { display: flex; align-items: start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.sr-entry-heading h2 { margin: 0 0 8px; }
+.sr-entry-heading p { margin: 6px 0; line-height: 1.5; }
+.sr-entry-close { flex: none; min-height: 44px; min-width: 44px; }
+.sr-entry-dialog .sr-prejoin-layout { grid-template-columns: minmax(0, 0.85fr) minmax(0, 1fr); gap: 16px; }
+.sr-entry-dialog .sr-preview-card { align-self: start; }
+.sr-entry-dialog .sr-prejoin-panel { padding: 14px; }
+.sr-entry-dialog .sr-preview-frame { min-height: 160px; }
+.sr-entry-dialog .sr-prejoin-panel h3 { margin-top: 0; }
+@media (max-width: 600px) {
+  .sr-entry-dialog { padding: 14px; }
+  .sr-entry-dialog .sr-prejoin-layout { grid-template-columns: minmax(0, 1fr); }
+  .sr-entry-dialog .sr-preview-frame { min-height: 120px; max-height: 180px; }
+}
+
 .sr-preview-card,
 .sr-prejoin-panel,
 .sr-stage-shell,

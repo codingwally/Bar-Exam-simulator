@@ -72,6 +72,13 @@
     isAdministrator: false,
     rooms: [],
     selectedRoomKey: '',
+    entryOpen: false,
+    entrySubmitting: false,
+    entryGeneration: 0,
+    entryTrigger: null,
+    previewGeneration: 0,
+    previewBusy: false,
+    accountGeneration: 0,
     currentRoomKey: '',
     roomCatalogBusy: false,
     roomCatalogPromise: null,
@@ -445,9 +452,9 @@
     button.textContent = restricted
       ? `${room.label} · ${ROOM_AUDIENCES[room.audience] || 'Access unavailable'}`
       : available
-      ? `Join ${roomPresentation(room.roomKey).name}`
+      ? 'Enter room'
       : canCreateAndJoin
-      ? `Create and join ${roomPresentation(room.roomKey).name}`
+      ? 'Open and enter room'
       : room
       ? `Waiting for ${roomPresentation(room.roomKey).name} to open`
       : 'Choose a room';
@@ -468,6 +475,65 @@
     syncJoinButton();
     syncSelectedRoomPolicy();
     return true;
+  }
+
+  function syncEntryDetails() {
+    const room = selectedRoom();
+    if (!room || !state.entryOpen) return;
+    byId('sr-entry-title').textContent = room.label;
+    byId('sr-entry-purpose').textContent = room.microphoneAllowed === false
+      ? 'Study quietly together with video, chat and silent screen sharing. Room audio is disabled.'
+      : 'Study together with conversation, video, shared materials and chat.';
+    byId('sr-entry-occupancy').textContent = `${room.participantCount} of ${room.capacity} places occupied`;
+    const privacy = byId('sr-entry-privacy-copy');
+    if (privacy) privacy.textContent = state.room
+      ? `Your current call in ${roomPresentation(state.currentRoomKey).name} continues until you choose Enter room. Moving closes that call first. The new room starts with your choices below.`
+      : 'Device preview is optional and stays on this device. Closing this window stops the preview. Nothing is published until you enter and opt in.';
+    syncSelectedRoomPolicy();
+    syncJoinButton();
+  }
+
+  function openEntryDialog(roomKey, trigger = document.activeElement) {
+    if (state.joining || state.roomMutationBusy || state.leaving) return false;
+    if (state.entryOpen && state.selectedRoomKey === String(roomKey)) return true;
+    if (!selectRoom(roomKey)) return false;
+    stopDeviceTest();
+    state.entryGeneration += 1;
+    state.entryOpen = true;
+    state.entryTrigger = trigger;
+    setJoinOption('microphone', false);
+    setJoinOption('camera', false);
+    syncEntryDetails();
+    const dialog = byId('sr-entry-dialog');
+    if (!dialog.open) {
+      if (typeof dialog.showModal === 'function') dialog.showModal();
+      else { dialog.hidden = false; dialog.setAttribute('open', ''); }
+    }
+    setStatus('sr-prejoin-status', 'Camera and microphone are off. Choose Enter room when ready.');
+    byId('sr-nickname')?.focus();
+    refreshDeviceLists().catch(() => {});
+    return true;
+  }
+
+  function closeEntryDialog({ restoreFocus = true, cancelJoin = true } = {}) {
+    if (cancelJoin) state.entryGeneration += 1;
+    if (cancelJoin && state.joining && state.room) {
+      // Stop a connecting or partially-started room immediately. Its owning
+      // join operation also checks the generation after every async boundary.
+      Promise.resolve(state.room.disconnect?.()).catch(() => {});
+      destroyBackgroundController().catch(() => {});
+    }
+    state.entryOpen = false;
+    stopDeviceTest();
+    const dialog = byId('sr-entry-dialog');
+    if (typeof dialog?.close === 'function') dialog.close();
+    else { dialog?.removeAttribute?.('open'); if (dialog) dialog.hidden = true; }
+    if (restoreFocus) {
+      const trigger = state.entryTrigger?.isConnected ? state.entryTrigger
+        : byId('sr-room-card-grid')?.querySelector(`[data-room-key="${state.selectedRoomKey}"]`);
+      trigger?.focus?.();
+    }
+    state.entryTrigger = null;
   }
 
   function roomCountCopy(room) {
@@ -539,12 +605,11 @@
     button.append(copy);
     const enter = () => {
       if (button.disabled || state.joining || state.roomMutationBusy) return;
-      if (selectRoom(room.roomKey)) void joinRoom();
+      openEntryDialog(room.roomKey, button);
     };
     button.addEventListener('click', (event) => {
       if (button.disabled) return;
-      if (event.detail === 0) enter();
-      else selectRoom(room.roomKey);
+      enter();
     });
     button.addEventListener('dblclick', enter);
     return button;
@@ -597,6 +662,7 @@
     renderRoomAdministration();
     syncJoinButton();
     syncSelectedRoomPolicy();
+    syncEntryDetails();
   }
 
   function localQualityRoomCatalog() {
@@ -915,6 +981,11 @@
     if (silent) state.joinWithMicrophone = false;
     const microphoneField = byId('sr-microphone-select')?.closest?.('.sr-field');
     microphoneField?.classList?.toggle('is-room-muted', silent);
+    if (microphoneField) microphoneField.hidden = silent;
+    const meter = byId('sr-microphone-meter')?.closest?.('.sr-meter-row');
+    if (meter) meter.hidden = silent;
+    const testLabel = byId('sr-test-devices')?.querySelector('span');
+    if (testLabel && !state.previewStream) testLabel.textContent = silent ? 'Preview camera' : 'Preview camera & microphone';
   }
 
   function setJoinOption(kind, enabled) {
@@ -941,12 +1012,14 @@
     stopMeter();
     const audioTrack = stream.getAudioTracks()[0];
     if (!audioTrack || !global.AudioContext) return;
-    state.audioContext = new global.AudioContext();
-    if (state.audioContext.state === 'suspended') {
-      await state.audioContext.resume().catch(() => {});
+    const context = new global.AudioContext();
+    state.audioContext = context;
+    if (context.state === 'suspended') {
+      await context.resume().catch(() => {});
     }
-    const source = state.audioContext.createMediaStreamSource(new global.MediaStream([audioTrack]));
-    state.analyser = state.audioContext.createAnalyser();
+    if (state.audioContext !== context) { await context.close().catch(() => {}); return; }
+    const source = context.createMediaStreamSource(new global.MediaStream([audioTrack]));
+    state.analyser = context.createAnalyser();
     state.analyser.fftSize = 256;
     source.connect(state.analyser);
     const samples = new Uint8Array(state.analyser.frequencyBinCount);
@@ -963,6 +1036,8 @@
   }
 
   function stopDeviceTest() {
+    state.previewGeneration += 1;
+    state.previewBusy = false;
     stopMeter();
     state.previewStream?.getTracks?.().forEach((track) => track.stop());
     state.previewStream = null;
@@ -975,7 +1050,8 @@
     byId('sr-camera-placeholder').hidden = false;
     const button = byId('sr-test-devices');
     const label = button?.querySelector('span');
-    if (label) label.textContent = 'Test camera & microphone';
+    if (button) button.disabled = false;
+    if (label) label.textContent = selectedRoom()?.microphoneAllowed === false ? 'Preview camera' : 'Preview camera & microphone';
   }
 
   function selectedConstraint(id) {
@@ -1160,7 +1236,16 @@
     state.deviceChangeBound = true;
   }
 
-  async function captureOneDeviceTest(mediaDevices, kind, selected) {
+  function assertCurrentPreview(generation) {
+    if (generation !== state.previewGeneration || state.leaving) {
+      const error = new Error('Device preview was closed.');
+      error.name = 'PreviewCancelledError';
+      throw error;
+    }
+  }
+
+  async function captureOneDeviceTest(mediaDevices, kind, selected, generation = state.previewGeneration) {
+    assertCurrentPreview(generation);
     const constraints = kind === 'camera'
       ? { video: selected, audio: false }
       : { video: false, audio: selected };
@@ -1169,6 +1254,7 @@
     } catch (error) {
       if (selected === true || !isRetryableDeviceError(error)) throw error;
       await refreshDeviceLists();
+      assertCurrentPreview(generation);
       return requestUserMediaWithTimeout(
         mediaDevices,
         kind === 'camera' ? { video: true, audio: false } : { video: false, audio: true },
@@ -1176,28 +1262,33 @@
     }
   }
 
-  async function captureSelectedDeviceTest(mediaDevices) {
+  async function captureSelectedDeviceTest(mediaDevices, generation = state.previewGeneration) {
     const selectedCamera = selectedConstraint('sr-camera-select');
-    const selectedMicrophone = selectedConstraint('sr-microphone-select');
+    const selectedMicrophone = selectedRoom()?.microphoneAllowed === false ? false : selectedConstraint('sr-microphone-select');
     const combinedConstraints = { video: selectedCamera, audio: selectedMicrophone };
     try {
       const stream = await requestUserMediaWithTimeout(mediaDevices, combinedConstraints);
       return { stream, cameraError: null, microphoneError: null };
     } catch (combinedError) {
+      assertCurrentPreview(generation);
       if (!isRetryableDeviceError(combinedError)) throw combinedError;
 
       const capturedStreams = [];
       let cameraError = null;
       let microphoneError = null;
       try {
-        capturedStreams.push(await captureOneDeviceTest(mediaDevices, 'camera', selectedCamera));
+        capturedStreams.push(await captureOneDeviceTest(mediaDevices, 'camera', selectedCamera, generation));
       } catch (error) {
         cameraError = error;
       }
-      try {
-        capturedStreams.push(await captureOneDeviceTest(mediaDevices, 'microphone', selectedMicrophone));
-      } catch (error) {
-        microphoneError = error;
+      if (generation !== state.previewGeneration || state.leaving) {
+        capturedStreams.flatMap((stream) => stream?.getTracks?.() || []).forEach((track) => track.stop());
+        assertCurrentPreview(generation);
+      }
+      if (selectedMicrophone !== false) {
+        try {
+          capturedStreams.push(await captureOneDeviceTest(mediaDevices, 'microphone', selectedMicrophone, generation));
+        } catch (error) { microphoneError = error; }
       }
 
       const tracks = capturedStreams.flatMap((stream) => stream?.getTracks?.() || []);
@@ -1219,6 +1310,7 @@
   }
 
   async function testDevices() {
+    if (state.previewBusy) return;
     if (state.previewStream) {
       stopDeviceTest();
       setStatus('sr-prejoin-status', 'Camera and microphone are off.');
@@ -1229,18 +1321,26 @@
       return;
     }
     const button = byId('sr-test-devices');
+    const previewGeneration = ++state.previewGeneration;
+    state.previewBusy = true;
     button.disabled = true;
     setStatus('sr-prejoin-status', 'Waiting for camera and microphone permission…');
     try {
-      const result = await captureSelectedDeviceTest(global.navigator.mediaDevices);
+      const result = await captureSelectedDeviceTest(global.navigator.mediaDevices, previewGeneration);
+      if (previewGeneration !== state.previewGeneration || state.leaving) {
+        result.stream?.getTracks?.().forEach((track) => track.stop());
+        return;
+      }
       state.previewStream = result.stream;
       const video = byId('sr-local-preview');
       video.srcObject = state.previewStream;
       video.hidden = state.previewStream.getVideoTracks().length === 0;
       byId('sr-camera-placeholder').hidden = !video.hidden;
       await video.play().catch(() => {});
-      await startMeter(state.previewStream).catch(() => {});
+      if (previewGeneration !== state.previewGeneration) return;
+      if (selectedRoom()?.microphoneAllowed !== false) await startMeter(state.previewStream).catch(() => {});
       await refreshDeviceLists();
+      if (previewGeneration !== state.previewGeneration) return;
       syncTestedDeviceSelections(state.previewStream);
       const label = button.querySelector('span');
       if (label) label.textContent = 'Stop device test';
@@ -1252,10 +1352,13 @@
           ? 'Camera and microphone are working on this computer. Nothing has been shared.'
           : hasMicrophone
           ? 'Microphone is working; the camera could not start. Nothing has been shared.'
+          : selectedRoom()?.microphoneAllowed === false
+          ? 'Camera preview is on. Library does not request or share microphone audio.'
           : 'Camera is working; the microphone could not start. Nothing has been shared.',
         'ok',
       );
     } catch (error) {
+      if (previewGeneration !== state.previewGeneration) return;
       stopDeviceTest();
       const denied = isPermissionError(error);
       const waiting = error?.name === 'PermissionTimeoutError';
@@ -1269,7 +1372,10 @@
         'error',
       );
     } finally {
-      button.disabled = false;
+      if (previewGeneration === state.previewGeneration) {
+        state.previewBusy = false;
+        button.disabled = false;
+      }
     }
   }
 
@@ -2011,6 +2117,18 @@
 
   function attachRemoteAudio(participants) {
     const audioBin = byId('sr-audio-bin');
+    if (state.currentRoomMicrophoneAllowed === false) {
+      detachTrackEntries((entry) => entry.kind === 'audio');
+      participants.filter((participant) => !participant.isLocal).forEach((participant) => {
+        for (const source of ['microphone', 'screen_share_audio']) {
+          const publication = publicationFor(participant, source);
+          if (publication?.setSubscribed) Promise.resolve(publication.setSubscribed(false)).catch(() => {});
+        }
+      });
+      state.audioPlaybackBlocked = false;
+      updateAudioPrompt();
+      return;
+    }
     const desiredKeys = new Set();
     participants.filter((participant) => !participant.isLocal).forEach((participant) => {
       if (
@@ -2240,7 +2358,7 @@
 
   function updateAudioPrompt() {
     const prompt = byId('sr-audio-prompt');
-    prompt.hidden = !state.room
+    prompt.hidden = !state.room || state.currentRoomMicrophoneAllowed === false
       || (!state.audioPlaybackBlocked && state.room.canPlaybackAudio !== false);
   }
 
@@ -2251,6 +2369,12 @@
   }
 
   async function startRoomAudioFromGesture(room = state.room) {
+    if (state.currentRoomMicrophoneAllowed === false) {
+      detachTrackEntries((entry) => entry.kind === 'audio');
+      state.audioPlaybackBlocked = false;
+      updateAudioPrompt();
+      return false;
+    }
     try {
       await room?.startAudio?.();
       if (state.room !== room) return false;
@@ -3067,8 +3191,11 @@
     const customOption = byId('sr-background-custom-option');
     if (customOption) customOption.disabled = !state.customBackgroundFile;
     const preview = byId('sr-background-preview');
-    if (preview) preview.src = state.backgroundChoice === 'custom' && state.customBackgroundPreview
-      ? state.customBackgroundPreview : DEFAULT_BACKGROUND_IMAGE;
+    if (preview) {
+      preview.hidden = state.backgroundChoice === 'blur';
+      preview.src = state.backgroundChoice === 'custom' && state.customBackgroundPreview
+        ? state.customBackgroundPreview : DEFAULT_BACKGROUND_IMAGE;
+    }
 
     if (!state.backdropEnabled) {
       if (node) node.dataset.backdropState = 'off';
@@ -3324,6 +3451,7 @@
 
   async function selectedBackgroundRequest(controller) {
     if (!state.backdropEnabled) return { mode: 'disabled' };
+    if (state.backgroundChoice === 'blur') return { mode: 'background-blur', blurRadius: 10 };
     if (state.backgroundChoice === 'custom' && state.customBackgroundFile) {
       if (state.customBackgroundController !== controller || !state.customBackgroundPath) {
         const registered = await controller.registerCustomBackground(state.customBackgroundFile);
@@ -3337,7 +3465,7 @@
 
   async function applyBackgroundChoice(choice) {
     const local = state.room?.localParticipant;
-    if (!local || state.cameraOperationBusy || !['off', 'brand', 'custom'].includes(choice)) return;
+    if (!local || state.cameraOperationBusy || !['off', 'blur', 'brand', 'custom'].includes(choice)) return;
     if (choice === 'custom' && !state.customBackgroundFile) return;
     const wasCameraOn = isLocalSourceEnabled(local, 'camera');
     const backdropEnabled = choice !== 'off';
@@ -3490,6 +3618,9 @@
     const local = state.room?.localParticipant;
     if (!local) throw new Error('The room is not connected.');
     const isMicrophone = kind === 'microphone';
+    if (isMicrophone && enabled && state.currentRoomMicrophoneAllowed === false) {
+      throw new Error('Library is silent. Microphone publication is not allowed.');
+    }
     if (LOCAL_TEST_MODE === 'live') {
       const setEnabled = isMicrophone ? local.setMicrophoneEnabled : local.setCameraEnabled;
       if (typeof setEnabled !== 'function') throw sourceStartError(kind);
@@ -3625,7 +3756,18 @@
   }
 
   async function joinRoom() {
-    if (state.joining || state.room) return;
+    if (state.entrySubmitting) return;
+    state.entrySubmitting = true;
+    try { return await enterSelectedRoom(); }
+    finally { state.entrySubmitting = false; }
+  }
+
+  async function enterSelectedRoom() {
+    if (state.joining || !state.entryOpen) return;
+    if (state.room && state.currentRoomKey === state.selectedRoomKey) { closeEntryDialog(); return; }
+    const entryGeneration = state.entryGeneration;
+    const accountGeneration = state.accountGeneration;
+    const entryIsCurrent = () => state.entryOpen && entryGeneration === state.entryGeneration && accountGeneration === state.accountGeneration;
     let roomToJoin = selectedRoom();
     if (roomToJoin?.canJoin === false) return;
     if (roomToJoin && !roomToJoin.active && !roomToJoin.alwaysOpen && state.isAdministrator && roomToJoin.canCreate === true) {
@@ -3660,6 +3802,14 @@
     stopDeviceTest();
     let room;
     try {
+      if (state.room) await disconnectConnectedRoom();
+      if (!entryIsCurrent()) return;
+      state.currentRoomMicrophoneAllowed = roomToJoin.microphoneAllowed !== false;
+      if (LOCAL_TEST_MODE === 'live') {
+        createLocalQualityPreview(roomKey, { microphoneEnabled: state.currentRoomMicrophoneAllowed && state.joinWithMicrophone, cameraEnabled: state.joinWithCamera });
+        closeEntryDialog({ restoreFocus: false, cancelJoin: false });
+        return;
+      }
       room = new LiveKit.Room(studyRoomMediaOptions());
       state.room = room;
       if (!installLocalCameraPublishGuard(room)) {
@@ -3671,6 +3821,7 @@
       }
       const audioUnlock = startRoomAudioFromGesture(room);
       const credential = await workerRequest('/study-room/join', { nickname, roomKey });
+      if (!entryIsCurrent()) throw new Error('Room entry was cancelled. Your devices remain off.');
       if (String(credential.room_key || '') !== roomKey) {
         throw new Error('The secure service returned a different Study Room than the one selected.');
       }
@@ -3679,14 +3830,17 @@
         autoSubscribe: true,
         maxRetries: 5,
       });
+      if (!entryIsCurrent()) throw new Error('Room entry was cancelled. Your devices remain off.');
       await audioUnlock;
       state.currentRoomKey = roomKey;
-      state.currentRoomMicrophoneAllowed = credential.microphone_allowed !== false;
+      state.currentRoomMicrophoneAllowed = roomKey !== '1' && credential.microphone_allowed !== false;
       if (!state.currentRoomMicrophoneAllowed) state.joinWithMicrophone = false;
       state.focusStartedAt = Date.parse(credential.focus_started_at || '') || Date.now();
       byId('sr-live-nickname').value = credential.participant_name || nickname;
       byId('sr-active-room-name').textContent = roomPresentation(roomKey).name;
       await enableInitialMedia();
+      if (!entryIsCurrent()) throw new Error('Room entry was cancelled. Your devices remain off.');
+      closeEntryDialog({ restoreFocus: false, cancelJoin: false });
       byId('sr-prejoin').hidden = true;
       byId('sr-live-room').hidden = false;
       document.body.classList.add('sr-in-call');
@@ -3716,6 +3870,10 @@
         friendlyError(error, 'The Study Room could not connect. Your camera and microphone stayed off.'),
         'error',
       );
+      if (!state.room) {
+        byId('sr-live-room').hidden = true;
+        byId('sr-prejoin').hidden = false;
+      }
       refreshRoomCatalog({ quiet: true }).catch(() => {});
     } finally {
       state.joining = false;
@@ -3793,6 +3951,10 @@
   }
 
   async function switchDevice(kind, select) {
+    if (state.room && state.currentRoomMicrophoneAllowed === false && kind !== 'videoinput') {
+      toast('Library is silent. Audio devices are not used in this room.');
+      return;
+    }
     const deviceId = select.value;
     const previousDeviceId = selectedDeviceId(kind);
     if (!state.room || !deviceId) {
@@ -3954,49 +4116,9 @@
       await refreshRoomCatalog({ quiet: true }).catch(() => {});
       return;
     }
-    if (!state.room) {
-      selectRoom(target.roomKey);
-      return;
-    }
+    if (!state.room) { openEntryDialog(target.roomKey, selector); return; }
     if (target.roomKey === state.currentRoomKey || state.switchingRoom) return;
-
-    const local = state.room.localParticipant;
-    const resumeMicrophone = isLocalSourceEnabled(local, 'microphone');
-    const resumeCamera = isLocalSourceEnabled(local, 'camera');
-    if (LOCAL_TEST_MODE === 'live') {
-      state.switchingRoom = true;
-      state.leaving = true;
-      toast(`Moving to ${roomPresentation(target.roomKey).name}…`);
-      try {
-        await disconnectConnectedRoom();
-        state.selectedRoomKey = target.roomKey;
-      } finally {
-        state.leaving = false;
-        state.switchingRoom = false;
-      }
-      createLocalQualityPreview(target.roomKey, {
-        microphoneEnabled: target.microphoneAllowed !== false && resumeMicrophone,
-        cameraEnabled: resumeCamera,
-      });
-      toast(`You are now studying in ${roomPresentation(target.roomKey).name}.`);
-      return;
-    }
-    state.switchingRoom = true;
-    state.leaving = true;
-    toast(`Moving to ${roomPresentation(target.roomKey).name}…`);
-    try {
-      await disconnectConnectedRoom();
-      state.selectedRoomKey = target.roomKey;
-      state.joinWithMicrophone = target.microphoneAllowed !== false && resumeMicrophone;
-      state.joinWithCamera = resumeCamera;
-      byId('sr-live-room').hidden = true;
-      byId('sr-prejoin').hidden = false;
-      renderRoomCatalog();
-    } finally {
-      state.leaving = false;
-      state.switchingRoom = false;
-    }
-    await joinRoom();
+    openEntryDialog(target.roomKey, selector);
   }
 
   async function leaveRoom() {
@@ -4142,6 +4264,14 @@
       setJoinOption('camera', !state.joinWithCamera);
     });
     byId('sr-join').addEventListener('click', joinRoom);
+    byId('sr-entry-close')?.addEventListener('click', () => closeEntryDialog());
+    byId('sr-entry-dialog')?.addEventListener('cancel', (event) => {
+      event.preventDefault();
+      closeEntryDialog();
+    });
+    byId('sr-entry-dialog')?.addEventListener('close', () => {
+      if (state.entryOpen) closeEntryDialog();
+    });
     byId('sr-toggle-microphone').addEventListener('click', () => toggleLocalTrack('microphone'));
     byId('sr-toggle-camera').addEventListener('click', () => toggleLocalTrack('camera'));
     byId('sr-toggle-screen-share').addEventListener('click', toggleScreenShare);
@@ -4230,6 +4360,8 @@
     });
     global.addEventListener('pagehide', () => {
       state.leaving = true;
+      state.entryGeneration += 1;
+      state.accountGeneration += 1;
       stopDeviceTest();
       global.clearInterval(state.roomRefreshTimer);
       const room = state.room;
@@ -4269,10 +4401,45 @@
       throw signInError;
     }
     state.session = data.session;
-    state.client.auth.onAuthStateChange((_event, session) => {
-      state.session = session || null;
-      if (!session && state.room) leaveRoom();
-    });
+    state.client.auth.onAuthStateChange((_event, session) => { handleAuthSession(session).catch(() => {}); });
+  }
+
+  async function handleAuthSession(session) {
+    const previousId = state.session?.user?.id;
+    const nextId = session?.user?.id;
+    state.session = session || null;
+    if (session && previousId === nextId) return;
+    state.accountGeneration += 1;
+    closeEntryDialog({ restoreFocus: false });
+    const oldRoom = state.room;
+    detachTracks();
+    state.access = null;
+    state.isAdministrator = false;
+    state.rooms = [];
+    state.selectedRoomKey = '';
+    state.roomEditor = null;
+    state.chatMessages = [];
+    state.blockedParticipants.clear();
+    state.localMutedParticipants.clear();
+    state.participantVolumes.clear();
+    if (state.customBackgroundPreview) global.URL.revokeObjectURL(state.customBackgroundPreview);
+    state.customBackgroundPreview = '';
+    state.customBackgroundFile = null;
+    state.customBackgroundPath = '';
+    state.customBackgroundController = null;
+    state.backgroundChoice = 'brand';
+    state.backdropEnabled = false;
+    byId('sr-experience').hidden = true;
+    byId('sr-access-state').hidden = false;
+    showAccessError({ status: session ? 0 : 401, message: session
+      ? 'The signed-in account changed. Your previous room and private device preview were closed. Choose Try again to check this account.'
+      : 'You signed out. Sign in again before entering a room.' });
+    // Invalidate and disconnect the previous identity before any new join. Do
+    // not close the browser window belonging to the newly signed-in identity.
+    const wasLeaving = state.leaving;
+    state.leaving = true;
+    try { if (oldRoom) await disconnectConnectedRoom(); else await destroyBackgroundController(); }
+    finally { state.leaving = wasLeaving; }
   }
 
   async function verifyAccess() {
@@ -4308,9 +4475,10 @@
       }
       syncBrandedBackdropState({ status: 'off', supported: true });
       bindDeviceChangeDetection();
-      // Local visual QA never requests a camera or microphone permission.
-      if (LOCAL_TEST_MODE) await refreshDeviceLists();
-      else await discoverDevices();
+      // Enumeration is passive. Capture/permission occurs only after the
+      // explicit preview action or confirmed entry with an enabled device.
+      await refreshDeviceLists();
+      setStatus('sr-prejoin-status', 'Camera and microphone are off. Your available devices were detected.');
       startRoomCatalogRefresh();
       if (LOCAL_TEST_MODE === 'live') createLocalQualityPreview();
     } catch (error) {

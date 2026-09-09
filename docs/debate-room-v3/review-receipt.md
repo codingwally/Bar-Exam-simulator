@@ -26,6 +26,8 @@ The first pushed candidate is `7be9f9d17831ef430a355589fa47e8b76421375a`:
 
 Current successor CI results belong in the PR's check records and review update, with the exact candidate/tree. These historical runs do not attest to a later source revision.
 
+Candidate `cb45d50937244b5c3e99606a3de481fe65018a03` subsequently passed [all thirteen Debate groups and artifact checks](https://github.com/codingwally/Bar-Exam-simulator/actions/runs/34340948244) and [shared release validation](https://github.com/codingwally/Bar-Exam-simulator/actions/runs/34340948247), including all 1,703 Worker tests. Its CI checkout `a9ec4d0ad8e7d4e6c40aaf1162ce1c98f8b98860` has the identical candidate tree `f2fd59f661c8020a5f97a991682fe014c60e654f`. The [permanent CI record](evidence/ci-validation-cb45d509.json) preserves the complete suite report. The unrelated [media transfer rerun](https://github.com/codingwally/Bar-Exam-simulator/actions/runs/34340948271) again failed on the existing narration HTTP 404. Separate isolated Debate and Study browser journeys are now being added; their results must identify the new candidate, and these earlier checks do not prove those new journeys.
+
 ## Remaining acceptance and release gates
 
 The local server was resumed with current source and the saved synthetic rehearsal; HTTP availability and saved state passed readback. An intervening full-suite run then passed twelve groups but failed the organizer process with a Node out-of-memory error. Only this task's local server was paused, preserving its saved data, and all thirteen groups passed on the unchanged-source rerun. The failed report remains in the evidence record. The local server is currently paused to conserve memory.

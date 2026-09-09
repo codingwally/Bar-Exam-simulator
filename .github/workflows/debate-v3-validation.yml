@@ -41,6 +41,55 @@ jobs:
           node scripts/build-pages-artifact.mjs
           node scripts/test-debate-artifact.mjs
           node scripts/test-pages-artifact.mjs
+      - name: Install existing pinned CI browser tooling
+        id: browser_tooling
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+        run: npm install --no-save --no-package-lock playwright@1.54.2
+      - name: Rehearse the organizer journey through an isolated browser
+        timeout-minutes: 10
+        env:
+          DEBATE_SYNTHETIC_BROWSER_CI: '1'
+        run: node scripts/test-debate-browser-organizer.mjs
+      - name: Verify Study waiting and administrator approval through the UI
+        if: ${{ !cancelled() && steps.browser_tooling.outcome == 'success' }}
+        timeout-minutes: 5
+        env:
+          DEBATE_SYNTHETIC_BROWSER_CI: '1'
+        run: |
+          node scripts/test-study-room-browser.mjs --harness-only
+          node scripts/test-study-room-browser.mjs
+      - name: Preserve synthetic browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debate-v3-synthetic-browser-evidence
+          path: |
+            artifacts/debate-local-rehearsal/browser-organizer-ci/report.json
+            artifacts/debate-local-rehearsal/browser-organizer-ci/screenshots/*
+            artifacts/debate-local-rehearsal/browser-organizer-ci/downloads/*
+            artifacts/debate-local-rehearsal/browser-organizer-ci/trace*.zip
+            artifacts/debate-local-rehearsal/browser-organizer-ci/*-failure-dom.html
+            artifacts/debate-local-rehearsal/browser-organizer-ci/request-log.jsonl
+            artifacts/debate-local-rehearsal/browser-organizer-ci/manifest.json
+            artifacts/debate-local-rehearsal/study-browser-ci/report.json
+            artifacts/debate-local-rehearsal/study-browser-ci/screenshots/*
+            artifacts/debate-local-rehearsal/study-browser-ci/downloads/*
+            artifacts/debate-local-rehearsal/study-browser-ci/trace*.zip
+            artifacts/debate-local-rehearsal/study-browser-ci/synthetic-trace-*.zip
+            artifacts/debate-local-rehearsal/study-browser-ci/final-*.png
+            artifacts/debate-local-rehearsal/study-browser-ci/admin-waiting-room.png
+            artifacts/debate-local-rehearsal/study-browser-ci/member-explicit-entry.png
+            artifacts/debate-local-rehearsal/study-browser-ci/*-failure-dom.html
+            artifacts/debate-local-rehearsal/study-browser-ci/request-log.jsonl
+            artifacts/debate-local-rehearsal/study-browser-ci/manifest.json
+            artifacts/debate-local-rehearsal/study-browser-ci/harness.json
+            artifacts/debate-local-rehearsal/study-browser-ci/harness-only/report.json
+            artifacts/debate-local-rehearsal/study-browser-ci/harness-only/request-log.jsonl
+            artifacts/debate-local-rehearsal/study-browser-ci/harness-only/manifest.json
+            artifacts/debate-local-rehearsal/study-browser-ci/harness-only/harness.json
+          if-no-files-found: warn
+          retention-days: 14
       - name: Preserve local verification report
         if: always()
         uses: actions/upload-artifact@v4

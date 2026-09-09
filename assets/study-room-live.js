@@ -502,14 +502,7 @@
       : `${presentation.name}, ${roomCountCopy(room)}`);
     button.setAttribute('aria-pressed', String(state.selectedRoomKey === room.roomKey));
 
-    if (available) {
-      const cover = document.createElement('img');
-      cover.className = 'sr-room-card-cover';
-      cover.src = presentation.cover;
-      cover.alt = '';
-      cover.setAttribute('aria-hidden', 'true');
-      button.append(cover);
-    } else {
+    if (!available) {
       const createIcon = document.createElement('span');
       createIcon.className = 'sr-room-create-icon';
       createIcon.setAttribute('aria-hidden', 'true');

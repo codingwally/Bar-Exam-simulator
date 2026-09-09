@@ -507,7 +507,7 @@ a {
   display: grid;
   min-width: 0;
   min-height: 88px;
-  grid-template-columns: 138px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: stretch;
   gap: 0;
   padding: 0;
@@ -532,13 +532,6 @@ a {
   border-color: var(--sr-gold-bright);
   background: linear-gradient(135deg, rgba(34, 52, 67, 0.9), rgba(63, 43, 9, 0.42));
   box-shadow: inset 0 0 0 1px rgba(255, 227, 154, 0.16), 0 0 26px rgba(217, 170, 69, 0.1);
-}
-
-.sr-room-card-cover {
-  width: 100%;
-  height: 100%;
-  min-height: 88px;
-  object-fit: cover;
 }
 
 .sr-room-card-copy {
@@ -1889,11 +1882,7 @@ a {
 
   .sr-room-card {
     min-height: 82px;
-    grid-template-columns: 112px minmax(0, 1fr);
-  }
-
-  .sr-room-card-cover {
-    min-height: 82px;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .sr-room-card-create {
@@ -2755,9 +2744,8 @@ body.sr-in-call .sr-participant-grid[data-layout-mode="tiled"] {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .sr-room-card,
-  .sr-room-card-closed {
-    grid-template-columns: 90px minmax(0, 1fr);
+  .sr-room-card {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .sr-control-dock {
@@ -2780,9 +2768,8 @@ body.sr-in-call .sr-participant-grid[data-layout-mode="tiled"] {
     grid-template-columns: 1fr;
   }
 
-  .sr-room-card,
-  .sr-room-card-closed {
-    grid-template-columns: 110px minmax(0, 1fr);
+  .sr-room-card {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .sr-panel-tabs button span:not(.sr-unread-badge) {

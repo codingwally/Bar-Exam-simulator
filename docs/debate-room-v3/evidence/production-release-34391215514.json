@@ -1,0 +1,598 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-09T18:53:46.934Z",
+  "status": "FAIL_BEFORE_WORKER_OR_PAGES_DEPLOYMENT",
+  "runId": 34391215514,
+  "candidate": "7632257d5665afda2c2bd02ef72a42c13df65663",
+  "receiptSha256": "c78ea85648a29eafabf540dea6d1b91ecf3c4e1d91456a72f4af6cf18ddbef17",
+  "release": {
+    "schemaVersion": 1,
+    "candidate": "7632257d5665afda2c2bd02ef72a42c13df65663",
+    "startedAt": "2026-09-09T18:48:30.572Z",
+    "status": "FAIL_PUBLIC_ENTRY_RELEASE",
+    "evidence": {
+      "ciRunId": "34390663871",
+      "stagingRunId": "34390805821",
+      "suiteSha256": "ae433b47a08fa862923699f3c285e0bb11ce069e99259e9bf03dee822e41a41c",
+      "stagingDriverSha256": "85387d2be2280c2f95d47c9c9fb7a6c0b6cbef9a139c4719e550b46f105c996d",
+      "sourceCount": 131
+    },
+    "storage": {
+      "status": "VERIFIED",
+      "verifiedPrivate": true,
+      "evidenceSha256": "c01b4f6d65ba8e2550db1f1f7f39229359750cee433b3616e5416543475f7bac",
+      "evidenceReference": "docs/debate-room-v3/evidence/production-database-20260910.json",
+      "projectRef": "hbllomlijfznnuudpdvr",
+      "bucket": "debate-private-v3",
+      "storageApiUploadDownloadVerified": false
+    },
+    "baselineFingerprint": "57b29c28a2b495b782821b37b4ef3bab70e13fe9fe9321d7ba18e11cafd78ef8",
+    "steps": [
+      {
+        "label": "dry-run-0",
+        "status": "PASS",
+        "stdoutSha256": "711a5df4fc05cdb1bc70619cbb386d698343dc5d62effae181e8ed6f56e79a2e",
+        "stderrSha256": "1295d579baa1596cd565599ea3f2427307e57df1dd3ce2013f654c593c0794bb",
+        "rawOutputStored": false
+      }
+    ],
+    "databaseProofSha256": "372075a1c44a9f2b7cc8c3cb4df6ad480205c9f1ba3663b374888b9bd33ca615",
+    "approvalReference": "Owner direct requests: publish it; make available to the public, paying and not paying; separate button beside Study Room for testing while coding. 10 September 2026 Asia/Manila. Superior recovery task explicitly cleared its hold.",
+    "publicLaunchAuthorized": true,
+    "publicLaunch": false,
+    "accessPolicy": "all-signed-in-paid-and-unpaid",
+    "fullAcceptance": false,
+    "authenticatedPaidUnpaidJourney": "NOT_RUN",
+    "unverifiedCapabilities": [
+      "complete hosted rehearsal",
+      "physical media",
+      "capacity and provider budget",
+      "real mail"
+    ],
+    "secretValuesStored": false,
+    "failureCode": "SERIALIZED_RESOURCE_CHANGED"
+  },
+  "diagnosis": {
+    "confirmed": "Pinned Wrangler 4.114.0 emits inherit bindings for the three existing declared LiveKit secrets. Local dry-run actual multipart confirms exact name/type-only bindings; alias has no inherited secrets.",
+    "source": "https://raw.githubusercontent.com/cloudflare/workers-sdk/wrangler@4.114.0/packages/deploy-helpers/src/deploy/helpers/secrets-validation.ts",
+    "actualMultipart": [
+      {
+        "file": "artifacts/debate-local-rehearsal/production-metadata-local/duediligence-gemini-examiner.json",
+        "sha256": "5f85bfb17f079b6312b07b5947e74d424e82c78fd35493900285433af48d5122",
+        "observed": {
+          "worker": "duediligence-gemini-examiner",
+          "wranglerVersion": "4.114.0",
+          "dryRun": true,
+          "configSha256": "e66cdddf973dbdede6c117ec6c039fc06296e34481988044bdfaf00f385d00ce",
+          "metadataSha256": "f81b387ba63f18ba9ec0f9ca0b367b188769e399446dce5a483b817418f25c62",
+          "stdoutSha256": "157607d88f57ae3e5b196657416cd43bc29380f0275670395e3f20bfcb9fb501",
+          "bindings": [
+            {
+              "name": "LIVEKIT_URL",
+              "type": "inherit",
+              "fields": [
+                "name",
+                "type"
+              ]
+            },
+            {
+              "name": "LIVEKIT_API_KEY",
+              "type": "inherit",
+              "fields": [
+                "name",
+                "type"
+              ]
+            },
+            {
+              "name": "LIVEKIT_API_SECRET",
+              "type": "inherit",
+              "fields": [
+                "name",
+                "type"
+              ]
+            },
+            {
+              "name": "DEBATE_ROOM_ENABLED",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "DEBATE_MEDIA_ENABLED",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "DEBATE_SWEEPER_ENABLED",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "DEBATE_APPROVED_MAX_PARTICIPANTS",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "DEBATE_RESULTS_EMAIL_MODE",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "DEBATE_INVITATION_EMAIL_MODE",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "DEBATE_PREVIEW_ACTOR_IDS",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "GEMINI_MODEL",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "GEMINI_GROUNDING_ENABLED",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "ALLOWED_ORIGIN",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "MAINTENANCE_MODE",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "MAINTENANCE_PASSWORD_HASH",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "MAINTENANCE_TOKEN_TTL_SECONDS",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "ALLOW_LEGACY_GUESTS",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "PHASE4_ACCESS_ENFORCEMENT",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "PHASE4_MODEL_QUALITY_ENFORCEMENT",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "REQUIRE_AUTHENTICATED_SUBMISSIONS",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "EXAMINATION_ROOM_ENABLED",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "EXAMINATION_ROOM_EMAIL_MODE",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "EXAMINATION_ROOM_RECOVERY_MODE",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "OUTBOUND_EMAIL_MODE",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "FORECAST_RESULTS_EMAIL_MODE",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "FORECAST_RESULTS_EMAIL_FROM",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "ADMIN_DIRECTORY_EMAIL_MODE",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "ADMIN_DIRECTORY_EMAIL_FROM",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "SUPPORT_NOTIFICATION_EMAIL_MODE",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "SUPPORT_NOTIFICATION_EMAIL_FROM",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "SIGN_IN_NOTIFICATION_EMAIL_MODE",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "SIGN_IN_NOTIFICATION_EMAIL_FROM",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "ADMIN_PULSE_ENABLED",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "ADMIN_PULSE_WEB_PUSH_ENABLED",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "ADMIN_PULSE_VAPID_PUBLIC_KEY",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "ADMIN_PULSE_VAPID_SUBJECT",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "PAYMENT_NOTIFICATION_EMAIL_MODE",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "SUBSCRIPTION_RECEIPT_EMAIL_MODE",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "PAYMENT_NOTIFICATION_EMAIL_FROM",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "PRIVATE_BETA_GATE_ENABLED",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "PRIVATE_BETA_DISCLOSURE_VERSION",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "VERDICT_PDF_ENABLED",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "VERDICT_PDF_PREMIUM_REQUIRED",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "BAR_EASY_ENABLED",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "CHAIR_CASES_ENABLED",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "DOCTRINES_ENABLED",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "ANCHOR_CASE_DIGESTS_ENABLED",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "AI_PREPARED_BETA_BADGE",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "CONTENT_HUMAN_REVIEW_REQUIRED",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "BAR_QUESTION_PRACTICE_RANDOMIZATION_V2_ENABLED",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "SYLLABUS_BASED_REVIEW_RANDOMIZATION_V2_ENABLED",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "BAR_EXAM_SIMULATION_RANDOMIZATION_V1_SCHEMA_READY",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "BAR_EXAM_SIMULATION_RANDOMIZATION_V1_ENABLED",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "STUDY_ROOM_ENABLED",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            },
+            {
+              "name": "STUDY_ROOM_NAME",
+              "type": "plain_text",
+              "fields": [
+                "name",
+                "text",
+                "type"
+              ]
+            }
+          ],
+          "remoteCallsRequested": false,
+          "credentialValuesStored": false
+        }
+      },
+      {
+        "file": "artifacts/debate-local-rehearsal/production-metadata-local/duediligence-api.json",
+        "sha256": "eb04a92b44e06656a2cfb9cdb3f3db1f774b25db3662cf269fa20448b37c2c18",
+        "observed": {
+          "worker": "duediligence-api",
+          "wranglerVersion": "4.114.0",
+          "dryRun": true,
+          "configSha256": "4859a48cd0d1acd2e6059b5412e5dceae2e5afca7d33455b4c16d3c509b7405a",
+          "metadataSha256": "c977afce31a6684d9847b907bee74da8d96d0147b64c40c4dc102de6833d8e0a",
+          "stdoutSha256": "c47951254ce6bd1474d59b4be450a2afb7b9b63d15f5da21538976178de805d2",
+          "bindings": [
+            {
+              "name": "DUE_DILIGENCE_APPLICATION",
+              "type": "service",
+              "fields": [
+                "name",
+                "service",
+                "type"
+              ]
+            }
+          ],
+          "remoteCallsRequested": false,
+          "credentialValuesStored": false
+        }
+      }
+    ]
+  },
+  "productionWorkerChanged": false,
+  "productionPagesChanged": false,
+  "fullAcceptance": false,
+  "publicLaunch": false
+}

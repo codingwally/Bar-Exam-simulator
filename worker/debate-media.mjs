@@ -7,18 +7,18 @@ const epoch = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{
 export class DebateMediaError extends Error {
   constructor(code, message, status = 503) { super(message); this.code = code; this.status = status; }
 }
-const pending = () => new DebateMediaError('DEBATE_MEDIA_PENDING', 'The secure room transition is not confirmed. Stay in the lobby and retry.', 409);
+const pending = () => new DebateMediaError('DEBATE_MEDIA_PENDING', 'We could not confirm your room connection. Stay in the lobby and try again.', 409);
 function configuration(env, { cleanup = false } = {}) {
   let url;
   try { url = new URL(env.LIVEKIT_URL); } catch { /* Safe configuration error below. */ }
   if ((!cleanup && env.DEBATE_MEDIA_ENABLED !== 'true') || !url || url.protocol !== 'wss:'
     || url.username || url.password || url.port || url.pathname !== '/' || url.search || url.hash
     || !env.LIVEKIT_API_KEY || !env.LIVEKIT_API_SECRET) {
-    throw new DebateMediaError('DEBATE_MEDIA_UNAVAILABLE', 'Live media is not enabled for this Debate Room preview. Your saved event is safe.');
+    throw new DebateMediaError('DEBATE_MEDIA_UNAVAILABLE', 'Video and audio calls are not available yet. Your saved debate remains available.');
   }
   // Cloud token revocation is required; JWT expiry alone does not revoke a connected participant.
   if (!url.hostname.endsWith('.livekit.cloud')) {
-    throw new DebateMediaError('DEBATE_REVOCATION_UNVERIFIED', 'This media server needs its role-revocation check before debate calls can open.');
+    throw new DebateMediaError('DEBATE_REVOCATION_UNVERIFIED', 'Video and audio calls are not available. Contact Due Diligence for help.');
   }
   return { url: `wss://${url.host}`, serviceUrl: `https://${url.host}` };
 }

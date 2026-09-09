@@ -509,8 +509,8 @@ export function createDebateService({ store, adapters = {}, now = Date.now, limi
   handlers.release_motion = ctx => { requireOrganizer(ctx.event, ctx.actorId); const match = matchOf(ctx.event, ctx.payload), motion = ctx.event.motions[match.motionId]; need(motion, 'MOTION_NOT_FOUND', 'Set the match motion first.'); motion.releasedAt ||= ctx.time; match.motionReleasedAt ||= ctx.time; return { releasedAt: motion.releasedAt }; };
   handlers.start_match = ctx => {
     const match = matchOf(ctx.event, ctx.payload); requireOfficial(ctx.event, match, ctx.actorId); mutableSetup(match);
-    need(!match.requiresReview, 'FIXTURE_REVIEW_REQUIRED', 'Resolve this match’s recorded fixture review before starting.');
-    const fixture = getBoundFixture(ctx.event, match); if (fixture) { requireResolvedFixture(ctx.event, fixture); need(fixture.status === 'SCHEDULED', 'FIXTURE_NOT_READY', 'This fixture is not waiting for its first start.'); }
+    need(!match.requiresReview, 'FIXTURE_REVIEW_REQUIRED', 'Review this match’s pairing before starting.');
+    const fixture = getBoundFixture(ctx.event, match); if (fixture) { requireResolvedFixture(ctx.event, fixture); need(fixture.status === 'SCHEDULED', 'FIXTURE_NOT_READY', 'This pairing is no longer waiting to start.'); }
     validateAssignments(ctx.event, match); const ready = readiness(ctx.event, match); need(ready.ready, 'MATCH_NOT_READY', 'Complete the readiness checks before starting.', ready);
     recordMatchAttendance(match, ctx.actorId, ctx.time, 'start_match');
     const motion = ctx.event.motions[match.motionId]; motion.releasedAt ||= ctx.time; match.motionReleasedAt = motion.releasedAt; match.rulesLockedAt = ctx.time; match.rulesHistory.push({ version: match.ruleVersion, rules: clone(match.rules), at: ctx.time }); match.runOfShow = domain.createRunOfShow(match.rules, match.closingSeats);
@@ -561,12 +561,12 @@ export function createDebateService({ store, adapters = {}, now = Date.now, limi
   handlers.enter_space = ctx => {
     const match = matchOf(ctx.event, ctx.payload), space = ctx.payload.space || 'main'; authorizeSpace(ctx.event, match, ctx.actorId, space);
     recordMatchAttendance(match, ctx.actorId, ctx.time, 'media_admission');
-    need(sessionMaximum > 0, 'MEDIA_UNCONFIGURED', 'The verified media operating limit must be configured before media admission.');
+    need(sessionMaximum > 0, 'MEDIA_UNCONFIGURED', 'Video and audio calls are not available yet. You can still use the debate’s written features.');
     const current = ctx.event.media[ctx.actorId];
     need(!current || current.status === 'left' || current.deviceId === ctx.payload.deviceId || ctx.payload.handoff === true, 'MEDIA_SESSION_CONFLICT', 'Confirm device handoff to replace your existing media connection.');
     // An expired lease still occupies its seat until provider removal confirms.
     const connected = mapValues(ctx.event.media).filter(s => s.matchId === match.id && s.userId !== ctx.actorId && s.status !== 'left');
-    need(connected.length < sessionMaximum, 'CAPACITY_LIMIT', 'This debate has reached its verified safe media capacity. Remain in the lobby and retry.');
+    need(connected.length < sessionMaximum, 'CAPACITY_LIMIT', 'This call is full. Stay in the lobby and try again later.');
     const epochId = id();
     const session = { eventId: ctx.event.id, matchId: match.id, userId: ctx.actorId, space, epochId, identity: `dd-debate-${epochId}`, roomName: `dd-debate-${ctx.event.id}-${match.id}-${space}`, sources: allowedSources(ctx.event, match, ctx.actorId, space, ctx.time), revocations: retiredMedia(current), maxParticipants: sessionMaximum, status: 'pending', deviceId: text(ctx.payload.deviceId, 128, true), expiresAt: ctx.time + 120000 };
     ctx.event.media[ctx.actorId] = session;
@@ -812,26 +812,26 @@ export function createDebateService({ store, adapters = {}, now = Date.now, limi
   };
   handlers.generate_fixtures = ctx => {
     requireOrganizer(ctx.event, ctx.actorId); const p = ctx.payload, teams = p.teamIds || Object.keys(ctx.event.teams); need(teams.every(t => ctx.event.teams[t]), 'TEAM_NOT_FOUND', 'Use registered event teams.');
-    need((p.motionIds || []).every(motionId => ctx.event.motions[motionId]), 'MOTION_NOT_FOUND', 'Fixture motions must belong to this event.');
+    need((p.motionIds || []).every(motionId => ctx.event.motions[motionId]), 'MOTION_NOT_FOUND', 'Choose motions from this event for the pairings.');
     let generation;
     if (p.method === 'round_robin') generation = domain.generateRoundRobin(teams, { motionIds: p.motionIds || [], motionReusePolicy: p.motionReusePolicy || 'none' });
     else if (p.method === 'elimination') { const order = clone(p.seedOrder || teams); let draw = null; if (p.random === true) { for (let i = order.length - 1; i > 0; i--) { const j = crypto.getRandomValues(new Uint32Array(1))[0] % (i + 1); [order[i], order[j]] = [order[j], order[i]]; } draw = { actorId: ctx.actorId, atMs: ctx.time, teamOrder: order, reroll: (ctx.event.fixtureDraws?.length || 0) }; } generation = domain.generateElimination(teams, { seedOrder: order, randomDraw: draw, motionIds: p.motionIds || [], motionReusePolicy: p.motionReusePolicy || 'none' }); }
-    else fail('INVALID_FIXTURE_METHOD', 'Choose round-robin or single elimination; manual fixtures are created with individual matches.');
+    else fail('INVALID_FIXTURE_METHOD', 'Choose round-robin or single elimination, or set up individual matches manually.');
     ctx.event.fixtureDraft = generation; ctx.event.fixtureDraws ||= []; ctx.event.fixtureDraws.push({ at: ctx.time, actorId: ctx.actorId, method: p.method, generation: clone(generation) }); return { generation };
   };
-  handlers.publish_fixtures = ctx => { requireOrganizer(ctx.event, ctx.actorId); need(ctx.payload.confirmed === true && ctx.event.fixtureDraft, 'CONFIRMATION_REQUIRED', 'Review and confirm the generated fixtures.'); need(!ctx.event.fixtures.some(f => f.matchId || fixtureWasStarted(f)), 'FIXTURES_LOCKED', 'Bound or started fixtures cannot be overwritten.'); ctx.event.fixtures = clone(ctx.event.fixtureDraft.fixtures); ctx.event.fixtureDraft.needsReview = false; return { published: true, fixtures: ctx.event.fixtures }; };
+  handlers.publish_fixtures = ctx => { requireOrganizer(ctx.event, ctx.actorId); need(ctx.payload.confirmed === true && ctx.event.fixtureDraft, 'CONFIRMATION_REQUIRED', 'Review and confirm the generated pairings.'); need(!ctx.event.fixtures.some(f => f.matchId || fixtureWasStarted(f)), 'FIXTURES_LOCKED', 'Pairings already assigned to matches cannot be replaced.'); ctx.event.fixtures = clone(ctx.event.fixtureDraft.fixtures); ctx.event.fixtureDraft.needsReview = false; return { published: true, fixtures: ctx.event.fixtures }; };
   handlers.advance_match = ctx => {
     requireOrganizer(ctx.event, ctx.actorId); const match = matchOf(ctx.event, ctx.payload), result = latestResult(match); need(result?.state === 'FINAL' && result.winner, 'RESULT_UNRESOLVED', 'Finalize a resolved official winner before advancing.');
-    need(!match.requiresReview, 'FIXTURE_REVIEW_REQUIRED', 'Resolve this match’s fixture review before advancing its result.');
-    need(!ctx.payload.fixtureId || ctx.payload.fixtureId === match.fixtureId, 'FIXTURE_BINDING_CONFLICT', 'A result can advance only its own recorded fixture.');
+    need(!match.requiresReview, 'FIXTURE_REVIEW_REQUIRED', 'Review this match’s pairing before advancing its result.');
+    need(!ctx.payload.fixtureId || ctx.payload.fixtureId === match.fixtureId, 'FIXTURE_BINDING_CONFLICT', 'A result can advance only its own scheduled match.');
     const fixture = getBoundFixture(ctx.event, match);
-    if (fixture) { need(!fixture.requiresReview, 'FIXTURE_REVIEW_REQUIRED', 'Resolve the fixture review before advancing.'); const update = domain.applyFixtureResult(ctx.event.fixtures, fixture.id, { status: 'FINAL', winnerTeamId: match.teamIds[result.winner], revision: result.revision, resultKind: result.resultKind }); ctx.event.fixtures = update.fixtures; for (const reviewId of update.downstreamReviewMatchIds) { const affected = mapValues(ctx.event.matches).find(m => m.fixtureId === reviewId); if (affected) affected.requiresReview = true; } }
-    if (ctx.payload.nextMatchId) { const next = ctx.event.matches[ctx.payload.nextMatchId]; need(next && next.id !== match.id && next.phase === 'setup', 'MATCH_NOT_READY', 'Choose a different prepared next match.'); need(!next.requiresReview, 'FIXTURE_REVIEW_REQUIRED', 'Resolve the next match’s fixture review.'); const nextFixture = getBoundFixture(ctx.event, next); if (nextFixture) requireResolvedFixture(ctx.event, nextFixture); validateAssignments(ctx.event, next); ctx.event.activeMatchId = next.id; }
+    if (fixture) { need(!fixture.requiresReview, 'FIXTURE_REVIEW_REQUIRED', 'Review the pairing before advancing.'); const update = domain.applyFixtureResult(ctx.event.fixtures, fixture.id, { status: 'FINAL', winnerTeamId: match.teamIds[result.winner], revision: result.revision, resultKind: result.resultKind }); ctx.event.fixtures = update.fixtures; for (const reviewId of update.downstreamReviewMatchIds) { const affected = mapValues(ctx.event.matches).find(m => m.fixtureId === reviewId); if (affected) affected.requiresReview = true; } }
+    if (ctx.payload.nextMatchId) { const next = ctx.event.matches[ctx.payload.nextMatchId]; need(next && next.id !== match.id && next.phase === 'setup', 'MATCH_NOT_READY', 'Choose a different prepared next match.'); need(!next.requiresReview, 'FIXTURE_REVIEW_REQUIRED', 'Review the next match’s pairing.'); const nextFixture = getBoundFixture(ctx.event, next); if (nextFixture) requireResolvedFixture(ctx.event, nextFixture); validateAssignments(ctx.event, next); ctx.event.activeMatchId = next.id; }
     ctx.event.status = 'draft'; return { activeMatchId: ctx.event.activeMatchId, fixtures: ctx.event.fixtures };
   };
   handlers.resolve_fixture_review = ctx => {
     requireOrganizer(ctx.event, ctx.actorId); const fixture = ctx.event.fixtures.find(f => f.id === ctx.payload.fixtureId);
-    need(fixture?.requiresReview, 'FIXTURE_REVIEW_NOT_REQUIRED', 'Choose an affected fixture awaiting a recorded review.');
+    need(fixture?.requiresReview, 'FIXTURE_REVIEW_NOT_REQUIRED', 'Choose an affected pairing that is waiting for review.');
     const reason = text(ctx.payload.reason, 2000, true), match = fixture.matchId ? ctx.event.matches[fixture.matchId] : null;
     const started = fixtureWasStarted(fixture, match), resolution = ctx.payload.resolution;
     need(started ? resolution === 'retain_played' : resolution === 'rebind_unstarted', 'INVALID_FIXTURE_RESOLUTION', started ? 'A started match may be retained only by an explicit recorded decision; use the result correction procedure if its outcome must change.' : 'An unstarted match must rebind to the current finalized predecessor winners.');

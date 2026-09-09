@@ -3,12 +3,28 @@ import assert from 'node:assert/strict';
 import { readFile, mkdir, mkdtemp, copyFile, writeFile, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { TARGET, CRITICAL_ASSETS, CRITICAL_SOURCES, REQUIRED_SUITE_GROUPS, hash, parseBase, previewIds, validatePolicy, buildConfig, sanitizeBaseline, validateBaseline, validatePreservation, captureRemote, validateEvidence, inspectArtifact, resolveStagingPublishableKey, validateSmokeSessions, smokeStaging } from './debate-staging-release.mjs';
+import { TARGET, CRITICAL_ASSETS, CRITICAL_SOURCES, REQUIRED_SUITE_GROUPS, hash, parseBase, previewIds, validatePolicy, buildConfig, sanitizeBaseline, validateBaseline, validatePreservation, captureRemote, validateEvidence, inspectArtifact, resolveStagingPublishableKey, validateSmokeSessions, smokeStaging, validateCaptureRequest } from './debate-staging-release.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const policy = JSON.parse(await readFile(path.join(ROOT, 'worker/debate-staging-policy.json'), 'utf8'));
 const base = parseBase(await readFile(path.join(ROOT, policy.baseConfig), 'utf8'));
 const versionId = 'b134ccc7-1111-4111-8111-111111111111', preview = '10000000-0000-4000-8000-000000000001';
+test('capture refuses forks, another actor, stale labels, a changed branch and a dirty or wrong candidate', () => {
+  const repo = 'codingwally/Bar-Exam-simulator', sha = 'a'.repeat(40);
+  const input = { event: { action: 'labeled', repository: { full_name: repo }, sender: { login: 'codingwally' }, label: { name: 'dv3-c-' + sha },
+    pull_request: { number: 356, state: 'open', head: { repo: { full_name: repo }, ref: 'codex/debate-room-v3-20260909', sha }, base: { repo: { full_name: repo }, ref: 'main' } } },
+    env: { GITHUB_EVENT_NAME: 'pull_request', GITHUB_REPOSITORY: repo, GITHUB_ACTOR: 'codingwally', GITHUB_TRIGGERING_ACTOR: 'codingwally', DEBATE_CANDIDATE_SHA: sha, GITHUB_REF: 'refs/pull/356/merge' }, head: sha, gitStatus: '' };
+  assert.equal(validateCaptureRequest(input), sha);
+  for (const mutate of [
+    x => { x.event.pull_request.head.repo.full_name = 'fork/project'; }, x => { x.event.sender.login = 'other'; },
+    x => { x.env.GITHUB_ACTOR = 'other'; }, x => { x.env.GITHUB_TRIGGERING_ACTOR = 'other'; },
+    x => { x.event.label.name = 'dv3-c-' + 'b'.repeat(40); }, x => { x.event.pull_request.head.ref = 'main'; },
+    x => { x.event.pull_request.base.ref = 'other'; }, x => { x.event.pull_request.number = 355; },
+    x => { x.event.action = 'synchronize'; }, x => { x.gitStatus = ' M worker/index.mjs'; },
+    x => { x.head = 'b'.repeat(40); }, x => { x.env.DEBATE_CANDIDATE_SHA = 'b'.repeat(40); },
+    x => { x.env.GITHUB_EVENT_NAME = 'pull_request_target'; }, x => { x.event.pull_request.state = 'closed'; },
+  ]) { const changed = structuredClone(input); mutate(changed); assert.throws(() => validateCaptureRequest(changed), { code: 'CAPTURE_AUTHORITY_REQUIRED' }); }
+});
 function remoteFixture() {
   return {
     deployments: { deployments: [{ id: 'deployment-one', versions: [{ version_id: versionId, percentage: 100 }] }] },
@@ -100,7 +116,12 @@ function evidenceFixture() {
   return { candidate, changedPaths: ['worker/debate-service.mjs'], migrationHashes, sourceHashes,
     suite: { head: candidate, status: 'PASS_LOCAL_SUITE', gitStatus: '', changedDuringRun: [], sourceHashes: { ...sourceHashes }, groups: REQUIRED_SUITE_GROUPS.map(name => ({ name, status: 'PASS', exitCode: 0 })) },
     review: { candidateSha: candidate, baseSha: '2'.repeat(40), approvedPaths: ['worker/debate-service.mjs'], studyRoomPreserved: true, recoveryPreserved: true, retiredRuntimeAbsent: true, evidenceReferences: ['reviewed-evidence'], approvalReference: 'Owner staging change reference',
-      databaseProof: { projectRef: TARGET.project, applied: true, rollbackProbePassed: true, privilegesPassed: true, evidenceReference: 'reviewed-probe', reviewedBy: 'Release reviewer', verifiedAt: '2026-09-09T00:00:00Z', migrationHashes: { ...migrationHashes } } } };
+      databaseProof: { schemaVersion: 2, projectRef: TARGET.project, evidenceReference: 'reviewed-probe', reviewedBy: 'Release reviewer', verifiedAt: '2026-09-09T00:00:00Z', migrationHashes: { ...migrationHashes },
+        localInstallationRollback: { passed: true, evidenceReference: 'local-installation', artifactSha256: hash('local'), engine: 'PGlite PostgreSQL 18.3', adaptations: ['Local PG version and existing admin-helper fingerprint'], migrationHashes: { ...migrationHashes } },
+        hostedApplication: { passed: true, evidenceReference: 'actual-application-ledger', artifactSha256: hash('applied'), migrationHashes: { ...migrationHashes } },
+        hostedDmlRollback: { passed: true, evidenceReference: 'hosted-DML-transaction', artifactSha256: hash('transaction') },
+        hostedPrivilegesAndPreservation: { passed: true, evidenceReference: 'hosted-privileges-and-Study', artifactSha256: hash('privileges') },
+        hostedInstallationRollback: { status: 'NOT_RUN', reason: 'Installation rollback verified locally; supported hosted connector applies DDL separately.' }, fullAcceptance: false } } };
 }
 test('release evidence binds complete reviewed scope, unchanged suite, exact migrations and the intended Supabase project', () => {
   validateEvidence(evidenceFixture());
@@ -109,8 +130,22 @@ test('release evidence binds complete reviewed scope, unchanged suite, exact mig
     input => { input.sourceHashes['worker/debate-service.mjs'] = hash('later edit'); },
     input => { input.changedPaths.push('assets/unrelated-feature.js'); },
     input => { input.review.databaseProof.projectRef = 'production-project'; },
-    input => { input.review.databaseProof.applied = false; },
+    input => { input.review.databaseProof.hostedApplication.passed = false; },
     input => { input.migrationHashes[policy.migrations[0]] = hash('different SQL'); },
+  ]) { const input = evidenceFixture(); mutate(input); assert.throws(() => validateEvidence(input)); }
+});
+
+test('protected preview distinguishes local installation rollback from actual hosted DML rollback without implying full acceptance', () => {
+  for (const mutate of [
+    input => { input.review.databaseProof.rollbackProbePassed = true; },
+    input => { delete input.review.databaseProof.localInstallationRollback; },
+    input => { input.review.databaseProof.hostedDmlRollback.passed = false; },
+    input => { input.review.databaseProof.hostedDmlRollback.artifactSha256 = ''; },
+    input => { input.review.databaseProof.hostedPrivilegesAndPreservation.passed = false; },
+    input => { input.review.databaseProof.hostedInstallationRollback.status = 'PASS'; },
+    input => { input.review.databaseProof.fullAcceptance = true; },
+    input => { input.review.databaseProof.localInstallationRollback.migrationHashes[policy.migrations[0]] = hash('different SQL'); },
+    input => { input.review.databaseProof.hostedApplication.migrationHashes[policy.migrations[0]] = hash('different SQL'); },
   ]) { const input = evidenceFixture(); mutate(input); assert.throws(() => validateEvidence(input)); }
 });
 

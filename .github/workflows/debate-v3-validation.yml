@@ -19,6 +19,7 @@ on:
       - 'supabase/migrations/20260909*'
       - 'index.html'
       - '.github/workflows/debate-v3-validation.yml'
+      - '.github/workflows/debate-v3-capture.yml'
 
 permissions:
   contents: read
@@ -95,6 +96,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: debate-v3-local-evidence
-          path: artifacts/debate-local-rehearsal/suite-*/*
+          path: |
+            artifacts/debate-local-rehearsal/suite-*/*
+            artifacts/debate-local-rehearsal/staging-dml-probe-ci/report.json
           if-no-files-found: warn
           retention-days: 14

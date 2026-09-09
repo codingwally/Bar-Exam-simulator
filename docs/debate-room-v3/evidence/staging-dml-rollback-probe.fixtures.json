@@ -1,0 +1,189 @@
+{
+  "kind": "REAL_SERVICE_GENERATED_SYNTHETIC_ENVELOPES",
+  "actorId": "10000000-0000-4000-8000-000000009909",
+  "now": 1800000000000,
+  "sourceHashLf": "0a9d665f58c47f0adb78901822dce625ab2df7ca5dd5bb2a7c4212b5868cdd58",
+  "inputs": [
+    {
+      "actor": {
+        "id": "10000000-0000-4000-8000-000000009909",
+        "displayName": "Synthetic rollback-only owner"
+      },
+      "command": "create_event",
+      "payload": {
+        "title": "Synthetic DML rollback-only Debate probe",
+        "rehearsal": true,
+        "visibility": "unlisted"
+      },
+      "expectedRevision": 0,
+      "idempotencyKey": "dml-rollback-probe-create-0001"
+    },
+    {
+      "actor": {
+        "id": "10000000-0000-4000-8000-000000009909",
+        "displayName": "Synthetic rollback-only owner"
+      },
+      "command": "update_event",
+      "payload": {
+        "title": "Synthetic DML rollback-only update"
+      },
+      "expectedRevision": 1,
+      "idempotencyKey": "dml-rollback-probe-update-0002",
+      "eventId": "de-69ddcb067b431a666ff395d98d00473d"
+    }
+  ],
+  "envelopes": [
+    {
+      "eventId": "de-69ddcb067b431a666ff395d98d00473d",
+      "actorId": "10000000-0000-4000-8000-000000009909",
+      "command": "create_event",
+      "idempotencyKey": "dml-rollback-probe-create-0001",
+      "payloadHash": "c773dc792ac6445e8b9a7b81ea941f74569e000723585166477eb137d220f560",
+      "expectedRevision": 0,
+      "now": 1800000000000,
+      "state": {
+        "id": "de-69ddcb067b431a666ff395d98d00473d",
+        "revision": 0,
+        "ownerId": "10000000-0000-4000-8000-000000009909",
+        "title": "Synthetic DML rollback-only Debate probe",
+        "description": "",
+        "timezone": "Asia/Manila",
+        "language": "English",
+        "scheduledAt": null,
+        "visibility": "unlisted",
+        "rehearsal": true,
+        "status": "draft",
+        "createdAt": 1800000000000,
+        "updatedAt": 1800000000000,
+        "members": {
+          "10000000-0000-4000-8000-000000009909": {
+            "id": "10000000-0000-4000-8000-000000009909",
+            "displayName": "Synthetic rollback-only owner",
+            "roles": [
+              "host"
+            ],
+            "teamId": null,
+            "admitted": true,
+            "checkedIn": true,
+            "removed": false,
+            "conflictDeclarations": []
+          }
+        },
+        "teams": {},
+        "motions": {},
+        "matches": {},
+        "invites": {},
+        "media": {},
+        "jobs": {},
+        "fixtures": [],
+        "activeMatchId": null,
+        "retention": {
+          "operationalDays": 30,
+          "chatDays": 30,
+          "evidenceDays": 90,
+          "officialDays": 365,
+          "approved": false,
+          "hold": false,
+          "nextCleanupAt": null
+        },
+        "contact": null
+      },
+      "receipt": {
+        "id": "27758954-26c1-4dac-acf9-33ad189587db",
+        "eventId": "de-69ddcb067b431a666ff395d98d00473d",
+        "command": "create_event",
+        "committedAt": 1800000000000,
+        "result": {
+          "eventId": "de-69ddcb067b431a666ff395d98d00473d"
+        }
+      },
+      "audit": {
+        "actorId": "10000000-0000-4000-8000-000000009909",
+        "command": "create_event",
+        "at": 1800000000000,
+        "matchId": null,
+        "correlationId": "27758954-26c1-4dac-acf9-33ad189587db"
+      },
+      "jobs": [],
+      "cancelJobs": [],
+      "retryJobs": [],
+      "consumeUploads": []
+    },
+    {
+      "eventId": "de-69ddcb067b431a666ff395d98d00473d",
+      "actorId": "10000000-0000-4000-8000-000000009909",
+      "command": "update_event",
+      "idempotencyKey": "dml-rollback-probe-update-0002",
+      "payloadHash": "882b423b00d2b1a132e170e773e6916a1d5993b28e2df9d3354faeb5e6d5f365",
+      "expectedRevision": 1,
+      "now": 1800000000000,
+      "state": {
+        "id": "de-69ddcb067b431a666ff395d98d00473d",
+        "revision": 1,
+        "ownerId": "10000000-0000-4000-8000-000000009909",
+        "title": "Synthetic DML rollback-only update",
+        "description": "",
+        "timezone": "Asia/Manila",
+        "language": "English",
+        "scheduledAt": null,
+        "visibility": "unlisted",
+        "rehearsal": true,
+        "status": "draft",
+        "createdAt": 1800000000000,
+        "updatedAt": 1800000000000,
+        "members": {
+          "10000000-0000-4000-8000-000000009909": {
+            "id": "10000000-0000-4000-8000-000000009909",
+            "displayName": "Synthetic rollback-only owner",
+            "roles": [
+              "host"
+            ],
+            "teamId": null,
+            "admitted": true,
+            "checkedIn": true,
+            "removed": false,
+            "conflictDeclarations": []
+          }
+        },
+        "teams": {},
+        "motions": {},
+        "matches": {},
+        "invites": {},
+        "media": {},
+        "jobs": {},
+        "fixtures": [],
+        "activeMatchId": null,
+        "retention": {
+          "operationalDays": 30,
+          "chatDays": 30,
+          "evidenceDays": 90,
+          "officialDays": 365,
+          "approved": false,
+          "hold": false,
+          "nextCleanupAt": null
+        },
+        "contact": null
+      },
+      "receipt": {
+        "id": "f66c5dc0-f2d2-425b-afe7-cefb65fe16fe",
+        "eventId": "de-69ddcb067b431a666ff395d98d00473d",
+        "command": "update_event",
+        "committedAt": 1800000000000,
+        "result": {
+          "saved": true
+        }
+      },
+      "audit": {
+        "actorId": "10000000-0000-4000-8000-000000009909",
+        "command": "update_event",
+        "at": 1800000000000,
+        "matchId": null,
+        "correlationId": "f66c5dc0-f2d2-425b-afe7-cefb65fe16fe"
+      },
+      "jobs": [],
+      "cancelJobs": [],
+      "retryJobs": [],
+      "consumeUploads": []
+    }
+  ]
+}

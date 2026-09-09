@@ -10,6 +10,8 @@ The only target is `https://duediligence-examinations-staging.wallyesteban1993.w
 - `scripts/debate-staging-release.mjs` captures sanitized current settings, verifies evidence, generates an additive configuration and checks deployed settings/assets/authentication. It contains no deployment, migration, login or secret-write operation.
 - `scripts/test-debate-staging-release.mjs` checks those gates with hostile drift, scope, privacy, credential and artifact cases.
 - `.github/workflows/debate-v3-staging.yml` is the separate manually dispatched staging workflow. It shares the existing staging concurrency group and never cancels an active owner. It requires the exact current `main` SHA and uses the existing `staging-e2e` environment. Read-only inventory found zero environment protection rules: there is no platform approval gate. Explicit current authorization, the account allowlist and the code/configuration/evidence gates therefore remain necessary. The package does not change environment protection, the existing staging workflow or support a production target.
+- `.github/workflows/debate-v3-capture.yml` permits only the owner `codingwally` to request a read-only capture by labeling PR356 `dv3-c-<exact head SHA>`. It pins that same-repository feature-branch SHA, rejects stale labels, forks and different actors, shares the staging concurrency group and uploads only sanitized `baseline.json`. It cannot deploy, create accounts, write SQL or change secrets. This provides current configuration evidence before merging the feature or registering the manual deployment workflow.
+- `scripts/debate-staging-fixtures.mjs` and `scripts/run-debate-staging-auth.mjs` select two fresh student test identities autonomously for actual Study regression and sibling Debate GET-only auth checks. The existing Study registrar classifies them as internal tests before sign-in. No new persistent bearer secrets are needed. The importable coordinator is not yet wired to a deployed workflow; its tested lifecycle is preparation, not evidence that hosted identities were created.
 
 The generated configuration retains `worker/wrangler.staging.toml`, resolving only the entry and artifact paths and adding `keep_vars = true` plus the Debate overlay. Existing Study Room, recovery, variables, secrets, compatibility date/flags, placement, logging and the two-minute cron must remain unchanged. Existing secret values are neither read into evidence nor replaced. The preflight rejects unrepresented resource bindings, limits, Logpush, extra logging/sampling/tracing settings or incomplete metadata; it requires a separately reviewed preservation change instead of guessing.
 
@@ -42,21 +44,43 @@ Use this schema with real values; these placeholders are intentionally invalid a
   "approvalReference": "ACTUAL_AUTHORIZED_STAGING_CLEARANCE_REFERENCE",
   "databaseProof": {
     "projectRef": "hlzqmreeoghbldnhlybr",
-    "applied": true,
-    "rollbackProbePassed": true,
-    "privilegesPassed": true,
+    "schemaVersion": 2,
     "evidenceReference": "ACTUAL_STAGING_DATABASE_CHECK_RECORD",
     "reviewedBy": "ACTUAL_REVIEWER",
     "verifiedAt": "ACTUAL_ISO_8601_TIME",
     "migrationHashes": {
       "supabase/migrations/20260909080139_debate_room_v3.sql": "EXACT_SHA256",
       "supabase/migrations/20260909080143_study_room_admission_v3.sql": "EXACT_SHA256"
-    }
+    },
+    "localInstallationRollback": {
+      "passed": true,
+      "evidenceReference": "ACTUAL_LOCAL_INSTALLATION_ROLLBACK_REPORT",
+      "artifactSha256": "EXACT_REPORT_SHA256",
+      "engine": "ACTUAL_LOCAL_POSTGRES_VERSION",
+      "adaptations": ["EXACT_DOCUMENTED_LOCAL_ADAPTATIONS"],
+      "migrationHashes": {"BOTH_EXACT_MIGRATION_PATHS": "THEIR_EXACT_SHA256_VALUES"}
+    },
+    "hostedApplication": {
+      "passed": true,
+      "evidenceReference": "ACTUAL_MIGRATION_APPLICATION_AND_LEDGER_READBACK",
+      "artifactSha256": "EXACT_REPORT_SHA256",
+      "migrationHashes": {"BOTH_EXACT_MIGRATION_PATHS": "THEIR_EXACT_SHA256_VALUES"}
+    },
+    "hostedDmlRollback": {"passed": true, "evidenceReference": "ACTUAL_HOSTED_TRANSACTION_AND_ABSENCE_READBACK", "artifactSha256": "EXACT_REPORT_SHA256"},
+    "hostedPrivilegesAndPreservation": {"passed": true, "evidenceReference": "ACTUAL_ROLE_DENIALS_AND_STUDY_PRESERVATION", "artifactSha256": "EXACT_REPORT_SHA256"},
+    "hostedInstallationRollback": {"status": "NOT_RUN", "reason": "Exact installation rollback tested locally; hosted DDL uses the supported migration tool."},
+    "fullAcceptance": false
   }
 }
 ```
 
 The workflow creates fresh complete local-suite evidence itself. All thirteen required groups must appear exactly once with PASS and exit code zero, and the source manifest must include the 65 explicitly required application, migration, build and release dependencies. It verifies every recorded source hash against the clean candidate, plus the approved path list against the actual Git diff. Local tests, build success or a manually filled JSON record alone do not authorize deployment.
+
+### Supported database path for the restricted preview
+
+The V3 specification authorizes implementation, controlled testing and a protected preview. Its F05 requires rollback testing on controlled data; it does not require a hosted schema-installation rollback before that preview. The original main-only and hosted installation-probe conditions were implementation choices in this branch, not additional owner approval boundaries. The installed connector requires DDL through `apply_migration`; no direct database connection is configured. Do not send DDL through `execute_sql` or pretend that a recorded migration is a rollback-only probe.
+
+For the protected preview, retain the exact local installation/rollback report and its stated PostgreSQL/fingerprint adaptations; apply only the two reviewed additive migrations to the fixed staging project through the supported migration tool; then execute a DML-only transaction/rollback probe and independent absence, real-role denial and Study-preservation readbacks. Schema version 2 records these as distinct hash-bound reports. It expressly records that hosted installation rollback was not run and full acceptance remains false. An old undifferentiated `rollbackProbePassed` flag is rejected. Missing application, transactional, privilege or preservation evidence still blocks deployment. This change does not approve public launch or clear F05/full acceptance by inference.
 
 ## Controlled staging sequence
 

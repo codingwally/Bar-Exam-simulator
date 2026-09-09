@@ -42,7 +42,7 @@ const groups = [
   ['local-http-boundaries', ['--test', 'scripts/test-debate-rehearsal-server.mjs']],
   ['accelerated-organizer', ['scripts/test-debate-organizer-rehearsal.mjs']],
   ['eligible-tournament-exports', ['scripts/test-debate-tournament-export.mjs']],
-  ['staging-preflight-gates', ['--test', 'scripts/test-debate-staging-release.mjs']],
+  ['staging-preflight-gates', ['--test', 'scripts/test-debate-staging-release.mjs', 'scripts/test-debate-staging-fixtures.mjs', 'scripts/test-debate-staging-dml-probe.mjs']],
   ['worker-configuration-contract', ['--test', 'scripts/test-worker-cpu-limit-contract.mjs']],
 ];
 const report = { startedAt: new Date().toISOString(), environment: 'Local Node / disposable PGlite / inert media; no provider or real mail', head: head.stdout.trim(), gitStatus: status.stdout.trim(), sourceHashes, groups: [], limitations: ['Not a physical camera/audio test', 'Not a90-minute endurance run', 'Not native multi-connection PostgreSQL load', 'No hosted migration, approved capacity ramp, real mail delivery or deployment proof'] };

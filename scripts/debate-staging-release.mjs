@@ -17,6 +17,18 @@ const equal = (a, b) => JSON.stringify(canonical(a)) === JSON.stringify(canonica
 const readJson = async filename => JSON.parse(await readFile(filename, 'utf8'));
 const git = args => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', windowsHide: true }).trim();
 
+export function validateCaptureRequest({ event, env, head, gitStatus }) {
+  const repo = 'codingwally/Bar-Exam-simulator', pr = event?.pull_request;
+  need(env.GITHUB_EVENT_NAME === 'pull_request' && event?.action === 'labeled' && env.GITHUB_REPOSITORY === repo && event?.repository?.full_name === repo
+    && env.GITHUB_ACTOR === 'codingwally' && env.GITHUB_TRIGGERING_ACTOR === 'codingwally' && event?.sender?.login === 'codingwally'
+    && pr?.number === 356 && pr.state === 'open' && pr.head?.repo?.full_name === repo && pr.head?.ref === 'codex/debate-room-v3-20260909'
+    && pr.base?.repo?.full_name === repo && pr.base?.ref === 'main' && SHA.test(pr.head?.sha || '')
+    && event.label?.name === 'dv3-c-' + pr.head.sha && env.DEBATE_CANDIDATE_SHA === pr.head.sha
+    && env.GITHUB_REF === 'refs/pull/356/merge' && head === pr.head.sha && gitStatus === '',
+  'CAPTURE_AUTHORITY_REQUIRED', 'Only the current owner-labeled exact candidate in PR356 may capture staging through this path.');
+  return pr.head.sha;
+}
+
 // Only parse the existing base's simple string/array settings. Unknown syntax fails closed.
 export function parseBase(source) {
   const value = key => { const matches = [...source.matchAll(new RegExp(`^${key}\\s*=\\s*(.+)$`, 'gm'))]; need(matches.length === 1, 'BASE_CONFIG_CHANGED', `Expected one ${key} setting in the reviewed staging base.`); return JSON.parse(matches[0][1].trim()); };
@@ -161,6 +173,11 @@ export const CRITICAL_SOURCES = Object.freeze([
   'scripts/serve-debate-rehearsal.mjs', 'scripts/test-debate-rehearsal-server.mjs', 'scripts/test-debate-organizer-rehearsal.mjs', 'scripts/test-debate-tournament-export.mjs',
   'scripts/test-study-room-admission-sql.mjs', 'scripts/test-study-room-always-open.mjs', 'scripts/test-study-room-backgrounds.mjs',
   'scripts/test-study-room-background-picker.mjs', 'scripts/test-study-room-hotfix-behavior.mjs', 'scripts/test-study-room-live.mjs',
+  '.github/workflows/debate-v3-capture.yml', 'scripts/debate-staging-fixtures.mjs', 'scripts/run-debate-staging-auth.mjs',
+  'scripts/test-debate-staging-fixtures.mjs', 'scripts/debate-staging-dml-probe.mjs', 'scripts/test-debate-staging-dml-probe.mjs',
+  'docs/debate-room-v3/evidence/staging-dml-rollback-probe.sql', 'docs/debate-room-v3/evidence/staging-dml-rollback-probe.readback.sql',
+  'docs/debate-room-v3/evidence/staging-dml-rollback-probe.fixtures.json', 'docs/debate-room-v3/evidence/staging-dml-rollback-probe.manifest.json',
+  'docs/debate-room-v3/evidence/staging-dml-rollback-probe.denials.json',
 ]);
 export function validateEvidence({ review, suite, candidate, changedPaths, migrationHashes, sourceHashes }) {
   need(SHA.test(candidate || '') && review.candidateSha === candidate && suite.head === candidate && SHA.test(review.baseSha || ''), 'CANDIDATE_MISMATCH', 'Review, local evidence and checkout must identify the same exact commit.');
@@ -175,8 +192,14 @@ export function validateEvidence({ review, suite, candidate, changedPaths, migra
   }
   need(equal(sorted(review.approvedPaths || []), sorted(changedPaths)) && review.studyRoomPreserved === true && review.recoveryPreserved === true && review.retiredRuntimeAbsent === true && review.evidenceReferences?.length > 0 && review.approvalReference?.trim(), 'SCOPE_REVIEW_REQUIRED', 'A concrete complete file scope and Study/recovery review reference are required.');
   const proof = review.databaseProof;
-  need(proof?.projectRef === TARGET.project && proof.applied === true && proof.rollbackProbePassed === true && proof.privilegesPassed === true && proof.evidenceReference?.trim() && proof.reviewedBy?.trim() && Number.isFinite(Date.parse(proof.verifiedAt)), 'DATABASE_PROOF_REQUIRED', 'Record the reviewed manually applied staging migration and privilege/rollback probe evidence. This package never applies migrations.');
+  need(proof?.schemaVersion === 2 && proof.projectRef === TARGET.project && proof.evidenceReference?.trim() && proof.reviewedBy?.trim() && Number.isFinite(Date.parse(proof.verifiedAt)) && !Object.hasOwn(proof, 'rollbackProbePassed'), 'DATABASE_PROOF_REQUIRED', 'Use the explicit local-installation, hosted-application, hosted-DML-rollback and privilege evidence schema; an ambiguous rollback flag is insufficient.');
+  const evidence = item => item?.passed === true && typeof item.evidenceReference === 'string' && item.evidenceReference.trim() && HASH.test(item.artifactSha256 || '');
+  need(evidence(proof.localInstallationRollback) && typeof proof.localInstallationRollback.engine === 'string' && proof.localInstallationRollback.engine.trim() && Array.isArray(proof.localInstallationRollback.adaptations)
+    && evidence(proof.hostedApplication) && evidence(proof.hostedDmlRollback) && evidence(proof.hostedPrivilegesAndPreservation), 'DATABASE_PROOF_REQUIRED', 'Exact migration application, hosted transaction rollback, actual hosted privileges and preserved Study contracts must be independently recorded.');
+  need(proof.hostedInstallationRollback?.status === 'NOT_RUN' && typeof proof.hostedInstallationRollback.reason === 'string' && proof.hostedInstallationRollback.reason.trim()
+    && proof.fullAcceptance === false, 'DATABASE_PROOF_REQUIRED', 'This restricted preview path retains the unexecuted hosted installation rollback and full-acceptance gap.');
   need(equal(proof.migrationHashes, migrationHashes), 'MIGRATION_DRIFT', 'The reviewed two migration hashes differ from the candidate files.');
+  need(equal(proof.localInstallationRollback.migrationHashes, migrationHashes) && equal(proof.hostedApplication.migrationHashes, migrationHashes), 'MIGRATION_DRIFT', 'Local installation and actual hosted application must both identify the exact two migration bodies.');
 }
 
 export const CRITICAL_ASSETS = Object.freeze(['index.html','debate-room/index.html','study-room/index.html','assets/debate-room.js','assets/debate-domain.js','assets/debate-sanctions.js','assets/debate-media.js','assets/debate-dates.js','assets/debate-entry.js','assets/debate-room.css','assets/study-room-live.js','assets/study-room-live.css','assets/study-room-preview.js','assets/phase2-experience.js','assets/feature-loader.js','assets/phase2.css','assets/vendor/supabase-2.49.8.umd.js','assets/phase2-config.js']);

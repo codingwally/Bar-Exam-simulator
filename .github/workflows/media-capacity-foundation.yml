@@ -7,7 +7,9 @@ on:
       - 'worker/media-capacity.mjs'
       - 'worker/media-capacity.test.mjs'
       - 'scripts/test-media-capacity-sql.mjs'
+      - 'scripts/media-capacity-logical-sql-cases.mjs'
       - 'supabase/migrations/20260909193705_shared_media_capacity_foundation.sql'
+      - 'supabase/migrations/20260909231948_shared_media_capacity_logical_sessions.sql'
       - 'docs/debate-room-v3/media-capacity-foundation.md'
 
 permissions:

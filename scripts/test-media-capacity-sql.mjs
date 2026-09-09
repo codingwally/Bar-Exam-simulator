@@ -4,6 +4,7 @@ import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
+import { LOGICAL_MIGRATION, runLogicalCapacitySqlCases } from './media-capacity-logical-sql-cases.mjs';
 
 export const MIGRATION = 'supabase/migrations/20260909193705_shared_media_capacity_foundation.sql';
 const root = new URL('../', import.meta.url);
@@ -38,7 +39,7 @@ test('native PostgreSQL17 atomically limits physical epochs across Study and Deb
   const output = new URL('artifacts/debate-local-rehearsal/media-capacity-native-ci/', root);
   await mkdir(output, { recursive: true });
   const report = { kind: 'NATIVE_POSTGRES17_MEDIA_CAPACITY_FOUNDATION', status: 'RUNNING', startedAt: new Date().toISOString(),
-    hostedExecuted: false, issuerIntegrated: false, providerObserved: false, nativeConcurrentConnections: false,
+    hostedExecuted: false, issuerIntegrated: false, providerObserved: false, nativeConcurrentConnections: false, nativeLogicalConcurrentConnections: false,
     dependencySchemaScope: 'Dedicated empty PostgreSQL17 database and inert anon/authenticated/service_role roles; exact new migration; no Auth server, Storage, LiveKit or existing product schema.',
     sourceHashesLf: {}, checks: [], expectedErrors: [], statementTimeoutMs: 10000, hostedPostgrestTimeoutHoisting: 'UNVERIFIED' };
   function run(sql, { expectedSqlstate, app = 'capacity-native', onOutput } = {}) {
@@ -85,7 +86,7 @@ test('native PostgreSQL17 atomically limits physical epochs across Study and Deb
         revocationAcknowledged: true, absent: true, cutoffSeconds: Math.floor(Math.max(at, row.release_requested_at_ms) / 1000) + 1, acknowledgedAtMs: at, observedAtMs: at } }) };
   }
   try {
-    for (const file of [MIGRATION,'worker/media-capacity.mjs','worker/media-capacity.test.mjs','scripts/test-media-capacity-sql.mjs','.github/workflows/media-capacity-foundation.yml','docs/debate-room-v3/media-capacity-foundation.md']) report.sourceHashesLf[file] = hash(await read(file));
+    for (const file of [MIGRATION,LOGICAL_MIGRATION,'worker/media-capacity.mjs','worker/media-capacity.test.mjs','scripts/test-media-capacity-sql.mjs','scripts/media-capacity-logical-sql-cases.mjs','.github/workflows/media-capacity-foundation.yml','docs/debate-room-v3/media-capacity-foundation.md']) report.sourceHashesLf[file] = hash(await read(file));
     report.postgresVersion = await run('show server_version;'); assert.match(report.postgresVersion, /^17\./);
     assert.equal(await run("select current_database()='media_capacity_ci' and to_regclass('private.media_capacity_policies') is null;"), 't');
     await run('create role anon; create role authenticated; create role service_role bypassrls;');
@@ -200,7 +201,9 @@ test('native PostgreSQL17 atomically limits physical epochs across Study and Deb
     await run(`begin; set local role service_role; ${sqlCall(aborted)} rollback;`);
     assert.equal((await get(9)).reservation, null);
     assert.equal(await run(`select debited_seconds from private.media_capacity_policies where project_id=${quote(projectId)};`), '0'); check('Caller rollback atomically removes reservation, idempotency receipt and budget debit');
-    assert.equal(hash(await read(MIGRATION)), report.sourceHashesLf[MIGRATION]);
+    report.foundationCheckCount = report.checks.length;
+    await runLogicalCapacitySqlCases({ run, rpc, read, report, check, quote, id, projectId, coordinatorId });
+    for (const [file, digest] of Object.entries(report.sourceHashesLf)) assert.equal(hash(await read(file)), digest, file);
     report.status = 'PASS_NATIVE_MEDIA_CAPACITY_FOUNDATION_ONLY';
   } catch (error) {
     report.status = 'FAIL'; report.failure = { code: /^[A-Z_]{3,80}$/u.test(error.message) ? error.message : 'CAPACITY_NATIVE_ASSERTION_FAILED', messageSha256: hash(String(error.message)) }; throw error;

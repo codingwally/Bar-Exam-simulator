@@ -4,6 +4,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const PROJECT = /^p_[a-z0-9]{8,48}$/u;
 const OPAQUE = /^[A-Za-z0-9:_-]{8,160}$/u;
 const STATES = new Set(['reserved', 'issued', 'connected', 'uncertain', 'revoking', 'released']);
+const ISSUERS = new Set(['production', 'staging']);
+const PRODUCTS = new Set(['study', 'debate']);
 export class MediaCapacityError extends Error {
   constructor(code) { super(code); this.name = 'MediaCapacityError'; this.code = code; }
 }
@@ -14,14 +16,26 @@ const canonical = value => Array.isArray(value) ? value.map(canonical) : value &
   ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
 
 export function validateCapacityReservation(value, projectId) {
-  need(exactKeys(value, ['project_id','epoch_id','actor_id','scope_key','identity','room_name','event_key','session_key','state','version','replaces_epoch','reserved_seconds','reserved_bytes','created_at_ms','budget_deadline_ms','last_mint_at_ms','token_expires_at_ms','release_command_id','release_requested_at_ms','release_proof'])
+  need(exactKeys(value, ['project_id','epoch_id','actor_id','scope_key','identity','room_name','event_key','session_key','state','version','replaces_epoch','reserved_seconds','reserved_bytes','created_at_ms','budget_deadline_ms','last_mint_at_ms','token_expires_at_ms','release_command_id','release_requested_at_ms','release_proof','issuer_id','product','logical_session_id'])
     && value.project_id === projectId && UUID.test(value.epoch_id || '') && UUID.test(value.actor_id || '')
+    && ISSUERS.has(value.issuer_id) && PRODUCTS.has(value.product) && UUID.test(value.logical_session_id || '')
     && value.identity === `mc-${value.epoch_id}` && OPAQUE.test(value.room_name || '') && OPAQUE.test(value.scope_key || '')
     && STATES.has(value.state) && integer(value.version, 1) && integer(value.reserved_seconds, 10, 21600)
     && integer(value.reserved_bytes, 1) && integer(value.created_at_ms, 1) && integer(value.budget_deadline_ms, value.created_at_ms + 1), 'MEDIA_CAPACITY_RESPONSE_INVALID');
   if (value.release_proof != null) need(exactKeys(value.release_proof, ['releaseCommandId','projectId','roomName','identity','revocationAcknowledged','absent','cutoffSeconds','acknowledgedAtMs','observedAtMs'])
     && value.release_proof.projectId === projectId && value.release_proof.identity === value.identity
     && value.release_proof.roomName === value.room_name && value.release_proof.absent === true && value.release_proof.revocationAcknowledged === true, 'MEDIA_CAPACITY_RESPONSE_INVALID');
+  return structuredClone(value);
+}
+
+export function validateLogicalCapacitySession(value, projectId) {
+  need(exactKeys(value, ['project_id','logical_session_id','issuer_id','actor_id','product','event_key','session_key','state','version','created_at_ms','funded_deadline_ms','allocated_seconds','last_epoch_id'])
+    && value.project_id === projectId && UUID.test(value.logical_session_id || '') && UUID.test(value.actor_id || '')
+    && ISSUERS.has(value.issuer_id) && PRODUCTS.has(value.product) && OPAQUE.test(value.event_key || '') && OPAQUE.test(value.session_key || '')
+    && ['open','closed'].includes(value.state) && integer(value.version, 1) && integer(value.created_at_ms, 1)
+    && integer(value.allocated_seconds, 10, 21600) && integer(value.funded_deadline_ms, 1)
+    && value.funded_deadline_ms === value.created_at_ms + value.allocated_seconds * 1000
+    && UUID.test(value.last_epoch_id || ''), 'MEDIA_CAPACITY_RESPONSE_INVALID');
   return structuredClone(value);
 }
 
@@ -41,15 +55,17 @@ export function countPhysicalEpochs(reservations) {
  * Authentication, room authorization and provider observations are the caller's
  * responsibilities. This adapter never claims a caller assertion proves LiveKit.
  */
-export function createMediaCapacityStore({ rpc, projectId, coordinatorId }) {
-  need(typeof rpc === 'function' && PROJECT.test(projectId || '') && UUID.test(coordinatorId || ''), 'MEDIA_CAPACITY_CONFIGURATION');
+export function createMediaCapacityStore({ rpc, projectId, coordinatorId, issuerId, product }) {
+  need(typeof rpc === 'function' && PROJECT.test(projectId || '') && UUID.test(coordinatorId || '')
+    && ISSUERS.has(issuerId) && PRODUCTS.has(product), 'MEDIA_CAPACITY_CONFIGURATION');
   const pending = new Map();
   async function call(operation, input) {
     const read = operation === 'read';
-    need(exactKeys(input, read ? ['epochId'] : ['commandId', 'policyRevision', 'epochId', 'actorId', 'scopeKey', 'reservedSeconds', 'reservedBytes', 'replacesEpoch', 'expectedVersion', 'tokenExpiresAtMs', 'proof']), 'MEDIA_CAPACITY_INPUT');
-    need(UUID.test(input.epochId || ''), 'MEDIA_CAPACITY_INPUT');
+    need(exactKeys(input, read ? ['epochId','actorId','logicalSessionId'] : ['commandId', 'policyRevision', 'epochId', 'actorId', 'logicalSessionId', 'scopeKey', 'reservedSeconds', 'reservedBytes', 'replacesEpoch', 'expectedVersion', 'tokenExpiresAtMs', 'proof']), 'MEDIA_CAPACITY_INPUT');
+    need(UUID.test(input.epochId || '') && UUID.test(input.actorId || '') && UUID.test(input.logicalSessionId || ''), 'MEDIA_CAPACITY_INPUT');
     if (!read) need(UUID.test(input.commandId || '') && integer(input.policyRevision, 1), 'MEDIA_CAPACITY_INPUT');
-    const command = { operation, projectId, coordinatorId, ...structuredClone(input) };
+    // The future private entrypoint fixes issuer/product; a browser cannot select them.
+    const command = { operation, projectId, coordinatorId, issuerId, product, ...structuredClone(input) };
     if (operation === 'reserve') need(UUID.test(input.actorId || '') && OPAQUE.test(input.scopeKey || '')
       && integer(input.reservedSeconds, 10, 21600) && integer(input.reservedBytes, 1)
       && (input.replacesEpoch === undefined || UUID.test(input.replacesEpoch)), 'MEDIA_CAPACITY_INPUT');
@@ -78,13 +94,24 @@ export function createMediaCapacityStore({ rpc, projectId, coordinatorId }) {
         throw new MediaCapacityError(result.error.code);
       }
       try {
-        need(exactKeys(result, ['ok', 'projectId', 'coordinatorId', 'enabled', 'policyRevision', 'replayed', 'reservation'])
+        need(exactKeys(result, ['ok', 'projectId', 'coordinatorId', 'enabled', 'policyRevision', 'replayed', 'reservation','logicalSession'])
           && result.ok === true && result.projectId === projectId && result.coordinatorId === coordinatorId
           && typeof result.enabled === 'boolean' && integer(result.policyRevision, 1), 'MEDIA_CAPACITY_RESPONSE_INVALID');
         if (result.reservation !== null) {
           result.reservation = validateCapacityReservation(result.reservation, projectId);
-          need(result.reservation.epoch_id === input.epochId, 'MEDIA_CAPACITY_RESPONSE_INVALID');
+          need(result.reservation.epoch_id === input.epochId && result.reservation.actor_id === input.actorId
+            && result.reservation.logical_session_id === input.logicalSessionId && result.reservation.issuer_id === issuerId
+            && result.reservation.product === product, 'MEDIA_CAPACITY_RESPONSE_INVALID');
         } else need(read, 'MEDIA_CAPACITY_RESPONSE_INVALID');
+        if (result.logicalSession !== null) {
+          result.logicalSession = validateLogicalCapacitySession(result.logicalSession, projectId);
+          const logical = result.logicalSession, epoch = result.reservation;
+          need(logical.logical_session_id === input.logicalSessionId && logical.actor_id === input.actorId
+            && logical.issuer_id === issuerId && logical.product === product, 'MEDIA_CAPACITY_RESPONSE_INVALID');
+          if (epoch) need(epoch.event_key === logical.event_key && epoch.session_key === logical.session_key
+            && epoch.budget_deadline_ms === logical.funded_deadline_ms && epoch.reserved_seconds === logical.allocated_seconds,
+          'MEDIA_CAPACITY_RESPONSE_INVALID');
+        } else need(read && result.reservation === null, 'MEDIA_CAPACITY_RESPONSE_INVALID');
       } catch (error) { if (!read) entry.state = 'unknown'; throw error; }
       if (!read) pending.delete(key);
       return structuredClone(result);
@@ -98,6 +125,7 @@ export function createMediaCapacityStore({ rpc, projectId, coordinatorId }) {
     markIssued: input => call('mark_issued', input), markConnected: input => call('mark_connected', input),
     markUncertain: input => call('mark_uncertain', input), requestRelease: input => call('request_release', input),
     confirmReleased: input => call('confirm_released', input),
+    closeSession: input => call('close_session', input),
     // Unknown outcomes require explicit read-only reconciliation by the future
     // coordinator; constructing another client is not proof of safe retry.
     unresolvedCommands: () => [...pending].filter(([, value]) => value.state === 'unknown').map(([commandId]) => commandId),

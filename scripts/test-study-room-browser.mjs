@@ -65,7 +65,8 @@ async function verifyHarness() {
   const row = (await admission('admin','list')).queue.find(r=>r.requestId===waiting.admission.requestId);
   await admission('admin','deny',{requestId:row.requestId,expectedVersion:row.version});
   await api('member','/__study/connect',{participantToken:granted.participant_token},403);
-  await api('member','/study-room/join',{roomKey:'2',nickname:'Synthetic waiting'},403);
+  const cooldown = await api('member','/study-room/join',{roomKey:'2',nickname:'Synthetic waiting'},409);
+  assert.equal(cooldown.error.code,'STUDY_ROOM_ADMISSION_COOLDOWN');
   await api('admin','/__study/disconnect',{connectionId:connected.connectionId}); await admission('admin','list',{},403);
   check('Revocation rejects stale JWT and later join; absent administrator loses queue access');
   const cancelled = await admission('member2','request',{nickname:'Synthetic cancel'});
@@ -94,6 +95,15 @@ async function verifyBrowser() {
     return page;
   };
   const off = async page => { assert.equal(await page.locator('#sr-join-camera').getAttribute('aria-pressed'),'false'); assert.equal(await page.locator('#sr-join-microphone').getAttribute('aria-pressed'),'false'); };
+  // Poll in Node: waitForFunction compiles page-side predicates and conflicts
+  // with the real page CSP. Keep CSP intact and read only locator properties.
+  const waitForJoin = (page, label) => eventually(async () => {
+    const button = page.locator('#sr-join');
+    return await button.isEnabled() && (!label || await button.textContent() === label);
+  }, `Join control did not become ready${label ? ': ' + label : ''}`, 15000);
+  const waitForPending = page => eventually(async () =>
+    (await page.locator('#sr-entry-admission-status').textContent()).includes('waiting room'),
+  'The admission dialog did not show its pending state', 15000);
   const open = async (page,key) => { await page.locator(`#sr-room-card-grid [data-room-key="${key}"]`).click(); await page.locator('#sr-entry-dialog').waitFor({state:'visible'}); await off(page); };
   const join = async page => { await page.locator('#sr-join').click(); await page.locator('#sr-live-room').waitFor({state:'visible'}); };
   const changePolicy = async (page,key,audience) => {
@@ -118,10 +128,10 @@ async function verifyBrowser() {
     await api('member','/study-room/join',{roomKey:'5',nickname:'Synthetic member'},403);
     await open(member,'1'); assert.equal(await member.locator('#sr-join-microphone').isDisabled(),true); await member.locator('#sr-entry-close').click();
     await open(member,'2'); await member.locator('#sr-nickname').fill('Synthetic pending member');
-    await member.waitForFunction(()=>document.getElementById('sr-join').textContent==='Ask to enter'&&!document.getElementById('sr-join').disabled);
+    await waitForJoin(member,'Ask to enter');
     const before = runtime.metrics.signedCredentials;
     await member.locator('#sr-join').dblclick();
-    await member.waitForFunction(()=>document.getElementById('sr-entry-admission-status').textContent.includes('waiting room'));
+    await waitForPending(member);
     assert.equal(await member.locator('#sr-join').isDisabled(),true); assert.equal(runtime.metrics.signedCredentials,before);
     assert.equal((await member.evaluate(()=>window.__studySynthetic.metrics)).constructors,0);
     check('DOM pending state persists in SQL without issuing a JWT or creating a media room');
@@ -132,7 +142,7 @@ async function verifyBrowser() {
     await admin.locator('#sr-waiting-refresh').click();
     await waitingRow(admin,'Synthetic pending member').getByRole('button',{name:'Admit',exact:true}).click();
     await member.locator('#sr-entry-admission-retry').click();
-    await member.waitForFunction(()=>document.getElementById('sr-join').textContent==='Enter room'&&!document.getElementById('sr-join').disabled);
+    await waitForJoin(member,'Enter room');
     assert.equal((await member.evaluate(()=>window.__studySynthetic.metrics)).connects,0); await off(member);
     check('Same-room admin manually admits; approval alone never connects the member');
     await join(member); assert.equal((await member.evaluate(()=>window.__studySynthetic.metrics)).connects,1);
@@ -142,19 +152,20 @@ async function verifyBrowser() {
     await admin.locator('#sr-waiting-refresh').click();
     await waitingRow(admin,'Synthetic pending member').getByRole('button',{name:'Remove access',exact:true}).click();
     await member.locator('#sr-live-room').waitFor({state:'hidden'});
-    await api('member','/study-room/join',{roomKey:'2',nickname:'Synthetic pending member'},403);
+    const cooldown = await api('member','/study-room/join',{roomKey:'2',nickname:'Synthetic pending member'},409);
+    assert.equal(cooldown.error.code,'STUDY_ROOM_ADMISSION_COOLDOWN');
     check('Admin removal disconnects the synthetic member and durable denial blocks later join');
     // Reuse the third page after a genuine client auth callback, without touching client state.
     await admin2.evaluate(()=>window.__studySynthetic.switchActor('member2'));
     await admin2.locator('#sr-access-retry').click(); await admin2.locator('#sr-room-card-grid [data-room-key="2"]').waitFor();
     await open(admin2,'2'); await admin2.locator('#sr-nickname').fill('Synthetic cancel member');
-    await admin2.waitForFunction(()=>!document.getElementById('sr-join').disabled); await admin2.locator('#sr-join').click();
-    await admin2.waitForFunction(()=>document.getElementById('sr-entry-admission-status').textContent.includes('waiting room'));
+    await waitForJoin(admin2); await admin2.locator('#sr-join').click();
+    await waitForPending(admin2);
     await admin2.locator('#sr-entry-admission-cancel').click();
     await eventually(async()=> (await admission('member2','status')).admission?.status==='cancelled','Cancel was not persisted');
     check('Actual Cancel request persists cancellation and leaves devices off');
     await admin2.locator('#sr-entry-close').click(); runtime.holdRequest('member2');
-    await open(admin2,'2'); await admin2.waitForFunction(()=>!document.getElementById('sr-join').disabled);
+    await open(admin2,'2'); await waitForJoin(admin2);
     await admin2.locator('#sr-join').click(); await eventually(()=>runtime.heldRequestCommitted,'Delayed request did not reach SQL');
     await admin2.evaluate(()=>window.__studySynthetic.switchActor('paid')); runtime.releaseRequest();
     await admin2.locator('#sr-entry-dialog').waitFor({state:'hidden'});

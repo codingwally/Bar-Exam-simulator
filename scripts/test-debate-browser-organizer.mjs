@@ -51,7 +51,21 @@ export async function runBrowserOrganizer() {
   const snapshotFor = page => snapshots.get(page);
   const matchFor = (page, id = matchId) => snapshotFor(page)?.matches.find(match => match.id === id);
   const action = (page, name, suffix = '') => page.locator(`[data-action="${name}"]${suffix}:visible`).first();
-  const textIncludes = async (page, selector, text) => page.waitForFunction(({ selector, text }) => document.querySelector(selector)?.textContent.includes(text), { selector, text });
+  // Poll locator results in Node. waitForFunction compiles strings in the page
+  // and is rejected by the application's deliberately unchanged CSP.
+  const pollLocator = async (description, read, accepts) => {
+    const deadline = Date.now() + 20000; let last;
+    do {
+      last = await read(); if (accepts(last)) return last;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    } while (Date.now() < deadline);
+    assert.fail(`Timed out waiting for ${description}; last locator value: ${JSON.stringify(last)}`);
+  };
+  const textIncludes = async (page, selector, text) => {
+    const target = page.locator(selector); await target.waitFor({ state: 'attached' });
+    return pollLocator(`${selector} to contain ${text}`, () => target.textContent(), value => value?.includes(text));
+  };
+  const notSaving = page => pollLocator('the current action to finish', () => page.locator('#status').textContent(), value => value !== 'Saving…');
   const screenshot = async (page, name) => {
     const relative = `screenshots/${String(report.screenshots.length + 1).padStart(2, '0')}-${name}.png`;
     await page.screenshot({ path: path.join(OUTPUT, relative), fullPage: true }); report.screenshots.push(relative);
@@ -77,19 +91,19 @@ export async function runBrowserOrganizer() {
   };
   const waitApp = async page => {
     await page.locator('#create-event').waitFor();
-    await page.waitForFunction(() => document.querySelector('#account')?.textContent.includes('(local rehearsal)'));
-    await page.waitForFunction(() => !['Opening Debate Room. Your microphone and camera are off.', 'Saving…'].includes(document.querySelector('#status')?.textContent));
+    await textIncludes(page, '#account', '(local rehearsal)');
+    await pollLocator('application startup', () => page.locator('#status').textContent(), value => !['Opening Debate Room. Your microphone and camera are off.', 'Saving…'].includes(value));
   };
   const fresh = async page => {
     if (!(await page.locator('#event').isVisible())) return;
     const response = page.waitForResponse(r => new URL(r.url()).pathname === '/debate-room/snapshot' && r.request().method() === 'GET');
     const [received] = await Promise.all([response, page.locator('#refresh').click()]); const body = await received.json();
     assert.ok(body.ok && body.event, 'Refresh reads an authorized saved snapshot'); snapshots.set(page, body.event);
-    await page.waitForFunction(() => document.querySelector('#status')?.textContent !== 'Saving…');
+    await notSaving(page);
   };
   const tab = async (page, panel) => { await page.locator(`#event-tabs [data-panel="${panel}"]`).click(); await page.locator(`#panel-${panel}`).waitFor({ state: 'visible' }); };
   const command = async (page, name, click, { reject } = {}) => {
-    await page.waitForFunction(() => document.querySelector('#status')?.textContent !== 'Saving…');
+    await notSaving(page);
     const waiting = page.waitForResponse(response => {
       if (new URL(response.url()).pathname !== '/debate-room/command') return false;
       try { return response.request().postDataJSON()?.command === name; } catch { return false; }
@@ -97,7 +111,7 @@ export async function runBrowserOrganizer() {
     const [response] = await Promise.all([waiting, click()]); const body = await response.json();
     if (reject) {
       assert.equal(body.error?.code, reject); report.expectedRejections.push({ command: name, code: reject, status: response.status(), actorId: actorIds.get(page), at: Date.now(), url: response.url() });
-      await page.waitForFunction(() => document.querySelector('#status')?.dataset.error === 'true'); return body;
+      await pollLocator('the rejected action message', () => page.locator('#status').getAttribute('data-error'), value => value === 'true'); return body;
     }
     assert.equal(response.status(), 200, `${name}: ${body.error?.code || body.error?.message || response.status()}`);
     assert.ok(body.ok && body.receipt?.id && body.event, `${name} must commit through the actual service`);
@@ -117,7 +131,9 @@ export async function runBrowserOrganizer() {
     await action(page, name, suffix).click(); await page.locator('#dialog').waitFor(); await field(page, 'reason').fill(reason); return submit(page, commandName);
   };
   const useGuest = async (id, { openEvent = true, selectedMatch = matchId } = {}) => {
-    await guest.goto(server.url); await waitApp(guest);
+    const lobbyNavigation = await guest.goto(server.url);
+    if (!lobbyNavigation) await guest.reload();
+    await waitApp(guest);
     if (await guest.locator('#local-actor').inputValue() !== id) {
       actorIds.set(guest, id); snapshots.delete(guest);
       await Promise.all([guest.waitForNavigation({ waitUntil: 'domcontentloaded' }), guest.locator('#local-actor').selectOption(id)]);
@@ -125,7 +141,8 @@ export async function runBrowserOrganizer() {
     }
     actorIds.set(guest, id);
     if (openEvent && eventId) {
-      await guest.goto(`${server.url}#${new URLSearchParams({ event: eventId, ...(selectedMatch ? { match: selectedMatch } : {}) })}`);
+      const eventNavigation = await guest.goto(`${server.url}#${new URLSearchParams({ event: eventId, ...(selectedMatch ? { match: selectedMatch } : {}) })}`);
+      if (!eventNavigation) await guest.reload();
       await textIncludes(guest, '#event-title', report.eventTitle); await fresh(guest);
     }
   };
@@ -309,7 +326,13 @@ export async function runBrowserOrganizer() {
     check('Corrected final version retains independent judging and nominated award', final.state === 'FINAL' && final.id !== originalResult.id && final.winner === 'affirmative' && final.awards.bestDebater.winners.includes('A2'));
     await textIncludes(host, '#result-summary', '99.67'); await screenshot(host, 'corrected-final-result');
     await host.setViewportSize({ width: 320, height: 800 });
-    check('Final results fit a narrow viewport without page-level overflow', await host.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+    // Browser layout metrics are a read-only protocol observation, requiring no
+    // injected page JavaScript and no CSP bypass in this CI-owned browser.
+    const layoutSession = await host.context().newCDPSession(host);
+    try {
+      const layout = await layoutSession.send('Page.getLayoutMetrics');
+      check('Final results fit a narrow viewport without page-level overflow', layout.cssContentSize.width <= layout.cssLayoutViewport.clientWidth + 1);
+    } finally { await layoutSession.detach(); }
     await screenshot(host, 'narrow-final-result'); await host.setViewportSize({ width: 1365, height: 900 });
     for (const [kind, panel] of [['rules', 'rules'], ['scorecard', 'judge'], ['result', 'results'], ['event_report', 'schedule'], ['csv', 'results'], ['certificate', 'results']]) {
       await tab(host, panel); let exported;

@@ -1,5 +1,7 @@
 # Public publication requirements — 10 September 2026
 
+**Latest publication:** [895380af, release 34414273591](publication-895380a.md). This supersedes the earlier release facts and checkpoints below. The current live owner-session reload passed the lobby, setup cancellation and rules guide; Home labels and its separate Debate link were verified. Live desktop lobby scrolling was identified and remains open, along with full rehearsal and physical acceptance.
+
 The owner explicitly requested publication while coding continues, then corrected the access scope to public, paying and non-paying users. These direct instructions supersede the prior admin-only preview interpretation. Existing sign-in and event-specific private permissions remain in force. No new spending or real mail is authorized by this change.
 
 Current checkpoint: exact `af963655` was published through both Workers and Pages in [run 34404153144](evidence/publication-34404153144.json). [Actual returning Chrome passed an ordinary reload](evidence/live-browser-copy-af96365.json): the new room/media scripts returned 200 without disk-cache reuse, the empty lobby showed no timer error for 44 seconds, and the rules guide and create/cancel controls worked without creating an event. This resolves the [earlier `44451be` cache failure](evidence/live-browser-cache-gap-44451be.json) at that observed scope. Live match actions and full acceptance remain separate.

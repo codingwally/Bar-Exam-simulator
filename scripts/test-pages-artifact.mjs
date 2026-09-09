@@ -28,6 +28,20 @@ async function walk(directory, prefix = '') {
 }
 
 const output = path.join(root, '.pages-dist');
+// The authentication SDK is an exact, same-version release asset, not a second
+// network origin required for sign-in. Never silently substitute vendor bytes.
+for (const [file, hash] of Object.entries({
+  'assets/vendor/supabase-2.49.8.umd.js': '522e844a8554c84631063fa630d0b824b8042f346a0222da04460f81d942dcf8',
+  'assets/vendor/591.supabase.js': '9c305b77dab63dd79eb96efab9069366fb2255bd8731d6b862287558d2560406',
+  'assets/vendor/supabase-2.49.8.LICENSE.txt': '334dd6820e2eaeab2064e7c59001b810566728a28a41a7c1dbf69bbee17d0936',
+})) {
+  assert.equal(createHash('sha256').update(await readFile(path.join(output, file))).digest('hex'), hash, file);
+}
+for (const file of ['index.html', 'admin/index.html', 'admin-pulse/index.html', 'study-room/index.html', 'examination-room/index.html']) {
+  const html = await readFile(path.join(output, file), 'utf8');
+  assert.ok(html.includes('src="/assets/vendor/supabase-2.49.8.umd.js"'), file);
+  assert.doesNotMatch(html, /cdn\.jsdelivr\.net\/npm\/@supabase\//, file);
+}
 const files = await walk(output);
 const publicTextFiles = files.filter((file) => /\.(?:css|html|js|svg|txt|webmanifest|xml)$/i.test(file));
 const publicTextSources = await Promise.all(publicTextFiles.map(async (file) => ({

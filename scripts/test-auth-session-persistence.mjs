@@ -474,6 +474,274 @@ assert.deepEqual(
 );
 assert.equal(restoredDestinations, 4, 'Toast suppression must not suppress destination restoration.');
 
+// Execute the real bootstrap/sign-in functions with inert SDK, DOM and timers.
+// No authentication request, redirect, database call or browser storage is used.
+function authBootstrapHarness({ sdkAvailable = true, maintenance = false } = {}) {
+  const calls = { clients: [], sessions: 0, listeners: 0, oauth: [], statuses: [], closed: 0 };
+  const state = {
+    client: null, session: null, user: null, authInitialized: false,
+    authInitializationPromise: null, authListenerRegistered: false,
+    authSdkRetryCount: 0, authInFlight: false,
+  };
+  const timers = new Map();
+  const events = new Map();
+  const scripts = [];
+  const storage = new MemoryStorage([[authKey, legacySession], [`${authKey}-code-verifier`, 'preserve-pkce']]);
+  const button = { disabled: false, textContent: 'Sign in with Google' };
+  let timerId = 0;
+  const behavior = {
+    getSession: async () => ({ data: { session: null }, error: null }),
+    loadUserState: async () => {},
+    createClient: () => client,
+  };
+  const client = { auth: {
+    getSession() { calls.sessions += 1; return behavior.getSession(); },
+    onAuthStateChange() { calls.listeners += 1; },
+    async signInWithOAuth(options) { calls.oauth.push(options); return { error: null }; },
+  } };
+  const global = {
+    localStorage: storage,
+    addEventListener(name, callback) { events.set(name, callback); },
+    removeEventListener(name, callback) { if (events.get(name) === callback) events.delete(name); },
+  };
+  const installSdk = () => {
+    global.supabase = { createClient(...args) { calls.clients.push(args); return behavior.createClient(); } };
+  };
+  if (sdkAvailable) installSdk();
+  const document = {
+    documentElement: { dataset: { ddMaintenance: maintenance ? 'locked' : 'unlocked' } },
+    getElementById: () => button,
+    createElement(tag) {
+      assert.equal(tag, 'script');
+      return { removed: false, remove() { this.removed = true; } };
+    },
+    head: { appendChild(script) { scripts.push(script); } },
+  };
+  const context = {
+    state, global, document, queueMicrotask, URLSearchParams,
+    config: { maintenance: { enabled: maintenance }, supabase: {
+      url: projectUrl, publishableKey: 'inert-publishable-key',
+      oauthRedirectUrl: 'https://duediligence.ph/?auth=callback',
+    } },
+    navigator: { onLine: true },
+    location: { href: 'https://duediligence.ph/#subject-matter', pathname: '/', hash: '#subject-matter', search: '' },
+    history: { replaceState() { assert.fail('Ordinary startup must not rewrite the URL.'); } },
+    setTimeout(callback, delay) { const id = ++timerId; timers.set(id, { callback, delay }); return id; },
+    clearTimeout(id) { timers.delete(id); },
+    syncAuthUi() {}, dispatchSessionState() {}, handleAuthStateChange() {},
+    closeEntry() { calls.closed += 1; },
+    safeSessionRead: (key) => storage.getItem(key),
+    safeSessionWrite: (key, value) => storage.setItem(key, value),
+    safeSessionRemove: (key) => storage.removeItem(key),
+    authReturnStorageKey: 'inert-return', authAttemptStorageKey: 'inert-attempt',
+    resetGoogleSignIn() { state.authInFlight = false; },
+    announceGoogleSignInStatus(message, tone) { calls.statuses.push({ message, tone }); },
+    armAuthTimeout() {}, notifyOwnerOfSuccessfulSignIn() {},
+    loadUserState: () => behavior.loadUserState(),
+    fetch() { assert.fail('Bootstrap regression tests must remain network-free.'); },
+  };
+  const functions = ['maintenanceAccessLocked', 'waitForMaintenanceAccess', 'recoverAuthSdk',
+    'initializeAuth', 'initializeAuthClient', 'signInWithGoogle'];
+  const api = vm.runInNewContext(
+    `${functions.map((name) => extractNamedFunction(phase2, name)).join('\n')}\n({initializeAuth, signInWithGoogle})`,
+    context,
+  );
+  return {
+    ...api, state, calls, scripts, timers, storage, behavior, installSdk, context,
+    unlock() {
+      document.documentElement.dataset.ddMaintenance = 'unlocked';
+      events.get('duediligence:maintenance-unlocked')?.();
+    },
+    fireTimers(delay) {
+      for (const [id, timer] of [...timers]) {
+        if (timer.delay === delay) { timers.delete(id); timer.callback(); }
+      }
+    },
+  };
+}
+
+async function flushBootstrap() {
+  for (let index = 0; index < 16; index += 1) await Promise.resolve();
+}
+
+{
+  const h = authBootstrapHarness({ sdkAvailable: false });
+  const initial = h.initializeAuth();
+  const concurrent = h.initializeAuth();
+  await flushBootstrap();
+  assert.equal(h.scripts.length, 1, 'Concurrent missing-SDK startup must share one recovery request.');
+  const first = h.scripts[0];
+  const staleLoad = first.onload;
+  assert.match(first.src, /^\/assets\/vendor\/supabase-2\.49\.8\.umd\.js\?retry=auth-bootstrap-20260909-1&attempt=\d+-1$/);
+  first.onerror();
+  assert.deepEqual(await Promise.all([initial, concurrent]), [false, false]);
+  assert.equal(first.removed, true);
+  assert.equal(first.onload, null);
+  assert.equal(first.onerror, null);
+  assert.equal(h.state.authInitializationPromise, null, 'Failed SDK delivery must leave a manual retry available.');
+  assert.equal(h.calls.clients.length, 0);
+  assert.equal(h.calls.oauth.length, 0, 'Background SDK recovery cannot trigger OAuth.');
+  assert.equal(h.storage.getItem(authKey), legacySession);
+  assert.equal(h.storage.getItem(`${authKey}-code-verifier`), 'preserve-pkce');
+
+  const clicks = [h.signInWithGoogle(), h.signInWithGoogle()];
+  await flushBootstrap();
+  assert.equal(h.scripts.length, 2, 'Explicit retry gets one fresh same-origin request.');
+  assert.notEqual(h.scripts[1].src, first.src, 'Each request must bypass a previously failed cached response.');
+  staleLoad();
+  assert.equal(h.scripts[1].removed, false, 'A callback from the failed request cannot settle its replacement.');
+  assert.equal(h.calls.clients.length, 0);
+  h.installSdk();
+  h.scripts[1].onload();
+  assert.deepEqual(await Promise.all(clicks), [true, true]);
+  assert.equal(h.calls.clients.length, 1);
+  assert.equal(h.calls.sessions, 1);
+  assert.equal(h.calls.listeners, 1);
+  assert.equal(h.calls.oauth.length, 1, 'Concurrent manual clicks must initiate only one OAuth request.');
+  const [url, key, options] = h.calls.clients[0];
+  assert.equal(url, projectUrl);
+  assert.equal(key, 'inert-publishable-key');
+  assert.equal(options.auth.storage, h.storage);
+  assert.deepEqual(JSON.parse(JSON.stringify({ ...options.auth, storage: undefined })), {
+    flowType: 'pkce', persistSession: true, autoRefreshToken: true, detectSessionInUrl: true,
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(h.calls.oauth[0])), {
+    provider: 'google', options: { redirectTo: 'https://duediligence.ph/?auth=callback', scopes: 'openid email profile' },
+  });
+  assert.equal(await h.initializeAuth(), true);
+  assert.equal(h.calls.sessions, 1, 'Completed initialization must not reread or recreate its client.');
+  assert.equal(h.timers.size, 0, 'Settled initialization must clear its recovery and UI deadline timers.');
+}
+
+{
+  const h = authBootstrapHarness({ sdkAvailable: false });
+  const initial = h.initializeAuth();
+  await flushBootstrap();
+  const lateCallback = h.scripts[0].onload;
+  h.fireTimers(6_000);
+  assert.equal(await initial, false, 'Stalled SDK delivery must settle within its bounded deadline.');
+  assert.equal(h.scripts[0].removed, true);
+  h.installSdk();
+  lateCallback();
+  await flushBootstrap();
+  assert.equal(h.calls.clients.length, 0, 'A timed-out callback cannot resurrect a settled initialization.');
+  assert.equal(h.calls.oauth.length, 0);
+  h.behavior.getSession = async () => ({ data: { session: {
+    access_token: 'inert-restored-session', user: { id: 'inert-restored-user' },
+  } }, error: null });
+  assert.equal(await h.signInWithGoogle(), true, 'A later SDK appearance must make the explicit control retryable.');
+  assert.equal(h.scripts.length, 1, 'An available SDK must never be reloaded.');
+  assert.equal(h.calls.clients.length, 1);
+  assert.equal(h.calls.listeners, 1);
+  assert.equal(h.calls.oauth.length, 0, 'Restoring an existing session must not start another OAuth flow.');
+  assert.equal(h.state.session.access_token, 'inert-restored-session');
+  assert.ok(h.calls.closed > 0);
+}
+
+{
+  const h = authBootstrapHarness({ sdkAvailable: false });
+  const initial = h.initializeAuth();
+  await flushBootstrap();
+  h.scripts[0].onload();
+  assert.equal(await initial, false, 'A script load without the SDK global is not successful initialization.');
+  assert.equal(h.state.authInitialized, false);
+  assert.equal(h.calls.clients.length, 0);
+}
+
+{
+  const h = authBootstrapHarness();
+  let completeSession;
+  h.behavior.getSession = () => new Promise((resolve) => { completeSession = resolve; });
+  const initial = h.initializeAuth();
+  await flushBootstrap();
+  h.fireTimers(8_000);
+  assert.equal(await initial, false);
+  assert.ok(h.state.authInitializationPromise, 'UI timeout must retain the one pending SDK session operation.');
+  const retry = h.signInWithGoogle();
+  await flushBootstrap();
+  assert.equal(h.calls.clients.length, 1);
+  assert.equal(h.calls.sessions, 1);
+  assert.equal(h.scripts.length, 0, 'A session delay cannot cause an SDK reload.');
+  h.fireTimers(8_000);
+  assert.equal(await retry, false);
+  completeSession({ data: { session: null }, error: null });
+  await flushBootstrap();
+  assert.equal(h.state.authInitialized, true);
+  assert.equal(h.calls.listeners, 1);
+  assert.equal(h.calls.oauth.length, 0, 'Late completion after a timed-out click cannot silently start OAuth.');
+  assert.equal(await h.signInWithGoogle(), true);
+  assert.equal(h.calls.oauth.length, 1);
+}
+
+{
+  const h = authBootstrapHarness();
+  h.behavior.createClient = () => { throw new Error('Inert construction failure'); };
+  assert.equal(await h.initializeAuth(), false);
+  assert.equal(h.state.client, null);
+  h.behavior.createClient = () => ({ auth: {
+    getSession() { h.calls.sessions += 1; return h.behavior.getSession(); },
+    onAuthStateChange() { h.calls.listeners += 1; },
+    async signInWithOAuth() { h.calls.oauth.push({}); return { error: null }; },
+  } });
+  h.behavior.getSession = async () => { throw new Error('Inert session rejection'); };
+  assert.equal(await h.initializeAuth(), false);
+  const ownedClient = h.state.client;
+  h.behavior.getSession = async () => ({ data: { session: null }, error: null });
+  assert.equal(await h.initializeAuth(), true);
+  assert.equal(h.state.client, ownedClient, 'Retry after session rejection must reuse the existing client.');
+  assert.equal(h.calls.clients.length, 2, 'Only the failed constructor may be attempted again.');
+  assert.equal(h.calls.listeners, 1);
+  assert.equal(h.scripts.length, 0);
+}
+
+{
+  const h = authBootstrapHarness();
+  h.behavior.getSession = async () => ({ data: { session: { access_token: 'inert', user: { id: 'inert' } } }, error: null });
+  h.behavior.loadUserState = async () => { throw new Error('Inert profile failure'); };
+  assert.equal(await h.initializeAuth(), false);
+  h.behavior.loadUserState = async () => {};
+  assert.equal(await h.initializeAuth(), true);
+  assert.equal(h.calls.clients.length, 1);
+  assert.equal(h.calls.listeners, 1, 'Failure after listener registration must not register a duplicate on retry.');
+  assert.equal(h.calls.oauth.length, 0);
+}
+
+{
+  const h = authBootstrapHarness({ sdkAvailable: false, maintenance: true });
+  const initial = h.initializeAuth();
+  const click = h.signInWithGoogle();
+  await flushBootstrap();
+  assert.equal(h.scripts.length, 0, 'Early clicks must not request the SDK while maintenance remains locked.');
+  assert.equal(h.calls.clients.length, 0);
+  h.fireTimers(8_000);
+  assert.deepEqual(await Promise.all([initial, click]), [false, false]);
+  h.unlock();
+  await flushBootstrap();
+  assert.equal(h.scripts.length, 1);
+  h.installSdk();
+  h.scripts[0].onload();
+  await flushBootstrap();
+  assert.equal(h.state.authInitialized, true);
+  assert.equal(h.calls.clients.length, 1);
+  assert.equal(h.calls.listeners, 1);
+  assert.equal(h.calls.oauth.length, 0, 'Unlocking maintenance cannot resurrect a timed-out manual OAuth request.');
+  assert.equal(await h.signInWithGoogle(), true);
+  assert.equal(h.calls.oauth.length, 1);
+}
+
+{
+  const h = authBootstrapHarness({ sdkAvailable: false });
+  h.context.document.head.appendChild = () => { throw new Error('Inert script insertion failure'); };
+  assert.equal(await h.initializeAuth(), false, 'A blocked recovery script must settle and remain retryable.');
+  assert.equal(h.state.authInitializationPromise, null);
+  assert.equal(h.timers.size, 0);
+  h.installSdk();
+  assert.equal(await h.initializeAuth(), true);
+  h.context.navigator.onLine = false;
+  assert.equal(await h.signInWithGoogle(), false);
+  assert.equal(h.calls.oauth.length, 0, 'Offline sign-in must retain its existing non-redirecting behavior.');
+}
+
 await import('./test-login-loop-p0.mjs');
 
 console.log('Durable authentication session checks passed.');

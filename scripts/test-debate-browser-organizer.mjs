@@ -32,7 +32,8 @@ export async function runBrowserOrganizer() {
     kind: 'ISOLATED_CI_SYNTHETIC_BROWSER_ORGANIZER', state: 'RUNNING', startedAt: new Date().toISOString(),
     head: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim(),
     testSha256: sha(await readFile(fileURLToPath(import.meta.url))), checks: [], actions: [], stages: [], downloads: [], screenshots: [],
-    unexpectedNetwork: [], pageErrors: [], consoleErrors: [], expectedRejections: [],
+    unexpectedNetwork: [], pageErrors: [], consoleErrors: [], expectedRejections: [], commandRejections: [],
+    simulatedLeaseExpiries: [], clockClaims: [],
     claims: { actualBrowserDom: true, actualLocalSql: true, syntheticIdentity: true, actualHostedAuth: false,
       mainWorkerBootstrap: false, studyRoomUi: false, physicalMedia: false, providerMedia: false,
       realEmail: false, nativePostgresConcurrency: false, endurance90Minutes: false, hostedDeployment: false },
@@ -46,7 +47,8 @@ export async function runBrowserOrganizer() {
   let server, browser, host, guest, origin, eventId, matchId;
   const contexts = [], snapshots = new Map(), actorIds = new Map(), captured = [];
   let trafficSequence = 0;
-  const observedRequests = new WeakMap();
+  const observedRequests = new WeakMap(), manualClaimIntents = new Map();
+  let requestSequence = 0, manualClaimSequence = 0;
   const pendingObservation = new Set();
   const snapshotFor = page => snapshots.get(page);
   const matchFor = (page, id = matchId) => snapshotFor(page)?.matches.find(match => match.id === id);
@@ -70,17 +72,40 @@ export async function runBrowserOrganizer() {
     const relative = `screenshots/${String(report.screenshots.length + 1).padStart(2, '0')}-${name}.png`;
     await page.screenshot({ path: path.join(OUTPUT, relative), fullPage: true }); report.screenshots.push(relative);
   };
+  const checkLiveMediaLayout = async width => {
+    await host.setViewportSize({ width, height: 900 });
+    const selectors = ['.media-dock', '#arena', '.judges-rail', '#affirmative-name', '#negative-name'];
+    const boxes = await Promise.all(selectors.map(selector => host.locator(selector).boundingBox()));
+    check(`Live room layout exposes the media controls, arena and headings at ${width}px`, boxes.every(box => box && box.width > 0 && box.height > 0));
+    const [dock, arena, ...headings] = boxes;
+    check(`Media controls stay above the arena without covering team or adjudicator headings at ${width}px`, dock.y + dock.height <= arena.y + 1
+      && headings.every(box => dock.y + dock.height <= box.y + 1), { width, geometry: Object.fromEntries(selectors.map((selector, index) => [selector, boxes[index]])) });
+    await screenshot(host, `live-media-controls-${width}px`);
+  };
   const observe = page => {
     page.on('pageerror', error => report.pageErrors.push({ actorId: actorIds.get(page), message: error.message }));
     page.on('console', message => { if (message.type() === 'error') report.consoleErrors.push({ actorId: actorIds.get(page), message: message.text(), location: message.location().url, at: Date.now() }); });
-    page.on('request', request => observedRequests.set(request, actorIds.get(page)));
+    page.on('request', request => {
+      const observation = { requestId: ++requestSequence, actorId: actorIds.get(page), requestedAt: Date.now() };
+      if (new URL(request.url()).pathname === '/debate-room/command') {
+        const input = request.postDataJSON();
+        Object.assign(observation, { command: input?.command, eventId: input?.eventId, matchId: input?.payload?.matchId, timerVersion: input?.payload?.timerVersion });
+        if (input?.command === 'claim_clock') {
+          observation.manualClaimId = manualClaimIntents.get(page) || null;
+          report.clockClaims.push(observation);
+        }
+      }
+      observedRequests.set(request, observation);
+    });
     page.on('response', response => {
+      const receivedAt = Date.now();
       const work = (async () => {
         const url = new URL(response.url());
         if (url.origin !== origin || !url.pathname.startsWith('/debate-room/')) return;
         if (!['/debate-room/command', '/debate-room/claim', '/debate-room/snapshot'].includes(url.pathname)) return;
         const body = await response.json().catch(() => null); if (!body) return;
-        const actorId = observedRequests.get(response.request());
+        const observation = observedRequests.get(response.request()), actorId = observation?.actorId;
+        if (url.pathname === '/debate-room/command' && !response.ok()) report.commandRejections.push({ ...observation, code: body.error?.code, status: response.status(), at: receivedAt, url: response.url() });
         captured.push({ sequence: ++trafficSequence, actorId, body }); if (captured.length > 80) captured.shift();
         if (body.event && actorId === actorIds.get(page)) {
           const previous = snapshotFor(page);
@@ -104,18 +129,32 @@ export async function runBrowserOrganizer() {
   const tab = async (page, panel) => { await page.locator(`#event-tabs [data-panel="${panel}"]`).click(); await page.locator(`#panel-${panel}`).waitFor({ state: 'visible' }); };
   const command = async (page, name, click, { reject } = {}) => {
     await notSaving(page);
+    if (name === 'claim_clock') manualClaimIntents.set(page, ++manualClaimSequence);
     const waiting = page.waitForResponse(response => {
       if (new URL(response.url()).pathname !== '/debate-room/command') return false;
       try { return response.request().postDataJSON()?.command === name; } catch { return false; }
     });
-    const [response] = await Promise.all([waiting, click()]); const body = await response.json();
+    let response;
+    try { [response] = await Promise.all([waiting, click()]); } finally { if (name === 'claim_clock') manualClaimIntents.delete(page); }
+    const body = await response.json(), observation = observedRequests.get(response.request());
     if (reject) {
-      assert.equal(body.error?.code, reject); report.expectedRejections.push({ command: name, code: reject, status: response.status(), actorId: actorIds.get(page), at: Date.now(), url: response.url() });
+      assert.equal(body.error?.code, reject); report.expectedRejections.push({ ...observation, command: name, code: reject, status: response.status(), at: Date.now(), url: response.url() });
       await pollLocator('the rejected action message', () => page.locator('#status').getAttribute('data-error'), value => value === 'true'); return body;
     }
     assert.equal(response.status(), 200, `${name}: ${body.error?.code || body.error?.message || response.status()}`);
     assert.ok(body.ok && body.receipt?.id && body.event, `${name} must commit through the actual service`);
     snapshots.set(page, body.event);
+    if (name === 'claim_clock') {
+      assert.ok(observation?.manualClaimId, 'Timer control must originate from the explicit DOM claim action');
+      observation.receiptId = body.receipt.id;
+      const expiry = report.simulatedLeaseExpiries.findLast(item => !item.manualRecovery && item.actorId === observation.actorId && item.eventId === observation.eventId && item.matchId === observation.matchId);
+      if (expiry) {
+        const timer = body.event.matches.find(match => match.id === expiry.matchId)?.timer;
+        check('Explicit DOM claim restores control after synthetic lease expiry', expiry.verifiedExpired && observation.requestedAt >= expiry.startedAt && observation.timerVersion === expiry.timerVersion
+          && timer?.controllerId === expiry.actorId && timer.version === expiry.timerVersion + 1 && timer.leaseExpiresAtServerMs > server.now(), { expiryId: expiry.id, receiptId: body.receipt.id });
+        expiry.manualRecovery = { requestId: observation.requestId, requestedAt: observation.requestedAt, at: Date.now(), receiptId: body.receipt.id, timerVersion: timer.version };
+      }
+    }
     report.actions.push({ command: name, actorId: actorIds.get(page), receiptId: body.receipt.id, revision: body.event.revision,
       eventId: body.event.id, matchId: response.request().postDataJSON()?.payload?.matchId || null });
     await textIncludes(page, '#status', 'Saved.');
@@ -156,7 +195,21 @@ export async function runBrowserOrganizer() {
   };
   const advance = async milliseconds => {
     // The sole non-DOM state adjustment is explicit elapsed test time, never a competition command.
-    await server.advance(milliseconds); await fresh(host);
+    const before = await server.store.read(eventId), timer = before.matches[matchId]?.timer, beforeServerMs = server.now();
+    let expiry;
+    if (timer?.controllerId && timer.leaseExpiresAtServerMs > beforeServerMs && timer.leaseExpiresAtServerMs <= beforeServerMs + milliseconds) {
+      expiry = { id: report.simulatedLeaseExpiries.length + 1, actorId: timer.controllerId, eventId, matchId,
+        stageAttemptId: timer.stageAttemptId, timerVersion: timer.version, leaseExpiresAtServerMs: timer.leaseExpiresAtServerMs,
+        beforeServerMs, milliseconds, startedAt: Date.now(), verifiedExpired: false };
+      report.simulatedLeaseExpiries.push(expiry);
+    }
+    const afterServerMs = await server.advance(milliseconds); await fresh(host);
+    if (expiry) {
+      const saved = (await server.store.read(eventId)).matches[matchId].timer;
+      check('Synthetic time jump expires the saved lease without renewing or claiming control', saved.controllerId === expiry.actorId && saved.version === expiry.timerVersion
+        && saved.leaseExpiresAtServerMs === expiry.leaseExpiresAtServerMs && saved.leaseExpiresAtServerMs <= afterServerMs, { expiryId: expiry.id });
+      Object.assign(expiry, { afterServerMs, verifiedExpired: true });
+    }
     report.simulatedAdvanceMs = (report.simulatedAdvanceMs || 0) + milliseconds;
   };
   const fillScore = async (page, corrected = false) => {
@@ -262,6 +315,7 @@ export async function runBrowserOrganizer() {
     await tab(host, 'overview'); await command(host, 'start_match', () => action(host, 'start-match').click(), { reject: 'MATCH_NOT_READY' });
     await prepareMatch(matchId); await screenshot(host, 'ready-with-explicit-accommodations');
     await command(host, 'start_match', () => action(host, 'start-match').click()); await tab(host, 'live');
+    await checkLiveMediaLayout(1365); await checkLiveMediaLayout(320); await host.setViewportSize({ width: 1365, height: 900 });
     check('Default preparation loads READY for 15 minutes', matchFor(host).timer.state === 'READY' && matchFor(host).timer.durationMs === 900000);
     const first = matchFor(host), aCaptain = first.captains.affirmative, nCaptain = first.captains.negative;
     await useGuest(aCaptain); await tab(guest, 'live'); await guest.locator('#channel').selectOption('team');
@@ -368,6 +422,19 @@ export async function runBrowserOrganizer() {
     await Promise.all([...pendingObservation]);
     check('No unexpected application network destinations', report.unexpectedNetwork.length === 0);
     check('No uncaught browser JavaScript errors', report.pageErrors.length === 0);
+    for (const rejection of report.commandRejections) {
+      // A periodic renewal may race the deliberately advanced clock. Only the
+      // exact expired lease, before its explicit DOM recovery, explains this 400.
+      const expiry = report.simulatedLeaseExpiries.find(item => item.verifiedExpired && item.manualRecovery
+        && rejection.command === 'renew_clock' && rejection.status === 400 && rejection.code === 'CONTROLLER_LEASE_REQUIRED'
+        && rejection.actorId === item.actorId && rejection.eventId === item.eventId && rejection.matchId === item.matchId && rejection.timerVersion === item.timerVersion
+        && rejection.requestedAt >= item.startedAt && rejection.requestedAt <= item.manualRecovery.requestedAt
+        && rejection.at >= item.startedAt && rejection.at <= item.startedAt + 5000);
+      if (expiry) report.expectedRejections.push({ ...rejection, reason: 'Documented synthetic jump expired this controller lease; explicit DOM claim recovered it.', expiryId: expiry.id });
+    }
+    check('Every command rejection has an exact expected request and error code', report.commandRejections.every(rejection => report.expectedRejections.some(expected => expected.requestId === rejection.requestId && expected.code === rejection.code && expected.status === rejection.status)));
+    check('Every timer claim came from an explicit DOM action and committed receipt', report.clockClaims.length > 0 && report.clockClaims.every(claim => claim.manualClaimId && claim.receiptId));
+    check('Every synthetic lease expiry recovered through an explicit DOM claim', report.simulatedLeaseExpiries.length > 0 && report.simulatedLeaseExpiries.every(expiry => expiry.verifiedExpired && expiry.manualRecovery));
     for (const error of report.consoleErrors) error.expectedResourceRejection = /^Failed to load resource: the server responded with a status of \d+/i.test(error.message)
       && report.expectedRejections.some(rejection => rejection.actorId === error.actorId && rejection.url === error.location && Math.abs(error.at - rejection.at) <= 1500 && error.message.includes(String(rejection.status)));
     check('No unexpected browser console errors', report.consoleErrors.every(error => error.expectedResourceRejection === true));

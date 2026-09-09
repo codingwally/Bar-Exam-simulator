@@ -18,6 +18,7 @@ export const RELEASE_FLAGS = Object.freeze({ DEBATE_ROOM_ENABLED: 'true', DEBATE
   DEBATE_RESULTS_EMAIL_MODE: 'suppressed', DEBATE_INVITATION_EMAIL_MODE: 'suppressed', DEBATE_PREVIEW_ACTOR_IDS: '' });
 export const MIGRATIONS = ['supabase/migrations/20260909080139_debate_room_v3.sql', 'supabase/migrations/20260909080143_study_room_admission_v3.sql'];
 export const OWN_SOURCES = ['.github/workflows/debate-v3-production-preview.yml', 'scripts/debate-production-preview.mjs', 'scripts/test-debate-production-preview.mjs'];
+const REQUIRED_INHERITED_SECRETS = Object.freeze(['LIVEKIT_API_KEY','LIVEKIT_API_SECRET','LIVEKIT_URL']);
 const need = (ok, code) => { if (!ok) throw Object.assign(new Error(code), { code }); };
 const equal = (a, b) => hash(a) === hash(b);
 const json = async file => JSON.parse(await readFile(file, 'utf8'));
@@ -39,8 +40,14 @@ export function parseProductionBase(source, alias = false) {
   const resourceSections = [...source.matchAll(/^\[\[([a-z_]+)\]\]/gm)].map(m => m[1]);
   need(resourceSections.every(name => name === 'rules' || alias && name === 'services'), 'UNREVIEWED_RESOURCE_BINDING');
   if (alias) need(setting('binding') === 'DUE_DILIGENCE_APPLICATION' && setting('service') === TARGET.worker && resourceSections.filter(x => x === 'services').length === 1, 'ALIAS_BINDING_CHANGED');
+  const secretSections=[...source.matchAll(/^\[secrets\]\s*\r?\n([\s\S]*?)(?=^\[|$(?![\s\S]))/gm)];
+  const requiredSecrets=setting('required') || [];
+  need(secretSections.length === (alias ? 0 : 1) && Array.isArray(requiredSecrets)
+    && equal([...requiredSecrets].sort(),alias ? [] : REQUIRED_INHERITED_SECRETS), 'REQUIRED_SECRET_DECLARATION_CHANGED');
+  if (!alias) need(secretSections[0][1].split(/\r?\n/).filter(line=>line.trim()&&!line.trim().startsWith('#')).length === 1,
+    'REQUIRED_SECRET_DECLARATION_CHANGED');
   return { source, alias, vars, date: setting('compatibility_date'), flags: setting('compatibility_flags') || [],
-    region: setting('region') || null, crons: setting('crons') || [], previewUrls: setting('preview_urls'), workersDev: setting('workers_dev') };
+    region: setting('region') || null, crons: setting('crons') || [], previewUrls: setting('preview_urls'), workersDev: setting('workers_dev'), requiredSecrets };
 }
 
 // Retain all variable values as hashes, including ordinary plaintext. Only known
@@ -171,6 +178,17 @@ export function validateSerializedMetadata(metadata, base, state, additions) {
   need(equal([...(metadata.keep_bindings || [])].sort(),['json','plain_text','secret_key','secret_text']), 'SERIALIZED_KEEP_BINDINGS_MISSING');
   need(!['cache','cache_options','exports','limits'].some(key => Object.hasOwn(metadata,key)), 'SERIALIZED_UNAPPROVED_SETTING');
   need(state.region ? equal(metadata.placement,{mode:'targeted',region:state.region}) : metadata.placement == null, 'SERIALIZED_PLACEMENT_DRIFT');
+  need(Array.isArray(metadata.bindings) && metadata.bindings.every(binding=>binding && typeof binding === 'object' && !Array.isArray(binding))
+    && new Set(metadata.bindings.map(binding=>binding.name)).size === metadata.bindings.length, 'SERIALIZED_BINDINGS_INVALID');
+  const expectedInherited=base.alias ? [] : REQUIRED_INHERITED_SECRETS;
+  need(Array.isArray(base.requiredSecrets) && equal([...base.requiredSecrets].sort(),expectedInherited), 'REQUIRED_SECRET_DECLARATION_CHANGED');
+  const inherited=metadata.bindings.filter(binding=>binding.type === 'inherit');
+  // Pinned Wrangler4.114.0 emits {name,type:'inherit'} for secrets.required.
+  // Only these three declarations, already captured as existing secret_text,
+  // may be inherited. No secret value, new name or replacement is accepted.
+  need(equal(inherited.map(binding=>binding.name).sort(),expectedInherited) && inherited.every(binding=>
+    equal(Object.keys(binding).sort(),['name','type']) && state.bindings.filter(existing=>
+      existing.name === binding.name && existing.type === 'secret_text').length === 1), 'SERIALIZED_INHERITED_SECRET_CHANGED');
   const expected = Object.entries({...base.vars,...additions}).map(([name,text]) => ({name,type:'plain_text',text}));
   if (base.alias) {
     const actual = (metadata.bindings || []).filter(b => b.type === 'service');
@@ -179,8 +197,17 @@ export function validateSerializedMetadata(metadata, base, state, additions) {
   }
   const actualVars = (metadata.bindings || []).filter(b => b.type === 'plain_text').sort((a,b)=>a.name.localeCompare(b.name));
   need(equal(actualVars,expected.sort((a,b)=>a.name.localeCompare(b.name))), 'SERIALIZED_VARIABLE_DRIFT');
-  need((metadata.bindings || []).every(b => b.type === 'plain_text' || base.alias && b.type === 'service'), 'SERIALIZED_RESOURCE_CHANGED');
+  need(metadata.bindings.every(b => b.type === 'plain_text' || base.alias && b.type === 'service'
+    || !base.alias && b.type === 'inherit'), 'SERIALIZED_RESOURCE_CHANGED');
   return true;
+}
+export function summarizeSerializedBindings(metadata) {
+  const identifier=value=>typeof value === 'string' && /^[A-Za-z_][A-Za-z0-9_.-]{0,127}$/.test(value) ? value : '[invalid]';
+  const bindings=Array.isArray(metadata?.bindings) ? metadata.bindings : [];
+  return { bindingCount:Array.isArray(metadata?.bindings) ? bindings.length : null, truncated:bindings.length>200,
+    bindings:bindings.slice(0,200).map(binding=>({name:identifier(binding?.name),type:identifier(binding?.type),
+      fields:binding && typeof binding === 'object' && !Array.isArray(binding) ? Object.keys(binding).slice(0,100).map(identifier).sort() : []})),
+    valuesStored:false };
 }
 export function validateRun(run, type, candidate) {
   need(run?.repository?.full_name === TARGET.repository && run.head_repository?.full_name === TARGET.repository
@@ -366,8 +393,12 @@ async function runOperation(mode) {
       const form = await new Response(bytes,{headers:{'Content-Type':'multipart/form-data; boundary='+boundary}}).formData();
       need(form.getAll('metadata').length === 1,'UPLOAD_METADATA_UNAVAILABLE'); const part=form.get('metadata');
       const metadata=JSON.parse(typeof part === 'string' ? part : await part.text());
-      validateSerializedMetadata(metadata,index === 0 ? base : alias,baseline.scripts[index === 0 ? TARGET.worker : TARGET.alias],configs[index].additions);
-      receipt.steps.push({label:'actual-upload-metadata-'+index,status:'PASS',metadataSha256:hash(metadata),rawMetadataStored:false}); await save('release.json',receipt);
+      const observed={label:'actual-upload-metadata-'+index,status:'OBSERVED_PENDING_VALIDATION',metadataSha256:hash(metadata),
+        ...summarizeSerializedBindings(metadata),rawMetadataStored:false};
+      receipt.steps.push(observed); await save('release.json',receipt);
+      try { validateSerializedMetadata(metadata,index === 0 ? base : alias,baseline.scripts[index === 0 ? TARGET.worker : TARGET.alias],configs[index].additions); observed.status='PASS'; }
+      catch(error) { observed.status='FAIL'; observed.failureCode=safeCode(error); throw error; }
+      finally { await save('release.json',receipt); }
     }
     if (mode === 'prepare') return;
     await trustedCandidate(); await currentPages(review.expectedPagesSha);

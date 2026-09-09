@@ -38,7 +38,7 @@ async function roomSources() {
 test('current room documents and the changed media import use new cache keys, preserving Study repair versions', async () => {
   const source = await roomSources(), refs = await roomAssetReferences(source);
   assert.deepEqual(refs.map(ref => ref.file), ['assets/debate-room.js','assets/debate-room.css','assets/debate-media.js','assets/study-room-live.js']);
-  for (const ref of refs.slice(0, 3)) assert.equal(new URL(ref.url).search, ref.file === 'assets/debate-room.css' ? '?v=debate-v3-20260910-3' : '?v=debate-v3-20260910-2');
+  for (const ref of refs.slice(0, 3)) assert.equal(new URL(ref.url).search, ref.file === 'assets/debate-media.js' ? '?v=debate-v3-20260910-2' : '?v=debate-v3-20260910-3');
   const study = new URL(refs[3].url);
   assert.equal(study.searchParams.get('v'), 'study-room-always-open-20260908-1');
   assert.equal(study.searchParams.get('entry'), 'v3-20260909-1');
@@ -51,6 +51,7 @@ test('returning browsers bypass the prior room cache keys and the verifier uses 
   const source = await roomSources(), refs = await roomAssetReferences(source), requested = [];
   const cache = new Map([
     [`${TARGET.origin}/assets/debate-room.js?v=debate-v3-20260909`, Buffer.from('old timer error')],
+    [`${TARGET.origin}/assets/debate-room.js?v=debate-v3-20260910-2`, Buffer.from('previous upload parser wording')],
     [`${TARGET.origin}/assets/debate-room.css?v=debate-v3-20260909`, Buffer.from('old room layout')],
     [`${TARGET.origin}/assets/debate-room.css?v=debate-v3-20260910-2`, Buffer.from('previous scrolling lobby')],
     [`${TARGET.origin}/assets/debate-media.js`, Buffer.from('old media copy')],

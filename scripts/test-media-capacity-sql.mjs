@@ -85,7 +85,7 @@ test('native PostgreSQL17 atomically limits physical epochs across Study and Deb
         revocationAcknowledged: true, absent: true, cutoffSeconds: Math.floor(Math.max(at, row.release_requested_at_ms) / 1000) + 1, acknowledgedAtMs: at, observedAtMs: at } }) };
   }
   try {
-    for (const file of [MIGRATION,'worker/media-capacity.mjs','worker/media-capacity.test.mjs','scripts/test-media-capacity-sql.mjs']) report.sourceHashesLf[file] = hash(await read(file));
+    for (const file of [MIGRATION,'worker/media-capacity.mjs','worker/media-capacity.test.mjs','scripts/test-media-capacity-sql.mjs','.github/workflows/media-capacity-foundation.yml','docs/debate-room-v3/media-capacity-foundation.md']) report.sourceHashesLf[file] = hash(await read(file));
     report.postgresVersion = await run('show server_version;'); assert.match(report.postgresVersion, /^17\./);
     assert.equal(await run("select current_database()='media_capacity_ci' and to_regclass('private.media_capacity_policies') is null;"), 't');
     await run('create role anon; create role authenticated; create role service_role bypassrls;');

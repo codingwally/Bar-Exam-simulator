@@ -43,7 +43,7 @@ const groups = [
   ['accelerated-organizer', ['scripts/test-debate-organizer-rehearsal.mjs']],
   ['eligible-tournament-exports', ['scripts/test-debate-tournament-export.mjs']],
   ['staging-preflight-gates', ['--test', 'scripts/test-debate-staging-release.mjs', 'scripts/test-debate-staging-fixtures.mjs', 'scripts/test-debate-staging-dml-probe.mjs',
-    'scripts/test-debate-hosted-cleanup.mjs', 'scripts/test-debate-hosted-fixtures.mjs', 'scripts/test-debate-hosted-driver.mjs',
+    'scripts/test-debate-hosted-cleanup.mjs', 'scripts/test-debate-hosted-fixtures.mjs', 'scripts/test-debate-hosted-driver.mjs', 'scripts/test-debate-hosted-upload-diagnostic.mjs',
     'scripts/test-debate-hosted-browser-safety.mjs', 'scripts/test-debate-hosted-preparation.mjs', 'scripts/test-debate-production-preview.mjs']],
   ['worker-configuration-contract', ['--test', 'scripts/test-worker-cpu-limit-contract.mjs']],
 ];

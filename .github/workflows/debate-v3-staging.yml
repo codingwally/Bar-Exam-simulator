@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: Capture and storage-headers are read-only; prepare-auth checks temporary identities; deploy checks restricted assets/auth; hosted-rehearsal also runs the real-duration control journey
+        description: Capture/storage-headers are read-only; upload-diagnostic uses reviewed staging deployment and temporary fixtures for one upload without timers; hosted-rehearsal runs the full control journey
         required: true
         type: choice
         default: capture
-        options: [capture, storage-headers, prepare-auth, deploy, prepare-hosted, hosted-rehearsal]
+        options: [capture, storage-headers, prepare-auth, deploy, prepare-hosted, hosted-rehearsal, upload-diagnostic]
       candidate_sha:
         description: Exact current main SHA reviewed for this staging release
         required: true
@@ -150,14 +150,14 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: node scripts/debate-staging-release.mjs capture
       - name: Verify provenance of the earlier hosted fixture preparation
-        if: inputs.operation == 'hosted-rehearsal'
+        if: inputs.operation == 'hosted-rehearsal' || inputs.operation == 'upload-diagnostic'
         env:
           GH_TOKEN: ${{ github.token }}
           DEBATE_HOSTED_PREPARATION_RUN_ID: ${{ inputs.hosted_preparation_run_id }}
           DEBATE_HOSTED_PREPARATION_SHA256: ${{ inputs.hosted_preparation_sha256 }}
         run: node scripts/resolve-debate-hosted-preparation.mjs provenance
       - name: Download the reviewed sanitized preparation evidence
-        if: inputs.operation == 'hosted-rehearsal'
+        if: inputs.operation == 'hosted-rehearsal' || inputs.operation == 'upload-diagnostic'
         uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
@@ -165,7 +165,7 @@ jobs:
           name: debate-v3-staging-release-${{ github.sha }}
           path: artifacts/debate-local-rehearsal/hosted-preparation
       - name: Pin the exact prior preparation receipt
-        if: inputs.operation == 'hosted-rehearsal'
+        if: inputs.operation == 'hosted-rehearsal' || inputs.operation == 'upload-diagnostic'
         env:
           DEBATE_HOSTED_PREPARATION_SHA256: ${{ inputs.hosted_preparation_sha256 }}
         run: node scripts/resolve-debate-hosted-preparation.mjs resolve
@@ -220,6 +220,8 @@ jobs:
         run: |
           if [[ "$REQUESTED_STAGING_OPERATION" == 'hosted-rehearsal' ]]; then
             DEBATE_HOSTED_REHEARSAL=1 DEBATE_HOSTED_BROWSER_CI=1 node scripts/run-debate-hosted-rehearsal.mjs run
+          elif [[ "$REQUESTED_STAGING_OPERATION" == 'upload-diagnostic' ]]; then
+            DEBATE_HOSTED_REHEARSAL=1 node scripts/run-debate-hosted-rehearsal.mjs upload-diagnostic
           elif [[ "$REQUESTED_STAGING_OPERATION" == 'prepare-hosted' ]]; then
             DEBATE_HOSTED_REHEARSAL=1 node scripts/run-debate-hosted-rehearsal.mjs prepare
           else
@@ -234,6 +236,7 @@ jobs:
             artifacts/debate-local-rehearsal/staging-release/*.json
             artifacts/debate-local-rehearsal/staging-release/hosted-*/driver.json
             artifacts/debate-local-rehearsal/staging-release/hosted-*/fixtures.json
+            artifacts/debate-local-rehearsal/staging-release/hosted-*/upload-diagnostic.json
             artifacts/debate-local-rehearsal/staging-release/hosted-*/browser/report.json
             artifacts/debate-local-rehearsal/staging-release/hosted-*/browser/screenshots/*.png
             artifacts/debate-local-rehearsal/staging-release/hosted-*/browser/downloads/*.pdf

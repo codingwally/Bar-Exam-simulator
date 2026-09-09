@@ -262,6 +262,7 @@ export const CRITICAL_SOURCES = Object.freeze([
   '.github/workflows/debate-v3-capture.yml', 'scripts/debate-staging-fixtures.mjs', 'scripts/run-debate-staging-auth.mjs',
   'scripts/test-debate-wrangler-metadata.mjs',
   'scripts/debate-hosted-cleanup.mjs', 'scripts/debate-hosted-fixtures.mjs', 'scripts/run-debate-hosted-rehearsal.mjs',
+  'scripts/debate-hosted-upload-diagnostic.mjs', 'scripts/test-debate-hosted-upload-diagnostic.mjs',
   'scripts/test-debate-hosted-cleanup.mjs', 'scripts/test-debate-hosted-fixtures.mjs', 'scripts/test-debate-hosted-driver.mjs',
   'scripts/test-debate-browser-hosted-organizer.mjs', 'scripts/test-debate-hosted-browser-safety.mjs',
   'scripts/resolve-debate-hosted-preparation.mjs', 'scripts/test-debate-hosted-preparation.mjs',

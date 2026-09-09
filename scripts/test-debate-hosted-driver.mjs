@@ -39,7 +39,7 @@ async function fixture(options = {}) {
   const tooling = path.join(root, 'artifacts/debate-local-rehearsal/staging-tooling/node_modules/wrangler/bin/wrangler.js');
   await mkdir(path.dirname(tooling), { recursive: true }); await mkdir(path.join(root, 'worker'));
   await writeFile(tooling, '/* inert test entry: never executed */');
-  let wall = 1800000000000, elapsed = 1000, preflights = 0, factoryCalls = 0, cleanupCalls = 0, browserCalls = 0;
+  let wall = 1800000000000, elapsed = 1000, preflights = 0, factoryCalls = 0, cleanupCalls = 0, browserCalls = 0, storageReads = 0;
   let lifecycle, lifecycleOptions, remote = baseline;
   const env = { DEBATE_CANDIDATE_SHA: sourceSha, DEBATE_EXPECTED_BASELINE_SHA256: baseline.fingerprint,
     DEBATE_EXPECTED_VERSION_ID: beforeVersion, DEBATE_RELEASE_REVIEW: '{}', DEBATE_LOCAL_SUITE_REPORT: 'artifacts/test-suite.json',
@@ -120,7 +120,9 @@ async function fixture(options = {}) {
           };
         },
         preflightStorage: async () => { stage('storage-preflight'); await parameters.persist({ runTag: 'inert-owned-run', cleanupComplete: false, credentialsStored: false });
-          return { status: options.storageState || 'ABSENT', rawIgnored: 'never-save-this-field' }; },
+          storageReads++;
+          return { status: options.bucketDisappears && storageReads > 1 ? 'ABSENT'
+            : options.storageState || (options.mode === 'upload-diagnostic' ? 'MATCHING_PRIVATE_BUCKET' : 'ABSENT'), rawIgnored: 'never-save-this-field' }; },
         ensureStorage: async () => { stage('storage-ensure'); return { status: 'MATCHING_PRIVATE_BUCKET' }; },
         provision: async () => {
           stage('provision'); const suppressed = await parameters.verifySuppression();
@@ -175,6 +177,17 @@ async function fixture(options = {}) {
       return { label: call.label, status: options.failAt === call.label ? 'FAIL' : 'PASS',
         exitCode: options.failAt === call.label ? 7 : 0, stdoutSha256: hash('inert'), stderrSha256: hash('inert'),
         rawOutputStored: false, rawIgnored: tokens.host };
+    },
+    uploadDiagnostic: async request => {
+      stage('upload-diagnostic'); assert.equal(request.lifecycle, lifecycle);
+      assert.equal(request.workerUrl, TARGET.origin); assert.equal(request.sourceSha, sourceSha); assert.equal(request.workerVersion, afterVersion);
+      const report = { kind: 'HOSTED_SINGLE_UPLOAD_DIAGNOSTIC', sourceSha, workerVersion: afterVersion,
+        status: options.uploadFailure ? 'FAIL_HOSTED_SINGLE_UPLOAD_DIAGNOSTIC' : 'PASS_HOSTED_SINGLE_UPLOAD_ONLY',
+        uploadAttempts: 1, completedTimerStages: 0, elapsedMs: 1000,
+        providerMedia: false, realMail: false, publicLaunch: false, fullAcceptance: false, credentialsStored: false, rawBodiesStored: false,
+        upload: { status: options.uploadFailure ? 503 : 200, ok: !options.uploadFailure,
+          errorCode: options.uploadFailure ? 'STORAGE_WRITE_UNCONFIRMED' : null } };
+      await request.persist(report); return report;
     },
     browser: async request => {
       browserCalls++; stage('browser'); assert.equal(request.lifecycle, lifecycle);
@@ -380,6 +393,61 @@ test('invalid hosted modes are rejected before static gates or fixture construct
     assert.equal(run.error.code, 'HOSTED_REHEARSAL_MODE'); assert.equal(run.f.preflights, 0);
     assert.equal(run.f.factoryCalls, 0); assert.equal(run.report, null);
   } finally { await run.f.dispose(); }
+});
+
+test('single upload diagnostic keeps preparation and staging deployment gates but never runs a timed browser', async () => {
+  const run = await exercise({ mode: 'upload-diagnostic' });
+  try {
+    assert.equal(run.error, undefined); assert.equal(run.result.status, 'PASS_HOSTED_UPLOAD_DIAGNOSTIC_ONLY');
+    assert.equal(run.report.deploymentState, 'VERSION_AND_PRESERVATION_VERIFIED');
+    assert.deepEqual(run.report.steps.map(step => step.label), ['prepare','deploy','postflight','smoke']);
+    assert.equal(run.f.browserCalls, 0); assert.equal(run.f.cleanupCalls, 1);
+    assert.equal(run.report.browser, undefined); assert.equal(run.report.minimumBrowserDurationMs, null);
+    assert.equal(run.f.events.includes('storage-ensure'), false);
+    assert.equal(run.report.uploadDiagnostic.uploadAttempts, 1); assert.equal(run.report.uploadDiagnostic.completedTimerStages, 0);
+    assert.equal(run.report.uploadDiagnostic.independentAbsence, 'PENDING_SEPARATE_POST_RUN_READBACK');
+    assert.equal(run.report.cleanup, 'EXACT_FIXTURES_DELETED_AND_KNOWN_SESSIONS_DENIED');
+    assert.equal(run.report.immediateLogoutFencingVerified, true); assert.equal(run.report.atomicCleanupHelperVerified, true);
+  } finally { await run.f.dispose(); }
+});
+
+test('single upload cannot bypass reviewed preparation before any fixture or deployment', async () => {
+  const run = await exercise({ mode: 'upload-diagnostic', preparation: 'missing' });
+  try { assert.equal(run.error.code, 'HOSTED_PREPARATION_EVIDENCE_REQUIRED'); assert.equal(run.f.factoryCalls, 0);
+    assert.equal(run.f.events.includes('deploy'), false); }
+  finally { await run.f.dispose(); }
+});
+
+test('single upload diagnostic never creates a missing bucket', async () => {
+  const run = await exercise({ mode: 'upload-diagnostic', storageState: 'ABSENT' });
+  try { assert.equal(run.error.code, 'HOSTED_UPLOAD_BUCKET_REQUIRED'); assert.equal(run.f.events.includes('storage-ensure'), false);
+    assert.equal(run.f.events.includes('provision'), false); assert.equal(run.f.events.includes('deploy'), false); }
+  finally { await run.f.dispose(); }
+});
+
+test('bucket disappearance between the diagnostic reads cannot reach conditional bucket creation', async () => {
+  const run = await exercise({ mode: 'upload-diagnostic', bucketDisappears: true });
+  try { assert.equal(run.error.code, 'HOSTED_UPLOAD_BUCKET_REQUIRED'); assert.equal(run.f.events.includes('storage-ensure'), false);
+    assert.equal(run.f.events.filter(stage => stage === 'storage-preflight').length, 2);
+    assert.equal(run.f.events.includes('provision'), false); assert.equal(run.f.events.includes('deploy'), false); }
+  finally { await run.f.dispose(); }
+});
+
+test('failed upload keeps diagnostic evidence and still cleans exact fixtures', async () => {
+  const run = await exercise({ mode: 'upload-diagnostic', uploadFailure: true });
+  try { assert.equal(run.error.code, 'HOSTED_UPLOAD_DIAGNOSTIC_FAILED'); assert.equal(run.f.cleanupCalls, 1);
+    assert.equal(run.report.uploadDiagnostic.status, 'FAIL_HOSTED_SINGLE_UPLOAD_DIAGNOSTIC');
+    assert.equal(run.report.cleanup, 'EXACT_FIXTURES_DELETED_AND_KNOWN_SESSIONS_DENIED');
+    assert.equal(run.report.observedAfterFailure.versionId, afterVersion); assert.equal(run.f.browserCalls, 0); }
+  finally { await run.f.dispose(); }
+});
+
+test('upload success cannot override incomplete cleanup or an unverified logout fence', async () => {
+  for (const extra of [{ cleanupIncomplete: true }, { immediateFence: false }, { atomicHelper: false }]) {
+    const run = await exercise({ mode: 'upload-diagnostic', ...extra });
+    try { assert.ok(run.error); assert.equal(run.result, undefined); assert.equal(run.f.cleanupCalls, 1); }
+    finally { await run.f.dispose(); }
+  }
 });
 
 for (const failAt of ['storage-preflight','storage-ensure','provision','session','sessions','prepare','recheck','deploy','postflight','smoke','browser']) {

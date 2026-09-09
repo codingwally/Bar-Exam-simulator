@@ -111,11 +111,13 @@ export function createStudyDebateFixtureLifecycle({ sourceSha, supabaseUrl, work
     sessions.set(record.id, login.body.access_token); record.signInState = 'confirmed'; await save();
     await proveSession(record, login.body.access_token);
     // Study access is part of this run's genuine purpose; no room join or token.
-    const study = await transport(workerUrl, '/study-room/access', { headers: {
+    record.studyAccess = 'requested'; await save();
+    const study = await transport(workerUrl, '/study-room/access', { method: 'POST', body: '{}', headers: {
       Authorization: `Bearer ${login.body.access_token}`, Origin: workerUrl } });
-    need(study.body?.ok === true && study.body?.allowed === true && study.body?.role === 'student' &&
+    need(study.body?.ok === true && study.body?.allowed === true && study.body?.role === 'member' &&
       study.body?.administrator === false && study.body?.canCreateRooms === false && study.body?.recording === false,
       'FIXTURE_STUDY_ACCESS_REGRESSION');
+    record.studyAccessRole = study.body.role;
     record.studyAccess = 'PASS_STUDENT_ACCESS_NO_JOIN'; await save();
     return Object.freeze({ id: record.id, token: login.body.access_token });
   }

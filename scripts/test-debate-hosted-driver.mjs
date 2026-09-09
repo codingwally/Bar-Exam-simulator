@@ -180,17 +180,58 @@ async function fixture(options = {}) {
       browserCalls++; stage('browser'); assert.equal(request.lifecycle, lifecycle);
       assert.equal(request.workerUrl, TARGET.origin); assert.equal(request.sourceSha, sourceSha); assert.equal(request.workerVersion, afterVersion);
       assert.ok(request.outputDir.startsWith(path.join(root, 'artifacts') + path.sep));
-      const duration = options.shortRun ? MINIMUM_HOSTED_REHEARSAL_MS - 1 : MINIMUM_HOSTED_REHEARSAL_MS + 1500;
+      const startedAt = new Date(wall).toISOString();
+      const duration = options.completedBrowserFailure ? 27747 : options.shortRun ? MINIMUM_HOSTED_REHEARSAL_MS - 1
+        : options.browserTiming === 'bounded-overhead' ? MINIMUM_HOSTED_REHEARSAL_MS + 15000 : MINIMUM_HOSTED_REHEARSAL_MS + 1500;
       elapsed += duration; wall += options.clockJump ? duration + 10000 : duration;
-      const result = { status: options.badBrowserStatus ? 'PARTIAL' : 'PASS_HOSTED_BROWSER_ORGANIZER_CONTROL_ONLY',
+      const result = { kind: 'ISOLATED_CI_HOSTED_BROWSER_ORGANIZER',
+        status: options.completedBrowserFailure ? 'FAIL' : options.badBrowserStatus ? 'PARTIAL' : 'PASS_HOSTED_BROWSER_ORGANIZER_CONTROL_ONLY',
         sourceSha: options.badBrowserSource ? 'f'.repeat(40) : sourceSha, workerVersion: afterVersion,
         actualHostedAuth: true, mainWorkerBootstrap: true, physicalMediaVerified: false,
         defaultFlowDurationMs: 78 * 60000, correctionWindowMs: 15 * 60000, elapsedMs: duration,
+        startedAt, finishedAt: new Date(wall).toISOString(), credentialsStored: false, rawDomStored: false, tracesStored: false,
+        claims: { physicalMedia: false, providerMedia: false, realEmail: false },
         rawIgnored: tokens.host };
+      if (options.completedBrowserFailure) result.failure = { code: 'TEST_BROWSER_ACTION_REJECTED', messageSha256: hash('inert action failure') };
       await mkdir(request.outputDir, { recursive: true });
       const stored = { ...result }; delete stored.rawIgnored;
       if (options.badBrowserArtifact) stored.sourceSha = 'e'.repeat(40);
-      if (!options.missingBrowserArtifact) await writeFile(path.join(request.outputDir, 'report.json'), JSON.stringify(stored));
+      if (options.browserArtifact === 'source') stored.sourceSha = 'e'.repeat(40);
+      if (options.browserArtifact === 'version') stored.workerVersion = beforeVersion;
+      if (options.browserArtifact === 'kind') stored.kind = 'UNRELATED_REPORT';
+      if (options.browserArtifact === 'privacy') stored.rawDomStored = true;
+      if (options.browserArtifact === 'nested-provider') stored.claims = { providerMedia: true };
+      if (options.browserArtifact === 'credential') stored.access_token = tokens.host;
+      if (options.browserArtifact === 'secret-value') stored.untrustedNote = env.CLOUDFLARE_API_TOKEN;
+      if (options.browserArtifact === 'unfinished') delete stored.finishedAt;
+      if (options.browserArtifact === 'running') stored.status = 'RUNNING';
+      if (options.browserArtifact === 'negative-timing') stored.elapsedMs = -1;
+      if (options.browserClaim) {
+        const target = options.claimOn === 'result' ? result : stored, value = options.claimValue ?? true;
+        if (options.claimLocation === 'top') target[options.browserClaim] = value;
+        else target.claims = { ...target.claims, [options.browserClaim]: value };
+      }
+      for (const target of [result, stored]) {
+        if (options.browserTiming === 'zero') { target.elapsedMs = 0; target.finishedAt = target.startedAt; }
+        if (options.browserTiming === 'just-short') {
+          target.elapsedMs = MINIMUM_HOSTED_REHEARSAL_MS - 1;
+          target.startedAt = new Date(Date.parse(target.finishedAt) - target.elapsedMs).toISOString();
+        }
+        if (['stale','future'].includes(options.browserTiming)) {
+          const offset = options.browserTiming === 'stale' ? -3600000 : 3600000;
+          target.startedAt = new Date(Date.parse(target.startedAt) + offset).toISOString();
+          target.finishedAt = new Date(Date.parse(target.finishedAt) + offset).toISOString();
+        }
+        if (options.browserTiming === 'bounded-overhead') {
+          target.startedAt = new Date(Date.parse(target.startedAt) + 2000).toISOString();
+          target.finishedAt = new Date(Date.parse(target.finishedAt) - 500).toISOString(); target.elapsedMs -= 2500;
+        }
+      }
+      if (options.browserTiming === 'returned-elapsed-mismatch') result.elapsedMs++;
+      if (options.browserTiming === 'returned-date-mismatch') result.finishedAt = new Date(Date.parse(result.finishedAt) + 1).toISOString();
+      if (!options.missingBrowserArtifact) await writeFile(path.join(request.outputDir, 'report.json'), options.browserArtifact === 'malformed' ? '{unfinished' : JSON.stringify(stored));
+      if (options.completedBrowserFailure || options.throwAfterBrowserReport)
+        throw Object.assign(new Error('inert-secret-browser-failure-' + tokens.host), { code: 'TEST_BROWSER_EXECUTION_FAILED' });
       return result;
     },
   };
@@ -230,6 +271,8 @@ test('hosted driver orders exact gates, private storage, eleven fresh accounts, 
     for (let i = 1; i < order.length; i++) assert.ok(run.f.events.indexOf(order[i - 1]) < run.f.events.indexOf(order[i]), order.join(' → '));
     assert.equal(run.report.allowedAccounts, 10); assert.equal(run.report.authenticatedAccounts, 11);
     assert.ok(run.report.browser.measuredDurationMs >= 93 * 60000); assert.equal(run.report.browser.minimumDurationMet, true);
+    assert.equal(run.report.browser.status, 'PASS_HOSTED_BROWSER_ORGANIZER_CONTROL_ONLY');
+    assert.match(run.report.browser.reportSha256, /^[a-f0-9]{64}$/); assert.equal(run.report.browser.reportPath, 'browser/report.json');
     assert.equal(run.report.deploymentState, 'VERSION_AND_PRESERVATION_VERIFIED');
     assert.equal(run.report.preparationEvidence.immediateLogoutFencingVerified, true);
     assert.equal(run.report.preparationEvidence.atomicCleanupHelperVerified, true);
@@ -400,3 +443,119 @@ test('raw child exception and failed readback remain sanitized while uncertainty
   try { assert.equal(run.error.code, 'HOSTED_REHEARSAL_STEP_FAILED'); assert.equal(run.report.postFailureReadback, 'UNAVAILABLE'); assert.equal(run.report.deploymentState, 'REQUESTED_OUTCOME_UNCONFIRMED'); assert.equal(run.f.cleanupCalls, 1); }
   finally { await run.f.dispose(); }
 });
+
+test('completed failing browser report replaces RUNNING without replacing the original execution error', async () => {
+  const run = await exercise({ completedBrowserFailure: true });
+  try {
+    assert.equal(run.error.code, 'TEST_BROWSER_EXECUTION_FAILED'); assert.equal(run.report.failureCode, run.error.code);
+    assert.equal(run.report.status, 'FAIL_HOSTED_REHEARSAL'); assert.equal(run.report.browser.status, 'FAIL');
+    assert.equal(run.report.browser.artifactStatus, 'VALIDATED'); assert.equal(run.report.browser.reportedStatus, 'FAIL');
+    assert.equal(run.report.browser.failureCode, 'TEST_BROWSER_EXECUTION_FAILED');
+    assert.equal(run.report.browser.reportedFailureCode, 'TEST_BROWSER_ACTION_REJECTED');
+    assert.equal(run.report.browser.measuredDurationMs, 27747); assert.equal(run.report.browser.reportedElapsedMs, 27747);
+    assert.equal(run.report.browser.clockConsistent, true); assert.equal(run.report.browser.accepted, false);
+    assert.equal(run.report.browser.minimumDurationMet, undefined); assert.match(run.report.browser.reportSha256, /^[a-f0-9]{64}$/);
+    assert.equal(run.f.cleanupCalls, 1); assert.equal(run.report.cleanup, 'EXACT_FIXTURES_DELETED_AND_KNOWN_SESSIONS_DENIED');
+  } finally { await run.f.dispose(); }
+});
+
+test('missing browser failure artifact is explicit and preserves the original error and cleanup', async () => {
+  const run = await exercise({ completedBrowserFailure: true, missingBrowserArtifact: true });
+  try {
+    assert.equal(run.error.code, 'TEST_BROWSER_EXECUTION_FAILED'); assert.equal(run.report.browser.status, 'FAIL');
+    assert.equal(run.report.browser.artifactStatus, 'ABSENT'); assert.equal(run.report.browser.artifactFailureCode, 'HOSTED_BROWSER_ARTIFACT_ABSENT');
+    assert.equal(run.report.browser.reportSha256, undefined); assert.equal(run.report.browser.reportedStatus, undefined);
+    assert.equal(run.report.browser.accepted, false); assert.equal(run.f.cleanupCalls, 1);
+  } finally { await run.f.dispose(); }
+});
+
+for (const browserArtifact of ['source','version','kind','privacy','nested-provider','credential','secret-value','unfinished','running','negative-timing','malformed']) {
+  test(`invalid ${browserArtifact} browser failure report is rejected without copying its fields or masking the original failure`, async () => {
+    const run = await exercise({ completedBrowserFailure: true, browserArtifact });
+    try {
+      assert.equal(run.error.code, 'TEST_BROWSER_EXECUTION_FAILED'); assert.equal(run.report.failureCode, 'TEST_BROWSER_EXECUTION_FAILED');
+      assert.equal(run.report.browser.status, 'FAIL'); assert.equal(run.report.browser.artifactStatus, 'INVALID');
+      assert.equal(run.report.browser.artifactFailureCode, 'HOSTED_BROWSER_ARTIFACT_INVALID');
+      assert.equal(run.report.browser.reportSha256, undefined); assert.equal(run.report.browser.reportedFailureCode, undefined);
+      assert.equal(run.report.browser.accepted, false); assert.equal(run.f.cleanupCalls, 1);
+    } finally { await run.f.dispose(); }
+  });
+}
+
+test('a passing stored child report cannot turn a thrown execution error into browser or driver success', async () => {
+  const run = await exercise({ throwAfterBrowserReport: true });
+  try {
+    assert.equal(run.error.code, 'TEST_BROWSER_EXECUTION_FAILED'); assert.equal(run.report.status, 'FAIL_HOSTED_REHEARSAL');
+    assert.equal(run.report.browser.status, 'FAIL'); assert.equal(run.report.browser.reportedStatus, 'PASS_HOSTED_BROWSER_ORGANIZER_CONTROL_ONLY');
+    assert.equal(run.report.browser.artifactStatus, 'VALIDATED'); assert.equal(run.report.browser.accepted, false);
+    assert.equal(run.report.browser.minimumDurationMet, undefined); assert.equal(run.f.cleanupCalls, 1);
+  } finally { await run.f.dispose(); }
+});
+
+test('cleanup failure retains both the execution failure and validated child failure receipt', async () => {
+  const run = await exercise({ completedBrowserFailure: true, cleanupIncomplete: true });
+  try {
+    assert.equal(run.error.code, 'HOSTED_FIXTURE_CLEANUP_UNCONFIRMED'); assert.equal(run.report.originalFailureCode, 'TEST_BROWSER_EXECUTION_FAILED');
+    assert.equal(run.report.browser.status, 'FAIL'); assert.equal(run.report.browser.artifactStatus, 'VALIDATED');
+    assert.equal(run.report.browser.reportedFailureCode, 'TEST_BROWSER_ACTION_REJECTED');
+    assert.equal(run.report.cleanup, 'EXACT_ID_RECONCILIATION_REQUIRED');
+  } finally { await run.f.dispose(); }
+});
+
+for (const browserArtifact of ['kind','privacy','nested-provider']) test(`apparent browser success uses the same ${browserArtifact} artifact validation`, async () => {
+  const run = await exercise({ browserArtifact });
+  try {
+    assert.equal(run.error.code, 'HOSTED_BROWSER_ARTIFACT_INVALID'); assert.equal(run.result, undefined);
+    assert.equal(run.report.browser.status, 'FAIL'); assert.equal(run.report.browser.artifactStatus, 'INVALID');
+    assert.equal(run.report.browser.accepted, false); assert.equal(run.report.browser.minimumDurationMet, undefined);
+    assert.equal(run.f.cleanupCalls, 1);
+  } finally { await run.f.dispose(); }
+});
+
+for (const browserClaim of ['realEmail','physicalMedia']) for (const claimOn of ['stored','result']) for (const claimLocation of ['top','nested']) {
+  test(`${claimOn} ${claimLocation} ${browserClaim} claim cannot grant control-only rehearsal success`, async () => {
+    const run = await exercise({ browserClaim, claimOn, claimLocation });
+    try {
+      assert.equal(run.error.code, claimOn === 'result' ? 'HOSTED_BROWSER_EVIDENCE_INVALID' : 'HOSTED_BROWSER_ARTIFACT_INVALID');
+      assert.equal(run.result, undefined); assert.equal(run.report.browser.status, 'FAIL'); assert.equal(run.report.browser.accepted, false);
+      assert.equal(run.report.browser.minimumDurationMet, undefined); assert.equal(run.f.cleanupCalls, 1);
+    } finally { await run.f.dispose(); }
+  });
+}
+
+test('a non-boolean physical-media claim cannot bypass the evidence boundary', async () => {
+  const run = await exercise({ browserClaim: 'physicalMedia', claimValue: 'true' });
+  try { assert.equal(run.error.code, 'HOSTED_BROWSER_ARTIFACT_INVALID'); assert.equal(run.result, undefined); assert.equal(run.f.cleanupCalls, 1); }
+  finally { await run.f.dispose(); }
+});
+
+for (const browserTiming of ['zero','just-short','stale','future','returned-elapsed-mismatch','returned-date-mismatch']) {
+  test(`${browserTiming} receipt timing cannot pass despite a full independent driver duration`, async () => {
+    const run = await exercise({ browserTiming });
+    try {
+      assert.equal(run.error.code, 'HOSTED_BROWSER_ARTIFACT_INVALID'); assert.equal(run.result, undefined);
+      assert.ok(run.report.browser.measuredDurationMs >= MINIMUM_HOSTED_REHEARSAL_MS);
+      assert.equal(run.report.browser.status, 'FAIL'); assert.equal(run.report.browser.accepted, false);
+      assert.equal(run.report.browser.minimumDurationMet, undefined); assert.equal(run.f.cleanupCalls, 1);
+    } finally { await run.f.dispose(); }
+  });
+}
+
+test('matching receipt timing allows bounded browser setup and report serialization overhead', async () => {
+  const run = await exercise({ browserTiming: 'bounded-overhead' });
+  try {
+    assert.equal(run.error, undefined); assert.equal(run.report.status, 'PASS_HOSTED_ORGANIZER_CONTROL_ONLY');
+    assert.equal(run.report.browser.minimumDurationMet, true); assert.equal(run.f.cleanupCalls, 1);
+  } finally { await run.f.dispose(); }
+});
+
+for (const options of [{ browserTiming: 'stale' }, { browserTiming: 'future' }, { browserClaim: 'realEmail' }, { browserClaim: 'physicalMedia' }]) {
+  test(`invalid failure receipt ${JSON.stringify(options)} preserves the original browser error`, async () => {
+    const run = await exercise({ completedBrowserFailure: true, ...options });
+    try {
+      assert.equal(run.error.code, 'TEST_BROWSER_EXECUTION_FAILED'); assert.equal(run.report.browser.artifactStatus, 'INVALID');
+      assert.equal(run.report.browser.accepted, false); assert.equal(run.report.browser.reportedFailureCode, undefined);
+      assert.equal(run.report.browser.reportSha256, undefined); assert.equal(run.f.cleanupCalls, 1);
+    } finally { await run.f.dispose(); }
+  });
+}

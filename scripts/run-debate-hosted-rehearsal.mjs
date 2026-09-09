@@ -46,6 +46,41 @@ function childReceipt(label, result) {
     rawOutputStored: false, outcomeUnconfirmed: label === 'deploy' && result.status !== 'PASS' };
 }
 
+const browserClaimsWithinScope = value => ['publicLaunch','providerMedia','realMail','realEmail','physicalMedia','fullAcceptance']
+  .every(key => (value[key] === undefined || value[key] === false)
+    && (value.claims?.[key] === undefined || value.claims[key] === false));
+
+async function readBrowserReceipt({ outputDir, sourceSha, workerVersion, secrets, attempt }) {
+  const filename = path.join(outputDir, 'browser/report.json');
+  need(await realpath(filename) === filename, 'HOSTED_BROWSER_ARTIFACT_INVALID');
+  const bytes = await readFile(filename), text = bytes.toString('utf8');
+  need(bytes.length <= 2 * 1024 * 1024
+    && !/"(?:access_token|refresh_token|password|authorization|serviceRoleKey|service_role_key)"\s*:/iu.test(text)
+    && ![...secrets].some(secret => secret.length >= 8 && text.includes(secret)), 'HOSTED_BROWSER_ARTIFACT_INVALID');
+  const stored = JSON.parse(text), started = Date.parse(stored.startedAt), finished = Date.parse(stored.finishedAt);
+  need(stored.kind === 'ISOLATED_CI_HOSTED_BROWSER_ORGANIZER'
+    && ['PASS_HOSTED_BROWSER_ORGANIZER_CONTROL_ONLY','FAIL'].includes(stored.status)
+    && stored.sourceSha === sourceSha && stored.workerVersion === workerVersion
+    && stored.actualHostedAuth === true && stored.mainWorkerBootstrap === true && stored.physicalMediaVerified === false
+    && stored.defaultFlowDurationMs === 78 * 60000 && stored.correctionWindowMs === 15 * 60000
+    && ['credentialsStored','tracesStored','rawDomStored'].every(key => stored[key] === false)
+    && browserClaimsWithinScope(stored)
+    && Number.isFinite(started) && Number.isFinite(finished) && finished >= started
+    && Number.isFinite(stored.elapsedMs) && stored.elapsedMs >= 0 && Math.abs(finished - started - stored.elapsedMs) <= 5000,
+  'HOSTED_BROWSER_ARTIFACT_INVALID');
+  // The browser records its start after module loading and static setup, then
+  // records its finish immediately before writing this file and returning.
+  // Allow bounded setup/serialization overhead, never a different run's timing.
+  need(Number.isFinite(attempt?.beganWall) && Number.isFinite(attempt?.finishedWall)
+    && Number.isFinite(attempt?.durationMs) && attempt.durationMs >= 0
+    && started >= attempt.beganWall - 5000 && started <= attempt.beganWall + 30000
+    && Math.abs(finished - attempt.finishedWall) <= 5000
+    && stored.elapsedMs <= attempt.durationMs + 5000 && stored.elapsedMs >= attempt.durationMs - 30000
+    && (stored.status !== 'PASS_HOSTED_BROWSER_ORGANIZER_CONTROL_ONLY' || stored.elapsedMs >= MINIMUM_HOSTED_REHEARSAL_MS),
+  'HOSTED_BROWSER_ARTIFACT_INVALID');
+  return { stored, sha256: hash(bytes), startedAt: new Date(started).toISOString(), completedAt: new Date(finished).toISOString() };
+}
+
 async function defaultBrowser(input) {
   const { runHostedBrowserOrganizer } = await import('./test-debate-browser-hosted-organizer.mjs');
   return runHostedBrowserOrganizer(input);
@@ -116,7 +151,7 @@ export async function runHostedDebateRehearsal({ mode = 'run', env = process.env
     physicalMedia: false, providerMedia: false, realMail: false, fullAcceptance: false };
   if (preparationEvidence) report.preparationEvidence = preparationEvidence;
   await saveReport(report);
-  let lifecycle, failure, cleanup;
+  let lifecycle, failure, cleanup, browserAttempt;
   const rememberSession = session => {
     need(session?.user && UUID.test(session.user.id || '') && typeof session.access_token === 'string' && session.access_token.length > 80,
       'HOSTED_SESSION_INVALID');
@@ -215,26 +250,49 @@ export async function runHostedDebateRehearsal({ mode = 'run', env = process.env
       await step('smoke');
       report.browser = { status: 'RUNNING', startedAt: instant(clock) }; await saveReport(report);
       const began = monotonic(), beganWall = clock();
+      browserAttempt = { began, beganWall };
       const result = await browser({ lifecycle, workerUrl: TARGET.origin, sourceSha: checked.candidate,
         workerVersion: report.deployedVersionId, outputDir: path.join(outputDir, 'browser') });
-      const durationMs = monotonic() - began, wallDurationMs = clock() - beganWall;
+      const durationMs = monotonic() - began, finishedWall = clock(), wallDurationMs = finishedWall - beganWall;
       need(result?.status === 'PASS_HOSTED_BROWSER_ORGANIZER_CONTROL_ONLY', 'HOSTED_BROWSER_NOT_PASSED');
       need(result.sourceSha === checked.candidate && result.workerVersion === report.deployedVersionId && result.actualHostedAuth === true
         && result.mainWorkerBootstrap === true && result.physicalMediaVerified === false
         && result.defaultFlowDurationMs === 78 * 60000 && result.correctionWindowMs === 15 * 60000
-        && !['publicLaunch','providerMedia','realMail','credentialsStored','tracesStored'].some(key => result[key] === true), 'HOSTED_BROWSER_EVIDENCE_INVALID');
+        && browserClaimsWithinScope(result)
+        && ['credentialsStored','tracesStored','rawDomStored'].every(key => result[key] === false), 'HOSTED_BROWSER_EVIDENCE_INVALID');
       need(Number.isFinite(wallDurationMs) && Math.abs(wallDurationMs - durationMs) <= 5000, 'HOSTED_REHEARSAL_CLOCK_CHANGED');
       need(Number.isFinite(durationMs) && durationMs >= MINIMUM_HOSTED_REHEARSAL_MS, 'HOSTED_REHEARSAL_TOO_SHORT');
-      const browserBytes = await readFile(path.join(outputDir, 'browser/report.json')), stored = JSON.parse(browserBytes);
-      const evidenceFields = ['status','sourceSha','workerVersion','actualHostedAuth','mainWorkerBootstrap','physicalMediaVerified','defaultFlowDurationMs','correctionWindowMs'];
-      need(evidenceFields.every(key => stored[key] === result[key]) && !['publicLaunch','providerMedia','realMail','credentialsStored','tracesStored'].some(key => stored[key] === true)
-        && !/"(?:access_token|refresh_token|password|authorization|serviceRoleKey|service_role_key)"\s*:/iu.test(browserBytes.toString('utf8'))
-        && ![...secrets].some(secret => secret.length >= 8 && browserBytes.includes(secret)), 'HOSTED_BROWSER_ARTIFACT_INVALID');
+      const { stored, sha256 } = await readBrowserReceipt({ outputDir, sourceSha: checked.candidate,
+        workerVersion: report.deployedVersionId, secrets, attempt: { beganWall, finishedWall, durationMs } });
+      const evidenceFields = ['kind','status','sourceSha','workerVersion','actualHostedAuth','mainWorkerBootstrap','physicalMediaVerified',
+        'defaultFlowDurationMs','correctionWindowMs','startedAt','finishedAt','elapsedMs','credentialsStored','tracesStored','rawDomStored'];
+      need(evidenceFields.every(key => stored[key] === result[key]), 'HOSTED_BROWSER_ARTIFACT_INVALID');
       report.browser = { status: result.status, startedAt: report.browser.startedAt, completedAt: instant(clock),
-        measuredDurationMs: durationMs, minimumDurationMet: true, reportPath: 'browser/report.json', reportSha256: hash(browserBytes) };
+        measuredDurationMs: durationMs, minimumDurationMet: true, reportPath: 'browser/report.json', reportSha256: sha256 };
       report.status = 'BROWSER_PASSED_PENDING_CLEANUP'; await saveReport(report);
     }
-  } catch (error) { failure = error; }
+  } catch (error) {
+    failure = error;
+    if (browserAttempt && report.browser?.status === 'RUNNING') {
+      const durationMs = monotonic() - browserAttempt.began, finishedWall = clock(), wallDurationMs = finishedWall - browserAttempt.beganWall;
+      const failed = { status: 'FAIL', startedAt: report.browser.startedAt, completedAt: instant(clock),
+        failureCode: codeFor(error), measuredDurationMs: Number.isFinite(durationMs) && durationMs >= 0 ? durationMs : null,
+        clockConsistent: Number.isFinite(wallDurationMs) && Number.isFinite(durationMs) && Math.abs(wallDurationMs - durationMs) <= 5000,
+        artifactStatus: 'UNAVAILABLE', accepted: false };
+      try {
+        const { stored, sha256, startedAt, completedAt } = await readBrowserReceipt({ outputDir, sourceSha: checked.candidate,
+          workerVersion: report.deployedVersionId, secrets, attempt: { beganWall: browserAttempt.beganWall, finishedWall, durationMs } });
+        Object.assign(failed, { artifactStatus: 'VALIDATED', reportedStatus: stored.status,
+          reportedFailureCode: stored.status === 'FAIL' && /^[A-Z][A-Z0-9_]{2,90}$/u.test(stored.failure?.code || '') ? stored.failure.code : null,
+          reportedStartedAt: startedAt, reportedCompletedAt: completedAt, reportedElapsedMs: stored.elapsedMs,
+          reportPath: 'browser/report.json', reportSha256: sha256 });
+      } catch (receiptError) {
+        failed.artifactStatus = receiptError?.code === 'ENOENT' ? 'ABSENT' : 'INVALID';
+        failed.artifactFailureCode = receiptError?.code === 'ENOENT' ? 'HOSTED_BROWSER_ARTIFACT_ABSENT' : 'HOSTED_BROWSER_ARTIFACT_INVALID';
+      }
+      report.browser = failed;
+    }
+  }
   finally {
     if (lifecycle) {
       try { cleanup = await lifecycle.cleanup(); }

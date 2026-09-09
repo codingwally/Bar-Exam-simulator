@@ -123,6 +123,43 @@ export function finalizeHostedBrowserShutdown(report) {
   if (!verified) report.status = 'FAIL';
 }
 
+const BOOTSTRAP_PATHS = new Set(['/debate-room/events', '/debate-room/discover']);
+const BOOTSTRAP_ERROR_CODES = new Set(['ORIGIN_NOT_ALLOWED', 'STUDY_ROOM_ACCOUNT_UNAVAILABLE',
+  'DEBATE_PREVIEW_RESTRICTED', 'ADMIN_FORBIDDEN', 'ADMIN_DATA_UNAVAILABLE', 'SIGN_IN_REQUIRED',
+  'AUTH_REQUIRED', 'INVALID_TOKEN', 'DEBATE_UNAVAILABLE']);
+
+// Only classifications cross the artifact boundary. Never retain raw headers,
+// response bodies, full navigation URLs or invitation fragments.
+export function summarizeHostedNavigation(value, origin, ownedEventId) {
+  try {
+    const url = new URL(value), params = new URLSearchParams(url.hash.slice(1));
+    return { sameOrigin: url.origin === origin, path: url.pathname === '/debate-room/' ? '/debate-room/' : 'OTHER',
+      hasEvent: params.has('event'), matchesOwnedEvent: !!ownedEventId && params.get('event') === ownedEventId,
+      hasMatch: params.has('match'), hasInvite: params.has('invite') };
+  } catch { return { validUrl: false }; }
+}
+
+export function summarizeHostedBootstrap({ pathname, status, contentType, body, headers = {}, origin }) {
+  assert.ok(BOOTSTRAP_PATHS.has(pathname));
+  assert.ok(Number.isInteger(status) && status >= 100 && status <= 599);
+  const header = name => Object.entries(headers).find(([key]) => key.toLowerCase() === name)?.[1];
+  const suppliedOrigin = header('origin'), referer = header('referer');
+  const classified = (value, choices) => value == null ? 'ABSENT' : choices.includes(value) ? value : 'OTHER';
+  let refererRelation = referer == null ? 'ABSENT' : 'OTHER';
+  try { if (new URL(referer).origin === origin) refererRelation = 'same-origin'; } catch {}
+  const type = typeof contentType === 'string' ? contentType.split(';', 1)[0].trim().toLowerCase() : '';
+  return { path: pathname, status, contentType: classified(type || null, ['application/json', 'text/html']),
+    ok: typeof body?.ok === 'boolean' ? body.ok : null,
+    eventCount: Array.isArray(body?.events) ? body.events.length : null,
+    errorCode: body?.error?.code == null ? null : BOOTSTRAP_ERROR_CODES.has(body.error.code) ? body.error.code : 'OTHER_ERROR',
+    request: { origin: suppliedOrigin == null ? 'ABSENT' : suppliedOrigin === origin ? 'same-origin'
+      : suppliedOrigin === '' ? 'EMPTY' : suppliedOrigin === 'null' ? 'null' : 'OTHER',
+      fetchSite: classified(header('sec-fetch-site'), ['same-origin', 'same-site', 'cross-site', 'none']),
+      fetchMode: classified(header('sec-fetch-mode'), ['cors', 'same-origin', 'no-cors', 'navigate', 'websocket']),
+      fetchDest: classified(header('sec-fetch-dest'), ['empty', 'document', 'iframe', 'script']),
+      referer: refererRelation, authorizationPresent: typeof header('authorization') === 'string' && header('authorization').length > 0 } };
+}
+
 export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSha, workerVersion, outputDir, browserFactory } = {}) {
   assertCiExecution();
   assert.equal(workerUrl, FIXTURE_TARGET.workerUrl);
@@ -145,7 +182,7 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
     defaultFlowDurationMs: 4680000, correctionWindowMs: 900000, credentialsStored: false, rawDomStored: false, tracesStored: false,
     testSha256: sha(await readFile(fileURLToPath(import.meta.url))), checks: [], actions: [], stages: [], downloads: [], screenshots: [],
     unexpectedNetwork: [], pageErrors: [], consoleErrors: [], expectedRejections: [], commandRejections: [],
-    clockClaims: [], bootstrap: [], sessionRefreshes: 0,
+    clockClaims: [], bootstrap: [], navigation: [], sessionRefreshes: 0,
     claims: { actualBrowserDom: true, actualHostedSql: true, syntheticIdentity: true, actualHostedAuth: true,
       mainWorkerBootstrap: true, studyRoomUi: false, physicalMedia: false, providerMedia: false,
       realEmail: false, nativePostgresConcurrency: false, controlEndurance90Minutes: false, hostedDeployment: true, googleOAuth: false },
@@ -158,7 +195,7 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
   const check = (name, condition, detail = {}) => { assert.ok(condition, name); report.checks.push({ name, status: 'PASS', ...detail }); };
   let browser, host, guest, eventId, matchId;
   const origin = workerUrl, appUrl = `${workerUrl}/debate-room/`;
-  const contexts = new Map(), snapshots = new Map(), actorIds = new Map(), captured = [];
+  const contexts = new Map(), snapshots = new Map(), actorIds = new Map(), checkpoints = new Map(), captured = [];
   let trafficSequence = 0;
   const observedRequests = new WeakMap(), manualClaimIntents = new Map();
   let requestSequence = 0, manualClaimSequence = 0;
@@ -197,12 +234,16 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
     await screenshot(host, `live-media-controls-${width}px`);
   };
   const observe = page => {
+    page.on('framenavigated', frame => { if (frame === page.mainFrame()) report.navigation.push({ actorId: actorIds.get(page),
+      checkpoint: checkpoints.get(page) || 'APP_ACTIVITY', at: Date.now(), ...summarizeHostedNavigation(page.url(), origin, eventId) }); });
     page.on('pageerror', error => report.pageErrors.push({ actorId: actorIds.get(page), messageSha256: sha(error.message) }));
     page.on('console', message => { if (message.type() === 'error') { const raw = message.text();
       report.consoleErrors.push({ actorId: actorIds.get(page), message: /^Failed to load resource: the server responded with a status of \d+/.exec(raw)?.[0] || 'REDACTED_BROWSER_ERROR',
         messageSha256: sha(raw), location: (() => { try { return new URL(message.location().url).origin + new URL(message.location().url).pathname; } catch { return 'UNKNOWN'; } })(), at: Date.now() }); } });
     page.on('request', request => {
-      const observation = { requestId: ++requestSequence, actorId: actorIds.get(page), requestedAt: Date.now() };
+      const observation = { requestId: ++requestSequence, actorId: actorIds.get(page), requestedAt: Date.now(),
+        checkpoint: checkpoints.get(page) || 'APP_ACTIVITY' };
+      if (BOOTSTRAP_PATHS.has(new URL(request.url()).pathname)) observation.navigation = summarizeHostedNavigation(page.url(), origin, eventId);
       if (new URL(request.url()).pathname === '/debate-room/command') {
         const input = request.postDataJSON();
         Object.assign(observation, { command: input?.command, eventId: input?.eventId, matchId: input?.payload?.matchId, timerVersion: input?.payload?.timerVersion });
@@ -221,9 +262,13 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
           const purpose = contexts.get(page.context()), session = await response.json();
           if (purpose) await lifecycle.acceptBrowserSession(purpose, session, { refreshResponse: true }); report.sessionRefreshes++; return;
         }
-        if (url.origin === origin && ['/debate-room/events', '/debate-room/discover'].includes(url.pathname) && response.ok()) {
-          const body = await response.json(); assert.ok(body.ok && Array.isArray(body.events));
-          report.bootstrap.push({ actorId: actorIds.get(page), path: url.pathname, status: response.status(), contentType: response.headers()['content-type'] || null }); return;
+        if (url.origin === origin && BOOTSTRAP_PATHS.has(url.pathname)) {
+          const body = await response.json().catch(() => null);
+          report.bootstrap.push({ ...observedRequests.get(response.request()), receivedAt,
+            ...summarizeHostedBootstrap({ pathname: url.pathname, status: response.status(),
+              contentType: response.headers()['content-type'], body, headers: await response.request().allHeaders(), origin }) });
+          if (response.ok()) assert.ok(body?.ok && Array.isArray(body.events));
+          return;
         }
         if (url.origin !== origin || !url.pathname.startsWith('/debate-room/')) return;
         if (!['/debate-room/command', '/debate-room/claim', '/debate-room/snapshot'].includes(url.pathname)) return;
@@ -295,7 +340,7 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
     const serialized = storage.origins.find(item => item.origin === origin)?.localStorage.find(item => item.name === `sb-${FIXTURE_TARGET.projectRef}-auth-token`)?.value;
     await context.close(); await Promise.allSettled([...pendingObservation]);
     if (serialized) await lifecycle.acceptBrowserSession(purpose, JSON.parse(serialized));
-    contexts.delete(context); snapshots.delete(page); actorIds.delete(page);
+    contexts.delete(context); snapshots.delete(page); actorIds.delete(page); checkpoints.delete(page);
   };
   const newPage = async purpose => {
     const session = await lifecycle.sessionFor(purpose);
@@ -320,10 +365,10 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
         await route.abort('blockedbyclient').catch(() => {});
       }
     });
-    const page = await context.newPage(); actorIds.set(page, session.user.id); observe(page);
+    const page = await context.newPage(); actorIds.set(page, session.user.id); checkpoints.set(page, 'INITIAL_BOOTSTRAP'); observe(page);
     page.setDefaultTimeout(30000); page.setDefaultNavigationTimeout(30000);
     const response = await page.goto(appUrl); assert.equal(response?.status(), 200);
-    await waitApp(page); return page;
+    await waitApp(page); checkpoints.set(page, 'APP_ACTIVITY'); return page;
   };
   const closeGuest = async () => { await closePage(guest); guest = null; };
   const useGuest = async (id, { openEvent = true, selectedMatch = matchId } = {}) => {
@@ -392,13 +437,16 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
     report.browser = { version: browser.version(), channel: 'chrome', headless: true, node: process.version, platform: process.platform };
     host = await newPage('host');
     report.eventTitle = `Hosted Debate ${fixtureManifest.runTag} main`;
+    checkpoints.set(host, 'CREATE_EVENT');
     await host.locator('#create-event').click(); await field(host, 'title').fill(report.eventTitle); await field(host, 'rehearsal').check();
     await field(host, 'description').fill('Synthetic Linux CI hosted organizer control rehearsal; physical audio not verified. Real default timers, no live media or outbound email.');
     await field(host, 'visibility').selectOption('unlisted');
     const created = await submit(host, 'create_event'); eventId = created.event.id; report.eventId = eventId;
     await lifecycle.recordEvent({ id: eventId, title: report.eventTitle });
+    checkpoints.set(host, 'RELOAD_OWNED_EVENT');
     await host.reload(); await textIncludes(host, '#event-title', report.eventTitle); await fresh(host);
     check('New event survives actual browser reload', snapshotFor(host).id === eventId);
+    checkpoints.set(host, 'APP_ACTIVITY');
     await command(host, 'check_in', () => host.locator('#check-in').click());
     for (let index = 1; index < 10; index++) {
       await fresh(host); await tab(host, 'participants'); await open(host, 'invite', 'Create invitation');
@@ -594,7 +642,8 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
       && report.expectedRejections.some(rejection => rejection.actorId === error.actorId && rejection.url === error.location && Math.abs(error.at - rejection.at) <= 1500 && error.message.includes(String(rejection.status)));
     check('No unexpected browser console errors', report.consoleErrors.every(error => error.expectedResourceRejection === true));
     check('At most two pages are open', [...contexts.keys()].reduce((n, context) => n + context.pages().length, 0) <= 2);
-    check('Actual main Worker JSON bootstrap includes events and discover', ['/debate-room/events', '/debate-room/discover'].every(route => report.bootstrap.some(item => item.path === route && item.contentType.includes('application/json'))));
+    check('Actual main Worker JSON bootstrap includes events and discover', [...BOOTSTRAP_PATHS].every(route => report.bootstrap.some(item => item.path === route && item.status === 200 && item.ok === true && item.contentType === 'application/json')));
+    check('Every hosted bootstrap request succeeds', report.bootstrap.every(item => item.status === 200 && item.ok === true));
     check('The unchanged default timetable totals 78 minutes before judging', report.stages.reduce((sum, stage) => sum + stage.durationMs, 0) === report.defaultFlowDurationMs);
     check('Real hosted control rehearsal spans at least 93 minutes', Date.now() - started >= 5580000);
     report.claims.controlEndurance90Minutes = true;

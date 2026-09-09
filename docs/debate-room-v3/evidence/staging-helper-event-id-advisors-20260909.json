@@ -1,0 +1,2486 @@
+{
+  "schemaVersion": 1,
+  "kind": "ACTUAL_STAGING_SECURITY_ADVISORS_AFTER_GENERATED_EVENT_ID_HELPER_UPGRADE",
+  "recordedAt": "2026-09-09T15:07:57Z",
+  "projectRef": "hlzqmreeoghbldnhlybr",
+  "status": "NO_HELPER_SCOPE_WARNING_OR_ERROR_OBSERVED",
+  "method": "Read-only Supabase get_advisors(type=security) on the fixed staging project after the separately recorded exact helper upgrade.",
+  "sourceBinding": {
+    "installationReceipt": "docs/debate-room-v3/evidence/staging-helper-event-id-upgrade-20260909.json",
+    "installationStatus": "PASS_EXACT_UPGRADE_AND_PERMISSION_READBACK",
+    "candidateSha": "e9e6608302b78649af3409febb06ed6f16e6c36e",
+    "testedHead": "9a5991d434968170d6051beb9a269c796f8a78fd",
+    "sourceHashes": {
+      "docs/debate-room-v3/evidence/staging-helper-security-advisors-20260909.json": "2ad675aa9228de5fb3255ed9f4d390b4012f32eb3e9f6062ad66695879a63c1b",
+      "docs/debate-room-v3/evidence/staging-helper-event-id-upgrade-20260909.json": "d4a08167f90cc3889a940c74010e46bc4fd19775ad0a775f91de70b0eb1252b6",
+      "supabase/staging/debate-hosted-cleanup.sql": "f6c2c0fffc72c6eb86f4b82b6e11062d9c1aaca5f0019ffc5962b617f85ca8d0",
+      "supabase/staging/debate-hosted-cleanup-event-ids-upgrade.sql": "f56754e3a3a7e2fd1d391c5990184ba72c402444bfff95ef87cd655e04de0aad"
+    },
+    "upgradeMigrationVersion": "20260909150103"
+  },
+  "comparison": {
+    "priorReceipt": "docs/debate-room-v3/evidence/staging-helper-security-advisors-20260909.json",
+    "priorRecordedAt": "2026-09-09T13:51:31.717Z",
+    "groups": [
+      {
+        "name": "rls_enabled_no_policy",
+        "level": "INFO",
+        "previousTotalCount": 245,
+        "currentTotalCount": 245,
+        "totalCountUnchanged": true,
+        "previousScopeCount": 12,
+        "currentScopeCount": 12,
+        "scopeIdentitiesUnchanged": true
+      },
+      {
+        "name": "anon_security_definer_function_executable",
+        "level": "WARN",
+        "previousTotalCount": 1,
+        "currentTotalCount": 1,
+        "totalCountUnchanged": true,
+        "previousScopeCount": 0,
+        "currentScopeCount": 0,
+        "scopeIdentitiesUnchanged": true
+      },
+      {
+        "name": "authenticated_security_definer_function_executable",
+        "level": "WARN",
+        "previousTotalCount": 11,
+        "currentTotalCount": 11,
+        "totalCountUnchanged": true,
+        "previousScopeCount": 0,
+        "currentScopeCount": 0,
+        "scopeIdentitiesUnchanged": true
+      },
+      {
+        "name": "auth_leaked_password_protection",
+        "level": "WARN",
+        "previousTotalCount": 1,
+        "currentTotalCount": 1,
+        "totalCountUnchanged": true,
+        "previousScopeCount": 0,
+        "currentScopeCount": 0,
+        "scopeIdentitiesUnchanged": true
+      }
+    ],
+    "helperFindings": [],
+    "scopedWarningOrErrorFindings": [],
+    "limitations": "The prior receipt retained scoped object details and aggregate counts for unrelated advisories. Matching unrelated counts does not prove every unrelated finding identity is unchanged."
+  },
+  "assessment": "No advisor finding names either cleanup helper function. The same twelve Debate/Study admission RLS-without-policy INFO object identities remain, consistent with the intentionally service-only tables and separately verified privileges. Aggregate counts match the prior receipt: 245 INFO and 13 WARN findings. All returned unrelated findings are preserved below; none was altered or dismissed.",
+  "remainingVerificationGaps": [
+    "Security advisors are not a complete security audit or approval for production release.",
+    "The separate upgrade receipt supplies actual function-body, ACL and role-denial proof; this advisor read does not rerun those SQL probes.",
+    "PostgREST statement-timeout hoisting remains unverified."
+  ],
+  "actualToolResult": {
+    "isError": false,
+    "result": {
+      "lints": [
+        {
+          "name": "rls_enabled_no_policy",
+          "title": "RLS Enabled No Policy",
+          "level": "INFO",
+          "facing": "EXTERNAL",
+          "categories": [
+            "SECURITY"
+          ],
+          "description": "Detects cases where row level security (RLS) has been enabled on a table but no RLS policies have been created.",
+          "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy",
+          "count": 245,
+          "findings": [
+            {
+              "detail": "Table \\`examination_room_v1.answer_revisions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "answer_revisions",
+                "type": "table",
+                "schema": "examination_room_v1"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`examination_room_v1.audit_events\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "audit_events",
+                "type": "table",
+                "schema": "examination_room_v1"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`examination_room_v1.email_delivery_events\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "email_delivery_events",
+                "type": "table",
+                "schema": "examination_room_v1"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`examination_room_v1.exam_roster\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_roster",
+                "type": "table",
+                "schema": "examination_room_v1"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`examination_room_v1.exam_versions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_versions",
+                "type": "table",
+                "schema": "examination_room_v1"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`examination_room_v1.exams\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exams",
+                "type": "table",
+                "schema": "examination_room_v1"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`examination_room_v1.grade_revision_items\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "grade_revision_items",
+                "type": "table",
+                "schema": "examination_room_v1"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`examination_room_v1.grade_revisions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "grade_revisions",
+                "type": "table",
+                "schema": "examination_room_v1"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`examination_room_v1.institutions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "institutions",
+                "type": "table",
+                "schema": "examination_room_v1"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`examination_room_v1.media_upload_intents\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "media_upload_intents",
+                "type": "table",
+                "schema": "examination_room_v1"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`examination_room_v1.owner_identity_corrections\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "owner_identity_corrections",
+                "type": "table",
+                "schema": "examination_room_v1"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`examination_room_v1.owner_key_envelopes\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "owner_key_envelopes",
+                "type": "table",
+                "schema": "examination_room_v1"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`examination_room_v1.privacy_acceptances\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "privacy_acceptances",
+                "type": "table",
+                "schema": "examination_room_v1"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`examination_room_v1.privacy_notice_versions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "privacy_notice_versions",
+                "type": "table",
+                "schema": "examination_room_v1"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`examination_room_v1.proctoring_artifacts\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "proctoring_artifacts",
+                "type": "table",
+                "schema": "examination_room_v1"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`examination_room_v1.proctoring_incidents\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "proctoring_incidents",
+                "type": "table",
+                "schema": "examination_room_v1"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`examination_room_v1.professor_access_requests\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "professor_access_requests",
+                "type": "table",
+                "schema": "examination_room_v1"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`examination_room_v1.questions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "questions",
+                "type": "table",
+                "schema": "examination_room_v1"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`examination_room_v1.recovery_snapshots\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "recovery_snapshots",
+                "type": "table",
+                "schema": "examination_room_v1"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`examination_room_v1.result_email_delivery_events\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "result_email_delivery_events",
+                "type": "table",
+                "schema": "examination_room_v1"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`examination_room_v1.result_releases\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "result_releases",
+                "type": "table",
+                "schema": "examination_room_v1"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`examination_room_v1.room_activations\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "room_activations",
+                "type": "table",
+                "schema": "examination_room_v1"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`examination_room_v1.staff_memberships\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "staff_memberships",
+                "type": "table",
+                "schema": "examination_room_v1"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`examination_room_v1.student_identities\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "student_identities",
+                "type": "table",
+                "schema": "examination_room_v1"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`examination_room_v1.student_sessions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "student_sessions",
+                "type": "table",
+                "schema": "examination_room_v1"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`examination_room_v1.submission_answers\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "submission_answers",
+                "type": "table",
+                "schema": "examination_room_v1"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`examination_room_v1.submission_receipts\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "submission_receipts",
+                "type": "table",
+                "schema": "examination_room_v1"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`examination_room_v1.submissions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "submissions",
+                "type": "table",
+                "schema": "examination_room_v1"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`private.bar_simulation_timer_recovery\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "bar_simulation_timer_recovery",
+                "type": "table",
+                "schema": "private"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`private.internal_test_accounts\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "internal_test_accounts",
+                "type": "table",
+                "schema": "private"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`private.study_room_admission_commands\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "study_room_admission_commands",
+                "type": "table",
+                "schema": "private"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`private.study_room_admissions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "study_room_admissions",
+                "type": "table",
+                "schema": "private"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`private.study_room_catalog\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "study_room_catalog",
+                "type": "table",
+                "schema": "private"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`private.study_room_catalog_audit\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "study_room_catalog_audit",
+                "type": "table",
+                "schema": "private"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.access_trials\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "access_trials",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.account_recovery_audit\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "account_recovery_audit",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.account_recovery_cases\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "account_recovery_cases",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.admin_action_requests\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "admin_action_requests",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.admin_audit_log\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "admin_audit_log",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.admin_capabilities\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "admin_capabilities",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.admin_pulse_deliveries\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "admin_pulse_deliveries",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.admin_pulse_events\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "admin_pulse_events",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.admin_pulse_push_subscriptions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "admin_pulse_push_subscriptions",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.auxiliary_writing_diagnostic_jobs\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "auxiliary_writing_diagnostic_jobs",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.auxiliary_writing_diagnostics\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "auxiliary_writing_diagnostics",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.bar_feels_manifest\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "bar_feels_manifest",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.bar_simulation_allocation_questions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "bar_simulation_allocation_questions",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.bar_simulation_allocations\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "bar_simulation_allocations",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.bar_simulation_answered_questions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "bar_simulation_answered_questions",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.bar_simulation_pool_staging_v1\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "bar_simulation_pool_staging_v1",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.bar_simulation_pool_syncs\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "bar_simulation_pool_syncs",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.bar_simulation_private_versions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "bar_simulation_private_versions",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.bar_simulation_question_pool\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "bar_simulation_question_pool",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.bar_simulation_runtime_config\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "bar_simulation_runtime_config",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.bar_simulation_start_receipts\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "bar_simulation_start_receipts",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.calibration_examples\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "calibration_examples",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.commercial_access_choices\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "commercial_access_choices",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.commercial_launch_rollback_snapshots\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "commercial_launch_rollback_snapshots",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.dd2026_bar_easy_usage\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "dd2026_bar_easy_usage",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.dd2026_bar_forecast_consents\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "dd2026_bar_forecast_consents",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.dd2026_content_audit\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "dd2026_content_audit",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.dd2026_content_items\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "dd2026_content_items",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.dd2026_content_roles\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "dd2026_content_roles",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.dd2026_content_versions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "dd2026_content_versions",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.dd2026_doctrine_mastery\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "dd2026_doctrine_mastery",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.dd2026_feature_flags\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "dd2026_feature_flags",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.dd2026_forecast_analytics_exports\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "dd2026_forecast_analytics_exports",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.dd2026_forecast_analytics_requests\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "dd2026_forecast_analytics_requests",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.dd2026_forecast_attempt_events\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "dd2026_forecast_attempt_events",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.dd2026_forecast_attempts\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "dd2026_forecast_attempts",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.dd2026_forecast_batches\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "dd2026_forecast_batches",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.dd2026_forecast_result_exports\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "dd2026_forecast_result_exports",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.dd2026_verdict_pdf_exports\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "dd2026_verdict_pdf_exports",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.debate_v3_audit\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "debate_v3_audit",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.debate_v3_ballots\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "debate_v3_ballots",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.debate_v3_events\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "debate_v3_events",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.debate_v3_maintenance\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "debate_v3_maintenance",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.debate_v3_match_versions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "debate_v3_match_versions",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.debate_v3_outbox\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "debate_v3_outbox",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.debate_v3_rate_limits\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "debate_v3_rate_limits",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.debate_v3_receipts\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "debate_v3_receipts",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.debate_v3_uploads\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "debate_v3_uploads",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.debate_v3_votes\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "debate_v3_votes",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.discount_assignments\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "discount_assignments",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.discount_codes\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "discount_codes",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.entitlement_history\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "entitlement_history",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_accommodations\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_accommodations",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_activation_attempt_windows\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_activation_attempt_windows",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_admin_break_glass_events\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_admin_break_glass_events",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_admin_break_glass_grants\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_admin_break_glass_grants",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_admissions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_admissions",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_answer_conflict_branches\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_answer_conflict_branches",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_answer_operations\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_answer_operations",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_answer_revisions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_answer_revisions",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_answers\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_answers",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_attempts\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_attempts",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_audit_events_v2\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_audit_events_v2",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_audit_log\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_audit_log",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_authoring_drafts\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_authoring_drafts",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_backup_outbox\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_backup_outbox",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_beadle_assignments\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_beadle_assignments",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_beadle_invitations\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_beadle_invitations",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_candidate_access_controls\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_candidate_access_controls",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_candidate_releases\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_candidate_releases",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_class_result_exports\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_class_result_exports",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_classrooms\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_classrooms",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_command_receipts\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_command_receipts",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_credential_windows\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_credential_windows",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_credentials\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_credentials",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_deadline_extensions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_deadline_extensions",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_dispute_reviews\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_dispute_reviews",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_email_delivery_events\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_email_delivery_events",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_email_jobs\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_email_jobs",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_errata\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_errata",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_exams\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_exams",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_grade_history\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_grade_history",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_grades\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_grades",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_grading_memberships\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_grading_memberships",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_identity_verifications\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_identity_verifications",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_incident_groups\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_incident_groups",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_integrity_events\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_integrity_events",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_leave_events\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_leave_events",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_model_answer_sources\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_model_answer_sources",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_professor_activations\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_professor_activations",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_professors\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_professors",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_publication_model_answers\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_publication_model_answers",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_publications\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_publications",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_question_sources\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_question_sources",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_question_versions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_question_versions",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_questions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_questions",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_releases\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_releases",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_request_payment_proofs\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_request_payment_proofs",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_requests\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_requests",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_result_exports\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_result_exports",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_result_release_batches\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_result_release_batches",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_roster\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_roster",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_roster_template_validations\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_roster_template_validations",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_roster_versions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_roster_versions",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_session_events\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_session_events",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_sessions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_sessions",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_student_access_issuances\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_student_access_issuances",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_student_code_attempt_windows\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_student_code_attempt_windows",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_submission_receipts\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_submission_receipts",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_submission_reopenings\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_submission_reopenings",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_submissions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_submissions",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_temporary_leaves\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_temporary_leaves",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.exam_room_user_exam_dismissals\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "exam_room_user_exam_dismissals",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.examination_ai_assessments\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "examination_ai_assessments",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.examination_attempts_multi\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "examination_attempts_multi",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.examination_audit_log\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "examination_audit_log",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.examination_beta_access\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "examination_beta_access",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.examination_command_receipts\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "examination_command_receipts",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.examination_definitions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "examination_definitions",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.examination_examiner_assignments\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "examination_examiner_assignments",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.examination_examiner_reviews\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "examination_examiner_reviews",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.examination_grading_jobs\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "examination_grading_jobs",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.examination_model_releases\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "examination_model_releases",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.examination_notifications\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "examination_notifications",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.examination_participants\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "examination_participants",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.examination_questions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "examination_questions",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.examination_responses\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "examination_responses",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.examination_submissions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "examination_submissions",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.examination_uploads\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "examination_uploads",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.examination_version_questions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "examination_version_questions",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.examination_versions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "examination_versions",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.feature_question_issuances\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "feature_question_issuances",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.feature_question_rotation_receipts\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "feature_question_rotation_receipts",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.feature_question_rotations\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "feature_question_rotations",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.forum_action_events\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "forum_action_events",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.forum_anonymous_aliases\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "forum_anonymous_aliases",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.forum_anonymous_identity_audits\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "forum_anonymous_identity_audits",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.forum_circle_members\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "forum_circle_members",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.forum_comments\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "forum_comments",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.forum_entry_indicators\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "forum_entry_indicators",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.forum_notifications\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "forum_notifications",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.forum_post_attachments\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "forum_post_attachments",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.forum_posts\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "forum_posts",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.forum_profile_avatar_cleanup_jobs\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "forum_profile_avatar_cleanup_jobs",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.forum_profile_avatars\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "forum_profile_avatars",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.forum_profile_settings\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "forum_profile_settings",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.forum_reactions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "forum_reactions",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.forum_reports\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "forum_reports",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.forum_reposts\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "forum_reposts",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.forum_saved_entries\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "forum_saved_entries",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.forum_study_circles\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "forum_study_circles",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.forum_telemetry_events\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "forum_telemetry_events",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.forum_user_blocks\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "forum_user_blocks",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.forum_user_restrictions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "forum_user_restrictions",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.founding_beta_invites\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "founding_beta_invites",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.free_beta_access\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "free_beta_access",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.free_beta_access_history\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "free_beta_access_history",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.global_beta_all_access_history\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "global_beta_all_access_history",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.grade_reservations\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "grade_reservations",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.guest_grading_devices\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "guest_grading_devices",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.guest_grading_reservations\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "guest_grading_reservations",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.guest_grading_usage\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "guest_grading_usage",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.introductory_token_grants\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "introductory_token_grants",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.introductory_token_ledger\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "introductory_token_ledger",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.lifetime_grade_usage\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "lifetime_grade_usage",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.outbound_notifications\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "outbound_notifications",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.partnership_inquiries\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "partnership_inquiries",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.partnership_inquiry_history\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "partnership_inquiry_history",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.payment_request_history\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "payment_request_history",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.payment_requests\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "payment_requests",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.payment_term_repair_journal\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "payment_term_repair_journal",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.payment_verification_recipients\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "payment_verification_recipients",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.pedro_actions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "pedro_actions",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.pedro_threads\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "pedro_threads",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.pedro_turns\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "pedro_turns",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.plan_catalog\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "plan_catalog",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.platform_access_settings\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "platform_access_settings",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.pricing_assets\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "pricing_assets",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.pricing_payment_channel_versions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "pricing_payment_channel_versions",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.pricing_plan_versions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "pricing_plan_versions",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.pricing_publication_events\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "pricing_publication_events",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.pricing_revisions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "pricing_revisions",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.private_beta_acceptances\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "private_beta_acceptances",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.private_beta_admissions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "private_beta_admissions",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.private_beta_code_attempts\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "private_beta_code_attempts",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.private_beta_pending_tokens\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "private_beta_pending_tokens",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.private_beta_sessions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "private_beta_sessions",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.private_beta_settings\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "private_beta_settings",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.professor_license_declarations\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "professor_license_declarations",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.provider_incidents\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "provider_incidents",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.question_correction_history\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "question_correction_history",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.question_corrections\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "question_corrections",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.refund_request_history\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "refund_request_history",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.refund_requests\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "refund_requests",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.release_content_syncs\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "release_content_syncs",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.release_subject_matter_payload_parts\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "release_subject_matter_payload_parts",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.study_annotations\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "study_annotations",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.subject_matter_cycles\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "subject_matter_cycles",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.subject_matter_incremental_staging_v1\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "subject_matter_incremental_staging_v1",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.subject_matter_incremental_syncs_v1\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "subject_matter_incremental_syncs_v1",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.subject_matter_placements\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "subject_matter_placements",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.subscription_history\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "subscription_history",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.subscriptions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "subscriptions",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.support_request_history\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "support_request_history",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.support_requests\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "support_requests",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.usage_events\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "usage_events",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.usage_sessions\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "usage_sessions",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.user_sign_in_events\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "user_sign_in_events",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.verdict_archived_records\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "verdict_archived_records",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.website_control_history\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "website_control_history",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Table \\`public.website_controls\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "website_controls",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            }
+          ]
+        },
+        {
+          "name": "anon_security_definer_function_executable",
+          "title": "Public Can Execute SECURITY DEFINER Function",
+          "level": "WARN",
+          "facing": "EXTERNAL",
+          "categories": [
+            "SECURITY"
+          ],
+          "description": "Detects `SECURITY DEFINER` functions that are callable without signing in. Revoke `EXECUTE`, switch the function to `SECURITY INVOKER`, or move it out of your exposed API schema if it is not meant to be public.",
+          "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable",
+          "count": 1,
+          "findings": [
+            {
+              "detail": "Function `public.handle_due_diligence_auth_user()` can be executed by the `anon` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/handle_due_diligence_auth_user`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+              "metadata": {
+                "name": "handle_due_diligence_auth_user",
+                "schema": "public",
+                "language": "plpgsql",
+                "arguments": "",
+                "security_definer": true
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            }
+          ]
+        },
+        {
+          "name": "authenticated_security_definer_function_executable",
+          "title": "Signed-In Users Can Execute SECURITY DEFINER Function",
+          "level": "WARN",
+          "facing": "EXTERNAL",
+          "categories": [
+            "SECURITY"
+          ],
+          "description": "Detects `SECURITY DEFINER` functions that are callable by signed-in users. Revoke `EXECUTE`, switch the function to `SECURITY INVOKER`, or move it out of your exposed API schema if signed-in users should not call it.",
+          "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable",
+          "count": 11,
+          "findings": [
+            {
+              "detail": "Function `public.accept_terms(p_terms_version text, p_privacy_version text, p_acceptance_source text)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/accept_terms`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+              "metadata": {
+                "name": "accept_terms",
+                "schema": "public",
+                "language": "plpgsql",
+                "arguments": "p_terms_version text, p_privacy_version text, p_acceptance_source text",
+                "security_definer": true
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Function `public.assign_user_role(p_target_user_id uuid, p_role text, p_reason text)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/assign_user_role`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+              "metadata": {
+                "name": "assign_user_role",
+                "schema": "public",
+                "language": "plpgsql",
+                "arguments": "p_target_user_id uuid, p_role text, p_reason text",
+                "security_definer": true
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Function `public.complete_commercial_profile_onboarding(p_display_name text, p_law_school_id text, p_law_school_other text, p_category text, p_professor_license_number text, p_terms_version text, p_privacy_version text)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/complete_commercial_profile_onboarding`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+              "metadata": {
+                "name": "complete_commercial_profile_onboarding",
+                "schema": "public",
+                "language": "plpgsql",
+                "arguments": "p_display_name text, p_law_school_id text, p_law_school_other text, p_category text, p_professor_license_number text, p_terms_version text, p_privacy_version text",
+                "security_definer": true
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Function `public.complete_commercial_profile_onboarding_v2(p_display_name text, p_law_school_id text, p_law_school_other text, p_category text, p_professor_license_number text, p_terms_version text, p_privacy_version text, p_trial_disclosure_version text, p_trial_acknowledged boolean)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/complete_commercial_profile_onboarding_v2`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+              "metadata": {
+                "name": "complete_commercial_profile_onboarding_v2",
+                "schema": "public",
+                "language": "plpgsql",
+                "arguments": "p_display_name text, p_law_school_id text, p_law_school_other text, p_category text, p_professor_license_number text, p_terms_version text, p_privacy_version text, p_trial_disclosure_version text, p_trial_acknowledged boolean",
+                "security_definer": true
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Function `public.complete_profile_onboarding(p_display_name text, p_school text, p_enrollment_status text, p_year_level text, p_terms_version text, p_privacy_version text)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/complete_profile_onboarding`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+              "metadata": {
+                "name": "complete_profile_onboarding",
+                "schema": "public",
+                "language": "plpgsql",
+                "arguments": "p_display_name text, p_school text, p_enrollment_status text, p_year_level text, p_terms_version text, p_privacy_version text",
+                "security_definer": true
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Function `public.current_user_role()` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/current_user_role`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+              "metadata": {
+                "name": "current_user_role",
+                "schema": "public",
+                "language": "sql",
+                "arguments": "",
+                "security_definer": true
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Function `public.handle_due_diligence_auth_user()` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/handle_due_diligence_auth_user`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+              "metadata": {
+                "name": "handle_due_diligence_auth_user",
+                "schema": "public",
+                "language": "plpgsql",
+                "arguments": "",
+                "security_definer": true
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Function `public.is_admin()` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/is_admin`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+              "metadata": {
+                "name": "is_admin",
+                "schema": "public",
+                "language": "sql",
+                "arguments": "",
+                "security_definer": true
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Function `public.is_super_admin()` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/is_super_admin`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+              "metadata": {
+                "name": "is_super_admin",
+                "schema": "public",
+                "language": "sql",
+                "arguments": "",
+                "security_definer": true
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Function `public.phase4_choose_access(p_choice text, p_request_key text)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/phase4_choose_access`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+              "metadata": {
+                "name": "phase4_choose_access",
+                "schema": "public",
+                "language": "plpgsql",
+                "arguments": "p_choice text, p_request_key text",
+                "security_definer": true
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            },
+            {
+              "detail": "Function `public.record_ai_improvement_consent(p_opted_in boolean, p_consent_version text, p_source text)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/record_ai_improvement_consent`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+              "metadata": {
+                "name": "record_ai_improvement_consent",
+                "schema": "public",
+                "language": "plpgsql",
+                "arguments": "p_opted_in boolean, p_consent_version text, p_source text",
+                "security_definer": true
+              },
+              "observed_at": "2026-09-09T15:07:54.707Z"
+            }
+          ]
+        },
+        {
+          "name": "auth_leaked_password_protection",
+          "title": "Leaked Password Protection Disabled",
+          "level": "WARN",
+          "facing": "EXTERNAL",
+          "categories": [
+            "SECURITY"
+          ],
+          "description": "Leaked password protection is currently disabled.",
+          "remediation": "https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection",
+          "count": 1,
+          "findings": [
+            {
+              "detail": "Supabase Auth prevents the use of compromised passwords by checking against HaveIBeenPwned.org. Enable this feature to enhance security.",
+              "metadata": {
+                "type": "auth",
+                "entity": "Auth"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "databaseMutations": false,
+  "providerMutations": false,
+  "productionTouched": false
+}

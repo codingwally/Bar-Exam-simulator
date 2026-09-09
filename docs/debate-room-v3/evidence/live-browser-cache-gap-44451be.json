@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-09T20:39:57.781Z",
+  "candidate": "44451be2f1cc677993d78039400eac4fbd157a0d",
+  "status": "FAIL_RETURNING_BROWSER_REUSES_OLD_ROOM_MODULES",
+  "source": "Actual signed-in Chrome tab 1879717059; ordinary reload and browser network response observations",
+  "url": "https://duediligence.ph/debate-room/",
+  "productionDataCreated": false,
+  "observations": [
+    "Updated HTML labels Invitation link or event reference and Invitation code (only needed with an event reference) are visible.",
+    "Empty lobby still displays Cannot read properties of undefined (reading timer) after ordinary reload and more than ten seconds.",
+    "Create debate opens the setup form; Cancel returns to the lobby without saving.",
+    "Setup form shows Practice debate (excluded from competition standings)."
+  ],
+  "browserNetwork": [
+    {
+      "path": "/assets/debate-room.js?v=debate-v3-20260909",
+      "status": 200,
+      "fromDiskCache": true,
+      "fromServiceWorker": false
+    },
+    {
+      "path": "/assets/debate-media.js",
+      "status": 200,
+      "fromDiskCache": true,
+      "fromServiceWorker": false
+    },
+    {
+      "path": "/assets/debate-room.css?v=debate-v3-20260909",
+      "status": 200,
+      "fromDiskCache": false,
+      "fromServiceWorker": false
+    }
+  ],
+  "independentFreshHttpReceipt": "artifacts/debate-local-rehearsal/public-normal-dependencies-44451be.json",
+  "currentCodeAvailableFromServer": true,
+  "returningBrowserFixVerified": false,
+  "limitation": "Publishing current bytes did not invalidate previously cached script URLs. Complete live wording, lobby fix, and Study refresh behavior remain unverified for returning visitors."
+}

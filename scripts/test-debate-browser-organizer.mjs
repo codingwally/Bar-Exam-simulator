@@ -339,7 +339,7 @@ export async function runBrowserOrganizer() {
       await field(host, 'text').fill(`This house would expand access to community learning resources, rehearsal motion ${n}.`); await submit(host, 'add_motion');
     }
     await tab(host, 'schedule'); await open(host, 'fixtures', 'Generate pairings'); await field(host, 'format').selectOption('round_robin'); await submit(host, 'generate_fixtures');
-    await textIncludes(host, '#schedule-content', 'Review draft fixtures'); await screenshot(host, 'reviewed-fixture');
+    await textIncludes(host, '#schedule-content', 'Review draft pairings'); await screenshot(host, 'reviewed-fixture');
     await open(host, 'publish-fixtures', 'Publish reviewed pairings'); await host.locator('#dialog-fields input[type="checkbox"]').check(); await submit(host, 'publish_fixtures');
     await open(host, 'fixture-match', 'Set up scheduled match');
     check('Published fixture fixes both teams and motion in the dialog', await field(host, 'affirmative').isDisabled() && await field(host, 'negative').isDisabled() && await field(host, 'motionId').isDisabled());

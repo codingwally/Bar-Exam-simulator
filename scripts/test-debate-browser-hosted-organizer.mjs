@@ -323,7 +323,7 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
     check('Timer options expose all four existing secondary controls without running an action', true);
     await host.locator('.timer-options summary').click();
   };
-  const checkLiveMediaLayout = async (width, height = 900) => {
+  const checkLiveMediaLayout = async (width, height = 900, imageLabel = 'live-media-controls') => {
     await host.setViewportSize({ width, height });
     await host.locator('.site-header').scrollIntoViewIfNeeded();
     const selectors = ['.media-dock', '#arena', '.judges-rail', '#affirmative-name', '#negative-name'];
@@ -380,6 +380,18 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
       }
       const floorScroll = await host.locator('.floor').evaluate(element => ({ height: element.clientHeight, scrollHeight: element.scrollHeight }));
       check('The clock and main timer controls fit together without inner scrolling', floorScroll.scrollHeight <= floorScroll.height + 1, { width, height, floorScroll });
+      if (await host.locator('#clock.overtime').count()) {
+        const clockGeometry = await host.locator('#clock').evaluate(element => ({ fontSize: parseFloat(getComputedStyle(element).fontSize),
+          lineHeight: parseFloat(getComputedStyle(element).lineHeight), height: element.clientHeight, width: element.clientWidth,
+          scrollHeight: element.scrollHeight, scrollWidth: element.scrollWidth }));
+        check('Desktop overtime is readable on one complete line without clipping', clockGeometry.fontSize >= 28
+          && clockGeometry.height <= clockGeometry.lineHeight + 2 && clockGeometry.scrollHeight <= clockGeometry.height + 1
+          && clockGeometry.scrollWidth <= clockGeometry.width + 1, { width, height, clockGeometry });
+        const current = matchFor(host), seats = current.runOfShow[current.currentStageIndex].speakerSeats;
+        const speakerText = await host.locator('#speaker-label').textContent();
+        check('Both questioning participants retain their complete names beside overtime', seats.length === 2
+          && seats.every(seat => speakerText.includes(snapshotFor(host).members.find(person => person.id === current.seats[seat]).displayName)));
+      }
       const scroll = await host.locator('html').evaluate(element => ({ width: element.clientWidth, height: element.clientHeight,
         scrollWidth: element.scrollWidth, scrollHeight: element.scrollHeight, x: window.scrollX, y: window.scrollY }));
       check('Desktop live view has no outer page scroll at ' + width + 'x' + height,
@@ -401,7 +413,7 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
       }
       check('Narrow adjudicator and observer tiles reserve separate Pin, initials and caption areas', true, { width, tiles });
     }
-    await screenshot(host, `live-media-controls-${width}x${height}`);
+    await screenshot(host, `${imageLabel}-${width}x${height}`);
   };
   const observe = page => {
     page.on('framenavigated', frame => { if (frame === page.mainFrame()) report.navigation.push({ actorId: actorIds.get(page),
@@ -713,7 +725,10 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
       }
       await waitReal(stage.durationMs + 1100); await host.locator('#clock.overtime').waitFor();
       check(stage.id + ' runs into visible overtime without auto-advance', matchFor(host).timer.state === 'RUNNING' && matchFor(host).runOfShow[matchFor(host).currentStageIndex].id === stage.id);
-      if (stage.id === 'stage-02') await screenshot(host, 'questioning-overtime');
+      if (stage.id === 'stage-02') {
+        await checkLiveMediaLayout(1365, 768, 'questioning-overtime'); await checkLiveMediaLayout(1280, 720, 'questioning-overtime');
+        await host.setViewportSize({ width: 1365, height: 900 }); await screenshot(host, 'questioning-overtime');
+      }
       await command(host, 'claim_clock', () => action(host, 'claim-clock').click());
       await command(host, 'timer', () => action(host, 'timer', '[data-type="FINISH"]').click()); await textIncludes(host, '#clock-status', 'FINISHED');
       const finished = matchFor(host), attempt = finished.attempts.find(item => item.id === finished.timer.stageAttemptId);

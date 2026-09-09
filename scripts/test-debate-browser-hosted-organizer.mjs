@@ -636,7 +636,9 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
       report.actions.push({ command: 'claim_invite', actorId: ACTOR(index), eventId, revision: claimBody.event.revision, via: 'invitation-link DOM form' });
       await textIncludes(guest, '#overview-content', 'Waiting for the host');
       check('Unadmitted identity receives only its own waiting snapshot', claimBody.event.awaitingAdmission === true && claimBody.event.members.length === 1 && claimBody.event.matches.length === 0 && claimBody.event.motions.length === 0);
-      check('Waiting participant cannot open other workspaces', await guest.locator('#event-tabs button:disabled').count() === 8);
+      check('Waiting participant cannot open other workspaces', await guest.locator('#event-tabs button[data-panel]:disabled').count() === 8);
+      check('Waiting participant cannot open supporting room tools', await guest.locator('[data-live-tool]:disabled').count() === 4
+        && await guest.locator('[data-live-tool]:visible').count() === 0 && !await guest.locator('#live-tools-dialog').isVisible());
       if (index === 9) await screenshot(guest, 'observer-waiting');
       await command(guest, 'check_in', () => guest.locator('#check-in').click());
       await fresh(host); await tab(host, 'participants'); await command(host, 'admit_member', () => action(host, 'admit', `[data-person="${ACTOR(index)}"]`).click());

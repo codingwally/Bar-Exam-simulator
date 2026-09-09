@@ -107,7 +107,9 @@ function rowsFor(document) {
     }
     line('Published', date(result.publishedAt, rules.timezone)); line(result.state === 'FINAL' ? 'Finalized' : 'Correction deadline', date(result.finalizedAt || result.correctionDeadline, rules.timezone));
     heading('Speech awards');
-    if (result.state !== 'FINAL') para('Awards await finalization.'); else awards(result.awards);
+    if (result.state !== 'FINAL') para('Awards await finalization.');
+    else if (['bestSpeaker', 'bestInterpellator', 'bestRebuttalSpeaker', 'bestDebater'].some(key => result.awards?.[key])) awards(result.awards);
+    else { para('No speech awards are available for this result.'); if (result.awards?.reason) para(result.awards.reason); }
     heading('Audience Choice');
     para('Audience Choice is a separate audience result. It does not change this official decision or award eligibility.');
     const poll = document.audienceChoice?.state === 'Published' && document.audienceChoice.result?.published ? document.audienceChoice.result : null;
@@ -128,7 +130,7 @@ function rowsFor(document) {
       for (const fixture of document.fixtures || []) line(`Round ${fixture.round} - ${fixture.id}`, `${fixture.affirmativeTeamId ? name(fixture.affirmativeTeamId) : 'Awaiting earlier match result'} vs ${fixture.negativeTeamId ? name(fixture.negativeTeamId) : 'Awaiting earlier match result'}; ${label(fixture.status)}${fixture.winnerTeamId ? `; winner ${name(fixture.winnerTeamId)}` : ''}${fixture.requiresReview ? '; correction review required' : ''}`);
       heading('Tournament awards');
       const tournament = document.eventAwards;
-      para(`At least ${tournament?.minimumMatches || 2} actual completed comparable matches are required. Different rubrics are evaluated separately. Rehearsal and exceptional unplayed results do not supply invented scores.`);
+      para(`At least ${tournament?.minimumMatches || 2} actual completed comparable matches are required. Different rubrics are evaluated separately. Practice matches and unplayed results do not count toward these awards.`);
       if (tournament?.reason) para(tournament.reason);
       if (!tournament?.comparableGroups?.length) para('No eligible comparable tournament group is available.');
       for (const [index, group] of (tournament?.comparableGroups || []).entries()) { heading(`Comparable rubric group ${index + 1}`); awards(group, true); }

@@ -28,27 +28,60 @@ test('capture refuses forks, another actor, stale labels, a changed branch and a
 function remoteFixture() {
   return {
     deployments: { deployments: [{ id: 'deployment-one', versions: [{ version_id: versionId, percentage: 100 }] }] },
-    settings: { compatibility_date: base.compatibilityDate, compatibility_flags: base.compatibilityFlags, placement: { region: 'gcp:us-east4' },
+    settings: { compatibility_date: base.compatibilityDate, compatibility_flags: base.compatibilityFlags, placement: { mode: 'targeted', target: [10] },
       bindings: [...Object.entries(base.vars).map(([name, text]) => ({ name, text, type: 'plain_text' })), ...policy.requiredSecretNames.map(name => ({ name, type: 'secret_text', text: 'DO_NOT_PERSIST_SECRET_VALUE' }))] },
-    scriptSettings: { observability: { enabled: true, logs: { enabled: true } }, logpush: false, tail_consumers: [] },
-    version: { id: versionId, resources: { script_runtime: { exports: { default: { cache: { enabled: false } } } } } },
-    service: { default_environment: { environment: 'production', script: { placement_mode: 'targeted', placement: { region: 'gcp:us-east4' } } } },
+    scriptSettings: { observability: { enabled: true, head_sampling_rate: 1, redact_query_string: false,
+      logs: { enabled: true, head_sampling_rate: 1, persist: true, invocation_logs: true }, traces: { enabled: false, head_sampling_rate: 1, persist: true } }, logpush: false, tail_consumers: [] },
+    version: { id: versionId, resources: { script_runtime: {} } },
+    service: { default_environment: { environment: 'production', script: { placement_mode: 'targeted', placement: { mode: 'targeted', target: [{ region: 'gcp:us-east4' }] } } } },
     schedules: { schedules: [{ cron: '*/2 * * * *' }] }, subdomain: { enabled: true, previews_enabled: true },
   };
 }
 const baseline = () => sanitizeBaseline(remoteFixture(), base);
 
-test('derived configuration preserves every base byte apart from path resolution and its additive closed Debate overlay', () => {
+test('derived configuration preserves base bytes with the additive closed Debate and exact captured logging overlays', () => {
   const result = buildConfig(base, policy, preview, '/local/artifact', ROOT);
   const additions = { ...policy.debateVars, DEBATE_PREVIEW_ACTOR_IDS: preview };
   let restored = result.text.replace('keep_vars = true\n', '');
   for (const [key, value] of Object.entries(additions)) restored = restored.replace(`${key} = ${JSON.stringify(value)}\n`, '');
   restored = restored.replace(/^main\s*=.*$/m, 'main = "commercial-entry.mjs"').replace(/^directory\s*=.*$/m, 'directory = "../.staging-dist"');
+  const fullObservability = '[observability]\nenabled = true\nhead_sampling_rate = 1\nredact_query_string = false\n\n[observability.logs]\nenabled = true\nhead_sampling_rate = 1\npersist = true\ninvocation_logs = true\n\n[observability.traces]\nenabled = false\nhead_sampling_rate = 1\npersist = true\n\n';
+  assert.ok(result.text.replaceAll('\r\n', '\n').includes(fullObservability));
+  assert.ok(!/^\[(?:cache|exports)/m.test(result.text));
+  restored = restored.replaceAll('\r\n', '\n').replace(fullObservability, '[observability]\nenabled = true\n\n[observability.logs]\nenabled = true\n\n');
   assert.equal(restored.replaceAll('\r\n', '\n'), base.source.replaceAll('\r\n', '\n'));
   assert.equal(result.hash, hash(result.text)); assert.deepEqual(result.previewActorIds, [preview]);
   for (const value of ['', '*', 'person@example.test', `${preview},${preview}`, `${preview}\nOUTBOUND_EMAIL_MODE=enabled`]) assert.throws(() => previewIds(value), { code: 'PREVIEW_ALLOWLIST_REQUIRED' });
   assert.throws(() => validatePolicy({ ...policy, publicUrl: 'https://duediligence.ph' }), { code: 'WRONG_TARGET' });
   assert.throws(() => validatePolicy({ ...policy, debateVars: { ...policy.debateVars, DEBATE_ROOM_ENABLED: 'true' } }), { code: 'UNSAFE_DEBATE_FLAGS' });
+  for (const extra of ['[cache]\nenabled = false', '[exports.default]\ntype = "worker"', 'cache.enabled = false', 'exports = {}']) {
+    assert.throws(() => buildConfig({ ...base, source: base.source + '\n' + extra }, policy, preview, '/local/artifact', ROOT), { code: 'BASE_CONFIG_CHANGED' });
+  }
+  assert.throws(() => buildConfig({ ...base, source: base.source.replace('[observability.logs]', '[observability.logs]\npersist = false') }, policy, preview, '/local/artifact', ROOT), { code: 'BASE_CONFIG_CHANGED' });
+});
+
+test('reviewed real capture shape requires corroborated placement, all cache omissions and exact complete observability', () => {
+  for (const mutate of [
+    raw => { raw.service.default_environment.script.placement.target[0].region = 'gcp:asia-east1'; },
+    raw => { raw.service.default_environment.script.placement = { mode: 'targeted', target: [10] }; },
+    raw => { raw.settings.placement.target = [11]; },
+    raw => { raw.version.resources.script_runtime.placement = { region: 'gcp:us-east4' }; },
+    raw => { raw.settings.cache_options = { enabled: false }; },
+    raw => { raw.settings.exports = {}; },
+    raw => { raw.version.resources.script_runtime.exports = { default: { type: 'worker', cache: { enabled: false } } }; },
+    raw => { raw.service.default_environment.script.cache_options = { cross_version_cache: false }; },
+    raw => { raw.service.default_environment.script.cache_future = { opaque: 'unreviewed' }; },
+    raw => { raw.scriptSettings.observability.redact_query_string = true; },
+    raw => { delete raw.scriptSettings.observability.traces.persist; },
+    raw => { raw.scriptSettings.observability.logs.destinations = []; },
+  ]) {
+    const raw = remoteFixture(); mutate(raw); const saved = sanitizeBaseline(raw, base);
+    assert.throws(() => validateBaseline(saved, base, policy, saved.fingerprint, versionId), 'A newly reviewed hash cannot silently approve changed runtime settings.');
+  }
+  const saved = baseline(); assert.equal(saved.state.cache, null); assert.equal(saved.state.cacheSource, null);
+  assert.equal(validateBaseline(saved, base, policy, saved.fingerprint, versionId), true);
+  saved.schemaVersion = 1;
+  assert.throws(() => validateBaseline(saved, base, policy, saved.fingerprint, versionId), { code: 'BASELINE_INCOMPLETE' });
 });
 
 test('baseline backup retains all secret names/types but no secret or unreviewed variable values', () => {
@@ -152,7 +185,17 @@ test('postflight permits precisely the reviewed Debate additions and detects rem
   Object.assign(after.state.vars, additions);
   after.state.bindings.push(...Object.keys(additions).map(name => ({ name, type: 'plain_text' })));
   after.state.bindings.sort((a, b) => a.name.localeCompare(b.name));
+  after.fingerprint = hash(after.state);
   assert.equal(validatePreservation(before, after, additions), true);
+  for (const mutate of [
+    saved => { saved.state.captureSources.settings.cacheOptions = { enabled: false }; },
+    saved => { saved.state.captureSources.runtime.exports = {}; },
+    saved => { saved.state.captureSources.service.script.placement.target[0].region = 'gcp:asia-east1'; },
+    saved => { saved.state.observability.logs.persist = false; },
+  ]) {
+    const drifted = structuredClone(after); mutate(drifted); drifted.fingerprint = hash(drifted.state);
+    assert.throws(() => validatePreservation(before, drifted, additions), { code: 'POSTDEPLOY_SETTINGS_DRIFT' });
+  }
   after.state.bindings = after.state.bindings.filter(binding => binding.name !== 'LIVEKIT_API_SECRET');
   assert.throws(() => validatePreservation(before, after, additions), { code: 'POSTDEPLOY_SETTINGS_DRIFT' });
 });

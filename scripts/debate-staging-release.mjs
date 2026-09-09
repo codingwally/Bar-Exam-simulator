@@ -14,6 +14,10 @@ const canonical = value => Array.isArray(value) ? value.map(canonical) : value &
 export const hash = value => createHash('sha256').update(typeof value === 'string' || value instanceof Uint8Array ? value : JSON.stringify(canonical(value))).digest('hex');
 const sorted = values => [...values].sort();
 const equal = (a, b) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
+// Explicit preservation of capture 34349103999. This is not a new logging plan.
+const REVIEWED_OBSERVABILITY = { enabled: true, head_sampling_rate: 1, redact_query_string: false,
+  logs: { enabled: true, head_sampling_rate: 1, persist: true, invocation_logs: true },
+  traces: { enabled: false, head_sampling_rate: 1, persist: true } };
 const readJson = async filename => JSON.parse(await readFile(filename, 'utf8'));
 const git = args => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', windowsHide: true }).trim();
 
@@ -61,12 +65,22 @@ export function buildConfig(base, policy, allowlist, outputDirectory, root = ROO
   validatePolicy(policy); const ids = previewIds(allowlist);
   need(!Object.keys(base.vars).some(key => key.startsWith('DEBATE_')), 'BASE_CONFIG_CHANGED', 'Debate variables entered the shared base; review the overlay before proceeding.');
   need(base.compatibilityDate === policy.compatibilityDate && equal(base.compatibilityFlags, policy.compatibilityFlags) && base.region === policy.placementRegion && equal(base.crons, policy.crons), 'BASE_CONFIG_CHANGED', 'Compatibility, placement or cron changed from the reviewed staging baseline.');
+  need(!/^\s*(?:\[+(?:cache|exports)(?:[.\]\s])|(?:cache|exports)(?:\s*=|\.))/m.test(base.source), 'BASE_CONFIG_CHANGED', 'The reviewed cache and export configuration is absent; new settings require a separate preservation review.');
+  const observabilityBlocks = [...base.source.matchAll(/^\[observability\]\s*\r?\n[\s\S]*?(?=^\[(?!observability[.\]])|$(?![\s\S]))/gm)];
+  const originalObservability = '[observability]\nenabled = true\n\n[observability.logs]\nenabled = true';
+  need(observabilityBlocks.length === 1 && observabilityBlocks[0][0].replaceAll('\r\n', '\n').trim() === originalObservability, 'BASE_CONFIG_CHANGED', 'The staging base logging configuration changed; review it before adding the exact captured preservation settings.');
   let config = base.source.replace(/^main\s*=.*$/m, `main = ${JSON.stringify(path.join(root, 'worker/commercial-entry.mjs').replaceAll('\\', '/'))}`)
     .replace(/^directory\s*=\s*"\.\.\/\.staging-dist"$/m, `directory = ${JSON.stringify(path.join(root, '.staging-dist').replaceAll('\\', '/'))}`);
   need(!/^keep_vars\s*=/m.test(config), 'BASE_CONFIG_CHANGED', 'Review the shared base keep_vars setting before generating the overlay.');
   config = 'keep_vars = true\n' + config;
   const additions = { ...policy.debateVars, DEBATE_PREVIEW_ACTOR_IDS: ids.join(',') };
   config = config.replace(/^\[vars\]\s*$/m, '[vars]\n' + Object.entries(additions).map(([key, value]) => `${key} = ${JSON.stringify(value)}`).join('\n'));
+  const eol = base.source.includes('\r\n') ? '\r\n' : '\n';
+  const observabilityText = Object.entries(REVIEWED_OBSERVABILITY).filter(([, value]) => typeof value !== 'object').map(([key, value]) => `${key} = ${JSON.stringify(value)}`);
+  const preservedObservability = ['[observability]', ...observabilityText, '', ...['logs','traces'].flatMap(section => [
+    `[observability.${section}]`, ...Object.entries(REVIEWED_OBSERVABILITY[section]).map(([key, value]) => `${key} = ${JSON.stringify(value)}`), '',
+  ]), ''].join(eol);
+  config = config.replace(observabilityBlocks[0][0], preservedObservability);
   return { filename: path.join(outputDirectory, 'wrangler.debate-staging.toml'), text: config, hash: hash(config), previewActorIds: ids };
 }
 
@@ -161,13 +175,23 @@ export function sanitizeBaseline({ deployments, settings, scriptSettings, versio
 export function validateBaseline(baseline, base, policy, expectedHash, expectedVersion) {
   need(HASH.test(expectedHash || '') && baseline.fingerprint === expectedHash && hash(baseline.state) === expectedHash, 'BASELINE_DRIFT', 'The reviewed sanitized remote snapshot hash no longer matches.');
   const s = baseline.state;
+  const sources = s.captureSources;
+  need(baseline.schemaVersion === 2 && sources?.schemaVersion === 1, 'BASELINE_INCOMPLETE', 'Require the reviewed expanded cache and service-placement capture.');
   need(UUID.test(expectedVersion || '') && s.versionId === expectedVersion && s.trafficPercent === 100, 'BASELINE_DRIFT', 'The exact reviewed active Worker version must still serve all staging traffic.');
   need(s.worker === TARGET.worker && s.origin === TARGET.origin && s.projectRef === TARGET.project, 'WRONG_TARGET', 'The remote snapshot belongs to a different environment.');
   need(s.compatibilityDate === base.compatibilityDate && equal(s.compatibilityFlags, sorted(base.compatibilityFlags)) && equal(s.crons, sorted(base.crons)), 'BASELINE_SETTINGS_DRIFT', 'Compatibility or cron differs from the staging base.');
-  need((s.placement?.region || s.placement?.target || s.placement?.hint) === policy.placementRegion, 'BASELINE_SETTINGS_DRIFT', 'The exact current placement target was not verified.');
-  need(s.observability?.enabled === true && s.observability?.logs?.enabled === true && s.cache === false && s.workersDev === true && s.previewUrls === true && s.tailConsumers.length === 0, 'BASELINE_SETTINGS_DRIFT', 'Logging, cache, routes, previews or tail consumers need review.');
+  need(equal(s.placement, { mode: 'targeted', target: [10] }) && equal(sources.settings?.placement, s.placement)
+    && sources.service?.defaultEnvironment === 'production' && sources.service.script?.placementMode === 'targeted'
+    && equal(sources.service.script.placement, { mode: 'targeted', target: [{ region: policy.placementRegion }] })
+    && sources.runtime?.placement === null && sources.runtime?.placementMode === null,
+  'BASELINE_SETTINGS_DRIFT', 'Require the observed settings placement and its same-capture explicit service region; numeric IDs are never interpreted as regions.');
+  const cacheAbsent = metadata => metadata?.cacheOptions === null && metadata.exports === null && equal(metadata.cacheOptionsPresentFields, [])
+    && Array.isArray(metadata.presentFields) && !metadata.presentFields.some(field => /^(?:cache|exports)(?:_|$)/.test(field));
+  need(s.cache === null && s.cacheSource === null && [sources.settings, sources.runtime, sources.service.script].every(cacheAbsent),
+    'UNREPRESENTED_REMOTE_SETTING', 'The reviewed cache and export settings must remain absent in every source. Omission does not mean disabled; any explicit setting needs review.');
+  need(s.workersDev === true && s.previewUrls === true && s.tailConsumers.length === 0, 'BASELINE_SETTINGS_DRIFT', 'Routes, previews or tail consumers need review.');
   need(s.logpush === false && (!s.limits || Object.keys(s.limits).length === 0), 'UNREPRESENTED_REMOTE_SETTING', 'A custom remote Logpush or resource limit needs an explicit preservation overlay before deployment.');
-  need(Object.keys(s.observability).every(key => ['enabled','logs'].includes(key)) && Object.keys(s.observability.logs).every(key => key === 'enabled'), 'UNREPRESENTED_REMOTE_SETTING', 'Additional remote logging, sampling or tracing settings need an explicit preservation overlay before deployment.');
+  need(equal(s.observability, REVIEWED_OBSERVABILITY), 'UNREPRESENTED_REMOTE_SETTING', 'Logging, sampling, redaction and tracing must match the complete captured preservation overlay.');
   const secretNames = s.bindings.filter(item => item.type === 'secret_text').map(item => item.name);
   for (const required of policy.requiredSecretNames) need(secretNames.includes(required), 'REMOTE_SECRET_MISSING', `Required existing secret binding ${required} is unavailable; do not print or replace its value.`);
   for (const [key, value] of Object.entries(base.vars)) {
@@ -177,6 +201,9 @@ export function validateBaseline(baseline, base, policy, expectedHash, expectedV
   return true;
 }
 export function validatePreservation(before, after, additions) {
+  need(before?.schemaVersion === 2 && after?.schemaVersion === 2 && before.state?.captureSources?.schemaVersion === 1 && after.state?.captureSources?.schemaVersion === 1
+    && hash(before.state) === before.fingerprint && hash(after.state) === after.fingerprint,
+  'POSTDEPLOY_SETTINGS_DRIFT', 'Preservation requires intact expanded snapshots including every cache, export and placement source.');
   const a = structuredClone(before.state), b = structuredClone(after.state);
   need(a.versionId !== b.versionId, 'DEPLOYMENT_UNCONFIRMED', 'A new exact active version has not been confirmed.');
   for (const key of ['versionId','deploymentId']) { delete a[key]; delete b[key]; }
@@ -232,6 +259,7 @@ export const CRITICAL_SOURCES = Object.freeze([
   'scripts/test-study-room-admission-sql.mjs', 'scripts/test-study-room-always-open.mjs', 'scripts/test-study-room-backgrounds.mjs',
   'scripts/test-study-room-background-picker.mjs', 'scripts/test-study-room-hotfix-behavior.mjs', 'scripts/test-study-room-live.mjs',
   '.github/workflows/debate-v3-capture.yml', 'scripts/debate-staging-fixtures.mjs', 'scripts/run-debate-staging-auth.mjs',
+  'scripts/test-debate-wrangler-metadata.mjs',
   'scripts/test-debate-staging-fixtures.mjs', 'scripts/debate-staging-dml-probe.mjs', 'scripts/test-debate-staging-dml-probe.mjs',
   'docs/debate-room-v3/evidence/staging-dml-rollback-probe.sql', 'docs/debate-room-v3/evidence/staging-dml-rollback-probe.readback.sql',
   'docs/debate-room-v3/evidence/staging-dml-rollback-probe.fixtures.json', 'docs/debate-room-v3/evidence/staging-dml-rollback-probe.manifest.json',

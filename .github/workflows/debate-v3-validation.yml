@@ -12,6 +12,7 @@ on:
       - 'worker/study-room*'
       - 'worker/index.mjs'
       - 'worker/wrangler.toml'
+      - 'worker/wrangler.staging.toml'
       - 'scripts/*debate*'
       - 'scripts/*study-room*'
       - 'scripts/build-pages-artifact.mjs'
@@ -20,11 +21,35 @@ on:
       - 'index.html'
       - '.github/workflows/debate-v3-validation.yml'
       - '.github/workflows/debate-v3-capture.yml'
+      - '.github/workflows/debate-v3-staging.yml'
 
 permissions:
   contents: read
 
 jobs:
+  wrangler-metadata:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install the existing exact pinned Wrangler in isolation
+        run: npm install --prefix artifacts/debate-local-rehearsal/staging-tooling --no-save --no-package-lock --ignore-scripts --no-audit --no-fund wrangler@4.114.0
+      - name: Verify actual upload metadata without credentials or network access
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo -n unshare --net -- env -i PATH="$PATH" DEBATE_HOST_NETWORK_NAMESPACE="$(readlink /proc/self/ns/net)" node scripts/test-debate-wrangler-metadata.mjs
+      - name: Preserve only sanitized metadata verification
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debate-v3-wrangler-metadata
+          path: artifacts/debate-local-rehearsal/wrangler-metadata/report.json
+          if-no-files-found: warn
+          retention-days: 14
   local-validation:
     runs-on: ubuntu-latest
     timeout-minutes: 20

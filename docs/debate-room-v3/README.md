@@ -1,6 +1,6 @@
 # Debate Room V3 candidate
 
-Implementation and verification are in progress. This branch is not deployed, and the full feature is not yet accepted for public launch.
+Implementation and verification are in progress. Candidate `147bb582e3ed4f0136f5e46f7d9a67412b404630` passed the complete synthetic CI organizer and Study admission journeys. No staging or production deployment is claimed, and full acceptance/public launch remain open.
 
 The owner adopted the complete V3 attachment (SHA-256 `14ddbb8173dc27c2ab869f593f4315989c33b88be1bf4e0f94d8f98ad121ab09`). Its MD and TXT copies are byte-identical. Later direct owner instructions give the outage task priority, require Study lobby picture removal first, and add ordinary Study room audience choices with All users as the default. Private Inner Chamber restrictions remain.
 
@@ -16,6 +16,12 @@ The first application change is image-removal commit `6431715`. Recovery commit 
 - [Draft review receipt and remaining acceptance gates](review-receipt.md).
 - [Restricted staging package](../debate-v3-staging-release.md) and [read-only target inventory](staging-inventory.md).
 - [Backend API contract](../../worker/debate-backend-contract.md).
+
+## Current verification
+
+[Candidate CI evidence](evidence/ci-validation-147bb582.json) binds all 13 passing suite groups and 92 source hashes to the exact tested Git tree. [Browser evidence](evidence/browser-ci-147bb582.json) records Debate's 156 checks, 196 commands, all 14 speaking stages plus preparation/break, six real browser downloads and next three-judge match startup. Study passed five HTTP/SQL and nine DOM checks, including same-room administrator admission and explicit member entry. The 1365px and 320px live controls were checked and visually reviewed.
+
+These runs use isolated Linux browsers, synthetic identity/bootstrap and inert media. They do not verify real hosted sign-in, physical audio/video, a full second match, 90 real minutes, provider capacity or email delivery. [Successor ab35500b](evidence/browser-ci-ab35500b.json) separately passed its 13 groups and both browsers;147bb582 remains the screenshot-review anchor. The owner authorized autonomous selection/setup of isolated staging test identities; that routine question is resolved. [Both exact staging migrations and bounded hosted DML/privilege probes have now passed](evidence/staging-database-20260909.json). Active Worker configuration was captured read-only; service metadata verifies placement, and cache omission/full observability have a reviewed preservation adapter. Actual pinned-tool serialization and hosted deployment remain open. See the [review receipt](review-receipt.md) for the remaining gates.
 
 ## Organizer quick start
 

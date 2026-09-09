@@ -1,0 +1,54 @@
+{
+  "artifactSha256": "ce653a3902b58c038c4fc44ff24d136a05fa1723699288bbf436d6111b6e6a9b",
+  "localVariantSha256": "e7d0573eeb23fb26e4b110d8962ccde1b58add1698b832724f6a54ce92e36a6f",
+  "localOnly": true,
+  "hostedExecuted": false,
+  "deviation": "Local in-memory variant changes PG17 guard to PG18 and current hosted admin_authorization_context MD5 to the existing repository local-model MD5. All four Study v1 fingerprints match exactly. Hosted artifact stays unchanged; no real hosted SQL execution.",
+  "negativeCases": [
+    {
+      "expected": "PROBE_PRECONDITION_ROLE_OR_PG17",
+      "status": "PASS_LOCAL"
+    },
+    {
+      "expected": "PROBE_REQUIRED_FUNCTION_DRIFT",
+      "status": "PASS_LOCAL"
+    },
+    {
+      "expected": "PROBE_CANDIDATE_OBJECT_COLLISION",
+      "status": "PASS_LOCAL"
+    },
+    {
+      "expected": "PROBE_REQUIRED_COLUMN_DRIFT",
+      "status": "PASS_LOCAL"
+    },
+    {
+      "expected": "PROBE_DEBATE_PRIVILEGE_MISMATCH",
+      "status": "PASS_LOCAL"
+    }
+  ],
+  "pgVersion": "PostgreSQL 18.3 (PGlite 0.5.7) on wasm32-unknown-linux-gnu, compiled by emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 3.1.74 (1092ec30a3fb1d46b1782ff1b4db5094d3d06ae5), 32-bit",
+  "checkpoints": [
+    {
+      "checkpoint": "PRECONDITIONS_VERIFIED",
+      "catalogHash": "6fbb901aebe0ace699c5609ec6e55a04",
+      "catalogAuditHash": "d751713988987e9331980363e24189ce",
+      "migrationLedgerHash": "e3f1b1d00d800ede6c9c877c5f3edc39"
+    },
+    {
+      "checkpoint": "TRANSACTIONAL_CHECKS_PASSED",
+      "providerCalls": 0,
+      "rollbackPending": true,
+      "authAccountsCreated": 0,
+      "businessRecordsReturned": false
+    },
+    {
+      "status": "ROLLBACK_COMPLETED_OBJECTS_ABSENT",
+      "catalogHash": "6fbb901aebe0ace699c5609ec6e55a04",
+      "catalogAuditHash": "d751713988987e9331980363e24189ce",
+      "hostedApplication": false,
+      "migrationLedgerHash": "e3f1b1d00d800ede6c9c877c5f3edc39",
+      "independentReadbackRequired": true
+    }
+  ],
+  "status": "PASS_LOCAL_VERSION_ADAPTED_ROLLBACK_AND_NEGATIVE_GATES"
+}

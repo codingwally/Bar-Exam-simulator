@@ -1,0 +1,32 @@
+# Restricted staging scope review — 9 September 2026
+
+The owner's direct instruction adopts V3 as the consolidated specification and authorizes implementation, controlled testing and a protected preview. The owner explicitly delegates routine staging identity choices. This review records that existing authority; it is not public-launch or spending approval.
+
+The superior task is “Add editable plans and pricing,” task `01a05118-fbdf-79f3-a554-c826885ac38b`. Its recovery commit `3a9f46b54ca4f926440e402e3831e578ffcb2022` is incorporated in the Debate branch. It previously released the incident hold and reported no active staging claim. A further coordination update on 9 September reports the actual two staging migrations, unchanged Worker version, planned restricted Auth/configuration checks and the need to register the manual staging workflow. A renewed freeze or conflicting ownership takes priority.
+
+## Reviewed implementation scope
+
+The first application change removed the Study lobby pictures in commit `6431715`. Study changes implement the requested ordinary-room All users default, Paid/Admin/Admin approval choices, exact-room administrator presence, a waiting list and explicit member entry after admission. V3 also supplies the device-entry dialog and camera-background requirements. Existing screen-share recovery, stable media tile identity, library behavior and private Inner Chamber restriction remain in the reviewed implementation. Synthetic browser/SQL tests and actual hosted preservation evidence are linked below; physical media behavior is not implied.
+
+Debate has its own page, navigation gates, client assets, domain/service/database modules and API prefix. Changes in shared `worker/index.mjs` are the Debate integration, narrowly scoped browser GET origin handling, Study admission RPC/routes and rate limits, required response headers and a separate disabled-by-default sweeper dispatch. Existing two-minute scheduled recovery remains. The production Wrangler source adds the independent minute schedule for a later separately approved release; this task has not deployed that production configuration. The staging overlay retains the existing two-minute schedule only and leaves the Debate sweeper disabled.
+
+The main page diff adds two initially hidden Debate links and its dedicated loader. Recovery/bootstrap, vendor Supabase 2.49.8, retry/cache repairs, pricing and authentication source are unchanged relative to the incorporated recovery baseline. The artifact builder adds only the Debate page/assets and exact shared browser domain/sanctions copies. Existing permitted compatibility surfaces are byte-checked; the established feature-decommission test owns the retired runtime exclusion. No retired runtime is reused for Debate behavior.
+
+The remaining scope is additive tests, two exact SQL migrations, dedicated manual staging/read-only capture/validation workflows, operation and requirement evidence, and ignored local artifacts. JSON evidence and migration bytes are pinned to avoid Windows line-ending hash drift. The release input must enumerate every actual base-to-candidate path and bind a fresh complete suite/source manifest; this document alone cannot approve a different diff.
+
+## Shared release boundaries
+
+Remote `main` was re-read as `3a9f46b54ca4f926440e402e3831e578ffcb2022` during this review. Existing `deploy.yml`, `deploy-pages-only.yml` and `deploy-worker.yml` use manual dispatch. The other automatic release workflows have narrow workflow-file paths and/or exact commit-message gates; the Debate candidate does not change those paths or use those release messages. Pages is configured for workflow builds. Integrating source to register the dedicated staging workflow does not itself prove or perform a production deployment. Recheck current main and workflow triggers immediately before integration.
+
+The only Worker deployment target is `duediligence-examinations-staging`; the only database is `hlzqmreeoghbldnhlybr`. Production, `duediligence-asset-recovery-preview`, `duediligence-site-recovery`, DNS, backups, existing credentials and pricing remain outside this task's mutation scope. The shared staging concurrency group does not cancel an active owner.
+
+## Actual evidence and outstanding verification
+
+- [Hosted database receipt](staging-database-20260909.json): exact additive migration application and stored SQL hashes, 98-statement DML rollback with 64 assertions and 22 function fingerprints, independent absence readback and six actual permission denials.
+- [Local installation rollback](local-installation-rollback-20260909.json): actual local PostgreSQL 18.3/PGlite test with the two explicit version/admin-helper adaptations. Hosted installation rollback was not run.
+- [Actual schema-2 capture](staging-baseline-34349103999.json), run [34349103999](https://github.com/codingwally/Bar-Exam-simulator/actions/runs/34349103999): unchanged version `b134ccc7-0c7f-4d00-89e0-d7314e0f1dd9`, 100% traffic, service placement `gcp:us-east4`, full observability and omitted cache/exports. Numeric settings target `[10]` is corroborated by the service metadata, not guessed.
+- [Browser receipt](browser-ci-ab35500b.json): synthetic complete default organizer progression, judging/results/downloads and Study waiting/admission; actual Auth, main Worker bootstrap and provider media are outside that synthetic harness. Earlier 147bb582 screenshots are the explicit visual-review anchor.
+
+Before Worker mutation, complete the configuration preservation adapter, actual pinned Wrangler serialization checks, fresh complete candidate CI, exact source/scope/database proof and real transient fixture preparation. Then verify actual deployed version, binding/settings preservation, candidate asset hashes, anonymous/excluded/allowed authorization and cleanup. That bounded smoke does not establish a full hosted organizer journey or a persistent reviewer preview.
+
+Full acceptance still requires the complete hosted multi-role journey, at least 90 real continuous minutes with physical cameras/microphones and independent screen-share audio, actual device/browser checks, verified existing provider allowance and Study commitments, the approved capacity ramp and actual approved mail/inbox evidence. Public access, real media, mail and capacity remain closed. No purchase, upgrade, recording, production deployment or public launch is approved by this review.

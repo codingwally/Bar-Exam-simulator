@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: Capture is read-only; deploy requires the reviewed complete package below
+        description: Capture is read-only; prepare-auth creates and cleans test identities; deploy also changes the existing staging Worker
         required: true
         type: choice
         default: capture
-        options: [capture, deploy]
+        options: [capture, prepare-auth, deploy]
       candidate_sha:
         description: Exact current main SHA reviewed for this staging release
         required: true
@@ -19,10 +19,6 @@ on:
         type: string
       expected_version_id:
         description: Complete active Worker version UUID from that reviewed baseline
-        required: false
-        type: string
-      preview_actor_ids:
-        description: Approved comma-separated staging account UUIDs; no public access
         required: false
         type: string
       review_evidence_json:
@@ -48,7 +44,6 @@ jobs:
       DEBATE_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
       DEBATE_EXPECTED_BASELINE_SHA256: ${{ inputs.expected_baseline_sha256 }}
       DEBATE_EXPECTED_VERSION_ID: ${{ inputs.expected_version_id }}
-      DEBATE_PREVIEW_ACTOR_IDS: ${{ inputs.preview_actor_ids }}
       DEBATE_RELEASE_REVIEW: ${{ inputs.review_evidence_json }}
     steps:
       - uses: actions/checkout@v4
@@ -72,23 +67,23 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: node scripts/debate-staging-release.mjs capture
       - name: Install locked dependencies without install scripts
-        if: inputs.operation == 'deploy'
+        if: inputs.operation != 'capture'
         run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
       - name: Verify the complete candidate and release gates
-        if: inputs.operation == 'deploy'
+        if: inputs.operation != 'capture'
         run: |
           node --test scripts/test-debate-staging-release.mjs
           node scripts/test-feature-decommission-boundary.mjs
           node scripts/test-debate-v3.mjs
           node -e "const fs=require('fs'),p='artifacts/debate-local-rehearsal';const names=fs.readdirSync(p).filter(n=>n.startsWith('suite-')).sort();if(names.length!==1)throw Error('Expected one fresh suite');fs.appendFileSync(process.env.GITHUB_ENV,'DEBATE_LOCAL_SUITE_REPORT='+p+'/'+names[0]+'/report.json\n');"
       - name: Resolve the existing audited staging public configuration
-        if: inputs.operation == 'deploy'
+        if: inputs.operation != 'capture'
         env:
           CONFIGURED_STAGING_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
         run: |
           node --input-type=module -e "import {resolveStagingPublishableKey} from './scripts/debate-staging-release.mjs';import {appendFileSync} from 'node:fs';const {key}=await resolveStagingPublishableKey({configuredKey:process.env.CONFIGURED_STAGING_PUBLISHABLE_KEY});console.log('::add-mask::'+key);appendFileSync(process.env.GITHUB_ENV,'STAGING_SUPABASE_PUBLISHABLE_KEY='+key+'\n');"
       - name: Build the existing target-locked sanitized staging artifact
-        if: inputs.operation == 'deploy'
+        if: inputs.operation != 'capture'
         env:
           STAGING_PUBLIC_URL: https://duediligence-examinations-staging.wallyesteban1993.workers.dev
           STAGING_WORKER_URL: https://duediligence-examinations-staging.wallyesteban1993.workers.dev
@@ -97,36 +92,24 @@ jobs:
         run: |
           node scripts/build-staging-artifact.mjs
           node scripts/test-debate-artifact.mjs
-      - name: Recheck live baseline and bind all reviewed evidence before mutation
-        if: inputs.operation == 'deploy'
+      - name: Install the existing pinned staging deploy tool in an isolated directory
+        if: inputs.operation != 'capture'
+        run: npm install --prefix artifacts/debate-local-rehearsal/staging-tooling --no-save --no-package-lock --ignore-scripts --no-audit --no-fund wrangler@4.114.0
+      - name: Verify actual upload metadata before provisioning any test account
+        if: inputs.operation != 'capture'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo -n unshare --net -- env -i PATH="$PATH" DEBATE_HOST_NETWORK_NAMESPACE="$(readlink /proc/self/ns/net)" node scripts/test-debate-wrangler-metadata.mjs
+      - name: Verify gates, provision scoped test sessions, execute requested operation and clean exact fixtures
+        if: inputs.operation != 'capture'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          DEBATE_STAGING_ALLOWED_BEARER: ${{ secrets.DEBATE_STAGING_ALLOWED_BEARER }}
-          DEBATE_STAGING_DENIED_BEARER: ${{ secrets.DEBATE_STAGING_DENIED_BEARER }}
+          STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
           STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ env.STAGING_SUPABASE_PUBLISHABLE_KEY }}
-        run: node scripts/debate-staging-release.mjs prepare
-      - name: Deploy only the approved existing staging Worker and its sanitized assets
-        if: inputs.operation == 'deploy'
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: worker
-          wranglerVersion: '4.114.0'
-          command: deploy --keep-vars --config ../artifacts/debate-local-rehearsal/staging-release/wrangler.debate-staging.toml
-      - name: Confirm exact active version and preserved settings
-        if: inputs.operation == 'deploy'
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: node scripts/debate-staging-release.mjs postflight
-      - name: Verify hosted assets and real allowlisted and excluded sessions
-        if: inputs.operation == 'deploy'
-        env:
-          DEBATE_STAGING_ALLOWED_BEARER: ${{ secrets.DEBATE_STAGING_ALLOWED_BEARER }}
-          DEBATE_STAGING_DENIED_BEARER: ${{ secrets.DEBATE_STAGING_DENIED_BEARER }}
-        run: node scripts/debate-staging-release.mjs smoke
+          REQUESTED_STAGING_OPERATION: ${{ inputs.operation }}
+        run: node scripts/run-debate-staging-auth.mjs "$REQUESTED_STAGING_OPERATION"
       - name: Retain sanitized release evidence even when a gate fails
         if: always()
         uses: actions/upload-artifact@v4
@@ -135,5 +118,7 @@ jobs:
           path: |
             artifacts/debate-local-rehearsal/staging-release/*.json
             artifacts/debate-local-rehearsal/suite-*/report.json
+            artifacts/debate-local-rehearsal/staging-dml-probe-ci/report.json
+            artifacts/debate-local-rehearsal/wrangler-metadata/report.json
           if-no-files-found: warn
           retention-days: 14

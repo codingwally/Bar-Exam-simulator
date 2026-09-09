@@ -8,6 +8,7 @@ import { withStudyDebateStagingAccounts, runRestrictedStaging, verifyRestrictedS
   executeRestrictedStagingChild } from './run-debate-staging-auth.mjs';
 import { CRITICAL_SOURCES, CRITICAL_ASSETS, REQUIRED_SUITE_GROUPS, hash, parseBase, buildConfig,
   sanitizeBaseline } from './debate-staging-release.mjs';
+import { createStudyRoomHandlers } from '../worker/study-room-routes.mjs';
 
 const NOW = Date.parse('2026-09-09T12:00:00Z');
 const clone = value => structuredClone(value);
@@ -15,6 +16,16 @@ function response(body, status = 200, range = null) { return { status,
   headers: { get: key => key === 'content-range' ? range : null }, json: async () => clone(body) }; }
 function harness(overrides = {}) {
   const calls = [], checkpoints = [], users = new Map(), roles = new Map(), registered = new Set(), tokens = new Map();
+  const studyHandlers = createStudyRoomHandlers({
+    authenticate: async request => ({ id: tokens.get(request.headers.get('Authorization')?.slice(7)) }),
+    authorizeAdmin: async () => null,
+    authorizeMember: async (_env, user) => ({ allowed: users.has(user.id), basis: 'signed_in' }),
+    rateLimit: async () => {}, readCatalog: async () => ({ schemaVersion: 1, maxRooms: 24,
+      rooms: ['1','2','3','4','5','6'].map(roomKey => ({ roomKey, label: 'Room ' + roomKey,
+        audience: roomKey === '5' ? 'admin' : 'all', revision: 1, accessRevision: 1 })) }),
+    describeRoom: () => ({ maxRooms: 24, maxParticipants: 100, recording: false }),
+    respond: (body, status) => response(body, status),
+  });
   let seed = 1;
   const config = { sourceSha: 'a'.repeat(40), ...FIXTURE_TARGET, serviceRoleKey: `sb_secret_${'s'.repeat(30)}`,
     publishableKey: `sb_publishable_${'p'.repeat(30)}`, clock: () => NOW,
@@ -55,8 +66,12 @@ function harness(overrides = {}) {
         return users.has(id) ? response({ id }) : response({ code: 'user_not_found' }, 401);
       }
       if (u.pathname === '/study-room/access') {
-        assert.equal(method, 'GET'); assert.ok(tokens.has(options.headers.Authorization.slice(7)));
-        return response({ ok: true, allowed: true, role: 'student', administrator: false, canCreateRooms: false, recording: false });
+        if (method !== 'POST') return response({ error: { code: 'METHOD_NOT_ALLOWED' } }, 405);
+        assert.equal(options.headers.Origin, FIXTURE_TARGET.workerUrl);
+        assert.equal(options.headers['Content-Type'], 'application/json'); assert.deepEqual(body, {});
+        assert.equal(checkpoints.at(-1).fixtures.at(-1).studyAccess, 'requested');
+        assert.ok(tokens.has(options.headers.Authorization.slice(7)));
+        return studyHandlers.access(new Request(url, options), {}, FIXTURE_TARGET.workerUrl, FIXTURE_TARGET.workerUrl);
       }
       if (u.pathname === '/auth/v1/logout') { assert.equal(u.searchParams.get('scope'), 'global'); return response(null, 204); }
       if (u.pathname.startsWith('/auth/v1/admin/users/')) {
@@ -100,7 +115,8 @@ test('two distinct real Study labels register before signin and pass access befo
   assert.notEqual(accounts.allowed.id, accounts.excluded.id);
   assert.equal(h.calls.filter(c => c.url.pathname === '/study-room/access').length, 2);
   assert.equal(h.actual.snapshot().fixtures.every(r => r.studyAccess === 'PASS_STUDENT_ACCESS_NO_JOIN'), true);
-  assert.equal(h.calls.filter(c => c.method === 'POST').length, 6);
+  assert.equal(h.actual.snapshot().fixtures.every(r => r.studyAccessRole === 'member'), true);
+  assert.equal(h.calls.filter(c => c.method === 'POST').length, 8);
   assert.ok(h.calls.every(c => !/invite|signup|recover|storage|livekit|join/u.test(c.url.pathname)));
   const cleaned = await h.actual.cleanup(); assert.equal(cleaned.complete, true);
   assert.equal(h.users.size, 0); assert.equal(h.roles.size, 0);
@@ -109,6 +125,15 @@ test('two distinct real Study labels register before signin and pass access befo
 });
 test('intent persistence failure prevents every remote mutation', async () => {
   const h = harness({ persistFailure: true }); await assert.rejects(h.actual.provision(), /SAVE_FAILED/); assert.equal(h.calls.length, 0);
+});
+test('a rejected Study access request cleans its registered signed-in fixture before a second account is created', async () => {
+  const h = harness({ intercept: c => c.url.pathname === '/study-room/access' ? response({ error: { code: 'METHOD_NOT_ALLOWED' } }, 405) : null });
+  await assert.rejects(h.actual.provision(), /FIXTURE_REMOTE_CONTRACT/);
+  assert.equal(h.actual.snapshot().fixtures.length, 1);
+  assert.equal(h.actual.snapshot().fixtures[0].studyAccess, 'requested');
+  assert.equal((await h.actual.cleanup()).complete, true);
+  assert.equal(h.users.size, 0); assert.equal(h.roles.size, 0);
+  assert.equal(h.actual.snapshot().fixtures[0].oldSessionDenied, true);
 });
 for (const route of ['/auth/v1/admin/users', '/auth/v1/token']) {
   test(`uncertain ${route} is single-shot and held, never blindly retried`, async () => {

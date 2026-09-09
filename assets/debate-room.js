@@ -1,5 +1,5 @@
 import {DEFAULT_RULES,SEATS,SPEAKER_CRITERIA,timerDisplay,scoreScorecard} from './debate-domain.js';
-import {DebateMedia} from './debate-media.js?v=debate-v3-20260910-1';
+import {DebateMedia} from './debate-media.js?v=debate-v3-20260910-2';
 import {eventInstant,eventLocalInput} from './debate-dates.js';
 
 const $ = id => document.getElementById(id);
@@ -23,9 +23,9 @@ const clearSensitiveViews = () => {closeLiveTools();state.viewGeneration++;for(c
 const mediaIdentity = personId => currentMatch()?.mediaParticipants?.find(p=>p.userId===personId)?.identity || '';
 const personName = personId => state.event?.members.find(p=>p.id === personId)?.displayName || 'Unassigned';
 const sideName = side => side === 'affirmative' ? 'Affirmative' : side === 'negative' ? 'Negative' : 'Unresolved';
-const teamName = teamId => state.event?.teams.find(t=>t.id===teamId)?.name || 'Awaiting predecessor';
+const teamName = teamId => state.event?.teams.find(t=>t.id===teamId)?.name || 'Awaiting earlier match result';
 const awardNames = {bestSpeaker:'Best Speaker',bestInterpellator:'Best Interpellator',bestRebuttalSpeaker:'Best Rebuttalist',bestDebater:'Best Debater'};
-const humanState = value => String(value || 'Unavailable').toLowerCase().replace(/_/g,' ').replace(/^./,c=>c.toUpperCase());
+const humanState = value => value === 'AWAITING_PREDECESSORS' ? 'Awaiting earlier match results' : String(value || 'Unavailable').toLowerCase().replace(/_/g,' ').replace(/^./,c=>c.toUpperCase());
 const judgingName = value => ({majority:'Full scorecards — majority of judges',aggregate:'Full scorecards — combined scores',simple:'Winner-only ballots'})[value] || 'Unavailable';
 const incidentName = value => value === 'fixture_review' ? 'Pairing reviewed' : humanState(value);
 const myTeamSide = () => {const m=currentMatch();return ['affirmative','negative'].find(side=>m?.teamIds?.[side]===me()?.teamId) || (Object.keys(m?.seats||{}).find(seat=>m.seats[seat]===state.event?.myId)?.[0]==='A'?'affirmative':Object.keys(m?.seats||{}).find(seat=>m.seats[seat]===state.event?.myId)?.[0]==='N'?'negative':null);};
@@ -39,6 +39,10 @@ const formatTime = value => value ? new Intl.DateTimeFormat('en-PH',{dateStyle:'
 
 function publicErrorMessage(value) {
   const text=String(value || '').trim();
+  const uncertainEmail='Email delivery could not be confirmed. Check its delivery status or contact the organizer before sending another copy.';
+  const privateStorageUnavailable='Private file storage is temporarily unavailable. Please try again later or contact the organizer.';
+  const privateStorageUnconfirmed='Private file storage could not be confirmed. File access is unavailable until that check succeeds. Contact the organizer for help.';
+  const uncertainFile='Saving this private file could not be confirmed. Check Shared evidence or Downloads and email delivery before trying again. Contact the organizer if its status remains unclear.';
   const guidance={
     'Timer changed. Reload the committed state.':'The timer changed. Refresh the event to see the current time.',
     'Only a designated controller or authorized official may take control.':'Only the assigned timekeeper or another authorized official may take timer control.',
@@ -46,6 +50,40 @@ function publicErrorMessage(value) {
     'Control must be renewed or explicitly taken over before changing the timer.':'Select Take timer control before changing the timer.',
     'This upload reservation has an invalid storage binding.':'This file upload could not be matched to the current evidence request. Reselect the file and try again.',
     'The corrected match must retain its fixture binding.':'The corrected match must stay linked to its published pairing.',
+    'Private debate file storage is not configured.':privateStorageUnavailable,
+    'The private storage bucket is invalid.':privateStorageUnavailable,
+    'STORAGE_UNCONFIGURED':privateStorageUnavailable,
+    'The debate storage bucket must be verified private before files can be saved.':privateStorageUnconfirmed,
+    'PRIVATE_STORAGE_UNCONFIRMED':privateStorageUnconfirmed,
+    'Saving this private file could not be confirmed. Retry using the same export job.':uncertainFile,
+    'STORAGE_WRITE_UNCONFIRMED':uncertainFile,
+    'This old invitation send needs provider reconciliation before another attempt.':uncertainEmail,
+    'This old send needs provider reconciliation before another delivery attempt.':uncertainEmail,
+    'The invitation response was unconfirmed. Retry only this same delivery job within its reconciliation window.':uncertainEmail,
+    'The email response was unconfirmed. Retry only this same delivery job within its reconciliation window.':uncertainEmail,
+    'The provider did not confirm invitation acceptance. Keep the same job when retrying.':uncertainEmail,
+    'The provider did not confirm acceptance. Keep the same delivery job when retrying.':uncertainEmail,
+    'EMAIL_RECONCILIATION_REQUIRED':uncertainEmail,
+    'EMAIL_ACCEPTANCE_UNCONFIRMED':uncertainEmail,
+    'This delivery lease is no longer current.':'The delivery status changed. Check Downloads and email delivery before taking another action.',
+    'This match must use its recorded published fixture.':'This match must use its published pairing.',
+    'The saved fixture and match assignments differ; resolve the recorded fixture review.':'The match assignments differ from the published pairing. Ask an official to review the pairing.',
+    'Resolve the fixture review before preparing or starting this match.':'Review the affected pairing before preparing or starting this match.',
+    'Both distinct fixture participants must be resolved.':'Confirm two different teams for this pairing before continuing.',
+    'A dependent match requires the currently finalized predecessor winner.':'Finalize the earlier match and confirm its winning team before continuing.',
+    'This published fixture already has a match or is not ready to prepare.':'This pairing already has a match or is not ready for setup. Check Published pairings.',
+    'Use the exact published fixture teams.':'Use the teams shown in the published pairing.',
+    'Use the motion assigned to this fixture.':'Use the motion assigned to this pairing.',
+    'Assign one of this event’s prepared motions before creating the fixture match.':'Assign a prepared motion to this pairing before setting up the match.',
+    'Only this unresolved fixture may be linked to a rematch.':'A rematch must stay linked to the original pairing that has no final winner.',
+    'Fixture not found.':'The pairing could not be found. Refresh the event and check Published pairings.',
+    'Winner must belong to the fixture.':'The winning team must be one of the two teams in this pairing.',
+    'An unstarted match must rebind to the current finalized predecessor winners.':'Update this unstarted match to use the confirmed winners of the earlier matches.',
+    'Resolve and finalize predecessor reviews first.':'Complete the reviews of the earlier matches and confirm their winners first.',
+    'A current predecessor team is unavailable.':'A winning team from an earlier match is unavailable. Ask the organizer to review the pairing.',
+    'Refresh the saved event revision before this action.':'Refresh the event to see the latest saved changes before continuing.',
+    'Use a unique action receipt key.':'This action could not be identified safely. Refresh the event before trying again.',
+    'This action key was used with different details.':'A previous attempt used different details. Refresh the event and check what was saved before trying again.',
   };
   if(Object.hasOwn(guidance,text))return guidance[text];
   const runtimeError=/^(?:(?:TypeError|ReferenceError|SyntaxError|RangeError|URIError|EvalError):(?:\s|$)|Cannot (?:read|set) properties of (?:undefined|null)\b|Cannot convert undefined or null to object\b|[A-Za-z_$][\w$]*(?:\.[\w$]+)* is (?:not defined|not a function)\b|Maximum call stack size exceeded\b|Unexpected token\b)/.test(text);
@@ -54,7 +92,7 @@ function publicErrorMessage(value) {
 const deliveryName = type => ({export:'Download',mail:'Results email',invitation_mail:'Invitation email',media:'Room connection',delete_evidence:'Evidence removal',delete_export:'Download removal'})[type] || 'Event request';
 function status(message,error=false) { $('status').textContent=error?publicErrorMessage(message):message; $('status').dataset.error=String(error); }
 async function request(path,body) {
-  if (!apiBase) throw new Error('The Debate Room connection is not configured. Your other Due Diligence features remain available.');
+  if (!apiBase) throw new Error('Debate Room is temporarily unavailable. Your other Due Diligence features remain available.');
   const accountGeneration=state.accountGeneration,viewGeneration=state.viewGeneration; const began=performance.now(); const controller=new AbortController(); const timeout=setTimeout(()=>controller.abort(),18000);
   try {
     const response=await fetch(`${apiBase.replace(/\/$/,'')}${path}`,{method:body?'POST':'GET',cache:'no-store',credentials:'omit',

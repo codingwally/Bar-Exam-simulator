@@ -1,8 +1,8 @@
 {
   "summary": {
-    "updatedAt": "2026-09-09T12:15:12.579Z",
+    "updatedAt": "2026-09-09T13:23:16.655Z",
     "sourceSha256": "14ddbb8173dc27c2ab869f593f4315989c33b88be1bf4e0f94d8f98ad121ab09",
-    "state": "READY_FOR_REVIEW_WITH_SYNTHETIC_BROWSER_PASS_NOT_FULL_ACCEPTANCE",
+    "state": "RESTRICTED_STAGING_DEPLOYED_PRESERVATION_PASS_SMOKE_FAILED_NOT_FULL_ACCEPTANCE",
     "scope": "Full V3 plus current owner Study admission directive. A linked test is coverage, not evidence of complete acceptance.",
     "recoveryBaseline": "3a9f46b54ca4f926440e402e3831e578ffcb2022",
     "integrationCheckpoint": "9053390",
@@ -875,7 +875,7 @@
           "worker/debate-origin.test.mjs"
         ],
         "observation": "Local release/config/migrations and read-only staging inventory prepared; existing recovery protected. No deployed Debate feature evidence. At candidate 147bb582 the staging gate required thirteen named groups and 65 critical source hashes; later gate changes need separate validation. CPU contract preserves the original two-minute cron plus independent minute sweep, without weakening auth or mail controls. Actual ab35500b application and hosted DML/role checks are in STAGING_DATABASE; read-only Worker capture is in STAGING_CAPTURE. No deployed Debate feature is attested.",
-        "gap": "Exact hosted database application/DML rollback/permissions passed. Active Worker configuration was captured read-only; service metadata verifies placement, and cache omission/full observability have a reviewed preservation adapter. Actual pinned-tool serialization and hosted deployment remain open. Actual hosted Auth/navigation, Worker/Pages release identifiers and public launch approval remain OPEN.",
+        "gap": "Exact hosted database application/DML rollback/permissions passed. Active Worker configuration was captured read-only; service metadata verifies placement, and cache omission/full observability have a reviewed preservation adapter. Actual pinned-tool serialization passed all 11 checks at 2377d800; corrected two-actor hosted preparation and deployed preservation remain open. Actual hosted Auth/navigation, Worker/Pages release identifiers and public launch approval remain OPEN.",
         "evidence": [
           "STAGING",
           "HISTORY"
@@ -1020,7 +1020,7 @@
         "id": "STAGING",
         "status": "HISTORICAL_READ_ONLY_PRE_APPLICATION_INVENTORY",
         "path": "docs/debate-room-v3/staging-inventory.md",
-        "observation": "Earlier read-only staging inventory preceded application. Both exact additive migrations and bounded hosted DML/privilege checks are now separately recorded in STAGING_DATABASE; no Worker deployment occurred.",
+        "observation": "Earlier read-only staging inventory preceded application. Both exact additive migrations and bounded hosted DML/privilege checks are now separately recorded in STAGING_DATABASE; this inventory itself did not deploy a Worker; later STAGING_DEPLOYMENT records the restricted release.",
         "limitations": "No deployment or migration proof; staging inventory cannot establish live Debate behavior or authorize launch.",
         "sha256": "40f3308211fcfe459eb99ea481b04d3b52a4eae3ce927ba7aafcdee4f3c55309"
       },
@@ -1595,7 +1595,7 @@
         "sha256": "ba076a5dc311d353ddf65cc0456851f6e1ad51cf9dde183a35b9c21371202991",
         "candidate": "ab35500b3630954bfae9bc4f64db68fc2c759121",
         "observation": "On staging hlzqmreeoghbldnhlybr, both additive migrations were applied using the supported tool. Ledger versions20260909115106 and20260909115132 store exact reviewed SQL hashes. The unmodified hosted DML probe passed98 statements/64 assertions/22 function fingerprints and independent rollback readback. Six actual SQLSTATE permission/input denials passed, with role cleanup confirmed after each.",
-        "limitations": "No Auth accounts, provider/mail/production writes or Worker deployment. Native concurrent sessions, REST schema-cache/service-role path, hosted schema-installation rollback, backup/deployed rollback and actual signed-in admission remain unverified. F05 stays partial.",
+        "limitations": "This database-only run did not create Auth accounts or deploy a Worker. Later fixture lifecycles and the restricted Worker deployment have separate receipts. Native concurrency, hosted installation rollback, backup/deployed rollback and signed-in room admission remain open; F05 stays partial.",
         "migrationHashes": {
           "supabase/migrations/20260909080139_debate_room_v3.sql": "89d4f46b1e1b2991202880114387a1356b5eedfcf562129079de83d55a94b53c",
           "supabase/migrations/20260909080143_study_room_admission_v3.sql": "5ca7d139bb925b00c82d391aab4f566446d5d1bdd25e0b1b271fde614cb11637"
@@ -1617,7 +1617,7 @@
         "candidate": "3597b221f1f39bbac8c257fd99ea8b9fd215cbe7",
         "url": "https://github.com/codingwally/Bar-Exam-simulator/actions/runs/34349103999",
         "observation": "Actual GET-only schema-2 capture: unchanged version b134ccc7-0c7f-4d00-89e0-d7314e0f1dd9, state fingerprint 038011196f012d3bde90af6e1a57a3feda15f58ffdd35d201378cc3c3f7b6f0f, explicit gcp:us-east4 service placement, complete existing observability and omitted cache/exports across all three sources.",
-        "limitations": "Cache omission is preserved as omission, not proof of disabled caching. Saved actual metadata passes the reviewed compatibility gate; actual pinned Wrangler serialization, Auth and deployed preservation remain unverified."
+        "limitations": "Historical predeployment capture. Cache omission is preserved as omission, not proof of disabled caching. Subsequent actual serialization and restricted deployment preservation have separate WRANGLER_METADATA and STAGING_DEPLOYMENT receipts."
       },
       "STAGING_CAPTURE_HISTORY": {
         "id": "STAGING_CAPTURE_HISTORY",
@@ -1628,19 +1628,100 @@
         "url": "https://github.com/codingwally/Bar-Exam-simulator/actions/runs/34347380898",
         "observation": "Owner-labeled GET-only capture recorded active staging Worker version b134ccc7-0c7f-4d00-89e0-d7314e0f1dd9 and sanitized state fingerprint 44965b039164bd173a5768b354d5703e2f9d97f2fad8ecebd66be2a841383544. Existing source target/date/flags were checked; no secret values were stored.",
         "limitations": "Historical first capture. Its missing metadata was investigated in the expanded successor capture; it is not deployment evidence."
+      },
+      "WRANGLER_METADATA": {
+        "id": "WRANGLER_METADATA",
+        "status": "PASS_PINNED_WRANGLER_OFFLINE_METADATA",
+        "path": "docs/debate-room-v3/evidence/wrangler-metadata-ci-2377d800.json",
+        "sha256": "06200c4e795903feec557d74e149778d65e6cbe54028b98941fe4f4266985bf3",
+        "head": "2377d800b1a15a041aff88206be323be49c03a75",
+        "observation": "All 11 actual pinned Wrangler4.114.0 multipart checks passed in a distinct kernel network namespace with no active interfaces/credentials. Targeted gcp:us-east4 placement, omitted cache/cache_options/exports, full captured observability, compatibility and variable/secret inheritance survived serialization. All six source hashes match exact candidate Git bytes.",
+        "limitations": "Inert Worker and one static asset; no full application bundle/runtime, Cloudflare request, deployment or server-side preservation proof."
+      },
+      "STAGING_AUTH_FAILURE": {
+        "id": "STAGING_AUTH_FAILURE",
+        "status": "FAILED_STUDY_HTTP_METHOD_CONTRACT_WITH_VERIFIED_EXACT_FIXTURE_CLEANUP",
+        "path": "docs/debate-room-v3/evidence/staging-prepare-auth-34350885585.json",
+        "sha256": "d47c25b8ebf6146bd6d86a1cc3b71279f78ba775b5e8543b97d80bae678699fd",
+        "head": "30a90e85b56b72c8da53b857e70b2db428809eb3",
+        "observation": "Failed real prepare-auth34350885585 created and classified one ordinary internal-test account before confirmed sign-in. The old GET Study access request failed405; the second account and prepare callback were not reached. Exact cleanup, old-session denial and independent zero Auth/role/session/owned-event readback passed.",
+        "limitations": "The initial run remains failed and requested no deployment, media or mail. PR 357 corrected POST{} and the source-discovered member expectation; the later live retry is separately recorded in STAGING_AUTH_PREPARATION. No immediate post-logout fence is established by old-session denial after Auth deletion."
+      },
+      "STAGING_AUTH_PREPARATION": {
+        "id": "STAGING_AUTH_PREPARATION",
+        "status": "PASS_REAL_TWO_ACTOR_STAGING_AUTH_PREPARATION",
+        "path": "docs/debate-room-v3/evidence/staging-prepare-auth-34351971269.json",
+        "sha256": "efafd6801a2361199c3644755d2c6971ae4cf76cb44b43bad90e7712b0cfa7aa",
+        "head": "f0c4d6be4203d0a3688521694145d86a0462f2a4",
+        "observation": "Run 34351971269 at f0c4d6b passed real ordinary login/project-session verification and POST{} Study member access for two registered internal-test fixtures. Preparation callback passed; both exact Auth UUIDs were deleted and old sessions denied.",
+        "limitations": "No room join, Debate allow/exclude smoke, event mutation or Worker deployment in this preparation run. No immediate post-global-logout denial proof before Auth deletion."
+      },
+      "STAGING_DEPLOYMENT": {
+        "id": "STAGING_DEPLOYMENT",
+        "status": "STAGING_DEPLOYED_PRESERVATION_PASS_SMOKE_FAILED",
+        "path": "docs/debate-room-v3/evidence/staging-deploy-34352333268.json",
+        "sha256": "fa69a3fc7052bbd780d231f07f8527be4d798e85e7fad2b2b94edbfa8d6a2b2e",
+        "head": "f0c4d6be4203d0a3688521694145d86a0462f2a4",
+        "observation": "Run 34352333268 deployed exact f0c4d6b Worker version 1be1d9c5-af54-4f89-b48c-d941968849ab; actual preservation passed with fingerprint 11ade1db738b752ea4f8b6b049f3290bb2ae50e4c112fd17a630bd9f2ada72ad. The 112ms smoke failed on HTML redirects before authenticated Debate checks. Both fixtures were exactly deleted; root independently read back zero Auth/session/role/owned-event rows.",
+        "limitations": "Workflow remains failed. No full hosted organizer flow, authenticated Debate allow/exclude proof, ongoing owner-accessible preview, production deployment or public launch."
+      },
+      "STAGING_ANONYMOUS_READBACK": {
+        "id": "STAGING_ANONYMOUS_READBACK",
+        "status": "PASS_18_ANONYMOUS_ASSET_HASHES_AND_CLOSED_PUBLIC_BOUNDARIES",
+        "path": "docs/debate-room-v3/evidence/staging-anonymous-readback-34352333268.json",
+        "sha256": "90561ec1cac8ca8296bef9ab2c846dfa63dcf85475b2720f902d2d3b8b5e7867",
+        "head": "f0c4d6be4203d0a3688521694145d86a0462f2a4",
+        "observation": "Root independent GET-only readback matched all18 f0c4d6b artifact hashes, documented three307 canonical HTML redirects, public access enabled:false and anonymous events401 AUTH_REQUIRED.",
+        "limitations": "No credentials or protected navigation/event lifecycle; this readback does not upgrade the failed authenticated smoke or prove allowed/excluded account authorization."
+      },
+      "CI_85193_SUITE": {
+        "id": "CI_85193_SUITE",
+        "status": "PASS_13_GROUPS_WITH_SEPARATE_NATIVE_JOB_FAILURE",
+        "path": "docs/debate-room-v3/evidence/ci-validation-85193a75.json",
+        "sha256": "d365861548e7636425a6955a66c164b2410d27d505fa5b42c46d99a94913c503",
+        "head": "85193a759dbf119dc9dd908cb0b6590196883ad3",
+        "observation": "Exact85193a75 tree809822024296e5143afd4b8f6ed60afcbccc6640 equals tested merge acd79649. All126 suite source hashes independently match Git bytes; all13 groups, build and shared34355666128 passed. Unrelatedmedia34355666098 remains HTTP404/curl22.",
+        "limitations": "Overall Debate workflow34355666171 remains failed from the separate native harness error. No hosted/physical acceptance upgrade."
+      },
+      "CI_85193_BROWSER": {
+        "id": "CI_85193_BROWSER",
+        "status": "PASS_SYNTHETIC_BROWSER_AND_TWO_FONT_LAYOUT_SCREENSHOTS",
+        "path": "docs/debate-room-v3/evidence/browser-ci-85193a75.json",
+        "sha256": "9769adb56c226013425411ecceb0ae5a7d6123a3041284f5fafaab3bdb12a3a8",
+        "head": "85193a759dbf119dc9dd908cb0b6590196883ad3",
+        "observation": "Debate156 checks/196 actions/16 stages/6 byte-verified downloads and next3judge startup passed in69451 real milliseconds; Study5HTTP+9DOM passed. Root viewed1365px/320px screenshots: self-hosted font layout coherent, media aboveArena, headings exposed and narrow wrapping within viewport.",
+        "limitations": "Synthetic bootstrap/inert media; no hosted Auth or90 real minutes. Only two new screenshots reviewed. Historical147bb582 visual proof retained."
+      },
+      "CI_85193_METADATA": {
+        "id": "CI_85193_METADATA",
+        "status": "PASS_11_PINNED_WRANGLER_SERIALIZATION_CHECKS",
+        "path": "docs/debate-room-v3/evidence/wrangler-metadata-ci-85193a75.json",
+        "sha256": "bc911a1e70a90f907be3919eef1efde30264a0a54694b9e31bf7ac9fe099296d",
+        "head": "85193a759dbf119dc9dd908cb0b6590196883ad3",
+        "observation": "All11 actual Wrangler4.114.0 offline multipart checks passed for85193a75; all6 source hashes independently verified.",
+        "limitations": "Inert Worker, no full runtime or provider request; separate native test failure keeps overall workflow failed."
+      },
+      "CI_85193_NATIVE_FAILURE": {
+        "id": "CI_85193_NATIVE_FAILURE",
+        "status": "FAIL_NATIVE_SQL_TEST_RESTORE_OPERATOR_AMBIGUITY",
+        "path": "docs/debate-room-v3/evidence/native-cleanup-ci-85193a75.json",
+        "sha256": "f8c84643c2ed1668f303b04719002d114a57b0ae219921c9c4ef2145ec66185b",
+        "head": "85193a759dbf119dc9dd908cb0b6590196883ad3",
+        "observation": "Actual isolated PostgreSQL17.6 installed unchanged helper/migration and passed15 named assertions, including full-row receipt drift and privilege/ownership guards, then failed42725 in the test restore expression.",
+        "limitations": "Contention and positive final deletion were NOT_REACHED. The embedded preinitialized nativeConcurrentConnections:true is not execution proof. No hosted helper installation or session-fence proof."
       }
     },
     "release": {
-      "status": "NOT_DEPLOYED",
+      "status": "RESTRICTED_STAGING_DEPLOYED_SMOKE_FAILED",
       "productionBaseline": "3a9f46b54ca4f926440e402e3831e578ffcb2022",
-      "baselineVerification": "Root read-only git ls-remote reported unchanged origin/main at audit time; not a Debate deployment.",
+      "baselineVerification": "Recovery SHA remains the preserved production baseline; PR 356/357 repository merges and the separately recorded restricted staging deployment do not establish a production Worker/Pages release.",
       "debateMigrationSha256": "89d4f46b1e1b2991202880114387a1356b5eedfcf562129079de83d55a94b53c",
       "studyAdmissionMigrationSha256": "5ca7d139bb925b00c82d391aab4f566446d5d1bdd25e0b1b271fde614cb11637",
       "databaseApplied": true,
       "providerSpend": false,
       "realEmailSent": false,
       "previewPreparation": {
-        "status": "HOSTED_DATABASE_VERIFIED_WORKER_DEPLOYMENT_BLOCKED",
+        "status": "PASS_REAL_TWO_ACTOR_PREPARATION_STAGING_DEPLOYED_SMOKE_FAILED",
         "proofSchema": 2,
         "localInstallationRollback": "PASS_WITH_DOCUMENTED_LOCAL_ADAPTATIONS",
         "hostedApplication": "PASS_EXACT_STORED_SQL_HASHES",
@@ -1648,11 +1729,21 @@
         "hostedPrivilegesAndPreservation": "PASS_SIX_ACTUAL_DENIALS_AND_STUDY_FINGERPRINTS",
         "hostedInstallationRollback": "NOT_RUN",
         "testIdentitySelection": "AUTHORIZED_AUTONOMOUSLY",
-        "authAccountsCreated": false,
-        "sourceCandidate": "ab35500b3630954bfae9bc4f64db68fc2c759121",
+        "authAccountsCreated": true,
+        "sourceCandidate": "f0c4d6be4203d0a3688521694145d86a0462f2a4",
         "sourceCi": "PASS_13_GROUPS_AND_BOTH_SYNTHETIC_BROWSERS",
-        "configurationCapture": "READ_ONLY_ACTIVE_VERSION_CAPTURED",
-        "deploymentBlocker": "Unresolved Cloudflare placement target representation and unavailable cache field; fail-closed preservation gate retained."
+        "configurationCapture": "EXPANDED_CAPTURE_PRESERVATION_VALIDATED",
+        "deploymentBlocker": "Restricted staging version and configuration preservation passed, but the smoke failed before authenticated Debate checks on HTML canonical redirects. Anonymous readback passed all 18 asset hashes and public-disabled/unauthenticated denial checks. Corrected authenticated smoke, hosted organizer lifecycle and full acceptance remain open.",
+        "authAccountsCreatedCount": 5,
+        "activeAuthAccountsAfterVerifiedCleanup": 0,
+        "firstConfirmedRealSignIn": true,
+        "realStudyAccess": "PASS_POST_MEMBER_TWO_ACTORS_IN_BOTH_LATER_RUNS_NO_JOIN",
+        "twoActorPreparation": "PASS_ACTUAL_34351971269_AND_34352333268",
+        "wranglerSerialization": "PASS_11_ACTUAL_OFFLINE_CHECKS_AT_2377D800",
+        "authEvidence": "docs/debate-room-v3/evidence/staging-prepare-auth-34351971269.json",
+        "cleanup": "EXACT_FIXTURES_DELETED_AND_OLD_SESSIONS_DENIED_AFTER_AUTH_DELETION",
+        "authAccountsCreatedCountScope": "Cumulative across preserved failed prepare 34350885585, passing prepare 34351971269 and deployed/smoke-failed run 34352333268; each reported exactly deleted.",
+        "immediatePostLogoutFence": "NOT_PROVED_BY_PAIR_LIFECYCLE"
       },
       "databaseEvidence": {
         "path": "docs/debate-room-v3/evidence/staging-database-20260909.json",
@@ -1677,7 +1768,37 @@
         ],
         "status": "PASS_HOSTED_ADDITIVE_APPLICATION_DML_ROLLBACK_AND_PERMISSIONS"
       },
-      "deploymentBlocker": "Actual pinned Wrangler serialization and exact candidate CI, real temporary Auth and subsequent deployed preservation/authentication are still required. Placement is corroborated by same-capture service metadata; cache/exports omission and full observability must be preserved."
+      "deploymentBlocker": "Restricted staging version and configuration preservation passed, but the smoke failed before authenticated Debate checks on HTML canonical redirects. Anonymous readback passed all 18 asset hashes and public-disabled/unauthenticated denial checks. Corrected authenticated smoke, hosted organizer lifecycle and full acceptance remain open.",
+      "repositoryMerge": {
+        "pr": 356,
+        "state": "MERGED",
+        "mergeCommit": "30a90e85b56b72c8da53b857e70b2db428809eb3",
+        "mergedAt": "2026-09-09T12:24:21Z",
+        "url": "https://github.com/codingwally/Bar-Exam-simulator/pull/356",
+        "workerDeploymentImplied": false
+      },
+      "productionStatus": "NOT_DEPLOYED",
+      "requirementReleaseStateMeaning": "Per-row releaseState records production release only; current restricted staging deployment is recorded in summary.release.stagingDeployment and is not per-clause acceptance.",
+      "stagingDeployment": {
+        "sourceSha": "f0c4d6be4203d0a3688521694145d86a0462f2a4",
+        "versionId": "1be1d9c5-af54-4f89-b48c-d941968849ab",
+        "deploymentId": "4ce2a2ea-95d5-4320-84b7-88bb7d6f7359",
+        "fingerprint": "11ade1db738b752ea4f8b6b049f3290bb2ae50e4c112fd17a630bd9f2ada72ad",
+        "runId": 34352333268,
+        "workflowConclusion": "failure",
+        "preservation": "PASS",
+        "authenticatedDebateSmoke": "NOT_REACHED",
+        "evidence": "docs/debate-room-v3/evidence/staging-deploy-34352333268.json",
+        "ongoingOwnerAccessiblePreview": false,
+        "publicLaunch": false
+      },
+      "repositoryFollowup": {
+        "pr": 357,
+        "state": "MERGED",
+        "mergeCommit": "f0c4d6be4203d0a3688521694145d86a0462f2a4",
+        "scope": "POST Study fixture access and actual member-response test contract; no application Worker runtime change",
+        "url": "https://github.com/codingwally/Bar-Exam-simulator/pull/357"
+      }
     },
     "statusDefinitions": {
       "LOCAL_VERIFIED": "Specific deterministic local or synthetic CI assertions verified, not all clauses or full acceptance.",
@@ -1701,10 +1822,13 @@
         "debate": 16,
         "study": 10
       },
-      "evidenceCatalogHashesChecked": 28,
+      "evidenceCatalogHashesChecked": 40,
       "hostedDatabaseMappedRows": 15,
       "successorSourceHashesChecked": 103,
-      "successorSourceHashMismatches": []
+      "successorSourceHashMismatches": [],
+      "metadataSourceHashesChecked": 6,
+      "realAuthFixturesCreated": 5,
+      "realAuthFixturesVerifiedDeleted": 5
     },
     "reviewHistory": {
       "firstCandidate": {
@@ -1820,6 +1944,30 @@
         "url": "https://github.com/codingwally/Bar-Exam-simulator/actions/runs/34347346911"
       },
       "visualReviewAnchor": "147bb582e3ed4f0136f5e46f7d9a67412b404630"
+    },
+    "latestReviewedCandidateCi": {
+      "candidate": "85193a759dbf119dc9dd908cb0b6590196883ad3",
+      "tree": "809822024296e5143afd4b8f6ed60afcbccc6640",
+      "testedCheckout": "acd796490fd04dfc7280b6c4c00cea7bfee7a532",
+      "overallWorkflow": "FAIL_NATIVE_TEST_HARNESS_42725",
+      "suiteGroupsPassed": 13,
+      "sourceHashesIndependentlyVerified": 126,
+      "browser": "PASS_SYNTHETIC_156_DEBATE_9_STUDY_DOM_5_STUDY_HTTP",
+      "metadata": "PASS_11_ACTUAL_OFFLINE",
+      "nativeCleanup": "FAIL_15_CHECKS_THEN_HARNESS_RESTORE_CONTENTION_NOT_REACHED",
+      "evidence": "docs/debate-room-v3/evidence/ci-validation-85193a75.json"
+    },
+    "latestVisualReview": {
+      "candidate": "85193a759dbf119dc9dd908cb0b6590196883ad3",
+      "evidence": "docs/debate-room-v3/evidence/browser-ci-85193a75.json",
+      "reviewedBy": "Root coordinator",
+      "screenshots": 2,
+      "widths": [
+        1365,
+        320
+      ],
+      "scope": "Self-hosted fonts, media dock/heading geometry and narrow wrapping only",
+      "historicalAnchor": "docs/debate-room-v3/evidence/browser-ci-147bb582.json"
     }
   },
   "requirements": [
@@ -2988,7 +3136,7 @@
         }
       },
       "releaseState": "NOT_DEPLOYED",
-      "blocker": "Launch approval, actual operating policy/limits and final release proof OPEN. Exact hosted database application/DML rollback/permissions passed. Active Worker configuration was captured read-only; service metadata verifies placement, and cache omission/full observability have a reviewed preservation adapter. Actual pinned-tool serialization and hosted deployment remain open. Actual hosted Auth/navigation, Worker/Pages release identifiers and public launch approval remain OPEN.",
+      "blocker": "Launch approval, actual operating policy/limits and final release proof OPEN. Exact hosted database application/DML rollback/permissions passed. Active Worker configuration was captured read-only; service metadata verifies placement, and cache omission/full observability have a reviewed preservation adapter. Actual pinned-tool serialization passed all 11 checks at 2377d800; corrected two-actor hosted preparation and deployed preservation remain open. Actual hosted Auth/navigation, Worker/Pages release identifiers and public launch approval remain OPEN.",
       "inspectionObservation": "Scope, recovery coordination, decommission and launch/spend boundaries documented. Outage clearance is not launch authority. Local release/config/migrations and read-only staging inventory prepared; existing recovery protected. No deployed Debate feature evidence. At candidate 147bb582 the staging gate required thirteen named groups and 65 critical source hashes; later gate changes need separate validation. CPU contract preserves the original two-minute cron plus independent minute sweep, without weakening auth or mail controls.",
       "actualTestFiles": [
         "scripts/test-debate-artifact.mjs",
@@ -3123,7 +3271,7 @@
         }
       },
       "releaseState": "NOT_DEPLOYED",
-      "blocker": "Launch approval, actual operating policy/limits and final release proof OPEN. Real approved sender/recipient authorization and actual inbox delivery OPEN; no real send evidenced. Exact hosted database application/DML rollback/permissions passed. Active Worker configuration was captured read-only; service metadata verifies placement, and cache omission/full observability have a reviewed preservation adapter. Actual pinned-tool serialization and hosted deployment remain open. Actual hosted Auth/navigation, Worker/Pages release identifiers and public launch approval remain OPEN.",
+      "blocker": "Launch approval, actual operating policy/limits and final release proof OPEN. Real approved sender/recipient authorization and actual inbox delivery OPEN; no real send evidenced. Exact hosted database application/DML rollback/permissions passed. Active Worker configuration was captured read-only; service metadata verifies placement, and cache omission/full observability have a reviewed preservation adapter. Actual pinned-tool serialization passed all 11 checks at 2377d800; corrected two-actor hosted preparation and deployed preservation remain open. Actual hosted Auth/navigation, Worker/Pages release identifiers and public launch approval remain OPEN.",
       "inspectionObservation": "Scope, recovery coordination, decommission and launch/spend boundaries documented. Outage clearance is not launch authority. Explicit recipient preview/send, verified account email lookup, sealed invites, bounded per-recipient idempotent jobs and honest accepted-not-delivery status. Disabled failure preserves results. Local release/config/migrations and read-only staging inventory prepared; existing recovery protected. No deployed Debate feature evidence. At candidate 147bb582 the staging gate required thirteen named groups and 65 critical source hashes; later gate changes need separate validation. CPU contract preserves the original two-minute cron plus independent minute sweep, without weakening auth or mail controls.",
       "actualTestFiles": [
         "worker/debate-service.test.mjs",
@@ -3229,7 +3377,7 @@
       },
       "releaseState": "NOT_DEPLOYED",
       "blocker": "Launch approval, actual operating policy/limits and final release proof OPEN.",
-      "inspectionObservation": "Scope, recovery coordination, decommission and launch/spend boundaries documented. Outage clearance is not launch authority. The owner resolved staging account selection by authorizing autonomous routine decisions; isolated fixtures are being prepared, not yet hosted.",
+      "inspectionObservation": "Scope, recovery coordination, decommission and launch/spend boundaries documented. Outage clearance is not launch authority. The owner authorized autonomous staging identity selection. One real ordinary fixture was registered, signed in and verified deleted; the corrected two-actor preparation retry remains open.",
       "actualTestFiles": [],
       "auditAreas": [
         "governance"
@@ -3355,7 +3503,7 @@
         }
       },
       "releaseState": "NOT_DEPLOYED",
-      "blocker": "Launch approval, actual operating policy/limits and final release proof OPEN. Exact hosted database application/DML rollback/permissions passed. Active Worker configuration was captured read-only; service metadata verifies placement, and cache omission/full observability have a reviewed preservation adapter. Actual pinned-tool serialization and hosted deployment remain open. Actual hosted Auth/navigation, Worker/Pages release identifiers and public launch approval remain OPEN.",
+      "blocker": "Launch approval, actual operating policy/limits and final release proof OPEN. Exact hosted database application/DML rollback/permissions passed. Active Worker configuration was captured read-only; service metadata verifies placement, and cache omission/full observability have a reviewed preservation adapter. Actual pinned-tool serialization passed all 11 checks at 2377d800; corrected two-actor hosted preparation and deployed preservation remain open. Actual hosted Auth/navigation, Worker/Pages release identifiers and public launch approval remain OPEN.",
       "inspectionObservation": "Scope, recovery coordination, decommission and launch/spend boundaries documented. Outage clearance is not launch authority. Local release/config/migrations and read-only staging inventory prepared; existing recovery protected. No deployed Debate feature evidence. At candidate 147bb582 the staging gate required thirteen named groups and 65 critical source hashes; later gate changes need separate validation. CPU contract preserves the original two-minute cron plus independent minute sweep, without weakening auth or mail controls. Hosted staging: exact two-migration application,64 DML assertions,22 function fingerprints, six actual SQLSTATE denials and independent rollback readback passed; full requirement acceptance remains open.",
       "actualTestFiles": [
         "scripts/test-debate-artifact.mjs",
@@ -31000,7 +31148,7 @@
         }
       },
       "releaseState": "NOT_DEPLOYED",
-      "blocker": "Exact hosted database application/DML rollback/permissions passed. Active Worker configuration was captured read-only; service metadata verifies placement, and cache omission/full observability have a reviewed preservation adapter. Actual pinned-tool serialization and hosted deployment remain open. Actual hosted Auth/navigation, Worker/Pages release identifiers and public launch approval remain OPEN.",
+      "blocker": "Exact hosted database application/DML rollback/permissions passed. Active Worker configuration was captured read-only; service metadata verifies placement, and cache omission/full observability have a reviewed preservation adapter. Actual pinned-tool serialization passed all 11 checks at 2377d800; corrected two-actor hosted preparation and deployed preservation remain open. Actual hosted Auth/navigation, Worker/Pages release identifiers and public launch approval remain OPEN.",
       "inspectionObservation": "Local release/config/migrations and read-only staging inventory prepared; existing recovery protected. No deployed Debate feature evidence. At candidate 147bb582 the staging gate required thirteen named groups and 65 critical source hashes; later gate changes need separate validation. CPU contract preserves the original two-minute cron plus independent minute sweep, without weakening auth or mail controls.",
       "actualTestFiles": [
         "scripts/test-debate-artifact.mjs",
@@ -31129,7 +31277,7 @@
         }
       },
       "releaseState": "NOT_DEPLOYED",
-      "blocker": "Launch approval, actual operating policy/limits and final release proof OPEN. Exact hosted database application/DML rollback/permissions passed. Active Worker configuration was captured read-only; service metadata verifies placement, and cache omission/full observability have a reviewed preservation adapter. Actual pinned-tool serialization and hosted deployment remain open. Actual hosted Auth/navigation, Worker/Pages release identifiers and public launch approval remain OPEN.",
+      "blocker": "Launch approval, actual operating policy/limits and final release proof OPEN. Exact hosted database application/DML rollback/permissions passed. Active Worker configuration was captured read-only; service metadata verifies placement, and cache omission/full observability have a reviewed preservation adapter. Actual pinned-tool serialization passed all 11 checks at 2377d800; corrected two-actor hosted preparation and deployed preservation remain open. Actual hosted Auth/navigation, Worker/Pages release identifiers and public launch approval remain OPEN.",
       "inspectionObservation": "Scope, recovery coordination, decommission and launch/spend boundaries documented. Outage clearance is not launch authority. Local release/config/migrations and read-only staging inventory prepared; existing recovery protected. No deployed Debate feature evidence. At candidate 147bb582 the staging gate required thirteen named groups and 65 critical source hashes; later gate changes need separate validation. CPU contract preserves the original two-minute cron plus independent minute sweep, without weakening auth or mail controls.",
       "actualTestFiles": [
         "scripts/test-debate-artifact.mjs",
@@ -31915,7 +32063,7 @@
         }
       },
       "releaseState": "NOT_DEPLOYED",
-      "blocker": "Consenting physical two-way media/browser tests and >=90 real-minute full-flow rehearsal OPEN. Actual plan/allowance, Study overhead/reconnect headroom, approved 10/25/50/100 ramp, measured media and cost OPEN. Exact hosted database application/DML rollback/permissions passed. Active Worker configuration was captured read-only; service metadata verifies placement, and cache omission/full observability have a reviewed preservation adapter. Actual pinned-tool serialization and hosted deployment remain open. Actual hosted Auth/navigation, Worker/Pages release identifiers and public launch approval remain OPEN.",
+      "blocker": "Consenting physical two-way media/browser tests and >=90 real-minute full-flow rehearsal OPEN. Actual plan/allowance, Study overhead/reconnect headroom, approved 10/25/50/100 ramp, measured media and cost OPEN. Exact hosted database application/DML rollback/permissions passed. Active Worker configuration was captured read-only; service metadata verifies placement, and cache omission/full observability have a reviewed preservation adapter. Actual pinned-tool serialization passed all 11 checks at 2377d800; corrected two-actor hosted preparation and deployed preservation remain open. Actual hosted Auth/navigation, Worker/Pages release identifiers and public launch approval remain OPEN.",
       "inspectionObservation": "Controlled lifecycle tests are not moving remote physical frames, intelligible speech, screen audio or device compatibility evidence. Configured verified finite limit gates media; no assumed 100. Expired connected leases retain seats until removal. Atomic admission/single device/private transfers covered locally. Local release/config/migrations and read-only staging inventory prepared; existing recovery protected. No deployed Debate feature evidence. At candidate 147bb582 the staging gate required thirteen named groups and 65 critical source hashes; later gate changes need separate validation. CPU contract preserves the original two-minute cron plus independent minute sweep, without weakening auth or mail controls. Hosted staging: exact two-migration application,64 DML assertions,22 function fingerprints, six actual SQLSTATE denials and independent rollback readback passed; full requirement acceptance remains open.",
       "actualTestFiles": [
         "scripts/test-debate-media.mjs",
@@ -32070,7 +32218,7 @@
         }
       },
       "releaseState": "NOT_DEPLOYED",
-      "blocker": "Exact hosted database application/DML rollback/permissions passed. Active Worker configuration was captured read-only; service metadata verifies placement, and cache omission/full observability have a reviewed preservation adapter. Actual pinned-tool serialization and hosted deployment remain open. Actual hosted Auth/navigation, Worker/Pages release identifiers and public launch approval remain OPEN. Exact hosted additive migrations, DML rollback/absence readback and direct-role denials passed. Native independent sessions, hosted backup/schema-installation rollback and deployed recovery remain OPEN.",
+      "blocker": "Exact hosted database application/DML rollback/permissions passed. Active Worker configuration was captured read-only; service metadata verifies placement, and cache omission/full observability have a reviewed preservation adapter. Actual pinned-tool serialization passed all 11 checks at 2377d800; corrected two-actor hosted preparation and deployed preservation remain open. Actual hosted Auth/navigation, Worker/Pages release identifiers and public launch approval remain OPEN. Exact hosted additive migrations, DML rollback/absence readback and direct-role denials passed. Native independent sessions, hosted backup/schema-installation rollback and deployed recovery remain OPEN.",
       "inspectionObservation": "Local release/config/migrations and read-only staging inventory prepared; existing recovery protected. No deployed Debate feature evidence. At candidate 147bb582 the staging gate required thirteen named groups and 65 critical source hashes; later gate changes need separate validation. CPU contract preserves the original two-minute cron plus independent minute sweep, without weakening auth or mail controls. One Postgres authority: row-lock/CAS, scoped receipts, unique ballot/vote rows, separate match histories/audit/outbox. Ten additive tables deny direct clients; Worker still authorizes actor explicitly. Explicit service-role default grants are revoked before exact grants; audit UPDATE/TRUNCATE are denied in the reproduced default-ACL regression. Hosted staging: exact two-migration application,64 DML assertions,22 function fingerprints, six actual SQLSTATE denials and independent rollback readback passed; full requirement acceptance remains open.",
       "actualTestFiles": [
         "scripts/test-debate-artifact.mjs",
@@ -37891,7 +38039,7 @@
         }
       },
       "releaseState": "NOT_DEPLOYED",
-      "blocker": "Exact hosted database application/DML rollback/permissions passed. Active Worker configuration was captured read-only; service metadata verifies placement, and cache omission/full observability have a reviewed preservation adapter. Actual pinned-tool serialization and hosted deployment remain open. Actual hosted Auth/navigation, Worker/Pages release identifiers and public launch approval remain OPEN.",
+      "blocker": "Exact hosted database application/DML rollback/permissions passed. Active Worker configuration was captured read-only; service metadata verifies placement, and cache omission/full observability have a reviewed preservation adapter. Actual pinned-tool serialization passed all 11 checks at 2377d800; corrected two-actor hosted preparation and deployed preservation remain open. Actual hosted Auth/navigation, Worker/Pages release identifiers and public launch approval remain OPEN.",
       "inspectionObservation": "Local release/config/migrations and read-only staging inventory prepared; existing recovery protected. No deployed Debate feature evidence. At candidate 147bb582 the staging gate required thirteen named groups and 65 critical source hashes; later gate changes need separate validation. CPU contract preserves the original two-minute cron plus independent minute sweep, without weakening auth or mail controls. Hosted staging: exact two-migration application,64 DML assertions,22 function fingerprints, six actual SQLSTATE denials and independent rollback readback passed; full requirement acceptance remains open.",
       "actualTestFiles": [
         "scripts/test-debate-artifact.mjs",
@@ -38025,7 +38173,7 @@
         }
       },
       "releaseState": "NOT_DEPLOYED",
-      "blocker": "Consenting physical two-way media/browser tests and >=90 real-minute full-flow rehearsal OPEN. Actual plan/allowance, Study overhead/reconnect headroom, approved 10/25/50/100 ramp, measured media and cost OPEN. Real approved sender/recipient authorization and actual inbox delivery OPEN; no real send evidenced. Exact hosted database application/DML rollback/permissions passed. Active Worker configuration was captured read-only; service metadata verifies placement, and cache omission/full observability have a reviewed preservation adapter. Actual pinned-tool serialization and hosted deployment remain open. Actual hosted Auth/navigation, Worker/Pages release identifiers and public launch approval remain OPEN.",
+      "blocker": "Consenting physical two-way media/browser tests and >=90 real-minute full-flow rehearsal OPEN. Actual plan/allowance, Study overhead/reconnect headroom, approved 10/25/50/100 ramp, measured media and cost OPEN. Real approved sender/recipient authorization and actual inbox delivery OPEN; no real send evidenced. Exact hosted database application/DML rollback/permissions passed. Active Worker configuration was captured read-only; service metadata verifies placement, and cache omission/full observability have a reviewed preservation adapter. Actual pinned-tool serialization passed all 11 checks at 2377d800; corrected two-actor hosted preparation and deployed preservation remain open. Actual hosted Auth/navigation, Worker/Pages release identifiers and public launch approval remain OPEN.",
       "inspectionObservation": "Controlled lifecycle tests are not moving remote physical frames, intelligible speech, screen audio or device compatibility evidence. Configured verified finite limit gates media; no assumed 100. Expired connected leases retain seats until removal. Atomic admission/single device/private transfers covered locally. Explicit recipient preview/send, verified account email lookup, sealed invites, bounded per-recipient idempotent jobs and honest accepted-not-delivery status. Disabled failure preserves results. Local release/config/migrations and read-only staging inventory prepared; existing recovery protected. No deployed Debate feature evidence. At candidate 147bb582 the staging gate required thirteen named groups and 65 critical source hashes; later gate changes need separate validation. CPU contract preserves the original two-minute cron plus independent minute sweep, without weakening auth or mail controls.",
       "actualTestFiles": [
         "scripts/test-debate-media.mjs",
@@ -38154,7 +38302,7 @@
         }
       },
       "releaseState": "NOT_DEPLOYED",
-      "blocker": "Exact hosted database application/DML rollback/permissions passed. Active Worker configuration was captured read-only; service metadata verifies placement, and cache omission/full observability have a reviewed preservation adapter. Actual pinned-tool serialization and hosted deployment remain open. Actual hosted Auth/navigation, Worker/Pages release identifiers and public launch approval remain OPEN.",
+      "blocker": "Exact hosted database application/DML rollback/permissions passed. Active Worker configuration was captured read-only; service metadata verifies placement, and cache omission/full observability have a reviewed preservation adapter. Actual pinned-tool serialization passed all 11 checks at 2377d800; corrected two-actor hosted preparation and deployed preservation remain open. Actual hosted Auth/navigation, Worker/Pages release identifiers and public launch approval remain OPEN.",
       "inspectionObservation": "Local release/config/migrations and read-only staging inventory prepared; existing recovery protected. No deployed Debate feature evidence. At candidate 147bb582 the staging gate required thirteen named groups and 65 critical source hashes; later gate changes need separate validation. CPU contract preserves the original two-minute cron plus independent minute sweep, without weakening auth or mail controls.",
       "actualTestFiles": [
         "scripts/test-debate-artifact.mjs",
@@ -38274,7 +38422,7 @@
         }
       },
       "releaseState": "NOT_DEPLOYED",
-      "blocker": "Exact hosted database application/DML rollback/permissions passed. Active Worker configuration was captured read-only; service metadata verifies placement, and cache omission/full observability have a reviewed preservation adapter. Actual pinned-tool serialization and hosted deployment remain open. Actual hosted Auth/navigation, Worker/Pages release identifiers and public launch approval remain OPEN.",
+      "blocker": "Exact hosted database application/DML rollback/permissions passed. Active Worker configuration was captured read-only; service metadata verifies placement, and cache omission/full observability have a reviewed preservation adapter. Actual pinned-tool serialization passed all 11 checks at 2377d800; corrected two-actor hosted preparation and deployed preservation remain open. Actual hosted Auth/navigation, Worker/Pages release identifiers and public launch approval remain OPEN.",
       "inspectionObservation": "Local release/config/migrations and read-only staging inventory prepared; existing recovery protected. No deployed Debate feature evidence. At candidate 147bb582 the staging gate required thirteen named groups and 65 critical source hashes; later gate changes need separate validation. CPU contract preserves the original two-minute cron plus independent minute sweep, without weakening auth or mail controls.",
       "actualTestFiles": [
         "scripts/test-debate-artifact.mjs",
@@ -38394,7 +38542,7 @@
         }
       },
       "releaseState": "NOT_DEPLOYED",
-      "blocker": "Exact hosted database application/DML rollback/permissions passed. Active Worker configuration was captured read-only; service metadata verifies placement, and cache omission/full observability have a reviewed preservation adapter. Actual pinned-tool serialization and hosted deployment remain open. Actual hosted Auth/navigation, Worker/Pages release identifiers and public launch approval remain OPEN.",
+      "blocker": "Exact hosted database application/DML rollback/permissions passed. Active Worker configuration was captured read-only; service metadata verifies placement, and cache omission/full observability have a reviewed preservation adapter. Actual pinned-tool serialization passed all 11 checks at 2377d800; corrected two-actor hosted preparation and deployed preservation remain open. Actual hosted Auth/navigation, Worker/Pages release identifiers and public launch approval remain OPEN.",
       "inspectionObservation": "Local release/config/migrations and read-only staging inventory prepared; existing recovery protected. No deployed Debate feature evidence. At candidate 147bb582 the staging gate required thirteen named groups and 65 critical source hashes; later gate changes need separate validation. CPU contract preserves the original two-minute cron plus independent minute sweep, without weakening auth or mail controls.",
       "actualTestFiles": [
         "scripts/test-debate-artifact.mjs",
@@ -38670,7 +38818,7 @@
         }
       },
       "releaseState": "NOT_DEPLOYED",
-      "blocker": "Exact hosted database application/DML rollback/permissions passed. Active Worker configuration was captured read-only; service metadata verifies placement, and cache omission/full observability have a reviewed preservation adapter. Actual pinned-tool serialization and hosted deployment remain open. Actual hosted Auth/navigation, Worker/Pages release identifiers and public launch approval remain OPEN.",
+      "blocker": "Exact hosted database application/DML rollback/permissions passed. Active Worker configuration was captured read-only; service metadata verifies placement, and cache omission/full observability have a reviewed preservation adapter. Actual pinned-tool serialization passed all 11 checks at 2377d800; corrected two-actor hosted preparation and deployed preservation remain open. Actual hosted Auth/navigation, Worker/Pages release identifiers and public launch approval remain OPEN.",
       "inspectionObservation": "Local release/config/migrations and read-only staging inventory prepared; existing recovery protected. No deployed Debate feature evidence. At candidate 147bb582 the staging gate required thirteen named groups and 65 critical source hashes; later gate changes need separate validation. CPU contract preserves the original two-minute cron plus independent minute sweep, without weakening auth or mail controls.",
       "actualTestFiles": [
         "scripts/test-debate-artifact.mjs",
@@ -40413,8 +40561,8 @@
         }
       },
       "releaseState": "NOT_DEPLOYED",
-      "blocker": "All source IDs and current test mappings are recorded; full acceptance and deployed-release proof remain open. Synthetic Debate create/reload/deep-link and Study entry journeys passed in CI. Hosted sign-in return, actual main/mobile navigation and physical browser matrix remain OPEN. Exact hosted database application/DML rollback/permissions passed. Active Worker configuration was captured read-only; service metadata verifies placement, and cache omission/full observability have a reviewed preservation adapter. Actual pinned-tool serialization and hosted deployment remain open. Actual hosted Auth/navigation, Worker/Pages release identifiers and public launch approval remain OPEN.",
-      "inspectionObservation": "All source paragraphs/table rows, 44 acceptance IDs and four owner directives retained; source coverage is not acceptance. Separate Debate route/menu/lobby, direct event entry and authenticated current snapshots implemented. Actual Worker same-origin GET permits seven known reads only with absent Origin, exact configured URL origin and Sec-Fetch-Site:same-origin. Explicit foreign/null/blank origins, unrelated routes and mutations remain denied. Delayed event/lobby responses cannot replace current navigation. Local release/config/migrations and read-only staging inventory prepared; existing recovery protected. No deployed Debate feature evidence. At candidate 147bb582 the staging gate required thirteen named groups and 65 critical source hashes; later gate changes need separate validation. CPU contract preserves the original two-minute cron plus independent minute sweep, without weakening auth or mail controls. Consolidated V3 is authoritative except later explicit owner changes, including OWNER-04. The owner resolved staging account selection by authorizing autonomous routine decisions; isolated fixtures are being prepared, not yet hosted.",
+      "blocker": "All source IDs and current test mappings are recorded; full acceptance and deployed-release proof remain open. Synthetic Debate create/reload/deep-link and Study entry journeys passed in CI. Hosted sign-in return, actual main/mobile navigation and physical browser matrix remain OPEN. Exact hosted database application/DML rollback/permissions passed. Active Worker configuration was captured read-only; service metadata verifies placement, and cache omission/full observability have a reviewed preservation adapter. Actual pinned-tool serialization passed all 11 checks at 2377d800; corrected two-actor hosted preparation and deployed preservation remain open. Actual hosted Auth/navigation, Worker/Pages release identifiers and public launch approval remain OPEN.",
+      "inspectionObservation": "All source paragraphs/table rows, 44 acceptance IDs and four owner directives retained; source coverage is not acceptance. Separate Debate route/menu/lobby, direct event entry and authenticated current snapshots implemented. Actual Worker same-origin GET permits seven known reads only with absent Origin, exact configured URL origin and Sec-Fetch-Site:same-origin. Explicit foreign/null/blank origins, unrelated routes and mutations remain denied. Delayed event/lobby responses cannot replace current navigation. Local release/config/migrations and read-only staging inventory prepared; existing recovery protected. No deployed Debate feature evidence. At candidate 147bb582 the staging gate required thirteen named groups and 65 critical source hashes; later gate changes need separate validation. CPU contract preserves the original two-minute cron plus independent minute sweep, without weakening auth or mail controls. Consolidated V3 is authoritative except later explicit owner changes, including OWNER-04. The owner authorized autonomous staging identity selection. One real ordinary fixture was registered, signed in and verified deleted; the corrected two-actor preparation retry remains open.",
       "actualTestFiles": [
         "scripts/test-debate-artifact.mjs",
         "scripts/test-debate-client-state.mjs",

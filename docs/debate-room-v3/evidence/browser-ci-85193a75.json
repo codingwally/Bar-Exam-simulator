@@ -1,0 +1,3775 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-09T13:21:43.158Z",
+  "status": "PASS_SYNTHETIC_BROWSER_JOURNEYS_WITH_TWO_FONT_LAYOUT_SCREENSHOTS_REVIEWED",
+  "provenance": {
+    "candidate": "85193a759dbf119dc9dd908cb0b6590196883ad3",
+    "candidateTree": "809822024296e5143afd4b8f6ed60afcbccc6640",
+    "testedCheckout": "acd796490fd04dfc7280b6c4c00cea7bfee7a532",
+    "testedCheckoutTree": "809822024296e5143afd4b8f6ed60afcbccc6640",
+    "testedCheckoutParents": [
+      "f0c4d6be4203d0a3688521694145d86a0462f2a4",
+      "85193a759dbf119dc9dd908cb0b6590196883ad3"
+    ],
+    "treeVerification": "Exact candidate Git tree independently resolved locally; tested checkout tree/parents independently read from GitHub Git commit API.",
+    "run": {
+      "id": 34355666171,
+      "url": "https://github.com/codingwally/Bar-Exam-simulator/actions/runs/34355666171",
+      "status": "completed",
+      "conclusion": "failure",
+      "reason": "Native cleanup test harness failed; local-validation and Wrangler metadata jobs passed independently."
+    },
+    "job": {
+      "id": 102479576504,
+      "name": "local-validation",
+      "conclusion": "success",
+      "startedAt": "2026-09-09T13:12:57Z",
+      "completedAt": "2026-09-09T13:15:32Z"
+    }
+  },
+  "sourceVerification": {
+    "debate": [
+      {
+        "path": "worker/debate-sanctions.mjs",
+        "sha256": "f43af5803e097b26836b217086d3e6d93c6e769c0867a2aaaeb6ef05f642119b"
+      },
+      {
+        "path": "worker/debate-domain.mjs",
+        "sha256": "669430db23c9b62429722cf58d41c5a97aa483f25056f299c2c1819a6a14d63b"
+      },
+      {
+        "path": "worker/debate-tournament.mjs",
+        "sha256": "f03907752aa76f2cd45b6747dcf0270eb6abdc004a260742a475fc0963258d2e"
+      },
+      {
+        "path": "worker/debate-fixtures.mjs",
+        "sha256": "d61f350b70f57a9d6e4fc2fad2593e6ca99e70cc70cbba4e14f5c4590a112c5c"
+      },
+      {
+        "path": "worker/debate-service.mjs",
+        "sha256": "0a9d665f58c47f0adb78901822dce625ab2df7ca5dd5bb2a7c4212b5868cdd58"
+      },
+      {
+        "path": "worker/debate-store.mjs",
+        "sha256": "08340dc8a0f5a1a9ccb19827a146dd5d788a8227d0393e90983574bd4431a31a"
+      },
+      {
+        "path": "worker/debate-routes.mjs",
+        "sha256": "d566a262f7ffbbc3c0ea94e57444eac386b565bf5f9536925c485a2f45cf86b9"
+      },
+      {
+        "path": "worker/debate-schema-draft.sql",
+        "sha256": "89d4f46b1e1b2991202880114387a1356b5eedfcf562129079de83d55a94b53c"
+      },
+      {
+        "path": "worker/debate-documents.mjs",
+        "sha256": "3dd08cb71074921527dfe4536459af1a613dd087774eab032886278be0918d6f"
+      },
+      {
+        "path": "assets/debate-room.js",
+        "sha256": "1c1c245f2d23f12e4f546ae33c57dc5613b927fd6417c157de6ab992cc4eed6e"
+      },
+      {
+        "path": "assets/debate-media.js",
+        "sha256": "ed33b1126087c531423840fb241afb9e95682bcfcd7c8ec8caafb8ae142593b2"
+      },
+      {
+        "path": "assets/debate-dates.js",
+        "sha256": "7549422128267aff3d7de4aafc535b5f40290df456a33fd5b85ddd4f7fcd0b12"
+      },
+      {
+        "path": "assets/debate-room.css",
+        "sha256": "bc752e89280753a0e80dd489229e2c2b9f3f4e1bc15a9b70d6a95291eab681bd"
+      },
+      {
+        "path": "debate-room/index.html",
+        "sha256": "b7722b53d25db83d381aea95480031b481522ce46cb7e29f7fca431dd02d647e"
+      },
+      {
+        "path": "scripts/serve-debate-rehearsal.mjs",
+        "sha256": "8b3db6ccf3aff8f4ae4165f07df4c810b4ffa892f5f63968f0ee5aeb3127070d"
+      },
+      {
+        "path": "scripts/test-debate-organizer-rehearsal.mjs",
+        "sha256": "4f95b5a2d010948bd5b2dbbd7ab381c2c899f263ba19b5d423ceeebf63a45a41"
+      },
+      {
+        "path": "assets/vendor/debate-fonts/fraunces-v38-latin-ext.woff2",
+        "sha256": "a21ecfbf41fbc393e24ef9b7e38532a27e8da5e0a074aa7d66802d1b5ccec2f0"
+      },
+      {
+        "path": "assets/vendor/debate-fonts/fraunces-v38-latin.woff2",
+        "sha256": "7f9d191d999336d3b9790afa72e1358e50a13b06d4f289341e92a311967a80f9"
+      },
+      {
+        "path": "assets/vendor/debate-fonts/inter-v20-latin-ext.woff2",
+        "sha256": "34b9c504cab7a73e37b746343a449132e56cf7b5481af2cb81dc74dcff25c956"
+      },
+      {
+        "path": "assets/vendor/debate-fonts/inter-v20-latin.woff2",
+        "sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62"
+      },
+      {
+        "path": "scripts/test-debate-browser-organizer.mjs",
+        "sha256": "500ae076bc1d548f212eea276a7d78c262c58d840506e78ac7a95e7aff29af46"
+      }
+    ],
+    "study": [
+      {
+        "path": "study-room/index.html",
+        "sha256": "54c96a2eff695deacd935fad05cc0d44413c4e7144adcd4c44e40f84f3c31bc8"
+      },
+      {
+        "path": "assets/study-room-live.js",
+        "sha256": "18233c7e451d4af50a4b71254ae93d68ceb0316b0b7a1cd4b4d880bd32542450"
+      },
+      {
+        "path": "assets/study-room-live.css",
+        "sha256": "b03ee186567cf1f027b699cc12979dcad4f89279d7563e11d8fe91218f1520c2"
+      },
+      {
+        "path": "worker/study-room-routes.mjs",
+        "sha256": "12e502a8271e1af0f2d0e7a54fa4fabde9037e612dc4c12eec2f57edf9d850a7"
+      },
+      {
+        "path": "worker/study-room-core.mjs",
+        "sha256": "7b8bdab0d8d545cc9acba564268dd4a8250c5e126fbc1238848682b1d0ddae04"
+      },
+      {
+        "path": "worker/study-room-admission.mjs",
+        "sha256": "d82c8c031b5c013f2a953b6e0dc350f6a266116e691b08d8608a7c1933c5346d"
+      },
+      {
+        "path": "supabase/migrations/20260908144814_astra_study_room_persisted_catalog.sql",
+        "sha256": "f5eb0739f36fca4d1cd574fdc7bd30a299351f8cc892a7896742f247fc496ebc"
+      },
+      {
+        "path": "supabase/migrations/20260909080143_study_room_admission_v3.sql",
+        "sha256": "5ca7d139bb925b00c82d391aab4f566446d5d1bdd25e0b1b271fde614cb11637"
+      },
+      {
+        "path": "scripts/serve-study-room-rehearsal.mjs",
+        "sha256": "207765224cdbdcbf25f7ad12af3ff9b2af7812c1a81c7eb62aaa4a5ceceb907e"
+      },
+      {
+        "path": "scripts/test-study-room-browser.mjs",
+        "sha256": "95f857102208180dd7a542061e798051b176b3d2f2b694b661d356debc90e941"
+      }
+    ]
+  },
+  "reports": {
+    "debate": {
+      "path": "artifacts/debate-local-rehearsal/ci-34355666171/debate-v3-synthetic-browser-evidence/browser-organizer-ci/report.json",
+      "sha256": "a6a028ad3509314a74463257fe18c555e296e9e8efde85068492b23a87b51625",
+      "report": {
+        "kind": "ISOLATED_CI_SYNTHETIC_BROWSER_ORGANIZER",
+        "state": "PASS_SYNTHETIC_BROWSER_ORGANIZER",
+        "startedAt": "2026-09-09T13:14:02.790Z",
+        "head": "acd796490fd04dfc7280b6c4c00cea7bfee7a532",
+        "testSha256": "500ae076bc1d548f212eea276a7d78c262c58d840506e78ac7a95e7aff29af46",
+        "checks": [
+          {
+            "name": "New event survives actual browser reload",
+            "status": "PASS"
+          },
+          {
+            "name": "Invitation contains a complete same-origin event and secret link",
+            "status": "PASS"
+          },
+          {
+            "name": "Unadmitted identity receives only its own waiting snapshot",
+            "status": "PASS"
+          },
+          {
+            "name": "Waiting participant cannot open other workspaces",
+            "status": "PASS"
+          },
+          {
+            "name": "Host admission unlocks People after a real refresh",
+            "status": "PASS"
+          },
+          {
+            "name": "Invitation contains a complete same-origin event and secret link",
+            "status": "PASS"
+          },
+          {
+            "name": "Unadmitted identity receives only its own waiting snapshot",
+            "status": "PASS"
+          },
+          {
+            "name": "Waiting participant cannot open other workspaces",
+            "status": "PASS"
+          },
+          {
+            "name": "Host admission unlocks People after a real refresh",
+            "status": "PASS"
+          },
+          {
+            "name": "Invitation contains a complete same-origin event and secret link",
+            "status": "PASS"
+          },
+          {
+            "name": "Unadmitted identity receives only its own waiting snapshot",
+            "status": "PASS"
+          },
+          {
+            "name": "Waiting participant cannot open other workspaces",
+            "status": "PASS"
+          },
+          {
+            "name": "Host admission unlocks People after a real refresh",
+            "status": "PASS"
+          },
+          {
+            "name": "Invitation contains a complete same-origin event and secret link",
+            "status": "PASS"
+          },
+          {
+            "name": "Unadmitted identity receives only its own waiting snapshot",
+            "status": "PASS"
+          },
+          {
+            "name": "Waiting participant cannot open other workspaces",
+            "status": "PASS"
+          },
+          {
+            "name": "Host admission unlocks People after a real refresh",
+            "status": "PASS"
+          },
+          {
+            "name": "Invitation contains a complete same-origin event and secret link",
+            "status": "PASS"
+          },
+          {
+            "name": "Unadmitted identity receives only its own waiting snapshot",
+            "status": "PASS"
+          },
+          {
+            "name": "Waiting participant cannot open other workspaces",
+            "status": "PASS"
+          },
+          {
+            "name": "Host admission unlocks People after a real refresh",
+            "status": "PASS"
+          },
+          {
+            "name": "Invitation contains a complete same-origin event and secret link",
+            "status": "PASS"
+          },
+          {
+            "name": "Unadmitted identity receives only its own waiting snapshot",
+            "status": "PASS"
+          },
+          {
+            "name": "Waiting participant cannot open other workspaces",
+            "status": "PASS"
+          },
+          {
+            "name": "Host admission unlocks People after a real refresh",
+            "status": "PASS"
+          },
+          {
+            "name": "Invitation contains a complete same-origin event and secret link",
+            "status": "PASS"
+          },
+          {
+            "name": "Unadmitted identity receives only its own waiting snapshot",
+            "status": "PASS"
+          },
+          {
+            "name": "Waiting participant cannot open other workspaces",
+            "status": "PASS"
+          },
+          {
+            "name": "Host admission unlocks People after a real refresh",
+            "status": "PASS"
+          },
+          {
+            "name": "Invitation contains a complete same-origin event and secret link",
+            "status": "PASS"
+          },
+          {
+            "name": "Unadmitted identity receives only its own waiting snapshot",
+            "status": "PASS"
+          },
+          {
+            "name": "Waiting participant cannot open other workspaces",
+            "status": "PASS"
+          },
+          {
+            "name": "Host admission unlocks People after a real refresh",
+            "status": "PASS"
+          },
+          {
+            "name": "Invitation contains a complete same-origin event and secret link",
+            "status": "PASS"
+          },
+          {
+            "name": "Unadmitted identity receives only its own waiting snapshot",
+            "status": "PASS"
+          },
+          {
+            "name": "Waiting participant cannot open other workspaces",
+            "status": "PASS"
+          },
+          {
+            "name": "Host admission unlocks People after a real refresh",
+            "status": "PASS"
+          },
+          {
+            "name": "Published fixture fixes both teams and motion in the dialog",
+            "status": "PASS"
+          },
+          {
+            "name": "Current match readiness is saved and rendered",
+            "status": "PASS"
+          },
+          {
+            "name": "Live room layout exposes the media controls, arena and headings at 1365px",
+            "status": "PASS"
+          },
+          {
+            "name": "Media controls stay above the arena without covering team or adjudicator headings at 1365px",
+            "status": "PASS",
+            "width": 1365,
+            "geometry": {
+              ".media-dock": {
+                "x": 28,
+                "y": 686.5,
+                "width": 1309,
+                "height": 74
+              },
+              "#arena": {
+                "x": 28,
+                "y": 784.5,
+                "width": 1309,
+                "height": 1144.28125
+              },
+              ".judges-rail": {
+                "x": 28,
+                "y": 784.5,
+                "width": 1309,
+                "height": 161.65625
+              },
+              "#affirmative-name": {
+                "x": 28,
+                "y": 966.15625,
+                "width": 362.5625,
+                "height": 22.65625
+              },
+              "#negative-name": {
+                "x": 974.421875,
+                "y": 966.15625,
+                "width": 362.578125,
+                "height": 22.65625
+              }
+            }
+          },
+          {
+            "name": "Live room layout exposes the media controls, arena and headings at 320px",
+            "status": "PASS"
+          },
+          {
+            "name": "Media controls stay above the arena without covering team or adjudicator headings at 320px",
+            "status": "PASS",
+            "width": 320,
+            "geometry": {
+              ".media-dock": {
+                "x": 18,
+                "y": 1144.265625,
+                "width": 284,
+                "height": 74
+              },
+              "#arena": {
+                "x": 18,
+                "y": 1242.265625,
+                "width": 284,
+                "height": 1279.9375
+              },
+              ".judges-rail": {
+                "x": 18,
+                "y": 1242.265625,
+                "width": 284,
+                "height": 104.8125
+              },
+              "#affirmative-name": {
+                "x": 18,
+                "y": 1994.890625,
+                "width": 136,
+                "height": 45.3125
+              },
+              "#negative-name": {
+                "x": 166,
+                "y": 1994.890625,
+                "width": 136,
+                "height": 45.3125
+              }
+            }
+          },
+          {
+            "name": "Default preparation loads READY for 15 minutes",
+            "status": "PASS"
+          },
+          {
+            "name": "Private marker absent from unauthorized DOM: CI_AFFIRMATIVE_PRIVATE_STRATEGY_DO_NOT_DISCLOSE",
+            "status": "PASS"
+          },
+          {
+            "name": "Private marker absent from unauthorized snapshots: CI_AFFIRMATIVE_PRIVATE_STRATEGY_DO_NOT_DISCLOSE",
+            "status": "PASS"
+          },
+          {
+            "name": "preparation begins READY without automatic start",
+            "status": "PASS"
+          },
+          {
+            "name": "Synthetic time jump expires the saved lease without renewing or claiming control",
+            "status": "PASS",
+            "expiryId": 1
+          },
+          {
+            "name": "preparation runs into visible overtime without auto-advance",
+            "status": "PASS"
+          },
+          {
+            "name": "Explicit DOM claim restores control after synthetic lease expiry",
+            "status": "PASS",
+            "expiryId": 1,
+            "receiptId": "b1363a73-31a0-4e2e-981a-36903024a528"
+          },
+          {
+            "name": "stage-01 begins READY without automatic start",
+            "status": "PASS"
+          },
+          {
+            "name": "Paused browser clock preserves elapsed time",
+            "status": "PASS"
+          },
+          {
+            "name": "Synthetic time jump expires the saved lease without renewing or claiming control",
+            "status": "PASS",
+            "expiryId": 2
+          },
+          {
+            "name": "stage-01 runs into visible overtime without auto-advance",
+            "status": "PASS"
+          },
+          {
+            "name": "Explicit DOM claim restores control after synthetic lease expiry",
+            "status": "PASS",
+            "expiryId": 2,
+            "receiptId": "01bae526-b6f8-4280-88bf-bc3ffea66095"
+          },
+          {
+            "name": "stage-02 begins READY without automatic start",
+            "status": "PASS"
+          },
+          {
+            "name": "Synthetic time jump expires the saved lease without renewing or claiming control",
+            "status": "PASS",
+            "expiryId": 3
+          },
+          {
+            "name": "stage-02 runs into visible overtime without auto-advance",
+            "status": "PASS"
+          },
+          {
+            "name": "Explicit DOM claim restores control after synthetic lease expiry",
+            "status": "PASS",
+            "expiryId": 3,
+            "receiptId": "5ce4be93-e3b4-491b-b72d-947dc85b5af9"
+          },
+          {
+            "name": "stage-03 begins READY without automatic start",
+            "status": "PASS"
+          },
+          {
+            "name": "Synthetic time jump expires the saved lease without renewing or claiming control",
+            "status": "PASS",
+            "expiryId": 4
+          },
+          {
+            "name": "stage-03 runs into visible overtime without auto-advance",
+            "status": "PASS"
+          },
+          {
+            "name": "Explicit DOM claim restores control after synthetic lease expiry",
+            "status": "PASS",
+            "expiryId": 4,
+            "receiptId": "6678bac5-93c3-4382-8ddf-c9497b591104"
+          },
+          {
+            "name": "stage-04 begins READY without automatic start",
+            "status": "PASS"
+          },
+          {
+            "name": "Synthetic time jump expires the saved lease without renewing or claiming control",
+            "status": "PASS",
+            "expiryId": 5
+          },
+          {
+            "name": "stage-04 runs into visible overtime without auto-advance",
+            "status": "PASS"
+          },
+          {
+            "name": "Explicit DOM claim restores control after synthetic lease expiry",
+            "status": "PASS",
+            "expiryId": 5,
+            "receiptId": "ffa662c1-4106-47f3-a5bc-3c5e2be120f6"
+          },
+          {
+            "name": "stage-05 begins READY without automatic start",
+            "status": "PASS"
+          },
+          {
+            "name": "Synthetic time jump expires the saved lease without renewing or claiming control",
+            "status": "PASS",
+            "expiryId": 6
+          },
+          {
+            "name": "stage-05 runs into visible overtime without auto-advance",
+            "status": "PASS"
+          },
+          {
+            "name": "Explicit DOM claim restores control after synthetic lease expiry",
+            "status": "PASS",
+            "expiryId": 6,
+            "receiptId": "0f55219a-47bc-4e76-b299-b178ff4b4e62"
+          },
+          {
+            "name": "stage-06 begins READY without automatic start",
+            "status": "PASS"
+          },
+          {
+            "name": "Synthetic time jump expires the saved lease without renewing or claiming control",
+            "status": "PASS",
+            "expiryId": 7
+          },
+          {
+            "name": "stage-06 runs into visible overtime without auto-advance",
+            "status": "PASS"
+          },
+          {
+            "name": "Explicit DOM claim restores control after synthetic lease expiry",
+            "status": "PASS",
+            "expiryId": 7,
+            "receiptId": "ed770126-5846-414b-8cb5-967d9ac7a779"
+          },
+          {
+            "name": "stage-07 begins READY without automatic start",
+            "status": "PASS"
+          },
+          {
+            "name": "Synthetic time jump expires the saved lease without renewing or claiming control",
+            "status": "PASS",
+            "expiryId": 8
+          },
+          {
+            "name": "stage-07 runs into visible overtime without auto-advance",
+            "status": "PASS"
+          },
+          {
+            "name": "Explicit DOM claim restores control after synthetic lease expiry",
+            "status": "PASS",
+            "expiryId": 8,
+            "receiptId": "e7e6f3ce-a7dc-45de-990a-d81c80c10c98"
+          },
+          {
+            "name": "stage-08 begins READY without automatic start",
+            "status": "PASS"
+          },
+          {
+            "name": "Synthetic time jump expires the saved lease without renewing or claiming control",
+            "status": "PASS",
+            "expiryId": 9
+          },
+          {
+            "name": "stage-08 runs into visible overtime without auto-advance",
+            "status": "PASS"
+          },
+          {
+            "name": "Explicit DOM claim restores control after synthetic lease expiry",
+            "status": "PASS",
+            "expiryId": 9,
+            "receiptId": "bcbcb6b9-a8f6-4853-be4c-c7b5465c4701"
+          },
+          {
+            "name": "stage-09 begins READY without automatic start",
+            "status": "PASS"
+          },
+          {
+            "name": "Synthetic time jump expires the saved lease without renewing or claiming control",
+            "status": "PASS",
+            "expiryId": 10
+          },
+          {
+            "name": "stage-09 runs into visible overtime without auto-advance",
+            "status": "PASS"
+          },
+          {
+            "name": "Explicit DOM claim restores control after synthetic lease expiry",
+            "status": "PASS",
+            "expiryId": 10,
+            "receiptId": "19e31401-4c26-4d6a-b02a-81fb65a06089"
+          },
+          {
+            "name": "stage-10 begins READY without automatic start",
+            "status": "PASS"
+          },
+          {
+            "name": "Synthetic time jump expires the saved lease without renewing or claiming control",
+            "status": "PASS",
+            "expiryId": 11
+          },
+          {
+            "name": "stage-10 runs into visible overtime without auto-advance",
+            "status": "PASS"
+          },
+          {
+            "name": "Explicit DOM claim restores control after synthetic lease expiry",
+            "status": "PASS",
+            "expiryId": 11,
+            "receiptId": "2dbfdc38-89e2-4d94-b596-acabf44c3d16"
+          },
+          {
+            "name": "stage-11 begins READY without automatic start",
+            "status": "PASS"
+          },
+          {
+            "name": "Synthetic time jump expires the saved lease without renewing or claiming control",
+            "status": "PASS",
+            "expiryId": 12
+          },
+          {
+            "name": "stage-11 runs into visible overtime without auto-advance",
+            "status": "PASS"
+          },
+          {
+            "name": "Explicit DOM claim restores control after synthetic lease expiry",
+            "status": "PASS",
+            "expiryId": 12,
+            "receiptId": "076f33ea-2695-4d5f-986b-5952b35d9c53"
+          },
+          {
+            "name": "stage-12 begins READY without automatic start",
+            "status": "PASS"
+          },
+          {
+            "name": "Synthetic time jump expires the saved lease without renewing or claiming control",
+            "status": "PASS",
+            "expiryId": 13
+          },
+          {
+            "name": "stage-12 runs into visible overtime without auto-advance",
+            "status": "PASS"
+          },
+          {
+            "name": "Explicit DOM claim restores control after synthetic lease expiry",
+            "status": "PASS",
+            "expiryId": 13,
+            "receiptId": "88ebb5ef-dd25-48c1-988e-ff79c3bd44a9"
+          },
+          {
+            "name": "closing-break begins READY without automatic start",
+            "status": "PASS"
+          },
+          {
+            "name": "Synthetic time jump expires the saved lease without renewing or claiming control",
+            "status": "PASS",
+            "expiryId": 14
+          },
+          {
+            "name": "closing-break runs into visible overtime without auto-advance",
+            "status": "PASS"
+          },
+          {
+            "name": "Explicit DOM claim restores control after synthetic lease expiry",
+            "status": "PASS",
+            "expiryId": 14,
+            "receiptId": "fa6bc602-4c7e-4724-bbb9-77364d777697"
+          },
+          {
+            "name": "stage-13 begins READY without automatic start",
+            "status": "PASS"
+          },
+          {
+            "name": "Synthetic time jump expires the saved lease without renewing or claiming control",
+            "status": "PASS",
+            "expiryId": 15
+          },
+          {
+            "name": "stage-13 runs into visible overtime without auto-advance",
+            "status": "PASS"
+          },
+          {
+            "name": "Explicit DOM claim restores control after synthetic lease expiry",
+            "status": "PASS",
+            "expiryId": 15,
+            "receiptId": "47eb9185-4937-4371-8e40-36fd2cd82ddd"
+          },
+          {
+            "name": "stage-14 begins READY without automatic start",
+            "status": "PASS"
+          },
+          {
+            "name": "Synthetic time jump expires the saved lease without renewing or claiming control",
+            "status": "PASS",
+            "expiryId": 16
+          },
+          {
+            "name": "stage-14 runs into visible overtime without auto-advance",
+            "status": "PASS"
+          },
+          {
+            "name": "Explicit DOM claim restores control after synthetic lease expiry",
+            "status": "PASS",
+            "expiryId": 16,
+            "receiptId": "79f0ca40-2753-449e-a1ba-0afe454f43aa"
+          },
+          {
+            "name": "All fourteen speaking stages and both preparation periods completed through the DOM",
+            "status": "PASS"
+          },
+          {
+            "name": "Full scorecard exposes all 26 numeric controls",
+            "status": "PASS"
+          },
+          {
+            "name": "Private judge draft restores after a real page reload",
+            "status": "PASS"
+          },
+          {
+            "name": "Observer has no private score form",
+            "status": "PASS"
+          },
+          {
+            "name": "Private marker absent from unauthorized DOM: CI_JUDGE_PRIVATE_NOTE_DO_NOT_DISCLOSE",
+            "status": "PASS"
+          },
+          {
+            "name": "Private marker absent from unauthorized snapshots: CI_JUDGE_PRIVATE_NOTE_DO_NOT_DISCLOSE",
+            "status": "PASS"
+          },
+          {
+            "name": "Private marker absent from unauthorized DOM: CI_AFFIRMATIVE_PRIVATE_STRATEGY_DO_NOT_DISCLOSE",
+            "status": "PASS"
+          },
+          {
+            "name": "Private marker absent from unauthorized snapshots: CI_AFFIRMATIVE_PRIVATE_STRATEGY_DO_NOT_DISCLOSE",
+            "status": "PASS"
+          },
+          {
+            "name": "Audience Choice records one current negative vote",
+            "status": "PASS"
+          },
+          {
+            "name": "Correction preserves a superseded published version",
+            "status": "PASS"
+          },
+          {
+            "name": "Full scorecard exposes all 26 numeric controls",
+            "status": "PASS"
+          },
+          {
+            "name": "Corrected final version retains independent judging and nominated award",
+            "status": "PASS"
+          },
+          {
+            "name": "Final results fit a narrow viewport without page-level overflow",
+            "status": "PASS"
+          },
+          {
+            "name": "rules browser download matches the real generated artifact",
+            "status": "PASS"
+          },
+          {
+            "name": "rules has a parseable nonempty PDF",
+            "status": "PASS"
+          },
+          {
+            "name": "scorecard browser download matches the real generated artifact",
+            "status": "PASS"
+          },
+          {
+            "name": "scorecard has a parseable nonempty PDF",
+            "status": "PASS"
+          },
+          {
+            "name": "result browser download matches the real generated artifact",
+            "status": "PASS"
+          },
+          {
+            "name": "result has a parseable nonempty PDF",
+            "status": "PASS"
+          },
+          {
+            "name": "event_report browser download matches the real generated artifact",
+            "status": "PASS"
+          },
+          {
+            "name": "event_report has a parseable nonempty PDF",
+            "status": "PASS"
+          },
+          {
+            "name": "csv browser download matches the real generated artifact",
+            "status": "PASS"
+          },
+          {
+            "name": "CSV has actual rows",
+            "status": "PASS"
+          },
+          {
+            "name": "certificate browser download matches the real generated artifact",
+            "status": "PASS"
+          },
+          {
+            "name": "certificate has a parseable nonempty PDF",
+            "status": "PASS"
+          },
+          {
+            "name": "Observer cannot download another actor’s private exports",
+            "status": "PASS"
+          },
+          {
+            "name": "Private marker absent from unauthorized DOM: CI_JUDGE_PRIVATE_NOTE_DO_NOT_DISCLOSE",
+            "status": "PASS"
+          },
+          {
+            "name": "Private marker absent from unauthorized snapshots: CI_JUDGE_PRIVATE_NOTE_DO_NOT_DISCLOSE",
+            "status": "PASS"
+          },
+          {
+            "name": "Private marker absent from unauthorized DOM: CI_AFFIRMATIVE_PRIVATE_STRATEGY_DO_NOT_DISCLOSE",
+            "status": "PASS"
+          },
+          {
+            "name": "Private marker absent from unauthorized snapshots: CI_AFFIRMATIVE_PRIVATE_STRATEGY_DO_NOT_DISCLOSE",
+            "status": "PASS"
+          },
+          {
+            "name": "Private marker absent from unauthorized DOM: CI_TEAM_A_FEEDBACK_PRIVATE",
+            "status": "PASS"
+          },
+          {
+            "name": "Private marker absent from unauthorized snapshots: CI_TEAM_A_FEEDBACK_PRIVATE",
+            "status": "PASS"
+          },
+          {
+            "name": "Private marker absent from unauthorized DOM: CI_TEAM_N_FEEDBACK_PRIVATE",
+            "status": "PASS"
+          },
+          {
+            "name": "Private marker absent from unauthorized snapshots: CI_TEAM_N_FEEDBACK_PRIVATE",
+            "status": "PASS"
+          },
+          {
+            "name": "Current match readiness is saved and rendered",
+            "status": "PASS"
+          },
+          {
+            "name": "Next three-judge match starts without changing prior attempts or results",
+            "status": "PASS"
+          },
+          {
+            "name": "Actual saved first match has all fourteen finished speaking attempts",
+            "status": "PASS"
+          },
+          {
+            "name": "Fixture finalization recorded its exact saved winner",
+            "status": "PASS"
+          },
+          {
+            "name": "No unexpected application network destinations",
+            "status": "PASS"
+          },
+          {
+            "name": "No uncaught browser JavaScript errors",
+            "status": "PASS"
+          },
+          {
+            "name": "Every command rejection has an exact expected request and error code",
+            "status": "PASS"
+          },
+          {
+            "name": "Every timer claim came from an explicit DOM action and committed receipt",
+            "status": "PASS"
+          },
+          {
+            "name": "Every synthetic lease expiry recovered through an explicit DOM claim",
+            "status": "PASS"
+          },
+          {
+            "name": "No unexpected browser console errors",
+            "status": "PASS"
+          },
+          {
+            "name": "At most two pages were opened",
+            "status": "PASS"
+          }
+        ],
+        "actions": [
+          {
+            "command": "create_event",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "dab029a4-8324-4022-bd72-9d4ea3d96b5e",
+            "revision": 1,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "ccb17868-2665-4a74-9275-0b5e5fe637ab",
+            "revision": 2,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "create_invite",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "44704e15-3f3c-476e-a260-80621f5064ce",
+            "revision": 3,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "claim_invite",
+            "actorId": "10000000-0000-4000-8000-000000000002",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "revision": 4,
+            "via": "invitation-link DOM form"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000002",
+            "receiptId": "f7e0f63b-9586-4047-8d45-0ce0792729aa",
+            "revision": 5,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "admit_member",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "6f4f8c5c-87ad-46fa-8d72-c63def9fa994",
+            "revision": 6,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "create_invite",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "6578bc95-b555-4c9d-b3fd-4d566c41ecfe",
+            "revision": 7,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "claim_invite",
+            "actorId": "10000000-0000-4000-8000-000000000003",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "revision": 8,
+            "via": "invitation-link DOM form"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000003",
+            "receiptId": "cfa8d8c9-532f-4fb1-909b-280814720494",
+            "revision": 9,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "admit_member",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "caf5b9ef-77b3-4a66-abe1-b2ed409db3da",
+            "revision": 10,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "create_invite",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "1256a1dc-04d5-4d52-b820-d60f881a3adf",
+            "revision": 11,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "claim_invite",
+            "actorId": "10000000-0000-4000-8000-000000000004",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "revision": 12,
+            "via": "invitation-link DOM form"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000004",
+            "receiptId": "c676a7c7-9df0-4a4d-a760-048cf6f137cd",
+            "revision": 13,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "admit_member",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "991fafbc-8e6e-4bb1-a47a-b82f3e479854",
+            "revision": 14,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "create_invite",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "a95fbc66-366c-45f8-b07a-ee7c9ddf1ad8",
+            "revision": 15,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "claim_invite",
+            "actorId": "10000000-0000-4000-8000-000000000005",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "revision": 16,
+            "via": "invitation-link DOM form"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000005",
+            "receiptId": "957d36e6-749d-4fa6-849b-b53926c1815c",
+            "revision": 17,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "admit_member",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "9effb282-b47a-44ad-b5ff-0b826addfba4",
+            "revision": 18,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "create_invite",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "cc531966-38ae-4c61-9e1d-fa02cfa0412b",
+            "revision": 19,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "claim_invite",
+            "actorId": "10000000-0000-4000-8000-000000000006",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "revision": 20,
+            "via": "invitation-link DOM form"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000006",
+            "receiptId": "b367a3ab-f9a8-4365-89dc-6203a88d5969",
+            "revision": 21,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "admit_member",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "26702b81-80b2-4e26-a92f-2db3935873e4",
+            "revision": 22,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "create_invite",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "ed95ec15-61e9-42c4-bf32-8522fc51c325",
+            "revision": 23,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "claim_invite",
+            "actorId": "10000000-0000-4000-8000-000000000007",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "revision": 24,
+            "via": "invitation-link DOM form"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000007",
+            "receiptId": "c49fc329-a75f-41d3-938b-a063727c17c7",
+            "revision": 25,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "admit_member",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "6ac5a7fe-0010-4612-8b51-55112d4103e6",
+            "revision": 26,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "create_invite",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "194ec3e4-786d-4db4-a7c1-79e901c9e97d",
+            "revision": 27,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "claim_invite",
+            "actorId": "10000000-0000-4000-8000-000000000008",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "revision": 28,
+            "via": "invitation-link DOM form"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000008",
+            "receiptId": "93a088f9-9319-4345-ac01-c0203c69e9c1",
+            "revision": 29,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "admit_member",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "d2b46acc-ac44-4571-abc3-2bd7adbaafea",
+            "revision": 30,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "create_invite",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "5a9487f4-bbac-473c-a58d-bfb913f86877",
+            "revision": 31,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "claim_invite",
+            "actorId": "10000000-0000-4000-8000-000000000009",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "revision": 32,
+            "via": "invitation-link DOM form"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000009",
+            "receiptId": "791d101d-ccec-445a-be90-8961e0fba26d",
+            "revision": 33,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "admit_member",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "7b321f54-f5e9-4f66-b9ec-eb39ccac7292",
+            "revision": 34,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "create_invite",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "58754d5b-f5c3-4063-bce1-2342e8f8bac2",
+            "revision": 35,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "claim_invite",
+            "actorId": "10000000-0000-4000-8000-000000000010",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "revision": 36,
+            "via": "invitation-link DOM form"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000010",
+            "receiptId": "edc774eb-54ae-470b-a0b4-5bd4c7f3c65d",
+            "revision": 37,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "admit_member",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "61d98c17-6188-4e9a-aa6f-98f32eb4065b",
+            "revision": 38,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "confirm_roster",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "6e4ddd0a-c01b-4337-a23c-c6b7d340bf79",
+            "revision": 39,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "confirm_roster",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "5d2ad16b-fd1e-474a-aee1-31f3ac9a7a0d",
+            "revision": 40,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "add_motion",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "31d1390d-8257-490a-8664-456581050411",
+            "revision": 41,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "add_motion",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "7aed2ec9-5bc9-4996-9aa7-9cc54e44291d",
+            "revision": 42,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "add_motion",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "f59dbe0d-6b87-4cd2-a4e4-cf6d97a2f8e0",
+            "revision": 43,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "add_motion",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "a350ecbb-e86b-4986-81f1-43bd913ed39e",
+            "revision": 44,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "add_motion",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "7f2a6553-b067-4419-b80a-e9a9ec879aee",
+            "revision": 45,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "generate_fixtures",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "559f87f0-9bb0-441a-963c-978b51e0ffd8",
+            "revision": 46,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "publish_fixtures",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "28100609-1b84-4061-8ede-4e2dce0ba5e6",
+            "revision": 47,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "create_match",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "6ac7f089-3d59-4022-bc12-b395fda2658c",
+            "revision": 48,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000002",
+            "receiptId": "2d85f1ef-8e42-4b2e-b863-a2009fa034dc",
+            "revision": 49,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "acknowledge_rules",
+            "actorId": "10000000-0000-4000-8000-000000000002",
+            "receiptId": "8a066a17-84c4-4075-9ef5-07da95b059f7",
+            "revision": 50,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000003",
+            "receiptId": "fd55f361-1ed2-455c-8100-5390c8a2c60f",
+            "revision": 51,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000004",
+            "receiptId": "69781db1-ccf4-4fb7-964a-c9155a58a924",
+            "revision": 52,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000005",
+            "receiptId": "2309a4b2-226c-4d21-ba1e-38969713ed09",
+            "revision": 53,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "acknowledge_rules",
+            "actorId": "10000000-0000-4000-8000-000000000005",
+            "receiptId": "ad52f20d-bd15-4dbb-925f-10bcd51e26ad",
+            "revision": 54,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000006",
+            "receiptId": "50dbcf28-de02-4045-a62d-c3a5dba5a0f4",
+            "revision": 55,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000007",
+            "receiptId": "115e607b-58b3-446c-97fe-6e2dd82922b5",
+            "revision": 56,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "record_device_check",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "dcf601f4-7cbd-414b-bd2f-1e1381679d4f",
+            "revision": 57,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "record_device_check",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "ada65a8d-2aba-41c0-beaf-b5934415db07",
+            "revision": 58,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "record_device_check",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "a3893dec-814c-419e-9925-d05fee3740bc",
+            "revision": 59,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "record_device_check",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "c14d1fac-b51d-4d18-a71a-ff4eeb9f8f34",
+            "revision": 60,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "record_device_check",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "ad4af0f9-3c50-4014-8866-0d8cecebdf3a",
+            "revision": 61,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "record_device_check",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "2aa62af9-36bb-4e79-b185-62f22b46dce1",
+            "revision": 62,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "release_motion",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "eb81ffd4-2d61-4739-90da-18a94f20e04c",
+            "revision": 63,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "start_match",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "c0b690ff-d3b1-4c65-a4c0-6c6b93b52fea",
+            "revision": 64,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "send_message",
+            "actorId": "10000000-0000-4000-8000-000000000002",
+            "receiptId": "8defe780-24f1-49e9-8816-09c6bddbb4d5",
+            "revision": 65,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "send_message",
+            "actorId": "10000000-0000-4000-8000-000000000005",
+            "receiptId": "2ab747a2-56fc-478f-b564-3749ee0a3e79",
+            "revision": 66,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "share_evidence",
+            "actorId": "10000000-0000-4000-8000-000000000005",
+            "receiptId": "e41d37bc-44be-458d-8621-36298c872c92",
+            "revision": 67,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "591aaa68-f3eb-4ac5-b84b-ca8c8057d190",
+            "revision": 68,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "05b6dc62-78b3-4ec0-8fe5-6c172c7a02b6",
+            "revision": 69,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "b1363a73-31a0-4e2e-981a-36903024a528",
+            "revision": 70,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "d7e4f7e8-bc18-46dc-87ef-45e8ca8d7897",
+            "revision": 71,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "next_stage",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "7b4b5567-f9bd-4e96-abe7-67dd75882c74",
+            "revision": 72,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "d85b1974-9a64-4276-aa9a-ec879e5c10d2",
+            "revision": 73,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "44d5f2a3-035e-4193-948a-f0224408b406",
+            "revision": 74,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "9d6e55aa-de49-498b-b93a-381975d1cbf4",
+            "revision": 75,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "2547ef11-c3a2-4986-b834-e95a9ef30384",
+            "revision": 76,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "ff622f1b-dc0a-4f86-bc4e-fa3762e26fd9",
+            "revision": 77,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "a5dfdc9b-5567-476c-8678-3d1e4619ee2c",
+            "revision": 78,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "01bae526-b6f8-4280-88bf-bc3ffea66095",
+            "revision": 79,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "a93b85da-1837-4ca8-9f0c-cd291ed1c3cf",
+            "revision": 80,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "next_stage",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "37aedb16-c2b2-4229-9767-899aaeeb6789",
+            "revision": 81,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "478bf52c-2142-44fa-bcfe-8cce47f09bdc",
+            "revision": 82,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "82ffba19-d585-4697-9802-3cc210d64e1a",
+            "revision": 83,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "5ce4be93-e3b4-491b-b72d-947dc85b5af9",
+            "revision": 84,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "4a15e6f1-5712-4968-80bc-cd2cb988c012",
+            "revision": 85,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "next_stage",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "82c1db9c-812b-4a00-acdf-6d7c10764706",
+            "revision": 86,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "60c379a8-fcab-4482-ac92-261ec85aec32",
+            "revision": 87,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "519764f7-3f0d-46f0-8585-ecf3a1c89992",
+            "revision": 88,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "6678bac5-93c3-4382-8ddf-c9497b591104",
+            "revision": 89,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "d9e6fe87-8df8-41ce-ada3-eb43dc5603ac",
+            "revision": 90,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "next_stage",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "18295e13-e6cf-41c8-b884-d1d4d37987ba",
+            "revision": 91,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "6b2ae997-29db-45ca-83c9-efb065b3b151",
+            "revision": 92,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "85814baa-5dba-4009-a28d-3d6afd29078e",
+            "revision": 93,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "ffa662c1-4106-47f3-a5bc-3c5e2be120f6",
+            "revision": 94,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "7832b62b-71df-4c40-96ce-f2514468c5e7",
+            "revision": 95,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "next_stage",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "5fe388f5-1e2d-46c9-ac7b-c7ae20efa4a9",
+            "revision": 96,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "8cba6085-c850-494c-a925-6943d22db9a0",
+            "revision": 97,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "432d7ae1-f701-440b-b9e7-b8e65db1fc0c",
+            "revision": 98,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "0f55219a-47bc-4e76-b299-b178ff4b4e62",
+            "revision": 99,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "11ff8c3c-3322-41d6-a825-eade4e2a4c46",
+            "revision": 100,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "next_stage",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "eb083984-2c43-4576-9789-589b04eee908",
+            "revision": 101,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "1a1eb485-1179-424f-8339-0b5af89069ab",
+            "revision": 102,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "793958b9-1a96-4427-a065-9be24e0c77dc",
+            "revision": 103,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "ed770126-5846-414b-8cb5-967d9ac7a779",
+            "revision": 104,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "9bd17fc9-857b-47e0-a679-3cda68df7545",
+            "revision": 105,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "next_stage",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "19d3a32f-78d2-4771-9450-c0297185b6f6",
+            "revision": 106,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "c2f8b326-41e4-44b1-87bd-d231fd8873f8",
+            "revision": 107,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "af294033-5e29-4ba2-8a48-4b58f56e7c42",
+            "revision": 108,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "e7e6f3ce-a7dc-45de-990a-d81c80c10c98",
+            "revision": 109,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "26c88f96-df09-4944-933a-63a18a7be38b",
+            "revision": 110,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "next_stage",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "5df65137-7c32-41d1-a137-8a0787ee37ed",
+            "revision": 111,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "e35fea79-0bcc-48e6-8794-5f19b64f8375",
+            "revision": 112,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "2f6bd889-02f0-45db-ad25-67090fc73582",
+            "revision": 113,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "bcbcb6b9-a8f6-4853-be4c-c7b5465c4701",
+            "revision": 114,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "d8668ad3-b1c5-4167-b1b6-1d6b5924b7b3",
+            "revision": 115,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "next_stage",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "1a4d5ac3-5bd3-4fb4-bd90-09b7a1b41447",
+            "revision": 116,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "0dae1a4f-5c41-496d-9045-4e85e66cdb39",
+            "revision": 117,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "5d97d515-25d1-4433-aab7-c184706a980c",
+            "revision": 118,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "19e31401-4c26-4d6a-b02a-81fb65a06089",
+            "revision": 119,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "1598c6cc-53d7-4147-9e6b-fdc44b73f429",
+            "revision": 120,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "next_stage",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "7ca61f0a-bfad-41ea-8825-3fc90480c81f",
+            "revision": 121,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "15b35865-374f-4571-96ef-9433929cc491",
+            "revision": 122,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "13c0cb00-ca04-4d09-b668-39d3977b0c58",
+            "revision": 124,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "2dbfdc38-89e2-4d94-b596-acabf44c3d16",
+            "revision": 125,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "985e12b1-c34a-496f-91e5-1c7cd0e74bcb",
+            "revision": 126,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "next_stage",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "aae9dcf8-7527-4468-a593-391fc2361dea",
+            "revision": 127,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "9b7c164f-a96a-4dd4-8746-e22cbbf78015",
+            "revision": 128,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "72beef57-4e03-4fc7-a32d-bfbdaa3b70cc",
+            "revision": 129,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "076f33ea-2695-4d5f-986b-5952b35d9c53",
+            "revision": 130,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "805a5ff6-a67d-463a-915b-08defd4c5cf4",
+            "revision": 131,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "next_stage",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "25cc120d-6b6c-4b1d-b45d-088aa35fb7ca",
+            "revision": 132,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "1b5b32a9-523a-496e-95f9-2512f118b67e",
+            "revision": 133,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "593bb987-86e8-4b4f-8215-48cf66c51349",
+            "revision": 134,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "88ebb5ef-dd25-48c1-988e-ff79c3bd44a9",
+            "revision": 135,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "3b58b563-490e-4c9b-8f34-209c3e985760",
+            "revision": 136,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "next_stage",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "9a869304-bc92-4d62-ad91-1afddc349f92",
+            "revision": 137,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "27b3f7d7-7cb6-48d3-80c5-585ea7129aee",
+            "revision": 138,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "88c5a4b3-346a-4090-b34a-87b090f44fa7",
+            "revision": 139,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "fa6bc602-4c7e-4724-bbb9-77364d777697",
+            "revision": 140,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "d8583f66-a6ef-4e1d-ad66-032f2efd7f5d",
+            "revision": 141,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "next_stage",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "65626f73-18c2-467b-988b-adc9465b814c",
+            "revision": 142,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "a836b0bf-fbdd-468b-bca4-61256b5a617c",
+            "revision": 143,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "e19e3909-4ceb-4659-a29e-49563ed0e202",
+            "revision": 144,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "47eb9185-4937-4371-8e40-36fd2cd82ddd",
+            "revision": 145,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "af62e9a1-4200-4647-a181-62eae6ec5171",
+            "revision": 146,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "next_stage",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "9dcd55d6-8bc3-4176-ab15-b3f47de586d6",
+            "revision": 147,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "63c33da9-1c18-4407-a963-23e2a03e8434",
+            "revision": 148,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "3c8249fc-9bde-4d43-8a6b-0904a0ade2b1",
+            "revision": 149,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "claim_clock",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "79f0ca40-2753-449e-a1ba-0afe454f43aa",
+            "revision": 150,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "timer",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "3b2247d7-d756-4954-a947-a71b0dc86668",
+            "revision": 151,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "next_stage",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "381d52db-ca04-47b3-9815-dacb90d2ace8",
+            "revision": 152,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "save_draft",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "daf34bd6-6f57-4bc7-a3e2-4841654ba3b1",
+            "revision": 153,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "open_ballots",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "bb39b0c5-e1dc-4c7d-81a4-10ec89474f2a",
+            "revision": 154,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "submit_ballot",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "9538f7dd-f05e-47ad-a09c-0f89db63a722",
+            "revision": 155,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "close_ballots",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "78f75c96-9ecb-47a5-a987-65481bca55c3",
+            "revision": 156,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "nominate_award",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "854330e7-55a8-48d9-913d-d029cae16a7c",
+            "revision": 157,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "open_poll",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "919626eb-94fb-4bf7-9c8a-e7ec4cbf215c",
+            "revision": 158,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "vote",
+            "actorId": "10000000-0000-4000-8000-000000000010",
+            "receiptId": "bf08e14f-df61-4fe8-aa64-2749636535ae",
+            "revision": 159,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "withdraw_vote",
+            "actorId": "10000000-0000-4000-8000-000000000010",
+            "receiptId": "e0d3fd5d-1921-4494-87ca-7395b46a96a3",
+            "revision": 160,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "vote",
+            "actorId": "10000000-0000-4000-8000-000000000010",
+            "receiptId": "8e00be02-2d53-40e8-a893-cc2b382c0bc7",
+            "revision": 161,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "close_poll",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "b35a2f59-d29a-4e12-a44f-1c4b9cd687ff",
+            "revision": 162,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "publish_poll",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "7b62ffff-01bd-47ad-84e5-37de8a1d3038",
+            "revision": 163,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "publish_result",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "43772a14-a7f7-47ba-b8f4-f2941cf59306",
+            "revision": 164,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "protest_result",
+            "actorId": "10000000-0000-4000-8000-000000000002",
+            "receiptId": "0b6466b1-999b-483f-8e5d-cfb87f997e5b",
+            "revision": 165,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "resolve_protest",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "e8f6a88b-fbac-43eb-967b-9e73ddea7e31",
+            "revision": 166,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "correct_result",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "591142c4-f0fd-4d6b-ac26-0720d5c16a6a",
+            "revision": 167,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "save_draft",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "a055d8ee-48bb-44ef-adb5-5bc799c4e9bd",
+            "revision": 168,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "open_ballots",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "4854b2ba-178e-42d2-9b5a-02762ba010c6",
+            "revision": 169,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "submit_ballot",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "2ca0446f-d739-4ffe-9c69-15a995430515",
+            "revision": 170,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "close_ballots",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "02edba8f-e002-4c3a-a2eb-2a5400382f2a",
+            "revision": 171,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "publish_result",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "6bc67db0-4891-4427-bea2-b5099e8be4f5",
+            "revision": 172,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "finalize_result",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "af188b60-765f-4752-aff7-28e31c1bece0",
+            "revision": 173,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "create_export",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "d4899923-b8cf-48bf-9fd8-80ad1e779f90",
+            "revision": 175,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "create_export",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "3db05318-bfe1-4698-b759-db40c9e99666",
+            "revision": 177,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "create_export",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "ca4961b7-2f42-451d-8481-bbc8c6074eb5",
+            "revision": 179,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "create_export",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "f46ff21c-abcc-405e-a3a9-3c1ac9d65b9b",
+            "revision": 181,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "create_export",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "d4a6a8d6-40b0-4007-aff3-c1a2d0829f6a",
+            "revision": 183,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "create_export",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "2ad8bcf5-362a-4949-874e-9f122af9ae51",
+            "revision": 185,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "create_match",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "8b4a2ce5-0dcc-4dbe-ab3e-d1e9394ecb5b",
+            "revision": 186,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": null
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000002",
+            "receiptId": "68a3d813-551b-4d9c-8fbe-256fa83706d7",
+            "revision": 187,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "6ec589fc-0f22-465d-9fba-949324c272ff"
+          },
+          {
+            "command": "acknowledge_rules",
+            "actorId": "10000000-0000-4000-8000-000000000002",
+            "receiptId": "7363e35f-d82f-4331-b3b6-29d40e54e798",
+            "revision": 188,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "6ec589fc-0f22-465d-9fba-949324c272ff"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000003",
+            "receiptId": "5eede9c0-c88c-4b73-bbc3-53a23b9ab93f",
+            "revision": 189,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "6ec589fc-0f22-465d-9fba-949324c272ff"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000004",
+            "receiptId": "55c19359-2512-45f2-9cab-958392bad97a",
+            "revision": 190,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "6ec589fc-0f22-465d-9fba-949324c272ff"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000005",
+            "receiptId": "7a644fe7-c770-4bd2-bfb6-96d719e9578c",
+            "revision": 191,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "6ec589fc-0f22-465d-9fba-949324c272ff"
+          },
+          {
+            "command": "acknowledge_rules",
+            "actorId": "10000000-0000-4000-8000-000000000005",
+            "receiptId": "368078dc-1f74-40a7-bbd7-82eff36ea425",
+            "revision": 192,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "6ec589fc-0f22-465d-9fba-949324c272ff"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000006",
+            "receiptId": "a2b4f3f4-e413-40c6-b927-9493680e1369",
+            "revision": 193,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "6ec589fc-0f22-465d-9fba-949324c272ff"
+          },
+          {
+            "command": "check_in",
+            "actorId": "10000000-0000-4000-8000-000000000007",
+            "receiptId": "8b275839-41bd-4e30-9ba5-101020774897",
+            "revision": 194,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "6ec589fc-0f22-465d-9fba-949324c272ff"
+          },
+          {
+            "command": "record_device_check",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "fd13766d-a756-4d5f-8887-1c05aece7d15",
+            "revision": 195,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "6ec589fc-0f22-465d-9fba-949324c272ff"
+          },
+          {
+            "command": "record_device_check",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "912b4f94-d1ce-4b68-b539-6e797395c281",
+            "revision": 196,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "6ec589fc-0f22-465d-9fba-949324c272ff"
+          },
+          {
+            "command": "record_device_check",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "ef7b7038-8f78-4198-ba0d-1c890faf563a",
+            "revision": 197,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "6ec589fc-0f22-465d-9fba-949324c272ff"
+          },
+          {
+            "command": "record_device_check",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "45205a6c-aa97-4e3c-ad70-b7131b5467ad",
+            "revision": 198,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "6ec589fc-0f22-465d-9fba-949324c272ff"
+          },
+          {
+            "command": "record_device_check",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "c0e7dbf1-67fc-4557-9b3b-11ab4df72453",
+            "revision": 199,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "6ec589fc-0f22-465d-9fba-949324c272ff"
+          },
+          {
+            "command": "record_device_check",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "bc87f24c-2ff2-4d7e-99fb-f07c244742f0",
+            "revision": 200,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "6ec589fc-0f22-465d-9fba-949324c272ff"
+          },
+          {
+            "command": "release_motion",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "224f7eb9-7b12-4477-983e-7c54e2177119",
+            "revision": 201,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "6ec589fc-0f22-465d-9fba-949324c272ff"
+          },
+          {
+            "command": "advance_match",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "27be7302-3650-43fb-abe7-c8a40311511b",
+            "revision": 202,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58"
+          },
+          {
+            "command": "start_match",
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "receiptId": "6e423ff8-d0de-455d-b86a-db1910071f00",
+            "revision": 203,
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "6ec589fc-0f22-465d-9fba-949324c272ff"
+          }
+        ],
+        "stages": [
+          {
+            "id": "preparation",
+            "kind": "preparation",
+            "seats": [],
+            "attemptId": "91e319f9-675b-4e2c-aa40-e9bd4db3dc3c",
+            "state": "FINISHED",
+            "durationMs": 900000
+          },
+          {
+            "id": "stage-01",
+            "kind": "constructive",
+            "seats": [
+              "A1"
+            ],
+            "attemptId": "64bee620-f77b-4506-a4da-0d51daee76f7",
+            "state": "FINISHED",
+            "durationMs": 300000
+          },
+          {
+            "id": "stage-02",
+            "kind": "interpellation",
+            "seats": [
+              "N1",
+              "A1"
+            ],
+            "attemptId": "98763917-1d5f-426f-8e91-85733ebb5ebd",
+            "state": "FINISHED",
+            "durationMs": 180000
+          },
+          {
+            "id": "stage-03",
+            "kind": "constructive",
+            "seats": [
+              "N1"
+            ],
+            "attemptId": "121e30b0-88bd-4df2-886b-30e7163290d6",
+            "state": "FINISHED",
+            "durationMs": 300000
+          },
+          {
+            "id": "stage-04",
+            "kind": "interpellation",
+            "seats": [
+              "A1",
+              "N1"
+            ],
+            "attemptId": "5f4d985e-933b-4fb0-b65e-aa7f20b07933",
+            "state": "FINISHED",
+            "durationMs": 180000
+          },
+          {
+            "id": "stage-05",
+            "kind": "constructive",
+            "seats": [
+              "A2"
+            ],
+            "attemptId": "8ace6afa-da60-473f-a781-b7f9aacd75a4",
+            "state": "FINISHED",
+            "durationMs": 300000
+          },
+          {
+            "id": "stage-06",
+            "kind": "interpellation",
+            "seats": [
+              "N2",
+              "A2"
+            ],
+            "attemptId": "b89c4e2e-f652-4ac9-851d-85f843f0c6da",
+            "state": "FINISHED",
+            "durationMs": 180000
+          },
+          {
+            "id": "stage-07",
+            "kind": "constructive",
+            "seats": [
+              "N2"
+            ],
+            "attemptId": "3f0a50f5-21e3-4b6d-88b6-5d11d8f4b62c",
+            "state": "FINISHED",
+            "durationMs": 300000
+          },
+          {
+            "id": "stage-08",
+            "kind": "interpellation",
+            "seats": [
+              "A2",
+              "N2"
+            ],
+            "attemptId": "34aaf7d1-e58f-4667-bdde-7081b78f6b38",
+            "state": "FINISHED",
+            "durationMs": 180000
+          },
+          {
+            "id": "stage-09",
+            "kind": "constructive",
+            "seats": [
+              "A3"
+            ],
+            "attemptId": "62772f95-3a6e-46f7-8e11-14e8c75a1752",
+            "state": "FINISHED",
+            "durationMs": 300000
+          },
+          {
+            "id": "stage-10",
+            "kind": "interpellation",
+            "seats": [
+              "N3",
+              "A3"
+            ],
+            "attemptId": "a2a21d4b-602b-49f9-8a67-1935bf29c392",
+            "state": "FINISHED",
+            "durationMs": 180000
+          },
+          {
+            "id": "stage-11",
+            "kind": "constructive",
+            "seats": [
+              "N3"
+            ],
+            "attemptId": "5a02e97d-fec7-4c55-84f2-03592487a947",
+            "state": "FINISHED",
+            "durationMs": 300000
+          },
+          {
+            "id": "stage-12",
+            "kind": "interpellation",
+            "seats": [
+              "A3",
+              "N3"
+            ],
+            "attemptId": "f95e56e1-b3ad-41fb-b9bc-81e246465be8",
+            "state": "FINISHED",
+            "durationMs": 180000
+          },
+          {
+            "id": "closing-break",
+            "kind": "break",
+            "seats": [],
+            "attemptId": "525bab6d-c46b-4bd6-9697-97f0cae63c9a",
+            "state": "FINISHED",
+            "durationMs": 300000
+          },
+          {
+            "id": "stage-13",
+            "kind": "rebuttal",
+            "seats": [
+              "N1"
+            ],
+            "attemptId": "8f257c6d-465c-4f9a-83e0-d529cc90cd47",
+            "state": "FINISHED",
+            "durationMs": 300000
+          },
+          {
+            "id": "stage-14",
+            "kind": "rebuttal",
+            "seats": [
+              "A1"
+            ],
+            "attemptId": "a1827c9c-f307-4f7e-970d-090c1553f19b",
+            "state": "FINISHED",
+            "durationMs": 300000
+          }
+        ],
+        "downloads": [
+          {
+            "kind": "rules",
+            "jobId": "9f495def-cec8-4571-8766-c390207f7a15",
+            "file": "downloads/rules-duediligence-debate-ci-full-browser-debate-2026-09-09t13-14-15-455z-rules-r1.pdf",
+            "bytes": 14802,
+            "sha256": "468b10ae2bb0e5948c5bcb973beefaad2ea48024a7b52c79fe8dbea9c182eb59",
+            "pages": 2
+          },
+          {
+            "kind": "scorecard",
+            "jobId": "c4b3e6c9-e18a-4892-b65d-5403584738ad",
+            "file": "downloads/scorecard-duediligence-debate-ci-full-browser-debate-2026-09-09t13-14-15-455z-scorecard-r1.pdf",
+            "bytes": 12818,
+            "sha256": "0650a983924626c456f33455f90132e7f5de9312db16c767c7c414042094fd10",
+            "pages": 2
+          },
+          {
+            "kind": "result",
+            "jobId": "2156ec3f-ea01-45aa-99a7-96c91978f9a4",
+            "file": "downloads/result-duediligence-debate-ci-full-browser-debate-2026-09-09t13-14-15-455z-result-r2.pdf",
+            "bytes": 13531,
+            "sha256": "4439af277cb3b19497df340ccafd3098bc05b9fa3fc290062455b55f6310c8bf",
+            "pages": 2,
+            "resultVersion": "5af3cf3f-fea0-4e19-9b69-4ed1a4648490"
+          },
+          {
+            "kind": "event_report",
+            "jobId": "15ea8578-e3d3-4332-8520-7c79bbaec625",
+            "file": "downloads/event_report-duediligence-debate-ci-full-browser-debate-2026-09-09t13-14-15-455z-event-report-r2.pdf",
+            "bytes": 14124,
+            "sha256": "00acbfc57665c96f3f53ca5e5f9029059c06ffdf1e85e6bb44a71bb39dc7aaed",
+            "pages": 2,
+            "resultVersion": "5af3cf3f-fea0-4e19-9b69-4ed1a4648490"
+          },
+          {
+            "kind": "csv",
+            "jobId": "e8498440-01b7-4f12-87cf-11e7c38b2809",
+            "file": "downloads/csv-duediligence-debate-ci-full-browser-debate-2026-09-09t13-14-15-455z-csv-r2.csv",
+            "bytes": 2116,
+            "sha256": "e5a3279924eb635626e4d41435b69a2a04160cc9e6c54fc42172f025d7451809",
+            "pages": null,
+            "resultVersion": "5af3cf3f-fea0-4e19-9b69-4ed1a4648490"
+          },
+          {
+            "kind": "certificate",
+            "jobId": "46164f00-d838-4025-8de5-8ef2b53092ca",
+            "file": "downloads/certificate-duediligence-debate-ci-full-browser-debate-2026-09-09t13-14-15-455z-certificate-r2.pdf",
+            "bytes": 10976,
+            "sha256": "dd9bd4635a764433a01a09f3bb7b52f083c199a012219b1c36b67f5c5ca1b5db",
+            "pages": 1,
+            "resultVersion": "5af3cf3f-fea0-4e19-9b69-4ed1a4648490"
+          }
+        ],
+        "screenshots": [
+          "screenshots/01-observer-waiting.png",
+          "screenshots/02-reviewed-fixture.png",
+          "screenshots/03-ready-with-explicit-accommodations.png",
+          "screenshots/04-live-media-controls-1365px.png",
+          "screenshots/05-live-media-controls-320px.png",
+          "screenshots/06-questioning-overtime.png",
+          "screenshots/07-corrected-final-result.png",
+          "screenshots/08-narrow-final-result.png",
+          "screenshots/09-final-fixture-and-standings.png",
+          "screenshots/10-next-match-ready.png"
+        ],
+        "unexpectedNetwork": [],
+        "pageErrors": [],
+        "consoleErrors": [
+          {
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "message": "Failed to load resource: the server responded with a status of 409 (Conflict)",
+            "location": "http://127.0.0.1:42091/debate-room/command",
+            "at": 1788959669381,
+            "expectedResourceRejection": true
+          },
+          {
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "message": "Failed to load resource: the server responded with a status of 400 (Bad Request)",
+            "location": "http://127.0.0.1:42091/debate-room/command",
+            "at": 1788959694530,
+            "expectedResourceRejection": true
+          }
+        ],
+        "expectedRejections": [
+          {
+            "requestId": 290,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959669371,
+            "command": "start_match",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "code": "MATCH_NOT_READY",
+            "status": 409,
+            "at": 1788959669382,
+            "url": "http://127.0.0.1:42091/debate-room/command"
+          },
+          {
+            "requestId": 747,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959694517,
+            "command": "finalize_result",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "code": "CORRECTION_WINDOW_OPEN",
+            "status": 400,
+            "at": 1788959694533,
+            "url": "http://127.0.0.1:42091/debate-room/command"
+          }
+        ],
+        "commandRejections": [
+          {
+            "requestId": 290,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959669371,
+            "command": "start_match",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "code": "MATCH_NOT_READY",
+            "status": 409,
+            "at": 1788959669380,
+            "url": "http://127.0.0.1:42091/debate-room/command"
+          },
+          {
+            "requestId": 747,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959694517,
+            "command": "finalize_result",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "code": "CORRECTION_WINDOW_OPEN",
+            "status": 400,
+            "at": 1788959694529,
+            "url": "http://127.0.0.1:42091/debate-room/command"
+          }
+        ],
+        "simulatedLeaseExpiries": [
+          {
+            "id": 1,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "stageAttemptId": "91e319f9-675b-4e2c-aa40-e9bd4db3dc3c",
+            "timerVersion": 3,
+            "leaseExpiresAtServerMs": 1788959707228,
+            "beforeServerMs": 1788959677418,
+            "milliseconds": 901100,
+            "startedAt": 1788959677423,
+            "verifiedExpired": true,
+            "afterServerMs": 1788960578518,
+            "manualRecovery": {
+              "requestId": 581,
+              "requestedAt": 1788959677737,
+              "at": 1788959677773,
+              "receiptId": "b1363a73-31a0-4e2e-981a-36903024a528",
+              "timerVersion": 4
+            }
+          },
+          {
+            "id": 2,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "stageAttemptId": "64bee620-f77b-4506-a4da-0d51daee76f7",
+            "timerVersion": 7,
+            "leaseExpiresAtServerMs": 1788960616002,
+            "beforeServerMs": 1788960586139,
+            "milliseconds": 301100,
+            "startedAt": 1788959678810,
+            "verifiedExpired": true,
+            "afterServerMs": 1788960887239,
+            "manualRecovery": {
+              "requestId": 593,
+              "requestedAt": 1788959678970,
+              "at": 1788959679002,
+              "receiptId": "01bae526-b6f8-4280-88bf-bc3ffea66095",
+              "timerVersion": 8
+            }
+          },
+          {
+            "id": 3,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "stageAttemptId": "98763917-1d5f-426f-8e91-85733ebb5ebd",
+            "timerVersion": 3,
+            "leaseExpiresAtServerMs": 1788960917735,
+            "beforeServerMs": 1788960887913,
+            "milliseconds": 181100,
+            "startedAt": 1788959679484,
+            "verifiedExpired": true,
+            "afterServerMs": 1788961069013,
+            "manualRecovery": {
+              "requestId": 600,
+              "requestedAt": 1788959680019,
+              "at": 1788959680054,
+              "receiptId": "5ce4be93-e3b4-491b-b72d-947dc85b5af9",
+              "timerVersion": 4
+            }
+          },
+          {
+            "id": 4,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "stageAttemptId": "121e30b0-88bd-4df2-886b-30e7163290d6",
+            "timerVersion": 3,
+            "leaseExpiresAtServerMs": 1788961099868,
+            "beforeServerMs": 1788961070066,
+            "milliseconds": 301100,
+            "startedAt": 1788959680537,
+            "verifiedExpired": true,
+            "afterServerMs": 1788961371166,
+            "manualRecovery": {
+              "requestId": 607,
+              "requestedAt": 1788959680745,
+              "at": 1788959680784,
+              "receiptId": "6678bac5-93c3-4382-8ddf-c9497b591104",
+              "timerVersion": 4
+            }
+          },
+          {
+            "id": 5,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "stageAttemptId": "5f4d985e-933b-4fb0-b65e-aa7f20b07933",
+            "timerVersion": 3,
+            "leaseExpiresAtServerMs": 1788961401718,
+            "beforeServerMs": 1788961371890,
+            "milliseconds": 181100,
+            "startedAt": 1788959681261,
+            "verifiedExpired": true,
+            "afterServerMs": 1788961552991,
+            "manualRecovery": {
+              "requestId": 613,
+              "requestedAt": 1788959681553,
+              "at": 1788959681585,
+              "receiptId": "ffa662c1-4106-47f3-a5bc-3c5e2be120f6",
+              "timerVersion": 4
+            }
+          },
+          {
+            "id": 6,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "stageAttemptId": "8ace6afa-da60-473f-a781-b7f9aacd75a4",
+            "timerVersion": 3,
+            "leaseExpiresAtServerMs": 1788961583601,
+            "beforeServerMs": 1788961553848,
+            "milliseconds": 301100,
+            "startedAt": 1788959682119,
+            "verifiedExpired": true,
+            "afterServerMs": 1788961854948,
+            "manualRecovery": {
+              "requestId": 619,
+              "requestedAt": 1788959682553,
+              "at": 1788959682617,
+              "receiptId": "0f55219a-47bc-4e76-b299-b178ff4b4e62",
+              "timerVersion": 4
+            }
+          },
+          {
+            "id": 7,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "stageAttemptId": "b89c4e2e-f652-4ac9-851d-85f843f0c6da",
+            "timerVersion": 3,
+            "leaseExpiresAtServerMs": 1788961885753,
+            "beforeServerMs": 1788961855942,
+            "milliseconds": 181100,
+            "startedAt": 1788959683113,
+            "verifiedExpired": true,
+            "afterServerMs": 1788962037043,
+            "manualRecovery": {
+              "requestId": 625,
+              "requestedAt": 1788959683253,
+              "at": 1788959683284,
+              "receiptId": "ed770126-5846-414b-8cb5-967d9ac7a779",
+              "timerVersion": 4
+            }
+          },
+          {
+            "id": 8,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "stageAttemptId": "3f0a50f5-21e3-4b6d-88b6-5d11d8f4b62c",
+            "timerVersion": 3,
+            "leaseExpiresAtServerMs": 1788962067504,
+            "beforeServerMs": 1788962037691,
+            "milliseconds": 301100,
+            "startedAt": 1788959683762,
+            "verifiedExpired": true,
+            "afterServerMs": 1788962338792,
+            "manualRecovery": {
+              "requestId": 632,
+              "requestedAt": 1788959684056,
+              "at": 1788959684090,
+              "receiptId": "e7e6f3ce-a7dc-45de-990a-d81c80c10c98",
+              "timerVersion": 4
+            }
+          },
+          {
+            "id": 9,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "stageAttemptId": "34aaf7d1-e58f-4667-bdde-7081b78f6b38",
+            "timerVersion": 3,
+            "leaseExpiresAtServerMs": 1788962369442,
+            "beforeServerMs": 1788962339629,
+            "milliseconds": 181100,
+            "startedAt": 1788959684600,
+            "verifiedExpired": true,
+            "afterServerMs": 1788962520730,
+            "manualRecovery": {
+              "requestId": 639,
+              "requestedAt": 1788959684737,
+              "at": 1788959684779,
+              "receiptId": "bcbcb6b9-a8f6-4853-be4c-c7b5465c4701",
+              "timerVersion": 4
+            }
+          },
+          {
+            "id": 10,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "stageAttemptId": "62772f95-3a6e-46f7-8e11-14e8c75a1752",
+            "timerVersion": 3,
+            "leaseExpiresAtServerMs": 1788962551238,
+            "beforeServerMs": 1788962521463,
+            "milliseconds": 301100,
+            "startedAt": 1788959685334,
+            "verifiedExpired": true,
+            "afterServerMs": 1788962822564,
+            "manualRecovery": {
+              "requestId": 645,
+              "requestedAt": 1788959685470,
+              "at": 1788959685503,
+              "receiptId": "19e31401-4c26-4d6a-b02a-81fb65a06089",
+              "timerVersion": 4
+            }
+          },
+          {
+            "id": 11,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "stageAttemptId": "a2a21d4b-602b-49f9-8a67-1935bf29c392",
+            "timerVersion": 4,
+            "leaseExpiresAtServerMs": 1788962853155,
+            "beforeServerMs": 1788962823288,
+            "milliseconds": 181100,
+            "startedAt": 1788959686059,
+            "verifiedExpired": true,
+            "afterServerMs": 1788963004388,
+            "manualRecovery": {
+              "requestId": 652,
+              "requestedAt": 1788959686253,
+              "at": 1788959686292,
+              "receiptId": "2dbfdc38-89e2-4d94-b596-acabf44c3d16",
+              "timerVersion": 5
+            }
+          },
+          {
+            "id": 12,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "stageAttemptId": "5a02e97d-fec7-4c55-84f2-03592487a947",
+            "timerVersion": 3,
+            "leaseExpiresAtServerMs": 1788963034969,
+            "beforeServerMs": 1788963005164,
+            "milliseconds": 301100,
+            "startedAt": 1788959686835,
+            "verifiedExpired": true,
+            "afterServerMs": 1788963306266,
+            "manualRecovery": {
+              "requestId": 658,
+              "requestedAt": 1788959686987,
+              "at": 1788959687028,
+              "receiptId": "076f33ea-2695-4d5f-986b-5952b35d9c53",
+              "timerVersion": 4
+            }
+          },
+          {
+            "id": 13,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "stageAttemptId": "f95e56e1-b3ad-41fb-b9bc-81e246465be8",
+            "timerVersion": 3,
+            "leaseExpiresAtServerMs": 1788963336802,
+            "beforeServerMs": 1788963306986,
+            "milliseconds": 181100,
+            "startedAt": 1788959687557,
+            "verifiedExpired": true,
+            "afterServerMs": 1788963488086,
+            "manualRecovery": {
+              "requestId": 664,
+              "requestedAt": 1788959687754,
+              "at": 1788959687791,
+              "receiptId": "88ebb5ef-dd25-48c1-988e-ff79c3bd44a9",
+              "timerVersion": 4
+            }
+          },
+          {
+            "id": 14,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "stageAttemptId": "525bab6d-c46b-4bd6-9697-97f0cae63c9a",
+            "timerVersion": 3,
+            "leaseExpiresAtServerMs": 1788963518690,
+            "beforeServerMs": 1788963488885,
+            "milliseconds": 301100,
+            "startedAt": 1788959688356,
+            "verifiedExpired": true,
+            "afterServerMs": 1788963789985,
+            "manualRecovery": {
+              "requestId": 672,
+              "requestedAt": 1788959688528,
+              "at": 1788959688588,
+              "receiptId": "fa6bc602-4c7e-4724-bbb9-77364d777697",
+              "timerVersion": 4
+            }
+          },
+          {
+            "id": 15,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "stageAttemptId": "8f257c6d-465c-4f9a-83e0-d529cc90cd47",
+            "timerVersion": 3,
+            "leaseExpiresAtServerMs": 1788963820634,
+            "beforeServerMs": 1788963790827,
+            "milliseconds": 301100,
+            "startedAt": 1788959689198,
+            "verifiedExpired": true,
+            "afterServerMs": 1788964091928,
+            "manualRecovery": {
+              "requestId": 678,
+              "requestedAt": 1788959689503,
+              "at": 1788959689544,
+              "receiptId": "47eb9185-4937-4371-8e40-36fd2cd82ddd",
+              "timerVersion": 4
+            }
+          },
+          {
+            "id": 16,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "stageAttemptId": "a1827c9c-f307-4f7e-970d-090c1553f19b",
+            "timerVersion": 3,
+            "leaseExpiresAtServerMs": 1788964122601,
+            "beforeServerMs": 1788964092790,
+            "milliseconds": 301100,
+            "startedAt": 1788959690061,
+            "verifiedExpired": true,
+            "afterServerMs": 1788964393891,
+            "manualRecovery": {
+              "requestId": 684,
+              "requestedAt": 1788959690253,
+              "at": 1788959690292,
+              "receiptId": "79f0ca40-2753-449e-a1ba-0afe454f43aa",
+              "timerVersion": 4
+            }
+          }
+        ],
+        "clockClaims": [
+          {
+            "requestId": 578,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959677230,
+            "command": "claim_clock",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "timerVersion": 1,
+            "manualClaimId": 1,
+            "receiptId": "591aaa68-f3eb-4ac5-b84b-ca8c8057d190"
+          },
+          {
+            "requestId": 581,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959677737,
+            "command": "claim_clock",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "timerVersion": 3,
+            "manualClaimId": 2,
+            "receiptId": "b1363a73-31a0-4e2e-981a-36903024a528"
+          },
+          {
+            "requestId": 584,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959678054,
+            "command": "claim_clock",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "timerVersion": 1,
+            "manualClaimId": 3,
+            "receiptId": "d85b1974-9a64-4276-aa9a-ec879e5c10d2"
+          },
+          {
+            "requestId": 587,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959678355,
+            "command": "claim_clock",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "timerVersion": 3,
+            "manualClaimId": 4,
+            "receiptId": "9d6e55aa-de49-498b-b93a-381975d1cbf4"
+          },
+          {
+            "requestId": 590,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959678671,
+            "command": "claim_clock",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "timerVersion": 5,
+            "manualClaimId": 5,
+            "receiptId": "ff622f1b-dc0a-4f86-bc4e-fa3762e26fd9"
+          },
+          {
+            "requestId": 593,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959678970,
+            "command": "claim_clock",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "timerVersion": 7,
+            "manualClaimId": 6,
+            "receiptId": "01bae526-b6f8-4280-88bf-bc3ffea66095"
+          },
+          {
+            "requestId": 596,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959679304,
+            "command": "claim_clock",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "timerVersion": 1,
+            "manualClaimId": 7,
+            "receiptId": "478bf52c-2142-44fa-bcfe-8cce47f09bdc"
+          },
+          {
+            "requestId": 600,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959680019,
+            "command": "claim_clock",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "timerVersion": 3,
+            "manualClaimId": 8,
+            "receiptId": "5ce4be93-e3b4-491b-b72d-947dc85b5af9"
+          },
+          {
+            "requestId": 603,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959680337,
+            "command": "claim_clock",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "timerVersion": 1,
+            "manualClaimId": 9,
+            "receiptId": "60c379a8-fcab-4482-ac92-261ec85aec32"
+          },
+          {
+            "requestId": 607,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959680745,
+            "command": "claim_clock",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "timerVersion": 3,
+            "manualClaimId": 10,
+            "receiptId": "6678bac5-93c3-4382-8ddf-c9497b591104"
+          },
+          {
+            "requestId": 610,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959681087,
+            "command": "claim_clock",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "timerVersion": 1,
+            "manualClaimId": 11,
+            "receiptId": "6b2ae997-29db-45ca-83c9-efb065b3b151"
+          },
+          {
+            "requestId": 613,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959681553,
+            "command": "claim_clock",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "timerVersion": 3,
+            "manualClaimId": 12,
+            "receiptId": "ffa662c1-4106-47f3-a5bc-3c5e2be120f6"
+          },
+          {
+            "requestId": 616,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959681870,
+            "command": "claim_clock",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "timerVersion": 1,
+            "manualClaimId": 13,
+            "receiptId": "8cba6085-c850-494c-a925-6943d22db9a0"
+          },
+          {
+            "requestId": 619,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959682553,
+            "command": "claim_clock",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "timerVersion": 3,
+            "manualClaimId": 14,
+            "receiptId": "0f55219a-47bc-4e76-b299-b178ff4b4e62"
+          },
+          {
+            "requestId": 622,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959682922,
+            "command": "claim_clock",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "timerVersion": 1,
+            "manualClaimId": 15,
+            "receiptId": "1a1eb485-1179-424f-8339-0b5af89069ab"
+          },
+          {
+            "requestId": 625,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959683253,
+            "command": "claim_clock",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "timerVersion": 3,
+            "manualClaimId": 16,
+            "receiptId": "ed770126-5846-414b-8cb5-967d9ac7a779"
+          },
+          {
+            "requestId": 628,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959683572,
+            "command": "claim_clock",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "timerVersion": 1,
+            "manualClaimId": 17,
+            "receiptId": "c2f8b326-41e4-44b1-87bd-d231fd8873f8"
+          },
+          {
+            "requestId": 632,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959684056,
+            "command": "claim_clock",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "timerVersion": 3,
+            "manualClaimId": 18,
+            "receiptId": "e7e6f3ce-a7dc-45de-990a-d81c80c10c98"
+          },
+          {
+            "requestId": 636,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959684410,
+            "command": "claim_clock",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "timerVersion": 1,
+            "manualClaimId": 19,
+            "receiptId": "e35fea79-0bcc-48e6-8794-5f19b64f8375"
+          },
+          {
+            "requestId": 639,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959684737,
+            "command": "claim_clock",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "timerVersion": 3,
+            "manualClaimId": 20,
+            "receiptId": "bcbcb6b9-a8f6-4853-be4c-c7b5465c4701"
+          },
+          {
+            "requestId": 642,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959685106,
+            "command": "claim_clock",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "timerVersion": 1,
+            "manualClaimId": 21,
+            "receiptId": "0dae1a4f-5c41-496d-9045-4e85e66cdb39"
+          },
+          {
+            "requestId": 645,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959685470,
+            "command": "claim_clock",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "timerVersion": 3,
+            "manualClaimId": 22,
+            "receiptId": "19e31401-4c26-4d6a-b02a-81fb65a06089"
+          },
+          {
+            "requestId": 648,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959685822,
+            "command": "claim_clock",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "timerVersion": 1,
+            "manualClaimId": 23,
+            "receiptId": "15b35865-374f-4571-96ef-9433929cc491"
+          },
+          {
+            "requestId": 652,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959686253,
+            "command": "claim_clock",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "timerVersion": 4,
+            "manualClaimId": 24,
+            "receiptId": "2dbfdc38-89e2-4d94-b596-acabf44c3d16"
+          },
+          {
+            "requestId": 655,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959686637,
+            "command": "claim_clock",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "timerVersion": 1,
+            "manualClaimId": 25,
+            "receiptId": "9b7c164f-a96a-4dd4-8746-e22cbbf78015"
+          },
+          {
+            "requestId": 658,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959686987,
+            "command": "claim_clock",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "timerVersion": 3,
+            "manualClaimId": 26,
+            "receiptId": "076f33ea-2695-4d5f-986b-5952b35d9c53"
+          },
+          {
+            "requestId": 661,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959687369,
+            "command": "claim_clock",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "timerVersion": 1,
+            "manualClaimId": 27,
+            "receiptId": "1b5b32a9-523a-496e-95f9-2512f118b67e"
+          },
+          {
+            "requestId": 664,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959687754,
+            "command": "claim_clock",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "timerVersion": 3,
+            "manualClaimId": 28,
+            "receiptId": "88ebb5ef-dd25-48c1-988e-ff79c3bd44a9"
+          },
+          {
+            "requestId": 668,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959688158,
+            "command": "claim_clock",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "timerVersion": 1,
+            "manualClaimId": 29,
+            "receiptId": "27b3f7d7-7cb6-48d3-80c5-585ea7129aee"
+          },
+          {
+            "requestId": 672,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959688528,
+            "command": "claim_clock",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "timerVersion": 3,
+            "manualClaimId": 30,
+            "receiptId": "fa6bc602-4c7e-4724-bbb9-77364d777697"
+          },
+          {
+            "requestId": 675,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959689003,
+            "command": "claim_clock",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "timerVersion": 1,
+            "manualClaimId": 31,
+            "receiptId": "a836b0bf-fbdd-468b-bca4-61256b5a617c"
+          },
+          {
+            "requestId": 678,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959689503,
+            "command": "claim_clock",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "timerVersion": 3,
+            "manualClaimId": 32,
+            "receiptId": "47eb9185-4937-4371-8e40-36fd2cd82ddd"
+          },
+          {
+            "requestId": 681,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959689870,
+            "command": "claim_clock",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "timerVersion": 1,
+            "manualClaimId": 33,
+            "receiptId": "63c33da9-1c18-4407-a963-23e2a03e8434"
+          },
+          {
+            "requestId": 684,
+            "actorId": "10000000-0000-4000-8000-000000000001",
+            "requestedAt": 1788959690253,
+            "command": "claim_clock",
+            "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+            "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+            "timerVersion": 3,
+            "manualClaimId": 34,
+            "receiptId": "79f0ca40-2753-449e-a1ba-0afe454f43aa"
+          }
+        ],
+        "claims": {
+          "actualBrowserDom": true,
+          "actualLocalSql": true,
+          "syntheticIdentity": true,
+          "actualHostedAuth": false,
+          "mainWorkerBootstrap": false,
+          "studyRoomUi": false,
+          "physicalMedia": false,
+          "providerMedia": false,
+          "realEmail": false,
+          "nativePostgresConcurrency": false,
+          "endurance90Minutes": false,
+          "hostedDeployment": false
+        },
+        "gaps": [
+          "Local HTML deliberately replaces hosted auth and removes provider scripts; this is not the main Worker or real Supabase sign-in path.",
+          "Study Room UI has a separate test; Debate waiting state does not prove Study admission.",
+          "No microphone, camera, provider, real email, native multi-connection Postgres, 90-minute endurance or hosted deployment is exercised.",
+          "The next three-judge match is started, not played to another final decision; tournament awards remain rehearsal-excluded.",
+          "PDF signatures, page counts and exact downloaded bytes are checked; PDF page layout requires the separate visual export review."
+        ],
+        "sourceHashes": {
+          "worker/debate-sanctions.mjs": "f43af5803e097b26836b217086d3e6d93c6e769c0867a2aaaeb6ef05f642119b",
+          "worker/debate-domain.mjs": "669430db23c9b62429722cf58d41c5a97aa483f25056f299c2c1819a6a14d63b",
+          "worker/debate-tournament.mjs": "f03907752aa76f2cd45b6747dcf0270eb6abdc004a260742a475fc0963258d2e",
+          "worker/debate-fixtures.mjs": "d61f350b70f57a9d6e4fc2fad2593e6ca99e70cc70cbba4e14f5c4590a112c5c",
+          "worker/debate-service.mjs": "0a9d665f58c47f0adb78901822dce625ab2df7ca5dd5bb2a7c4212b5868cdd58",
+          "worker/debate-store.mjs": "08340dc8a0f5a1a9ccb19827a146dd5d788a8227d0393e90983574bd4431a31a",
+          "worker/debate-routes.mjs": "d566a262f7ffbbc3c0ea94e57444eac386b565bf5f9536925c485a2f45cf86b9",
+          "worker/debate-schema-draft.sql": "89d4f46b1e1b2991202880114387a1356b5eedfcf562129079de83d55a94b53c",
+          "worker/debate-documents.mjs": "3dd08cb71074921527dfe4536459af1a613dd087774eab032886278be0918d6f",
+          "assets/debate-room.js": "1c1c245f2d23f12e4f546ae33c57dc5613b927fd6417c157de6ab992cc4eed6e",
+          "assets/debate-media.js": "ed33b1126087c531423840fb241afb9e95682bcfcd7c8ec8caafb8ae142593b2",
+          "assets/debate-dates.js": "7549422128267aff3d7de4aafc535b5f40290df456a33fd5b85ddd4f7fcd0b12",
+          "assets/debate-room.css": "bc752e89280753a0e80dd489229e2c2b9f3f4e1bc15a9b70d6a95291eab681bd",
+          "debate-room/index.html": "b7722b53d25db83d381aea95480031b481522ce46cb7e29f7fca431dd02d647e",
+          "scripts/serve-debate-rehearsal.mjs": "8b3db6ccf3aff8f4ae4165f07df4c810b4ffa892f5f63968f0ee5aeb3127070d",
+          "scripts/test-debate-organizer-rehearsal.mjs": "4f95b5a2d010948bd5b2dbbd7ab381c2c899f263ba19b5d423ceeebf63a45a41",
+          "assets/vendor/debate-fonts/fraunces-v38-latin-ext.woff2": "a21ecfbf41fbc393e24ef9b7e38532a27e8da5e0a074aa7d66802d1b5ccec2f0",
+          "assets/vendor/debate-fonts/fraunces-v38-latin.woff2": "7f9d191d999336d3b9790afa72e1358e50a13b06d4f289341e92a311967a80f9",
+          "assets/vendor/debate-fonts/inter-v20-latin-ext.woff2": "34b9c504cab7a73e37b746343a449132e56cf7b5481af2cb81dc74dcff25c956",
+          "assets/vendor/debate-fonts/inter-v20-latin.woff2": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62"
+        },
+        "serverUrl": "http://127.0.0.1:42091/debate-room/",
+        "browser": {
+          "version": "152.0.7977.82",
+          "channel": "chrome",
+          "headless": true,
+          "node": "v22.23.2",
+          "platform": "linux"
+        },
+        "eventTitle": "CI full browser Debate 2026-09-09T13:14:15.455Z",
+        "eventId": "de-fd486b1598b17f6f432064f0ee1f6c1f",
+        "matchId": "d09d9f93-abcb-4172-8d4f-e51ade48ac58",
+        "simulatedAdvanceMs": 5603835,
+        "finalResult": {
+          "id": "5af3cf3f-fea0-4e19-9b69-4ed1a4648490",
+          "revision": 2,
+          "state": "FINAL",
+          "winner": "affirmative"
+        },
+        "nextMatchId": "6ec589fc-0f22-465d-9fba-949324c272ff",
+        "finishedAt": "2026-09-09T13:15:12.241Z",
+        "actualDurationMs": 69451
+      }
+    },
+    "study": {
+      "path": "artifacts/debate-local-rehearsal/ci-34355666171/debate-v3-synthetic-browser-evidence/study-browser-ci/report.json",
+      "sha256": "e401ace491662ebae02bb57247e630fd55ff45dab32c21352259ec5cae9a3c63",
+      "report": {
+        "status": "PASS_SYNTHETIC_STUDY_BROWSER",
+        "synthetic": true,
+        "actualDOM": true,
+        "actualRoutes": true,
+        "actualSQL": true,
+        "browserVersion": "152.0.7977.82",
+        "hostedAuth": false,
+        "providerPresence": false,
+        "physicalMedia": false,
+        "realMail": false,
+        "productionChanges": false,
+        "checks": [
+          "Actual admin editor saves four policies and defaults a new room to All; Inner Chamber stays fixed",
+          "DOM pending state persists in SQL without issuing a JWT or creating a media room",
+          "Outside admin and admin in another room cannot inspect the waiting queue",
+          "Same-room admin manually admits; approval alone never connects the member",
+          "Only the member’s explicit Enter obtains an authorized JWT and connects the inert transport",
+          "Admin removal disconnects the synthetic member and durable denial blocks later join",
+          "Actual Cancel request persists cancellation and leaves devices off",
+          "Late request after account switch cancels under the original identity and cannot enter for the new account",
+          "Every browser remained free of capture, publication, WebRTC, WebSocket and external network"
+        ],
+        "errors": [],
+        "sourceHashes": {
+          "study-room/index.html": "54c96a2eff695deacd935fad05cc0d44413c4e7144adcd4c44e40f84f3c31bc8",
+          "assets/study-room-live.js": "18233c7e451d4af50a4b71254ae93d68ceb0316b0b7a1cd4b4d880bd32542450",
+          "assets/study-room-live.css": "b03ee186567cf1f027b699cc12979dcad4f89279d7563e11d8fe91218f1520c2",
+          "worker/study-room-routes.mjs": "12e502a8271e1af0f2d0e7a54fa4fabde9037e612dc4c12eec2f57edf9d850a7",
+          "worker/study-room-core.mjs": "7b8bdab0d8d545cc9acba564268dd4a8250c5e126fbc1238848682b1d0ddae04",
+          "worker/study-room-admission.mjs": "d82c8c031b5c013f2a953b6e0dc350f6a266116e691b08d8608a7c1933c5346d",
+          "supabase/migrations/20260908144814_astra_study_room_persisted_catalog.sql": "f5eb0739f36fca4d1cd574fdc7bd30a299351f8cc892a7896742f247fc496ebc",
+          "supabase/migrations/20260909080143_study_room_admission_v3.sql": "5ca7d139bb925b00c82d391aab4f566446d5d1bdd25e0b1b271fde614cb11637",
+          "scripts/serve-study-room-rehearsal.mjs": "207765224cdbdcbf25f7ad12af3ff9b2af7812c1a81c7eb62aaa4a5ceceb907e",
+          "scripts/test-study-room-browser.mjs": "95f857102208180dd7a542061e798051b176b3d2f2b694b661d356debc90e941"
+        },
+        "substitutions": [
+          "HTML replaces external SDK/config/auth/background scripts with synthetic auth and inert SDK transport; actual Study live.js is unchanged.",
+          "CSS external font imports removed for isolated rendering; no production bootstrap or font-loading claim.",
+          "Admin authorization helper and prerequisite auth tables match the existing local SQL fixture; no hosted authentication.",
+          "LiveKit active presence/revocation is a JWT-backed inert registry; no provider behavior or rate-limit capacity claim."
+        ],
+        "metrics": {
+          "signedCredentials": 3,
+          "connections": 3,
+          "revoked": 1,
+          "providerCalls": 0,
+          "rpcCalls": 111
+        },
+        "finishedAt": "2026-09-09T13:15:25.252Z"
+      }
+    },
+    "studyHttp": {
+      "path": "artifacts/debate-local-rehearsal/ci-34355666171/debate-v3-synthetic-browser-evidence/study-browser-ci/harness-only/report.json",
+      "sha256": "fd822d5458ffc588181a6cd48fdc43aca0264bba7635e4b291eb7b5b83bf69d9",
+      "report": {
+        "status": "PASS_SYNTHETIC_STUDY_HTTP_SQL",
+        "synthetic": true,
+        "actualDOM": false,
+        "actualRoutes": true,
+        "actualSQL": true,
+        "browserVersion": null,
+        "hostedAuth": false,
+        "providerPresence": false,
+        "physicalMedia": false,
+        "realMail": false,
+        "productionChanges": false,
+        "checks": [
+          "Catalog defaults All users and preserves private Inner Chamber",
+          "Pending cannot obtain a credential, and absent admin cannot list",
+          "Actual SQL approval enables one actor-bound signed-token connection",
+          "Revocation rejects stale JWT and later join; absent administrator loses queue access",
+          "Cancellation persists in actual service-role SQL"
+        ],
+        "errors": [],
+        "sourceHashes": {
+          "study-room/index.html": "54c96a2eff695deacd935fad05cc0d44413c4e7144adcd4c44e40f84f3c31bc8",
+          "assets/study-room-live.js": "18233c7e451d4af50a4b71254ae93d68ceb0316b0b7a1cd4b4d880bd32542450",
+          "assets/study-room-live.css": "b03ee186567cf1f027b699cc12979dcad4f89279d7563e11d8fe91218f1520c2",
+          "worker/study-room-routes.mjs": "12e502a8271e1af0f2d0e7a54fa4fabde9037e612dc4c12eec2f57edf9d850a7",
+          "worker/study-room-core.mjs": "7b8bdab0d8d545cc9acba564268dd4a8250c5e126fbc1238848682b1d0ddae04",
+          "worker/study-room-admission.mjs": "d82c8c031b5c013f2a953b6e0dc350f6a266116e691b08d8608a7c1933c5346d",
+          "supabase/migrations/20260908144814_astra_study_room_persisted_catalog.sql": "f5eb0739f36fca4d1cd574fdc7bd30a299351f8cc892a7896742f247fc496ebc",
+          "supabase/migrations/20260909080143_study_room_admission_v3.sql": "5ca7d139bb925b00c82d391aab4f566446d5d1bdd25e0b1b271fde614cb11637",
+          "scripts/serve-study-room-rehearsal.mjs": "207765224cdbdcbf25f7ad12af3ff9b2af7812c1a81c7eb62aaa4a5ceceb907e",
+          "scripts/test-study-room-browser.mjs": "95f857102208180dd7a542061e798051b176b3d2f2b694b661d356debc90e941"
+        },
+        "substitutions": [
+          "HTML replaces external SDK/config/auth/background scripts with synthetic auth and inert SDK transport; actual Study live.js is unchanged.",
+          "CSS external font imports removed for isolated rendering; no production bootstrap or font-loading claim.",
+          "Admin authorization helper and prerequisite auth tables match the existing local SQL fixture; no hosted authentication.",
+          "LiveKit active presence/revocation is a JWT-backed inert registry; no provider behavior or rate-limit capacity claim."
+        ],
+        "metrics": {
+          "signedCredentials": 3,
+          "connections": 2,
+          "revoked": 1,
+          "providerCalls": 0,
+          "rpcCalls": 71
+        },
+        "finishedAt": "2026-09-09T13:15:14.977Z"
+      }
+    }
+  },
+  "counts": {
+    "debateChecks": 156,
+    "debateActions": 196,
+    "stages": 16,
+    "downloads": 6,
+    "studyDomChecks": 9,
+    "studyHttpSqlChecks": 5,
+    "realDurationMs": 69451,
+    "nextThreeJudgeMatch": "STARTED_ONLY"
+  },
+  "downloads": [
+    {
+      "kind": "rules",
+      "jobId": "9f495def-cec8-4571-8766-c390207f7a15",
+      "file": "downloads/rules-duediligence-debate-ci-full-browser-debate-2026-09-09t13-14-15-455z-rules-r1.pdf",
+      "bytes": 14802,
+      "sha256": "468b10ae2bb0e5948c5bcb973beefaad2ea48024a7b52c79fe8dbea9c182eb59",
+      "pages": 2,
+      "path": "artifacts/debate-local-rehearsal/ci-34355666171/debate-v3-synthetic-browser-evidence/browser-organizer-ci/downloads/rules-duediligence-debate-ci-full-browser-debate-2026-09-09t13-14-15-455z-rules-r1.pdf",
+      "independentlyByteVerified": true
+    },
+    {
+      "kind": "scorecard",
+      "jobId": "c4b3e6c9-e18a-4892-b65d-5403584738ad",
+      "file": "downloads/scorecard-duediligence-debate-ci-full-browser-debate-2026-09-09t13-14-15-455z-scorecard-r1.pdf",
+      "bytes": 12818,
+      "sha256": "0650a983924626c456f33455f90132e7f5de9312db16c767c7c414042094fd10",
+      "pages": 2,
+      "path": "artifacts/debate-local-rehearsal/ci-34355666171/debate-v3-synthetic-browser-evidence/browser-organizer-ci/downloads/scorecard-duediligence-debate-ci-full-browser-debate-2026-09-09t13-14-15-455z-scorecard-r1.pdf",
+      "independentlyByteVerified": true
+    },
+    {
+      "kind": "result",
+      "jobId": "2156ec3f-ea01-45aa-99a7-96c91978f9a4",
+      "file": "downloads/result-duediligence-debate-ci-full-browser-debate-2026-09-09t13-14-15-455z-result-r2.pdf",
+      "bytes": 13531,
+      "sha256": "4439af277cb3b19497df340ccafd3098bc05b9fa3fc290062455b55f6310c8bf",
+      "pages": 2,
+      "resultVersion": "5af3cf3f-fea0-4e19-9b69-4ed1a4648490",
+      "path": "artifacts/debate-local-rehearsal/ci-34355666171/debate-v3-synthetic-browser-evidence/browser-organizer-ci/downloads/result-duediligence-debate-ci-full-browser-debate-2026-09-09t13-14-15-455z-result-r2.pdf",
+      "independentlyByteVerified": true
+    },
+    {
+      "kind": "event_report",
+      "jobId": "15ea8578-e3d3-4332-8520-7c79bbaec625",
+      "file": "downloads/event_report-duediligence-debate-ci-full-browser-debate-2026-09-09t13-14-15-455z-event-report-r2.pdf",
+      "bytes": 14124,
+      "sha256": "00acbfc57665c96f3f53ca5e5f9029059c06ffdf1e85e6bb44a71bb39dc7aaed",
+      "pages": 2,
+      "resultVersion": "5af3cf3f-fea0-4e19-9b69-4ed1a4648490",
+      "path": "artifacts/debate-local-rehearsal/ci-34355666171/debate-v3-synthetic-browser-evidence/browser-organizer-ci/downloads/event_report-duediligence-debate-ci-full-browser-debate-2026-09-09t13-14-15-455z-event-report-r2.pdf",
+      "independentlyByteVerified": true
+    },
+    {
+      "kind": "csv",
+      "jobId": "e8498440-01b7-4f12-87cf-11e7c38b2809",
+      "file": "downloads/csv-duediligence-debate-ci-full-browser-debate-2026-09-09t13-14-15-455z-csv-r2.csv",
+      "bytes": 2116,
+      "sha256": "e5a3279924eb635626e4d41435b69a2a04160cc9e6c54fc42172f025d7451809",
+      "pages": null,
+      "resultVersion": "5af3cf3f-fea0-4e19-9b69-4ed1a4648490",
+      "path": "artifacts/debate-local-rehearsal/ci-34355666171/debate-v3-synthetic-browser-evidence/browser-organizer-ci/downloads/csv-duediligence-debate-ci-full-browser-debate-2026-09-09t13-14-15-455z-csv-r2.csv",
+      "independentlyByteVerified": true
+    },
+    {
+      "kind": "certificate",
+      "jobId": "46164f00-d838-4025-8de5-8ef2b53092ca",
+      "file": "downloads/certificate-duediligence-debate-ci-full-browser-debate-2026-09-09t13-14-15-455z-certificate-r2.pdf",
+      "bytes": 10976,
+      "sha256": "dd9bd4635a764433a01a09f3bb7b52f083c199a012219b1c36b67f5c5ca1b5db",
+      "pages": 1,
+      "resultVersion": "5af3cf3f-fea0-4e19-9b69-4ed1a4648490",
+      "path": "artifacts/debate-local-rehearsal/ci-34355666171/debate-v3-synthetic-browser-evidence/browser-organizer-ci/downloads/certificate-duediligence-debate-ci-full-browser-debate-2026-09-09t13-14-15-455z-certificate-r2.pdf",
+      "independentlyByteVerified": true
+    }
+  ],
+  "rootVisualReview": {
+    "executedBy": "Root coordinator in active task on 2026-09-09; both actual downloaded images viewed",
+    "observedAt": null,
+    "scope": "Exactly two screenshots at1365px and320px with the self-hosted fonts; camera-off/inert media.",
+    "screenshots": [
+      {
+        "path": "artifacts/debate-local-rehearsal/ci-34355666171/debate-v3-synthetic-browser-evidence/browser-organizer-ci/screenshots/04-live-media-controls-1365px.png",
+        "bytes": 286989,
+        "sha256": "c92450d06eaef8de1696d799aa472e79026dad0429d2ce7febedaace21f33af8"
+      },
+      {
+        "path": "artifacts/debate-local-rehearsal/ci-34355666171/debate-v3-synthetic-browser-evidence/browser-organizer-ci/screenshots/05-live-media-controls-320px.png",
+        "bytes": 230124,
+        "sha256": "e0e599bef684bfd876a07b6ddb0c14c35d7a974ff464b9aa0aa80f19a122c2a1"
+      }
+    ],
+    "observations": [
+      "Self-hosted font layout looks coherent in both inspected screenshots.",
+      "Media controls sit above the arena without covering team/adjudicator headings.",
+      "Narrow layout wraps within the viewport."
+    ],
+    "historicalVisualAnchorPreserved": "docs/debate-room-v3/evidence/browser-ci-147bb582.json",
+    "limitations": [
+      "No separate visual inspection of the newer overtime/remaining gallery/PDF pages is claimed.",
+      "No physical mobile/Safari/accessibility, actual camera/audio/provider quality, hosted Auth or90-real-minute evidence."
+    ]
+  },
+  "artifact": {
+    "id": 10105701911,
+    "name": "debate-v3-synthetic-browser-evidence",
+    "apiReportedArchiveDigest": "sha256:3b88e144b6af5832a73d0aba1bac34b3ba86a6cf68fa27e98171fd397505414e",
+    "archiveDigestIndependentlyVerified": false
+  },
+  "limitations": [
+    "The local-validation job passed, but the overall workflow34355666171 remains failed by the separate native SQL harness error.",
+    "Fresh synthetic identity/bootstrap and disposable SQL with inert provider transport; the full93-minute hosted run remains unexecuted.",
+    "Six downloaded bytes verified; not every regenerated PDF page was separately visually reviewed.",
+    "The next three-judge match started only; no complete second browser match is claimed."
+  ],
+  "fullAcceptance": false,
+  "publicLaunch": false
+}

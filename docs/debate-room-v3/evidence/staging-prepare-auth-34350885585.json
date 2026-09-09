@@ -1,0 +1,208 @@
+{
+  "schemaVersion": 1,
+  "status": "FAILED_STUDY_HTTP_METHOD_CONTRACT_WITH_VERIFIED_EXACT_FIXTURE_CLEANUP",
+  "recordedAt": "2026-09-09T12:31:32.779Z",
+  "workflow": {
+    "id": 34350885585,
+    "url": "https://github.com/codingwally/Bar-Exam-simulator/actions/runs/34350885585",
+    "event": "workflow_dispatch",
+    "operation": "prepare-auth",
+    "headSha": "30a90e85b56b72c8da53b857e70b2db428809eb3",
+    "status": "completed",
+    "conclusion": "failure",
+    "startedAt": "2026-09-09T12:25:02Z",
+    "updatedAt": "2026-09-09T12:26:20Z"
+  },
+  "repository": {
+    "pr": 356,
+    "url": "https://github.com/codingwally/Bar-Exam-simulator/pull/356",
+    "state": "MERGED",
+    "mergedAt": "2026-09-09T12:24:21Z",
+    "mergeCommit": "30a90e85b56b72c8da53b857e70b2db428809eb3",
+    "mergeTree": "7b3b032f0668f75eb6412a0034ff04d0ad5693dd",
+    "verification": "PR state/merge timestamp/commit independently read using gh pr view; merge is not a Worker deployment."
+  },
+  "actualAttempt": {
+    "accountsCreated": 1,
+    "registeredBeforeSignIn": 1,
+    "confirmedPasswordSignIns": 1,
+    "verifiedAuthSessions": 1,
+    "studyAccessSucceeded": false,
+    "secondAccountCreated": false,
+    "releasePreparationInvoked": false,
+    "deploymentRequested": false,
+    "fixtureId": "264e01b1-554d-47eb-8de2-84b58f79f2dc",
+    "failureCode": "FIXTURE_REMOTE_CONTRACT",
+    "cleanup": "EXACT_FIXTURES_DELETED",
+    "oldSessionDenied": true,
+    "noMail": true,
+    "noProvider": true,
+    "noDebateWrites": true
+  },
+  "reports": [
+    {
+      "path": "artifacts/debate-local-rehearsal/staging-34350885585/staging-release/2026-09-09T12-25-58.316Z-prepare-auth-driver.json",
+      "sha256": "f35b746eaed8aa1bc1f6c1d1879a9ef60ed2ce287053bd85af187c8901e21aaa",
+      "report": {
+        "schemaVersion": 1,
+        "mode": "prepare-auth",
+        "status": "FAIL_RESTRICTED_STAGING",
+        "startedAt": "2026-09-09T12:25:58.316Z",
+        "sourceSha": "30a90e85b56b72c8da53b857e70b2db428809eb3",
+        "target": {
+          "worker": "duediligence-examinations-staging",
+          "origin": "https://duediligence-examinations-staging.wallyesteban1993.workers.dev",
+          "project": "hlzqmreeoghbldnhlybr"
+        },
+        "staticPreflight": {
+          "status": "PASS_STATIC_GATES_BEFORE_ACCOUNT_CREATION",
+          "candidateSha": "30a90e85b56b72c8da53b857e70b2db428809eb3",
+          "reviewedBaseSha": "3a9f46b54ca4f926440e402e3831e578ffcb2022",
+          "baselineFingerprint": "038011196f012d3bde90af6e1a57a3feda15f58ffdd35d201378cc3c3f7b6f0f",
+          "previousVersionId": "b134ccc7-0c7f-4d00-89e0-d7314e0f1dd9",
+          "migrationHashes": {
+            "supabase/migrations/20260909080139_debate_room_v3.sql": "89d4f46b1e1b2991202880114387a1356b5eedfcf562129079de83d55a94b53c",
+            "supabase/migrations/20260909080143_study_room_admission_v3.sql": "5ca7d139bb925b00c82d391aab4f566446d5d1bdd25e0b1b271fde614cb11637"
+          },
+          "suiteSha256": "9d5a005df37d83b0fa168b4b78ddad237df09d9a76ce851d393fc4ff533761da",
+          "artifactHashes": {
+            "index.html": "d0c18888e5424b6113b30950466304fe6bfcca4089610dba1b1e8be01bf81b19",
+            "debate-room/index.html": "b7722b53d25db83d381aea95480031b481522ce46cb7e29f7fca431dd02d647e",
+            "study-room/index.html": "54c96a2eff695deacd935fad05cc0d44413c4e7144adcd4c44e40f84f3c31bc8",
+            "assets/debate-room.js": "1c1c245f2d23f12e4f546ae33c57dc5613b927fd6417c157de6ab992cc4eed6e",
+            "assets/debate-domain.js": "a024c94b56e708ce395d2bef8e19566cfac69719a8a580637819ff4b8b1707bc",
+            "assets/debate-sanctions.js": "f43af5803e097b26836b217086d3e6d93c6e769c0867a2aaaeb6ef05f642119b",
+            "assets/debate-media.js": "ed33b1126087c531423840fb241afb9e95682bcfcd7c8ec8caafb8ae142593b2",
+            "assets/debate-dates.js": "7549422128267aff3d7de4aafc535b5f40290df456a33fd5b85ddd4f7fcd0b12",
+            "assets/debate-entry.js": "81fc674a29b4c4997b8bdd40fe5e49b56e37592cbd573b26675274a9d7894563",
+            "assets/debate-room.css": "c2f6095a0bda20771101763ed631fc171b3a0fb43515f31cd228f8e7c6743c70",
+            "assets/study-room-live.js": "18233c7e451d4af50a4b71254ae93d68ceb0316b0b7a1cd4b4d880bd32542450",
+            "assets/study-room-live.css": "b03ee186567cf1f027b699cc12979dcad4f89279d7563e11d8fe91218f1520c2",
+            "assets/study-room-preview.js": "00477d0c99c0df301beed26eeea970facdc9094766984f3deefad716eb3d9a7d",
+            "assets/phase2-experience.js": "60f59903d92240b4869e9cb7edbbdfb2a1f72a0ce2229790b562f85815375edc",
+            "assets/feature-loader.js": "e93faeb186624afc009998303597f2dba9f4dd2e883c47ea0f325ba7b89eefc8",
+            "assets/phase2.css": "daa402e9e2cc6142f38a024f50b410a7e04396547288c5d6ebdefd9ff0b5a965",
+            "assets/vendor/supabase-2.49.8.umd.js": "522e844a8554c84631063fa630d0b824b8042f346a0222da04460f81d942dcf8",
+            "assets/phase2-config.js": "54d8bb9ce3eb0e13df023257bb07c084d00f1a1c1250c1cbcfe9b76492f3384c"
+          },
+          "publicKeySource": "existing-ci-configuration",
+          "publicKeyValidation": {
+            "status": "PASS_FIXED_STAGING_AUTH_SETTINGS",
+            "projectRef": "hlzqmreeoghbldnhlybr",
+            "httpStatus": 200,
+            "emailProviderEnabled": true,
+            "checkedAt": "2026-09-09T12:25:57.468Z",
+            "userRecordsRead": false,
+            "credentialsStored": false
+          },
+          "wrangler": null,
+          "publicLaunch": false,
+          "mediaEnabled": false,
+          "mailEnabled": false
+        },
+        "deploymentState": "NOT_REQUESTED",
+        "steps": [],
+        "cleanup": "EXACT_FIXTURES_DELETED",
+        "credentialsStored": false,
+        "failureCode": "FIXTURE_REMOTE_CONTRACT",
+        "completedAt": "2026-09-09T12:26:16.886Z"
+      }
+    },
+    {
+      "path": "artifacts/debate-local-rehearsal/staging-34350885585/staging-release/2026-09-09T12-25-58.316Z-prepare-auth-fixtures.json",
+      "sha256": "39814cc3a36b55dc2b92be3922142f9bef3cf3a0a2a96a25d663c051271ac853",
+      "report": {
+        "schemaVersion": 1,
+        "purpose": "Study Room regression and Debate restricted-auth smoke",
+        "projectRef": "hlzqmreeoghbldnhlybr",
+        "sourceSha": "30a90e85b56b72c8da53b857e70b2db428809eb3",
+        "startedAt": "2026-09-09T12:25:58.317Z",
+        "noMail": true,
+        "noProvider": true,
+        "noDebateWrites": true,
+        "credentialsStored": false,
+        "registration": "existing-astra-staging-study-room-v1-before-first-sign-in",
+        "classificationRetention": "Auth deletion cascades registry; sanitized registration receipts retained here",
+        "cleanupComplete": true,
+        "fixtures": [
+          {
+            "purpose": "allowed",
+            "runId": "dv3study-a610412d",
+            "label": "student",
+            "id": "264e01b1-554d-47eb-8de2-84b58f79f2dc",
+            "createdAt": "2026-09-09T12:25:59.228771Z",
+            "creationState": "recorded",
+            "registrationState": "confirmed",
+            "signInState": "confirmed",
+            "signOutState": "confirmed",
+            "cleanupState": "auth_deleted_verified",
+            "registrationReceipt": {
+              "registered": true,
+              "fixtureUserId": "264e01b1-554d-47eb-8de2-84b58f79f2dc",
+              "dataScope": "internal_test",
+              "registrationVersion": "astra-staging-study-room-v1"
+            },
+            "retainedAuditIds": [],
+            "oldSessionDenied": true
+          }
+        ],
+        "suppression": {
+          "projectRef": "hlzqmreeoghbldnhlybr",
+          "outboundEmailMode": "suppressed",
+          "checkedAt": "2026-09-09T12:25:58.811Z"
+        }
+      }
+    }
+  ],
+  "independentRootReadback": {
+    "attribution": "Root agent independently queried the exact staging Worker route and exact Supabase fixture UUID after the failed run, then supplied the observations to this evidence-only subtask. The subtask did not repeat those connector queries.",
+    "date": "2026-09-09",
+    "exactObservedTimestamp": null,
+    "projectRef": "hlzqmreeoghbldnhlybr",
+    "fixtureId": "264e01b1-554d-47eb-8de2-84b58f79f2dc",
+    "workerRoute": {
+      "method": "GET",
+      "path": "/study-room/access",
+      "originHeaderSupplied": true,
+      "httpStatus": 405,
+      "errorCode": "METHOD_NOT_ALLOWED"
+    },
+    "databaseCounts": {
+      "auth.users": 0,
+      "public.user_roles": 0,
+      "auth.sessions": 0,
+      "ownedDebateEvents": 0
+    },
+    "scope": "Exact-ID cleanup readback only; not a broad account, analytics or site-security audit."
+  },
+  "diagnosisAndCorrection": {
+    "diagnosis": "The first real account was classified and signed in, but the old test client used GET for a POST-only Study access route. The failure occurred before creating the second fixture or invoking the prepare callback.",
+    "correctedRequest": {
+      "method": "POST",
+      "body": "{}"
+    },
+    "localValidation": {
+      "status": "PASS_REPORTED_BY_ROOT",
+      "tests": 32,
+      "scope": "Root reported the lightweight fixture/driver suite passing, including a fake 405 method guard and exact cleanup on access failure. This evidence subtask inspected the changed request and test guards but did not rerun the suite."
+    },
+    "correctionSourceHashes": {
+      "scripts/debate-staging-fixtures.mjs": "e1704034c13de91e2973116e138fb4d3018253f488a348218873e68d21098fbd",
+      "scripts/test-debate-staging-fixtures.mjs": "e2056b3404b31f8e405bd740a64f81affd4e7662cd8070347aa24dd1e063e306"
+    },
+    "retryStatus": "NOT_YET_VERIFIED",
+    "retryRequirement": "Execute the corrected exact candidate against staging and prove both actors, actual Study access, preparation and exact cleanup.",
+    "followupSourceFinding": {
+      "status": "SOURCE_FOUND_AND_LOCALLY_TESTED_NOT_OBSERVED_IN_FAILED_HOSTED_RUN",
+      "finding": "The ordinary Study access response uses role member, while the ordinary Auth user_roles record is student. GET was rejected first, so the failed hosted run did not observe this response.",
+      "correction": "The fixture expects member. Its test harness now invokes the actual createStudyRoomHandlers.access handler with inert identity/catalog data and verifies POST {}, Origin and Content-Type.",
+      "runtimeChanged": false
+    }
+  },
+  "limitations": [
+    "The workflow remains failed; successful registration/sign-in/cleanup does not turn it into a successful two-account preparation.",
+    "Only one test identity was created and then independently verified absent; no customer account was used.",
+    "No Worker/Pages deployment, public launch, provider connection, real mail or complete hosted organizer rehearsal is proved.",
+    "The full physical 90-minute rehearsal, provider capacity/spend gates and remaining database/deployment/retention checks remain open."
+  ]
+}

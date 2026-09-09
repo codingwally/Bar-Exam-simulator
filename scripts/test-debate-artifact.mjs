@@ -3,6 +3,7 @@ import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
+import { createHash } from 'node:crypto';
 import { createTimer, timerDisplay } from '../worker/debate-domain.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const artifact = path.join(root, '.pages-dist');
@@ -20,6 +21,18 @@ for (const match of page.matchAll(/<script[^>]+src="([^"]+)"/g)) {
   assert.ok((await stat(path.resolve(artifact, 'debate-room', relative))).isFile(), relative);
 }
 const client = await readFile(path.join(artifact, 'assets/debate-room.js'), 'utf8');
+const css = await readFile(path.join(artifact, 'assets/debate-room.css'), 'utf8');
+assert.doesNotMatch(css, /@import\b|https?:\/\//, 'Debate typography must not require an external stylesheet or font request.');
+const fonts = JSON.parse(await readFile(path.join(root, 'assets/vendor/debate-fonts/manifest.json'), 'utf8'));
+const cssFontPaths = [...new Set([...css.matchAll(/url\(['"]?([^)'"\s]+)['"]?\)/g)].map(match => match[1].replace(/^\.\//, '')))].sort();
+assert.deepEqual(cssFontPaths, fonts.fonts.map(font => 'vendor/debate-fonts/' + font.file).sort());
+for (const font of fonts.fonts) {
+  const bytes = await readFile(path.join(artifact, 'assets/vendor/debate-fonts', font.file));
+  assert.equal(bytes.subarray(0, 4).toString('ascii'), 'wOF2');
+  assert.equal(bytes.length, font.bytes);
+  assert.equal(createHash('sha256').update(bytes).digest('hex'), font.sha256, font.file);
+}
+for (const name of ['Fraunces.OFL.txt','Inter.OFL.txt']) assert.match(await readFile(path.join(artifact, 'assets/vendor/debate-fonts', name), 'utf8'), /SIL OPEN FONT LICENSE/);
 for (const match of client.matchAll(/from\s+['"](\.[^'"]+)['"]/g)) assert.ok((await stat(path.resolve(artifact, 'assets', match[1]))).isFile(), match[1]);
 assert.equal(await readFile(path.join(artifact, 'assets/debate-domain.js'), 'utf8'), (await readFile(path.join(root, 'worker/debate-domain.mjs'), 'utf8')).replace("'./debate-sanctions.mjs'", "'./debate-sanctions.js'"), 'Browser and server must use the same domain arithmetic, with only the browser module suffix changed.');
 assert.equal(await readFile(path.join(artifact, 'assets/debate-sanctions.js'), 'utf8'), await readFile(path.join(root, 'worker/debate-sanctions.mjs'), 'utf8'), 'Sanctions arithmetic must remain identical in both environments.');

@@ -1,0 +1,222 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-09T13:31:04Z",
+  "status": "PASS_HOSTED_HELPER_INSTALLATION_AND_DIRECT_SQL_BOUNDARIES",
+  "sourceCandidate": "40d78a367987a0a31243ae0c77be2e697064da18",
+  "target": {
+    "projectRef": "hlzqmreeoghbldnhlybr",
+    "supabaseUrl": "https://hlzqmreeoghbldnhlybr.supabase.co",
+    "productionTouched": false
+  },
+  "source": {
+    "path": "supabase/staging/debate-hosted-cleanup.sql",
+    "sha256": "d4f7c239564d6f4634a2fa8415dd4cb9eebb37b76bb98a5f02d3175774184a14",
+    "bytes": 16545,
+    "outsideProductionMigrationDiscovery": true,
+    "applicationTool": "supabase_apply_migration (root-coordinated)"
+  },
+  "nativeCi": {
+    "runId": 34356961196,
+    "url": "https://github.com/codingwally/Bar-Exam-simulator/actions/runs/34356961196",
+    "artifact": "debate-v3-native-cleanup-evidence/report.json",
+    "sha256": "28d312ac83038707854722df35b2b8416677727e9493f278f79b0719f83a37f5",
+    "status": "PASS_NATIVE_POSTGRES17_ATOMIC_CLEANUP",
+    "engine": "PostgreSQL17.6",
+    "checksPassed": 22,
+    "nativeConcurrentConnections": true,
+    "hostedExecuted": false,
+    "dependencySchemaScope": "Inert reduced Auth/Storage/billing fixtures; unmodified real Debate migration/helper SQL; no Auth server or Storage API."
+  },
+  "installedMetadata": {
+    "functions": [
+      {
+        "acl": "{postgres=X/postgres,service_role=X/postgres}",
+        "kind": "f",
+        "name": "astra_staging_debate_cleanup_v1",
+        "owner": "postgres",
+        "schema": "private",
+        "strict": false,
+        "language": "plpgsql",
+        "parallel": "u",
+        "leakproof": false,
+        "bodySha256": "1d02811f3c315d68ba47cbf1085c1386a6c02e9289e00e0ae9ccfed153aa6467",
+        "returnType": "jsonb",
+        "returnsSet": false,
+        "volatility": "v",
+        "argumentNames": [
+          "p_manifest",
+          "p_expected"
+        ],
+        "configuration": [
+          "search_path=\"\"",
+          "lock_timeout=5s",
+          "statement_timeout=20s"
+        ],
+        "securityDefiner": true,
+        "defaultArguments": 0,
+        "normalizedBodySha256": "1d02811f3c315d68ba47cbf1085c1386a6c02e9289e00e0ae9ccfed153aa6467"
+      },
+      {
+        "acl": "{postgres=X/postgres,service_role=X/postgres}",
+        "kind": "f",
+        "name": "astra_staging_debate_cleanup_v1",
+        "owner": "postgres",
+        "schema": "public",
+        "strict": false,
+        "language": "sql",
+        "parallel": "u",
+        "leakproof": false,
+        "bodySha256": "aec0459bac58aee8fc65057c1d9408f4b3e3842c059e38dbcdfa18fb834dcfd2",
+        "returnType": "jsonb",
+        "returnsSet": false,
+        "volatility": "v",
+        "argumentNames": [
+          "p_manifest",
+          "p_expected"
+        ],
+        "configuration": [
+          "search_path=\"\"",
+          "lock_timeout=5s",
+          "statement_timeout=20s"
+        ],
+        "securityDefiner": false,
+        "defaultArguments": 0,
+        "normalizedBodySha256": "aec0459bac58aee8fc65057c1d9408f4b3e3842c059e38dbcdfa18fb834dcfd2"
+      }
+    ],
+    "migrations": [
+      {
+        "name": "astra_staging_debate_cleanup_v1",
+        "version": "20260909132706",
+        "statementCount": 1,
+        "statementHashes": [
+          {
+            "bytes": 16545,
+            "sha256": "d4f7c239564d6f4634a2fa8415dd4cb9eebb37b76bb98a5f02d3175774184a14",
+            "ordinal": 1
+          }
+        ],
+        "joinedStatementsSha256": "d4f7c239564d6f4634a2fa8415dd4cb9eebb37b76bb98a5f02d3175774184a14"
+      }
+    ]
+  },
+  "privileges": {
+    "executing_role": "postgres",
+    "postgres_version": "17.6",
+    "service_private_usage": true,
+    "anon_public_execute": false,
+    "authenticated_public_execute": false,
+    "service_public_execute": true,
+    "anon_private_execute": false,
+    "authenticated_private_execute": false,
+    "service_private_execute": true,
+    "service_audit_select": true,
+    "service_audit_insert": true,
+    "service_audit_delete": true,
+    "service_audit_update": false,
+    "service_audit_truncate": false
+  },
+  "localBodyHashes": [
+    {
+      "schema": "private",
+      "sha256": "1d02811f3c315d68ba47cbf1085c1386a6c02e9289e00e0ae9ccfed153aa6467"
+    },
+    {
+      "schema": "public",
+      "sha256": "aec0459bac58aee8fc65057c1d9408f4b3e3842c059e38dbcdfa18fb834dcfd2"
+    }
+  ],
+  "exactStatementAndFunctionBodiesMatch": true,
+  "permissionProbes": [
+    {
+      "role": "anon",
+      "schema": "public",
+      "input": "empty object manifest; NULL expected snapshot",
+      "sqlState": "42501",
+      "expected": true,
+      "reason": "permission denied for function",
+      "transactional": true,
+      "explicitRollbackIssuedAfterError": true,
+      "subsequentReadback": {
+        "executing_role": "postgres",
+        "requested_role": "none"
+      }
+    },
+    {
+      "role": "anon",
+      "schema": "private",
+      "input": "empty object manifest; NULL expected snapshot",
+      "sqlState": "42501",
+      "expected": true,
+      "reason": "permission denied for schema private",
+      "transactional": true,
+      "explicitRollbackIssuedAfterError": true,
+      "subsequentReadback": {
+        "executing_role": "postgres",
+        "requested_role": "none"
+      }
+    },
+    {
+      "role": "authenticated",
+      "schema": "public",
+      "input": "empty object manifest; NULL expected snapshot",
+      "sqlState": "42501",
+      "expected": true,
+      "reason": "permission denied for function",
+      "transactional": true,
+      "explicitRollbackIssuedAfterError": true,
+      "subsequentReadback": {
+        "executing_role": "postgres",
+        "requested_role": "none"
+      }
+    },
+    {
+      "role": "authenticated",
+      "schema": "private",
+      "input": "empty object manifest; NULL expected snapshot",
+      "sqlState": "42501",
+      "expected": true,
+      "reason": "permission denied for schema private",
+      "transactional": true,
+      "explicitRollbackIssuedAfterError": true,
+      "subsequentReadback": {
+        "executing_role": "postgres",
+        "requested_role": "none"
+      }
+    },
+    {
+      "role": "service_role",
+      "schema": "public",
+      "input": "empty object manifest; NULL expected snapshot",
+      "sqlState": "P0001",
+      "expected": true,
+      "reason": "HOSTED_CLEANUP_MANIFEST_SCOPE",
+      "transactional": true,
+      "explicitRollbackIssuedAfterError": true,
+      "subsequentReadback": {
+        "executing_role": "postgres",
+        "requested_role": "none"
+      }
+    }
+  ],
+  "readbackScope": {
+    "mechanism": "Supabase execute_sql fixed project_id; infrastructure metadata SELECT and transaction-scoped role/invalid-manifest SELECT only",
+    "validFixtureHelperInvocation": false,
+    "authAccountsCreated": 0,
+    "databaseFixtureRowsDeleted": 0,
+    "storageObjectsChanged": 0,
+    "providerSettingsChanged": false,
+    "mailSent": false
+  },
+  "remainingVerification": {
+    "actualRestHelperWithRegisteredFixtures": "UNVERIFIED; required prepare-hosted empty-scope capture and confirmed zero-delete",
+    "immediatePostLogoutAuthAndWorkerDenial": "UNVERIFIED; required prepare-hosted proof before the long run",
+    "hostedPostgrestTimeoutHoisting": "UNVERIFIED; both functions configure20s but native contention test used an explicit outer timeout",
+    "hostedFullOrganizerRehearsal": "NOT_RUN",
+    "physicalMedia": "NOT_RUN",
+    "publicLaunch": false,
+    "fullAcceptance": false,
+    "databaseProjectIdentity": "Pinned externally by exact MCP project_id and CI URL; payloadref is a context guard, no immutable project GUC claim"
+  }
+}
+

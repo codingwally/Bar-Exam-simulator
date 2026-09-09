@@ -28,3 +28,7 @@ docs/debate-room-v3/evidence/staging-dml-rollback-probe.denials.json -text
 docs/debate-room-v3/evidence/*.json -text
 docs/debate-room-v3/evidence/samples/* -text
 docs/debate-room-v3/evidence/samples/*.csv whitespace=cr-at-eol
+supabase/staging/debate-hosted-cleanup.sql -text
+assets/vendor/debate-fonts/* -text
+# These verbatim upstream licenses contain one trailing space; keep pinned bytes.
+assets/vendor/debate-fonts/*.OFL.txt -whitespace

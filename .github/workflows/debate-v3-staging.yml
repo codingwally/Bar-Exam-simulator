@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: Capture is read-only; prepare-auth creates and cleans test identities; deploy also changes the existing staging Worker
+        description: Capture is read-only; prepare-auth checks temporary identities; deploy checks restricted assets/auth; hosted-rehearsal also runs the real-duration control journey
         required: true
         type: choice
         default: capture
-        options: [capture, prepare-auth, deploy]
+        options: [capture, prepare-auth, deploy, prepare-hosted, hosted-rehearsal]
       candidate_sha:
         description: Exact current main SHA reviewed for this staging release
         required: true
@@ -25,9 +25,18 @@ on:
         description: Reviewed JSON matching docs/debate-v3-staging-release.md, including manually applied database proof
         required: false
         type: string
+      hosted_preparation_run_id:
+        description: Successful prepare-hosted run for this exact candidate and unchanged staging baseline
+        required: false
+        type: string
+      hosted_preparation_sha256:
+        description: Reviewed SHA-256 of that run's sanitized hosted driver.json receipt
+        required: false
+        type: string
 
 permissions:
   contents: read
+  actions: read
 
 # Also used by the existing staging gate; never interrupt another staging owner.
 concurrency:
@@ -35,11 +44,50 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  hosted-cleanup-postgres:
+    if: inputs.operation != 'capture'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    services:
+      postgres:
+        image: postgres:17.6
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: debate_ci_only
+          POSTGRES_DB: debate_cleanup_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d debate_cleanup_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify staging-only cleanup without provider credentials
+        env:
+          DEBATE_HOSTED_SQL_CI: '1'
+          PGHOST: 127.0.0.1
+          PGPORT: '5432'
+          PGUSER: postgres
+          PGDATABASE: debate_cleanup_ci
+          PGPASSWORD: debate_ci_only
+        run: node scripts/test-debate-hosted-atomic-cleanup.mjs
+      - name: Preserve native cleanup evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debate-v3-native-cleanup-evidence
+          path: artifacts/debate-local-rehearsal/hosted-atomic-cleanup-ci/report.json
+          if-no-files-found: warn
+          retention-days: 14
   staging:
-    if: github.repository == 'codingwally/Bar-Exam-simulator' && github.ref == 'refs/heads/main' && github.actor != 'dependabot[bot]'
+    needs: hosted-cleanup-postgres
+    if: ${{ !cancelled() && github.repository == 'codingwally/Bar-Exam-simulator' && github.ref == 'refs/heads/main' && github.actor != 'dependabot[bot]' && (inputs.operation == 'capture' || needs.hosted-cleanup-postgres.result == 'success') }}
     environment: staging-e2e
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: ${{ inputs.operation == 'hosted-rehearsal' && 180 || 45 }}
     env:
       DEBATE_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
       DEBATE_EXPECTED_BASELINE_SHA256: ${{ inputs.expected_baseline_sha256 }}
@@ -66,6 +114,26 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: node scripts/debate-staging-release.mjs capture
+      - name: Verify provenance of the earlier hosted fixture preparation
+        if: inputs.operation == 'hosted-rehearsal'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEBATE_HOSTED_PREPARATION_RUN_ID: ${{ inputs.hosted_preparation_run_id }}
+          DEBATE_HOSTED_PREPARATION_SHA256: ${{ inputs.hosted_preparation_sha256 }}
+        run: node scripts/resolve-debate-hosted-preparation.mjs provenance
+      - name: Download the reviewed sanitized preparation evidence
+        if: inputs.operation == 'hosted-rehearsal'
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.hosted_preparation_run_id }}
+          name: debate-v3-staging-release-${{ github.sha }}
+          path: artifacts/debate-local-rehearsal/hosted-preparation
+      - name: Pin the exact prior preparation receipt
+        if: inputs.operation == 'hosted-rehearsal'
+        env:
+          DEBATE_HOSTED_PREPARATION_SHA256: ${{ inputs.hosted_preparation_sha256 }}
+        run: node scripts/resolve-debate-hosted-preparation.mjs resolve
       - name: Install locked dependencies without install scripts
         if: inputs.operation != 'capture'
         run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
@@ -101,6 +169,11 @@ jobs:
         run: |
           set -euo pipefail
           sudo -n unshare --net -- env -i PATH="$PATH" DEBATE_HOST_NETWORK_NAMESPACE="$(readlink /proc/self/ns/net)" node scripts/test-debate-wrangler-metadata.mjs
+      - name: Install existing pinned browser tooling for the hosted control rehearsal
+        if: inputs.operation == 'hosted-rehearsal'
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+        run: npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.54.2
       - name: Verify gates, provision scoped test sessions, execute requested operation and clean exact fixtures
         if: inputs.operation != 'capture'
         env:
@@ -109,7 +182,14 @@ jobs:
           STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
           STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ env.STAGING_SUPABASE_PUBLISHABLE_KEY }}
           REQUESTED_STAGING_OPERATION: ${{ inputs.operation }}
-        run: node scripts/run-debate-staging-auth.mjs "$REQUESTED_STAGING_OPERATION"
+        run: |
+          if [[ "$REQUESTED_STAGING_OPERATION" == 'hosted-rehearsal' ]]; then
+            DEBATE_HOSTED_REHEARSAL=1 DEBATE_HOSTED_BROWSER_CI=1 node scripts/run-debate-hosted-rehearsal.mjs run
+          elif [[ "$REQUESTED_STAGING_OPERATION" == 'prepare-hosted' ]]; then
+            DEBATE_HOSTED_REHEARSAL=1 node scripts/run-debate-hosted-rehearsal.mjs prepare
+          else
+            node scripts/run-debate-staging-auth.mjs "$REQUESTED_STAGING_OPERATION"
+          fi
       - name: Retain sanitized release evidence even when a gate fails
         if: always()
         uses: actions/upload-artifact@v4
@@ -117,6 +197,12 @@ jobs:
           name: debate-v3-staging-release-${{ github.sha }}
           path: |
             artifacts/debate-local-rehearsal/staging-release/*.json
+            artifacts/debate-local-rehearsal/staging-release/hosted-*/driver.json
+            artifacts/debate-local-rehearsal/staging-release/hosted-*/fixtures.json
+            artifacts/debate-local-rehearsal/staging-release/hosted-*/browser/report.json
+            artifacts/debate-local-rehearsal/staging-release/hosted-*/browser/screenshots/*.png
+            artifacts/debate-local-rehearsal/staging-release/hosted-*/browser/downloads/*.pdf
+            artifacts/debate-local-rehearsal/staging-release/hosted-*/browser/downloads/*.csv
             artifacts/debate-local-rehearsal/suite-*/report.json
             artifacts/debate-local-rehearsal/staging-dml-probe-ci/report.json
             artifacts/debate-local-rehearsal/wrangler-metadata/report.json

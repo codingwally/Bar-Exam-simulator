@@ -1,0 +1,406 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS_PINNED_WRANGLER_OFFLINE_METADATA",
+  "recordedAt": "2026-09-09T12:19:46.039Z",
+  "candidate": "2377d800b1a15a041aff88206be323be49c03a75",
+  "sourceTree": "7b3b032f0668f75eb6412a0034ff04d0ad5693dd",
+  "workflow": {
+    "id": 34350162559,
+    "url": "https://github.com/codingwally/Bar-Exam-simulator/actions/runs/34350162559",
+    "jobId": 102461182185,
+    "jobName": "wrangler-metadata",
+    "jobConclusion": "success",
+    "jobStartedAt": "2026-09-09T12:17:29Z",
+    "jobCompletedAt": "2026-09-09T12:17:47Z",
+    "scope": "Only this completed metadata job is attested; competition/browser/shared CI evidence is recorded separately."
+  },
+  "artifact": {
+    "id": 10103343242,
+    "name": "debate-v3-wrangler-metadata",
+    "createdAt": "2026-09-09T12:17:44Z",
+    "archiveDigest": "sha256:605741745523ff0bbfff260102c190ef9d311a11c5e0f3c1134146b2a9373cbd",
+    "archiveBytes": 2629,
+    "archiveDigestSource": "GitHub Actions artifacts API metadata; not an independently retained archive checksum.",
+    "reportPath": "artifacts/debate-local-rehearsal/wrangler-ci-34350162559/report.json",
+    "reportSha256": "abb78817912ae7ca29b6a3bcaf3931f82f684575d3211442a2c8b354c6f7e5d1",
+    "retention": "Raw Actions artifact is temporary; this receipt permanently embeds the complete sanitized report."
+  },
+  "exactSourceVerification": {
+    "testedCheckout": "55cef422b25402ff3d1d0e0e1b8a23300a1878f9",
+    "testedCheckoutTree": "7b3b032f0668f75eb6412a0034ff04d0ad5693dd",
+    "testedCheckoutParents": [
+      "3a9f46b54ca4f926440e402e3831e578ffcb2022",
+      "2377d800b1a15a041aff88206be323be49c03a75"
+    ],
+    "candidateTreeMatches": true,
+    "checkoutSource": "GitHub Git commit API readback; candidate tree and all six source hashes independently verified against exact local Git blob bytes.",
+    "sourceHashCount": 6,
+    "sourceHashes": [
+      {
+        "path": "scripts/test-debate-wrangler-metadata.mjs",
+        "reportedSha256": "58fa62bd03c1e189dd31df1cafe6c9feeff401589e589e157c37a28bec9f63b4",
+        "actualSha256": "58fa62bd03c1e189dd31df1cafe6c9feeff401589e589e157c37a28bec9f63b4",
+        "status": "MATCH_EXACT_GIT_BLOB"
+      },
+      {
+        "path": "scripts/debate-staging-release.mjs",
+        "reportedSha256": "13ddaad1be08325f58e9d8e59ca0b05797eb699d165624594ba642e59637d632",
+        "actualSha256": "13ddaad1be08325f58e9d8e59ca0b05797eb699d165624594ba642e59637d632",
+        "status": "MATCH_EXACT_GIT_BLOB"
+      },
+      {
+        "path": "worker/wrangler.staging.toml",
+        "reportedSha256": "e93d72892b472843119f573e377ee374ef4c436e5efe380c622da694858000f2",
+        "actualSha256": "e93d72892b472843119f573e377ee374ef4c436e5efe380c622da694858000f2",
+        "status": "MATCH_EXACT_GIT_BLOB"
+      },
+      {
+        "path": "worker/debate-staging-policy.json",
+        "reportedSha256": "4c8217966c8b2426acab90bfdb6e268e51d4c9878fc6e1d152cf56797cbc84ef",
+        "actualSha256": "4c8217966c8b2426acab90bfdb6e268e51d4c9878fc6e1d152cf56797cbc84ef",
+        "status": "MATCH_EXACT_GIT_BLOB"
+      },
+      {
+        "path": ".github/workflows/debate-v3-validation.yml",
+        "reportedSha256": "386b2aee091992480b8e061f8895fb0738f5234ecf3d496260cbde8b84281047",
+        "actualSha256": "386b2aee091992480b8e061f8895fb0738f5234ecf3d496260cbde8b84281047",
+        "status": "MATCH_EXACT_GIT_BLOB"
+      },
+      {
+        "path": ".github/workflows/debate-v3-staging.yml",
+        "reportedSha256": "fd7135729b462327e15d9e54107d8182ae9ab2b5f6ec7fb5afa88d2cc3170e11",
+        "actualSha256": "fd7135729b462327e15d9e54107d8182ae9ab2b5f6ec7fb5afa88d2cc3170e11",
+        "status": "MATCH_EXACT_GIT_BLOB"
+      }
+    ]
+  },
+  "report": {
+    "schemaVersion": 1,
+    "status": "PASS_PINNED_WRANGLER_OFFLINE_METADATA",
+    "startedAt": "2026-09-09T12:17:42.227Z",
+    "environment": "Linux network namespace; inert Worker/static asset; actual pinned Wrangler dry-run",
+    "node": "v22.23.2",
+    "checks": [
+      {
+        "name": "fresh kernel network namespace with no active IP interfaces",
+        "status": "PASS"
+      },
+      {
+        "name": "real overlay uses the fixture and preserves the reviewed base",
+        "status": "PASS"
+      },
+      {
+        "name": "installed Wrangler is exactly the existing pinned version",
+        "status": "PASS"
+      },
+      {
+        "name": "Wrangler environment excludes credentials and inherited execution hooks",
+        "status": "PASS"
+      },
+      {
+        "name": "pinned wrapper reports dry-run exit",
+        "status": "PASS"
+      },
+      {
+        "name": "serialized placement uses the exact targeted region",
+        "status": "PASS"
+      },
+      {
+        "name": "serialized cache and exports remain omitted",
+        "status": "PASS"
+      },
+      {
+        "name": "all captured observability fields survive serialization",
+        "status": "PASS"
+      },
+      {
+        "name": "compatibility and existing variable/secret preservation survive serialization",
+        "status": "PASS"
+      },
+      {
+        "name": "serialized module is the exact inert fixture",
+        "status": "PASS"
+      },
+      {
+        "name": "tracked staging base bytes remain unchanged",
+        "status": "PASS"
+      }
+    ],
+    "sourceHashes": {
+      "scripts/test-debate-wrangler-metadata.mjs": "58fa62bd03c1e189dd31df1cafe6c9feeff401589e589e157c37a28bec9f63b4",
+      "scripts/debate-staging-release.mjs": "13ddaad1be08325f58e9d8e59ca0b05797eb699d165624594ba642e59637d632",
+      "worker/wrangler.staging.toml": "e93d72892b472843119f573e377ee374ef4c436e5efe380c622da694858000f2",
+      "worker/debate-staging-policy.json": "4c8217966c8b2426acab90bfdb6e268e51d4c9878fc6e1d152cf56797cbc84ef",
+      ".github/workflows/debate-v3-validation.yml": "386b2aee091992480b8e061f8895fb0738f5234ecf3d496260cbde8b84281047",
+      ".github/workflows/debate-v3-staging.yml": "fd7135729b462327e15d9e54107d8182ae9ab2b5f6ec7fb5afa88d2cc3170e11"
+    },
+    "limitations": [
+      "The actual configuration parser and upload serializer are exercised with an inert entrypoint and one static file.",
+      "The full application Worker is not bundled or executed; no Cloudflare request, account provisioning, deployment, provider, Auth, database or mail operation is performed.",
+      "Upload omission is proved; server-side acceptance and preservation still require the separately authorized deployment and readback."
+    ],
+    "network": {
+      "isolated": true,
+      "hostNamespace": "net:[4026531833]",
+      "currentNamespace": "net:[4026532268]",
+      "activeIpInterfaces": []
+    },
+    "tool": {
+      "package": "wrangler",
+      "version": "4.114.0",
+      "wrapperSha256": "780661a508810f3b65786895b1ca9aacbc4f55d329ae6b8c1e49ec8433569f77",
+      "cliSha256": "386ce186b5a2583dadd20dd9ca1221d3dbcbbf24c020244bd447e337c8099159"
+    },
+    "checkoutSha": "55cef422b25402ff3d1d0e0e1b8a23300a1878f9",
+    "uploadSha256": "637add07c10e9b24f96e0f2b67a463d77ccd17fd7cfc1ce7e98498499f03765a",
+    "generatedConfigurationSha256": "4fee97186cea6e546e32416094f99e7ee982526e3e572eb930cced52725bf4ec",
+    "metadata": {
+      "placement": {
+        "mode": "targeted",
+        "region": "gcp:us-east4"
+      },
+      "observability": {
+        "enabled": true,
+        "head_sampling_rate": 1,
+        "redact_query_string": false,
+        "logs": {
+          "enabled": true,
+          "head_sampling_rate": 1,
+          "persist": true,
+          "invocation_logs": true
+        },
+        "traces": {
+          "enabled": false,
+          "head_sampling_rate": 1,
+          "persist": true
+        }
+      },
+      "cachePresent": false,
+      "cacheOptionsPresent": false,
+      "exportsPresent": false,
+      "compatibilityDate": "2026-07-26",
+      "compatibilityFlags": [
+        "nodejs_compat"
+      ],
+      "keepBindings": [
+        "plain_text",
+        "json",
+        "secret_text",
+        "secret_key"
+      ],
+      "mainModule": "commercial-entry.mjs",
+      "bindings": [
+        {
+          "name": "LIVEKIT_URL",
+          "type": "inherit"
+        },
+        {
+          "name": "LIVEKIT_API_KEY",
+          "type": "inherit"
+        },
+        {
+          "name": "LIVEKIT_API_SECRET",
+          "type": "inherit"
+        },
+        {
+          "name": "DEBATE_ROOM_ENABLED",
+          "type": "plain_text"
+        },
+        {
+          "name": "DEBATE_MEDIA_ENABLED",
+          "type": "plain_text"
+        },
+        {
+          "name": "DEBATE_SWEEPER_ENABLED",
+          "type": "plain_text"
+        },
+        {
+          "name": "DEBATE_RESULTS_EMAIL_MODE",
+          "type": "plain_text"
+        },
+        {
+          "name": "DEBATE_INVITATION_EMAIL_MODE",
+          "type": "plain_text"
+        },
+        {
+          "name": "DEBATE_APPROVED_MAX_PARTICIPANTS",
+          "type": "plain_text"
+        },
+        {
+          "name": "DEBATE_PREVIEW_ACTOR_IDS",
+          "type": "plain_text"
+        },
+        {
+          "name": "SUPABASE_URL",
+          "type": "plain_text"
+        },
+        {
+          "name": "GEMINI_MODEL",
+          "type": "plain_text"
+        },
+        {
+          "name": "GEMINI_GROUNDING_ENABLED",
+          "type": "plain_text"
+        },
+        {
+          "name": "ALLOWED_ORIGIN",
+          "type": "plain_text"
+        },
+        {
+          "name": "ALLOW_LEGACY_GUESTS",
+          "type": "plain_text"
+        },
+        {
+          "name": "PHASE4_ACCESS_ENFORCEMENT",
+          "type": "plain_text"
+        },
+        {
+          "name": "PHASE4_MODEL_QUALITY_ENFORCEMENT",
+          "type": "plain_text"
+        },
+        {
+          "name": "REQUIRE_AUTHENTICATED_SUBMISSIONS",
+          "type": "plain_text"
+        },
+        {
+          "name": "EXAMINATION_ROOM_ENABLED",
+          "type": "plain_text"
+        },
+        {
+          "name": "EXAMINATION_ROOM_EMAIL_MODE",
+          "type": "plain_text"
+        },
+        {
+          "name": "EXAMINATION_ROOM_RECOVERY_MODE",
+          "type": "plain_text"
+        },
+        {
+          "name": "OUTBOUND_EMAIL_MODE",
+          "type": "plain_text"
+        },
+        {
+          "name": "SUBSCRIPTION_RECEIPT_EMAIL_MODE",
+          "type": "plain_text"
+        },
+        {
+          "name": "FORECAST_RESULTS_EMAIL_MODE",
+          "type": "plain_text"
+        },
+        {
+          "name": "FORECAST_RESULTS_EMAIL_FROM",
+          "type": "plain_text"
+        },
+        {
+          "name": "ADMIN_DIRECTORY_EMAIL_MODE",
+          "type": "plain_text"
+        },
+        {
+          "name": "ADMIN_DIRECTORY_EMAIL_FROM",
+          "type": "plain_text"
+        },
+        {
+          "name": "SUPPORT_NOTIFICATION_EMAIL_MODE",
+          "type": "plain_text"
+        },
+        {
+          "name": "SUPPORT_NOTIFICATION_EMAIL_FROM",
+          "type": "plain_text"
+        },
+        {
+          "name": "SIGN_IN_NOTIFICATION_EMAIL_MODE",
+          "type": "plain_text"
+        },
+        {
+          "name": "SIGN_IN_NOTIFICATION_EMAIL_FROM",
+          "type": "plain_text"
+        },
+        {
+          "name": "ADMIN_PULSE_ENABLED",
+          "type": "plain_text"
+        },
+        {
+          "name": "ADMIN_PULSE_WEB_PUSH_ENABLED",
+          "type": "plain_text"
+        },
+        {
+          "name": "ADMIN_PULSE_VAPID_PUBLIC_KEY",
+          "type": "plain_text"
+        },
+        {
+          "name": "ADMIN_PULSE_VAPID_SUBJECT",
+          "type": "plain_text"
+        },
+        {
+          "name": "PRIVATE_BETA_GATE_ENABLED",
+          "type": "plain_text"
+        },
+        {
+          "name": "PRIVATE_BETA_DISCLOSURE_VERSION",
+          "type": "plain_text"
+        },
+        {
+          "name": "VERDICT_PDF_ENABLED",
+          "type": "plain_text"
+        },
+        {
+          "name": "VERDICT_PDF_PREMIUM_REQUIRED",
+          "type": "plain_text"
+        },
+        {
+          "name": "BAR_EASY_ENABLED",
+          "type": "plain_text"
+        },
+        {
+          "name": "CHAIR_CASES_ENABLED",
+          "type": "plain_text"
+        },
+        {
+          "name": "DOCTRINES_ENABLED",
+          "type": "plain_text"
+        },
+        {
+          "name": "ANCHOR_CASE_DIGESTS_ENABLED",
+          "type": "plain_text"
+        },
+        {
+          "name": "AI_PREPARED_BETA_BADGE",
+          "type": "plain_text"
+        },
+        {
+          "name": "CONTENT_HUMAN_REVIEW_REQUIRED",
+          "type": "plain_text"
+        },
+        {
+          "name": "BAR_QUESTION_PRACTICE_RANDOMIZATION_V2_ENABLED",
+          "type": "plain_text"
+        },
+        {
+          "name": "SYLLABUS_BASED_REVIEW_RANDOMIZATION_V2_ENABLED",
+          "type": "plain_text"
+        },
+        {
+          "name": "BAR_EXAM_SIMULATION_RANDOMIZATION_V1_SCHEMA_READY",
+          "type": "plain_text"
+        },
+        {
+          "name": "BAR_EXAM_SIMULATION_RANDOMIZATION_V1_ENABLED",
+          "type": "plain_text"
+        },
+        {
+          "name": "STUDY_ROOM_ENABLED",
+          "type": "plain_text"
+        },
+        {
+          "name": "STUDY_ROOM_NAME",
+          "type": "plain_text"
+        }
+      ]
+    },
+    "finishedAt": "2026-09-09T12:17:43.418Z"
+  },
+  "limitations": [
+    "The actual configuration parser and upload serializer are exercised with an inert entrypoint and one static file.",
+    "The full application Worker is not bundled or executed; no Cloudflare request, account provisioning, deployment, provider, Auth, database or mail operation is performed.",
+    "Upload omission is proved; server-side acceptance and preservation still require the separately authorized deployment and readback."
+  ]
+}

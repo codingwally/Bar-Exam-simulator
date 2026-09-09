@@ -1,6 +1,8 @@
 # Operations and controlled release
 
-No hosted migrations, provider settings, email sends, quota purchases, or deployments have been performed by this task. This document is a reviewable release plan, not launch authorization.
+Controlled staging work has occurred in Supabase project `hlzqmreeoghbldnhlybr` and Worker `duediligence-examinations-staging`. The [two additive migrations, hosted rollback and permission checks](evidence/staging-database-20260909.json) are recorded. The [staging-only cleanup helper](evidence/staging-hosted-cleanup-helper-20260909.json) was also installed after native PostgreSQL CI; its migration-ledger bytes and both function bodies match the reviewed source, and actual unprivileged database calls are denied. The helper remains outside production migration discovery.
+
+The [first restricted Worker deployment](evidence/staging-deploy-34352333268.json) passed configuration preservation but failed its authenticated smoke step; its temporary accounts were cleaned. That receipt does not establish the complete hosted organizer rehearsal. Valid-fixture cleanup through the hosted REST API, immediate logout fencing, the full rehearsal and physical-media verification remain separate evidence gates. PostgREST timeout hoisting remains unverified. No production deployment, public launch, quota purchase or real Debate email/media session is authorized by this document.
 
 ## Configuration
 

@@ -40,8 +40,12 @@ test('local rehearsal HTTP perimeter and real command authorization', async t =>
   assert.match(page.headers['content-security-policy'], /connect-src 'self'/); assert.match(page.headers['content-security-policy'], /media-src 'none'/);
   expect('Cross-origin allow header is absent', Object.hasOwn(page.headers, 'access-control-allow-origin'), false);
   const localCss = (await request('/assets/debate-room.css')).text;
-  expect('External font imports are removed from local copy', /@import/.test(localCss), false);
-  expect('Semicolons inside font URLs do not corrupt the first local CSS rule', localCss.trimStart().startsWith(':root'), true);
+  expect('Local CSS has no external font request', /@import|https?:\/\//.test(localCss), false);
+  expect('Local CSS preserves font faces and root declarations', /@font-face\s*\{/.test(localCss) && /:root\{/.test(localCss), true);
+  const font = await request('/assets/vendor/debate-fonts/inter-v20-latin.woff2');
+  expect('Same-origin font is served', font.status, 200);
+  expect('Font uses its correct content type', font.headers['content-type'], 'font/woff2');
+  expect('Unlisted font source manifest stays private', (await request('/assets/vendor/debate-fonts/manifest.json')).status, 404);
   expect('Local media endpoint cannot connect a provider', (await request('/debate-room/media')).status, 503);
   const authHeaders = { Origin: origin, Authorization: `Bearer ${hostIdentity.token}`, 'Content-Type': 'application/json' };
   const post = async (pathname, data, headers = authHeaders) => request(pathname, { method: 'POST', headers, body: JSON.stringify(data) });

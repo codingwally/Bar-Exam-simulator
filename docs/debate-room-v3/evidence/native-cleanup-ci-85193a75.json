@@ -1,0 +1,250 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-09T13:18:48.732Z",
+  "status": "FAILED_NATIVE_TEST_HARNESS_SQL_OPERATOR_AMBIGUITY",
+  "provenance": {
+    "candidate": "85193a759dbf119dc9dd908cb0b6590196883ad3",
+    "candidateTree": "809822024296e5143afd4b8f6ed60afcbccc6640",
+    "testedCheckout": "acd796490fd04dfc7280b6c4c00cea7bfee7a532",
+    "testedCheckoutTree": "809822024296e5143afd4b8f6ed60afcbccc6640",
+    "testedCheckoutParents": [
+      "f0c4d6be4203d0a3688521694145d86a0462f2a4",
+      "85193a759dbf119dc9dd908cb0b6590196883ad3"
+    ],
+    "treeVerification": "Exact candidate Git tree independently resolved locally; tested checkout tree/parents independently read from GitHub Git commit API.",
+    "run": {
+      "id": 34355666171,
+      "url": "https://github.com/codingwally/Bar-Exam-simulator/actions/runs/34355666171",
+      "status": "completed",
+      "conclusion": "failure",
+      "reason": "Native cleanup test harness failed; local-validation and Wrangler metadata jobs passed independently."
+    },
+    "job": {
+      "id": 102479576196,
+      "name": "hosted-cleanup-postgres",
+      "conclusion": "failure",
+      "startedAt": "2026-09-09T13:12:57Z",
+      "completedAt": "2026-09-09T13:13:30Z"
+    }
+  },
+  "sourceVerification": [
+    {
+      "path": "supabase/staging/debate-hosted-cleanup.sql",
+      "sha256": "d4f7c239564d6f4634a2fa8415dd4cb9eebb37b76bb98a5f02d3175774184a14"
+    },
+    {
+      "path": "supabase/migrations/20260909080139_debate_room_v3.sql",
+      "sha256": "89d4f46b1e1b2991202880114387a1356b5eedfcf562129079de83d55a94b53c"
+    },
+    {
+      "path": "scripts/test-debate-hosted-atomic-cleanup.mjs",
+      "sha256": "286e0348f04e5e4a9bbb1ada38e37640679021eece056951cba14410b1d9a22d"
+    }
+  ],
+  "actualEvidence": {
+    "engine": "17.6 (Debian 17.6-2.pgdg13+1)",
+    "successfulNamedChecks": 15,
+    "expectedSqlStateDenials": 20,
+    "helperInstalledInDisposableCi": true,
+    "hostedHelperInstalled": false,
+    "concurrentConnectionAssertions": "NOT_REACHED",
+    "positiveAtomicDeletionAssertions": "NOT_REACHED",
+    "reportedConcurrentConnectionsBoolean": "The embedded report initialized nativeConcurrentConnections:true before execution; it is not evidence that the failed run reached concurrency tests."
+  },
+  "failureDiagnosis": {
+    "sqlState": "42725",
+    "actualLogDiagnostic": "operator is not unique: unknown - unknown at character 86",
+    "stage": "Restoring the deliberately mutated foreign-member fixture after its guard tests passed.",
+    "cause": "Harness expression state->members-key was parsed ambiguously; the helper itself is unchanged by the follow-up parenthesized/text-cast restore correction.",
+    "diagnosticSource": "Independently read actual completed GitHub job log and exact candidate harness source.",
+    "logSha256": "c602540fc9f558fd9a1ae433ccff6a3136d91528f3ad9275010c766176df0c34",
+    "logBytes": 101652,
+    "rawLogStored": false
+  },
+  "artifact": {
+    "id": 10105613377,
+    "name": "debate-v3-native-cleanup-evidence",
+    "apiReportedArchiveDigest": "sha256:04e21e79a9e6a0b25945688670ec6ec2ecf44168fb3bc6222b989a298c2ea672",
+    "archiveDigestIndependentlyVerified": false
+  },
+  "evidence": {
+    "path": "artifacts/debate-local-rehearsal/ci-34355666171/debate-v3-native-cleanup-evidence/report.json",
+    "sha256": "79c447709f34cf1bf23b288e570e648d8102b7e20b59f0b9c10bb2f9f0dfa89e",
+    "report": {
+      "kind": "NATIVE_CI_POSTGRES17_STAGING_CLEANUP",
+      "status": "FAIL",
+      "hostedExecuted": false,
+      "sourceSha256": "d4f7c239564d6f4634a2fa8415dd4cb9eebb37b76bb98a5f02d3175774184a14",
+      "adaptations": [],
+      "nativeConcurrentConnections": true,
+      "providerCalls": 0,
+      "dependencySchemaScope": "Inert reduced Auth/Storage/billing fixtures; unmodified real Debate migration/helper SQL; no Auth server or Storage API.",
+      "sourceHashes": {
+        "helper": "d4f7c239564d6f4634a2fa8415dd4cb9eebb37b76bb98a5f02d3175774184a14",
+        "debateMigration": "89d4f46b1e1b2991202880114387a1356b5eedfcf562129079de83d55a94b53c",
+        "harness": "286e0348f04e5e4a9bbb1ada38e37640679021eece056951cba14410b1d9a22d"
+      },
+      "identityBoundary": "Only the external target-pinned coordinator proves hosted project identity; payload ref is context.",
+      "statementTimeoutEvidence": "Native test sets an outer statement timeout explicitly; hosted PostgREST hoisting remains separate verification.",
+      "lockScope": "nine Debate tables only; SHARE ROW EXCLUSIVE; per-lock timeout5s",
+      "checks": [
+        {
+          "name": "Actual engine is PostgreSQL17.6 without SQL source adaptations",
+          "passed": true
+        },
+        {
+          "name": "Exact reviewed staging helper SQL installs with no adaptation",
+          "passed": true
+        },
+        {
+          "name": "Capture accepts real export and retained evidence job envelopes",
+          "passed": true
+        },
+        {
+          "name": "Snapshot exposes only native hashes/counts/keys, no private record content",
+          "passed": true
+        },
+        {
+          "name": "Only service invokes helper and audit UPDATE/TRUNCATE stay denied",
+          "passed": true
+        },
+        {
+          "name": "Wrong project context fails while external project identity remains separately pinned",
+          "passed": true
+        },
+        {
+          "name": "Changed non-key receipt JSON aborts before every DB deletion",
+          "passed": true
+        },
+        {
+          "name": "Changed receipt itself remains for reconciliation",
+          "passed": true
+        },
+        {
+          "name": "immutable classification fails before any Debate deletion",
+          "passed": true
+        },
+        {
+          "name": "platform promotion fails before any Debate deletion",
+          "passed": true
+        },
+        {
+          "name": "active Auth session fails before any Debate deletion",
+          "passed": true
+        },
+        {
+          "name": "billing data fails before any Debate deletion",
+          "passed": true
+        },
+        {
+          "name": "embedded provider job type fails before any Debate deletion",
+          "passed": true
+        },
+        {
+          "name": "running delivery claim fails before any Debate deletion",
+          "passed": true
+        },
+        {
+          "name": "foreign event member fails before any Debate deletion",
+          "passed": true
+        }
+      ],
+      "expectedErrors": [
+        {
+          "sqlState": "42501",
+          "messageSha256": "341966421663ae989efdab90e306531af7a9516937dbe6b626be16d657d6b0c5"
+        },
+        {
+          "sqlState": "42501",
+          "messageSha256": "c0884cfc42375d836a81c4e1172ad1968531b92c3e6241a22de4ce643119697d"
+        },
+        {
+          "sqlState": "42501",
+          "messageSha256": "341966421663ae989efdab90e306531af7a9516937dbe6b626be16d657d6b0c5"
+        },
+        {
+          "sqlState": "42501",
+          "messageSha256": "c0884cfc42375d836a81c4e1172ad1968531b92c3e6241a22de4ce643119697d"
+        },
+        {
+          "sqlState": "P0001",
+          "messageSha256": "6d7116c13850e055a525c6d7d101c0f7cd11f7ae6f9ad716453ab95f39b359de"
+        },
+        {
+          "sqlState": "P0001",
+          "messageSha256": "0ea8acde85f950c6edc5d540a52239a702045c14954747600c2aeea1e9aa686d"
+        },
+        {
+          "sqlState": "P0001",
+          "messageSha256": "015482bb89c7cc32806b98607cc18f013d672454dfa0a0e44fa0e95d28e2b3d5"
+        },
+        {
+          "sqlState": "P0001",
+          "messageSha256": "015482bb89c7cc32806b98607cc18f013d672454dfa0a0e44fa0e95d28e2b3d5"
+        },
+        {
+          "sqlState": "P0001",
+          "messageSha256": "cafc395db161843dbe3e8c5d21f1cc401c481686c1d9bd6087774a1b49263ca6"
+        },
+        {
+          "sqlState": "P0001",
+          "messageSha256": "cafc395db161843dbe3e8c5d21f1cc401c481686c1d9bd6087774a1b49263ca6"
+        },
+        {
+          "sqlState": "P0001",
+          "messageSha256": "cafc395db161843dbe3e8c5d21f1cc401c481686c1d9bd6087774a1b49263ca6"
+        },
+        {
+          "sqlState": "P0001",
+          "messageSha256": "cafc395db161843dbe3e8c5d21f1cc401c481686c1d9bd6087774a1b49263ca6"
+        },
+        {
+          "sqlState": "P0001",
+          "messageSha256": "83e0c2423c2bdc441f172f942c99fbf3339fe1d77dd6853c22a6f8270365a3f4"
+        },
+        {
+          "sqlState": "P0001",
+          "messageSha256": "83e0c2423c2bdc441f172f942c99fbf3339fe1d77dd6853c22a6f8270365a3f4"
+        },
+        {
+          "sqlState": "P0001",
+          "messageSha256": "54b67496a23e90be803cae87350fca45fc86454fad379a348b848bfb9710fa75"
+        },
+        {
+          "sqlState": "P0001",
+          "messageSha256": "54b67496a23e90be803cae87350fca45fc86454fad379a348b848bfb9710fa75"
+        },
+        {
+          "sqlState": "P0001",
+          "messageSha256": "54b67496a23e90be803cae87350fca45fc86454fad379a348b848bfb9710fa75"
+        },
+        {
+          "sqlState": "P0001",
+          "messageSha256": "54b67496a23e90be803cae87350fca45fc86454fad379a348b848bfb9710fa75"
+        },
+        {
+          "sqlState": "P0001",
+          "messageSha256": "73634e99dceff7d3070ff93db975847322a45387363fd9901227bcd1bc768274"
+        },
+        {
+          "sqlState": "P0001",
+          "messageSha256": "73634e99dceff7d3070ff93db975847322a45387363fd9901227bcd1bc768274"
+        }
+      ],
+      "postgresVersion": "17.6 (Debian 17.6-2.pgdg13+1)",
+      "failure": {
+        "code": "NATIVE_SQL_FAILED",
+        "sqlState": "42725",
+        "messageSha256": "5489aa2e986a18c7fb74204d68d3677633e98673dc15f6facc224ff753c7a4f0"
+      },
+      "finishedAt": "2026-09-09T13:13:26.869Z"
+    }
+  },
+  "limitations": [
+    "Run remains failed; no native contention, successful complete atomic deletion or hosted helper execution is claimed.",
+    "Dependency Auth/Storage/billing schemas are reduced inert CI fixtures; no live Auth server, Storage API, provider or mail operation.",
+    "Hosted PostgREST timeout hoisting and immediate real Auth/Worker logout fencing remain separately unverified."
+  ],
+  "fullAcceptance": false,
+  "publicLaunch": false
+}

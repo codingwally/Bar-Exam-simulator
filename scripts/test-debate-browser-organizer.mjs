@@ -103,6 +103,13 @@ export async function runBrowserOrganizer() {
     await host.locator('.timer-options summary').click();
   };
   const checkLiveMediaLayout = async (width, height = 900) => {
+    // The local server injects a 150px actor/time toolbar absent from shipped HTML.
+    // Exclude only that harness element when measuring the actual app viewport.
+    const harnessToolbar = host.locator('#local-rehearsal-tools');
+    assert.equal(await harnessToolbar.count(), 1);
+    await harnessToolbar.evaluate(element => { element.hidden = true; });
+    check('Synthetic-only host toolbar is excluded from app viewport measurements', !await harnessToolbar.isVisible(),
+      { selector: '#local-rehearsal-tools', appElementsModified: false, width, height });
     await host.setViewportSize({ width, height });
     await host.locator('.site-header').scrollIntoViewIfNeeded();
     const selectors = ['.media-dock', '#arena', '.judges-rail', '#affirmative-name', '#negative-name'];

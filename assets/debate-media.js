@@ -12,18 +12,26 @@ export class DebateMedia {
     this.background=null;this.effect='none';this.customFile=null;this.customPath='';
     this.ownedCamera=null;this.cameraOn=false;this.cameraDevice='';this.microphoneDevice='';
     this.priority=new Set();this.visible=new Set();this.subscriptionState=new WeakMap();
-    this.busy=false;this.captureEpoch=null;
+    this.busy=false;this.captureEpoch=null;this.capturePermissionEpoch=null;
+    this.permissionEpochs={camera:0,microphone:0,screen_share:0,screen_share_audio:0};
     // A stable facade lets the existing controller retain its track/processor
     // while a new authorized RTC identity replaces only the publication.
     this.cameraBridge={
       publishTrack:async(track,options)=>{
-        if(this.captureEpoch!==this.generation||!this.allowed(SOURCE.camera))throw new Error('Camera entry was cancelled.');
+        if(!this.cameraCaptureCurrent())throw new Error('Camera entry was cancelled.');
         const room=this.room,epoch=this.generation;
         const actual=await room.localParticipant.publishTrack(track,options);
-        if(epoch!==this.generation||room!==this.room){await room.localParticipant.unpublishTrack(track,true).catch(()=>{});track.stop();throw new Error('Camera entry was cancelled.');}
+        if(epoch!==this.generation||room!==this.room||!this.cameraCaptureCurrent()){await room.localParticipant.unpublishTrack(track,true).catch(()=>{});track.stop();throw new Error('Camera entry was cancelled.');}
         const owned={track,actual,room,protected:true};
         const facade={get track(){return owned.actual?.track||owned.track;},get isMuted(){return owned.actual?.isMuted??owned.track.isMuted;},
-          mute:()=>owned.actual?.mute?.()||owned.track.mute(),unmute:()=>owned.actual?.unmute?.()||owned.track.unmute()};
+          mute:()=>owned.actual?.mute?.()||owned.track.mute(),unmute:async()=>{
+            if(!this.cameraCaptureCurrent())throw new Error('Camera entry was cancelled.');
+            await (owned.actual?.unmute?.()||owned.track.unmute());
+            if(!this.cameraCaptureCurrent()){
+              try{await (owned.actual?.mute?.()||owned.track.mute());}catch{owned.track.stop();}
+              throw new Error('Camera entry was cancelled.');
+            }
+          }};
         this.ownedCamera=owned;return facade;
       },
       unpublishTrack:async(track,stop)=>{
@@ -36,6 +44,22 @@ export class DebateMedia {
   }
   get joined(){return this.room?.state==='connected';}
   allowed(source){return this.joined&&this.sources.includes(source);}
+  cameraCaptureCurrent(){return this.captureEpoch===this.generation&&this.capturePermissionEpoch===this.permissionEpochs.camera&&this.allowed(SOURCE.camera);}
+  updateSources(sources){
+    const previous=this.sources;this.sources=[...sources];
+    const revoked=[SOURCE.camera,SOURCE.microphone,SOURCE.screen,SOURCE.shareAudio].filter(source=>previous.includes(source)&&!this.sources.includes(source));
+    for(const source of revoked){
+      // A later grant must not revive an operation that crossed a revocation.
+      ++this.permissionEpochs[source];
+    }
+    const stoppingOperations=[];
+    if(revoked.includes(SOURCE.camera)&&(this.cameraOn||this.captureEpoch===this.generation))stoppingOperations.push(this.stopCameraSafely());
+    if(revoked.includes(SOURCE.microphone))stoppingOperations.push(this.stopMicrophoneSafely());
+    if(revoked.includes(SOURCE.screen)||revoked.includes(SOURCE.shareAudio))stoppingOperations.push(this.stopShareSafely());
+    for(const stopping of stoppingOperations){
+      if(stopping)this.operation=Promise.all([this.operation.catch(()=>{}),stopping.catch(error=>this.onIssue(error.message))]).then(()=>{});
+    }
+  }
   emit(){this.onState({joined:this.joined,microphone:!!this.room?.localParticipant.isMicrophoneEnabled,
     camera:this.joined&&this.cameraOn&&!!this.ownedCamera?.actual&&liveTrack(this.ownedCamera.track),
     share:!!this.room?.localParticipant.isScreenShareEnabled,sources:[...this.sources],state:this.room?.state||'disconnected'});}
@@ -43,7 +67,7 @@ export class DebateMedia {
 
   join(credential){
     if(!credential?.identity||!credential?.roomName||!Array.isArray(credential.sources))return Promise.reject(new Error('The room credential could not be confirmed.'));
-    if(this.joined&&this.credential?.identity===credential.identity&&this.credential.roomName===credential.roomName){this.sources=[...credential.sources];this.credential=credential;this.emit();return Promise.resolve();}
+    if(this.joined&&this.credential?.identity===credential.identity&&this.credential.roomName===credential.roomName){this.updateSources(credential.sources);this.credential=credential;this.emit();return Promise.resolve();}
     const epoch=++this.generation;
     return this.enqueue(async()=>{
       if(epoch!==this.generation)return;
@@ -78,9 +102,9 @@ export class DebateMedia {
       });
       bind('ParticipantPermissionsChanged',(_previous,participant)=>{
         if(participant&&participant!==room.localParticipant)return;
-        const known=room.localParticipant.permissions?.canPublishSources;
-        if(Array.isArray(known))this.sources=known.map(sourceName).filter(Boolean);
-        if(!this.sources.includes(SOURCE.camera)&&this.cameraOn)this.stopCameraSafely().catch(error=>this.onIssue(error.message));
+        const permissions=room.localParticipant.permissions,known=permissions?.canPublishSources;
+        if(permissions?.canPublish===false)this.updateSources([]);
+        else if(Array.isArray(known))this.updateSources(known.map(sourceName).filter(Boolean));
         this.emit();
       });
       try{
@@ -89,10 +113,16 @@ export class DebateMedia {
         this.syncSubscriptions();const owned=this.ownedCamera;
         if(this.cameraOn&&this.sources.includes(SOURCE.camera)&&liveTrack(owned?.track)){
           if(owned.protected&&!this.background?.snapshot().processorAttached)throw new Error('Your protected camera needs an explicit retry before it can publish.');
+          const permissionEpoch=this.permissionEpochs.camera;
           owned.actual=await room.localParticipant.publishTrack(owned.track,{source:SOURCE.camera});owned.room=room;
+          if(permissionEpoch!==this.permissionEpochs.camera||!this.allowed(SOURCE.camera)||!this.cameraOn){
+            await this.stopCameraSafely();
+            if(!current())await room.localParticipant.unpublishTrack(owned.track,false);
+            return;
+          }
           if(!current()){await room.localParticipant.unpublishTrack(owned.track,false);return;}
           this.attach(owned.track,owned.actual,room.localParticipant);
-        }else if(this.cameraOn){this.cameraOn=false;this.onIssue('Camera is off. Its previous capture or permission is unavailable; enable it explicitly when ready.');}
+        }else if(this.cameraOn){await this.stopCameraSafely();this.onIssue('Camera is off. Its previous capture or permission is unavailable; enable it explicitly when ready.');}
         this.emit();
       }catch(error){if(current()){await this.suspendInternal();this.cameraOn=false;this.emit();}throw error;}
     });
@@ -158,13 +188,21 @@ export class DebateMedia {
     if(item.source===SOURCE.screen&&!this.presentation.querySelector('video')){this.presentation.hidden=true;this.onPresentation(null,'Screen sharing stopped');}
     if(item.source===SOURCE.camera)this.onVideo(item.identity,null,'Camera off');
   }
-  microphone(enabled,deviceId){const epoch=this.generation;return this.enqueue(async()=>{
+  async stopMicrophoneSafely(room=this.room,track=room?.localParticipant.getTrackPublication(SOURCE.microphone)?.track){
+    if(!room)return;
+    // Stop the source even if the SDK mute is waiting for a device restart.
+    track?.stop();
+    try{await room.localParticipant.setMicrophoneEnabled(false);}
+    finally{if(track){try{await room.localParticipant.unpublishTrack(track,true);}finally{track.stop();}}this.emit();}
+  }
+  microphone(enabled,deviceId){const epoch=this.generation,permissionEpoch=this.permissionEpochs.microphone;return this.enqueue(async()=>{
     if(epoch!==this.generation)return;
     if(enabled&&!this.allowed(SOURCE.microphone))throw new Error('You do not have the microphone floor. Request help or wait for your speaking stage.');if(!this.room)return;
-    const room=this.room;
-    if(deviceId&&deviceId!==this.microphoneDevice&&room.localParticipant.isMicrophoneEnabled){const track=room.localParticipant.getTrackPublication(SOURCE.microphone)?.track;if(track)await track.restartTrack(captureOptions(deviceId));}
+    const room=this.room,current=()=>epoch===this.generation&&room===this.room&&permissionEpoch===this.permissionEpochs.microphone&&this.allowed(SOURCE.microphone);
+    if(enabled&&!current())return;
+    if(deviceId&&deviceId!==this.microphoneDevice&&room.localParticipant.isMicrophoneEnabled){const track=room.localParticipant.getTrackPublication(SOURCE.microphone)?.track;if(track){await track.restartTrack(captureOptions(deviceId));if(!current()){await this.stopMicrophoneSafely(room,track);return;}}}
     this.microphoneDevice=deviceId??this.microphoneDevice;await room.localParticipant.setMicrophoneEnabled(enabled,captureOptions(this.microphoneDevice));
-    if(epoch!==this.generation)await room.localParticipant.setMicrophoneEnabled(false);this.emit();
+    if(enabled&&!current())await this.stopMicrophoneSafely(room);this.emit();
   });}
   backgroundController(){
     if(!this.background){const factory=globalThis.DueDiligenceStudyRoomMandatoryBackground?.createController;if(!factory)throw new Error('Background effects could not load. The camera remains off.');
@@ -180,8 +218,8 @@ export class DebateMedia {
   async stopCameraSafely(){
     const owned=this.ownedCamera;
     try{
-      if(this.background)await this.background.disableCamera();else await owned?.actual?.mute?.();
-      if(owned?.actual&&owned.actual.isMuted!==true&&owned.track.isMuted!==true)throw new Error('Camera mute could not be confirmed.');
+      if(this.background)await this.background.disableCamera();else if(owned?.actual)await owned.actual.mute?.();else await owned?.track?.mute?.();
+      if(owned?.track&&owned.actual?.isMuted!==true&&owned.track.isMuted!==true)throw new Error('Camera mute could not be confirmed.');
     }catch{
       // A failed mute must never leave a green/false Off state with outgoing
       // video. Stop the owned source even if transport cleanup is unavailable.
@@ -190,38 +228,53 @@ export class DebateMedia {
       this.ownedCamera=null;
     }finally{this.cameraOn=false;this.emit();}
   }
-  camera(enabled,deviceId){const epoch=this.generation;return this.enqueue(async()=>{
-    if(epoch!==this.generation)return;this.busy=true;this.captureEpoch=epoch;
+  camera(enabled,deviceId){const epoch=this.generation,permissionEpoch=this.permissionEpochs.camera;return this.enqueue(async()=>{
+    if(epoch!==this.generation)return;this.busy=true;this.captureEpoch=epoch;this.capturePermissionEpoch=permissionEpoch;
     try{if(!enabled){await this.stopCameraSafely();return;}
       if(!this.allowed(SOURCE.camera))throw new Error('Camera publishing is restricted or this room is not connected.');await this.enableCameraInternal(deviceId,epoch);
     }catch(error){await this.stopCameraSafely();throw error;}
-    finally{this.busy=false;this.captureEpoch=null;}
+    finally{this.busy=false;this.captureEpoch=null;this.capturePermissionEpoch=null;}
   });}
   async enableCameraInternal(deviceId,epoch){
+    if(!this.cameraCaptureCurrent()){await this.stopCameraSafely();return;}
     const changed=deviceId!==undefined&&deviceId!==this.cameraDevice;this.cameraDevice=deviceId??this.cameraDevice;const options=captureOptions(this.cameraDevice);
     if(this.effect!=='none'||this.background){const controller=this.backgroundController();
       if(!controller.capabilities().supported)throw new Error('This browser cannot apply backgrounds. Select None explicitly to show your actual background.');
       await controller.switchBackground(await this.effectRequest(this.effect));
+      if(!this.cameraCaptureCurrent()){await this.stopCameraSafely();return;}
       if(changed&&this.ownedCamera?.actual)await controller.switchCamera(options);else await controller.enableCamera(options);
+      const owned=this.ownedCamera,room=this.room;
+      if(owned&&!owned.actual){
+        if(!this.cameraCaptureCurrent()){await this.stopCameraSafely();return;}
+        if(!liveTrack(owned.track)||(this.effect!=='none'&&!controller.snapshot().processorAttached))throw new Error('Your protected camera needs an explicit retry before it can publish.');
+        // The controller retains its track and facade across room transfers.
+        // An explicit retry must replace the missing transport publication too.
+        owned.actual=await room.localParticipant.publishTrack(owned.track,{source:SOURCE.camera});owned.room=room;
+      }
     }else{
       const room=this.room;
-      if(this.ownedCamera?.actual&&liveTrack(this.ownedCamera.track)){if(changed)await this.ownedCamera.track.restartTrack(options);await this.ownedCamera.actual.unmute();}
+      if(this.ownedCamera?.actual&&liveTrack(this.ownedCamera.track)){
+        if(changed)await this.ownedCamera.track.restartTrack(options);
+        if(!this.cameraCaptureCurrent()){await this.stopCameraSafely();return;}
+        await this.ownedCamera.actual.unmute();
+      }
       else{
         const previous=this.ownedCamera;
         if(previous?.actual&&previous.room)await previous.room.localParticipant.unpublishTrack(previous.track,true);
         previous?.track?.stop?.();this.ownedCamera=null;
+        if(!this.cameraCaptureCurrent()){await this.stopCameraSafely();return;}
         const track=await globalThis.LivekitClient.createLocalVideoTrack(options);
-        if(epoch!==this.generation||room!==this.room){track.stop();return;}
+        if(epoch!==this.generation||room!==this.room||!this.cameraCaptureCurrent()){track.stop();return;}
         let actual;try{actual=await room.localParticipant.publishTrack(track,{source:SOURCE.camera});}catch(error){track.stop();throw error;}
         this.ownedCamera={track,actual,room,protected:false};}
     }
-    if(epoch!==this.generation){await this.ownedCamera?.actual?.mute?.();this.cameraOn=false;return;}
+    if(epoch!==this.generation||!this.cameraCaptureCurrent()){await this.stopCameraSafely();return;}
     this.cameraOn=true;if(this.ownedCamera?.actual)this.attach(this.ownedCamera.track,this.ownedCamera.actual,this.room.localParticipant);this.emit();
   }
   setEffect(effect,file){
     if(!['none','blur','brand','custom'].includes(effect))return Promise.reject(new Error('Choose a supported background.'));
-    const epoch=this.generation;return this.enqueue(async()=>{
-      if(epoch!==this.generation)return;if(!this.room)throw new Error('Enter the room before choosing a background.');this.captureEpoch=epoch;this.busy=true;
+    const epoch=this.generation,permissionEpoch=this.permissionEpochs.camera;return this.enqueue(async()=>{
+      if(epoch!==this.generation)return;if(!this.room)throw new Error('Enter the room before choosing a background.');this.captureEpoch=epoch;this.capturePermissionEpoch=permissionEpoch;this.busy=true;
       const wasOn=this.cameraOn,oldPath=this.customPath;
       try{
         if(effect==='none'&&!this.background){this.effect='none';return;}
@@ -237,17 +290,65 @@ export class DebateMedia {
         await controller.switchBackground(request);if(oldPath&&oldPath!==this.customPath)controller.removeCustomBackground(oldPath);
         if(wasOn)await this.enableCameraInternal(undefined,epoch);
       }catch(error){await this.stopCameraSafely();throw error;}
-      finally{this.captureEpoch=null;this.busy=false;this.emit();}
+      finally{this.captureEpoch=null;this.capturePermissionEpoch=null;this.busy=false;this.emit();}
     });
   }
-  share(enabled){const epoch=this.generation;return this.enqueue(async()=>{
+  async stopShareSafely(room=this.room){
+    if(!room)return;
+    const captured=()=>[...(room.localParticipant.trackPublications?.values()||[])].filter(publication=>[SOURCE.screen,SOURCE.shareAudio].includes(sourceName(publication.source))).map(publication=>publication.track).filter(Boolean);
+    const tracks=new Set(captured());for(const track of tracks)track.stop();
+    let failure;
+    try{await room.localParticipant.setScreenShareEnabled(false);}catch(error){failure=error;}
+    // A pending capture can finish while the SDK disable is in flight.
+    for(const track of captured()){tracks.add(track);track.stop();}
+    for(const track of tracks){try{await room.localParticipant.unpublishTrack(track,true);}catch(error){failure||=error;}finally{track.stop();}}
+    this.emit();if(failure)throw failure;
+  }
+  share(enabled){const epoch=this.generation,screenEpoch=this.permissionEpochs.screen_share,audioEpoch=this.permissionEpochs.screen_share_audio;return this.enqueue(async()=>{
     if(epoch!==this.generation)return;if(enabled&&!this.allowed(SOURCE.screen))throw new Error('Screen sharing needs the moderator’s presenter permission.');
     if(enabled&&!navigator.mediaDevices?.getDisplayMedia)throw new Error('This browser cannot share its screen. Present a source link or document through Shared evidence.');if(!this.room)return;
-    const room=this.room;await room.localParticipant.setScreenShareEnabled(enabled,{audio:this.sources.includes(SOURCE.shareAudio),resolution:{width:1920,height:1080,frameRate:10}});
-    if(epoch!==this.generation)await room.localParticipant.setScreenShareEnabled(false);this.emit();
+    const room=this.room,audio=this.allowed(SOURCE.shareAudio);
+    const current=()=>epoch===this.generation&&room===this.room&&screenEpoch===this.permissionEpochs.screen_share&&this.allowed(SOURCE.screen)
+      &&(!audio||(audioEpoch===this.permissionEpochs.screen_share_audio&&this.allowed(SOURCE.shareAudio)));
+    if(!enabled){await this.stopShareSafely(room);return;}if(!current())return;
+    try{await room.localParticipant.setScreenShareEnabled(true,{audio,resolution:{width:1920,height:1080,frameRate:10}});}
+    catch(error){await this.stopShareSafely(room).catch(()=>{});throw error;}
+    if(!current())await this.stopShareSafely(room);this.emit();
   });}
   async enableSound(){await this.room?.startAudio();await Promise.allSettled([...this.audioTracks.values(),...this.videos.values()].map(x=>x.element.play()));}
   async devices(){return navigator.mediaDevices?.enumerateDevices()||[];}
+  selectDevices({cameraDevice=this.cameraDevice,microphoneDevice=this.microphoneDevice}={}){
+    const epoch=this.generation,cameraPermissionEpoch=this.permissionEpochs.camera,microphonePermissionEpoch=this.permissionEpochs.microphone;
+    return this.enqueue(async()=>{
+      if(epoch!==this.generation)return;
+      if(typeof cameraDevice!=='string'||typeof microphoneDevice!=='string')throw new Error('Choose an available camera and microphone.');
+      if(cameraDevice!==this.cameraDevice){
+        if(this.cameraOn&&this.allowed(SOURCE.camera)){
+          this.captureEpoch=epoch;this.capturePermissionEpoch=cameraPermissionEpoch;this.busy=true;
+          try{await this.enableCameraInternal(cameraDevice,epoch);}
+          catch(error){await this.stopCameraSafely();throw error;}
+          finally{this.captureEpoch=null;this.capturePermissionEpoch=null;this.busy=false;}
+        }else this.cameraDevice=cameraDevice;
+      }
+      if(epoch!==this.generation)return;
+      if(microphoneDevice!==this.microphoneDevice){
+        const room=this.room,participant=room?.localParticipant;
+        if(participant?.isMicrophoneEnabled){
+          if(!this.allowed(SOURCE.microphone))throw new Error('Your microphone permission changed. Wait for your speaking stage before switching an active microphone.');
+          const track=participant.getTrackPublication(SOURCE.microphone)?.track;if(track){
+            if(microphonePermissionEpoch!==this.permissionEpochs.microphone)return;
+            await track.restartTrack(captureOptions(microphoneDevice));
+            if(epoch!==this.generation||room!==this.room||microphonePermissionEpoch!==this.permissionEpochs.microphone||!this.allowed(SOURCE.microphone)){
+              await this.stopMicrophoneSafely(room,track);return;
+            }
+          }
+        }
+        if(epoch!==this.generation)return;
+        this.microphoneDevice=microphoneDevice;
+      }
+      this.emit();
+    });
+  }
   leave(){
     ++this.generation;this.cameraOn=false;
     // Destroy marks a pending processor immediately; late capture cannot publish.

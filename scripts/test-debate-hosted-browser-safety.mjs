@@ -2,10 +2,50 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { assertCiExecution, hostedBrowserEnvironment, finalizeHostedBrowserShutdown, HOSTED_DEFAULT_TIMED_STAGES,
   assertHostedDefaultRunOfShow, assertHostedFinishedAttempt, assertHostedCorrectedAwards, assertHostedExportVersion,
-  assertHostedNextMatchState, assertHostedPriorMatchPreserved } from './test-debate-browser-hosted-organizer.mjs';
+  assertHostedNextMatchState, assertHostedPriorMatchPreserved, summarizeHostedBootstrap, summarizeHostedNavigation } from './test-debate-browser-hosted-organizer.mjs';
 import { createRunOfShow, calculateAwards } from '../worker/debate-domain.mjs';
 
 const seats = Object.fromEntries(['A1', 'A2', 'A3', 'N1', 'N2', 'N3'].map(seat => [seat, `inert-${seat}`]));
+
+test('failed bootstrap diagnostics classify 403 without retaining credentials, private bodies or foreign URLs', () => {
+  const origin = 'https://staging.invalid', secret = 'PRIVATE_SENTINEL_DO_NOT_STORE';
+  const value = summarizeHostedBootstrap({ pathname: '/debate-room/events', status: 403, origin,
+    contentType: `application/json; private=${secret}`, body: { ok: false, error: { code: 'ORIGIN_NOT_ALLOWED', message: secret }, private: secret },
+    headers: { Authorization: `Bearer ${secret}`, Referer: `https://${secret}.invalid/#invite=${secret}`,
+      Origin: `https://${secret}.invalid`, 'Sec-Fetch-Site': 'same-origin', 'Sec-Fetch-Mode': 'cors', 'Sec-Fetch-Dest': 'empty', Cookie: secret } });
+  assert.equal(value.status, 403); assert.equal(value.errorCode, 'ORIGIN_NOT_ALLOWED'); assert.equal(value.ok, false);
+  assert.deepEqual(value.request, { origin: 'OTHER', fetchSite: 'same-origin', fetchMode: 'cors', fetchDest: 'empty', referer: 'OTHER', authorizationPresent: true });
+  assert.equal(value.contentType, 'application/json'); assert.equal(value.eventCount, null);
+  assert.ok(!JSON.stringify(value).includes(secret));
+  const unknown = summarizeHostedBootstrap({ pathname: '/debate-room/events', status: 403, origin,
+    contentType: secret, body: { error: { code: secret } }, headers: { 'sec-fetch-site': secret, referer: secret } });
+  assert.equal(unknown.errorCode, 'OTHER_ERROR'); assert.ok(!JSON.stringify(unknown).includes(secret));
+  assert.equal(unknown.request.origin, 'ABSENT'); assert.equal(unknown.request.authorizationPresent, false);
+});
+
+test('bootstrap success and malformed response retain only bounded structural facts on the two fixed routes', () => {
+  const origin = 'https://staging.invalid';
+  for (const pathname of ['/debate-room/events', '/debate-room/discover']) {
+    const result = summarizeHostedBootstrap({ pathname, status: 200, origin, contentType: 'Application/JSON; charset=utf-8',
+      body: { ok: true, events: [{ title: 'PRIVATE_TITLE' }] }, headers: { origin, referer: `${origin}/debate-room/#invite=PRIVATE_INVITE` } });
+    assert.equal(result.eventCount, 1); assert.equal(result.ok, true); assert.equal(result.errorCode, null);
+    assert.equal(result.request.origin, 'same-origin'); assert.equal(result.request.referer, 'same-origin');
+    assert.ok(!JSON.stringify(result).includes('PRIVATE'));
+  }
+  const malformed = summarizeHostedBootstrap({ pathname: '/debate-room/events', status: 502, origin, body: null });
+  assert.equal(malformed.ok, null); assert.equal(malformed.contentType, 'ABSENT');
+  assert.throws(() => summarizeHostedBootstrap({ pathname: '/auth/v1/token', status: 200, origin }));
+});
+
+test('navigation diagnostics describe owned-event reloads without recording invitation secrets or foreign paths', () => {
+  const origin = 'https://staging.invalid', owned = 'de-' + 'a'.repeat(32);
+  const result = summarizeHostedNavigation(`${origin}/debate-room/#event=${owned}&match=PRIVATE_MATCH&invite=PRIVATE_SECRET`, origin, owned);
+  assert.deepEqual(result, { sameOrigin: true, path: '/debate-room/', hasEvent: true, matchesOwnedEvent: true, hasMatch: true, hasInvite: true });
+  const other = summarizeHostedNavigation('https://PRIVATE_HOST.invalid/PRIVATE_PATH?PRIVATE_QUERY#event=PRIVATE_EVENT', origin, owned);
+  assert.equal(other.path, 'OTHER'); assert.equal(other.sameOrigin, false); assert.equal(other.matchesOwnedEvent, false);
+  assert.ok(!JSON.stringify([result, other]).includes('PRIVATE'));
+  assert.deepEqual(summarizeHostedNavigation('not a URL', origin, owned), { validUrl: false });
+});
 
 test('independent hosted timetable rejects reordered stages, reversed question pairs and redistributed durations even with the same total', () => {
   assertHostedDefaultRunOfShow(createRunOfShow());

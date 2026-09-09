@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "kind": "BOUNDED_VISUAL_REVIEW_OF_SYNTHETIC_CI_SCREENSHOTS",
+  "status": "RECORDED_BOUNDED_VISUAL_OBSERVATIONS",
+  "reviewAttribution": {
+    "reviewer": "root coordinator agent",
+    "observationSource": "Root viewed these four unique images, including an original-resolution reread of the 320px Debate image.",
+    "recorder": "visual_layout subagent",
+    "recorderIndependentlyViewedImages": false,
+    "recorderVerifiedFileHashesDimensionsAndSourceProvenance": true
+  },
+  "provenance": {
+    "ciRunId": 34366512958,
+    "ciRunUrl": "https://github.com/codingwally/Bar-Exam-simulator/actions/runs/34366512958",
+    "artifactName": "debate-v3-synthetic-browser-evidence",
+    "reviewedSourceHead": "9a5991d434968170d6051beb9a269c796f8a78fd",
+    "reviewedSourceTree": "9b3afd08c6c5f9d82e441bbae5a32a62aef0d559",
+    "debateReportExecutionHead": "07386058838cd1cbaa43c2591f9de1f95ad82828",
+    "executionHeadIsReviewedSourceHead": false,
+    "sourceComparison": "Independently hashed exact git show 9a5991d434968170d6051beb9a269c796f8a78fd:<path> bytes for every sourceHashes entry in both reports; all 20 Debate and 10 Study pairs match. The report's different execution HEAD is retained above.",
+    "imageMetadataMethod": "SHA256 over complete PNG bytes; width and height read from PNG IHDR.",
+    "browser": {
+      "version": "152.0.7977.64",
+      "channel": "chrome",
+      "headless": true,
+      "platform": "linux"
+    },
+    "reports": [
+      {
+        "path": "artifacts/debate-local-rehearsal/ci-34366512958/debate-v3-synthetic-browser-evidence/browser-organizer-ci/report.json",
+        "sha256": "5ad2c7354995ff930ebc20718652bf6c3510943308d7223801c574ba832e8305",
+        "reportedState": "PASS_SYNTHETIC_BROWSER_ORGANIZER",
+        "finishedAt": "2026-09-09T14:54:52.428Z",
+        "verifiedSourceHashPairs": 20
+      },
+      {
+        "path": "artifacts/debate-local-rehearsal/ci-34366512958/debate-v3-synthetic-browser-evidence/study-browser-ci/report.json",
+        "sha256": "6e61eefeed1337c99388b41c50af48133d9bd8901de9f2fbd4872eb1c21940b2",
+        "reportedState": "PASS_SYNTHETIC_STUDY_BROWSER",
+        "finishedAt": "2026-09-09T14:55:04.442Z",
+        "verifiedSourceHashPairs": 10
+      }
+    ]
+  },
+  "images": [
+    {
+      "path": "artifacts/debate-local-rehearsal/ci-34366512958/debate-v3-synthetic-browser-evidence/browser-organizer-ci/screenshots/04-live-media-controls-1365px.png",
+      "sha256": "bb6fc6faf44aa02dc34026d97cd5525c964a57dde285ab8683bb3a1be06f8331",
+      "bytes": 286051,
+      "width": 1365,
+      "height": 3008,
+      "rootObservations": [
+        "Media controls appear above the arena.",
+        "Team and adjudicator headings are exposed.",
+        "The timer is visually separate from participant tiles."
+      ]
+    },
+    {
+      "path": "artifacts/debate-local-rehearsal/ci-34366512958/debate-v3-synthetic-browser-evidence/browser-organizer-ci/screenshots/05-live-media-controls-320px.png",
+      "sha256": "6908f79bfb03305fdcdad5c17156cd71e72204068c573919e2db5da40c1d24ef",
+      "bytes": 229634,
+      "width": 320,
+      "height": 4468,
+      "rootObservations": [
+        "Media controls remain above the arena and headings remain exposed.",
+        "The timer is visually separate from participant tiles.",
+        "The narrow control strip shows horizontal clipping or a scrollable presentation; participant tile labels are truncated."
+      ],
+      "limitations": [
+        "This is a 320px CI viewport, not a physical mobile-browser test.",
+        "The screenshot does not prove horizontal scrolling interaction or access to every clipped control."
+      ]
+    },
+    {
+      "path": "artifacts/debate-local-rehearsal/ci-34366512958/debate-v3-synthetic-browser-evidence/study-browser-ci/admin-waiting-room.png",
+      "sha256": "14af50bf47f9cef7500d9e6b794b44050a3969ccc4d4cc79c52056b657d3933a",
+      "bytes": 372066,
+      "width": 1280,
+      "height": 919,
+      "rootObservations": [
+        "The admin view shows the pending member's approved state and the Remove access control.",
+        "The rule requiring the admin to be inside the room is visible."
+      ]
+    },
+    {
+      "path": "artifacts/debate-local-rehearsal/ci-34366512958/debate-v3-synthetic-browser-evidence/study-browser-ci/member-explicit-entry.png",
+      "sha256": "16c1c460b5c1ffbfca0be2243ee13591537724989dae788096aaaa53e87cd44e",
+      "bytes": 288579,
+      "width": 1280,
+      "height": 919,
+      "rootObservations": [
+        "The final member tile is visible after the test's explicit entry action."
+      ],
+      "limitations": [
+        "This final-state screenshot is not pre-entry screenshot proof and does not independently show the entry action."
+      ]
+    }
+  ],
+  "evidenceLimits": {
+    "uniqueImagesReviewedByRoot": 4,
+    "completeUiReview": false,
+    "scrollInteractionVerified": false,
+    "hostedUiOrAuthenticationVerified": false,
+    "physicalBrowserOrDeviceVerified": false,
+    "physicalMediaVerified": false,
+    "providerPresenceOrRevocationVerified": false,
+    "realEmailVerified": false,
+    "realTimeEnduranceVerified": false,
+    "preEntryScreenshotVerified": false,
+    "productionOrPublicLaunchApproved": false,
+    "studySubstitutions": [
+      "Synthetic Auth and inert SDK transport replace the external bootstrap scripts; actual Study live.js is unchanged in the harness.",
+      "Study CSS external font imports are removed for isolated rendering; this receipt makes no Study production font-loading claim.",
+      "Local SQL fixture authorization and JWT-backed inert presence/revocation do not prove hosted identity or provider behavior."
+    ],
+    "interpretation": "These are bounded observations of four actual CI image files, attributed to the root reviewer. Synthetic report PASS states and screenshots do not establish full product acceptance, an actual hosted organizer journey, or physical media quality."
+  }
+}

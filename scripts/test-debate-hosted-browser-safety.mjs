@@ -30,7 +30,8 @@ function uploadHarness() {
 test('upload diagnostics retain exact known error classifications and bounded byte facts without private response data', () => {
   const secret = 'PRIVATE_SENTINEL_DO_NOT_STORE';
   for (const code of ['STORAGE_UNCONFIGURED', 'PRIVATE_STORAGE_UNCONFIRMED', 'STORAGE_WRITE_UNCONFIRMED',
-    'UPLOAD_INVALID', 'UPLOAD_CHANGED', 'UNSAFE_FILE', 'DEBATE_UNAVAILABLE']) {
+    'UPLOAD_INVALID', 'UPLOAD_CHANGED', 'UNSAFE_FILE', 'DEBATE_UNAVAILABLE', 'STORE_UNAVAILABLE',
+    'EVIDENCE_INPUT_READ_FAILED', 'EVIDENCE_BUCKET_CHECK_FAILED', 'EVIDENCE_WRITE_FAILED', 'EVIDENCE_READBACK_FAILED', 'EVIDENCE_SEAL_FAILED', 'DELIVERY_REDIRECT_REJECTED']) {
     const summary = summarizeHostedEvidenceUpload({ status: 503, contentType: `Application/JSON; secret=${secret}`,
       expected: expectedUpload, body: { ok: false, error: { code, message: secret }, private: secret,
         attachment: { mimeType: secret, size: secret, uploadId: secret, digest: secret, storageKey: secret } } });

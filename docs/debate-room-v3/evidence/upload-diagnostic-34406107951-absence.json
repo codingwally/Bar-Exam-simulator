@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS_INDEPENDENT_EXACT_FIXTURE_AND_EVENT_ABSENCE",
+  "reviewer": "Codex /root/clock_ci",
+  "projectRef": "hlzqmreeoghbldnhlybr",
+  "runId": 34406107951,
+  "sourceSha": "2afe1322cbd7d344fceb184a9010ad7d37c0c493",
+  "readOnly": true,
+  "checkedAt": "2026-09-09 21:40:50.767977+00",
+  "fixtureCount": 11,
+  "explicitEventCount": 1,
+  "scopeCount": 19,
+  "allCountsZero": true,
+  "exactFixtureIds": [
+    "2e316843-95a9-46a2-bbc5-e603669d5878",
+    "d088a8dc-d17d-40a5-b1ef-39fc697844d4",
+    "1ef0fd33-bd83-4ddf-b8a5-eb1150e69584",
+    "37ed7a81-4191-46ef-a595-e4e1bbb0e4a5",
+    "428199a3-9df3-485c-aa04-b038a3254bc9",
+    "2c74344d-7a85-4f4c-b5cf-aa43d2880903",
+    "c172206d-fa3f-4e54-a28c-4df23a62a2e5",
+    "03b7ffb3-4fa5-4fb5-83c5-98434381c6a6",
+    "f1734e88-9d01-47b4-b511-b911cab3b460",
+    "b77be19b-9b1f-41b1-871e-2cdffd171c45",
+    "12d1a975-2c74-4ff0-987b-44f708e3625a"
+  ],
+  "exactEventIds": [
+    "de-3fbd3fa4ce19abd6b0d80716ed9ecad7"
+  ],
+  "deletedParentEventsIncluded": true,
+  "exactStorageEventPrefixesIncluded": true,
+  "manifest": {
+    "path": "artifacts/debate-local-rehearsal/staging-34406107951/debate-v3-staging-release-2afe1322cbd7d344fceb184a9010ad7d37c0c493/staging-release/hosted-2afe1322cbd7-79643388-ed00-4d97-a937-cb25c0cb81d8/fixtures.json",
+    "sha256": "0306a6b8dc3e6ca71553c5bc9e4e323917f664432dc1cf82f85096273b734c9c",
+    "runTag": "dv3host-ecfe04c3d1d76544",
+    "reportedProofFlags": {
+      "cleanupComplete": true,
+      "immediateLogoutFencingVerified": true,
+      "atomicCleanupHelperVerified": true
+    }
+  },
+  "driver": {
+    "path": "artifacts/debate-local-rehearsal/staging-34406107951/debate-v3-staging-release-2afe1322cbd7d344fceb184a9010ad7d37c0c493/staging-release/hosted-2afe1322cbd7-79643388-ed00-4d97-a937-cb25c0cb81d8/driver.json",
+    "sha256": "4bd4c1138d3781266eb370babbc787a47ca66923f7dc9c1027026ddb1f15246d",
+    "status": "FAIL_HOSTED_UPLOAD_DIAGNOSTIC"
+  },
+  "diagnostic": {
+    "path": "artifacts/debate-local-rehearsal/staging-34406107951/debate-v3-staging-release-2afe1322cbd7d344fceb184a9010ad7d37c0c493/staging-release/hosted-2afe1322cbd7-79643388-ed00-4d97-a937-cb25c0cb81d8/upload-diagnostic.json",
+    "sha256": "1c4d04bf44d1d30105cd7cb185b2ef57d71287eecda6e935478ce4dc0cf81af9",
+    "status": "FAIL_HOSTED_SINGLE_UPLOAD_DIAGNOSTIC",
+    "uploadAttempts": 1,
+    "upload": {
+      "path": "/debate-room/evidence/upload",
+      "status": 503,
+      "contentType": "application/json",
+      "ok": false,
+      "errorCode": "DEBATE_UNAVAILABLE",
+      "attachmentMimeType": "ABSENT",
+      "attachmentSize": null,
+      "uploadReceiptPresent": false,
+      "expected": {
+        "mimeType": "application/pdf",
+        "size": 387,
+        "sha256": "169e1766315912ca9bb5e36b5b54efe58c37df7dd2222098796d7e0e27f63781"
+      }
+    }
+  },
+  "query": "with f as(select unnest(array['2e316843-95a9-46a2-bbc5-e603669d5878','d088a8dc-d17d-40a5-b1ef-39fc697844d4','1ef0fd33-bd83-4ddf-b8a5-eb1150e69584','37ed7a81-4191-46ef-a595-e4e1bbb0e4a5','428199a3-9df3-485c-aa04-b038a3254bc9','2c74344d-7a85-4f4c-b5cf-aa43d2880903','c172206d-fa3f-4e54-a28c-4df23a62a2e5','03b7ffb3-4fa5-4fb5-83c5-98434381c6a6','f1734e88-9d01-47b4-b511-b911cab3b460','b77be19b-9b1f-41b1-871e-2cdffd171c45','12d1a975-2c74-4ff0-987b-44f708e3625a']::uuid[]) id), e as(select unnest(array['de-3fbd3fa4ce19abd6b0d80716ed9ecad7']::text[]) id union select distinct t.id from public.debate_v3_events t join f on t.owner_id=f.id::text or t.state->'members' ? f.id::text), counts as(\nselect 'auth_users' scope,count(*) n from auth.users t join f on t.id=f.id\nunion all select 'auth_sessions' scope,count(*) n from auth.sessions t join f on t.user_id=f.id\nunion all select 'refresh_tokens' scope,count(*) n from auth.refresh_tokens t join f on t.user_id=f.id::text\nunion all select 'identities' scope,count(*) n from auth.identities t join f on t.user_id=f.id\nunion all select 'student_roles' scope,count(*) n from public.user_roles t join f on t.user_id=f.id\nunion all select 'roles_assigned' scope,count(*) n from public.user_roles t join f on t.assigned_by=f.id\nunion all select 'registry' scope,count(*) n from private.internal_test_accounts t join f on t.user_id=f.id\nunion all select 'profiles' scope,count(*) n from public.profiles t join f on t.id=f.id\nunion all select 'forum_profiles' scope,count(*) n from public.forum_profile_settings t join f on t.user_id=f.id\nunion all select 'debate_events',count(*) from public.debate_v3_events t where t.id in(select id from e)\nunion all select 'debate_receipts',count(*) from public.debate_v3_receipts t where t.actor_id in(select id::text from f) or t.event_id in(select id from e)\nunion all select 'debate_audit',count(*) from public.debate_v3_audit t where t.actor_id in(select id::text from f) or t.event_id in(select id from e)\nunion all select 'debate_ballots',count(*) from public.debate_v3_ballots t where t.judge_id in(select id::text from f) or t.event_id in(select id from e)\nunion all select 'debate_votes',count(*) from public.debate_v3_votes t where t.actor_id in(select id::text from f) or t.event_id in(select id from e)\nunion all select 'debate_outbox',count(*) from public.debate_v3_outbox t where t.actor_id in(select id::text from f) or t.event_id in(select id from e)\nunion all select 'debate_uploads',count(*) from public.debate_v3_uploads t where t.actor_id in(select id::text from f) or t.event_id in(select id from e)\nunion all select 'debate_match_versions',count(*) from public.debate_v3_match_versions where event_id in(select id from e)\nunion all select 'debate_rate_limits',count(*) from public.debate_v3_rate_limits t join f on t.actor_id=f.id::text\nunion all select 'storage_owned',count(*) from storage.objects t where exists(select 1 from f where t.owner=f.id or t.owner_id=f.id::text or position(f.id::text in t.name)>0) or (t.bucket_id='debate-private-v3' and exists(select 1 from e where starts_with(t.name,'evidence/'||e.id||'/') or starts_with(t.name,'exports/'||e.id||'/')))) select clock_timestamp() checked_at,(select count(*) from f) fixture_count,jsonb_object_agg(scope,n) counts from counts;",
+  "result": [
+    {
+      "checked_at": "2026-09-09 21:40:50.767977+00",
+      "fixture_count": 11,
+      "counts": {
+        "profiles": 0,
+        "registry": 0,
+        "auth_users": 0,
+        "identities": 0,
+        "debate_audit": 0,
+        "debate_votes": 0,
+        "auth_sessions": 0,
+        "debate_events": 0,
+        "debate_outbox": 0,
+        "storage_owned": 0,
+        "student_roles": 0,
+        "debate_ballots": 0,
+        "debate_uploads": 0,
+        "forum_profiles": 0,
+        "refresh_tokens": 0,
+        "roles_assigned": 0,
+        "debate_receipts": 0,
+        "debate_rate_limits": 0,
+        "debate_match_versions": 0
+      }
+    }
+  ],
+  "queryFile": "independent-absence.sql",
+  "resultFile": "independent-absence-result.json",
+  "scopeCaveat": "Explicit artifact-recorded event IDs are included even if their parent rows are deleted. All eight related actor/event scopes and exact debate-private-v3 evidence/<eventId>/ and exports/<eventId>/ prefixes are checked. This independent SELECT proves scoped database absence at its timestamp; it does not independently exercise old-bearer HTTP denial, diagnose the prior upload exception, prove successful upload, physical media, mail, timers or full acceptance.",
+  "mutationsPerformed": false,
+  "credentialsReadOrStored": false,
+  "independentAuthHttpRequests": false
+}

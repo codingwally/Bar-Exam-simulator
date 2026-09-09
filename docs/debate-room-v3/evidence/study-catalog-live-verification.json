@@ -1,0 +1,160 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-09T21:08:43.232Z",
+  "reviewer": "Codex /root/visual_layout",
+  "status": "PASS_LIVE_STUDY_CATALOG_REFRESH_OBSERVATION",
+  "candidate": "af963655a63fa11245bcac2db0a796b789dbb4a9",
+  "candidateTree": "f4ecb893dc38b90ab3db3a79b5842a5e6d96488d",
+  "productionRunId": 34404153144,
+  "sourceHashes": {
+    "assets/study-room-live.js": "45ce9d9d95de2b7cbd1d168c4b4220d7c2f54de6a9e0854754f4f7da776e984b",
+    "study-room/index.html": "694a1c36e978d215858b7497056bfcfabfd365499fab10b604230b1583ae5515"
+  },
+  "productionAssetEvidence": {
+    "path": "artifacts/debate-local-rehearsal/production-34404153144/debate-v3-public-assets-af963655a63fa11245bcac2db0a796b789dbb4a9/pages-verification.json",
+    "sha256": "e03eaffa356ad4a61ba75807936c6021a3f4b7383eb55eac748dd00d7b951ec2",
+    "studySourceLinkedAsset": {
+      "file": "assets/study-room-live.js",
+      "referencedBy": "study-room/index.html",
+      "url": "https://duediligence.ph/assets/study-room-live.js?v=study-room-always-open-20260908-1&layout=stable-pins-20260908-1&catalog=admin-room-manager-20260908-1&join=free-join-20260909-1&share=screen-recovery-20260909-1&entry=v3-20260909-1&responsiveness=catalog-read-20260910-1",
+      "sha256": "45ce9d9d95de2b7cbd1d168c4b4220d7c2f54de6a9e0854754f4f7da776e984b"
+    },
+    "scope": "Independent release receipt confirms live asset bytes; this browser observation confirms the same exact script URL and successful resource load, without reading its response body."
+  },
+  "page": {
+    "url": "https://duediligence.ph/study-room/",
+    "browser": "Chrome",
+    "temporaryTab": "1879717085",
+    "viewport": {
+      "width": 1920,
+      "height": 855
+    },
+    "signedInAdminViewObserved": true
+  },
+  "script": {
+    "url": "https://duediligence.ph/assets/study-room-live.js?v=study-room-always-open-20260908-1&layout=stable-pins-20260908-1&catalog=admin-room-manager-20260908-1&join=free-join-20260909-1&share=screen-recovery-20260909-1&entry=v3-20260909-1&responsiveness=catalog-read-20260910-1",
+    "initiatorType": "script",
+    "responseStatus": 200,
+    "durationMs": 375.8,
+    "transferSize": 46839
+  },
+  "refresh": {
+    "route": "/study-room/rooms",
+    "method": "POST",
+    "requestStartedAt": "2026-09-09T21:05:08.909Z",
+    "durationToResponseMs": 11046.575,
+    "status": 200,
+    "domSampleAt": "2026-09-09T21:05:18.935Z",
+    "domSampleOffsetMs": 10025.514,
+    "domSampleBeforeResponseMs": 1021.061,
+    "timingCorrelation": "DOM Date.now sample was correlated with the request CDP wallTime and monotonic response duration. The sample occurred approximately 1.021 seconds before this observed response.",
+    "during": {
+      "roomCards": [
+        {
+          "id": "sr-room-card-1",
+          "disabled": false,
+          "ariaDisabled": null
+        },
+        {
+          "id": "sr-room-card-2",
+          "disabled": false,
+          "ariaDisabled": null
+        },
+        {
+          "id": "sr-room-card-3",
+          "disabled": false,
+          "ariaDisabled": null
+        },
+        {
+          "id": "sr-room-card-4",
+          "disabled": false,
+          "ariaDisabled": null
+        },
+        {
+          "id": "sr-create-room",
+          "disabled": false,
+          "ariaDisabled": null
+        },
+        {
+          "id": "sr-room-card-6",
+          "disabled": false,
+          "ariaDisabled": null
+        }
+      ],
+      "addDisabled": true,
+      "allSixEditButtonsDisabled": true
+    },
+    "laterIdle": {
+      "observedAt": "2026-09-09T21:06:23.157Z",
+      "roomCards": [
+        {
+          "id": "sr-room-card-1",
+          "disabled": false
+        },
+        {
+          "id": "sr-room-card-2",
+          "disabled": false
+        },
+        {
+          "id": "sr-room-card-3",
+          "disabled": false
+        },
+        {
+          "id": "sr-room-card-4",
+          "disabled": false
+        },
+        {
+          "id": "sr-create-room",
+          "disabled": false
+        },
+        {
+          "id": "sr-room-card-6",
+          "disabled": false
+        }
+      ],
+      "addDisabled": false,
+      "allSixEditButtonsDisabled": false
+    }
+  },
+  "adjacentOptionsObservation": {
+    "route": "/study-room/rooms",
+    "method": "OPTIONS",
+    "status": 204,
+    "durationMs": 7324.557,
+    "scope": "An OPTIONS request at the same route started about 2 ms after the observed POST and completed during its pending interval. This receipt does not attribute server processing or the POST delay to it."
+  },
+  "visual": {
+    "screenshotViewedInline": true,
+    "screenshotSaved": false,
+    "lobbyHeroImageAbsent": true,
+    "smallRoomIconsRemain": true,
+    "lobbyVideoElementCount": 0,
+    "roomNamesAndChoicesReadable": true
+  },
+  "actions": {
+    "navigatedNewTemporaryTab": true,
+    "roomChoiceClicked": false,
+    "joinedRoom": false,
+    "createdOrEditedRoom": false,
+    "enteredMedia": false,
+    "changedPermissions": false,
+    "temporaryTabClosed": true,
+    "originalTabsUntouched": [
+      "1879717047",
+      "1879717059"
+    ]
+  },
+  "privacy": {
+    "credentialsStored": false,
+    "privateApiBodiesRead": false,
+    "rawHeadersStored": false,
+    "rawDomStored": false
+  },
+  "limitations": [
+    "One observed slow refresh of 11.047 seconds is not a general latency estimate and does not establish a source of latency.",
+    "Enabled controls were observed without clicking them; this does not prove room admission, join or physical media.",
+    "This observation used the existing signed-in administrator session, not a paid/unpaid member comparison.",
+    "No site-wide acceptance, load test or hosted endurance claim."
+  ],
+  "fullAcceptance": false
+}

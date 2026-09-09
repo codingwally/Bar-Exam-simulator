@@ -54,7 +54,7 @@ class Element {
     this._html = html;
     if (!html) return;
     // Retain emitted HTML for these read-only rendering assertions; no event handlers are synthesized.
-    if (['schedule-content','rules-content','help-content','events','discover-events','stage-controls','private-space-controls','evidence-list','run-of-show'].includes(this.id)) return;
+    if (['schedule-content','rules-content','help-content','results-content','events','discover-events','stage-controls','private-space-controls','evidence-list','run-of-show'].includes(this.id)) return;
     if (this.id === 'active-match') { for (const option of html.matchAll(/<option value="([^"]*)"[^>]*>(.*?)<\/option>/g)) { const node = new Element('option'); node.value = option[1]; node.textContent = option[2]; this.append(node); } return; }
     // The only parsed template needed is ensureTile's camera-off fallback.
     if (html.startsWith('<span class="initials"')) {
@@ -123,7 +123,7 @@ function harness() {
     loadEvents = async () => { counters.discovery++; };
     globalThis.client = {state, media, request, refresh, command, retryPending, adopt,
       loadHistory, ensureTile, clearSensitiveViews, discardEventView, messageHistoryKey, signOutCleanup, submitEvidence,
-      currentMatch, usableMatches, actualRenderLive, actualLoadEvents, renderSchedule, renderRules, renderHelp, publicErrorMessage, actions, leaveCurrentMedia, openEvent, renewOwnedClock};
+      currentMatch, usableMatches, actualRenderLive, actualLoadEvents, renderSchedule, renderRules, renderHelp, renderResults, guarded, publicErrorMessage, actions, leaveCurrentMedia, openEvent, renewOwnedClock};
     ${matchChangeWiring}
     ${lobbyWiring}
   `, context, { filename: filename.pathname });
@@ -498,6 +498,107 @@ test('discovery failure renders the same safe message without hiding the success
   assert.equal(h.element('discover-events').textContent, h.publicErrorMessage('TypeError: failed'));
   assert.doesNotMatch(h.element('discover-events').textContent, /undefined|timer|TypeError/);
 });
+
+test('known server terminology maps to participant guidance while the command keeps its status and code', async () => {
+  const h = harness(); openFixture(h);
+  const message = 'The saved fixture and match assignments differ; resolve the recorded fixture review.';
+  const operation = h.command('prepare_match', { matchId: 'event-one-match' });
+  const rejected = assert.rejects(operation, error => error.status === 409 && error.code === 'FIXTURE_ASSIGNMENT_CONFLICT' && error.message === message);
+  h.fetches[0].respond({ ok: false, error: { code: 'FIXTURE_ASSIGNMENT_CONFLICT', message } }, 409);
+  await rejected;
+  assert.equal(h.element('status').textContent, 'The match assignments differ from the published pairing. Ask an official to review the pairing.');
+  assert.equal(h.element('status').dataset.error, 'true');
+  assert.equal(h.fetches.length, 1, 'Wording does not automatically retry the failed action');
+  assert.equal(h.state.pending, null);
+  for (const [file, messages] of [
+    ['worker/debate-fixtures.mjs', [
+      'This match must use its recorded published fixture.',
+      'Resolve the fixture review before preparing or starting this match.',
+      'Both distinct fixture participants must be resolved.',
+      'A dependent match requires the currently finalized predecessor winner.',
+      'This published fixture already has a match or is not ready to prepare.',
+      'Use the exact published fixture teams.', 'Use the motion assigned to this fixture.',
+      'Assign one of this event’s prepared motions before creating the fixture match.',
+      'Only this unresolved fixture may be linked to a rematch.',
+    ]],
+    ['worker/debate-domain.mjs', ['Fixture not found.', 'Winner must belong to the fixture.']],
+    ['worker/debate-service.mjs', [
+      'An unstarted match must rebind to the current finalized predecessor winners.',
+      'Resolve and finalize predecessor reviews first.', 'A current predecessor team is unavailable.',
+      'Refresh the saved event revision before this action.', 'Use a unique action receipt key.',
+      'This delivery lease is no longer current.',
+    ]],
+  ]) {
+    const server = await readFile(new URL('../' + file, import.meta.url), 'utf8');
+    for (const input of messages) {
+      assert.ok(server.includes(input), 'The mapping corresponds to an actual server message');
+      const output = h.publicErrorMessage(input);
+      assert.notEqual(output, input);
+      assert.doesNotMatch(output, /\bfixture|predecessor|rebind|lease|revision|receipt key\b/i);
+    }
+  }
+});
+
+test('an unconfirmed evidence upload gives cautious file guidance without retrying or discarding the selected file', async () => {
+  for (const [code, message, expected] of [
+    ['PRIVATE_STORAGE_UNCONFIRMED', 'The debate storage bucket must be verified private before files can be saved.', /File access is unavailable until that check succeeds/],
+    ['STORAGE_WRITE_UNCONFIRMED', 'Saving this private file could not be confirmed. Retry using the same export job.', /Check Shared evidence or Downloads and email delivery before trying again/],
+  ]) {
+    const h = harness(); openFixture(h); const { form, fields, submit } = privateDrafts(h); fields.channel.value = 'public';
+    const file = fields.file.files[0]; const operation = h.guarded(() => h.submitEvidence(form));
+    h.fetches[0].respond({ ok: false, error: { code, message } }, 503); await operation;
+    assert.match(h.element('status').textContent, expected);
+    assert.doesNotMatch(h.element('status').textContent, /bucket|export job|success|has been saved/i);
+    assert.equal(h.publicErrorMessage(code), h.element('status').textContent, 'Delivery status codes use the same cautious guidance');
+    assert.equal(h.element('status').dataset.error, 'true'); assert.equal(h.fetches.length, 1);
+    assert.equal(fields.file.files[0], file); assert.equal(submit.disabled, false); assert.equal(h.state.evidenceUploading, false);
+  }
+});
+
+test('uncertain email status displays a check-before-sending warning without changing its failed state', async () => {
+  const h = harness(), event = openFixture(h), match = event.matches[0]; match.resultVersions = []; match.protests = [];
+  event.outbox = ['EMAIL_ACCEPTANCE_UNCONFIRMED', 'EMAIL_RECONCILIATION_REQUIRED'].map((error, i) => ({ id: 'mail-' + i, type: 'mail', status: 'failed', error }));
+  const before = JSON.stringify(event); h.renderResults(); const html = h.element('results-content').innerHTML;
+  assert.match(html, /Check its delivery status or contact the organizer before sending another copy/);
+  assert.match(html, /Failed/); assert.doesNotMatch(html, /EMAIL_|provider|reconciliation|send again now|successfully sent/i);
+  assert.equal(JSON.stringify(event), before); assert.equal(h.fetches.length, 0);
+  const server = await readFile(new URL('../worker/debate-delivery.mjs', import.meta.url), 'utf8');
+  const messages = [...server.matchAll(/'((?:This old (?:invitation )?send|The (?:invitation|email) response was unconfirmed|The provider did not confirm)[^']+)'/g)].map(match => match[1]);
+  assert.equal(messages.length, 6, 'Cover the six existing uncertain-email messages');
+  for (const message of messages) assert.equal(h.publicErrorMessage(message), h.publicErrorMessage('EMAIL_ACCEPTANCE_UNCONFIRMED'));
+  assert.equal(h.publicErrorMessage('Result email is not enabled. Authorized downloads remain available.'), 'Result email is not enabled. Authorized downloads remain available.');
+});
+
+test('pairing placeholders explain earlier results while preserving participant-entered titles and internal states', () => {
+  const h = harness(), event = openFixture(h), match = event.matches[0]; match.rules = structuredClone(domain.DEFAULT_RULES);
+  match.title = 'Controller Lease Invitational'; event.teams = [{ id: 'team-one', name: 'Fixture Scholars' }];
+  event.fixtures = [{ id: 'se-2-1', round: 2, affirmativeTeamId: 'team-one', negativeTeamId: null, status: 'AWAITING_PREDECESSORS' }];
+  const before = JSON.stringify(event); h.renderSchedule(); const html = h.element('schedule-content').innerHTML;
+  assert.match(html, /Fixture Scholars \/ Awaiting earlier match result/);
+  assert.match(html, /Awaiting earlier match results/); assert.match(html, /Controller Lease Invitational/);
+  assert.doesNotMatch(html, /Awaiting predecessor|AWAITING_PREDECESSORS/);
+  assert.equal(JSON.stringify(event), before, 'Display labels never rewrite user data or machine state');
+});
+
+const automaticRosterReason = 'Confirmed team roster changed before match lock. Review the named seats and renewed readiness.';
+const publicRosterReason = 'The team roster changed before the match started. Review the assigned speakers, accept the updated rules, and complete the readiness checks again.';
+for (const [name, incident, expected] of [
+  ['maps the exact automatic roster notice', { type: 'roster_updated', reason: automaticRosterReason }, publicRosterReason],
+  ['preserves another notice type with the same text', { type: 'technical', reason: automaticRosterReason }, automaticRosterReason],
+  ['preserves a custom roster notice', { type: 'roster_updated', reason: automaticRosterReason + ' The organizer requests a review.' }, automaticRosterReason + ' The organizer requests a review.'],
+]) {
+  test(`Help ${name}`, async () => {
+    const h = harness(), event = openFixture(h); event.matches[0].incidents = [incident];
+    const before = JSON.stringify(event);
+    assert.ok((await readFile(new URL('../worker/debate-service.mjs', import.meta.url), 'utf8')).includes(automaticRosterReason), 'The display mapping matches the actual automatic server notice');
+    h.renderHelp(); const html = h.element('help-content').innerHTML;
+    assert.ok(html.includes(expected));
+    if (expected === publicRosterReason) assert.ok(!html.includes(automaticRosterReason));
+    else assert.ok(!html.includes(publicRosterReason));
+    assert.equal(JSON.stringify(event), before, 'Rendering never rewrites the saved notice or user text');
+    assert.equal(h.fetches.length, 0);
+  });
+}
 
 test('actual rules and Help rendering formats domain labels without changing stored rules or incident data', () => {
   const h = harness(), event = openFixture(h), match = event.matches[0];

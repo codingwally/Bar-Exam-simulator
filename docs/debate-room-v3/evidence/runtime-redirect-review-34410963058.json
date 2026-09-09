@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-09T22:19:34.645Z",
+  "status": "CONFIRMED_PINNED_RUNTIME_REDIRECT_INCOMPATIBILITY",
+  "runId": "34410963058",
+  "runUrl": "https://github.com/codingwally/Bar-Exam-simulator/actions/runs/34410963058",
+  "candidate": "f8fa63bce4c5f1b1f88bf39e3632fe807b07c233",
+  "candidateTree": "44269686a0fd4df68f3a5ba7ab6bb976c607c8dd",
+  "sourceHashPairs": 13,
+  "evidence": "runtime-redirect-failure-34410963058.json",
+  "evidenceSha256": "3b7be01204d5b69a41875ce0cfa84fa0b836ddedb99804527c1c854df8b0f5ca",
+  "actualRuntime": {
+    "wrangler": "4.114.0",
+    "miniflare": "4.20260722.0",
+    "workerd": "1.20260722.1"
+  },
+  "runtimeStarted": true,
+  "casesCompleted": 0,
+  "failureStage": "send -> privateBucket",
+  "observation": "The actual delivery adapter throws for redirect:error before any Storage write in the isolated pinned runtime.",
+  "hostedCauseConfirmed": false,
+  "correctionVerified": false,
+  "externalRequests": false,
+  "fullAcceptance": false,
+  "limitations": [
+    "The first direct upload failed; multipart, validation, readback and deletion did not run.",
+    "This test uses inert Storage in a loopback-only namespace and does not identify the earlier hosted 503 without a corresponding hosted retry.",
+    "The two earlier harness startup failures are separate from this actual adapter execution."
+  ]
+}

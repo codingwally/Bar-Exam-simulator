@@ -456,6 +456,14 @@ body.dd-auth-pending .dd-auth-bootstrap {
   --qfs-nav-icon: url("icons/navigation/door-open.svg");
 }
 
+#site-header.qfs-shell #spa-study-room {
+  --qfs-nav-icon: url("icons/community/camera.svg");
+}
+
+#site-header.qfs-shell .quorum-nav-link[data-debate-room-entry] {
+  --qfs-nav-icon: url("icons/navigation/mic.svg");
+}
+
 #site-header.qfs-shell #spa-pricing {
   --qfs-nav-icon: url("icons/navigation/tag.svg");
 }

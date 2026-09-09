@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-09T21:01:59.243Z",
+  "candidate": "af963655a63fa11245bcac2db0a796b789dbb4a9",
+  "status": "PASS_PUBLIC_RELOADED_LOBBY_AND_RULES",
+  "url": "https://duediligence.ph/debate-room/",
+  "source": "Actual existing signed-in Chrome tab 1879717059, ordinary reload, accessibility tree and read-only network observations",
+  "productionDataCreated": false,
+  "oldTimerErrorVisible": false,
+  "lobbyObservedFrom": "2026-09-09T21:00:08.573Z",
+  "observedLobbySeconds": 44,
+  "observations": [
+    "The existing owner session reaches the lobby with no events and no raw timer error.",
+    "Invitation link or event reference and the event-reference invitation-code explanation are visible.",
+    "The lobby and rules guide display the 5/3/5 format.",
+    "The rules guide says the official controlling the timer selects Start and that scoring choices precede confirmation of the rules.",
+    "Create debate opens the complete setup form, including Practice debate (excluded from competition standings); Cancel returns to the empty lobby.",
+    "Done closes the rules guide and returns focus to its entry button.",
+    "No event, participant, media connection, evidence upload or email was created during this check."
+  ],
+  "browserNetwork": [
+    {
+      "path": "/assets/debate-room.css?v=debate-v3-20260910-1",
+      "status": 200,
+      "fromDiskCache": false,
+      "fromServiceWorker": false
+    },
+    {
+      "path": "/assets/debate-room.js?v=debate-v3-20260910-1",
+      "status": 200,
+      "fromDiskCache": false,
+      "fromServiceWorker": false
+    },
+    {
+      "path": "/assets/debate-media.js?v=debate-v3-20260910-1",
+      "status": 200,
+      "fromDiskCache": false,
+      "fromServiceWorker": false
+    }
+  ],
+  "limits": [
+    "Live organizer/participant match actions were not exercised in production.",
+    "Separate paid/unpaid production sessions and Study background-refresh interaction remain separate verification tasks."
+  ]
+}

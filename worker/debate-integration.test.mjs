@@ -25,7 +25,7 @@ function storageFixture() {
   const fetcher = async (input, options = {}) => {
     const url = new URL(String(input));
     assert.equal(url.origin, 'https://project.test', 'No fixture may reach a real provider');
-    assert.equal(options.redirect, 'error');
+    assert.equal(options.redirect, 'manual');
     assert.equal(options.headers.Authorization, 'Bearer inert-service-secret');
     assert.equal(options.headers.apikey, 'inert-service-secret');
     calls.push({ path: url.pathname, method: options.method || 'GET' });
@@ -286,7 +286,7 @@ test('mail verifies current active account email, uses immutable idempotency, an
   const now = 1800000000000, calls = []; let active = true;
   const env = { ...baseEnv, OUTBOUND_EMAIL_MODE: 'enabled', DEBATE_RESULTS_EMAIL_MODE: 'enabled', RESEND_API_KEY: 'inert-resend-key', DEBATE_RESULTS_EMAIL_FROM: 'Debate <test@example.test>' };
   const delivery = createDebateDelivery(env, { now: () => now, fetcher: async (input, options) => {
-    const url = new URL(String(input)); calls.push({ url: url.href, options }); assert.equal(options.redirect, 'error');
+    const url = new URL(String(input)); calls.push({ url: url.href, options }); assert.equal(options.redirect, 'manual');
     if (url.origin === 'https://project.test' && url.pathname === `/auth/v1/admin/users/${person(1).id}`) return Response.json({ id: person(1).id, email: 'current@example.test', email_confirmed_at: new Date(now - 1000).toISOString(), is_anonymous: false, ...(active ? {} : { banned_until: new Date(now + 60000).toISOString() }) });
     assert.equal(url.href, 'https://api.resend.com/emails'); const payload = JSON.parse(options.body);
     assert.deepEqual(payload.to, ['current@example.test']); assert.match(payload.subject, /^\[Rehearsal\]/); assert.equal(options.headers['Idempotency-Key'], 'debate-result/mail-local-job');
@@ -318,7 +318,7 @@ test('invitation delivery encrypts secrets, binds recipient and expiry, defaults
   const env = { ...baseEnv, OUTBOUND_EMAIL_MODE: 'enabled', DEBATE_INVITATION_EMAIL_MODE: 'enabled', DEBATE_INVITATION_EMAIL_FROM: 'Debate <test@example.test>',
     RESEND_API_KEY: 'inert-resend-key', DEBATE_APPROVED_REHEARSAL_RECIPIENT_EMAILS: 'approved@example.test' };
   const fetcher = async (input, options) => {
-    assert.equal(String(input), 'https://api.resend.com/emails'); assert.equal(options.redirect, 'error');
+    assert.equal(String(input), 'https://api.resend.com/emails'); assert.equal(options.redirect, 'manual');
     const payload = JSON.parse(options.body); calls.push({ key: options.headers['Idempotency-Key'], payload });
     assert.deepEqual(payload.to, ['approved@example.test']); assert.match(payload.subject, /^\[Rehearsal\]/);
     assert.ok(payload.text.includes(`#event=event-local-only&invite=${code}`));

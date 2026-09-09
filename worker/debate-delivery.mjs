@@ -6,6 +6,23 @@ const opaque = /^[a-zA-Z0-9:_-]{8,160}$/u;
 const MAX_FILE = 10485760;
 export class DebateDeliveryError extends Error { constructor(code, message, status = 503) { super(message); this.code = code; this.status = status; } }
 const requireThat = (ok, code, message, status) => { if (!ok) throw new DebateDeliveryError(code, message, status); };
+const fileStages = Object.freeze({
+  input: ['EVIDENCE_INPUT_READ_FAILED', 'The file could not be read. Reselect it and try again.'],
+  bucket: ['EVIDENCE_BUCKET_CHECK_FAILED', 'We could not confirm that files will remain private. Please try again later.'],
+  write: ['EVIDENCE_WRITE_FAILED', 'Saving this private file could not be confirmed. Refresh the event to check its status.'],
+  readback: ['EVIDENCE_READBACK_FAILED', 'The private file could not be opened. Please try again later.'],
+  seal: ['EVIDENCE_SEAL_FAILED', 'The file could not be verified. Please try again later.'],
+});
+async function atFileStage(stage, operation) {
+  try { return await operation(); }
+  catch (error) {
+    // Only our deliberate file rejections may retain their original guidance.
+    // Native string codes and numeric DOMException codes can carry private data.
+    if (error instanceof DebateDeliveryError) throw error;
+    const [code, message] = fileStages[stage];
+    throw new DebateDeliveryError(code, message);
+  }
+}
 const b64 = bytes => btoa(Array.from(bytes, byte => String.fromCharCode(byte)).join(''));
 const unb64 = value => Uint8Array.from(atob(value), c => c.charCodeAt(0));
 const digest = async bytes => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), b => b.toString(16).padStart(2, '0')).join('');
@@ -38,24 +55,39 @@ export function createDebateDelivery(env, { fetcher = fetch, now = Date.now } = 
   }
   async function send(url, options = {}, max = 200000) {
     const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15000);
-    try { const response = await fetcher(url, { ...options, redirect: 'error', signal: controller.signal }); const bytes = response.body ? await boundedBytes(response.body, max) : new Uint8Array(); return { response, bytes }; }
+    try {
+      const response = await fetcher(url, { ...options, redirect: 'manual', signal: controller.signal });
+      if (response.status >= 300 && response.status < 400) {
+        // Never follow Location or read a redirect body with private credentials.
+        // Cancellation is best effort: a hostile cancel promise cannot delay rejection.
+        try { void response.body?.cancel().catch(() => {}); } catch { /* Reject below. */ }
+        throw new DebateDeliveryError('DELIVERY_REDIRECT_REJECTED', 'The request could not be confirmed. Refresh the event to check its status before trying again.');
+      }
+      const bytes = response.body ? await boundedBytes(response.body, max) : new Uint8Array(); return { response, bytes };
+    }
     finally { clearTimeout(timer); }
   }
   async function privateBucket() {
-    const c = config(), { response, bytes } = await send(`${c.base}/storage/v1/bucket/${c.bucket}`, { headers: c.headers });
-    let bucket; try { bucket = JSON.parse(new TextDecoder().decode(bytes)); } catch { /* Fail below. */ }
-    requireThat(response.ok && bucket?.id === c.bucket && bucket.public === false, 'PRIVATE_STORAGE_UNCONFIRMED', 'The debate storage bucket must be verified private before files can be saved.'); return c;
+    return atFileStage('bucket', async () => {
+      const c = config(), { response, bytes } = await send(`${c.base}/storage/v1/bucket/${c.bucket}`, { headers: c.headers });
+      let bucket; try { bucket = JSON.parse(new TextDecoder().decode(bytes)); } catch { /* Fail below. */ }
+      requireThat(response.ok && bucket?.id === c.bucket && bucket.public === false, 'PRIVATE_STORAGE_UNCONFIRMED', 'The debate storage bucket must be verified private before files can be saved.'); return c;
+    });
   }
   const validKey = key => /^(exports|evidence)\/[a-zA-Z0-9:_-]{8,160}\/(?:[a-zA-Z0-9:_-]{8,160}\/)?[a-zA-Z0-9_-]{8,160}\.(pdf|csv|png|jpg)$/.test(key);
   async function put(key, bytes, mimeType, overwrite = false) {
     requireThat(validKey(key), 'INVALID_FILE_KEY', 'The file identifier is invalid.', 400); const c = await privateBucket();
-    const { response } = await send(`${c.base}/storage/v1/object/${c.bucket}/${key}`, { method: 'POST', headers: { ...c.headers, 'Content-Type': mimeType, 'x-upsert': String(overwrite), 'Cache-Control': 'private, no-store' }, body: bytes });
-    requireThat(response.ok, 'STORAGE_WRITE_UNCONFIRMED', 'Saving this private file could not be confirmed. Retry using the same export job.');
+    await atFileStage('write', async () => {
+      const { response } = await send(`${c.base}/storage/v1/object/${c.bucket}/${key}`, { method: 'POST', headers: { ...c.headers, 'Content-Type': mimeType, 'x-upsert': String(overwrite), 'Cache-Control': 'private, no-store' }, body: bytes });
+      requireThat(response.ok, 'STORAGE_WRITE_UNCONFIRMED', 'Saving this private file could not be confirmed. Retry using the same export job.');
+    });
   }
   async function download(key, max = MAX_FILE) {
     requireThat(validKey(key), 'INVALID_FILE_KEY', 'The file identifier is invalid.', 400); const c = await privateBucket();
-    const { response, bytes } = await send(`${c.base}/storage/v1/object/authenticated/${c.bucket}/${key}`, { headers: c.headers }, max);
-    requireThat(response.ok, 'DOWNLOAD_UNAVAILABLE', 'This private file is unavailable. Generate a new copy or ask the organizer.', 404); return bytes;
+    return atFileStage('readback', async () => {
+      const { response, bytes } = await send(`${c.base}/storage/v1/object/authenticated/${c.bucket}/${key}`, { headers: c.headers }, max);
+      requireThat(response.ok, 'DOWNLOAD_UNAVAILABLE', 'This private file is unavailable. Generate a new copy or ask the organizer.', 404); return bytes;
+    });
   }
   async function exportFile(job) {
     const output = await renderDebateDocument(job.payload.document, { format: job.payload.format });
@@ -72,24 +104,26 @@ export function createDebateDelivery(env, { fetcher = fetch, now = Date.now } = 
   async function upload({ actorId, eventId, matchId, channel, body, mimeType, name, reservation }) {
     requireThat([actorId,eventId,matchId].every(v => opaque.test(v)), 'UPLOAD_INVALID', 'The upload destination is invalid.', 400);
     if (reservation) requireThat(['actorId','eventId','matchId','channel','mimeType'].every(key => reservation[key] === ({ actorId,eventId,matchId,channel,mimeType })[key]) && /^[0-9a-f-]{36}$/i.test(reservation.id) && Number.isSafeInteger(reservation.expiresAt) && reservation.expiresAt > now(), 'UPLOAD_INVALID', 'This upload reservation does not match the authorized destination.', 403);
-    const bytes = await boundedBytes(body); requireThat(bytes.length > 0 && detectEvidenceType(bytes) === mimeType, 'UNSAFE_FILE', 'The file type does not match its contents.', 400);
+    const bytes = await atFileStage('input', () => boundedBytes(body)); requireThat(bytes.length > 0 && detectEvidenceType(bytes) === mimeType, 'UNSAFE_FILE', 'The file type does not match its contents.', 400);
     const id = reservation?.id || crypto.randomUUID(), extension = mimeType === 'application/pdf' ? 'pdf' : mimeType === 'image/png' ? 'png' : 'jpg', storageKey = `evidence/${eventId}/${matchId}/${id}.${extension}`;
     requireThat(!reservation || reservation.storageKey === storageKey, 'UPLOAD_INVALID', 'This upload reservation has an invalid storage binding.', 403);
     await put(storageKey, bytes, mimeType);
-    const receipt = { id, actorId, eventId, matchId, ...(channel ? { channel } : {}), storageKey, mimeType, size: bytes.length, digest: await digest(bytes), filename: `${filename(name).replace(/\.[^.]+$/, '')}.${extension}`, expiresAt: reservation?.expiresAt || now() + 3600000 };
-    return { uploadId: await seal(receipt), mimeType, size: bytes.length };
+    return atFileStage('seal', async () => {
+      const receipt = { id, actorId, eventId, matchId, ...(channel ? { channel } : {}), storageKey, mimeType, size: bytes.length, digest: await digest(bytes), filename: `${filename(name).replace(/\.[^.]+$/, '')}.${extension}`, expiresAt: reservation?.expiresAt || now() + 3600000 };
+      return { uploadId: await seal(receipt), mimeType, size: bytes.length };
+    });
   }
   async function validateEvidence(input) {
     const receipt = await unseal(input.uploadId);
     requireThat(receipt.expiresAt > now() && ['actorId','eventId','matchId','mimeType','size'].every(k => receipt[k] === input[k]) && (!receipt.channel || receipt.channel === input.channel), 'UPLOAD_INVALID', 'This upload does not belong to this account and match, or has expired.', 403);
     const bytes = await download(receipt.storageKey);
-    requireThat(bytes.length === receipt.size && detectEvidenceType(bytes) === receipt.mimeType && await digest(bytes) === receipt.digest, 'UPLOAD_CHANGED', 'The uploaded file changed. Upload it again.', 409);
+    requireThat(bytes.length === receipt.size && detectEvidenceType(bytes) === receipt.mimeType && await atFileStage('seal', () => digest(bytes)) === receipt.digest, 'UPLOAD_CHANGED', 'The uploaded file changed. Upload it again.', 409);
     return { verified: true, id: receipt.id, storageKey: receipt.storageKey, mimeType: receipt.mimeType, size: receipt.size, digest: receipt.digest, filename: receipt.filename, scanStatus: 'type_checked_not_malware_scanned' };
   }
   async function downloadEvidence(meta) {
     requireThat(Number.isSafeInteger(meta.size) && meta.size > 0 && meta.size <= MAX_FILE && /^[a-f0-9]{64}$/.test(meta.digest || ''), 'EVIDENCE_INTEGRITY_UNCONFIRMED', 'This evidence file needs its verified file record restored before downloading.', 409);
     const bytes = await download(meta.storageKey, meta.size);
-    requireThat(bytes.length === meta.size && detectEvidenceType(bytes) === meta.mimeType && await digest(bytes) === meta.digest, 'UPLOAD_CHANGED', 'The saved evidence file changed. Ask its author to upload it again.', 409);
+    requireThat(bytes.length === meta.size && detectEvidenceType(bytes) === meta.mimeType && await atFileStage('seal', () => digest(bytes)) === meta.digest, 'UPLOAD_CHANGED', 'The saved evidence file changed. Ask its author to upload it again.', 409);
     return bytes;
   }
   async function deleteEvidence(job) {

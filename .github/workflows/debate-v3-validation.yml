@@ -25,6 +25,7 @@ on:
       - '.github/workflows/debate-v3-validation.yml'
       - '.github/workflows/debate-v3-capture.yml'
       - '.github/workflows/debate-v3-staging.yml'
+      - '.github/workflows/debate-v3-production-preview.yml'
 
 permissions:
   contents: read

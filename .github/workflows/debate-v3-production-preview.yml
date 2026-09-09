@@ -1,0 +1,187 @@
+name: Debate V3 public entry release
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Capture reads configuration; prepare verifies without deployment; deploy publishes signed-in paid and unpaid access
+        required: true
+        type: choice
+        default: capture
+        options: [capture, prepare, deploy]
+      candidate_sha:
+        description: Exact current main SHA reviewed and staged
+        required: true
+        type: string
+      review_json:
+        description: Hash-bound production database/storage evidence, CI and staging run references, baseline, exact scope and current public-release approval
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  deployments: read
+  pull-requests: read
+
+concurrency:
+  group: examination-room-production-cutover
+  cancel-in-progress: false
+
+env:
+  DEBATE_PREVIEW_CANDIDATE: ${{ inputs.candidate_sha }}
+  DEBATE_PREVIEW_REVIEW: ${{ inputs.review_json }}
+
+jobs:
+  worker:
+    if: github.repository == 'codingwally/Bar-Exam-simulator' && github.ref == 'refs/heads/main' && github.actor == 'codingwally' && github.triggering_actor == 'codingwally'
+    environment: production-worker
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify source and public release guard tests
+        run: |
+          test -z "$(git status --porcelain --untracked-files=all)"
+          node --test scripts/test-debate-production-preview.mjs
+      - name: Capture both existing production Workers without mutation
+        if: inputs.operation == 'capture'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/debate-production-preview.mjs capture
+      - name: Verify exact successful CI and staging provenance
+        id: evidence
+        if: inputs.operation != 'capture'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/debate-production-preview.mjs provenance
+      - name: Download exact CI source report
+        if: inputs.operation != 'capture'
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.evidence.outputs.ci_run_id }}
+          name: debate-v3-local-evidence
+          path: artifacts/debate-local-rehearsal/production-release/ci
+      - name: Download exact staged assets and Auth evidence
+        if: inputs.operation != 'capture'
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.evidence.outputs.staging_run_id }}
+          name: debate-v3-staging-release-${{ github.sha }}
+          path: artifacts/debate-local-rehearsal/production-release/staging
+      - name: Install locked application dependencies
+        if: inputs.operation != 'capture'
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+      - name: Build and verify the complete public artifact
+        if: inputs.operation != 'capture'
+        run: |
+          node scripts/build-pages-artifact.mjs
+          node scripts/test-debate-artifact.mjs
+          node scripts/test-pages-artifact.mjs
+          node scripts/test-feature-decommission-boundary.mjs
+          node --test scripts/test-worker-cpu-limit-contract.mjs
+      - name: Install existing exact pinned release tooling
+        if: inputs.operation != 'capture'
+        run: npm install --prefix artifacts/debate-local-rehearsal/production-tooling --no-save --no-package-lock --ignore-scripts --no-audit --no-fund wrangler@4.114.0
+      - name: Prepare or deploy application Worker then public API alias
+        if: inputs.operation != 'capture'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          RELEASE_OPERATION: ${{ inputs.operation }}
+        run: node scripts/debate-production-preview.mjs "$RELEASE_OPERATION"
+      - name: Preserve only sanitized release receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debate-v3-production-${{ github.sha }}
+          path: |
+            artifacts/debate-local-rehearsal/production-release/baseline.json
+            artifacts/debate-local-rehearsal/production-release/predeploy-baseline.json
+            artifacts/debate-local-rehearsal/production-release/deployed-baseline.json
+            artifacts/debate-local-rehearsal/production-release/release.json
+          if-no-files-found: warn
+          retention-days: 14
+  pages:
+    needs: worker
+    if: inputs.operation == 'deploy'
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      actions: read
+      deployments: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: debate-v3-production-${{ github.sha }}
+          path: artifacts/debate-local-rehearsal/production-release
+      - name: Build identical Pages artifact after Worker verification
+        run: |
+          npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+          node scripts/build-pages-artifact.mjs
+          node scripts/test-debate-artifact.mjs
+          node scripts/test-pages-artifact.mjs
+      - uses: actions/configure-pages@v4
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .pages-dist
+      - name: Recheck exact main and prior live Pages inside Pages lock
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/debate-production-preview.mjs pages-gate
+      - name: Publish Pages after application and API verification
+        id: deployment
+        uses: actions/deploy-pages@v4
+  verify:
+    needs: pages
+    if: inputs.operation == 'deploy'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build exact expected public bytes
+        run: |
+          npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+          node scripts/build-pages-artifact.mjs
+      - name: Verify live release stamp, Debate, Study, recovery and pricing assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/debate-production-preview.mjs verify-pages
+      - name: Preserve bounded live asset evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debate-v3-public-assets-${{ github.sha }}
+          path: artifacts/debate-local-rehearsal/production-release/pages-verification.json
+          if-no-files-found: warn
+          retention-days: 14

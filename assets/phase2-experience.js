@@ -422,6 +422,10 @@
       : { schoolId: 'other', schoolOther: schoolName, schoolName };
   }
 
+  function formatSchoolName(value) {
+    return schoolDisplayName({ school: value });
+  }
+
   function injectShell() {
     if (document.getElementById('dd2-entry-overlay')) return;
     document.body.insertAdjacentHTML('beforeend', `
@@ -3972,6 +3976,7 @@
     refreshSession: refreshAuthenticatedSession,
     whenAuthReady: () => authReady,
     getSession: () => state.session,
+    formatSchoolName,
     config,
   });
 

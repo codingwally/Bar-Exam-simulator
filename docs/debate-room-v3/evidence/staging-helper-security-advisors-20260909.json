@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-09T13:51:31.717Z",
+  "projectRef": "hlzqmreeoghbldnhlybr",
+  "status": "NO_HELPER_SCOPE_WARNING_OR_ERROR_OBSERVED",
+  "helperSourceSha256": "d4f7c239564d6f4634a2fa8415dd4cb9eebb37b76bb98a5f02d3175774184a14",
+  "method": "Actual Supabase security advisors after staging helper installation and private bucket creation",
+  "findings": [
+    {
+      "name": "rls_enabled_no_policy",
+      "level": "INFO",
+      "totalCount": 245,
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy",
+      "scopeFindings": [
+        {
+          "detail": "Table \\`private.study_room_admission_commands\\` has RLS enabled, but no policies exist",
+          "metadata": {
+            "name": "study_room_admission_commands",
+            "type": "table",
+            "schema": "private"
+          },
+          "observed_at": "2026-09-09T13:51:31.717Z"
+        },
+        {
+          "detail": "Table \\`private.study_room_admissions\\` has RLS enabled, but no policies exist",
+          "metadata": {
+            "name": "study_room_admissions",
+            "type": "table",
+            "schema": "private"
+          },
+          "observed_at": "2026-09-09T13:51:31.717Z"
+        },
+        {
+          "detail": "Table \\`public.debate_v3_audit\\` has RLS enabled, but no policies exist",
+          "metadata": {
+            "name": "debate_v3_audit",
+            "type": "table",
+            "schema": "public"
+          },
+          "observed_at": "2026-09-09T13:51:31.717Z"
+        },
+        {
+          "detail": "Table \\`public.debate_v3_ballots\\` has RLS enabled, but no policies exist",
+          "metadata": {
+            "name": "debate_v3_ballots",
+            "type": "table",
+            "schema": "public"
+          },
+          "observed_at": "2026-09-09T13:51:31.717Z"
+        },
+        {
+          "detail": "Table \\`public.debate_v3_events\\` has RLS enabled, but no policies exist",
+          "metadata": {
+            "name": "debate_v3_events",
+            "type": "table",
+            "schema": "public"
+          },
+          "observed_at": "2026-09-09T13:51:31.717Z"
+        },
+        {
+          "detail": "Table \\`public.debate_v3_maintenance\\` has RLS enabled, but no policies exist",
+          "metadata": {
+            "name": "debate_v3_maintenance",
+            "type": "table",
+            "schema": "public"
+          },
+          "observed_at": "2026-09-09T13:51:31.717Z"
+        },
+        {
+          "detail": "Table \\`public.debate_v3_match_versions\\` has RLS enabled, but no policies exist",
+          "metadata": {
+            "name": "debate_v3_match_versions",
+            "type": "table",
+            "schema": "public"
+          },
+          "observed_at": "2026-09-09T13:51:31.717Z"
+        },
+        {
+          "detail": "Table \\`public.debate_v3_outbox\\` has RLS enabled, but no policies exist",
+          "metadata": {
+            "name": "debate_v3_outbox",
+            "type": "table",
+            "schema": "public"
+          },
+          "observed_at": "2026-09-09T13:51:31.717Z"
+        },
+        {
+          "detail": "Table \\`public.debate_v3_rate_limits\\` has RLS enabled, but no policies exist",
+          "metadata": {
+            "name": "debate_v3_rate_limits",
+            "type": "table",
+            "schema": "public"
+          },
+          "observed_at": "2026-09-09T13:51:31.717Z"
+        },
+        {
+          "detail": "Table \\`public.debate_v3_receipts\\` has RLS enabled, but no policies exist",
+          "metadata": {
+            "name": "debate_v3_receipts",
+            "type": "table",
+            "schema": "public"
+          },
+          "observed_at": "2026-09-09T13:51:31.717Z"
+        },
+        {
+          "detail": "Table \\`public.debate_v3_uploads\\` has RLS enabled, but no policies exist",
+          "metadata": {
+            "name": "debate_v3_uploads",
+            "type": "table",
+            "schema": "public"
+          },
+          "observed_at": "2026-09-09T13:51:31.717Z"
+        },
+        {
+          "detail": "Table \\`public.debate_v3_votes\\` has RLS enabled, but no policies exist",
+          "metadata": {
+            "name": "debate_v3_votes",
+            "type": "table",
+            "schema": "public"
+          },
+          "observed_at": "2026-09-09T13:51:31.717Z"
+        }
+      ]
+    },
+    {
+      "name": "anon_security_definer_function_executable",
+      "level": "WARN",
+      "totalCount": 1,
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable",
+      "scopeFindings": []
+    },
+    {
+      "name": "authenticated_security_definer_function_executable",
+      "level": "WARN",
+      "totalCount": 11,
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable",
+      "scopeFindings": []
+    },
+    {
+      "name": "auth_leaked_password_protection",
+      "level": "WARN",
+      "totalCount": 1,
+      "remediation": "https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection",
+      "scopeFindings": []
+    }
+  ],
+  "assessment": "The twelve Debate/Study admission no-policy INFO findings concern intentionally service-only tables. The new helper is absent from exposed-security-definer warnings, consistent with independently verified service-only grants. Unrelated existing warnings remain; this is not whole-site security clearance.",
+  "productionTouched": false
+}
+

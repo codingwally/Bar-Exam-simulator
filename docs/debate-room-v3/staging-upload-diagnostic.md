@@ -1,0 +1,17 @@
+# Bounded staging evidence-upload diagnostic
+
+This operation diagnoses the unresolved hosted upload 503. The earlier read-only header comparison (34398220249, source `0a840c28c88c4ab9311232ba124a2cae287464f2`) returned HTTP 200 for both tested header variants. It did not establish the historical failure's cause or parity with the Worker credential.
+
+Choose `upload-diagnostic` in **Debate V3 restricted staging** only after the existing `prepare-hosted` operation passes for the exact candidate and unchanged baseline. Supply that preparation run and driver receipt hash, plus the usual exact baseline/version/database review evidence. The same concurrency lock, native cleanup test, candidate validation, pinned Wrangler metadata check, preparation provenance and immediate deployment rechecks apply.
+
+The whole operation performs staging writes. It creates the existing eleven immutable internal-test identities, uses the reviewed restricted staging deployment to allow their fresh preview UUIDs, verifies preserved configuration and authenticated smoke, then performs one short API journey through the actual Worker. There is no access bypass or use of previously deleted identities.
+
+The journey creates one unlisted rehearsal event, enrolls its six fixture debaters, creates two teams and one match, and attempts one small blank PDF upload. It stops in setup without starting any timer, joining media, sending mail, starting exports or sharing evidence. The successful upload response means the existing Worker completed its private reservation and stored-byte verification; it is not browser, audience-download, endurance, media or provider-budget acceptance. A missing bucket is a failure; the diagnostic does not create it. Unknown command/upload responses are not retried.
+
+Only fixed operation/path labels, HTTP statuses, strictly allowlisted error codes, fixture event/match identifiers, and bounded file size/MIME/digest facts enter `hosted-*/upload-diagnostic.json`. No response bodies, headers, bearer tokens, upload receipts, invitation secrets or private error messages are retained. The driver records its SHA-256. `STORE_UNAVAILABLE` is recognized separately from an unclassified error.
+
+The existing lifecycle always performs its scoped logout fencing, Storage cleanup, atomic event cleanup and exact Auth deletion, including after failure. The driver cannot pass without complete cleanup, immediate old-session denial and the atomic-helper proof. Both driver and fixture reports remain in the normal sanitized artifact.
+
+After a real run, independently read back its exact generated account and event scopes using the existing coordinator procedure. Preserve that separate absence receipt alongside the attempt. The diagnostic explicitly leaves independent absence pending; it cannot establish its own independent verification. Nothing in this change executes or authorizes a production deployment, enables media, changes a schema or credential, or completes the full V3 acceptance ledger.
+
+Focused inert validation: `node --test scripts/test-debate-hosted-upload-diagnostic.mjs scripts/test-debate-hosted-driver.mjs scripts/test-debate-hosted-browser-safety.mjs`. The upload tests exercise the actual integration/service/delivery code with in-memory persistence and Storage transport. Hosted evidence requires an explicitly dispatched, completed workflow and its independent cleanup readback.

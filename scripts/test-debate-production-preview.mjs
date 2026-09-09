@@ -4,7 +4,8 @@ import { readFile } from 'node:fs/promises';
 import { TARGET, RELEASE_FLAGS, MIGRATIONS, OWN_SOURCES, parseProductionBase, sanitizeScript,
   validateBaseAgainstRemote, buildProductionConfig, validatePreservation, validateDatabaseProof,
   validateStorageEvidence, validateRun, validateStagingDriver, validateSuite,
-  validateSerializedMetadata, summarizeSerializedBindings, validateExternalDatabaseRecord, validateExternalStorageRecord, captureProduction } from './debate-production-preview.mjs';
+  validateSerializedMetadata, summarizeSerializedBindings, validateExternalDatabaseRecord, validateExternalStorageRecord, captureProduction,
+  roomAssetReferences, verifyRoomAssetReferences } from './debate-production-preview.mjs';
 import { hash, CRITICAL_SOURCES, REQUIRED_SUITE_GROUPS } from './debate-staging-release.mjs';
 
 const base = parseProductionBase(await readFile(new URL('../worker/wrangler.toml',import.meta.url),'utf8'));
@@ -26,6 +27,85 @@ const raw = b => ({ deployments:{deployments:[{id:deployment,versions:[{version_
   service:{default_environment:{environment:'production',script:{has_assets:false,placement:b.region ? {mode:'targeted',target:[{region:b.region}]} : null}}} });
 const state = b => sanitizeScript(raw(b),b.alias ? TARGET.alias : TARGET.worker);
 const error = (fn,code) => assert.throws(fn,value=>value.code===code);
+
+const roomSourceFiles = ['debate-room/index.html','study-room/index.html','assets/debate-room.js',
+  'assets/debate-room.css','assets/debate-media.js','assets/study-room-live.js'];
+async function roomSources() {
+  const files = Object.fromEntries(await Promise.all(roomSourceFiles.map(async file => [file, await readFile(new URL('../' + file, import.meta.url))])));
+  return { files, readAsset: async file => { assert.ok(Object.hasOwn(files, file), 'Only the fixed room asset closure may be read'); return files[file]; } };
+}
+
+test('current room documents and the changed media import use new cache keys, preserving Study repair versions', async () => {
+  const source = await roomSources(), refs = await roomAssetReferences(source);
+  assert.deepEqual(refs.map(ref => ref.file), ['assets/debate-room.js','assets/debate-room.css','assets/debate-media.js','assets/study-room-live.js']);
+  for (const ref of refs.slice(0, 3)) assert.equal(new URL(ref.url).search, '?v=debate-v3-20260910-1');
+  const study = new URL(refs[3].url);
+  assert.equal(study.searchParams.get('v'), 'study-room-always-open-20260908-1');
+  assert.equal(study.searchParams.get('entry'), 'v3-20260909-1');
+  assert.equal(study.searchParams.get('responsiveness'), 'catalog-read-20260910-1');
+  assert.equal(refs[2].referencedBy, 'assets/debate-room.js', 'Changing the parent module URL does not version its child import');
+  for (const ref of refs) assert.equal(ref.sha256, hash(source.files[ref.file]));
+});
+
+test('returning browsers bypass the prior room cache keys and the verifier uses actual source-linked URLs', async () => {
+  const source = await roomSources(), refs = await roomAssetReferences(source), requested = [];
+  const cache = new Map([
+    [`${TARGET.origin}/assets/debate-room.js?v=debate-v3-20260909`, Buffer.from('old timer error')],
+    [`${TARGET.origin}/assets/debate-room.css?v=debate-v3-20260909`, Buffer.from('old room layout')],
+    [`${TARGET.origin}/assets/debate-media.js`, Buffer.from('old media copy')],
+    [refs[3].url.replace('&responsiveness=catalog-read-20260910-1',''), Buffer.from('old catalog refresh')],
+  ]);
+  const verified = await verifyRoomAssetReferences({ ...source, fetcher: async (url, options) => {
+    requested.push(url); assert.equal(options.method, 'GET'); assert.equal(options.redirect, 'error');
+    assert.equal(options.cache, 'no-store'); assert.equal(options.headers, undefined);
+    assert.equal(new URL(url).origin, TARGET.origin); assert.equal(new URL(url).searchParams.has('release'), false);
+    assert.equal(cache.has(url), false, 'The new reference must not hit the visitor’s previous cached version');
+    return new Response(source.files[new URL(url).pathname.slice(1)]);
+  } });
+  assert.deepEqual(verified, refs); assert.deepEqual(requested, refs.map(ref => ref.url));
+  assert.equal(cache.size, 4, 'Refreshing references does not require clearing anyone’s browser storage');
+});
+
+test('stale content at any actual room URL fails even when a release-query request would return current bytes', async () => {
+  const source = await roomSources(), refs = await roomAssetReferences(source);
+  for (const stale of refs) {
+    const requests = [];
+    await assert.rejects(verifyRoomAssetReferences({ ...source, fetcher: async url => {
+      requests.push(url);
+      return new Response(url === stale.url ? 'stale cached room file' : source.files[new URL(url).pathname.slice(1)]);
+    } }), { code: 'ROOM_ASSET_HASH_MISMATCH' });
+    assert.equal(requests.filter(url => url === stale.url).length, 1);
+    assert.ok(requests.every(url => !new URL(url).searchParams.has('release')));
+  }
+});
+
+test('source-linked verification rejects failed or redirected requests without falling back to another cache key', async () => {
+  const source = await roomSources();
+  for (const status of [404, 302]) {
+    let calls = 0;
+    await assert.rejects(verifyRoomAssetReferences({ ...source, fetcher: async () => { calls++; return new Response(null, { status }); } }), { code: 'ROOM_ASSET_UNAVAILABLE' });
+    assert.equal(calls, 1);
+  }
+  let calls = 0;
+  const redirected = new TypeError('inert redirect rejection');
+  await assert.rejects(verifyRoomAssetReferences({ ...source, fetcher: async (_url, options) => {
+    calls++; assert.equal(options.redirect, 'error'); throw redirected;
+  } }), error => error === redirected);
+  assert.equal(calls, 1);
+});
+
+test('missing, duplicated, unversioned or off-origin room references fail before any request', async () => {
+  for (const mutate of [
+    files => files['assets/debate-room.js'] = String(files['assets/debate-room.js']).replace('./debate-media.js?v=debate-v3-20260910-1', './debate-media.js'),
+    files => files['assets/debate-room.js'] = String(files['assets/debate-room.js']).replace('./debate-media.js?v=debate-v3-20260910-1', 'https://other.example/assets/debate-media.js?v=debate-v3-20260910-1'),
+    files => files['assets/debate-room.js'] = String(files['assets/debate-room.js']).replace('./debate-media.js?v=debate-v3-20260910-1', './debate-media.js?v=current&release=other'),
+    files => files['debate-room/index.html'] = String(files['debate-room/index.html']).replace('debate-room.css?', 'missing.css?'),
+    files => files['debate-room/index.html'] = String(files['debate-room/index.html']) + '<script src="../assets/debate-room.js?v=duplicate"></script>',
+  ]) {
+    const source = await roomSources(); mutate(source.files);
+    await assert.rejects(verifyRoomAssetReferences({ ...source, fetcher: async () => assert.fail('Invalid references must not make requests') }), { code: 'ROOM_ASSET_REFERENCE_INVALID' });
+  }
+});
 
 test('public access includes paid and unpaid signed-in users while unverified providers stay closed',()=>{
   assert.deepEqual(RELEASE_FLAGS,{DEBATE_ROOM_ENABLED:'true',DEBATE_MEDIA_ENABLED:'false',DEBATE_SWEEPER_ENABLED:'false',
@@ -223,7 +303,7 @@ test('capture makes only fixed-target GETs and detects version changes before re
   }}),e=>e.code==='CAPTURE_VERSION_CHANGED');
 });
 test('workflow keeps Worker, alias, Pages order and exposes no database, service secret or raw configuration artifact',async()=>{
-  const workflow=await readFile(new URL('../.github/workflows/debate-v3-production-preview.yml',import.meta.url),'utf8');
+  const workflow=(await readFile(new URL('../.github/workflows/debate-v3-production-preview.yml',import.meta.url),'utf8')).replaceAll('\r\n','\n');
   assert.match(workflow,/options: \[capture, prepare, deploy\]/);
   assert.match(workflow,/group: examination-room-production-cutover\n  cancel-in-progress: false/);
   assert.match(workflow,/pages:\n    needs: worker/);assert.match(workflow,/verify:\n    needs: pages/);

@@ -89,6 +89,10 @@ async function defaultLifecycle(input) {
   const { createHostedDebateFixtureLifecycle } = await import('./debate-hosted-fixtures.mjs');
   return createHostedDebateFixtureLifecycle(input);
 }
+async function defaultUploadDiagnostic(input) {
+  const { runHostedUploadDiagnostic } = await import('./debate-hosted-upload-diagnostic.mjs');
+  return runHostedUploadDiagnostic(input);
+}
 
 async function verifyPreparationReceipt({ env, root, checked, clock }) {
   need(typeof env.DEBATE_HOSTED_PREPARATION_REPORT === 'string' && env.DEBATE_HOSTED_PREPARATION_REPORT.length > 0
@@ -120,9 +124,9 @@ async function verifyPreparationReceipt({ env, root, checked, clock }) {
 
 export async function runHostedDebateRehearsal({ mode = 'run', env = process.env, root = ROOT, fetcher = fetch,
   preflight = verifyRestrictedStagingPreflight, lifecycleFactory = defaultLifecycle,
-  child = executeRestrictedStagingChild, browser = defaultBrowser, capture = captureRemote,
+  child = executeRestrictedStagingChild, browser = defaultBrowser, uploadDiagnostic = defaultUploadDiagnostic, capture = captureRemote,
   verifySessions = validateSmokeSessions, clock = Date.now, monotonic = () => performance.now() } = {}) {
-  need(['prepare','run'].includes(mode), 'HOSTED_REHEARSAL_MODE');
+  need(['prepare','run','upload-diagnostic'].includes(mode), 'HOSTED_REHEARSAL_MODE');
   // No storage or accounts may exist before this full exact-candidate check.
   let checked;
   try { checked = await preflight({ mode: 'deploy', env, root, fetcher }); }
@@ -131,7 +135,7 @@ export async function runHostedDebateRehearsal({ mode = 'run', env = process.env
   validatePolicy(checked.policy);
   validateBaseline(checked.baseline, checked.base, checked.policy, env.DEBATE_EXPECTED_BASELINE_SHA256, env.DEBATE_EXPECTED_VERSION_ID);
   let preparationEvidence;
-  if (mode === 'run') {
+  if (mode !== 'prepare') {
     try { preparationEvidence = await verifyPreparationReceipt({ env, root, checked, clock }); }
     catch (error) { const safe = new Error(codeFor(error)); safe.code = safe.message; throw safe; }
   }
@@ -144,7 +148,7 @@ export async function runHostedDebateRehearsal({ mode = 'run', env = process.env
   const saveReport = atomicJsonWriter(reportPath, secrets), persist = atomicJsonWriter(manifestPath, secrets);
   const report = { schemaVersion: 1, kind: 'HOSTED_DEBATE_ORGANIZER_REHEARSAL_DRIVER', mode, status: 'STATIC_GATES_PASSED',
     sourceSha: checked.candidate, target: TARGET, startedAt: instant(clock), baselineFingerprint: checked.baseline.fingerprint,
-    previousVersionId: checked.baseline.state.versionId, minimumBrowserDurationMs: MINIMUM_HOSTED_REHEARSAL_MS,
+    previousVersionId: checked.baseline.state.versionId, minimumBrowserDurationMs: mode === 'upload-diagnostic' ? null : MINIMUM_HOSTED_REHEARSAL_MS,
     deploymentState: 'NOT_REQUESTED', storage: 'NOT_REQUESTED', steps: [], cleanup: 'NOT_STARTED',
     immediateLogoutFencingVerified: null, atomicCleanupHelperVerified: false,
     credentialsStored: false, rawOutputStored: false, tracesStored: false, publicLaunch: false,
@@ -178,10 +182,14 @@ export async function runHostedDebateRehearsal({ mode = 'run', env = process.env
     report.cleanup = 'PENDING'; await saveReport(report);
     const storage = await lifecycle.preflightStorage();
     need(['ABSENT','MATCHING_PRIVATE_BUCKET'].includes(storage?.status), 'HOSTED_STORAGE_PREFLIGHT_INVALID');
+    if (mode === 'upload-diagnostic') need(storage.status === 'MATCHING_PRIVATE_BUCKET', 'HOSTED_UPLOAD_BUCKET_REQUIRED');
     report.storage = storage.status; await saveReport(report);
     // Suppression is refreshed before even a conditional storage creation.
     await recheckSuppression();
-    await lifecycle.ensureStorage(); report.storage = 'PRIVATE_BUCKET_CONFIRMED'; await saveReport(report);
+    if (mode === 'upload-diagnostic') {
+      need((await lifecycle.preflightStorage())?.status === 'MATCHING_PRIVATE_BUCKET', 'HOSTED_UPLOAD_BUCKET_REQUIRED');
+    } else await lifecycle.ensureStorage();
+    report.storage = 'PRIVATE_BUCKET_CONFIRMED'; await saveReport(report);
     const provisioned = await lifecycle.provision(), accounts = provisioned?.accounts;
     need(accounts && Object.keys(accounts).length === ACTORS.length && ACTORS.every(name => UUID.test(accounts[name]?.id || ''))
       && new Set(ACTORS.map(name => accounts[name].id)).size === ACTORS.length, 'HOSTED_ACCOUNT_SCOPE_INVALID');
@@ -248,6 +256,23 @@ export async function runHostedDebateRehearsal({ mode = 'run', env = process.env
       allowedSession = rememberSession(await lifecycle.sessionFor('host')); excludedSession = rememberSession(await lifecycle.sessionFor('excluded'));
       need(allowedSession.user.id === accounts.host.id && excludedSession.user.id === accounts.excluded.id, 'HOSTED_SESSION_SCOPE_INVALID');
       await step('smoke');
+      if (mode === 'upload-diagnostic') {
+        const filename = path.join(outputDir, 'upload-diagnostic.json');
+        const result = await uploadDiagnostic({ lifecycle, workerUrl: TARGET.origin, sourceSha: checked.candidate,
+          workerVersion: report.deployedVersionId, persist: atomicJsonWriter(filename, secrets), request: fetcher, clock, rememberSession });
+        const stored = await readJson(filename);
+        need(hash(result) === hash(stored) && result?.kind === 'HOSTED_SINGLE_UPLOAD_DIAGNOSTIC'
+          && result.sourceSha === checked.candidate && result.workerVersion === report.deployedVersionId
+          && ['providerMedia','realMail','publicLaunch','fullAcceptance','credentialsStored','rawBodiesStored'].every(key => result[key] === false)
+          && result.completedTimerStages === 0 && Number.isFinite(result.elapsedMs) && result.elapsedMs >= 0 && result.elapsedMs < 330000,
+        'HOSTED_UPLOAD_DIAGNOSTIC_EVIDENCE_INVALID');
+        report.uploadDiagnostic = { status: result.status, uploadAttempts: result.uploadAttempts,
+          completedTimerStages: 0, reportPath: 'upload-diagnostic.json', reportSha256: hash(await readFile(filename)),
+          independentAbsence: 'PENDING_SEPARATE_POST_RUN_READBACK' }; await saveReport(report);
+        need(result.status === 'PASS_HOSTED_SINGLE_UPLOAD_ONLY' && result.uploadAttempts === 1
+          && result.upload?.status === 200 && result.upload?.ok === true, 'HOSTED_UPLOAD_DIAGNOSTIC_FAILED');
+        report.status = 'UPLOAD_PASSED_PENDING_CLEANUP'; await saveReport(report);
+      } else {
       report.browser = { status: 'RUNNING', startedAt: instant(clock) }; await saveReport(report);
       const began = monotonic(), beganWall = clock();
       browserAttempt = { began, beganWall };
@@ -270,6 +295,7 @@ export async function runHostedDebateRehearsal({ mode = 'run', env = process.env
       report.browser = { status: result.status, startedAt: report.browser.startedAt, completedAt: instant(clock),
         measuredDurationMs: durationMs, minimumDurationMet: true, reportPath: 'browser/report.json', reportSha256: sha256 };
       report.status = 'BROWSER_PASSED_PENDING_CLEANUP'; await saveReport(report);
+      }
     }
   } catch (error) {
     failure = error;
@@ -308,6 +334,8 @@ export async function runHostedDebateRehearsal({ mode = 'run', env = process.env
       } catch { report.immediateLogoutFencingVerified = null; report.atomicCleanupHelperVerified = false; }
       if (report.immediateLogoutFencingVerified !== true)
         report.verificationGap = 'IMMEDIATE_LOGOUT_FENCING_NOT_VERIFIED_BEFORE_AUTH_DELETION';
+      if (mode === 'upload-diagnostic' && cleanup?.complete === true && report.immediateLogoutFencingVerified !== true && !failure)
+        failure = Object.assign(new Error('HOSTED_UPLOAD_LOGOUT_FENCE_UNVERIFIED'), { code: 'HOSTED_UPLOAD_LOGOUT_FENCE_UNVERIFIED' });
       if (cleanup?.complete !== true) {
         if (failure) report.originalFailureCode = codeFor(failure);
         failure = Object.assign(new Error('HOSTED_FIXTURE_CLEANUP_UNCONFIRMED'), { code: 'HOSTED_FIXTURE_CLEANUP_UNCONFIRMED' });
@@ -319,7 +347,7 @@ export async function runHostedDebateRehearsal({ mode = 'run', env = process.env
     }
   }
   if (failure) {
-    report.status = 'FAIL_HOSTED_REHEARSAL'; report.failureCode = codeFor(failure);
+    report.status = mode === 'upload-diagnostic' ? 'FAIL_HOSTED_UPLOAD_DIAGNOSTIC' : 'FAIL_HOSTED_REHEARSAL'; report.failureCode = codeFor(failure);
     if (report.deploymentState !== 'NOT_REQUESTED') {
       try {
         const actual = await capture({ token: env.CLOUDFLARE_API_TOKEN, accountId: env.CLOUDFLARE_ACCOUNT_ID, base: checked.base, fetcher });
@@ -329,7 +357,8 @@ export async function runHostedDebateRehearsal({ mode = 'run', env = process.env
       } catch { report.postFailureReadback = 'UNAVAILABLE'; }
     }
   }
-  if (!failure) report.status = mode === 'prepare' ? 'PASS_HOSTED_FIXTURE_PREPARATION_ONLY' : 'PASS_HOSTED_ORGANIZER_CONTROL_ONLY';
+  if (!failure) report.status = mode === 'prepare' ? 'PASS_HOSTED_FIXTURE_PREPARATION_ONLY'
+    : mode === 'upload-diagnostic' ? 'PASS_HOSTED_UPLOAD_DIAGNOSTIC_ONLY' : 'PASS_HOSTED_ORGANIZER_CONTROL_ONLY';
   report.completedAt = instant(clock); await saveReport(report);
   if (failure) { const safe = new Error(report.failureCode); safe.code = report.failureCode; safe.reportPath = reportPath; throw safe; }
   return { status: report.status, mode, reportPath, manifestPath, outputDir, deploymentState: report.deploymentState,
@@ -340,7 +369,7 @@ export async function runHostedDebateRehearsal({ mode = 'run', env = process.env
 }
 
 async function main() {
-  need(process.argv.length === 3 && ['prepare','run'].includes(process.argv[2]), 'HOSTED_REHEARSAL_MODE');
+  need(process.argv.length === 3 && ['prepare','run','upload-diagnostic'].includes(process.argv[2]), 'HOSTED_REHEARSAL_MODE');
   need(process.platform === 'linux' && process.env.GITHUB_ACTIONS === 'true' && process.env.DEBATE_HOSTED_REHEARSAL === '1'
     && process.env.GITHUB_REPOSITORY === 'codingwally/Bar-Exam-simulator' && process.env.GITHUB_ACTOR === 'codingwally'
     && process.env.GITHUB_TRIGGERING_ACTOR === 'codingwally', 'HOSTED_REHEARSAL_CI_REQUIRED');

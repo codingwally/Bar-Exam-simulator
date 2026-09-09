@@ -38,10 +38,10 @@ function rowsFor(document) {
   const rules = document.rules;
   if (document.kind === 'rules') {
     heading('Rules accepted for this match');
-    line('Preset', rules.preset); line('Language', rules.language); line('Timezone', rules.timezone);
+    line('Format', rules.preset); line('Language', rules.language); line('Timezone', rules.timezone);
     line('Decision method', rules.judgingMode); line('Preparation', `${rules.preparationMs / 60000} minutes`);
     para('Each team has three active speakers. Its captain is one of those three. The accepted roster identifies the actual closing speaker.');
-    para('The controller starts and finishes each stage explicitly. Zero begins overtime; it never automatically ends a speech, mutes participants or deducts points. During questioning both assigned participants have the floor.');
+    para('The official controlling the timer selects Start and Finish stage. Zero begins overtime; it never automatically ends a speech, mutes participants or deducts points. During questioning both assigned participants have the floor.');
     line('Motion', document.motion?.text || 'Private until the organizer releases it');
     heading('Declared sanctions');
     if (!rules.sanctions?.length) para('No custom sanctions declared. No automatic penalty applies for overtime.');
@@ -57,7 +57,7 @@ function rowsFor(document) {
     }
     para(`Provisional results allow ${rules.correctionWindowMs / 60000} minutes for procedural correction. A human official must finalize after open protests are resolved. Audience Choice is separate from the official result and awards.`);
     heading('Source notes');
-    para('This is the Due Diligence Modified Oxford-Oregon preset; event practices vary. The accepted version above governs this match.');
+    para('This is the Due Diligence Modified Oxford-Oregon format; event practices vary. The accepted version above governs this match.');
     para('Casiciaco Recoletos Seminary: https://www.recoletosdebaguio.edu.ph/2022/04/06/cares-holds-philosophical-debate-during-jornadas-de-filosofia-2022/');
     para('Mañebog tournament framework: https://ourhappyschool.com/debate/debate-tournament-framework-mechanics-guidelines-etc');
     para('DENR/DepEd event mechanics: https://catanduanes.deped.gov.ph/files/UM---Inter-Schools-Debate-for-the-Environment-and-Battle-of-Best-Partnership-Initiatives-and-Awarding-Ceremonies.pdf');

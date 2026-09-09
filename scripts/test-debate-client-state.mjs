@@ -477,6 +477,14 @@ test('public errors hide recognized runtime failures while preserving actionable
     'Review the next match’s pairing.', 'Your account or event changed. Refresh the event to check which actions were saved.',
     'Video and audio calls are not available yet. You can still use the debate’s written features.',
   ]) assert.equal(h.publicErrorMessage(message), message, 'Actionable domain guidance remains visible');
+  for (const [message,guidance] of [
+    ['Timer changed. Reload the committed state.','The timer changed. Refresh the event to see the current time.'],
+    ['Only a designated controller or authorized official may take control.','Only the assigned timekeeper or another authorized official may take timer control.'],
+    ['Another controller holds the current lease.','Another official currently controls the timer.'],
+    ['Control must be renewed or explicitly taken over before changing the timer.','Select Take timer control before changing the timer.'],
+    ['This upload reservation has an invalid storage binding.','This file upload could not be matched to the current evidence request. Reselect the file and try again.'],
+    ['The corrected match must retain its fixture binding.','The corrected match must stay linked to its published pairing.'],
+  ]) assert.equal(h.publicErrorMessage(message),guidance,'Known technical failures retain their specific recovery guidance');
 });
 
 test('discovery failure renders the same safe message without hiding the successful event list', async () => {
@@ -503,7 +511,12 @@ test('actual rules and Help rendering formats domain labels without changing sto
     ['majority', 'Full scorecards — majority of judges'], ['aggregate', 'Full scorecards — combined scores'], ['simple', 'Winner-only ballots'],
   ]) {
     match.rules.judgingMode = mode; const before = JSON.stringify(event);
-    h.renderRules(); assert.ok(h.element('rules-content').innerHTML.includes('Official decision: ' + label));
+    h.renderRules(); const rules=h.element('rules-content').innerHTML;
+    assert.ok(rules.includes('Official decision: ' + label));
+    assert.match(rules,/The timer starts only when the official controlling it selects Start\./);
+    assert.match(rules,/before the rules are confirmed\./);
+    assert.match(rules,/<h2>The 5\/3\/5 format<\/h2>/);
+    assert.doesNotMatch(rules,/its controller acts|before rules lock|5\/3\/5 preset|Oxford–Oregon preset/);
     h.renderHelp(); const help = h.element('help-content').innerHTML;
     assert.match(help, /Roster updated/); assert.match(help, /Pairing reviewed · Reviewed &lt;pairing&gt;. · Open/);
     assert.match(help, /Private room invitation · Requested discussion. · Acknowledged/);

@@ -262,6 +262,7 @@ export const CRITICAL_SOURCES = Object.freeze([
   '.github/workflows/debate-v3-capture.yml', 'scripts/debate-staging-fixtures.mjs', 'scripts/run-debate-staging-auth.mjs',
   'scripts/test-debate-wrangler-metadata.mjs',
   'scripts/debate-hosted-cleanup.mjs', 'scripts/debate-hosted-fixtures.mjs', 'scripts/run-debate-hosted-rehearsal.mjs',
+  'scripts/debate-hosted-upload-diagnostic.mjs', 'scripts/test-debate-hosted-upload-diagnostic.mjs',
   'scripts/test-debate-hosted-cleanup.mjs', 'scripts/test-debate-hosted-fixtures.mjs', 'scripts/test-debate-hosted-driver.mjs',
   'scripts/test-debate-browser-hosted-organizer.mjs', 'scripts/test-debate-hosted-browser-safety.mjs',
   'scripts/resolve-debate-hosted-preparation.mjs', 'scripts/test-debate-hosted-preparation.mjs',
@@ -391,11 +392,39 @@ export async function smokeStaging({ allowedToken, deniedToken, manifest, fetche
       await assetWait(Math.min(2000, assetDeadline - assetNow()));
     }
   }
-  const access = await get('/debate-room/access'); const accessBody = await access.json(); need(access.ok && accessBody.enabled === false, 'PUBLIC_ACCESS_OPEN', 'Debate public access must remain closed.');
-  const anonymous = await get('/debate-room/events'); need(anonymous.status === 401, 'AUTH_SMOKE_FAILED', 'Anonymous event access must be denied.');
-  const denied = await get('/debate-room/events', deniedToken), deniedBody = await denied.json(); need(denied.status === 403 && deniedBody.error?.code === 'DEBATE_PREVIEW_RESTRICTED', 'AUTH_SMOKE_FAILED', 'A real excluded account must fail the preview allowlist.');
-  const allowed = await get('/debate-room/events', allowedToken), allowedBody = await allowed.json(); need(allowed.ok && allowedBody.ok === true && Array.isArray(allowedBody.events), 'AUTH_SMOKE_FAILED', 'A real allowlisted account must reach its authorized event list.');
-  return { status: 'PASS_STAGING_ASSETS_AND_AUTH_ONLY', assetObservations, physicalMedia: false, fullOrganizerJourney: false, endurance90Minutes: false, capacity: false, realMail: false, publicLaunch: false };
+  // Only fixed codes emitted by the existing Worker/Debate boundary may enter
+  // the diagnostic. Unknown provider/database codes and all messages stay out.
+  const knownAuthCodes = new Set(['AUTH_REQUIRED', 'AUTHENTICATION_REQUIRED', 'INVALID_SESSION', 'AUTH_SESSION_VERIFICATION_UNAVAILABLE', 'DEBATE_PREVIEW_RESTRICTED', 'DEBATE_UNAVAILABLE', 'STORE_UNAVAILABLE', 'SERVICE_UNAVAILABLE']);
+  const authObservations = [];
+  const authGet = async (routeCategory, pathname, token) => {
+    const observation = { routeCategory, status: null }; authObservations.push(observation);
+    let response;
+    try { response = await get(pathname, token); }
+    catch { fail('AUTH_SMOKE_FAILED', `The ${routeCategory} staging check could not be read.`); }
+    observation.status = response.status;
+    const body = await response.json().catch(() => null);
+    if (knownAuthCodes.has(body?.error?.code)) observation.errorCode = body.error.code;
+    return { response, body };
+  };
+  try {
+    const access = await authGet('public-access', '/debate-room/access'); need(access.response.ok && access.body?.enabled === false, 'PUBLIC_ACCESS_OPEN', 'Debate public access must remain closed.');
+    const anonymous = await authGet('anonymous-events', '/debate-room/events'); need(anonymous.response.status === 401, 'AUTH_SMOKE_FAILED', 'Anonymous event access must be denied.');
+    const denied = await authGet('excluded-events', '/debate-room/events', deniedToken); need(denied.response.status === 403 && denied.body?.error?.code === 'DEBATE_PREVIEW_RESTRICTED', 'AUTH_SMOKE_FAILED', 'A real excluded account must fail the preview allowlist.');
+    const allowed = await authGet('allowlisted-events', '/debate-room/events', allowedToken); need(allowed.response.ok && allowed.body?.ok === true && Array.isArray(allowed.body.events), 'AUTH_SMOKE_FAILED', 'A real allowlisted account must reach its authorized event list.');
+  } catch (error) {
+    error.assetObservations = assetObservations; error.authObservations = authObservations; throw error;
+  }
+  return { status: 'PASS_STAGING_ASSETS_AND_AUTH_ONLY', assetObservations, authObservations, physicalMedia: false, fullOrganizerJourney: false, endurance90Minutes: false, capacity: false, realMail: false, publicLaunch: false };
+}
+
+export async function recordStagingSmoke({ outputFile, ...options }) {
+  try {
+    const result = await smokeStaging(options);
+    await writeFile(outputFile, JSON.stringify(result, null, 2)); return result;
+  } catch (error) {
+    if (error.assetObservations) await writeFile(outputFile, JSON.stringify({ status: error.authObservations ? 'FAIL_STAGING_AUTH' : 'FAIL_STAGING_ASSETS', code: error.code, assetObservations: error.assetObservations, authObservations: error.authObservations || [] }, null, 2));
+    throw error;
+  }
 }
 
 async function main() {
@@ -404,13 +433,8 @@ async function main() {
   const base = parseBase(await readFile(path.join(ROOT, policy.baseConfig), 'utf8'));
   const output = path.join(ROOT, 'artifacts/debate-local-rehearsal/staging-release'); await mkdir(output, { recursive: true });
   if (mode === 'smoke') {
-    try {
-      const result = await smokeStaging({ allowedToken: process.env.DEBATE_STAGING_ALLOWED_BEARER, deniedToken: process.env.DEBATE_STAGING_DENIED_BEARER, manifest: await readJson(path.join(output, 'artifact.json')) });
-      await writeFile(path.join(output, 'smoke.json'), JSON.stringify(result, null, 2)); console.log(result.status);
-    } catch (error) {
-      if (error.assetObservations) await writeFile(path.join(output, 'smoke.json'), JSON.stringify({ status: 'FAIL_STAGING_ASSETS', code: error.code, assetObservations: error.assetObservations }, null, 2));
-      throw error;
-    }
+    const result = await recordStagingSmoke({ outputFile: path.join(output, 'smoke.json'), allowedToken: process.env.DEBATE_STAGING_ALLOWED_BEARER, deniedToken: process.env.DEBATE_STAGING_DENIED_BEARER, manifest: await readJson(path.join(output, 'artifact.json')) });
+    console.log(result.status);
     return;
   }
   const baseline = await captureRemote({ token: process.env.CLOUDFLARE_API_TOKEN, accountId: process.env.CLOUDFLARE_ACCOUNT_ID, base });

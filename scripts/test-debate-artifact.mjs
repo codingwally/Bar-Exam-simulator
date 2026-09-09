@@ -33,7 +33,12 @@ for (const font of fonts.fonts) {
   assert.equal(createHash('sha256').update(bytes).digest('hex'), font.sha256, font.file);
 }
 for (const name of ['Fraunces.OFL.txt','Inter.OFL.txt']) assert.match(await readFile(path.join(artifact, 'assets/vendor/debate-fonts', name), 'utf8'), /SIL OPEN FONT LICENSE/);
-for (const match of client.matchAll(/from\s+['"](\.[^'"]+)['"]/g)) assert.ok((await stat(path.resolve(artifact, 'assets', match[1]))).isFile(), match[1]);
+for (const match of client.matchAll(/from\s+['"](\.[^'"]+)['"]/g)) {
+  const dependency = new URL(match[1], 'https://artifact.invalid/assets/debate-room.js');
+  assert.equal(dependency.origin, 'https://artifact.invalid');
+  assert.ok(dependency.pathname.startsWith('/assets/'), 'Browser imports must stay inside the public assets directory');
+  assert.ok((await stat(path.join(artifact, dependency.pathname.slice(1)))).isFile(), match[1]);
+}
 assert.equal(await readFile(path.join(artifact, 'assets/debate-domain.js'), 'utf8'), (await readFile(path.join(root, 'worker/debate-domain.mjs'), 'utf8')).replace("'./debate-sanctions.mjs'", "'./debate-sanctions.js'"), 'Browser and server must use the same domain arithmetic, with only the browser module suffix changed.');
 assert.equal(await readFile(path.join(artifact, 'assets/debate-sanctions.js'), 'utf8'), await readFile(path.join(root, 'worker/debate-sanctions.mjs'), 'utf8'), 'Sanctions arithmetic must remain identical in both environments.');
 const clockDeclaration = client.match(/^const serverNow = .+;$/m)?.[0];

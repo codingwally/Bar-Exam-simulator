@@ -32,6 +32,7 @@ function remoteFixture() {
       bindings: [...Object.entries(base.vars).map(([name, text]) => ({ name, text, type: 'plain_text' })), ...policy.requiredSecretNames.map(name => ({ name, type: 'secret_text', text: 'DO_NOT_PERSIST_SECRET_VALUE' }))] },
     scriptSettings: { observability: { enabled: true, logs: { enabled: true } }, logpush: false, tail_consumers: [] },
     version: { id: versionId, resources: { script_runtime: { exports: { default: { cache: { enabled: false } } } } } },
+    service: { default_environment: { environment: 'production', script: { placement_mode: 'targeted', placement: { region: 'gcp:us-east4' } } } },
     schedules: { schedules: [{ cron: '*/2 * * * *' }] }, subdomain: { enabled: true, previews_enabled: true },
   };
 }
@@ -83,18 +84,64 @@ test('exact baseline gates reject traffic, version, origin, secret, cron, mail a
   }
 });
 
+test('expanded capture preserves numeric placement and explicit cache sources without copying service or runtime payloads', () => {
+  const raw = remoteFixture();
+  raw.settings.placement = { mode: 'targeted', target: [10], private_value: 'PRIVATE_PLACEMENT_VALUE' };
+  raw.settings.cache_options = { enabled: false, cross_version_cache: true, private_value: 'PRIVATE_CACHE_VALUE' };
+  raw.settings.exports = { default: { type: 'worker', state: 'created', cache: { enabled: true }, private_value: 'PRIVATE_EXPORT_VALUE' } };
+  raw.version.resources.script_runtime.exports = { default: { type: 'worker', state: 'created', cache: { enabled: false } }, NamedEntry: { type: 'worker', state: 'created', cache: { enabled: true } } };
+  raw.version.resources.script_runtime.private_payload = { text: 'PRIVATE_RUNTIME_VALUE' };
+  Object.assign(raw.service.default_environment.script, { placement: { mode: 'targeted', target: [10] }, cache_options: { enabled: true, cross_version_cache: false },
+    exports: { default: { type: 'worker', cache: { enabled: true } } }, bindings: [{ name: 'PRIVATE', text: 'PRIVATE_SERVICE_BINDING' }], author_email: 'PRIVATE_AUTHOR_VALUE' });
+  const result = sanitizeBaseline(raw, base), sources = result.state.captureSources;
+  assert.equal(result.schemaVersion, 2); assert.equal(sources.schemaVersion, 1); assert.equal(result.fingerprint, hash(result.state));
+  assert.deepEqual(result.state.placement, { mode: 'targeted', target: [10] });
+  assert.equal(result.state.cache, false); assert.equal(result.state.cacheSource, 'version.resources.script_runtime.exports.default.cache.enabled');
+  assert.deepEqual(sources.settings.cacheOptions, { enabled: false, cross_version_cache: true });
+  assert.equal(sources.settings.exports.default.cache.enabled, true); assert.equal(sources.runtime.exports.NamedEntry.cache.enabled, true);
+  assert.ok(sources.runtime.presentFields.includes('private_payload')); assert.ok(sources.settings.cacheOptionsPresentFields.includes('private_value'));
+  assert.equal(sources.service.defaultEnvironment, 'production'); assert.deepEqual(sources.service.script.placement.target, [10]);
+  assert.deepEqual(sources.service.script.cacheOptions, { enabled: true, cross_version_cache: false });
+  assert.ok(sources.service.script.presentFields.includes('bindings'));
+  for (const secret of ['PRIVATE_PLACEMENT_VALUE','PRIVATE_CACHE_VALUE','PRIVATE_EXPORT_VALUE','PRIVATE_RUNTIME_VALUE','PRIVATE_SERVICE_BINDING','PRIVATE_AUTHOR_VALUE']) assert.ok(!JSON.stringify(result).includes(secret));
+  assert.throws(() => validateBaseline(result, base, policy, result.fingerprint, versionId), { code: 'BASELINE_SETTINGS_DRIFT' }, 'Numeric placement is still unverified; richer capture does not authorize deployment.');
+  const changed = structuredClone(result); changed.state.captureSources.settings.cacheOptions.cross_version_cache = false;
+  assert.notEqual(hash(changed.state), result.fingerprint, 'Diagnostic configuration is bound to the reviewed snapshot hash.');
+});
+
+test('cache capture uses documented global flags and per-entrypoint overrides while omission stays unknown', () => {
+  const raw = remoteFixture(); delete raw.version.resources.script_runtime.exports;
+  raw.settings.cache = { enabled: false }; // Obsolete capture path must not create evidence.
+  raw.service.default_environment.script.cache_options = { enabled: false };
+  let result = sanitizeBaseline(raw, base);
+  assert.equal(result.state.cache, null); assert.equal(result.state.cacheSource, null);
+  assert.equal(result.state.captureSources.settings.cacheOptions, null);
+  raw.settings.cache_options = { enabled: false, cross_version_cache: false };
+  result = sanitizeBaseline(raw, base);
+  assert.equal(result.state.cache, false); assert.equal(result.state.cacheSource, 'settings.cache_options.enabled');
+  raw.settings.exports = { default: { type: 'worker', cache: { enabled: true } } };
+  result = sanitizeBaseline(raw, base);
+  assert.equal(result.state.cache, true); assert.equal(result.state.cacheSource, 'settings.exports.default.cache.enabled');
+  raw.settings.cache_options.enabled = 'false';
+  assert.throws(() => sanitizeBaseline(raw, base), { code: 'BASELINE_INCOMPLETE' });
+  delete raw.settings.cache_options; delete raw.service.default_environment.script;
+  assert.throws(() => sanitizeBaseline(raw, base), { code: 'BASELINE_INCOMPLETE' });
+});
+
 test('baseline capture uses only locked-target GET requests, checks credentials first and sanitizes failed API responses', async () => {
   const calls = [], raw = remoteFixture();
   const fetcher = async (url, options) => {
     calls.push({ url, options });
-    const suffix = url.split(`/workers/scripts/${TARGET.worker}`)[1];
-    const value = { '/deployments': raw.deployments, '/settings': raw.settings, '/script-settings': raw.scriptSettings, [`/versions/${versionId}`]: raw.version, '/schedules': raw.schedules, '/subdomain': raw.subdomain }[suffix];
+    const suffix = url.split(`https://api.cloudflare.com/client/v4/accounts/${'a'.repeat(32)}/workers/`)[1];
+    const value = { [`scripts/${TARGET.worker}/deployments`]: raw.deployments, [`scripts/${TARGET.worker}/settings`]: raw.settings, [`scripts/${TARGET.worker}/script-settings`]: raw.scriptSettings,
+      [`scripts/${TARGET.worker}/versions/${versionId}`]: raw.version, [`scripts/${TARGET.worker}/schedules`]: raw.schedules, [`scripts/${TARGET.worker}/subdomain`]: raw.subdomain,
+      [`services/${TARGET.worker}`]: raw.service }[suffix];
     assert.ok(value, 'No unreviewed Cloudflare endpoint may be contacted');
     return Response.json({ success: true, result: value });
   };
   await assert.rejects(captureRemote({ accountId: 'a'.repeat(32), base, fetcher }), { code: 'CI_CREDENTIAL_MISSING' }); assert.equal(calls.length, 0);
   const result = await captureRemote({ token: 'test-credential-never-logged', accountId: 'a'.repeat(32), base, fetcher });
-  assert.equal(calls.length, 7); assert.ok(calls.every(call => call.options.method === 'GET' && call.options.redirect === 'error' && !call.options.body));
+  assert.equal(calls.length, 8); assert.ok(calls.every(call => call.options.method === 'GET' && call.options.redirect === 'error' && !call.options.body));
   assert.equal(result.state.versionId, versionId); assert.ok(!JSON.stringify(result).includes('test-credential-never-logged'));
   await assert.rejects(captureRemote({ token: 'test', accountId: 'a'.repeat(32), base, fetcher: async () => Response.json({ error: 'SECRET_BODY' }, { status: 403 }) }), error => error.code === 'CLOUDFLARE_READ_FAILED' && !error.message.includes('SECRET_BODY'));
 });

@@ -70,7 +70,7 @@ export function buildConfig(base, policy, allowlist, outputDirectory, root = ROO
   return { filename: path.join(outputDirectory, 'wrangler.debate-staging.toml'), text: config, hash: hash(config), previewActorIds: ids };
 }
 
-export function sanitizeBaseline({ deployments, settings, scriptSettings, version, schedules, subdomain }, base) {
+export function sanitizeBaseline({ deployments, settings, scriptSettings, version, schedules, subdomain, service }, base) {
   const deployment = deployments?.deployments?.[0];
   need(deployment?.versions?.length === 1 && deployment.versions[0].percentage === 100 && UUID.test(deployment.versions[0].version_id), 'SPLIT_OR_MISSING_DEPLOYMENT', 'Require one identified version serving 100% of staging traffic.');
   need(version?.id === deployment.versions[0].version_id, 'BASELINE_DRIFT', 'The active version changed during baseline capture.');
@@ -86,21 +86,77 @@ export function sanitizeBaseline({ deployments, settings, scriptSettings, versio
       if (safe) vars[binding.name] = binding.text; else undisclosedVariableHashes[binding.name] = hash(binding.text);
     }
   }
+  // These diagnostics retain only reviewed configuration fields, never raw API
+  // objects (service metadata can also contain bindings and author details).
+  const object = value => value && typeof value === 'object' && !Array.isArray(value);
+  const fieldNames = value => {
+    need(object(value), 'BASELINE_INCOMPLETE', 'Expected a configuration metadata object.');
+    const keys = Object.keys(value);
+    need(keys.length <= 100 && keys.every(key => /^[A-Za-z_$][A-Za-z0-9_$-]{0,127}$/.test(key)), 'BASELINE_INCOMPLETE', 'Unexpected configuration metadata field names.');
+    return sorted(keys);
+  };
+  const label = value => { need(typeof value === 'string' && /^[A-Za-z0-9_$.:/-]{1,255}$/.test(value), 'BASELINE_INCOMPLETE', 'Unexpected configuration metadata label.'); return value; };
+  const booleans = (value, allowed) => {
+    if (value == null) return null;
+    fieldNames(value);
+    return Object.fromEntries(allowed.filter(key => Object.hasOwn(value, key)).map(key => {
+      need(typeof value[key] === 'boolean', 'BASELINE_INCOMPLETE', 'A cache configuration flag was not boolean.'); return [key, value[key]];
+    }));
+  };
+  const placement = value => {
+    if (value == null) return null;
+    fieldNames(value);
+    const result = Object.fromEntries(['mode','region','host','hostname','hint'].filter(key => value[key] != null).map(key => [key, label(value[key])]));
+    if (value.target != null) {
+      const target = item => {
+        if (Number.isSafeInteger(item) && item >= 0) return item; // Observed numeric ID: preserve it without interpreting it as a region.
+        if (typeof item === 'string') return label(item);
+        fieldNames(item);
+        return Object.fromEntries(['region','host','hostname'].filter(key => item[key] != null).map(key => [key, label(item[key])]));
+      };
+      need(!Array.isArray(value.target) || value.target.length <= 30, 'BASELINE_INCOMPLETE', 'Unexpected placement target count.');
+      result.target = Array.isArray(value.target) ? value.target.map(target) : target(value.target);
+    }
+    return result;
+  };
+  const exports = value => {
+    if (value == null) return null;
+    return Object.fromEntries(fieldNames(value).map(name => {
+      const entry = value[name], presentFields = fieldNames(entry);
+      return [name, { presentFields, ...Object.fromEntries(['type','state'].filter(key => entry[key] != null).map(key => [key, label(entry[key])])),
+        cache: booleans(entry.cache, ['enabled']), cachePresentFields: entry.cache == null ? [] : fieldNames(entry.cache) }];
+    }));
+  };
+  const metadata = value => ({ presentFields: fieldNames(value), placement: placement(value.placement),
+    placementMode: value.placement_mode == null ? null : label(value.placement_mode),
+    cacheOptions: booleans(value.cache_options, ['enabled','cross_version_cache']),
+    cacheOptionsPresentFields: value.cache_options == null ? [] : fieldNames(value.cache_options), exports: exports(value.exports) });
   const runtime = version.resources?.script_runtime || {};
+  need(object(service?.default_environment?.script), 'BASELINE_INCOMPLETE', 'The existing service default-environment script metadata was unavailable.');
+  const captureSources = { schemaVersion: 1, settings: metadata(settings), runtime: metadata(runtime),
+    service: { defaultEnvironment: label(service.default_environment.environment), script: metadata(service.default_environment.script) } };
+  // The documented global field is cache_options; omitted flags remain unknown.
+  // Capture every override separately so the reviewer can detect disagreement.
+  const cacheCandidates = [
+    ['version.resources.script_runtime.exports.default.cache.enabled', captureSources.runtime.exports?.default?.cache?.enabled],
+    ['settings.exports.default.cache.enabled', captureSources.settings.exports?.default?.cache?.enabled],
+    ['settings.cache_options.enabled', captureSources.settings.cacheOptions?.enabled],
+  ];
+  const selectedCache = cacheCandidates.find(([, value]) => typeof value === 'boolean');
   const state = { worker: TARGET.worker, origin: TARGET.origin, projectRef: TARGET.project,
     deploymentId: deployment.id, versionId: version.id, trafficPercent: 100,
     bindings: bindings.sort((a, b) => a.name.localeCompare(b.name)), vars, undisclosedVariableHashes,
     compatibilityDate: (settings.compatibility_date || runtime.compatibility_date || '').slice(0, 10),
     compatibilityFlags: sorted(settings.compatibility_flags || runtime.compatibility_flags || []),
-    placement: settings.placement ? Object.fromEntries(['mode','region','target','hint'].filter(key => settings.placement[key] != null).map(key => [key, settings.placement[key]])) : null, observability: scriptSettings.observability || settings.observability || null,
+    placement: captureSources.settings.placement, observability: scriptSettings.observability || settings.observability || null,
     logpush: scriptSettings.logpush ?? settings.logpush ?? false, tailConsumers: scriptSettings.tail_consumers || [],
     limits: runtime.limits || settings.limits || null, usageModel: runtime.usage_model || null,
-    cache: runtime.exports?.default?.cache?.enabled ?? settings.cache?.enabled ?? null,
+    cache: selectedCache?.[1] ?? null, cacheSource: selectedCache?.[0] ?? null, captureSources,
     crons: sorted((schedules?.schedules || schedules || []).map(item => typeof item === 'string' ? item : item.cron)),
     workersDev: subdomain?.enabled, previewUrls: subdomain?.previews_enabled,
   };
   need(state.bindings.length === new Set(state.bindings.map(item => item.name)).size, 'BASELINE_INCOMPLETE', 'Duplicate remote binding names.');
-  return { schemaVersion: 1, capturedAt: new Date().toISOString(), state, fingerprint: hash(state), secretValuesStored: false };
+  return { schemaVersion: 2, capturedAt: new Date().toISOString(), state, fingerprint: hash(state), secretValuesStored: false };
 }
 export function validateBaseline(baseline, base, policy, expectedHash, expectedVersion) {
   need(HASH.test(expectedHash || '') && baseline.fingerprint === expectedHash && hash(baseline.state) === expectedHash, 'BASELINE_DRIFT', 'The reviewed sanitized remote snapshot hash no longer matches.');
@@ -133,19 +189,21 @@ export function validatePreservation(before, after, additions) {
 
 export async function captureRemote({ token, accountId, fetcher = fetch, base }) {
   need(token && /^[a-f0-9]{32}$/i.test(accountId || ''), 'CI_CREDENTIAL_MISSING', 'Existing Cloudflare CI token/account credentials are required. No login or secret replacement is attempted.');
-  const prefix = `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${TARGET.worker}`;
-  const get = async suffix => {
-    const response = await fetcher(prefix + suffix, { method: 'GET', redirect: 'error', headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(20000) });
+  const workerPrefix = `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers`;
+  const prefix = `${workerPrefix}/scripts/${TARGET.worker}`;
+  const getUrl = async url => {
+    const response = await fetcher(url, { method: 'GET', redirect: 'error', headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(20000) });
     const body = await response.json().catch(() => null);
     need(response.ok && body?.success === true && body.result != null, 'CLOUDFLARE_READ_FAILED', `Cloudflare baseline read failed (${response.status}); raw response omitted.`);
     return body.result;
   };
+  const get = suffix => getUrl(prefix + suffix);
   const deployments = await get('/deployments'), active = deployments?.deployments?.[0]?.versions;
   need(active?.length === 1 && UUID.test(active[0].version_id), 'BASELINE_INCOMPLETE', 'An exact active Worker version is required.');
-  const [settings, scriptSettings, version, schedules, subdomain] = await Promise.all([get('/settings'), get('/script-settings'), get(`/versions/${active[0].version_id}`), get('/schedules'), get('/subdomain')]);
+  const [settings, scriptSettings, version, schedules, subdomain, service] = await Promise.all([get('/settings'), get('/script-settings'), get(`/versions/${active[0].version_id}`), get('/schedules'), get('/subdomain'), getUrl(`${workerPrefix}/services/${TARGET.worker}`)]);
   const rechecked = await get('/deployments');
   need(equal(rechecked.deployments?.[0], deployments.deployments[0]), 'BASELINE_DRIFT', 'Staging changed while the baseline was captured.');
-  return sanitizeBaseline({ deployments, settings, scriptSettings, version, schedules, subdomain }, base);
+  return sanitizeBaseline({ deployments, settings, scriptSettings, version, schedules, subdomain, service }, base);
 }
 export const REQUIRED_SUITE_GROUPS = Object.freeze([
   'server-domain-database', 'client-state-media-dates', 'study-admission-sql',

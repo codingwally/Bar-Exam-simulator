@@ -300,6 +300,266 @@ assert.match(loader, /loadedStyles\.get\(href\) === pending[\s\S]*?loadedStyles\
 assert.match(loader, /loadedScripts\.get\(src\) === pending[\s\S]*?loadedScripts\.delete\(src\)/);
 assert.match(loader, /featurePromises\.delete\(group\)/);
 
+// Exercise the real loader with controlled native events and a deterministic
+// clock. No network, real credentials, or live subscriptions are involved.
+async function flushLoaderMicrotasks() {
+  for (let index = 0; index < 12; index += 1) await Promise.resolve();
+}
+
+function createLoaderHarness({ allowed = true, existingStyles = [] } = {}) {
+  const nodes = [];
+  const timers = new Map();
+  let now = 0;
+  let timerSequence = 0;
+  let accessChecks = 0;
+  const append = (node) => {
+    node.connected = true;
+    nodes.push(node);
+  };
+  const document = {
+    readyState: 'loading',
+    activeElement: null,
+    head: { append },
+    body: { append },
+    get styleSheets() {
+      return existingStyles.map((href) => ({ href })).concat(nodes
+        .filter((node) => node.rel === 'stylesheet' && node.connected && node.loaded)
+        .map((node) => ({ href: node.href })));
+    },
+    createElement(tagName) {
+      const listeners = new Map();
+      return {
+        tagName,
+        dataset: {},
+        connected: false,
+        loaded: false,
+        listeners,
+        addEventListener(name, callback, options) { listeners.set(name, { callback, options }); },
+        removeEventListener(name, callback) {
+          if (listeners.get(name)?.callback === callback) listeners.delete(name);
+        },
+        remove() { this.connected = false; },
+        emit(name) {
+          if (name === 'load') this.loaded = true;
+          const listener = listeners.get(name);
+          if (listener?.options?.once) listeners.delete(name);
+          listener?.callback();
+        },
+      };
+    },
+  };
+  const window = {
+    addEventListener() {},
+    setTimeout(callback, delay) {
+      const id = ++timerSequence;
+      timers.set(id, { callback, at: now + delay });
+      return id;
+    },
+    clearTimeout(id) { timers.delete(id); },
+    DueDiligencePhase4: {
+      getAccess: () => ({ allowed, unlimited: allowed }),
+      ensureProtectedAccess: async () => { accessChecks += 1; return allowed; },
+      ensureUnlimitedFeatureAccess: async () => { accessChecks += 1; return allowed; },
+    },
+  };
+  vm.runInNewContext(loader, {
+    window, document, URL,
+    Date: { now: () => now },
+    location: { href: 'https://duediligence.ph/?source=home#subject-matter' },
+  }, { filename: 'assets/feature-loader.js' });
+  return {
+    api: window.DueDiligenceFeatureLoader,
+    nodes,
+    timers,
+    styles: () => nodes.filter((node) => node.rel === 'stylesheet'),
+    scripts: () => nodes.filter((node) => node.tagName === 'script'),
+    accessChecks: () => accessChecks,
+    async advance(ms) {
+      const until = now + ms;
+      while (true) {
+        const next = [...timers.entries()]
+          .filter(([, timer]) => timer.at <= until)
+          .sort((left, right) => left[1].at - right[1].at)[0];
+        if (!next) break;
+        const [id, timer] = next;
+        now = timer.at;
+        timers.delete(id);
+        timer.callback();
+        await flushLoaderMicrotasks();
+      }
+      now = until;
+      await flushLoaderMicrotasks();
+    },
+  };
+}
+
+async function completeExaminationScripts(harness) {
+  await flushLoaderMicrotasks();
+  assert.equal(harness.scripts().length, 1, 'Scripts must start sequentially after all styles are ready.');
+  harness.scripts()[0].emit('load');
+  await flushLoaderMicrotasks();
+  assert.equal(harness.scripts().length, 2);
+  harness.scripts()[1].emit('load');
+  await flushLoaderMicrotasks();
+}
+
+// A native stylesheet error gets exactly one automatic cache-busted retry,
+// shared by concurrent opens. Existing version keys and the origin are retained.
+const recoveredLoader = createLoaderHarness();
+const recoveredOpen = recoveredLoader.api.loadForFeature('subject-matter');
+const concurrentOpen = recoveredLoader.api.loadForFeature('bar-feels');
+await flushLoaderMicrotasks();
+assert.equal(recoveredLoader.styles().length, 2);
+const [failedStyle, siblingStyle] = recoveredLoader.styles();
+const originalStyleUrl = new URL(failedStyle.href, 'https://duediligence.ph/');
+failedStyle.emit('error');
+siblingStyle.emit('load');
+await flushLoaderMicrotasks();
+assert.equal(recoveredLoader.styles().length, 3, 'Concurrent routes must share the one automatic retry.');
+assert.equal(failedStyle.connected, false);
+assert.equal(failedStyle.listeners.size, 0, 'Failed stylesheet handlers must be removed.');
+assert.equal(siblingStyle.listeners.size, 0, 'Successful stylesheet handlers must be removed.');
+assert.equal(recoveredLoader.scripts().length, 0, 'A successful sibling must not bypass the failed stylesheet.');
+const retryStyle = recoveredLoader.styles()[2];
+const retryStyleUrl = new URL(retryStyle.href);
+assert.equal(retryStyleUrl.origin, originalStyleUrl.origin);
+assert.equal(retryStyleUrl.pathname, originalStyleUrl.pathname);
+assert.equal(retryStyleUrl.hash, originalStyleUrl.hash);
+assert.ok(retryStyleUrl.searchParams.get('_dd_style_retry'));
+retryStyleUrl.searchParams.delete('_dd_style_retry');
+assert.equal(retryStyleUrl.href, originalStyleUrl.href, 'Retry must preserve every existing asset version parameter.');
+retryStyle.emit('load');
+await completeExaminationScripts(recoveredLoader);
+assert.equal(await recoveredOpen, true);
+assert.equal(await concurrentOpen, true);
+assert.equal(recoveredLoader.timers.size, 0);
+assert.equal(retryStyle.listeners.size, 0);
+assert.equal(await recoveredLoader.api.loadForFeature('subject-matter'), true);
+assert.equal(recoveredLoader.styles().length, 3, 'Successful styles must remain reusable.');
+assert.equal(recoveredLoader.scripts().length, 2, 'A repeated open must not execute scripts again.');
+
+// Terminal failure is bounded, user-facing copy is concise, and explicit retry
+// reuses the successful sibling without retaining the rejected group promise.
+const failedLoader = createLoaderHarness();
+const failedOpen = failedLoader.api.loadForFeature('subject-matter').catch((error) => error);
+const sharedFailure = failedLoader.api.loadForFeature('bar-feels').catch((error) => error);
+await flushLoaderMicrotasks();
+failedLoader.styles()[0].emit('error');
+failedLoader.styles()[1].emit('load');
+await flushLoaderMicrotasks();
+failedLoader.styles()[2].emit('error');
+const terminalError = await failedOpen;
+assert.equal(await sharedFailure, terminalError, 'Concurrent opens must observe the same terminal error.');
+assert.equal(terminalError.message, 'This page could not finish loading. Please try again.');
+assert.equal(terminalError.asset, failedLoader.styles()[0].href, 'Diagnostics retain the canonical asset separately.');
+assert.doesNotMatch(terminalError.message, /assets\/|\?/);
+assert.match(terminalError.cause.message, /failed/);
+assert.equal(failedLoader.styles().length, 3);
+assert.equal(failedLoader.timers.size, 0);
+assert.equal(failedLoader.scripts().length, 0);
+assert.equal(failedLoader.styles().filter((node) => node.connected).length, 1);
+const manualOpen = failedLoader.api.loadForFeature('subject-matter');
+await flushLoaderMicrotasks();
+assert.equal(failedLoader.styles().length, 4, 'Manual retry loads only the failed style, not successful siblings.');
+assert.equal(failedLoader.styles()[3].href, failedLoader.styles()[0].href, 'Manual retry starts with the canonical URL.');
+failedLoader.styles()[3].emit('load');
+await completeExaminationScripts(failedLoader);
+assert.equal(await manualOpen, true);
+
+// Missing browser events cannot leave navigation pending indefinitely. Even a
+// queued late callback from a removed element must not settle its replacement.
+const timedLoader = createLoaderHarness();
+let timedOutcome = 'pending';
+const timedOpen = timedLoader.api.loadForFeature('subject-matter').then(
+  () => { timedOutcome = 'resolved'; },
+  (error) => { timedOutcome = 'rejected'; return error; },
+);
+await flushLoaderMicrotasks();
+const timedStyle = timedLoader.styles()[0];
+const staleLoad = timedStyle.listeners.get('load').callback;
+const staleError = timedStyle.listeners.get('error').callback;
+timedLoader.styles()[1].emit('load');
+await timedLoader.advance(9999);
+assert.equal(timedLoader.styles().length, 2);
+assert.equal(timedOutcome, 'pending');
+await timedLoader.advance(1);
+assert.equal(timedLoader.styles().length, 3);
+assert.equal(timedStyle.connected, false);
+assert.equal(timedStyle.listeners.size, 0);
+staleLoad();
+staleError();
+await flushLoaderMicrotasks();
+assert.equal(timedOutcome, 'pending');
+assert.equal(timedLoader.scripts().length, 0, 'A late event must never start scripts before the replacement CSS loads.');
+await timedLoader.advance(10000);
+const timeoutError = await timedOpen;
+assert.equal(timedOutcome, 'rejected');
+assert.match(timeoutError.cause.message, /timed out/);
+assert.equal(timedLoader.styles().length, 3, 'Two timeouts must not start a third automatic attempt.');
+assert.equal(timedLoader.timers.size, 0);
+assert.equal(timedLoader.styles()[2].listeners.size, 0);
+assert.equal(timedLoader.styles()[2].connected, false);
+await timedLoader.advance(60000);
+assert.equal(timedLoader.styles().length, 3, 'No background retry loop may survive terminal failure.');
+const afterTimeoutOpen = timedLoader.api.loadForFeature('subject-matter');
+await flushLoaderMicrotasks();
+assert.equal(timedLoader.styles().length, 4);
+timedLoader.styles()[3].emit('load');
+await completeExaminationScripts(timedLoader);
+assert.equal(await afterTimeoutOpen, true, 'Manual recovery must work after a timeout too.');
+
+const timeoutRecovery = createLoaderHarness();
+const timeoutRecoveryOpen = timeoutRecovery.api.loadForFeature('subject-matter');
+await flushLoaderMicrotasks();
+timeoutRecovery.styles()[1].emit('load');
+await timeoutRecovery.advance(10000);
+timeoutRecovery.styles()[2].emit('load');
+await completeExaminationScripts(timeoutRecovery);
+assert.equal(await timeoutRecoveryOpen, true, 'A timed-out canonical request can recover automatically.');
+assert.equal(timeoutRecovery.timers.size, 0);
+
+// Simultaneous groups share their common stylesheet and script; no duplicate
+// initialization is introduced by the stylesheet recovery mechanism.
+const crossGroupLoader = createLoaderHarness();
+const examinationGroup = crossGroupLoader.api.loadForFeature('subject-matter');
+const contentGroup = crossGroupLoader.api.loadForFeature('bar-easy');
+await flushLoaderMicrotasks();
+assert.equal(crossGroupLoader.styles().length, 3, 'The study workspace stylesheet must be shared between groups.');
+crossGroupLoader.styles().forEach((node) => node.emit('load'));
+await flushLoaderMicrotasks();
+assert.equal(crossGroupLoader.scripts().length, 1, 'The common workspace script must be requested only once.');
+crossGroupLoader.scripts()[0].emit('load');
+await flushLoaderMicrotasks();
+assert.equal(crossGroupLoader.scripts().length, 3);
+crossGroupLoader.scripts().slice(1).forEach((node) => node.emit('load'));
+assert.equal(await examinationGroup, true);
+assert.equal(await contentGroup, true);
+assert.equal(crossGroupLoader.timers.size, 0);
+
+const scriptFailureLoader = createLoaderHarness();
+const scriptFailure = scriptFailureLoader.api.loadForFeature('subject-matter').catch((error) => error);
+await flushLoaderMicrotasks();
+scriptFailureLoader.styles().forEach((node) => node.emit('load'));
+await flushLoaderMicrotasks();
+scriptFailureLoader.scripts()[0].emit('error');
+assert.match((await scriptFailure).message, /Unable to load assets\/study-workspace\.js/);
+await scriptFailureLoader.advance(60000);
+assert.equal(scriptFailureLoader.scripts().length, 1, 'Script failures must never trigger automatic script retries.');
+
+const preloadedLoader = createLoaderHarness({ existingStyles: [failedStyle.href, siblingStyle.href] });
+const preloadedOpen = preloadedLoader.api.loadForFeature('subject-matter');
+await completeExaminationScripts(preloadedLoader);
+assert.equal(await preloadedOpen, true);
+assert.equal(preloadedLoader.styles().length, 0, 'Already available canonical styles must not be fetched again.');
+assert.equal(preloadedLoader.timers.size, 0);
+
+const deniedLoader = createLoaderHarness({ allowed: false });
+assert.equal(await deniedLoader.api.loadForFeature('subject-matter'), false);
+assert.equal(await deniedLoader.api.loadForFeature('bar-feels'), false);
+assert.equal(deniedLoader.accessChecks(), 2);
+assert.equal(deniedLoader.nodes.length, 0, 'Denied access must not load or retry any feature assets.');
+assert.equal(deniedLoader.timers.size, 0);
+
 // Home and Study Circles: pending/error truth, stable routing, validation, and create-once recovery.
 assert.match(home, /Loading unanswered questions…/);
 assert.match(home, /This is not an empty result\./);

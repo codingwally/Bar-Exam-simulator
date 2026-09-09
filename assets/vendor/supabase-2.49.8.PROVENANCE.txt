@@ -1,0 +1,11 @@
+Package: @supabase/supabase-js@2.49.8 (same version as the former CDN script)
+Source: https://registry.npmjs.org/@supabase/supabase-js/-/supabase-js-2.49.8.tgz
+Acquired: 2026-09-09 using npm pack --ignore-scripts
+Package integrity: sha512-zzBQLgS/jZs7btWcIAc7V5yfB+juG7h0AXxKowMJuySsO5vK+F7Vp+HCa07Z+tu9lZtr3sT9fofkc86bdylmtw==
+No package code or dependency version was modified. UMD source was copied byte-for-byte.
+package/dist/umd/supabase.js -> supabase-2.49.8.umd.js
+SHA256: 522e844a8554c84631063fa630d0b824b8042f346a0222da04460f81d942dcf8
+package/dist/umd/591.supabase.js -> 591.supabase.js (bundled optional runtime chunk)
+SHA256: 9c305b77dab63dd79eb96efab9069366fb2255bd8731d6b862287558d2560406
+package/LICENSE -> supabase-2.49.8.LICENSE.txt
+SHA256: 334dd6820e2eaeab2064e7c59001b810566728a28a41a7c1dbf69bbee17d0936

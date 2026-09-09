@@ -75,6 +75,10 @@ function featureLoaderHarness(access, unlimitedResult) {
       tagName,
       dataset: {},
       addEventListener(type, callback) { listeners.set(type, callback); },
+      removeEventListener(type, callback) {
+        if (listeners.get(type) === callback) listeners.delete(type);
+      },
+      remove() {},
       dispatch(type) { listeners.get(type)?.(); },
     };
   }
@@ -103,6 +107,7 @@ function featureLoaderHarness(access, unlimitedResult) {
     location,
     addEventListener() {},
     setTimeout() { return 0; },
+    clearTimeout() {},
     DueDiligencePhase4: {
       getAccess: () => access,
       ensureProtectedAccess: async () => true,

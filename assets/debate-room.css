@@ -162,6 +162,34 @@ body:has(#event:not([hidden]) #panel-live:not([hidden])) .live-tool-actions{disp
 .timer-options summary{list-style-position:inside;border:1px solid var(--line);border-radius:4px;text-align:center}
 .timer-options>div{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;padding-top:8px}
 
+/* Keep discovery beside the invitation form on desktop. Event lists retain
+   their own keyboard-scrollable space as the member's catalog grows. */
+@media(min-width:1100px) and (min-height:650px){
+  body:has(#lobby:not([hidden])){height:100dvh;display:flex;flex-direction:column}
+  body:has(#lobby:not([hidden])) .site-header{flex:none;min-height:64px;padding-block:10px}
+  body:has(#lobby:not([hidden])) main{width:100%;min-height:0;flex:1;display:flex;flex-direction:column;padding:14px 28px 20px}
+  body:has(#lobby:not([hidden])) .workspace-notices{flex:none}
+  body:has(#lobby:not([hidden])) .workspace-notices>*{margin-bottom:10px;padding:8px 12px}
+  #lobby{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1.5fr) minmax(330px,1fr);grid-template-rows:auto minmax(0,1fr) minmax(0,1fr);gap:20px 48px}
+  #lobby>.page-heading{grid-column:1/-1;margin:0;gap:20px}
+  #lobby>.page-heading h1{font-size:2.5rem;margin-bottom:8px}
+  #lobby>.page-heading p:last-child{margin:0}
+  #lobby .lobby-columns{display:contents}
+  #lobby .lobby-columns>section,#lobby>section[aria-labelledby=discover-heading]{min-height:0;display:flex;flex-direction:column}
+  #lobby .lobby-columns>section{grid-column:1;grid-row:2}
+  #lobby>section[aria-labelledby=discover-heading]{grid-column:1;grid-row:3;border-top:1px solid var(--line);padding-top:16px}
+  #lobby h2{flex:none;font-size:1.45rem;margin:0 0 10px}
+  #lobby .event-list{flex:1;min-height:0;overflow:auto;scrollbar-gutter:stable;padding-right:8px}
+  #lobby .event-list article{padding:14px 0}
+  #lobby .event-list article:first-child{padding-top:0}
+  #lobby .lobby-columns aside{grid-column:2;grid-row:2/4;min-height:0;overflow:auto;padding-left:32px}
+  #lobby aside label{gap:6px;margin-bottom:12px}
+  #lobby aside form{margin-bottom:14px}
+  #lobby aside hr{margin:16px 0}
+  #lobby aside p{font-size:.9rem;line-height:1.5;margin-bottom:10px}
+  #lobby #discover-more{flex:none;align-self:flex-start;margin-top:8px}
+}
+
 /* One desktop window: benches and floor stay visible; supporting tools open
    without rebuilding the forms, timer or subscribed participant video nodes. */
 @media(min-width:1100px) and (min-height:650px){

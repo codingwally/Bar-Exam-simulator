@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile, mkdir, mkdtemp, copyFile, writeFile, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { TARGET, CRITICAL_ASSETS, CRITICAL_SOURCES, REQUIRED_SUITE_GROUPS, hash, parseBase, previewIds, validatePolicy, buildConfig, sanitizeBaseline, validateBaseline, validatePreservation, captureRemote, validateEvidence, inspectArtifact, resolveStagingPublishableKey, validateSmokeSessions, smokeStaging, validateCaptureRequest } from './debate-staging-release.mjs';
+import { TARGET, CRITICAL_ASSETS, CRITICAL_SOURCES, REQUIRED_SUITE_GROUPS, hash, parseBase, previewIds, validatePolicy, buildConfig, sanitizeBaseline, validateBaseline, validatePreservation, captureRemote, validateEvidence, inspectArtifact, resolveStagingPublishableKey, validateSmokeSessions, smokeStaging, recordStagingSmoke, validateCaptureRequest } from './debate-staging-release.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const policy = JSON.parse(await readFile(path.join(ROOT, 'worker/debate-staging-policy.json'), 'utf8'));
@@ -429,6 +429,65 @@ test('asset convergence never retries a failing authenticated event check', asyn
     return f.authResponse(url, options);
   } }), { code: 'AUTH_SMOKE_FAILED' });
   assert.equal(assets, 1); assert.equal(allowed, 1); assert.deepEqual(f.waits, []);
+});
+
+test('successful smoke persists exactly four sanitized one-shot auth observations with asset evidence', async () => {
+  const f = assetSmokeFixture(), parent = path.join(ROOT, 'artifacts/debate-local-rehearsal');
+  await mkdir(parent, { recursive: true });
+  const outputFile = path.join(await mkdtemp(path.join(parent, 'smoke-auth-pass-')), 'smoke.json');
+  let calls = 0;
+  await recordStagingSmoke({ ...f.input, outputFile, fetcher: async (url, options) => {
+    calls++;
+    return url === TARGET.origin + '/debate-room/' ? new Response(f.bytes) : f.authResponse(url, options);
+  } });
+  const report = JSON.parse(await readFile(outputFile, 'utf8'));
+  assert.equal(report.status, 'PASS_STAGING_ASSETS_AND_AUTH_ONLY'); assert.equal(calls, 5);
+  assert.equal(report.assetObservations.length, 1);
+  assert.deepEqual(report.authObservations, [
+    { routeCategory: 'public-access', status: 200 },
+    { routeCategory: 'anonymous-events', status: 401 },
+    { routeCategory: 'excluded-events', status: 403, errorCode: 'DEBATE_PREVIEW_RESTRICTED' },
+    { routeCategory: 'allowlisted-events', status: 200 },
+  ]);
+});
+
+for (const scenario of ['known-code', 'unknown-code', 'malformed-json', 'transport-error']) test(`failed allowlisted smoke persists sanitized ${scenario} observations without retrying or masking the failure`, async () => {
+  const f = assetSmokeFixture(), parent = path.join(ROOT, 'artifacts/debate-local-rehearsal');
+  await mkdir(parent, { recursive: true });
+  const outputFile = path.join(await mkdtemp(path.join(parent, 'smoke-auth-fail-')), 'smoke.json');
+  let allowedCalls = 0, totalCalls = 0, failure;
+  await assert.rejects(recordStagingSmoke({ ...f.input, outputFile, fetcher: async (url, options) => {
+    totalCalls++;
+    if (url === TARGET.origin + '/debate-room/') return new Response(f.bytes);
+    if (options.headers.Authorization !== 'Bearer private-allowed') return f.authResponse(url, options);
+    allowedCalls++; assert.equal(options.redirect, 'error');
+    if (scenario === 'transport-error') throw new Error('PRIVATE_TRANSPORT_URL?token=private-allowed');
+    if (scenario === 'malformed-json') return new Response('PRIVATE_INVALID_BODY', { status: 502 });
+    return Response.json({ ok: false, error: { code: scenario === 'known-code' ? 'STORE_UNAVAILABLE' : 'PRIVATE_UNKNOWN_CODE', message: 'PRIVATE_MESSAGE', details: { actorId: '10000000-0000-4000-8000-000000000001' } } }, { status: 503, headers: { 'x-private-response': 'PRIVATE_HEADER' } });
+  } }), error => { failure = error; assert.equal(error.code, 'AUTH_SMOKE_FAILED'); return true; });
+  assert.equal(allowedCalls, 1); assert.equal(totalCalls, 5); assert.deepEqual(f.waits, []);
+  const raw = await readFile(outputFile, 'utf8'), report = JSON.parse(raw);
+  assert.equal(report.status, 'FAIL_STAGING_AUTH'); assert.equal(report.code, failure.code);
+  assert.deepEqual(report.assetObservations, failure.assetObservations);
+  assert.deepEqual(report.authObservations, failure.authObservations); assert.equal(report.authObservations.length, 4);
+  const last = report.authObservations.at(-1);
+  assert.equal(last.routeCategory, 'allowlisted-events');
+  assert.equal(last.status, scenario === 'transport-error' ? null : scenario === 'malformed-json' ? 502 : 503);
+  assert.equal(last.errorCode, scenario === 'known-code' ? 'STORE_UNAVAILABLE' : undefined);
+  for (const observation of report.authObservations) assert.ok(Object.keys(observation).every(key => ['routeCategory', 'status', 'errorCode'].includes(key)));
+  assert.doesNotMatch(raw + failure.message, /PRIVATE_|private-allowed|private-excluded|10000000-0000-4000-8000-000000000001/);
+});
+
+test('public-access failure records its response and stops before every authenticated request', async () => {
+  const f = assetSmokeFixture(); let calls = 0;
+  await assert.rejects(smokeStaging({ ...f.input, fetcher: async (url, options) => {
+    calls++; assert.equal(options.headers.Authorization, undefined);
+    return url === TARGET.origin + '/debate-room/' ? new Response(f.bytes) : Response.json({ enabled: true });
+  } }), error => {
+    assert.equal(error.code, 'PUBLIC_ACCESS_OPEN'); assert.equal(error.assetObservations.length, 1);
+    assert.deepEqual(error.authObservations, [{ routeCategory: 'public-access', status: 200 }]); return true;
+  });
+  assert.equal(calls, 2);
 });
 
 test('predeploy session verification rejects expired and wrongly scoped real-account responses before mutation', async () => {

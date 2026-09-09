@@ -8,6 +8,8 @@ The [first hosted preparation](evidence/staging-prepare-hosted-34358904483.json)
 
 ## Configuration
 
+The later [successful eleven-account preparation](evidence/staging-prepare-hosted-34362629625.json) verified real immediate Auth/Worker logout denial, the empty-scope cleanup RPC and exact account absence. [Hosted run 34363892777](evidence/staging-hosted-rehearsal-34363892777.json) subsequently deployed `c03d122334fbf1da1373c7008b282f53bc5fceac` as Worker version `a2fcbb39-2203-48d7-9ca9-224e4c798492`; preservation, exact assets and authenticated allow/exclude smoke passed. Its current baseline fingerprint is `6d8026d840bc88e74cc8f0efdfa6f66f3bf389fb5c7c03f51aa31e6717e77c73`. The browser failed after creating its first event because fixture validation expected a UUID instead of the service's generated `de-` identifier. All eleven sessions were fenced; ten accounts were deleted and the host plus its event were held. This is a failed rehearsal, with no timed stage completed. Review the staging-only exact-definition helper upgrade and its native CI before applying it; reconcile the held data separately and obtain fresh preparation evidence before retrying. The older preparation cannot authorize a changed candidate or baseline.
+
 Existing Supabase, LiveKit, origin validation and approved outgoing-mail infrastructure remain the integration points. Never put service-role keys, mail keys, invitation secrets or media tokens in the static artifact, audit output or screenshots.
 
 | Setting | Safe initial state and purpose |

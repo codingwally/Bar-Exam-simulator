@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { FIXTURE_TARGET, studyDebateFixtureIdentity } from './debate-staging-fixtures.mjs';
-import { createHostedDataSafety, HOSTED_ACTOR_NAMES, HOSTED_BUCKET } from './debate-hosted-cleanup.mjs';
+import { createHostedDataSafety, HOSTED_ACTOR_NAMES, HOSTED_BUCKET, isHostedEventId } from './debate-hosted-cleanup.mjs';
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
 const SHA = /^[a-f0-9]{40}$/u;
 const need = (value, code) => { if (!value) { const e = new Error(code); e.code = code; throw e; } };
@@ -308,7 +308,7 @@ export function createHostedDebateFixtureLifecycle({ sourceSha, supabaseUrl, wor
     },
     async recordEvent({ id, title }) {
       const intent = manifest.eventIntents.find(item => item.title === title);
-      need(intent && UUID.test(id || '') && (!intent.id || intent.id === id), 'HOSTED_EVENT_UNDECLARED');
+      need(intent && isHostedEventId(id) && (!intent.id || intent.id === id), 'HOSTED_EVENT_UNDECLARED');
       intent.id = id; intent.creationState = 'RESPONSE_ID_RECORDED'; await save();
       const found = await safety.rows('debate_v3_events', { id: `eq.${id}` }, 1);
       need(found.length === 1, 'HOSTED_EVENT_READBACK'); safety.validateEvent(found[0], { fixtures: manifest.fixtures, runTag: manifest.runTag, title });

@@ -4,6 +4,8 @@ import { createHostedDebateFixtureLifecycle } from './debate-hosted-fixtures.mjs
 import { FIXTURE_TARGET } from './debate-staging-fixtures.mjs';
 import { HOSTED_BUCKET, hostedHash } from './debate-hosted-cleanup.mjs';
 import { createStudyRoomHandlers } from '../worker/study-room-routes.mjs';
+import { createDebateService } from '../worker/debate-service.mjs';
+import { createMemoryDebateStoreForTests } from '../worker/debate-store.mjs';
 
 const NOW = Date.parse('2026-09-09T14:00:00Z'), clone = value => structuredClone(value);
 // Inert JWT-shaped fixtures only. The injected Auth route is the explicit
@@ -90,6 +92,33 @@ function harness(overrides = {}) {
   return { lifecycle: createHostedDebateFixtureLifecycle(config), users, roles, tokens, registered, revoked, calls, checkpoints, config,
     advance: milliseconds => { now += milliseconds; } };
 }
+
+test('an actual service-generated default event ID is recorded and read without changing UUID actor or export-job domains', async () => {
+  let row;
+  const h = harness({ rows: (table, query, found) => table === 'debate_v3_events' && query.get('id') === `eq.${row?.id}` ? [row] : found });
+  await h.lifecycle.provision();
+  const host = (await h.lifecycle.sessionFor('host')).user, title = `Hosted Debate ${h.lifecycle.snapshot().runTag} main`;
+  const idempotencyKey = '11111111-1111-4111-8111-000000000077';
+  await h.lifecycle.recordEventIntent({ title, idempotencyKey });
+  const store = createMemoryDebateStoreForTests(), service = createDebateService({ store, now: () => NOW });
+  const created = await service.execute({ actor: { id: host.id, verified: true }, command: 'create_event',
+    payload: { title, rehearsal: true, visibility: 'unlisted' }, expectedRevision: 0, idempotencyKey });
+  const state = await store.read(created.event.id);
+  assert.match(state.id, /^de-[a-f0-9]{32}$/u);
+  row = { id: state.id, owner_id: state.ownerId, revision: state.revision, state };
+  await h.lifecycle.recordEvent({ id: state.id, title });
+  assert.equal(h.lifecycle.snapshot().eventIntents[0].creationState, 'EXACT_OWNED_EVENT_CONFIRMED');
+  assert.deepEqual(await h.lifecycle.readEvent(state.id), state);
+  await assert.rejects(h.lifecycle.readStoredExport({ eventId: state.id, jobId: state.id, format: 'pdf' }), /HOSTED_EXPORT_SCOPE/);
+  const confirmed = clone(h.lifecycle.snapshot().eventIntents);
+  for (const id of [host.id, 'de-' + 'a'.repeat(31), 'de-' + 'a'.repeat(33), 'de-' + 'A'.repeat(32), state.id + '/escape', null]) {
+    const before = h.calls.length;
+    await assert.rejects(h.lifecycle.recordEvent({ id, title }), /HOSTED_EVENT_UNDECLARED/);
+    assert.equal(h.calls.length, before); assert.deepEqual(h.lifecycle.snapshot().eventIntents, confirmed);
+  }
+  row.owner_id = '22222222-2222-4222-8222-222222222222';
+  await assert.rejects(h.lifecycle.readEvent(state.id), /HOSTED_EVENT_OWNERSHIP/);
+});
 
 test('eleven registered students are classified before signin, ten preview identities, no platform promotions', async () => {
   const h = harness(); const provisioned = await h.lifecycle.provision();

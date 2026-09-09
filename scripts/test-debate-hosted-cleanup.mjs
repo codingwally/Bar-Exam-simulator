@@ -1,16 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createHostedDataSafety, HOSTED_BUCKET, hostedHash } from './debate-hosted-cleanup.mjs';
+import { createHostedDataSafety, HOSTED_BUCKET, hostedHash, isHostedEventId } from './debate-hosted-cleanup.mjs';
 import { FIXTURE_TARGET } from './debate-staging-fixtures.mjs';
+import { createDebateService } from '../worker/debate-service.mjs';
+import { createMemoryDebateStoreForTests } from '../worker/debate-store.mjs';
 
 const NOW = Date.parse('2026-09-09T15:00:00Z'), ID = n => `11111111-1111-4111-8111-${String(n).padStart(12, '0')}`;
 const copy = value => structuredClone(value);
+const generatedStore = createMemoryDebateStoreForTests();
+const generatedService = createDebateService({ store: generatedStore, now: () => NOW });
+const generatedEvent = await generatedService.execute({ actor: { id: ID(1), verified: true }, command: 'create_event',
+  payload: { title: 'Hosted Debate dv3host-aaaaaaaaaaaaaaaa main', rehearsal: true, visibility: 'unlisted' },
+  expectedRevision: 0, idempotencyKey: ID(41) });
+const generatedState = await generatedStore.read(generatedEvent.event.id);
 function harness({ intercept, pauseChange } = {}) {
   const fixtures = ['host', 'observer'].map((purpose, i) => ({ id: ID(i + 1), purpose, runId: `dv3study-${String(i).padStart(8, '0')}`,
     createdAt: new Date(NOW - 10000000).toISOString(), signOutState: 'confirmed', authDeniedBeforeCleanup: true, workerDeniedBeforeCleanup: true }));
-  const runTag = 'dv3host-aaaaaaaaaaaaaaaa', title = `Hosted Debate ${runTag} main`, eventId = ID(20);
+  const runTag = 'dv3host-aaaaaaaaaaaaaaaa', title = `Hosted Debate ${runTag} main`, eventId = generatedState.id;
   const event = { id: eventId, owner_id: fixtures[0].id, revision: 8, status: 'draft', created_at_ms: NOW - 10000000, updated_at_ms: NOW,
-    state: { id: eventId, ownerId: fixtures[0].id, revision: 8, title, rehearsal: true, visibility: 'unlisted',
+    state: { ...copy(generatedState), id: eventId, ownerId: fixtures[0].id, revision: 8, title, rehearsal: true, visibility: 'unlisted',
       members: Object.fromEntries(fixtures.map(f => [f.id, { id: f.id }])), media: {} } };
   const jobId = ID(30), key = `exports/${eventId}/${jobId}.pdf`;
   const tables = { debate_v3_events: [event], debate_v3_uploads: [],
@@ -41,7 +49,7 @@ function harness({ intercept, pauseChange } = {}) {
       const { p_manifest, p_expected } = JSON.parse(options.body);
       const snapshot = { version: 1, manifestSha256: hostedHash(p_manifest), snapshotSha256: hostedHash(tables),
         counts: Object.fromEntries(Object.entries(tables).map(([name, values]) => [name.slice('debate_v3_'.length), values.length])),
-        storageKeys: tables.debate_v3_outbox.length ? [key] : [] };
+        storageKeys: [...new Set(tables.debate_v3_outbox.map(job => job.result?.storageKey || job.job.payload?.storageKey))].sort() };
       if (!p_expected) return { status: 200, body: { status: 'CAPTURED', snapshot } };
       assert.deepEqual(snapshot, p_expected, 'Inert atomic transport refuses changed full rows'); assert.equal(files.size, 0);
       for (const table of Object.keys(tables)) tables[table] = [];
@@ -91,6 +99,48 @@ test('owned event cleanup fences sessions and removes files before one frozen at
   assert.equal(writes.length, 1); assert.ok(writes.every(call => call.route.startsWith('/storage/')));
   assert.equal(h.calls.filter(c => c.route.includes('/rpc/astra_staging_debate_cleanup_v1')).length, 2);
   assert.equal(h.record.atomic.state, 'DELETED_ABSENCE_VERIFIED');
+});
+
+test('service-generated event IDs carry both export and evidence paths through frozen cleanup', async () => {
+  const h = harness(), eventId = h.event.id, uploadId = ID(31), matchId = ID(32), cleanupJobId = `upload-cleanup:${uploadId}`;
+  assert.equal(eventId, generatedEvent.event.id); assert.match(eventId, /^de-[a-f0-9]{32}$/u);
+  const storageKey = `evidence/${eventId}/${matchId}/${uploadId}.pdf`, actorId = h.fixtures[0].id;
+  h.tables.debate_v3_outbox.push({ id: cleanupJobId, event_id: eventId, actor_id: actorId, type: 'delete_evidence', status: 'cancelled',
+    job: { id: cleanupJobId, eventId, actorId, type: 'delete_evidence', payload: { uploadId, storageKey } } });
+  h.tables.debate_v3_uploads.push({ id: uploadId, event_id: eventId, actor_id: actorId, match_id: matchId, cleanup_job_id: cleanupJobId,
+    record: { id: uploadId, eventId, actorId, matchId, storageKey } });
+  h.files.add(storageKey);
+  await h.safety.cleanupEvents(h.record, h.ownership);
+  assert.equal(h.record.complete, true); assert.equal(h.record.helperVerified, true);
+  assert.deepEqual(h.record.atomic.eventIds, [eventId]); assert.equal(h.record.atomic.snapshot.storageKeys.length, 2);
+  assert.equal(h.files.size, 0); assert.ok(Object.values(h.tables).every(rows => rows.length === 0));
+  const requests = h.calls.filter(call => call.method === 'DELETE'); assert.equal(requests.length, 2);
+  assert.ok(requests.every(call => JSON.parse(call.body).prefixes.every(key => key.split('/')[1] === eventId)));
+});
+
+test('event ID type and storage segments reject UUID events, malformed digests, foreign prefixes and traversal', async () => {
+  for (const id of [ID(20), 'de-' + 'a'.repeat(31), 'de-' + 'a'.repeat(33), 'de-' + 'A'.repeat(32),
+    generatedState.id + '/escape', generatedState.id + '\n', null, {}]) {
+    assert.equal(isHostedEventId(id), false);
+    const h = harness(); h.event.id = id; h.event.state.id = id; h.ownership.eventIntents[0].id = id;
+    assert.throws(() => h.safety.validateEvent(h.event, { fixtures: h.fixtures, runTag: h.ownership.runTag,
+      title: h.ownership.eventIntents[0].title }), /HOSTED_EVENT_OWNERSHIP/);
+    await assert.rejects(h.safety.cleanupEvents(h.record, h.ownership), /HOSTED_(?:EVENT_OWNERSHIP|UNEXPECTED_OWNED_EVENT)/);
+    assert.ok(h.calls.every(call => call.method === 'GET'));
+  }
+  for (const key of [`evidence/de-${'f'.repeat(32)}/${ID(32)}/${ID(31)}.pdf`,
+    `evidence/${generatedState.id}/../${ID(31)}.pdf`, `evidence/${generatedState.id}/%2e%2e/${ID(31)}.pdf`,
+    `evidence/${generatedState.id}/${ID(32)}/extra/${ID(31)}.pdf`, `evidence/${generatedState.id}//${ID(31)}.pdf`,
+    `evidence/${generatedState.id}/${ID(31)}.pdf?other=1`, `evidence/${generatedState.id}/${ID(31)}.pdf#fragment`]) {
+    const h = harness(), jobId = `upload-cleanup:${ID(31)}`, actorId = h.fixtures[0].id;
+    h.tables.debate_v3_outbox.push({ id: jobId, event_id: h.event.id, actor_id: actorId, type: 'delete_evidence', status: 'cancelled',
+      job: { id: jobId, eventId: h.event.id, actorId, type: 'delete_evidence', payload: { storageKey: key } } });
+    await assert.rejects(h.safety.cleanupEvents(h.record, h.ownership), /HOSTED_FILE_SCOPE/);
+    assert.ok(h.calls.every(call => call.method === 'GET'));
+  }
+  const h = harness(); h.fixtures[0].id = generatedState.id;
+  await assert.rejects(h.safety.cleanupEvents(h.record, h.ownership), /HOSTED_FIXTURE_SET/);
+  assert.equal(h.calls.length, 0);
 });
 test('missing session fence or foreign event ownership permits no deletion', async () => {
   for (const mutate of [h => { h.ownership.sessionsFenced = false; }, h => { h.fixtures[0].authDeniedBeforeCleanup = false; },

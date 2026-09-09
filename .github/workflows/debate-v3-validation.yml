@@ -20,6 +20,7 @@ on:
       - 'scripts/test-worker-cpu-limit-contract.mjs'
       - 'supabase/migrations/20260909*'
       - 'supabase/staging/debate-hosted-cleanup.sql'
+      - 'supabase/staging/debate-hosted-cleanup-event-ids-upgrade.sql'
       - 'index.html'
       - '.github/workflows/debate-v3-validation.yml'
       - '.github/workflows/debate-v3-capture.yml'

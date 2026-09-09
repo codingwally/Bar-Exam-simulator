@@ -97,7 +97,14 @@ try {
     const pdf = blankPdf(); assert.ok(pdf.length < 1024); report.inertFile = { size: pdf.length, sha256: hash(pdf) };
     for (const mode of ['direct', 'multipart']) await check('actual workerd ' + mode + ' upload, validation, download, foreign denial and deletion', async () => {
       let body = pdf, headers = { 'Content-Type': 'application/pdf' };
-      if (mode === 'multipart') { body = new FormData(); body.set('file', new File([pdf], 'inert.pdf', { type: 'application/pdf' })); headers = {}; }
+      if (mode === 'multipart') {
+        const form = new FormData(); form.set('file', new File([pdf], 'inert.pdf', { type: 'application/pdf' }));
+        // Serialize through native HTTP primitives before crossing Miniflare's
+        // separate Request/FormData implementation; workerd still parses the file.
+        const encoded = new Request('https://repro.fixture.invalid/multipart', { method: 'POST', body: form });
+        headers = Object.fromEntries(encoded.headers); body = new Uint8Array(await encoded.arrayBuffer());
+        assert.match(headers['content-type'], /^multipart\/form-data; boundary=/);
+      }
       const response = await mf.dispatchFetch('https://repro.fixture.invalid/' + mode, { method: 'POST', body, headers });
       const result = await response.json(); report.cases.push({ mode, status: response.status, result });
       assert.equal(response.status, 200); assert.equal(result.ok, true); assert.equal(result.size, pdf.length); assert.equal(result.downloadSha256, hash(pdf)); assert.equal(result.foreignReceiptDenied, true); assert.equal(result.deleted, true);

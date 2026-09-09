@@ -27,7 +27,7 @@ function runtimeDiagnostic(source, message) {
   const safe = String(message).replaceAll(INERT_KEY, '[inert-key]').slice(0, 1000);
   if (report.runtimeDiagnostics.length < 40) report.runtimeDiagnostics.push({ source, message: safe });
   else report.runtimeDiagnosticsTruncated = true;
-  if (/compatib|future|falling back|clamp/i.test(safe)) {
+  if (/compatib|future|clamp/i.test(safe)) {
     report.compatibilityWarnings ??= [];
     if (report.compatibilityWarnings.length < 10) report.compatibilityWarnings.push(safe);
   }
@@ -75,18 +75,22 @@ try {
     active = 'bundle unchanged adapter and dependencies';
     const bundle = await esbuild.build({ absWorkingDir: ROOT, entryPoints: ['scripts/fixtures/debate-delivery-workerd-entry.mjs'], bundle: true, format: 'esm', platform: 'browser', target: 'es2022', write: false, metafile: true, logLevel: 'silent' });
     assert.ok(Object.keys(bundle.metafile.inputs).includes('worker/debate-delivery.mjs'));
+    const storageBundle = await esbuild.build({ absWorkingDir: ROOT, stdin: { contents: "import storage from './scripts/fixtures/debate-delivery-workerd-storage.mjs'; export default storage;", resolveDir: ROOT, sourcefile: 'inert-storage-default-entry.mjs' }, bundle: true, format: 'esm', platform: 'browser', target: 'es2022', write: false, metafile: true, logLevel: 'silent' });
+    assert.deepEqual(Object.values(storageBundle.metafile.outputs).flatMap(output => output.exports), ['default']);
     report.bundleSha256 = hash(bundle.outputFiles[0].contents);
+    report.fakeStorageBundleSha256 = hash(storageBundle.outputFiles[0].contents);
     const config = await readFile(path.join(ROOT, 'worker/wrangler.staging.toml'), 'utf8');
     const compatibilityDate = config.match(/^compatibility_date\s*=\s*"([0-9-]+)"/m)?.[1]; assert.match(compatibilityDate || '', /^\d{4}-\d{2}-\d{2}$/);
     assert.match(config, /^compatibility_flags\s*=\s*\["nodejs_compat"\]/m);
     report.requestedCompatibilityDate = compatibilityDate; report.compatibilityFlags = ['nodejs_compat'];
     report.effectiveCompatibilityDate = null; // Only the requested setting and actual emitted warnings are evidence here.
     active = 'workerd startup';
-    mf = new Miniflare({ host: '127.0.0.1', port: 0, log: new ReceiptLog(LogLevel.WARN), handleRuntimeStdio(stdout, stderr) {
+    report.requestCfExternalLookup = false;
+    mf = new Miniflare({ host: '127.0.0.1', port: 0, cf: false, log: new ReceiptLog(LogLevel.WARN), handleRuntimeStdio(stdout, stderr) {
       for (const [source, stream] of [['workerd.stdout', stdout], ['workerd.stderr', stderr]]) createInterface(stream).on('line', line => runtimeDiagnostic(source, line));
     }, workers: [
       { name: 'delivery-repro', modules: true, script: bundle.outputFiles[0].text, compatibilityDate, compatibilityFlags: ['nodejs_compat'], bindings: { SUPABASE_URL: 'https://storage.fixture.invalid', SUPABASE_SERVICE_ROLE_KEY: INERT_KEY, DEBATE_STORAGE_BUCKET: 'debate-private-v3', OUTBOUND_EMAIL_MODE: 'suppressed' }, outboundService: 'fake-storage' },
-      { name: 'fake-storage', modules: true, script: await readFile(path.join(ROOT, 'scripts/fixtures/debate-delivery-workerd-storage.mjs'), 'utf8'), compatibilityDate, outboundService: { network: { allow: [], deny: ['public', 'private'] } } },
+      { name: 'fake-storage', modules: true, script: storageBundle.outputFiles[0].text, compatibilityDate, outboundService: { network: { allow: [], deny: ['public', 'private'] } } },
     ] });
     await mf.ready; report.runtimeStarted = true;
     const pdf = blankPdf(); assert.ok(pdf.length < 1024); report.inertFile = { size: pdf.length, sha256: hash(pdf) };

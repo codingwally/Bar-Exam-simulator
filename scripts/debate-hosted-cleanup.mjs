@@ -5,6 +5,9 @@ export const HOSTED_BUCKET = Object.freeze({ id: 'debate-private-v3', public: fa
   fileSizeLimit: 10485760, allowedMimeTypes: ['application/pdf', 'image/jpeg', 'image/png', 'text/csv'] });
 export const HOSTED_ACTOR_NAMES = Object.freeze(['host', 'A1', 'A2', 'A3', 'N1', 'N2', 'N3', 'judge2', 'judge3', 'observer', 'excluded']);
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
+// This hosted UI flow omits eventId, so the service generates de-<digest>.
+// Auth, upload and job identifiers keep their separate UUID/opaque contracts.
+export const isHostedEventId = value => typeof value === 'string' && /^de-[a-f0-9]{32}$/u.test(value);
 const opaque = /^[a-zA-Z0-9:_-]{8,160}$/u;
 const need = (value, code) => { if (!value) { const error = new Error(code); error.code = code; throw error; } };
 const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object' ?
@@ -61,7 +64,7 @@ export function createHostedDataSafety({ supabaseUrl, service, persist, clock = 
   function validateEvent(row, { fixtures, runTag, title }) {
     const actors = validateFixtureSet(fixtures), host = fixtures.find(f => f.purpose === 'host');
     need(/^dv3host-[a-f0-9]{16}$/u.test(runTag || '') && ['main', 'isolation'].some(suffix => title === `Hosted Debate ${runTag} ${suffix}`), 'HOSTED_EVENT_TAG');
-    need(row && uuid.test(row.id || '') && row.owner_id === host?.id && row.state?.id === row.id &&
+    need(row && isHostedEventId(row.id) && row.owner_id === host?.id && row.state?.id === row.id &&
       row.state.ownerId === host.id && row.state.title === title && row.state.rehearsal === true && row.state.visibility === 'unlisted' &&
       Number.isSafeInteger(row.revision) && row.revision > 0 && row.state.revision === row.revision &&
       row.state.members && Object.keys(row.state.members).length > 0 && Object.keys(row.state.members).every(id => actors.has(id)) &&
@@ -86,8 +89,9 @@ export function createHostedDataSafety({ supabaseUrl, service, persist, clock = 
         key = `exports/${event.id}/${job.id}.${job.job.payload.format}`;
         need(!job.result?.storageKey || job.result.storageKey === key, 'HOSTED_EXPORT_SCOPE');
       } else key = job.job.payload?.storageKey;
-      need(typeof key === 'string' && (key.startsWith(`exports/${event.id}/`) || key.startsWith(`evidence/${event.id}/`)) &&
-        /^(exports|evidence)\/[a-f0-9-]{36}\/(?:[a-zA-Z0-9:_-]{8,160}\/)?[a-zA-Z0-9_-]{8,160}\.(pdf|csv|png|jpg)$/u.test(key), 'HOSTED_FILE_SCOPE');
+      const pathParts = typeof key === 'string' ? key.split('/') : [];
+      need(['exports', 'evidence'].includes(pathParts[0]) && pathParts[1] === event.id && isHostedEventId(pathParts[1]) &&
+        /^(?:[a-zA-Z0-9:_-]{8,160}\/)?[a-zA-Z0-9_-]{8,160}\.(pdf|csv|png|jpg)$/u.test(pathParts.slice(2).join('/')), 'HOSTED_FILE_SCOPE');
       keys.add(key);
     }
     for (const upload of tables.uploads) {

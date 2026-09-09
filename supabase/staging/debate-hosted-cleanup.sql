@@ -97,7 +97,7 @@ begin
   end loop;
   for v_event in select e from jsonb_array_elements(p_manifest->'events') e loop
     if v_event - array['id','title'] <> '{}'::jsonb
-       or coalesce(v_event->>'id','') !~ '^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$'
+       or coalesce(v_event->>'id','') !~ '^de-[a-f0-9]{32}$'
        or coalesce(v_event->>'title','') not in ('Hosted Debate '||(p_manifest->>'runTag')||' main','Hosted Debate '||(p_manifest->>'runTag')||' isolation') then
       raise exception 'HOSTED_CLEANUP_EVENT_INTENT';
     end if;
@@ -152,7 +152,7 @@ begin
       v_key := 'exports/'||(v_row->>'event_id')||'/'||(v_row->>'id')||'.'||(v_job->'payload'->>'format');
       if v_row->'result'->>'storageKey' is not null and v_row->'result'->>'storageKey'<>v_key then raise exception 'HOSTED_CLEANUP_EXPORT_SCOPE'; end if;
     else v_key := v_job->'payload'->>'storageKey'; end if;
-    if v_key is null or v_key !~ '^(exports|evidence)/[a-f0-9-]{36}/([a-zA-Z0-9:_-]{8,160}/)?[a-zA-Z0-9_-]{8,160}\.(pdf|csv|png|jpg)$'
+    if v_key is null or v_key !~ '^(exports|evidence)/de-[a-f0-9]{32}/([a-zA-Z0-9:_-]{8,160}/)?[a-zA-Z0-9_-]{8,160}\.(pdf|csv|png|jpg)$'
        or not(starts_with(v_key,'exports/'||(v_row->>'event_id')||'/') or starts_with(v_key,'evidence/'||(v_row->>'event_id')||'/')) then
       raise exception 'HOSTED_CLEANUP_STORAGE_KEY';
     end if;

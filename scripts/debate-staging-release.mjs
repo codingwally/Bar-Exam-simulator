@@ -264,7 +264,7 @@ export const CRITICAL_SOURCES = Object.freeze([
   'scripts/test-debate-hosted-cleanup.mjs', 'scripts/test-debate-hosted-fixtures.mjs', 'scripts/test-debate-hosted-driver.mjs',
   'scripts/test-debate-browser-hosted-organizer.mjs', 'scripts/test-debate-hosted-browser-safety.mjs',
   'scripts/resolve-debate-hosted-preparation.mjs', 'scripts/test-debate-hosted-preparation.mjs',
-  'supabase/staging/debate-hosted-cleanup.sql', 'scripts/test-debate-hosted-atomic-cleanup.mjs',
+  'supabase/staging/debate-hosted-cleanup.sql', 'supabase/staging/debate-hosted-cleanup-event-ids-upgrade.sql', 'scripts/test-debate-hosted-atomic-cleanup.mjs',
   '.github/workflows/debate-v3-validation.yml',
   'assets/vendor/debate-fonts/fraunces-v38-latin-ext.woff2', 'assets/vendor/debate-fonts/fraunces-v38-latin.woff2',
   'assets/vendor/debate-fonts/inter-v20-latin-ext.woff2', 'assets/vendor/debate-fonts/inter-v20-latin.woff2',

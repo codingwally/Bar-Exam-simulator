@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile, mkdir, mkdtemp, copyFile, writeFile, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { TARGET, CRITICAL_ASSETS, CRITICAL_SOURCES, REQUIRED_SUITE_GROUPS, hash, parseBase, previewIds, validatePolicy, buildConfig, sanitizeBaseline, validateBaseline, validatePreservation, captureRemote, validateEvidence, inspectArtifact, resolveStagingPublishableKey, validateSmokeSessions, smokeStaging, validateCaptureRequest } from './debate-staging-release.mjs';
+import { TARGET, CRITICAL_ASSETS, CRITICAL_SOURCES, REQUIRED_SUITE_GROUPS, hash, parseBase, previewIds, validatePolicy, buildConfig, sanitizeBaseline, validateBaseline, validatePreservation, captureRemote, validateEvidence, inspectArtifact, resolveStagingPublishableKey, validateSmokeSessions, smokeStaging, recordStagingSmoke, validateCaptureRequest } from './debate-staging-release.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const policy = JSON.parse(await readFile(path.join(ROOT, 'worker/debate-staging-policy.json'), 'utf8'));
@@ -334,8 +334,160 @@ test('hosted smoke requires exact assets plus genuine allow/deny-shaped authenti
   assert.deepEqual(calls.slice(0, 4).map(call => new URL(call.url).pathname), ['/', '/debate-room/', '/study-room/', '/assets/debate-room.js']);
   assert.ok(calls.slice(0, 4).every(call => !call.options.headers.Authorization), 'Asset checks carry no bearer');
   await assert.rejects(smokeStaging({ allowedToken: 'same', deniedToken: 'same', manifest, fetcher }), { code: 'SMOKE_CREDENTIAL_MISSING' });
-  await assert.rejects(smokeStaging({ allowedToken: 'allowed', deniedToken: 'excluded', manifest, fetcher: async () => new Response('wrong deployed source') }), { code: 'DEPLOYED_ASSET_MISMATCH' });
+  let staleTime = 0;
+  await assert.rejects(smokeStaging({ allowedToken: 'allowed', deniedToken: 'excluded', manifest, assetNow: () => staleTime, assetWait: async ms => { staleTime += ms; }, fetcher: async () => new Response('wrong deployed source') }), { code: 'DEPLOYED_ASSET_MISMATCH' });
   await assert.rejects(smokeStaging({ allowedToken: 'allowed', deniedToken: 'excluded', manifest: { hashes: { '../foreign': hash('bad') } }, fetcher }), { code: 'INVALID_SMOKE_MANIFEST' });
+});
+
+function assetSmokeFixture() {
+  let elapsed = 0;
+  const calls = [], waits = [], bytes = 'reviewed static candidate';
+  const input = {
+    allowedToken: 'private-allowed', deniedToken: 'private-excluded',
+    manifest: { hashes: { 'debate-room/index.html': hash(bytes) } },
+    assetNow: () => elapsed,
+    assetWait: async ms => { waits.push(ms); elapsed += ms; }
+  };
+  const authResponse = (url, options) => {
+    if (url.endsWith('/access')) return Response.json({ ok: true, enabled: false });
+    if (!options.headers.Authorization) return Response.json({ ok: false }, { status: 401 });
+    if (options.headers.Authorization === 'Bearer private-excluded') return Response.json({ ok: false, error: { code: 'DEBATE_PREVIEW_RESTRICTED' } }, { status: 403 });
+    return Response.json({ ok: true, events: [] });
+  };
+  return { input, calls, waits, bytes, authResponse, advance: ms => { elapsed += ms; } };
+}
+
+test('static smoke converges to exact bytes before one-shot auth and retains only bounded sanitized observations', async () => {
+  const f = assetSmokeFixture(); let assets = 0;
+  const result = await smokeStaging({ ...f.input, fetcher: async (url, options) => {
+    f.calls.push({ url, options });
+    if (url === TARGET.origin + '/debate-room/') {
+      assets++;
+      assert.equal(options.redirect, 'error'); assert.equal(options.cache, 'no-store'); assert.equal(options.method, 'GET');
+      assert.equal(options.headers.Authorization, undefined);
+      return assets === 1 ? new Response('old deployment PRIVATE_BODY', { status: 200, headers: { 'x-private-fixture': 'PRIVATE_HEADER' } })
+        : assets === 2 ? new Response('temporarily unavailable', { status: 503 }) : new Response(f.bytes);
+    }
+    assert.equal(assets, 3, 'No auth request may run before exact static bytes converge');
+    return f.authResponse(url, options);
+  } });
+  assert.equal(result.status, 'PASS_STAGING_ASSETS_AND_AUTH_ONLY');
+  assert.deepEqual(f.waits, [2000, 2000]);
+  assert.equal(f.calls.length, 7, 'Three static attempts and exactly four original auth/access checks');
+  assert.deepEqual(result.assetObservations.map(x => [x.status, x.attempt]), [[200, 1], [503, 2], [200, 3]]);
+  assert.equal(result.assetObservations[2].hash, hash(f.bytes));
+  for (const row of result.assetObservations) assert.deepEqual(Object.keys(row).sort(), ['attempt', 'hash', 'path', 'status']);
+  assert.doesNotMatch(JSON.stringify(result), /PRIVATE_BODY|PRIVATE_HEADER|private-allowed|private-excluded/);
+});
+
+test('persistent stale static bytes exhaust the fixed deadline and never reach auth', async () => {
+  const f = assetSmokeFixture();
+  await assert.rejects(smokeStaging({ ...f.input, fetcher: async (url, options) => {
+    f.calls.push(url); assert.equal(url, TARGET.origin + '/debate-room/'); assert.equal(options.headers.Authorization, undefined);
+    return new Response('persistent old bytes');
+  } }), error => {
+    assert.equal(error.code, 'DEPLOYED_ASSET_MISMATCH');
+    assert.equal(error.assetObservations.length, 30);
+    assert.equal(error.assetObservations.at(-1).hash, hash('persistent old bytes'));
+    assert.doesNotMatch(JSON.stringify(error), /persistent old bytes|private-allowed|private-excluded/);
+    return true;
+  });
+  assert.equal(f.calls.length, 30); assert.equal(f.waits.reduce((sum, ms) => sum + ms, 0), 60000);
+});
+
+test('static convergence rejects late exact bytes and caps attempts even if an injected clock does not advance', async () => {
+  const late = assetSmokeFixture();
+  await assert.rejects(smokeStaging({ ...late.input, fetcher: async () => { late.advance(60000); return new Response(late.bytes); } }), { code: 'DEPLOYED_ASSET_MISMATCH' });
+  assert.equal(late.waits.length, 0);
+  const frozen = assetSmokeFixture(); let calls = 0;
+  await assert.rejects(smokeStaging({ ...frozen.input, assetWait: async () => {}, fetcher: async () => { calls++; return new Response('stale'); } }), error => {
+    assert.equal(error.code, 'DEPLOYED_ASSET_MISMATCH'); assert.equal(error.assetObservations.length, 31); return true;
+  });
+  assert.equal(calls, 31);
+});
+
+test('static redirect or transport failure fails immediately without following, retrying or retaining raw errors', async () => {
+  for (const returnedRedirect of [false, true]) {
+    const f = assetSmokeFixture(); let calls = 0;
+    await assert.rejects(smokeStaging({ ...f.input, fetcher: async (url, options) => {
+      calls++; assert.equal(url, TARGET.origin + '/debate-room/'); assert.equal(options.redirect, 'error');
+      if (returnedRedirect) return new Response('private redirect body', { status: 302, headers: { Location: 'https://foreign.invalid/private' } });
+      throw new TypeError('unexpected redirect https://foreign.invalid/private?token=DO_NOT_STORE');
+    } }), error => {
+      assert.equal(error.code, 'DEPLOYED_ASSET_FETCH_FAILED'); assert.equal(error.assetObservations.length, 1);
+      assert.doesNotMatch(error.message + JSON.stringify(error), /foreign|DO_NOT_STORE|private redirect body/); return true;
+    });
+    assert.equal(calls, 1); assert.deepEqual(f.waits, []);
+  }
+});
+
+test('asset convergence never retries a failing authenticated event check', async () => {
+  const f = assetSmokeFixture(); let assets = 0, allowed = 0;
+  await assert.rejects(smokeStaging({ ...f.input, fetcher: async (url, options) => {
+    if (url === TARGET.origin + '/debate-room/') { assets++; return new Response(f.bytes); }
+    if (options.headers.Authorization === 'Bearer private-allowed') { allowed++; return Response.json({ ok: false }, { status: 503 }); }
+    return f.authResponse(url, options);
+  } }), { code: 'AUTH_SMOKE_FAILED' });
+  assert.equal(assets, 1); assert.equal(allowed, 1); assert.deepEqual(f.waits, []);
+});
+
+test('successful smoke persists exactly four sanitized one-shot auth observations with asset evidence', async () => {
+  const f = assetSmokeFixture(), parent = path.join(ROOT, 'artifacts/debate-local-rehearsal');
+  await mkdir(parent, { recursive: true });
+  const outputFile = path.join(await mkdtemp(path.join(parent, 'smoke-auth-pass-')), 'smoke.json');
+  let calls = 0;
+  await recordStagingSmoke({ ...f.input, outputFile, fetcher: async (url, options) => {
+    calls++;
+    return url === TARGET.origin + '/debate-room/' ? new Response(f.bytes) : f.authResponse(url, options);
+  } });
+  const report = JSON.parse(await readFile(outputFile, 'utf8'));
+  assert.equal(report.status, 'PASS_STAGING_ASSETS_AND_AUTH_ONLY'); assert.equal(calls, 5);
+  assert.equal(report.assetObservations.length, 1);
+  assert.deepEqual(report.authObservations, [
+    { routeCategory: 'public-access', status: 200 },
+    { routeCategory: 'anonymous-events', status: 401 },
+    { routeCategory: 'excluded-events', status: 403, errorCode: 'DEBATE_PREVIEW_RESTRICTED' },
+    { routeCategory: 'allowlisted-events', status: 200 },
+  ]);
+});
+
+for (const scenario of ['known-code', 'unknown-code', 'malformed-json', 'transport-error']) test(`failed allowlisted smoke persists sanitized ${scenario} observations without retrying or masking the failure`, async () => {
+  const f = assetSmokeFixture(), parent = path.join(ROOT, 'artifacts/debate-local-rehearsal');
+  await mkdir(parent, { recursive: true });
+  const outputFile = path.join(await mkdtemp(path.join(parent, 'smoke-auth-fail-')), 'smoke.json');
+  let allowedCalls = 0, totalCalls = 0, failure;
+  await assert.rejects(recordStagingSmoke({ ...f.input, outputFile, fetcher: async (url, options) => {
+    totalCalls++;
+    if (url === TARGET.origin + '/debate-room/') return new Response(f.bytes);
+    if (options.headers.Authorization !== 'Bearer private-allowed') return f.authResponse(url, options);
+    allowedCalls++; assert.equal(options.redirect, 'error');
+    if (scenario === 'transport-error') throw new Error('PRIVATE_TRANSPORT_URL?token=private-allowed');
+    if (scenario === 'malformed-json') return new Response('PRIVATE_INVALID_BODY', { status: 502 });
+    return Response.json({ ok: false, error: { code: scenario === 'known-code' ? 'STORE_UNAVAILABLE' : 'PRIVATE_UNKNOWN_CODE', message: 'PRIVATE_MESSAGE', details: { actorId: '10000000-0000-4000-8000-000000000001' } } }, { status: 503, headers: { 'x-private-response': 'PRIVATE_HEADER' } });
+  } }), error => { failure = error; assert.equal(error.code, 'AUTH_SMOKE_FAILED'); return true; });
+  assert.equal(allowedCalls, 1); assert.equal(totalCalls, 5); assert.deepEqual(f.waits, []);
+  const raw = await readFile(outputFile, 'utf8'), report = JSON.parse(raw);
+  assert.equal(report.status, 'FAIL_STAGING_AUTH'); assert.equal(report.code, failure.code);
+  assert.deepEqual(report.assetObservations, failure.assetObservations);
+  assert.deepEqual(report.authObservations, failure.authObservations); assert.equal(report.authObservations.length, 4);
+  const last = report.authObservations.at(-1);
+  assert.equal(last.routeCategory, 'allowlisted-events');
+  assert.equal(last.status, scenario === 'transport-error' ? null : scenario === 'malformed-json' ? 502 : 503);
+  assert.equal(last.errorCode, scenario === 'known-code' ? 'STORE_UNAVAILABLE' : undefined);
+  for (const observation of report.authObservations) assert.ok(Object.keys(observation).every(key => ['routeCategory', 'status', 'errorCode'].includes(key)));
+  assert.doesNotMatch(raw + failure.message, /PRIVATE_|private-allowed|private-excluded|10000000-0000-4000-8000-000000000001/);
+});
+
+test('public-access failure records its response and stops before every authenticated request', async () => {
+  const f = assetSmokeFixture(); let calls = 0;
+  await assert.rejects(smokeStaging({ ...f.input, fetcher: async (url, options) => {
+    calls++; assert.equal(options.headers.Authorization, undefined);
+    return url === TARGET.origin + '/debate-room/' ? new Response(f.bytes) : Response.json({ enabled: true });
+  } }), error => {
+    assert.equal(error.code, 'PUBLIC_ACCESS_OPEN'); assert.equal(error.assetObservations.length, 1);
+    assert.deepEqual(error.authObservations, [{ routeCategory: 'public-access', status: 200 }]); return true;
+  });
+  assert.equal(calls, 2);
 });
 
 test('predeploy session verification rejects expired and wrongly scoped real-account responses before mutation', async () => {

@@ -343,6 +343,44 @@ async function signedOutSmoke() {
     }
   } return records;
 }
+
+// Verify the exact URLs a fresh room document/module gives a returning browser.
+// A separate ?release= probe cannot reveal stale bytes at these cache keys.
+export async function roomAssetReferences({ readAsset = file => readFile(path.join(ROOT, '.pages-dist', file)) } = {}) {
+  const room = String(await readAsset('debate-room/index.html'));
+  const study = String(await readAsset('study-room/index.html'));
+  const client = String(await readAsset('assets/debate-room.js'));
+  const attributeReferences = source => [...source.matchAll(/\b(?:src|href)\s*=\s*["']([^"']+)["']/g)].map(match => match[1].replaceAll('&amp;', '&'));
+  const imports = [...client.matchAll(/^import\s+[^;\r\n]+?\s+from\s+["']([^"']+)["'];/gm)].map(match => match[1]);
+  const edges = [
+    ['debate-room/index.html', 'assets/debate-room.js', attributeReferences(room)],
+    ['debate-room/index.html', 'assets/debate-room.css', attributeReferences(room)],
+    ['assets/debate-room.js', 'assets/debate-media.js', imports],
+    ['study-room/index.html', 'assets/study-room-live.js', attributeReferences(study)],
+  ];
+  const references = [];
+  for (const [referencedBy, file, values] of edges) {
+    const urls = values.map(value => new URL(value, `${TARGET.origin}/${referencedBy}`)).filter(url => url.pathname === '/' + file);
+    need(urls.length === 1, 'ROOM_ASSET_REFERENCE_INVALID');
+    const url = urls[0];
+    need(url.origin === TARGET.origin && !url.username && !url.password && !url.hash
+      && /^\?[a-zA-Z0-9_=&.-]{1,600}$/.test(url.search) && url.searchParams.get('v')
+      && !url.searchParams.has('release'), 'ROOM_ASSET_REFERENCE_INVALID');
+    references.push({ file, referencedBy, url: url.href, sha256: hash(await readAsset(file)) });
+  }
+  return references;
+}
+
+export async function verifyRoomAssetReferences({ readAsset, fetcher = fetch } = {}) {
+  const references = await roomAssetReferences({ readAsset });
+  for (const reference of references) {
+    const response = await fetcher(reference.url, { method: 'GET', redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(20000) });
+    need(response.ok, 'ROOM_ASSET_UNAVAILABLE');
+    need(hash(Buffer.from(await response.arrayBuffer())) === reference.sha256, 'ROOM_ASSET_HASH_MISMATCH');
+  }
+  return references;
+}
+
 async function runOperation(mode) {
   need(['capture','provenance','prepare','deploy','pages-gate','verify-pages'].includes(mode), 'INVALID_OPERATION');
   const candidate = await trustedCandidate(), review = JSON.parse(process.env.DEBATE_PREVIEW_REVIEW || '{}');
@@ -353,16 +391,18 @@ async function runOperation(mode) {
     await currentPages(review.expectedPagesSha); need((await capture()).fingerprint===receipt.production?.fingerprint,'WORKER_CHANGED_BEFORE_PAGES'); return; }
   if (mode === 'verify-pages') {
     const assets = [...new Set([...CRITICAL_ASSETS, 'service-worker.js','admin/index.html','assets/pricing-renderer.js','assets/pricing-renderer.css','assets/pricing-checkout-safety.js','assets/vendor/591.supabase.js'])];
-    let lastCode = 'PAGES_ASSETS_UNVERIFIED', observations;
+    let lastCode = 'PAGES_ASSETS_UNVERIFIED', observations, sourceLinkedAssets;
     for (let attempt = 0; attempt < 24; attempt++) { try {
       await currentPages(candidate); observations = [];
       for (const file of ['.well-known/duediligence-release.txt', ...assets]) {
         const response = await fetch(`${TARGET.origin}/${file.replace(/index\.html$/, '')}?release=${candidate}`, { redirect:'error', cache:'no-store', signal:AbortSignal.timeout(20000) });
         need(response.ok, 'LIVE_ASSET_UNAVAILABLE'); const bytes = Buffer.from(await response.arrayBuffer());
         need(hash(bytes) === hash(await readFile(path.join(ROOT,'.pages-dist',file))), 'LIVE_ASSET_HASH_MISMATCH'); observations.push({ file, sha256:hash(bytes) });
-      } break;
+      }
+      sourceLinkedAssets = await verifyRoomAssetReferences();
+      break;
     } catch (error) { lastCode = safeCode(error); if (attempt === 23) throw Object.assign(new Error(lastCode),{code:lastCode}); await new Promise(resolve => setTimeout(resolve,5000)); } }
-    await save('pages-verification.json',{ status:'PASS_PUBLIC_ENTRY_ASSETS', candidate, observations, authenticatedPaidUnpaidJourney:'NOT_RUN', physicalMedia:false, fullAcceptance:false, publicLaunch:true }); return;
+    await save('pages-verification.json',{ status:'PASS_PUBLIC_ENTRY_ASSETS', candidate, observations, sourceLinkedAssets, authenticatedPaidUnpaidJourney:'NOT_RUN', physicalMedia:false, fullAcceptance:false, publicLaunch:true }); return;
   }
   const evidence = await reviewGates(review,candidate,true), baseline = await capture();
   need(baseline.fingerprint === review.baselineSha256 && baseline.scripts[TARGET.worker].versionId === review.workerVersionId

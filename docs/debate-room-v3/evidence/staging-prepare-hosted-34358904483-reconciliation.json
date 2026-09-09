@@ -1,0 +1,267 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS_EXACT_FIXTURE_DATABASE_RECONCILIATION",
+  "projectRef": "hlzqmreeoghbldnhlybr",
+  "sourceSha": "1a0a30f00ab3ca441c9ba73df3605f11ecbc9b9f",
+  "workflowRunId": 34358904483,
+  "completedWorkflowArtifacts": "artifacts/debate-local-rehearsal/staging-34358904483/debate-v3-staging-release-1a0a30f00ab3ca441c9ba73df3605f11ecbc9b9f/staging-release/hosted-1a0a30f00ab3-f6ff2fbf-017f-48f5-969f-ec93602d379b",
+  "fixture": {
+    "id": "f341af43-15d0-4177-916a-53a8e1a297fc",
+    "runId": "dv3study-0eabb144",
+    "runTag": "dv3host-84134a6ce9bb0989",
+    "purpose": "host",
+    "createdAt": "2026-09-09T13:45:32.485184Z",
+    "expectedCount": 1
+  },
+  "independentReadback": {
+    "transport": "Supabase execute_sql, fixed staging project_id; SELECT only",
+    "providerMutationsPerformed": false,
+    "authUsers": 1,
+    "authSessions": 1,
+    "refreshTokenRows": 1,
+    "nonRevokedRefreshTokenRows": 1,
+    "refreshTokenLengthOnly": 12,
+    "tokenValuesSelected": false,
+    "registryRows": 1,
+    "studentRoleRows": 1,
+    "roleAssignmentsByFixture": 0,
+    "debate": {
+      "eventsOwnedOrMember": 0,
+      "receipts": 0,
+      "audit": 0,
+      "matchVersions": 0,
+      "ballots": 0,
+      "votes": 0,
+      "outbox": 0,
+      "uploads": 0,
+      "rateLimits": 0
+    },
+    "directAuthForeignKeyScopes": {
+      "checkedAt": "2026-09-09T13:53:07.403019+00:00",
+      "nonzeroScopes": [
+        {
+          "count": 1,
+          "scope": "auth.identities.user_id"
+        },
+        {
+          "count": 1,
+          "scope": "auth.sessions.user_id"
+        },
+        {
+          "count": 1,
+          "scope": "public.forum_profile_settings.user_id"
+        },
+        {
+          "count": 1,
+          "scope": "private.internal_test_accounts.user_id"
+        },
+        {
+          "count": 1,
+          "scope": "public.profiles.id"
+        },
+        {
+          "count": 1,
+          "scope": "public.user_roles.user_id"
+        }
+      ],
+      "checkedFkScopes": 257
+    },
+    "additionalReferenceScopes": {
+      "checkedAt": "2026-09-09T13:54:28.124173+00:00",
+      "checkedScopes": 481,
+      "nonzeroScopes": []
+    },
+    "additionalScopeDefinition": "Exact fixture UUID comparisons on non-Auth-FK UUID columns and named user/owner/actor/judge/identity text columns across public/private/storage/auth, excluding separately checked known Auth session tables, plus 13 Study/Debate JSON text references. Counts only; no customer row contents.",
+    "frozenOwnership": {
+      "roleHash": "c57c2309d920fe51895e0d65659f4d3b7248dc4cc8bd33469e63464bb5f13d89",
+      "ownership": {
+        "createdAt": "2026-09-09T13:45:32.485184+00:00",
+        "authUserId": "f341af43-15d0-4177-916a-53a8e1a297fc",
+        "notDeleted": true,
+        "lastSignInAt": "2026-09-09T13:45:34.902721+00:00",
+        "expectedEmail": true,
+        "emailConfirmed": true,
+        "expectedAppMetadata": true,
+        "expectedDisplayName": true,
+        "ordinaryAuthenticated": true
+      },
+      "profileHash": "b249001c7f290e94f95105ceb6fd42f45682faa734575237063dfeb32840dce8",
+      "registryHash": "4bd6cc16cc51a6c7e2af074be7e05584959cd261532f5997cab17e96b78e6f2e",
+      "identityScope": {
+        "id": "b8b92059-872b-470b-a582-6a4addfafab3",
+        "count": 1,
+        "createdAt": "2026-09-09T13:45:32.587244+00:00",
+        "updatedAt": "2026-09-09T13:45:32.587244+00:00",
+        "expectedSingleEmail": true
+      },
+      "mutationRules": 0,
+      "forumProfileHash": "bb714afef68ef1f6dfc450226ab07d93b3acb6ada04c01313d6eed830627ca6a"
+    },
+    "sessionMetadata": [
+      {
+        "id": "d8a175f5-51f3-4499-acb9-efc8b7d1b607",
+        "aal": "aal1",
+        "factor_id": null,
+        "not_after": null,
+        "created_at": "2026-09-09T13:45:34.903433+00:00",
+        "updated_at": "2026-09-09T13:45:34.903433+00:00",
+        "refreshed_at": null,
+        "oauth_client_id": null
+      }
+    ],
+    "refreshMetadataWithoutToken": [
+      {
+        "id": 1926,
+        "revoked": false,
+        "created_at": "2026-09-09T13:45:34.916588+00:00",
+        "session_id": "d8a175f5-51f3-4499-acb9-efc8b7d1b607",
+        "updated_at": "2026-09-09T13:45:34.916588+00:00",
+        "parent_empty": true,
+        "token_length": 12
+      }
+    ],
+    "passwordAmr": [
+      {
+        "created_at": "2026-09-09T13:45:34.933086+00:00",
+        "updated_at": "2026-09-09T13:45:34.933086+00:00",
+        "authentication_method": "password"
+      }
+    ],
+    "exactAuthDefaultRows": {
+      "profile": {
+        "id": "f341af43-15d0-4177-916a-53a8e1a297fc",
+        "school": null,
+        "created_at": "2026-09-09T13:45:32.482633+00:00",
+        "updated_at": "2026-09-09T13:45:32.482633+00:00",
+        "year_level": null,
+        "display_name": "Synthetic Study Room student",
+        "law_school_id": null,
+        "law_school_other": null,
+        "enrollment_status": null,
+        "subscription_tier": "free",
+        "commercial_category": null,
+        "subscription_status": "inactive",
+        "profile_completed_at": null,
+        "commercial_onboarding_completed_at": null
+      },
+      "forumProfile": {
+        "user_id": "f341af43-15d0-4177-916a-53a8e1a297fc",
+        "public_id": "qm_18b2dd16ddeec14a9dba",
+        "show_year": true,
+        "created_at": "2026-09-09T13:45:32.482633+00:00",
+        "updated_at": "2026-09-09T13:45:32.482633+00:00",
+        "show_school": true,
+        "profile_public": true,
+        "verified_academic_at": null,
+        "verified_academic_by": null
+      },
+      "role": {
+        "role": "student",
+        "user_id": "f341af43-15d0-4177-916a-53a8e1a297fc",
+        "created_at": "2026-09-09T13:45:32.482633+00:00",
+        "updated_at": "2026-09-09T13:45:32.482633+00:00",
+        "assigned_by": null
+      },
+      "registry": {
+        "user_id": "f341af43-15d0-4177-916a-53a8e1a297fc",
+        "classified_at": "2026-09-09T13:45:34.519968+00:00",
+        "classification_source": "astra_study_room_staging_v1:dv3study-0eabb144:student"
+      }
+    },
+    "knownCascadeReview": {
+      "directAuthFkScopes": 257,
+      "expectedNonzeroScopes": 6,
+      "sessionForeignKeys": [
+        "auth.refresh_tokens.session_id CASCADE",
+        "auth.mfa_amr_claims.session_id CASCADE"
+      ],
+      "downstreamForeignKeysFromOtherDeletedRows": 0,
+      "nonInternalDeleteTriggersOnAffectedTables": 0,
+      "mutationRewriteRulesOnAffectedTables": 0,
+      "authAuditRowsReferencingFixture": 0,
+      "automaticProfileProvenance": [
+        "public.handle_due_diligence_auth_user(): INSERT profiles and student user_roles",
+        "public.forum_profile_settings_for_new_user(): INSERT default forum_profile_settings"
+      ]
+    },
+    "phase": "BEFORE_RECONCILIATION"
+  },
+  "proposedTransaction": {
+    "path": "docs/debate-room-v3/evidence/staging-prepare-hosted-34358904483-reconciliation.sql",
+    "sha256": "355b547f7fc9544db91a061de14ce1b791fcc1d1f41c1f5a97389c83a8ca6a73",
+    "executed": true,
+    "explicitDeletes": [
+      "one exact auth.refresh_tokens row",
+      "one exact auth.sessions row",
+      "one exact auth.users row"
+    ],
+    "permittedCascades": [
+      "one password auth.mfa_amr_claims row",
+      "one email auth.identities row",
+      "one public.profiles default",
+      "one public.forum_profile_settings default",
+      "one public.user_roles student row",
+      "one private.internal_test_accounts registration row"
+    ],
+    "lockScope": "Exact Auth user/session/refresh/AMR/identity/default rows; no table-wide Auth/Study/financial locks",
+    "lockTimeoutMs": 5000,
+    "topLevelStatementTimeoutMs": 30000,
+    "noAutomaticRetry": true,
+    "execution": {
+      "executedBy": "root coordinator after source review",
+      "transport": "Supabase execute_sql",
+      "projectId": "hlzqmreeoghbldnhlybr",
+      "executedAt": "2026-09-09T14:02:53Z",
+      "executionAttempts": 1,
+      "exactSqlSha256": "355b547f7fc9544db91a061de14ce1b791fcc1d1f41c1f5a97389c83a8ca6a73",
+      "acknowledged": true,
+      "toolIsError": false,
+      "toolResult": [],
+      "evidenceSource": "Root coordinator reported the acknowledged direct tool result; no mutation was executed by the receipt author."
+    }
+  },
+  "cleanup": {
+    "complete": true,
+    "status": "ACKNOWLEDGED_DATABASE_TRANSACTION_AND_SEPARATE_ABSENCE_READBACK",
+    "oldBearerAvailable": false,
+    "immediateLogoutFencingVerified": false,
+    "oldBearerDenialVerified": false,
+    "atomicCleanupHelperVerified": false,
+    "storageBucketRetained": "debate-private-v3"
+  },
+  "verificationGaps": [
+    "The original known 200 sign-in response was rejected before the bearer was retained. The exact account/session/refresh have now been removed, but the unavailable old bearer was not used for a denial check.",
+    "Database session/refresh removal and account absence do not prove immediate global-logout or old-token HTTP denial; both flags remain false.",
+    "This exact reconciliation did not invoke the hosted atomic cleanup helper and does not verify its REST fixture contract.",
+    "The target project was pinned by the root tool/coordinator; no immutable database project-identity GUC exists.",
+    "No event, long browser rehearsal, physical media or provider session was created in the failed preparation."
+  ],
+  "postCommitReadback": {
+    "transport": "Supabase execute_sql; separate read-only SELECT after acknowledged transaction",
+    "performedBy": "root coordinator",
+    "projectId": "hlzqmreeoghbldnhlybr",
+    "checkedAt": "2026-09-09T14:03:30.719461+00:00",
+    "counts": {
+      "profiles": 0,
+      "auth_users": 0,
+      "auth_sessions": 0,
+      "auth_identities": 0,
+      "storage_buckets": 0,
+      "storage_objects": 0,
+      "auth_password_amr": 0,
+      "auth_refresh_tokens": 0,
+      "preserved_auth_audit": 0,
+      "forum_profile_defaults": 0,
+      "internal_test_registry": 0,
+      "storage_multipart_parts": 0,
+      "storage_multipart_uploads": 0,
+      "student_roles_and_assignments": 0
+    },
+    "allExpectedCountsZero": true,
+    "expectedPreservedAuthAuditCount": 0,
+    "auditCountPreserved": true,
+    "oldBearerDenialVerified": false,
+    "immediateLogoutFencingVerified": false,
+    "query": "WITH f AS (SELECT 'f341af43-15d0-4177-916a-53a8e1a297fc'::uuid id, 'd8a175f5-51f3-4499-acb9-efc8b7d1b607'::uuid sid), counts AS (\nSELECT 'auth_users' scope,count(*) n FROM auth.users,f WHERE users.id=f.id\nUNION ALL SELECT 'auth_sessions',count(*) FROM auth.sessions,f WHERE user_id=f.id OR sessions.id=f.sid\nUNION ALL SELECT 'auth_refresh_tokens',count(*) FROM auth.refresh_tokens,f WHERE user_id=f.id::text OR session_id=f.sid\nUNION ALL SELECT 'auth_password_amr',count(*) FROM auth.mfa_amr_claims,f WHERE session_id=f.sid OR mfa_amr_claims.id='5ff6ebcb-627c-4153-86a4-45e2daff4e62'::uuid\nUNION ALL SELECT 'auth_identities',count(*) FROM auth.identities,f WHERE user_id=f.id\nUNION ALL SELECT 'profiles',count(*) FROM public.profiles,f WHERE profiles.id=f.id\nUNION ALL SELECT 'forum_profile_defaults',count(*) FROM public.forum_profile_settings,f WHERE user_id=f.id\nUNION ALL SELECT 'student_roles_and_assignments',count(*) FROM public.user_roles,f WHERE user_id=f.id OR assigned_by=f.id\nUNION ALL SELECT 'internal_test_registry',count(*) FROM private.internal_test_accounts,f WHERE user_id=f.id\nUNION ALL SELECT 'preserved_auth_audit',count(*) FROM auth.audit_log_entries,f WHERE position(f.id::text IN payload::text)>0\nUNION ALL SELECT 'storage_objects',count(*) FROM storage.objects,f WHERE owner=f.id OR owner_id=f.id::text OR position(f.id::text IN name)>0 OR position('dv3study-0eabb144' IN name)>0\nUNION ALL SELECT 'storage_buckets',count(*) FROM storage.buckets,f WHERE owner=f.id OR owner_id=f.id::text\nUNION ALL SELECT 'storage_multipart_uploads',count(*) FROM storage.s3_multipart_uploads,f WHERE owner_id=f.id::text OR position(f.id::text IN key)>0 OR position('dv3study-0eabb144' IN key)>0\nUNION ALL SELECT 'storage_multipart_parts',count(*) FROM storage.s3_multipart_uploads_parts,f WHERE owner_id=f.id::text OR position(f.id::text IN key)>0 OR position('dv3study-0eabb144' IN key)>0\n) SELECT jsonb_build_object('checkedAt',clock_timestamp(),'fixtureId','f341af43-15d0-4177-916a-53a8e1a297fc','counts',jsonb_object_agg(scope,n),'allExpectedCountsZero',bool_and(n=0),'oldBearerDenialVerified',false,'immediateLogoutFencingVerified',false) AS exact_reconciliation FROM counts;"
+  }
+}

@@ -19,7 +19,7 @@ export function createHostedDebateFixtureLifecycle({ sourceSha, supabaseUrl, wor
   need(/^sb_secret_[A-Za-z0-9_-]{20,}$/u.test(serviceRoleKey || '') &&
     /^sb_publishable_[A-Za-z0-9_-]{20,}$/u.test(publishableKey || ''), 'FIXTURE_CREDENTIAL_MISSING');
   need(typeof persist === 'function' && typeof verifySuppression === 'function', 'FIXTURE_GATES_REQUIRED');
-  const sessions = new Map(), signInDispatched = new Set(), sessionOperations = new Map();
+  const sessions = new Map(), receivedSessions = new Map(), cleanupAccess = new Map(), signInDispatched = new Set(), sessionOperations = new Map();
   const manifest = { schemaVersion: 1, purpose: 'Study Room regression and hosted Debate organizer control rehearsal',
     projectRef: FIXTURE_TARGET.projectRef, sourceSha, startedAt: new Date(clock()).toISOString(),
     runTag: `dv3host-${random(8).toString('hex')}`, noMail: true, noMediaProvider: true, noPublicLaunch: true, credentialsStored: false,
@@ -70,6 +70,31 @@ export function createHostedDebateFixtureLifecycle({ sourceSha, supabaseUrl, wor
       headers: { Authorization: `Bearer ${token}` } }, [200], publishableKey);
     need(body?.id === record.id, 'FIXTURE_SESSION_IDENTITY');
   }
+  function rememberReceived(record, session) {
+    // A successful token response may already have rotated server credentials.
+    // Retain it before metadata validation; never serialize this map to evidence.
+    receivedSessions.set(record.id, clone(session));
+  }
+  function accessClaims(record, session, { allowExpired = false } = {}) {
+    const token = session?.access_token;
+    need(typeof token === 'string' && /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/u.test(token), 'HOSTED_SESSION_INVALID');
+    let claims;
+    try { claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8')); }
+    catch { need(false, 'HOSTED_SESSION_INVALID'); }
+    need(claims?.sub === record.id && claims.iss === `${supabaseUrl}/auth/v1` &&
+      Number.isSafeInteger(claims.exp) && claims.exp > 0 && Number.isSafeInteger(claims.exp * 1000) &&
+      (allowExpired || claims.exp * 1000 > clock()), 'HOSTED_SESSION_INVALID');
+    return claims;
+  }
+  async function qualifyCleanupAccess(record, session) {
+    const claims = accessClaims(record, session);
+    // Parsing is not signature verification. Only the fixed Auth server's live
+    // exact-user response qualifies this bearer for active use or logout.
+    await proveSession(record, session.access_token);
+    const known = cleanupAccess.get(record.id);
+    if (!known || claims.exp >= known.expires_at) cleanupAccess.set(record.id, { access_token: session.access_token, expires_at: claims.exp });
+    record.cleanupAccessVerified = true;
+  }
   async function create(purpose) {
     need(HOSTED_ACTOR_NAMES.includes(purpose) && !manifest.fixtures.some(r => r.purpose === purpose), 'FIXTURE_PURPOSE_INVALID');
     const runId = `dv3study-${random(4).toString('hex')}`;
@@ -99,12 +124,13 @@ export function createHostedDebateFixtureLifecycle({ sourceSha, supabaseUrl, wor
     signInDispatched.add(record.id);
     const login = await transport(supabaseUrl, '/auth/v1/token?grant_type=password', {
       method: 'POST', body: JSON.stringify({ email: expected.email, password }) }, [200], publishableKey);
-    validateSessionShape(record, login.body);
-    sessions.set(record.id, login.body); record.signInState = 'confirmed'; await save();
-    await proveSession(record, login.body.access_token);
+    rememberReceived(record, login.body); record.signInState = 'response_received'; await save();
+    await qualifyCleanupAccess(record, login.body);
+    const session = validateSessionShape(record, login.body);
+    sessions.set(record.id, session); record.signInState = 'confirmed'; await save();
     // Study access is part of this run's genuine purpose; no room join or token.
     const study = await transport(workerUrl, '/study-room/access', { method: 'POST', body: '{}', headers: {
-      Authorization: `Bearer ${login.body.access_token}`, Origin: workerUrl } });
+      Authorization: `Bearer ${session.access_token}`, Origin: workerUrl } });
     need(study.body?.ok === true && study.body?.allowed === true && study.body?.role === 'member' &&
       study.body?.administrator === false && study.body?.canCreateRooms === false && study.body?.recording === false,
       'FIXTURE_STUDY_ACCESS_REGRESSION');
@@ -112,9 +138,14 @@ export function createHostedDebateFixtureLifecycle({ sourceSha, supabaseUrl, wor
     return Object.freeze({ id: record.id });
   }
   function validateSessionShape(record, session, { allowExpired = false } = {}) {
-    need(session?.user?.id === record.id && typeof session.access_token === 'string' && session.access_token.length > 80 &&
-      typeof session.refresh_token === 'string' && session.refresh_token.length > 20 &&
-      Number.isSafeInteger(session.expires_at) && (allowExpired || session.expires_at * 1000 > clock()), 'HOSTED_SESSION_INVALID');
+    const claims = accessClaims(record, session, { allowExpired });
+    // GoTrue refresh tokens are opaque; its legacy generator emits 12 chars.
+    // auth-js 2.69.1 also normalizes REST expires_in-only responses. Use the
+    // server-authenticated JWT expiry, never a client-derived expiry extension.
+    need(session?.user?.id === record.id && typeof session.refresh_token === 'string' && session.refresh_token.length > 0 &&
+      Number.isSafeInteger(session.expires_in) && session.expires_in > 0 && session.token_type === 'bearer' &&
+      (session.expires_at === undefined || Number.isSafeInteger(session.expires_at) && session.expires_at > 0), 'HOSTED_SESSION_INVALID');
+    return { ...clone(session), expires_at: claims.exp };
   }
   async function sessionOperation(id, callback) {
     const previous = sessionOperations.get(id) || Promise.resolve(), pending = previous.catch(() => {}).then(callback);
@@ -125,14 +156,14 @@ export function createHostedDebateFixtureLifecycle({ sourceSha, supabaseUrl, wor
     const record = manifest.fixtures.find(f => f.purpose === purpose);
     need(record?.signInState === 'confirmed' && record.signOutState === 'not_started', 'HOSTED_SESSION_UNAVAILABLE');
     return sessionOperation(record.id, async () => {
-    let session = sessions.get(record.id); validateSessionShape(record, session, { allowExpired: true });
+    let session = validateSessionShape(record, sessions.get(record.id), { allowExpired: true });
     if (session.expires_at * 1000 < clock() + 120000) {
       need(record.refreshState !== 'requested', 'HOSTED_REFRESH_OUTCOME_UNKNOWN');
       record.refreshState = 'requested'; await save();
       const refreshed = await transport(supabaseUrl, '/auth/v1/token?grant_type=refresh_token', {
         method: 'POST', body: JSON.stringify({ refresh_token: session.refresh_token }) }, [200], publishableKey);
-      validateSessionShape(record, refreshed.body); await proveSession(record, refreshed.body.access_token);
-      session = refreshed.body; sessions.set(record.id, session); record.refreshState = 'confirmed';
+      rememberReceived(record, refreshed.body); await qualifyCleanupAccess(record, refreshed.body);
+      session = validateSessionShape(record, refreshed.body); sessions.set(record.id, session); record.refreshState = 'confirmed';
       record.refreshCount = (record.refreshCount || 0) + 1; await save();
     }
     return clone(session);
@@ -143,17 +174,19 @@ export function createHostedDebateFixtureLifecycle({ sourceSha, supabaseUrl, wor
     need(record?.signInState === 'confirmed' && record.signOutState === 'not_started', 'HOSTED_SESSION_UNAVAILABLE');
     session = clone(session);
     return sessionOperation(record.id, async () => {
-    validateSessionShape(record, session, { allowExpired: true });
+    rememberReceived(record, session);
+    const claims = accessClaims(record, session, { allowExpired: true });
+    need(session?.user?.id === record.id, 'HOSTED_SESSION_INVALID');
     const current = sessions.get(record.id);
-    if (current && session.expires_at < current.expires_at) {
+    if (current && claims.exp < current.expires_at) {
       record.olderBrowserSessionIgnored = (record.olderBrowserSessionIgnored || 0) + 1; await save(); return false;
     }
     // A closing context can still expose its pre-refresh storage value. That
     // value cannot resolve a refresh whose HTTP response was lost.
     if (record.refreshState === 'requested' && session.access_token === current?.access_token && !refreshResponse) return false;
-    need(!current || session.expires_at !== current.expires_at || session.access_token === current.access_token ||
+    need(!current || claims.exp !== current.expires_at || session.access_token === current.access_token ||
       (refreshResponse && record.refreshState === 'requested' && record.refreshOwner === 'browser'), 'HOSTED_SESSION_ORDER_UNCONFIRMED');
-    validateSessionShape(record, session); await proveSession(record, session.access_token);
+    await qualifyCleanupAccess(record, session); session = validateSessionShape(record, session);
     sessions.set(record.id, session); record.refreshState = 'confirmed'; record.browserSessionAcceptedAt = new Date(clock()).toISOString(); await save(); return true;
     });
   }
@@ -166,7 +199,13 @@ export function createHostedDebateFixtureLifecycle({ sourceSha, supabaseUrl, wor
   async function fenceSession(record, { requireImmediate = true } = {}) {
     const current = await identity(record);
     if (record.signOutState === 'confirmed' && record.authDeniedBeforeCleanup && record.workerDeniedBeforeCleanup) return;
-    let token = sessions.get(record.id)?.access_token;
+    const priorAccess = cleanupAccess.get(record.id), received = receivedSessions.get(record.id);
+    if (received && (!priorAccess || priorAccess.expires_at * 1000 <= clock() + 30000) && received.access_token !== priorAccess?.access_token) {
+      // A preceding transport/readback failure may have interrupted qualification.
+      // Retry only the authoritative read, never a password or refresh grant.
+      await qualifyCleanupAccess(record, receivedSessions.get(record.id));
+    }
+    let known = cleanupAccess.get(record.id), token = known?.access_token;
     if (record.signInState === 'not_started' || (record.signInState === 'requested' && !signInDispatched.has(record.id))) {
       // The password exists only in this process. No sign-in was attempted; an
       // unexpected sign-in timestamp stops cleanup for exact-ID reconciliation.
@@ -179,13 +218,17 @@ export function createHostedDebateFixtureLifecycle({ sourceSha, supabaseUrl, wor
     } else {
       // A lost sign-in response can have created a session whose token we do not
       // have. Do not pretend it was revoked or blindly recreate credentials.
-      need(record.registrationState === 'confirmed' && record.signInState === 'confirmed', 'FIXTURE_UNRESOLVED_STATE');
+      need(record.registrationState === 'confirmed' && ['confirmed', 'response_received'].includes(record.signInState), 'FIXTURE_UNRESOLVED_STATE');
       need(token, 'FIXTURE_SESSION_UNAVAILABLE');
       if (record.signOutState === 'not_started') {
         // A refresh may have completed remotely after its response was lost.
         // Revoke through the still-valid known access token; never resubmit the
         // uncertain refresh token just to obtain a logout credential.
-        if (sessions.get(record.id).expires_at * 1000 <= clock() + 30000) token = (await sessionFor(record.purpose)).access_token;
+        if (known.expires_at * 1000 <= clock() + 30000) {
+          need(record.signInState === 'confirmed' && record.refreshState !== 'requested', 'HOSTED_CLEANUP_SESSION_EXPIRED');
+          token = (await sessionFor(record.purpose)).access_token; known = cleanupAccess.get(record.id);
+        }
+        need(known?.access_token === token && known.expires_at * 1000 > clock(), 'HOSTED_CLEANUP_SESSION_EXPIRED');
         record.signOutState = 'requested'; record.logoutTransportState = 'requested'; await save();
         await transport(supabaseUrl, '/auth/v1/logout?scope=global', { method: 'POST',
           headers: { Authorization: `Bearer ${token}` } }, [200, 204], publishableKey);
@@ -212,7 +255,7 @@ export function createHostedDebateFixtureLifecycle({ sourceSha, supabaseUrl, wor
   }
   async function cleanupOne(record, { allowUnfencedAuthDelete = false } = {}) {
     await fenceSession(record, { requireImmediate: !allowUnfencedAuthDelete });
-    const token = sessions.get(record.id)?.access_token;
+    const token = cleanupAccess.get(record.id)?.access_token;
     await assertFinancialEmpty(record);
     // Exact event/file cleanup must finish first. Any remaining actor data or
     // foreign membership blocks Auth deletion, including partial failures.
@@ -252,7 +295,7 @@ export function createHostedDebateFixtureLifecycle({ sourceSha, supabaseUrl, wor
       need([401, 403].includes(oldSession.status), 'FIXTURE_OLD_SESSION_ACCEPTED');
       record.oldSessionDenied = true;
     } else { record.oldSessionDenied = null; record.sessionProof = 'No sign-in requested; Auth absence verified, no bearer to replay'; }
-    record.cleanupState = 'auth_deleted_verified'; sessions.delete(record.id); await save();
+    record.cleanupState = 'auth_deleted_verified'; sessions.delete(record.id); receivedSessions.delete(record.id); cleanupAccess.delete(record.id); await save();
   }
   return Object.freeze({ snapshot, preflightStorage: safety.bucketPreflight,
     ensureStorage: () => safety.ensureBucket(manifest), sessionFor, acceptBrowserSession, recordBrowserRefreshIntent,
@@ -309,10 +352,11 @@ export function createHostedDebateFixtureLifecycle({ sourceSha, supabaseUrl, wor
       let fenced = true;
       for (const record of manifest.fixtures.filter(record => record.creationState === 'recorded' && record.cleanupState !== 'auth_deleted_verified')) {
         try { await identity(record); await assertFinancialEmpty(record); await fenceSession(record, { requireImmediate: false });
-          if (record.signInState === 'confirmed' && (!record.authDeniedBeforeCleanup || !record.workerDeniedBeforeCleanup)) fenced = false; }
+          if (['confirmed', 'response_received'].includes(record.signInState) && (!record.authDeniedBeforeCleanup || !record.workerDeniedBeforeCleanup)) fenced = false; }
         catch (error) { fenced = false; record.failureCode = error?.code || 'HOSTED_SESSION_FENCE_UNCONFIRMED'; await save().catch(() => {}); }
       }
-      const activeFixtures = manifest.fixtures.filter(record => record.creationState === 'recorded' && record.cleanupState !== 'auth_deleted_verified' && record.signInState === 'confirmed');
+      const activeFixtures = manifest.fixtures.filter(record => record.creationState === 'recorded' && record.cleanupState !== 'auth_deleted_verified' &&
+        ['confirmed', 'response_received'].includes(record.signInState) && cleanupAccess.has(record.id));
       manifest.immediateLogoutFencingVerified = manifest.fixtures.length === 11 && manifest.fixtures.every(record =>
         record.signInState === 'confirmed' && record.authDeniedBeforeCleanup && record.workerDeniedBeforeCleanup);
       let noEventRunConfirmed = false;

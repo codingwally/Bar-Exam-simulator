@@ -6,6 +6,13 @@ import { HOSTED_BUCKET, hostedHash } from './debate-hosted-cleanup.mjs';
 import { createStudyRoomHandlers } from '../worker/study-room-routes.mjs';
 
 const NOW = Date.parse('2026-09-09T14:00:00Z'), clone = value => structuredClone(value);
+// Inert JWT-shaped fixtures only. The injected Auth route is the explicit
+// identity oracle; these strings are not signed tokens or hosted evidence.
+const inertAccess = (id, exp, nonce = 'inert', claims = {}) => [
+  Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url'),
+  Buffer.from(JSON.stringify({ iss: `${FIXTURE_TARGET.supabaseUrl}/auth/v1`, sub: id, exp, nonce, ...claims })).toString('base64url'),
+  Buffer.from('not-a-real-signature-' + nonce).toString('base64url'),
+].join('.');
 const reply = (body, status = 200, range = null) => ({ status,
   headers: { get: key => key === 'content-range' ? range : null }, json: async () => clone(body) });
 function harness(overrides = {}) {
@@ -52,9 +59,10 @@ function harness(overrides = {}) {
         const grant = u.searchParams.get('grant_type');
         const user = grant === 'password' ? [...users.values()].find(user => user.email === body.email) : users.get(refreshes.get(body.refresh_token));
         assert.ok(user && registered.has(user.id) && !revoked.has(user.id)); tokenVersion++;
-        const access = `inert-access-${tokenVersion}-${user.id}-`.repeat(4), refresh = `inert-refresh-${tokenVersion}-${user.id}`;
+        const access = inertAccess(user.id, Math.floor(now / 1000) + 3600, String(tokenVersion)), refresh = String(tokenVersion).padStart(12, 'r');
         tokens.set(access, user.id); refreshes.set(refresh, user.id); user.last_sign_in_at ||= new Date(now).toISOString();
-        return reply({ access_token: access, refresh_token: refresh, expires_at: Math.floor(now / 1000) + 3600, expires_in: 3600, token_type: 'bearer', user });
+        const session = { access_token: access, refresh_token: refresh, expires_in: 3600, token_type: 'bearer', user };
+        return reply(overrides.session?.(session, { grant, user, now, tokenVersion }) || session);
       }
       const tokenId = tokens.get(options.headers.Authorization?.slice(7));
       if (u.pathname === '/auth/v1/user') return reply(users.has(tokenId) && !revoked.has(tokenId) ? { id: tokenId } : { code: 'session_not_found' }, users.has(tokenId) && !revoked.has(tokenId) ? 200 : 403);
@@ -79,7 +87,7 @@ function harness(overrides = {}) {
       }
       throw new Error('UNEXPECTED_INERT_ROUTE');
     } };
-  return { lifecycle: createHostedDebateFixtureLifecycle(config), users, roles, registered, revoked, calls, checkpoints, config,
+  return { lifecycle: createHostedDebateFixtureLifecycle(config), users, roles, tokens, registered, revoked, calls, checkpoints, config,
     advance: milliseconds => { now += milliseconds; } };
 }
 
@@ -87,6 +95,8 @@ test('eleven registered students are classified before signin, ten preview ident
   const h = harness(); const provisioned = await h.lifecycle.provision();
   assert.equal(Object.keys(provisioned.accounts).length, 11); assert.equal(provisioned.previewIds.length, 10);
   assert.ok(!provisioned.previewIds.includes(provisioned.excludedId)); assert.equal(h.registered.size, 11);
+  const session = await h.lifecycle.sessionFor('host');
+  assert.equal(session.refresh_token.length, 12); assert.equal(session.expires_at, Math.floor(NOW / 1000) + 3600);
   assert.equal(h.calls.filter(c => c.url.pathname === '/study-room/access').length, 11);
   assert.ok([...h.roles.values()].every(role => role.role === 'student'));
   const cleanup = await h.lifecycle.cleanup(); assert.equal(cleanup.complete, true); assert.equal(h.users.size, 0); assert.equal(h.revoked.size, 11);
@@ -102,11 +112,90 @@ test('actual session material stays in memory, refreshes after an hour, and is r
   assert.equal(h.calls.filter(c => c.url.searchParams.get('grant_type') === 'refresh_token').length, 11);
   assert.ok(!JSON.stringify(h.checkpoints).includes(after.refresh_token));
 });
+
+test('SDK expiry metadata cannot extend the server-authenticated JWT expiry', async () => {
+  const h = harness({ session: session => ({ ...session, expires_at: Math.floor(NOW / 1000) + 99999 }) });
+  await h.lifecycle.provision(); const session = await h.lifecycle.sessionFor('host');
+  assert.equal(session.expires_at, Math.floor(NOW / 1000) + 3600);
+  assert.equal((await h.lifecycle.cleanup()).complete, true);
+});
+
+for (const [name, change] of [
+  ['empty refresh token', session => ({ ...session, refresh_token: '' })],
+  ['absent refresh token', session => { const next = { ...session }; delete next.refresh_token; return next; }],
+  ['invalid expires_in', session => ({ ...session, expires_in: '3600' })],
+  ['invalid expires_at', session => ({ ...session, expires_at: null })],
+  ['wrong response user', session => ({ ...session, user: { id: '22222222-2222-4222-8222-222222222222' } })],
+]) test(`received bearer survives ${name} metadata rejection solely for verified cleanup`, async () => {
+  const h = harness({ session: change });
+  await assert.rejects(h.lifecycle.provision(), /HOSTED_SESSION_INVALID/);
+  const record = h.lifecycle.snapshot().fixtures[0]; assert.equal(record.signInState, 'response_received');
+  await assert.rejects(h.lifecycle.sessionFor('host'), /HOSTED_SESSION_UNAVAILABLE/);
+  assert.equal((await h.lifecycle.cleanup()).complete, true); assert.equal(h.users.size, 0); assert.equal(h.revoked.size, 1);
+  const logout = h.calls.find(call => call.url.pathname === '/auth/v1/logout');
+  assert.ok(logout && h.tokens.has(logout.headers.Authorization.slice(7)));
+  assert.equal(h.calls.filter(call => call.url.pathname === '/auth/v1/token').length, 1);
+  assert.equal(h.lifecycle.snapshot().immediateLogoutFencingVerified, false);
+});
+
+test('a received credential is retained before a failed Auth readback and requalified by read-only cleanup', async () => {
+  let failed = false;
+  const h = harness({ intercept: call => {
+    if (!failed && call.url.pathname === '/auth/v1/user') { failed = true; return reply(null, 503); }
+    return null;
+  } });
+  await assert.rejects(h.lifecycle.provision(), /FIXTURE_REMOTE_CONTRACT/);
+  assert.equal(h.lifecycle.snapshot().fixtures[0].signInState, 'response_received');
+  assert.equal((await h.lifecycle.cleanup()).complete, true); assert.equal(h.users.size, 0);
+  assert.equal(h.calls.filter(call => call.url.pathname === '/auth/v1/token').length, 1);
+});
+
+for (const claims of [{ iss: 'https://foreign.invalid/auth/v1' }, { sub: '22222222-2222-4222-8222-222222222222' }, { exp: 'invalid' }]) {
+  test(`wrong JWT ${Object.keys(claims)[0]} cannot qualify for active use or authorize logout`, async () => {
+    const h = harness({ session: (session, { user, now }) => ({ ...session,
+      access_token: inertAccess(user.id, Math.floor(now / 1000) + 3600, 'foreign', claims) }) });
+    await assert.rejects(h.lifecycle.provision(), /HOSTED_SESSION_INVALID/);
+    assert.equal((await h.lifecycle.cleanup()).complete, false); assert.equal(h.users.size, 1);
+    assert.equal(h.calls.filter(call => call.url.pathname === '/auth/v1/logout').length, 0);
+    assert.equal(h.calls.filter(call => call.method === 'DELETE').length, 0);
+  });
+}
+
+test('live Auth identity mismatch cannot qualify even a matching JWT-shaped credential for cleanup', async () => {
+  const h = harness({ intercept: call => call.url.pathname === '/auth/v1/user'
+    ? reply({ id: '22222222-2222-4222-8222-222222222222' }) : null });
+  await assert.rejects(h.lifecycle.provision(), /FIXTURE_SESSION_IDENTITY/);
+  assert.equal((await h.lifecycle.cleanup()).complete, false); assert.equal(h.users.size, 1);
+  assert.equal(h.calls.filter(call => call.url.pathname === '/auth/v1/logout').length, 0);
+});
+
+test('malformed received refresh metadata retains the new verified logout bearer without retrying the consumed refresh token', async () => {
+  const h = harness({ session: (session, { grant }) => grant === 'refresh_token' ? { ...session, refresh_token: '' } : session });
+  await h.lifecycle.provision(); const original = await h.lifecycle.sessionFor('host'); h.advance(3500000);
+  await assert.rejects(h.lifecycle.sessionFor('host'), /HOSTED_SESSION_INVALID/);
+  await assert.rejects(h.lifecycle.sessionFor('host'), /HOSTED_REFRESH_OUTCOME_UNKNOWN/);
+  const received = [...h.tokens.entries()].filter(([, id]) => id === original.user.id).at(-1)[0];
+  assert.notEqual(received, original.access_token);
+  assert.equal((await h.lifecycle.cleanup()).complete, true);
+  assert.ok(h.calls.some(call => call.url.pathname === '/auth/v1/logout' && call.headers.Authorization === `Bearer ${received}`));
+  assert.equal(h.calls.filter(call => call.url.searchParams.get('grant_type') === 'refresh_token').length, 1);
+});
+
+test('cleanup can requalify a received refresh bearer after an interrupted identity read when the old bearer has expired', async () => {
+  let interruptNextUser = false;
+  const h = harness({ session: (session, { grant }) => { if (grant === 'refresh_token') interruptNextUser = true; return session; },
+    intercept: call => { if (interruptNextUser && call.url.pathname === '/auth/v1/user') { interruptNextUser = false; return reply(null, 503); } return null; } });
+  await h.lifecycle.provision(); const original = await h.lifecycle.sessionFor('host'); h.advance(3600001);
+  await assert.rejects(h.lifecycle.sessionFor('host'), /FIXTURE_REMOTE_CONTRACT/);
+  assert.equal((await h.lifecycle.cleanup()).complete, true);
+  assert.equal(h.calls.filter(call => call.url.searchParams.get('grant_type') === 'refresh_token' && call.body.refresh_token === original.refresh_token).length, 1);
+});
 test('browser cannot replace a fixture session with another account or an unverified token', async () => {
   const h = harness(); await h.lifecycle.provision(); const observer = await h.lifecycle.sessionFor('observer'), host = await h.lifecycle.sessionFor('host');
   await assert.rejects(h.lifecycle.acceptBrowserSession('host', observer), /HOSTED_SESSION_INVALID/);
-  await assert.rejects(h.lifecycle.acceptBrowserSession('host', { ...host, access_token: 'unknown'.repeat(20) }), /HOSTED_SESSION_ORDER_UNCONFIRMED/);
-  await assert.rejects(h.lifecycle.acceptBrowserSession('host', { ...host, expires_at: host.expires_at + 60, access_token: 'unknown'.repeat(20) }), /FIXTURE_REMOTE_CONTRACT/);
+  await assert.rejects(h.lifecycle.acceptBrowserSession('host', { ...host, access_token: inertAccess(host.user.id, host.expires_at, 'unknown') }), /HOSTED_SESSION_ORDER_UNCONFIRMED/);
+  await assert.rejects(h.lifecycle.acceptBrowserSession('host', { ...host, expires_at: host.expires_at + 60, access_token: inertAccess(host.user.id, host.expires_at + 60, 'unknown') }), /FIXTURE_REMOTE_CONTRACT/);
+  assert.equal((await h.lifecycle.sessionFor('host')).access_token, host.access_token);
   assert.equal((await h.lifecycle.cleanup()).complete, true);
 });
 test('lost refresh response is never retried during cleanup; valid prior access safely revokes the session', async () => {

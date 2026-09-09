@@ -275,6 +275,8 @@ export const CRITICAL_SOURCES = Object.freeze([
   'docs/debate-room-v3/evidence/staging-dml-rollback-probe.sql', 'docs/debate-room-v3/evidence/staging-dml-rollback-probe.readback.sql',
   'docs/debate-room-v3/evidence/staging-dml-rollback-probe.fixtures.json', 'docs/debate-room-v3/evidence/staging-dml-rollback-probe.manifest.json',
   'docs/debate-room-v3/evidence/staging-dml-rollback-probe.denials.json',
+  'docs/debate-room-v3/evidence/staging-dml-rollback-probe-service-398557be.sql', 'docs/debate-room-v3/evidence/staging-dml-rollback-probe-service-398557be.readback.sql',
+  'docs/debate-room-v3/evidence/staging-dml-rollback-probe-service-398557be.fixtures.json', 'docs/debate-room-v3/evidence/staging-dml-rollback-probe-service-398557be.manifest.json',
 ]);
 export function validateEvidence({ review, suite, candidate, changedPaths, migrationHashes, sourceHashes }) {
   need(SHA.test(candidate || '') && review.candidateSha === candidate && suite.head === candidate && SHA.test(review.baseSha || ''), 'CANDIDATE_MISMATCH', 'Review, local evidence and checkout must identify the same exact commit.');

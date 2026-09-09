@@ -1,5 +1,5 @@
 import {DEFAULT_RULES,SEATS,SPEAKER_CRITERIA,timerDisplay,scoreScorecard} from './debate-domain.js';
-import {DebateMedia} from './debate-media.js';
+import {DebateMedia} from './debate-media.js?v=debate-v3-20260910-1';
 import {eventInstant,eventLocalInput} from './debate-dates.js';
 
 const $ = id => document.getElementById(id);

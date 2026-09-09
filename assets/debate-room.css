@@ -146,3 +146,83 @@
   .judge-tiles .tile .initials,.observer-tiles .tile .initials{position:relative;inset:auto;grid-row:2;min-height:48px}
   .judge-tiles .tile .caption,.observer-tiles .tile .caption{position:relative;inset:auto;grid-row:3;z-index:1}
 }
+
+.live-tool-actions{display:none;align-items:center;gap:5px;flex-wrap:wrap}
+body:has(#event:not([hidden]) #panel-live:not([hidden])) .live-tool-actions{display:flex}
+.live-tool-actions button{border-color:var(--line)}
+.live-tool-actions [aria-expanded=true]{border-color:var(--gold);color:var(--gold)}
+.live-tools-dialog{width:min(720px,calc(100vw - 28px));max-height:calc(100dvh - 40px)}
+.live-tools-dialog>.section-heading{position:sticky;top:-26px;z-index:2;padding-block:8px;background:var(--navy)}
+.live-tools-dialog .live-tools{display:block;margin:0}
+.live-tools-dialog .messages{height:clamp(140px,35dvh,300px)}
+.live-tools-dialog #run-of-show{padding-left:24px;line-height:1.5}
+.live-tools-dialog #run-of-show li{padding:8px 0}
+.live-tools-dialog #run-of-show .current{color:var(--gold);font-weight:600}
+.timer-options{width:100%;position:relative}
+.timer-options summary{list-style-position:inside;border:1px solid var(--line);border-radius:4px;text-align:center}
+.timer-options>div{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;padding-top:8px}
+
+/* One desktop window: benches and floor stay visible; supporting tools open
+   without rebuilding the forms, timer or subscribed participant video nodes. */
+@media(min-width:1100px) and (min-height:650px){
+  body:has(#event:not([hidden]) #panel-live:not([hidden])){height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+  body:has(#event:not([hidden]) #panel-live:not([hidden])) .site-header{height:52px;flex:none;padding:4px 16px;gap:12px}
+  body:has(#event:not([hidden]) #panel-live:not([hidden])) .brand{font-size:1.1rem}
+  body:has(#event:not([hidden]) #panel-live:not([hidden])) .brand img{width:30px;height:30px}
+  body:has(#event:not([hidden]) #panel-live:not([hidden])) main{width:100%;max-width:none;min-height:0;flex:1;display:flex;flex-direction:column;gap:6px;padding:8px 16px}
+  body:has(#event:not([hidden]) #panel-live:not([hidden])) .workspace-notices{display:flex;gap:8px;flex:none;min-width:0}
+  body:has(#event:not([hidden]) #panel-live:not([hidden])) .workspace-notices>*{flex:1;min-width:0;max-height:44px;overflow:auto;margin:0;padding:5px 10px;font-size:.75rem;line-height:1.35}
+  body:has(#event:not([hidden]) #panel-live:not([hidden])) #rehearsal-banner{flex:0 1 285px}
+  body:has(#event:not([hidden]) #panel-live:not([hidden])) #event{flex:1;min-height:0;display:grid;grid-template-rows:44px 50px minmax(0,1fr);gap:6px}
+  body:has(#event:not([hidden]) #panel-live:not([hidden])) #event>.page-heading{margin:0;gap:16px;min-width:0}
+  body:has(#event:not([hidden]) #panel-live:not([hidden])) #event>.page-heading>div:first-child{display:flex;align-items:center;gap:14px;min-width:0}
+  body:has(#event:not([hidden]) #panel-live:not([hidden])) #event-title{font-size:1.3rem;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:0}
+  body:has(#event:not([hidden]) #panel-live:not([hidden])) #event-meta{display:none}
+  body:has(#event:not([hidden]) #panel-live:not([hidden])) #back-lobby{flex:none}
+  body:has(#event:not([hidden]) #panel-live:not([hidden])) #event-tabs{flex-wrap:nowrap;align-items:start;min-width:0;gap:3px;margin:0;padding:0 0 5px}
+  body:has(#event:not([hidden]) #panel-live:not([hidden])) #event-tabs button{font-size:.78rem;padding:7px 9px;white-space:nowrap}
+  body:has(#event:not([hidden]) #panel-live:not([hidden])) .live-tool-actions{flex-wrap:nowrap;margin-left:auto;gap:4px}
+  #panel-live{min-height:0;display:grid;grid-template-rows:auto auto minmax(0,1fr) 56px;gap:6px}
+  #panel-live .live-heading{grid-row:1;min-height:44px;margin:0;gap:18px;align-items:center}
+  #panel-live .live-heading>div{min-width:0;flex:1;display:flex;align-items:baseline;gap:12px}
+  #panel-live #motion-label{margin:0;flex:none}
+  #panel-live #live-motion{margin:0;font-size:1.18rem;line-height:1.3;max-height:3.9em;overflow:auto;overflow-wrap:anywhere}
+  #panel-live #active-match{max-width:220px;font-size:.8rem;padding:8px}
+  #panel-live #media-status{grid-row:2;padding:5px 10px;font-size:.75rem;line-height:1.35;margin:0;max-height:44px;overflow:auto}
+  #panel-live .arena{grid-row:3;min-height:0;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(270px,.72fr);grid-template-rows:minmax(96px,.8fr) minmax(104px,1fr) minmax(112px,.8fr);grid-template-areas:'judges judges floor' 'affirmative negative floor' 'observers observers floor';gap:8px 16px}
+  #panel-live .arena>section{min-width:0;min-height:0}
+  #panel-live .judges-rail,#panel-live .team-rail,#panel-live .observers{display:flex;flex-direction:column;gap:5px}
+  #panel-live .arena h3{font-size:.9rem;line-height:1.15;margin:0}
+  #panel-live .judge-tiles{flex:1;min-height:0;gap:8px}
+  #panel-live .judge-tiles .tile{width:min(190px,30%)}
+  #panel-live .team-rail>div{flex:1;min-height:0;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:minmax(0,1fr);gap:8px}
+  #panel-live .tile{aspect-ratio:auto;min-height:0}
+  #panel-live .tile .initials{inset:0 50px 30px 0;font-size:1.5rem}
+  #panel-live .tile .caption{padding:5px 7px;gap:4px;font-size:.72rem;line-height:1.2}
+  #panel-live .tile .caption small{white-space:nowrap;font-size:.62rem}
+  #panel-live .tile.pinned{position:fixed;inset:90px 25% 88px;width:auto;height:auto;z-index:8;box-shadow:0 0 0 100vmax #020c1699}
+  #panel-live .tile.pinned .initials{font-size:3rem}
+  #panel-live .observers{padding-top:6px}
+  #panel-live .observers .section-heading{align-items:center;margin:0;min-height:24px}
+  #panel-live .observers .section-heading .actions{position:absolute;right:16px;bottom:18px;z-index:1}
+  #panel-live .observers .section-heading .actions button{width:44px;padding:4px}
+  #panel-live .observer-tiles{flex:1;min-height:0;grid-template-columns:repeat(6,minmax(0,1fr));grid-template-rows:minmax(0,1fr);gap:8px}
+  #panel-live .floor{display:flex;flex-direction:column;align-items:stretch;justify-content:center;padding:10px 12px;border:1px solid var(--line);border-radius:5px;background:#081d31;overflow:auto}
+  #panel-live .floor p{margin:0 0 5px;line-height:1.3;font-size:.78rem}
+  #panel-live .floor #stage-label{font-size:.7rem;letter-spacing:.06em}
+  #panel-live .floor h2{font-size:1rem;line-height:1.3;margin:0 0 4px;overflow-wrap:anywhere}
+  #panel-live .clock,#panel-live .clock.overtime{font-size:3.3rem;line-height:1.1;margin:3px 0 5px}
+  #panel-live .clock.overtime{font-size:clamp(1.8rem,2.3vw,2rem);line-height:1.35;white-space:nowrap}
+  #panel-live #stage-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;margin-top:4px}
+  #panel-live #stage-controls>p{grid-column:1/-1}
+  #panel-live #stage-controls>[data-action=claim-clock]{order:5}
+  #panel-live .timer-options{order:6}
+  #panel-live #stage-controls button{font-size:.76rem;padding:6px 7px}
+  #panel-live .floor .timer-options{margin:0}
+  #panel-live .timer-options summary{font-size:.76rem;padding:10px 4px}
+  #panel-live .timer-options>div{position:absolute;bottom:calc(100% + 4px);left:auto;right:0;width:calc(200% + 4px);z-index:4;display:grid;grid-template-columns:1fr 1fr;padding:8px;border:1px solid var(--gold);border-radius:4px;background:var(--navy);box-shadow:0 6px 25px #0009}
+  #panel-live .presentation{flex:none;max-height:160px;overflow:auto;margin:6px 0}
+  #panel-live .presentation video{max-height:150px}
+  #panel-live .media-dock{grid-row:4;align-items:center;flex-wrap:nowrap;padding:5px 112px 5px 0;margin:0;gap:8px}
+  #panel-live .media-dock button{font-size:.8rem;padding:8px 12px;white-space:nowrap;flex:none}
+}

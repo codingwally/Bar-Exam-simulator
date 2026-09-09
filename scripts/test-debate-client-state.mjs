@@ -54,7 +54,7 @@ class Element {
     this._html = html;
     if (!html) return;
     // Retain emitted HTML for these read-only rendering assertions; no event handlers are synthesized.
-    if (['schedule-content','rules-content','stage-controls','private-space-controls','evidence-list','run-of-show'].includes(this.id)) return;
+    if (['schedule-content','rules-content','help-content','events','discover-events','stage-controls','private-space-controls','evidence-list','run-of-show'].includes(this.id)) return;
     if (this.id === 'active-match') { for (const option of html.matchAll(/<option value="([^"]*)"[^>]*>(.*?)<\/option>/g)) { const node = new Element('option'); node.value = option[1]; node.textContent = option[2]; this.append(node); } return; }
     // The only parsed template needed is ensureTile's camera-off fallback.
     if (html.startsWith('<span class="initials"')) {
@@ -97,7 +97,7 @@ function harness() {
     activeElement: null,
     getElementById(id) { if (!elements.has(id)) { const element = new Element(); element.id = id; elements.set(id, element); } return elements.get(id); },
     createElement(tagName) { return new Element(tagName); },
-    querySelectorAll(selector) { if (selector === '#event-tabs button') return []; throw new Error(`Unexpected document selector ${selector}`); },
+    querySelectorAll(selector) { if (selector === '#event-tabs button' || selector === '[data-live-tool]') return []; throw new Error(`Unexpected document selector ${selector}`); },
   };
   class MediaBoundary {
     constructor() { this.videos = new Map(); this.audioTracks = new Map(); this.credential = null; this.joined = false; this.leaveCalls = 0; }
@@ -116,13 +116,14 @@ function harness() {
   });
   vm.runInContext(`${declarations}\n${evidenceDeclaration}\n
     const actualRenderLive = renderLive;
+    const actualLoadEvents = loadEvents;
     renderLive = () => { counters.live++; };
     renderPanel = () => { counters.panel++; };
     renderMessages = () => { counters.messages++; };
     loadEvents = async () => { counters.discovery++; };
     globalThis.client = {state, media, request, refresh, command, retryPending, adopt,
       loadHistory, ensureTile, clearSensitiveViews, discardEventView, messageHistoryKey, signOutCleanup, submitEvidence,
-      currentMatch, usableMatches, actualRenderLive, renderSchedule, renderRules, actions, leaveCurrentMedia, openEvent};
+      currentMatch, usableMatches, actualRenderLive, actualLoadEvents, renderSchedule, renderRules, renderHelp, publicErrorMessage, actions, leaveCurrentMedia, openEvent, renewOwnedClock};
     ${matchChangeWiring}
     ${lobbyWiring}
   `, context, { filename: filename.pathname });
@@ -153,6 +154,40 @@ function addSecret(h, id, text = 'PRIVATE_OLD_PERSON_SCORE') {
   const node = new Element('input'); node.textContent = text; h.element(id).append(node); return node;
 }
 const viewChanged = error => error.code === 'VIEW_CHANGED' && error.status === 409;
+
+test('sign-out closes the supporting native dialog and clears its private forms', async () => {
+  const h = harness(); openFixture(h); const { fields } = privateDrafts(h);
+  const tools = h.element('live-tools-dialog'); tools.open = true;
+  await h.signOutCleanup();
+  assert.equal(tools.open, false);
+  assert.equal(tools.closed, 1);
+  assertDraftsCleared(fields);
+});
+
+test('clock renewal ignores an empty lobby and renews only the signed-in controller', async () => {
+  const h = harness();
+  vm.runInContext("const renewals=[]; command=async(name,payload)=>{renewals.push({name,payload});}; globalThis.renewals=renewals;", h.context);
+  await h.renewOwnedClock();
+  h.state.session = { user: { id: 'judge-one' } };
+  await h.renewOwnedClock();
+  const event = openFixture(h);
+  await h.renewOwnedClock();
+  event.matches[0].timer = { version: 9, controllerId: 'someone-else' };
+  await h.renewOwnedClock();
+  event.matches[0].timer.controllerId = event.myId;
+  h.state.busy = true;
+  await h.renewOwnedClock();
+  h.state.busy = false;
+  h.state.session = null;
+  await h.renewOwnedClock();
+  assert.equal(h.context.renewals.length, 0);
+  h.state.session = { user: { id: 'judge-one' } };
+  await h.renewOwnedClock();
+  assert.equal(h.context.renewals.length, 1);
+  assert.equal(h.context.renewals[0].name, 'renew_clock');
+  assert.equal(h.context.renewals[0].payload.timerVersion, 9);
+  assert.equal(h.element('status').textContent, '');
+});
 
 const expiredMatch = id => ({ id, title: 'Archived match', phase: 'expired', officialRecordsExpired: true });
 function privateLiveView(h) {
@@ -426,3 +461,53 @@ for (const [change, mutate] of [
     assert.equal(h.counters.panel, 1, 'The new scoring context renders even when the old form had focus');
   });
 }
+
+
+test('public errors hide recognized runtime failures while preserving actionable debate guidance', () => {
+  const h = harness();
+  const fallback = 'This action could not be completed. Refresh the event and try again. If it continues, contact the organizer.';
+  for (const message of [
+    "Cannot read properties of undefined (reading 'timer')", "Cannot set properties of null (setting 'value')",
+    'Cannot convert undefined or null to object', 'state is not defined', 'match.timer.start is not a function',
+    'TypeError: unexpected implementation detail', 'ReferenceError: renderer is not defined',
+    'Maximum call stack size exceeded', 'Unexpected token < in JSON at position 0', 'CONTROLLER_LEASE_REQUIRED', '',
+  ]) assert.equal(h.publicErrorMessage(message), fallback, message);
+  for (const message of [
+    'Sign in before creating your event.', 'The file must be 10 MB or smaller.',
+    'Review the next match’s pairing.', 'Your account or event changed. Refresh the event to check which actions were saved.',
+    'Video and audio calls are not available yet. You can still use the debate’s written features.',
+  ]) assert.equal(h.publicErrorMessage(message), message, 'Actionable domain guidance remains visible');
+});
+
+test('discovery failure renders the same safe message without hiding the successful event list', async () => {
+  const h = harness(); openFixture(h);
+  const loading = h.actualLoadEvents();
+  h.fetches[0].respond({ events: [] }); await loading;
+  assert.match(h.element('events').innerHTML, /You have no events yet/);
+  assert.equal(h.fetches.length, 2);
+  h.fetches[1].respond({ ok: false, error: { message: "Cannot read properties of undefined (reading 'timer')" } }, 500);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.element('discover-events').textContent, h.publicErrorMessage('TypeError: failed'));
+  assert.doesNotMatch(h.element('discover-events').textContent, /undefined|timer|TypeError/);
+});
+
+test('actual rules and Help rendering formats domain labels without changing stored rules or incident data', () => {
+  const h = harness(), event = openFixture(h), match = event.matches[0];
+  match.rules = structuredClone(domain.DEFAULT_RULES); match.sanctions = []; match.resultVersions = [];
+  match.incidents = [
+    { type: 'roster_updated', reason: 'Review the confirmed speakers.' },
+    { type: 'fixture_review', reason: 'Reviewed <pairing>.', state: 'OPEN' },
+    { type: 'private_room_invitation', reason: 'Requested discussion.', state: 'ACKNOWLEDGED' },
+  ];
+  for (const [mode, label] of [
+    ['majority', 'Full scorecards — majority of judges'], ['aggregate', 'Full scorecards — combined scores'], ['simple', 'Winner-only ballots'],
+  ]) {
+    match.rules.judgingMode = mode; const before = JSON.stringify(event);
+    h.renderRules(); assert.ok(h.element('rules-content').innerHTML.includes('Official decision: ' + label));
+    h.renderHelp(); const help = h.element('help-content').innerHTML;
+    assert.match(help, /Roster updated/); assert.match(help, /Pairing reviewed · Reviewed &lt;pairing&gt;. · Open/);
+    assert.match(help, /Private room invitation · Requested discussion. · Acknowledged/);
+    assert.doesNotMatch(help, /roster_updated|fixture_review|private_room_invitation|capture source|A grant never/);
+    assert.equal(JSON.stringify(event), before, 'Formatting does not modify stored rules, incidents, or permissions');
+  }
+});

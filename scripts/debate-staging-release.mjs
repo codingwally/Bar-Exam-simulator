@@ -255,7 +255,7 @@ export const CRITICAL_SOURCES = Object.freeze([
   '.github/workflows/debate-v3-production-preview.yml', 'scripts/debate-production-preview.mjs', 'scripts/test-debate-production-preview.mjs', 'scripts/test-debate-entry.mjs',
   'scripts/test-debate-v3.mjs', 'scripts/build-pages-artifact.mjs', 'scripts/build-staging-artifact.mjs',
   'scripts/test-feature-decommission-boundary.mjs', 'scripts/test-debate-artifact.mjs', 'scripts/test-worker-cpu-limit-contract.mjs',
-  'scripts/test-debate-client-state.mjs', 'scripts/test-debate-media.mjs', 'scripts/test-debate-dates.mjs',
+  'scripts/test-debate-client-state.mjs', 'scripts/test-debate-desktop-layout.mjs', 'scripts/test-debate-media.mjs', 'scripts/test-debate-dates.mjs',
   'scripts/serve-debate-rehearsal.mjs', 'scripts/test-debate-rehearsal-server.mjs', 'scripts/test-debate-organizer-rehearsal.mjs', 'scripts/test-debate-tournament-export.mjs',
   'scripts/test-study-room-admission-sql.mjs', 'scripts/test-study-room-always-open.mjs', 'scripts/test-study-room-backgrounds.mjs',
   'scripts/test-study-room-background-picker.mjs', 'scripts/test-study-room-hotfix-behavior.mjs', 'scripts/test-study-room-live.mjs',
@@ -275,6 +275,8 @@ export const CRITICAL_SOURCES = Object.freeze([
   'docs/debate-room-v3/evidence/staging-dml-rollback-probe.sql', 'docs/debate-room-v3/evidence/staging-dml-rollback-probe.readback.sql',
   'docs/debate-room-v3/evidence/staging-dml-rollback-probe.fixtures.json', 'docs/debate-room-v3/evidence/staging-dml-rollback-probe.manifest.json',
   'docs/debate-room-v3/evidence/staging-dml-rollback-probe.denials.json',
+  'docs/debate-room-v3/evidence/staging-dml-rollback-probe-service-398557be.sql', 'docs/debate-room-v3/evidence/staging-dml-rollback-probe-service-398557be.readback.sql',
+  'docs/debate-room-v3/evidence/staging-dml-rollback-probe-service-398557be.fixtures.json', 'docs/debate-room-v3/evidence/staging-dml-rollback-probe-service-398557be.manifest.json',
 ]);
 export function validateEvidence({ review, suite, candidate, changedPaths, migrationHashes, sourceHashes }) {
   need(SHA.test(candidate || '') && review.candidateSha === candidate && suite.head === candidate && SHA.test(review.baseSha || ''), 'CANDIDATE_MISMATCH', 'Review, local evidence and checkout must identify the same exact commit.');

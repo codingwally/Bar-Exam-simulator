@@ -1,0 +1,41 @@
+{
+  "kind": "PREPARED_NOT_EXECUTED_DML_ROLLBACK_PROBE",
+  "targetProject": "hlzqmreeoghbldnhlybr",
+  "sourceHashes": {
+    "debate": "89d4f46b1e1b2991202880114387a1356b5eedfcf562129079de83d55a94b53c",
+    "study": "5ca7d139bb925b00c82d391aab4f566446d5d1bdd25e0b1b271fde614cb11637",
+    "serviceLf": "398557be44e80197fc7323220d3078c11d7fc596fe73c590229b9e4d559fa493"
+  },
+  "sqlSha256": "579a4a63ca51914566b9daf864ab3f0fdac7a23c2590bcf1c842b047814c6b4f",
+  "readbackSha256": "3df9e67986d99daba6e861f89398d140ed44f67619154678087f71e05ba46691",
+  "fixtureSha256": "b3d44e9a5b163a346022db85456c46778aaf53d1fc356bef62e8738a1a0d2c4c",
+  "predecessor": {
+    "fixturePath": "docs/debate-room-v3/evidence/staging-dml-rollback-probe.fixtures.json",
+    "fixtureSha256": "02be235d5758910ab4c2382ca815b582fd04ee666217b08a5648ed325152bcfb",
+    "serviceSourceHashLf": "0a9d665f58c47f0adb78901822dce625ab2df7ca5dd5bb2a7c4212b5868cdd58",
+    "normalizedActualEnvelopesIdentical": true,
+    "envelopeCount": 2,
+    "normalization": [
+      "Random receipt.id",
+      "Matching audit.correlationId"
+    ],
+    "historicalHostedEvidenceReusedForCurrentExecutionClaim": false
+  },
+  "eventId": "de-69ddcb067b431a666ff395d98d00473d",
+  "actorId": "10000000-0000-4000-8000-000000009909",
+  "outsiderActorId": "10000000-0000-4000-8000-000000009908",
+  "jobId": "de-69ddcb067b431a666ff395d98d00473d:rollback-only-job",
+  "statements": 98,
+  "assertions": 64,
+  "functionBodies": 22,
+  "claims": {
+    "generatedFromActualService": true,
+    "localSqlExecuted": false,
+    "hostedSqlExecuted": false,
+    "schemaInstallRollback": false,
+    "authAccountsCreated": false,
+    "providerCalls": false,
+    "actualPermissionErrorProbes": false,
+    "nativeConcurrentConnections": false
+  }
+}

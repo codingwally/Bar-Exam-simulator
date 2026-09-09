@@ -99,7 +99,7 @@ test('public copy uses practice debates and pairings while preserving form and a
 });
 
 test('internal error codes become an actionable public message while availability explanations remain explicit', () => {
-  const declaration = client.match(/^function publicErrorMessage\(value\) \{.+\}$/m)?.[0];
+  const declaration = client.match(/^function publicErrorMessage\(value\) \{[\s\S]*?^\}/m)?.[0];
   assert.ok(declaration);
   const describe = vm.runInNewContext(`${declaration}; publicErrorMessage`);
   for (const code of ['MEDIA_UNCONFIGURED', 'OUTBOX_FAILED', 'FORBIDDEN', 'STORE_UNAVAILABLE: internal context']) {

@@ -66,14 +66,14 @@ export class DebateMedia {
   enqueue(operation){const run=this.operation.catch(()=>{}).then(operation);this.operation=run;return run;}
 
   join(credential){
-    if(!credential?.identity||!credential?.roomName||!Array.isArray(credential.sources))return Promise.reject(new Error('The room credential could not be confirmed.'));
+    if(!credential?.identity||!credential?.roomName||!Array.isArray(credential.sources))return Promise.reject(new Error('We could not confirm your room access. Try entering again.'));
     if(this.joined&&this.credential?.identity===credential.identity&&this.credential.roomName===credential.roomName){this.updateSources(credential.sources);this.credential=credential;this.emit();return Promise.resolve();}
     const epoch=++this.generation;
     return this.enqueue(async()=>{
       if(epoch!==this.generation)return;
       await this.suspendInternal();if(epoch!==this.generation)return;
       const kit=globalThis.LivekitClient;
-      if(!kit?.Room)throw new Error('Video conferencing could not load. Refresh or continue with the saved competition controls.');
+      if(!kit?.Room)throw new Error('Video could not load. Refresh the page or continue using the debate’s written features.');
       this.sources=[...credential.sources];this.credential=credential;
       const room=new kit.Room({adaptiveStream:true,dynacast:true,stopLocalTrackOnUnpublish:false,
         videoCaptureDefaults:{resolution:{width:1280,height:720,frameRate:24}},
@@ -112,7 +112,7 @@ export class DebateMedia {
         if(!current()){await room.disconnect(false);return;}
         this.syncSubscriptions();const owned=this.ownedCamera;
         if(this.cameraOn&&this.sources.includes(SOURCE.camera)&&liveTrack(owned?.track)){
-          if(owned.protected&&!this.background?.snapshot().processorAttached)throw new Error('Your protected camera needs an explicit retry before it can publish.');
+          if(owned.protected&&!this.background?.snapshot().processorAttached)throw new Error('Restart your camera to continue using the selected background.');
           const permissionEpoch=this.permissionEpochs.camera;
           owned.actual=await room.localParticipant.publishTrack(owned.track,{source:SOURCE.camera});owned.room=room;
           if(permissionEpoch!==this.permissionEpochs.camera||!this.allowed(SOURCE.camera)||!this.cameraOn){
@@ -122,7 +122,7 @@ export class DebateMedia {
           }
           if(!current()){await room.localParticipant.unpublishTrack(owned.track,false);return;}
           this.attach(owned.track,owned.actual,room.localParticipant);
-        }else if(this.cameraOn){await this.stopCameraSafely();this.onIssue('Camera is off. Its previous capture or permission is unavailable; enable it explicitly when ready.');}
+        }else if(this.cameraOn){await this.stopCameraSafely();this.onIssue('Your camera is off. Turn it on again when you are ready.');}
         this.emit();
       }catch(error){if(current()){await this.suspendInternal();this.cameraOn=false;this.emit();}throw error;}
     });
@@ -206,7 +206,7 @@ export class DebateMedia {
   });}
   backgroundController(){
     if(!this.background){const factory=globalThis.DueDiligenceStudyRoomMandatoryBackground?.createController;if(!factory)throw new Error('Background effects could not load. The camera remains off.');
-      this.background=factory({getLocalParticipant:()=>this.cameraBridge,maxFps:15,onStateChange:state=>{if(state.error){this.cameraOn=false;this.onIssue(`${state.error} Select None explicitly to use your raw camera.`);}this.emit();}});}
+      this.background=factory({getLocalParticipant:()=>this.cameraBridge,maxFps:15,onStateChange:state=>{if(state.error){this.cameraOn=false;this.onIssue(`${state.error} Choose None to show your actual background.`);}this.emit();}});}
     return this.background;
   }
   async effectRequest(effect,file){
@@ -231,7 +231,7 @@ export class DebateMedia {
   camera(enabled,deviceId){const epoch=this.generation,permissionEpoch=this.permissionEpochs.camera;return this.enqueue(async()=>{
     if(epoch!==this.generation)return;this.busy=true;this.captureEpoch=epoch;this.capturePermissionEpoch=permissionEpoch;
     try{if(!enabled){await this.stopCameraSafely();return;}
-      if(!this.allowed(SOURCE.camera))throw new Error('Camera publishing is restricted or this room is not connected.');await this.enableCameraInternal(deviceId,epoch);
+      if(!this.allowed(SOURCE.camera))throw new Error('Your camera is not available. Enter the room and check that cameras are allowed.');await this.enableCameraInternal(deviceId,epoch);
     }catch(error){await this.stopCameraSafely();throw error;}
     finally{this.busy=false;this.captureEpoch=null;this.capturePermissionEpoch=null;}
   });}
@@ -239,14 +239,14 @@ export class DebateMedia {
     if(!this.cameraCaptureCurrent()){await this.stopCameraSafely();return;}
     const changed=deviceId!==undefined&&deviceId!==this.cameraDevice;this.cameraDevice=deviceId??this.cameraDevice;const options=captureOptions(this.cameraDevice);
     if(this.effect!=='none'||this.background){const controller=this.backgroundController();
-      if(!controller.capabilities().supported)throw new Error('This browser cannot apply backgrounds. Select None explicitly to show your actual background.');
+      if(!controller.capabilities().supported)throw new Error('This browser cannot apply backgrounds. Choose None to show your actual background.');
       await controller.switchBackground(await this.effectRequest(this.effect));
       if(!this.cameraCaptureCurrent()){await this.stopCameraSafely();return;}
       if(changed&&this.ownedCamera?.actual)await controller.switchCamera(options);else await controller.enableCamera(options);
       const owned=this.ownedCamera,room=this.room;
       if(owned&&!owned.actual){
         if(!this.cameraCaptureCurrent()){await this.stopCameraSafely();return;}
-        if(!liveTrack(owned.track)||(this.effect!=='none'&&!controller.snapshot().processorAttached))throw new Error('Your protected camera needs an explicit retry before it can publish.');
+        if(!liveTrack(owned.track)||(this.effect!=='none'&&!controller.snapshot().processorAttached))throw new Error('Restart your camera to continue using the selected background.');
         // The controller retains its track and facade across room transfers.
         // An explicit retry must replace the missing transport publication too.
         owned.actual=await room.localParticipant.publishTrack(owned.track,{source:SOURCE.camera});owned.room=room;
@@ -283,7 +283,7 @@ export class DebateMedia {
           await controller.destroy();this.background=null;this.effect='none';
           if(wasOn)await this.enableCameraInternal(undefined,epoch);return;
         }
-        if(!controller.capabilities().supported)throw new Error('Background effects are unavailable. Select None explicitly to show your actual background.');
+        if(!controller.capabilities().supported)throw new Error('Background effects are unavailable. Choose None to show your actual background.');
         const request=await this.effectRequest(effect,file);if(epoch!==this.generation)return;
         this.effect=effect;
         if(this.ownedCamera&&!this.ownedCamera.protected){const owned=this.ownedCamera;await owned.room.localParticipant.unpublishTrack(owned.track,false);owned.track.stop();this.ownedCamera=null;}

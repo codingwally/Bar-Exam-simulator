@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: Capture is read-only; prepare-auth checks temporary identities; deploy checks restricted assets/auth; hosted-rehearsal also runs the real-duration control journey
+        description: Capture and storage-headers are read-only; prepare-auth checks temporary identities; deploy checks restricted assets/auth; hosted-rehearsal also runs the real-duration control journey
         required: true
         type: choice
         default: capture
-        options: [capture, prepare-auth, deploy, prepare-hosted, hosted-rehearsal]
+        options: [capture, storage-headers, prepare-auth, deploy, prepare-hosted, hosted-rehearsal]
       candidate_sha:
         description: Exact current main SHA reviewed for this staging release
         required: true
@@ -44,8 +44,43 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  storage-headers:
+    if: ${{ inputs.operation == 'storage-headers' && github.repository == 'codingwally/Bar-Exam-simulator' && github.ref == 'refs/heads/main' && github.actor != 'dependabot[bot]' }}
+    environment: staging-e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      DEBATE_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+      REQUESTED_STAGING_OPERATION: storage-headers
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify exact trusted checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$DEBATE_CANDIDATE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$DEBATE_CANDIDATE_SHA"
+          test "$GITHUB_SHA" = "$DEBATE_CANDIDATE_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
+      - name: Test bounded diagnostic with inert transport only
+        run: node --test scripts/test-debate-storage-headers.mjs
+      - name: Compare exactly two read-only staging bucket requests
+        env:
+          STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/diagnose-debate-storage-headers.mjs
+      - name: Preserve only sanitized diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debate-v3-storage-headers-${{ github.sha }}
+          path: artifacts/debate-local-rehearsal/staging-release/storage-headers.json
+          if-no-files-found: warn
+          retention-days: 14
   hosted-cleanup-postgres:
-    if: inputs.operation != 'capture'
+    if: inputs.operation != 'capture' && inputs.operation != 'storage-headers'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     services:
@@ -84,7 +119,7 @@ jobs:
           retention-days: 14
   staging:
     needs: hosted-cleanup-postgres
-    if: ${{ !cancelled() && github.repository == 'codingwally/Bar-Exam-simulator' && github.ref == 'refs/heads/main' && github.actor != 'dependabot[bot]' && (inputs.operation == 'capture' || needs.hosted-cleanup-postgres.result == 'success') }}
+    if: ${{ !cancelled() && inputs.operation != 'storage-headers' && github.repository == 'codingwally/Bar-Exam-simulator' && github.ref == 'refs/heads/main' && github.actor != 'dependabot[bot]' && (inputs.operation == 'capture' || needs.hosted-cleanup-postgres.result == 'success') }}
     environment: staging-e2e
     runs-on: ubuntu-latest
     timeout-minutes: ${{ inputs.operation == 'hosted-rehearsal' && 180 || 45 }}

@@ -25,7 +25,7 @@ export function detectEvidenceType(bytes) {
   if (bytes.length >= 8 && [137,80,78,71,13,10,26,10].every((n,i) => bytes[i] === n)) return 'image/png';
   if (bytes.length >= 4 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255 && bytes.at(-2) === 255 && bytes.at(-1) === 217) return 'image/jpeg';
   if (bytes.length >= 10 && new TextDecoder().decode(bytes.slice(0,5)) === '%PDF-' && new TextDecoder().decode(bytes.slice(-1024)).includes('%%EOF')) return 'application/pdf';
-  throw new DebateDeliveryError('UNSAFE_FILE', 'The file bytes must match a PDF, PNG or JPEG.', 400);
+  throw new DebateDeliveryError('UNSAFE_FILE', 'Choose a valid PDF, PNG or JPEG file.', 400);
 }
 
 export function createDebateDelivery(env, { fetcher = fetch, now = Date.now } = {}) {
@@ -67,7 +67,7 @@ export function createDebateDelivery(env, { fetcher = fetch, now = Date.now } = 
   async function seal(value) { const payload = b64(encoder.encode(JSON.stringify(value))); return `${payload}.${b64(new Uint8Array(await crypto.subtle.sign('HMAC', await signingKey(), encoder.encode(payload))))}`; }
   async function unseal(value) {
     try { const [payload, signature, extra] = String(value).split('.'); if (extra || value.length > 4096 || !await crypto.subtle.verify('HMAC', await signingKey(), unb64(signature), encoder.encode(payload))) throw new Error(); return JSON.parse(new TextDecoder().decode(unb64(payload))); }
-    catch { throw new DebateDeliveryError('UPLOAD_INVALID', 'This upload receipt is invalid. Upload the file again.', 403); }
+    catch { throw new DebateDeliveryError('UPLOAD_INVALID', 'We could not verify this upload. Upload the file again.', 403); }
   }
   async function upload({ actorId, eventId, matchId, channel, body, mimeType, name, reservation }) {
     requireThat([actorId,eventId,matchId].every(v => opaque.test(v)), 'UPLOAD_INVALID', 'The upload destination is invalid.', 400);

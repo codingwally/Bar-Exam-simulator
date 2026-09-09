@@ -816,6 +816,7 @@ function createLiveHarness({
       }),
     },
     fetch: routedFetch,
+    AbortController,
     crypto: {
       getRandomValues(array) {
         array.fill(7);
@@ -1503,8 +1504,10 @@ function fakeLocalTrack(kind, deviceId) {
       Track: { Source: liveKitSources },
       AudioPresets: { speech: { maxBitrate: 24_000 } },
     },
-    scheduleTimeout(callback) {
-      callback();
+    scheduleTimeout(callback, milliseconds) {
+      // Fast-forward only microphone sampling; catalog/permission deadlines
+      // must not fire synchronously while their successful reads are pending.
+      if (milliseconds === 400) callback();
       return 1;
     },
   });

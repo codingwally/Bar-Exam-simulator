@@ -106,7 +106,8 @@ function deferred() {
 }
 
 function harness({ admin = false, rooms = catalog(admin), joinGate = null, signedIn = true, mutationGate = null } = {}) {
-  const transport = { rooms: structuredClone(rooms), failure: null, listFailure: false, malformed: false };
+  const transport = { rooms: structuredClone(rooms), failure: null, listFailure: false, malformed: false, listGate: null, bodyGate: null, catalogSignals: [] };
+  const timers = new Map(); let timerId = 0;
   const elements = new Map();
   const get = (id) => {
     if (!elements.has(id)) elements.set(id, new Element());
@@ -131,7 +132,10 @@ function harness({ admin = false, rooms = catalog(admin), joinGate = null, signe
     document, location: { hostname: 'fixture.invalid', search: '' },
     DueDiligencePhase2Config: { workerUrl: 'https://study-room.fixture.invalid' },
     LivekitClient: { Room }, localStorage: { getItem: () => null, setItem() {} },
-    addEventListener() {}, clearInterval() {}, clearTimeout() {}, setTimeout: () => 1,
+    AbortController,
+    addEventListener() {}, clearInterval() {},
+    clearTimeout(id) { timers.delete(id); },
+    setTimeout(callback, milliseconds) { const id = ++timerId; timers.set(id, { callback, milliseconds }); return id; },
     __observations: observations,
     async fetch(url, options) {
       const parsed = new URL(url);
@@ -148,6 +152,8 @@ function harness({ admin = false, rooms = catalog(admin), joinGate = null, signe
         microphone_allowed: body.roomKey !== '1',
       } : {};
       if (parsed.pathname === '/study-room/rooms') {
+        transport.catalogSignals.push(options.signal);
+        if (transport.listGate) await transport.listGate.promise;
         if (transport.listFailure) return { ok:false, status:503, json:async()=>({ok:false,error:{code:'STUDY_ROOM_CATALOG_UNAVAILABLE'}}) };
         data = { rooms: structuredClone(transport.rooms), schemaVersion:1, maxRooms:24 };
       }
@@ -168,7 +174,10 @@ function harness({ admin = false, rooms = catalog(admin), joinGate = null, signe
           data = {room:transport.malformed ? {...saved,roomKey:'24'} : saved};
         }
       }
-      return { ok: true, status: 200, json: async () => ({ ok: true, ...data }) };
+      return { ok: true, status: 200, json: async () => {
+        if (parsed.pathname === '/study-room/rooms' && transport.bodyGate) await transport.bodyGate.promise;
+        return { ok: true, ...data };
+      } };
     },
   };
   vm.runInNewContext(instrumented, { window, URL, URLSearchParams, console }, { timeout: 1_000 });
@@ -180,7 +189,7 @@ function harness({ admin = false, rooms = catalog(admin), joinGate = null, signe
   get('sr-nickname').value = 'VM participant';
   hooks.renderRoomCatalog();
   hooks.bindControls();
-  return { ...hooks, get, observations, transport, card: (key) => get('sr-room-card-grid').querySelectorAll('[data-room-key]').find((x) => x.dataset.roomKey === key) };
+  return { ...hooks, get, observations, transport, timers, card: (key) => get('sr-room-card-grid').querySelectorAll('[data-room-key]').find((x) => x.dataset.roomKey === key) };
 }
 
 async function settled(h) {
@@ -545,4 +554,52 @@ test('room switch keeps current meeting through cancel and applies Library polic
   assert.equal(h.state.currentRoomKey, '2'); assert.equal(h.state.currentRoomMicrophoneAllowed, true);
   assert.equal(h.get('sr-join-microphone').disabled, false);
   assert.equal(h.observations.connects.length, 3); assert.equal(h.observations.disconnects, 2);
+});
+
+
+for (const stalledPart of ['listGate', 'bodyGate']) test('catalog deadline releases a stalled ' + stalledPart + ' without adopting its late response or retrying', async () => {
+  const h = harness({ admin: true }); const gate = deferred(); h.transport[stalledPart] = gate;
+  h.transport.rooms[1] = { ...h.transport.rooms[1], label: 'Late catalog label', revision: 2 };
+  const loading = h.refreshRoomCatalog({ quiet: true });
+  const coalesced = h.refreshRoomCatalog({ quiet: true });
+  const rejected = Promise.all([assert.rejects(loading, /took too long/), assert.rejects(coalesced, /took too long/)]);
+  await new Promise(setImmediate);
+  assert.equal(h.state.roomCatalogBusy, true); assert.equal(h.state.roomCatalogLoaded, true);
+  assert.equal(h.card('2').disabled, false, 'Quiet refresh does not block an already allowed room selection');
+  assert.equal(h.get('sr-room-add').disabled, true, 'Catalog mutation controls remain guarded while reading');
+  const deadline = [...h.timers.values()].find(timer => timer.milliseconds === 12000);
+  assert.ok(deadline, 'The real catalog read has a finite deadline'); deadline.callback(); await rejected;
+  assert.equal(h.state.roomCatalogBusy, false); assert.equal(h.state.roomCatalogQuiet, false); assert.equal(h.state.roomCatalogPromise, null);
+  assert.equal(h.card('2').disabled, false); assert.equal(h.get('sr-room-add').disabled, false);
+  assert.equal(h.transport.catalogSignals[0].aborted, true); assert.equal(h.timers.size, 0);
+  assert.equal(h.observations.requests.length, 1, 'Timeout does not retry or issue a mutation');
+  assert.equal(h.state.rooms[1].label, 'Room 1'); gate.resolve(); await new Promise(setImmediate);
+  assert.equal(h.state.rooms[1].label, 'Room 1', 'A response arriving after the deadline cannot overwrite the retained catalog');
+  assert.equal(h.observations.requests.length, 1);
+});
+
+test('quiet refresh permits device-off selection, preserves restricted rooms, and applies the completed access policy', async () => {
+  const h = harness(); const gate = deferred(); h.transport.listGate = gate;
+  h.transport.rooms[1] = { ...h.transport.rooms[1], audience: 'paid', canJoin: false, revision: 2, accessRevision: 2 };
+  const loading = h.refreshRoomCatalog({ quiet: true });
+  assert.equal(h.card('2').disabled, false); assert.equal(h.card('5').disabled, true);
+  await h.card('2').emit('click'); assert.equal(h.state.entryOpen, true);
+  assert.equal(h.state.joinWithCamera, false); assert.equal(h.state.joinWithMicrophone, false);
+  assert.equal(h.observations.connects.length, 0); assert.equal(h.observations.requests.length, 1);
+  gate.resolve(); await loading;
+  assert.equal(h.card('2').disabled, true, 'Completed authoritative policy still disables the restricted room');
+  assert.equal(h.timers.size, 0); assert.equal(h.transport.catalogSignals[0].aborted, false);
+  assert.equal(h.observations.connects.length, 0); assert.equal(h.observations.requests.length, 1);
+});
+
+test('initial or explicit catalog refresh keeps the selection lock and clears its deadline on completion', async () => {
+  for (const initial of [true, false]) {
+    const h = harness({ admin: true }); const gate = deferred(); h.transport.listGate = gate;
+    h.state.roomCatalogLoaded = !initial;
+    const loading = h.refreshRoomCatalog({ quiet: initial });
+    assert.equal(h.card('2').disabled, true); assert.equal(h.state.roomCatalogQuiet, false);
+    gate.resolve(); await loading;
+    assert.equal(h.card('2').disabled, false); assert.equal(h.get('sr-room-add').disabled, false);
+    assert.equal(h.timers.size, 0); assert.equal(h.observations.requests.length, 1);
+  }
 });

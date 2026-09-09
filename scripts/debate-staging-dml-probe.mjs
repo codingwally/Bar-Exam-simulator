@@ -8,7 +8,9 @@ import { createDebateService } from '../worker/debate-service.mjs';
 import { createMemoryDebateStoreForTests } from '../worker/debate-store.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const BASE = 'docs/debate-room-v3/evidence/staging-dml-rollback-probe';
+export const HISTORICAL_PROBE_BASE = 'docs/debate-room-v3/evidence/staging-dml-rollback-probe';
+export const PROBE_BASE = `${HISTORICAL_PROBE_BASE}-service-398557be`;
+const HISTORICAL_FIXTURE_SHA256 = '02be235d5758910ab4c2382ca815b582fd04ee666217b08a5648ed325152bcfb';
 const ACTOR = '10000000-0000-4000-8000-000000009909';
 const OUTSIDER = '10000000-0000-4000-8000-000000009908';
 const NOW = 1800000000000;
@@ -45,6 +47,12 @@ export async function captureFixture() {
 function normalizedEnvelope(envelope) {
   const copy = structuredClone(envelope); copy.receipt.id = 'NORMALIZED_RANDOM_RECEIPT'; copy.audit.correlationId = 'NORMALIZED_RANDOM_RECEIPT';
   return JSON.parse(JSON.stringify(copy));
+}
+
+export function validateCapturedFixture(fixture, fresh) {
+  assert.equal(fixture.sourceHashLf, fresh.sourceHashLf, 'The captured service source must still match');
+  assert.deepEqual(fixture.inputs, fresh.inputs);
+  assert.deepEqual(fixture.envelopes.map(normalizedEnvelope), fresh.envelopes.map(normalizedEnvelope), 'Frozen envelopes must match actual current service output');
 }
 
 function functions(sql) {
@@ -107,11 +115,16 @@ export async function buildProbe() {
   const debate = await read('worker/debate-schema-draft.sql'), study = await read('worker/study-room-admission-schema-draft.sql');
   assert.equal(hash(debate), EXPECTED.debate); assert.equal(hash(study), EXPECTED.study);
   const old = await read('docs/debate-room-v3/evidence/staging-rollback-probe.sql');
-  const fixture = JSON.parse(await read(`${BASE}.fixtures.json`));
+  const fixture = JSON.parse(await read(`${PROBE_BASE}.fixtures.json`));
   const fresh = await captureFixture();
-  assert.equal(fixture.sourceHashLf, fresh.sourceHashLf, 'The captured service source must still match');
-  assert.deepEqual(fixture.inputs, fresh.inputs);
-  assert.deepEqual(fixture.envelopes.map(normalizedEnvelope), fresh.envelopes.map(normalizedEnvelope), 'Frozen envelopes must match actual current service output');
+  validateCapturedFixture(fixture, fresh);
+  // Preserve the earlier executed evidence. This successor proves the current
+  // wording-only service change reproduces the same complete commit envelopes.
+  const historicalBytes = await read(`${HISTORICAL_PROBE_BASE}.fixtures.json`);
+  assert.equal(hash(historicalBytes), HISTORICAL_FIXTURE_SHA256, 'Historical fixture bytes must remain unchanged');
+  const historical = JSON.parse(historicalBytes);
+  assert.deepEqual(historical.inputs, fresh.inputs);
+  assert.deepEqual(historical.envelopes.map(normalizedEnvelope), fresh.envelopes.map(normalizedEnvelope), 'This successor is limited to unchanged service commit envelopes');
   const [create, update] = fixture.envelopes, eventId = create.eventId, jobId = `${eventId}:rollback-only-job`;
   const allFunctions = [...functions(debate), ...functions(study)]; assert.equal(allFunctions.length, 22);
   const oldFunctions = extraction(old, 'expected_functions');
@@ -120,6 +133,7 @@ export async function buildProbe() {
   const sql = [
     '-- REVIEW-ONLY DML transaction. Target must be independently pinned to hlzqmreeoghbldnhlybr.',
     `-- Exact already-installed source hashes: Debate ${EXPECTED.debate}; Study ${EXPECTED.study}.`,
+    `-- Current service source (LF SHA256): ${fresh.sourceHashLf}; actual generated fixture: ${PROBE_BASE}.fixtures.json.`,
     '-- No schema changes, Auth accounts, real email, provider calls or business-record output.',
     '-- Submit the ENTIRE file as one batch on one connection. Never execute fragments.',
     '-- A failed assertion aborts the transaction. Confirm rollback/connection closure and independent readback.',
@@ -201,17 +215,19 @@ export async function buildProbe() {
   ].join('\n');
   sql.push(readback);
   const output = sql.join('\n\n') + '\n'; const statements = executableStatements(output);
-  return { sql: output, readback: readback + '\n', manifest: { kind: 'PREPARED_NOT_EXECUTED_DML_ROLLBACK_PROBE', targetProject: 'hlzqmreeoghbldnhlybr', sourceHashes: EXPECTED, sqlSha256: hash(output), readbackSha256: hash(readback + '\n'), fixtureSha256: hash(await read(`${BASE}.fixtures.json`)), eventId, actorId: ACTOR, outsiderActorId: OUTSIDER, jobId, statements: statements.length, assertions: statements.filter(statement => /^SELECT '' AS check_name/i.test(statement)).length, functionBodies: allFunctions.length,
+  return { sql: output, readback: readback + '\n', manifest: { kind: 'PREPARED_NOT_EXECUTED_DML_ROLLBACK_PROBE', targetProject: 'hlzqmreeoghbldnhlybr', sourceHashes: { ...EXPECTED, serviceLf: fresh.sourceHashLf }, sqlSha256: hash(output), readbackSha256: hash(readback + '\n'), fixtureSha256: hash(await read(`${PROBE_BASE}.fixtures.json`)),
+    predecessor: { fixturePath: `${HISTORICAL_PROBE_BASE}.fixtures.json`, fixtureSha256: HISTORICAL_FIXTURE_SHA256, serviceSourceHashLf: historical.sourceHashLf, normalizedActualEnvelopesIdentical: true, envelopeCount: fresh.envelopes.length, normalization: ['Random receipt.id', 'Matching audit.correlationId'], historicalHostedEvidenceReusedForCurrentExecutionClaim: false },
+    eventId, actorId: ACTOR, outsiderActorId: OUTSIDER, jobId, statements: statements.length, assertions: statements.filter(statement => /^SELECT '' AS check_name/i.test(statement)).length, functionBodies: allFunctions.length,
     claims: { generatedFromActualService: true, localSqlExecuted: false, hostedSqlExecuted: false, schemaInstallRollback: false, authAccountsCreated: false, providerCalls: false, actualPermissionErrorProbes: false, nativeConcurrentConnections: false } } };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   if (process.argv.includes('--capture-fixtures')) {
-    await writeFile(path.join(ROOT, `${BASE}.fixtures.json`), JSON.stringify(await captureFixture(), null, 2) + '\n');
+    await writeFile(path.join(ROOT, `${PROBE_BASE}.fixtures.json`), JSON.stringify(await captureFixture(), null, 2) + '\n');
   }
   const result = await buildProbe();
-  await writeFile(path.join(ROOT, `${BASE}.sql`), result.sql);
-  await writeFile(path.join(ROOT, `${BASE}.readback.sql`), result.readback);
-  await writeFile(path.join(ROOT, `${BASE}.manifest.json`), JSON.stringify(result.manifest, null, 2) + '\n');
+  await writeFile(path.join(ROOT, `${PROBE_BASE}.sql`), result.sql);
+  await writeFile(path.join(ROOT, `${PROBE_BASE}.readback.sql`), result.readback);
+  await writeFile(path.join(ROOT, `${PROBE_BASE}.manifest.json`), JSON.stringify(result.manifest, null, 2) + '\n');
   process.stdout.write(JSON.stringify(result.manifest, null, 2) + '\n');
 }

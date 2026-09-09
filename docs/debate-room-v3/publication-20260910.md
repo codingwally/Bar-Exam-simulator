@@ -4,12 +4,15 @@ The owner explicitly requested publication while coding continues, then correcte
 
 | ID | Direct requirement | Implementation / test | Current evidence |
 | --- | --- | --- | --- |
-| OWNER-05 | Publish public access for paid and unpaid members; separate button beside Study Room | `assets/debate-entry.js`, `worker/debate-integration.mjs`, `scripts/test-debate-entry.mjs`, dedicated public release workflow | Source adjacency and actual integration under inert transport tested; live deployed proof pending |
-| OWNER-06 | Professional public copy without development jargon | `assets/debate-room.js`, `debate-room/index.html`, copy checks in `scripts/test-debate-entry.mjs` | Practice debate, pairings, downloads and readable status text; browser review pending |
+| OWNER-05 | Publish public access for paid and unpaid members; separate button beside Study Room | `assets/debate-entry.js`, `worker/debate-integration.mjs`, `scripts/test-debate-entry.mjs`, dedicated public release workflow | Published exact 7cf505d in run 34393069910; 29 live asset hashes and public access checks passed. Actual signed-in owner Chrome confirmed button beside Study and clicked through to lobby. Separate production paid/unpaid account journeys remain unverified. |
+| OWNER-06 | Professional public copy without development jargon | `assets/debate-room.js`, `debate-room/index.html`, copy checks in `scripts/test-debate-entry.mjs` | Initial revised copy published; subsequent review found residual Help/scoring/error jargon and an exposed empty-lobby error. Corrections are in progress. |
 | OWNER-07 | One desktop window without page scrolling; apply supplied PowerPoint | `C:/Users/wally/Downloads/DEBATE ROOM.pptx`, extracted three-slide source reviewed | Pending after urgent publication; current layout does not meet this requirement |
-| OWNER-08 | Audit and debug the whole website after Debate publication, preserving design and functions | Later full-site route/action/evidence audit | Not started; publication takes priority |
+| OWNER-08 | Audit and debug the whole website after Debate publication, preserving design and functions | Full-site route/action/evidence audit | Started with actual publication browser checks and an independent inventory of safe existing audit runners; not a completed overall audit. |
+| BUG-EMPTY-LOBBY | No clock renewal or runtime error before opening an active controlled match | `renewOwnedClock`, behavioral client regression | Live defect reproduced at 7cf505d. Correction 4de607f passes 29 client tests; not yet deployed. |
 
 ## Release facts
+
+Public entry is live at https://duediligence.ph/debate-room/ as exact revision `7cf505dea809fbb8f35d6c88171fba7b62bf52cd`. The successful Worker, Pages and asset checks are recorded in [publication evidence](evidence/publication-34393069910.json), including the subsequently discovered lobby defect and verification limits. This is public access for testing while implementation continues, not full product acceptance.
 
 Production database project is `hbllomlijfznnuudpdvr`. Both reviewed migrations were applied once through the migration connector. Stored hashes match the source; the existing Study catalog and audit fingerprints are unchanged. The complete rollback-only transaction passed all 64 assertions after adapting the existing catalog migration version and the LF-only production admin function fingerprint; the complete admin function definitions match staging after line-ending normalization. Independent readback found the test event absent. Six real permission-denial probes passed. The private evidence/export bucket is configured with the existing 10 MB limit and PDF/JPEG/PNG/CSV types; Storage API upload/download is a separate pending check.
 

@@ -580,6 +580,26 @@ test('pairing placeholders explain earlier results while preserving participant-
   assert.equal(JSON.stringify(event), before, 'Display labels never rewrite user data or machine state');
 });
 
+const automaticRosterReason = 'Confirmed team roster changed before match lock. Review the named seats and renewed readiness.';
+const publicRosterReason = 'The team roster changed before the match started. Review the assigned speakers, accept the updated rules, and complete the readiness checks again.';
+for (const [name, incident, expected] of [
+  ['maps the exact automatic roster notice', { type: 'roster_updated', reason: automaticRosterReason }, publicRosterReason],
+  ['preserves another notice type with the same text', { type: 'technical', reason: automaticRosterReason }, automaticRosterReason],
+  ['preserves a custom roster notice', { type: 'roster_updated', reason: automaticRosterReason + ' The organizer requests a review.' }, automaticRosterReason + ' The organizer requests a review.'],
+]) {
+  test(`Help ${name}`, async () => {
+    const h = harness(), event = openFixture(h); event.matches[0].incidents = [incident];
+    const before = JSON.stringify(event);
+    assert.ok((await readFile(new URL('../worker/debate-service.mjs', import.meta.url), 'utf8')).includes(automaticRosterReason), 'The display mapping matches the actual automatic server notice');
+    h.renderHelp(); const html = h.element('help-content').innerHTML;
+    assert.ok(html.includes(expected));
+    if (expected === publicRosterReason) assert.ok(!html.includes(automaticRosterReason));
+    else assert.ok(!html.includes(publicRosterReason));
+    assert.equal(JSON.stringify(event), before, 'Rendering never rewrites the saved notice or user text');
+    assert.equal(h.fetches.length, 0);
+  });
+}
+
 test('actual rules and Help rendering formats domain labels without changing stored rules or incident data', () => {
   const h = harness(), event = openFixture(h), match = event.matches[0];
   match.rules = structuredClone(domain.DEFAULT_RULES); match.sanctions = []; match.resultVersions = [];

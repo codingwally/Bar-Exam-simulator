@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "kind": "INERT_STORAGE_WORKERD_DELIVERY",
+  "status": "FAIL",
+  "startedAt": "2026-09-09T22:12:04.164Z",
+  "checks": [
+    {
+      "name": "fake Storage refuses an external host before any request handling",
+      "status": "PASS"
+    },
+    {
+      "name": "fake Storage refuses credentials other than its fixed inert value",
+      "status": "PASS"
+    },
+    {
+      "name": "fake Storage rejects other buckets and methods",
+      "status": "PASS"
+    },
+    {
+      "name": "rejected fake requests create no object or accepted call",
+      "status": "PASS"
+    },
+    {
+      "name": "fresh Linux network namespace exposes only loopback",
+      "status": "PASS"
+    },
+    {
+      "name": "runtime process has no inherited credential or execution-hook environment",
+      "status": "PASS"
+    },
+    {
+      "name": "runtime comes from the existing exact pinned Wrangler installation",
+      "status": "PASS"
+    }
+  ],
+  "sourceHashes": {
+    "scripts/test-debate-delivery-workerd.mjs": "e25dbbdb6058acf635ff3590e9abe8c3d740b9358f590fbfb3e7728ac87d3c74",
+    "scripts/fixtures/debate-delivery-workerd-entry.mjs": "1f8ea788b849aab9b4ea5862fe516109f8bdd2f9a8c8ea4d90936168bba53d58",
+    "scripts/fixtures/debate-delivery-workerd-storage.mjs": "a1e1554a5cdea18973c6c57470a416f4a3ed8d4a1e10d7101d812c23b5b6ba49",
+    ".github/workflows/debate-v3-validation.yml": "16c22d2e763d796c0ebe6195572672e622341f99051041dc7dfbd5be3bc8baf4",
+    "worker/debate-delivery.mjs": "ae39f4381af8ec99eb5215aa5ff8dd9fb262dbd20a7bf9ac4ac55b1cf6a7f633",
+    "worker/debate-documents.mjs": "7b3ae145a8819c14c682fe46bb2fed48909bc73ee5aca4f5b66f8bc2ef9c7d09",
+    "worker/debate-domain.mjs": "669430db23c9b62429722cf58d41c5a97aa483f25056f299c2c1819a6a14d63b",
+    "worker/debate-sanctions.mjs": "f43af5803e097b26836b217086d3e6d93c6e769c0867a2aaaeb6ef05f642119b",
+    "worker/noto-sans-latin-ext.mjs": "e3acd4369b61478ee0de1a184369ded3494a529bfd4f79c450eb826269a537c7",
+    "worker/outbound-email-policy.mjs": "82d585228a4a61dfc56d397ec4d59f316ccb502d632d2d8cba29bffba8213a86",
+    "worker/package.json": "0f8f309064930ca8c2b9987fa390eda563ba6bbcc9eb38aa5df83de5aaadeb2f",
+    "worker/package-lock.json": "630a53a5c2d768ca56b43a049f5a365432081562ed0d4acf547d33a214db8184",
+    "worker/wrangler.staging.toml": "e93d72892b472843119f573e377ee374ef4c436e5efe380c622da694858000f2"
+  },
+  "cases": [
+    {
+      "mode": "direct",
+      "status": 500,
+      "result": {
+        "ok": false,
+        "stage": "upload",
+        "error": {
+          "name": "TypeError",
+          "code": null,
+          "message": "Invalid redirect value, must be one of \"follow\" or \"manual\" (\"error\" won't be implemented since it does not make sense at the edge; use \"manual\" and check the response status code).",
+          "stack": [
+            "TypeError: Invalid redirect value, must be one of \"follow\" or \"manual\" (\"error\" won't be implemented since it does not make sense at the edge; use \"manual\" and check the response s",
+            "    at send (script-0:60305:30)",
+            "    at privateBucket (script-0:60313:54)",
+            "    at put (script-0:60325:21)",
+            "    at Object.upload (script-0:60366:11)"
+          ]
+        }
+      }
+    }
+  ],
+  "runtimeStarted": true,
+  "productSourceModified": false,
+  "realCredentialsUsed": false,
+  "realStorageUsed": false,
+  "realMailSent": false,
+  "fullAcceptance": false,
+  "limitations": [
+    "The unchanged delivery adapter and its dependencies run in local pinned workerd with an inert Storage service binding.",
+    "No production/staging endpoint, Auth, database, bucket or provider credential is used; all network egress is blocked by a separate kernel namespace.",
+    "Pinned workerd may differ from the deployed Cloudflare runtime; the configured compatibility date is recorded as requested, not proof of an identical hosted runtime.",
+    "These checks cannot explain a hosted failure without corresponding actual hosted stage evidence."
+  ],
+  "network": {
+    "isolated": true,
+    "loopbackOnly": true,
+    "hostNamespace": "net:[4026531833]",
+    "currentNamespace": "net:[4026532266]"
+  },
+  "checkoutSha": "6cf64c8e97820555bba4faf47d3ade614d2bdd47",
+  "checkoutTree": "44269686a0fd4df68f3a5ba7ab6bb976c607c8dd",
+  "tooling": {
+    "wrangler": "4.114.0",
+    "miniflare": "4.20260722.0",
+    "workerd": "1.20260722.1"
+  },
+  "bundleSha256": "cdc41d75479a1456055a0c3808e9e3f8c87ec681517aa295839f90a831c57de1",
+  "fakeStorageBundleSha256": "502fca2f5b5b015d2c0e9750a4c18c1ec1a1adaff812dd13e8856f4d5163f299",
+  "requestedCompatibilityDate": "2026-07-26",
+  "compatibilityFlags": [
+    "nodejs_compat"
+  ],
+  "effectiveCompatibilityDate": null,
+  "requestCfExternalLookup": false,
+  "unexpectedFakeStorageOutboundCalls": 0,
+  "inertFile": {
+    "size": 382,
+    "sha256": "049f9c29797f04255880dd74abb8ff74feb0eb62e5f12131dfcd66382008fed3"
+  },
+  "failedCheck": "actual workerd direct upload, validation, download, foreign denial and deletion",
+  "error": {
+    "name": "AssertionError",
+    "code": "ERR_ASSERTION",
+    "message": "Expected values to be strictly equal:\n\n500 !== 200\n"
+  },
+  "finishedAt": "2026-09-09T22:12:05.509Z"
+}

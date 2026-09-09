@@ -652,6 +652,20 @@
     });
   }
 
+  function academicDetails(profile = {}) {
+    const school = String(profile.school || '').trim();
+    const schoolLabel = global.DueDiligencePhase2?.formatSchoolName?.(school) || school;
+    const year = String(profile.yearLevel || '').trim();
+    const yearLabels = {
+      first_year: 'First Year', second_year: 'Second Year', third_year: 'Third Year',
+      fourth_year: 'Fourth Year', fifth_year: 'Fifth Year',
+      '1': 'First Year', '2': 'Second Year', '3': 'Third Year', '4': 'Fourth Year', '5': 'Fifth Year',
+      review: 'Review / Bar Candidate', professor: 'Professor',
+    };
+    const yearLabel = Object.hasOwn(yearLabels, year.toLowerCase()) ? yearLabels[year.toLowerCase()] : year;
+    return [schoolLabel, yearLabel].filter(Boolean).join(' · ');
+  }
+
   function authorBlock(author = {}, viewerOwns = false) {
     const canOpenProfile = Boolean(author.memberId);
     const wrapper = document.createElement(canOpenProfile ? 'button' : 'div');
@@ -675,7 +689,7 @@
       : author.displayName || 'Due Diligence Member';
     const secondary = author.anonymous
       ? `Anonymous${viewerOwns ? ' · You' : ''}`
-      : [author.school, author.yearLevel].filter(Boolean).join(' · ') || 'Due Diligence member';
+      : academicDetails(author) || 'Due Diligence member';
     copy.append(
       textElement('strong', '', name),
       textElement('span', author.anonymous ? 'lex-anonymous-badge' : '', secondary),
@@ -2354,7 +2368,7 @@
     identity.append(
       textElement('span', 'lex-kicker', profile.verifiedAcademicIdentity ? 'Verified Academic Identity' : 'Community member'),
       textElement('h3', '', profile.displayName || 'Due Diligence Member'),
-      textElement('p', 'quorum-panel-copy', [profile.school, profile.yearLevel].filter(Boolean).join(' · ') || 'Academic details are private.'),
+      textElement('p', 'quorum-panel-copy', academicDetails(profile) || 'Academic details are private.'),
     );
     hero.append(portrait, identity);
     panel.append(hero);
@@ -2655,7 +2669,7 @@
         card.className = 'quorum-profile-card';
         card.append(
           textElement('h4', '', profile.displayName || 'Due Diligence Member'),
-          textElement('p', 'quorum-panel-copy', [profile.school, profile.yearLevel].filter(Boolean).join(' · ') || 'Academic details are private.'),
+          textElement('p', 'quorum-panel-copy', academicDetails(profile) || 'Academic details are private.'),
           button('Open profile', 'lex-button lex-button-quiet', () => showMemberProfile(profile.memberId)),
         );
         groups.append(card);

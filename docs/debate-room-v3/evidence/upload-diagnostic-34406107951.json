@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-09T21:44:08.268Z",
+  "status": "FAIL_ACTUAL_UPLOAD_WITH_CONFIRMED_SCOPED_CLEANUP",
+  "runId": "34406107951",
+  "candidate": "2afe1322cbd7d344fceb184a9010ad7d37c0c493",
+  "runUrl": "https://github.com/codingwally/Bar-Exam-simulator/actions/runs/34406107951",
+  "driver": {
+    "path": "artifacts/debate-local-rehearsal/staging-34406107951/debate-v3-staging-release-2afe1322cbd7d344fceb184a9010ad7d37c0c493/staging-release/hosted-2afe1322cbd7-79643388-ed00-4d97-a937-cb25c0cb81d8/driver.json",
+    "sha256": "4bd4c1138d3781266eb370babbc787a47ca66923f7dc9c1027026ddb1f15246d"
+  },
+  "diagnostic": {
+    "path": "artifacts/debate-local-rehearsal/staging-34406107951/debate-v3-staging-release-2afe1322cbd7d344fceb184a9010ad7d37c0c493/staging-release/hosted-2afe1322cbd7-79643388-ed00-4d97-a937-cb25c0cb81d8/upload-diagnostic.json",
+    "sha256": "1c4d04bf44d1d30105cd7cb185b2ef57d71287eecda6e935478ce4dc0cf81af9"
+  },
+  "fixtures": {
+    "path": "artifacts/debate-local-rehearsal/staging-34406107951/debate-v3-staging-release-2afe1322cbd7d344fceb184a9010ad7d37c0c493/staging-release/hosted-2afe1322cbd7-79643388-ed00-4d97-a937-cb25c0cb81d8/fixtures.json",
+    "sha256": "0306a6b8dc3e6ca71553c5bc9e4e323917f664432dc1cf82f85096273b734c9c"
+  },
+  "independentAbsence": {
+    "path": "artifacts/debate-local-rehearsal/staging-34406107951/independent-absence-readback.json",
+    "sha256": "81e8dfa186f1ef26bcab44ba935c729120c233c5248cb7ad8a011c20a75a4aa6"
+  },
+  "uploadAttempts": 1,
+  "uploadStatus": 503,
+  "errorCode": "DEBATE_UNAVAILABLE",
+  "failureCause": "UNDETERMINED_UNTYPED_RUNTIME_ERROR_OR_TRANSPORT_FAILURE",
+  "expectedFileBytes": 387,
+  "completedTimerStages": 0,
+  "cleanup": "EXACT_FIXTURES_DELETED_AND_KNOWN_SESSIONS_DENIED",
+  "immediateLogoutFencingVerified": true,
+  "atomicCleanupHelperVerified": true,
+  "deployedVersionId": "a0fec0f4-56b4-4898-99e4-8e85ef749e89",
+  "deployedFingerprint": "302c6f4885d99a535aa3f908f218aec6bc9518776b6faaf985048e9a0d9a8bc8",
+  "providerMedia": false,
+  "realMail": false,
+  "fullAcceptance": false,
+  "limits": [
+    "The generic error does not identify the throwing operation.",
+    "Cleanup proves scoped absence after the run, not whether the original upload wrote bytes.",
+    "No private download, timed rehearsal, media or email was exercised."
+  ]
+}

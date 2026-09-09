@@ -1,0 +1,52 @@
+name: Home display component validation
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/validate-home-display.yml'
+      - 'assets/lex-forum.js'
+      - 'assets/lex-forum.css'
+      - 'assets/quorum-first-shell.css'
+      - 'assets/phase2-experience.js'
+      - 'assets/feature-loader.js'
+      - 'assets/icons/community/camera.svg'
+      - 'assets/icons/navigation/mic.svg'
+      - 'assets/vendor/debate-fonts/**'
+      - 'index.html'
+      - 'scripts/test-home-display*.mjs'
+      - 'scripts/test-lex-forum.mjs'
+permissions:
+  contents: read
+jobs:
+  component-rendering:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify actual public label formatting and existing Home contracts
+        run: |
+          node scripts/test-lex-forum.mjs
+          node scripts/test-public-home-responsive-css.mjs
+      - name: Install existing exact pinned browser tooling
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+        run: npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.54.2
+      - name: Render only local Home components with synthetic members
+        env:
+          HOME_DISPLAY_BROWSER_CI: '1'
+        run: node scripts/test-home-display-browser.mjs
+      - name: Preserve component-only evidence without customer data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: home-display-component-evidence
+          path: |
+            artifacts/debate-local-rehearsal/home-display-browser/report.json
+            artifacts/debate-local-rehearsal/home-display-browser/home-*.png
+            artifacts/debate-local-rehearsal/home-display-browser/navigation-*.png
+          if-no-files-found: warn
+          retention-days: 14

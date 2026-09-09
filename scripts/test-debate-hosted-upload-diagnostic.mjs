@@ -33,6 +33,8 @@ async function fixture(options = {}) {
     authenticate: async req => actors[names.find(name => req.headers.get('authorization') === `Bearer ${tokens[name]}`)],
     fetcher: async (url, request) => {
       const path = new URL(url).pathname;
+      const stage = path.startsWith('/storage/v1/bucket/') ? 'bucket' : request.method === 'POST' ? 'write' : 'readback';
+      if (options.storageFailure === stage) throw new TypeError('private transport detail');
       if (path === '/storage/v1/bucket/debate-private-v3') return Response.json({ id: 'debate-private-v3', public: false });
       if (request.method === 'POST' && path.startsWith('/storage/v1/object/debate-private-v3/')) {
         if (options.storageDenial) return Response.json({ message: 'private provider body' }, { status: 403 });
@@ -101,6 +103,18 @@ test('actual completion RPC outage preserves STORE_UNAVAILABLE instead of an unk
   assert.equal(f.objects.size, 1, 'Cleanup lifecycle must retain the recorded object scope even on failed completion');
   assert.ok(!JSON.stringify(result).includes('private database error'));
 });
+
+for (const [stage, code] of [['bucket','EVIDENCE_BUCKET_CHECK_FAILED'], ['write','EVIDENCE_WRITE_FAILED'], ['readback','EVIDENCE_READBACK_FAILED']]) {
+  test(`actual integration exposes only the safe ${stage} failure code and retains one upload attempt`, async () => {
+    const f = await fixture({ storageFailure: stage }), result = await runHostedUploadDiagnostic(f.input);
+    assert.equal(result.status, 'FAIL_HOSTED_SINGLE_UPLOAD_DIAGNOSTIC');
+    assert.equal(result.upload.status, 503); assert.equal(result.upload.errorCode, code);
+    assert.equal(result.uploadAttempts, 1); assert.equal(result.completedTimerStages, 0);
+    assert.equal(f.network.filter(row => row.path.endsWith('/evidence/upload')).length, 1);
+    assert.equal(f.objects.size, stage === 'readback' ? 1 : 0);
+    assert.doesNotMatch(JSON.stringify(f.saved), /private transport detail|TypeError|inert-service-secret/);
+  });
+}
 
 test('a lost successful upload response is held without a second mutation or private error text', async () => {
   const f = await fixture({ lostUploadResponse: true }), result = await runHostedUploadDiagnostic(f.input);

@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-09T21:13:02.039Z",
+  "reviewer": "Codex /root/visual_layout",
+  "status": "READ_ONLY_SOURCE_LATENCY_REVIEW_NO_CAUSE_ATTRIBUTED",
+  "candidate": "af963655a63fa11245bcac2db0a796b789dbb4a9",
+  "sourceHashes": {
+    "assets/study-room-live.js": "45ce9d9d95de2b7cbd1d168c4b4220d7c2f54de6a9e0854754f4f7da776e984b",
+    "worker/index.mjs": "e7e201629d320450b372a1d964c2237daccc7be6775af1fff02b3a174c279df6",
+    "worker/study-room-routes.mjs": "12e502a8271e1af0f2d0e7a54fa4fabde9037e612dc4c12eec2f57edf9d850a7",
+    "worker/study-room-core.mjs": "7b8bdab0d8d545cc9acba564268dd4a8250c5e126fbc1238848682b1d0ddae04",
+    "worker/public-api-alias.mjs": "41ba320b49142de9f1756a0234f51d2b5669cadc25ed300d847bd2adb1aee2cc",
+    "worker/maintenance-entry.mjs": "dbafe2656287ebf026f5406e419d34a9991e4a968d55e0d1f386a873e7cc5ec3",
+    "worker/commercial-entry.mjs": "14ab1c194fb45bcbb288703e8a1fbe6c5fc9a0bad267ce97763689edcef85fb4",
+    "supabase/migrations/20260908144814_astra_study_room_persisted_catalog.sql": "f5eb0739f36fca4d1cd574fdc7bd30a299351f8cc892a7896742f247fc496ebc",
+    "supabase/migrations/20260909080143_study_room_admission_v3.sql": "5ca7d139bb925b00c82d391aab4f566446d5d1bdd25e0b1b271fde614cb11637",
+    "supabase/migrations/20260730_005_phase4_access_subscriptions.sql": "9778955ccbaff18da0f8eceefca8f94e35861a53b317126c5d8e48c0fa35c041"
+  },
+  "observation": {
+    "path": "artifacts/debate-local-rehearsal/production-34404153144/study-catalog-live-verification.json",
+    "sha256": "b16a898e242c40cbfe959dcf393faa8e7ef6781f84706a09d436f3bc6cbf4914",
+    "scope": "One11.047s POST and adjacent7.325s OPTIONS; no general latency estimate."
+  },
+  "browser": {
+    "source": "assets/study-room-live.js",
+    "lines": [
+      24,
+      325,
+      898,
+      918,
+      1162
+    ],
+    "facts": [
+      "Natural catalog refresh runs every15seconds. In-flight browser reads are deduplicated.",
+      "POST /study-room/rooms has a fixed URL and Authorization, Content-Type, X-Request-ID header names; optional existing beta headers are spread if available.",
+      "The catalog read has a12second deadline covering the response body; it retains previous rooms. This timeout is scoped to reading the list."
+    ]
+  },
+  "cors": {
+    "source": "worker/index.mjs",
+    "lines": [
+      319,
+      10499
+    ],
+    "facts": [
+      "OPTIONS returns204 before the Study Auth, catalog or media-service path.",
+      "Access-Control-Max-Age is86400; the allowed origin is exact and allowed names include the Study request headers. Vary isOrigin.",
+      "Maintenance entry also declares86400 when its alternate OPTIONS path applies; normal configured production maintenance isoff.",
+      "No source-defined per-refresh URL variation or header-name churn was found. A random X-Request-ID value alone is not a header-name cache-key change."
+    ],
+    "standard": {
+      "url": "https://fetch.spec.whatwg.org/#cors-preflight-cache",
+      "verified": "2026-09-10",
+      "summary": "The preflight cache matches partition, origin, URL, credentials, method and header names. Browsers may remove entries before their advertised maximum age."
+    },
+    "gap": "Actual repeated preflights need browser-cache/instrumentation and safe request/response timing observations. The current evidence does not identify a missing server cache declaration."
+  },
+  "successfulAdminPath": [
+    {
+      "order": 1,
+      "source": "worker/study-room-routes.mjs",
+      "lines": [
+        136,
+        202
+      ],
+      "operation": "Rate guard, fresh Auth and role context; parse the bounded list request.",
+      "localOnly": "Rate key uses HMAC and an in-memory window; no database rate RPC."
+    },
+    {
+      "order": 2,
+      "source": "worker/index.mjs",
+      "lines": [
+        5400,
+        4458
+      ],
+      "outbound": "Supabase GET /auth/v1/user",
+      "notes": "Current authoritative user verification on each request. First success is one outbound call; transient cases allow two attempts,15seconds each,100ms retry delay. No suggestion to skip or cache this authority check."
+    },
+    {
+      "order": 3,
+      "source": "worker/index.mjs",
+      "lines": [
+        5445,
+        755
+      ],
+      "outbound": "Supabase POST /rest/v1/rpc/admin_authorization_context",
+      "notes": "One fresh role/capability RPC. Wrapper does not supply an explicit AbortSignal timeout; the observed successful call duration is unknown."
+    },
+    {
+      "order": 4,
+      "source": "worker/index.mjs",
+      "lines": [
+        5451,
+        10260
+      ],
+      "outbound": "Supabase POST /rest/v1/rpc/study_room_catalog_v2",
+      "notes": "One RPC with10second timeout. Source SQL delegates to one ordered aggregate over the bounded room catalog."
+    },
+    {
+      "order": 5,
+      "source": "worker/study-room-core.mjs",
+      "lines": [
+        479,
+        491
+      ],
+      "outbound": "LiveKit RoomServiceClient.listRooms(all configured names)",
+      "notes": "One combined provider call, then local descriptors. No per-room provider loop or room creation occurs in list. The application wrapper has no explicit per-call timeout here; SDK/runtime timeout behavior was not newly measured."
+    }
+  ],
+  "conditionalPath": {
+    "source": "worker/study-room-routes.mjs",
+    "lines": [
+      114,
+      206
+    ],
+    "fact": "A non-administrator listing a catalog that contains a paid room may require one additional current subscription REST lookup; this is skipped for the observed administrator. No admission RPC or payment action is part of the ordinary list operation."
+  },
+  "timeoutBoundary": {
+    "fact": "The client12second deadline is shorter than the possible Auth retry budget alone. Incoming cancellation is not explicitly passed from this route into each downstream fetch. Runtime cancellation behavior and actual overlap were not measured.",
+    "recommendation": "Measure stage timing and cancellation before proposing any bounded request-deadline change; retain fresh Auth, role and eligibility checks."
+  },
+  "nextEvidenceNeeded": [
+    "Observe a small consecutive set of natural refreshes with only route/method, safe request-header names, safe CORS response fields and timing phases. Retain no Authorization values, cookies or private response bodies.",
+    "Separate OPTIONS waiting/connection/TTFB from the actual POST and determine whether browser cache controls or instrumentation are affecting preflight reuse; do not change cache settings merely to force a result.",
+    "Correlate safe elapsed-time spans for Auth, administrator RPC, catalog RPC and LiveKit listRooms under an opaque request correlation reference. Existing source logs identify selected errors, not successful-stage durations.",
+    "Only if a database span is slow, inspect query execution/lock/connection timing against the source-defined small catalog and role queries; no query or migration was run by this review.",
+    "Compare several observations during normal network conditions; the root separately reported intermittent GitHub DNS/network errors in this window. That report is context, not proof of the Study cause."
+  ],
+  "conclusions": [
+    "No justified CORS, Auth, entitlement or room-policy patch emerged from this source review.",
+    "Sequential Auth/database/media-service waits are plausible contributors, but their actual shares of this one refresh remain unmeasured.",
+    "Keep the delivered responsive room choices and all current authorization boundaries."
+  ],
+  "limits": {
+    "readOnly": true,
+    "providerQueries": false,
+    "codeEdits": false,
+    "deployments": false,
+    "latencyCauseEstablished": false,
+    "fullSiteAcceptance": false
+  }
+}

@@ -38,7 +38,7 @@ async function roomSources() {
 test('current room documents and the changed media import use new cache keys, preserving Study repair versions', async () => {
   const source = await roomSources(), refs = await roomAssetReferences(source);
   assert.deepEqual(refs.map(ref => ref.file), ['assets/debate-room.js','assets/debate-room.css','assets/debate-media.js','assets/study-room-live.js']);
-  for (const ref of refs.slice(0, 3)) assert.equal(new URL(ref.url).search, '?v=debate-v3-20260910-1');
+  for (const ref of refs.slice(0, 3)) assert.equal(new URL(ref.url).search, '?v=debate-v3-20260910-2');
   const study = new URL(refs[3].url);
   assert.equal(study.searchParams.get('v'), 'study-room-always-open-20260908-1');
   assert.equal(study.searchParams.get('entry'), 'v3-20260909-1');
@@ -53,6 +53,7 @@ test('returning browsers bypass the prior room cache keys and the verifier uses 
     [`${TARGET.origin}/assets/debate-room.js?v=debate-v3-20260909`, Buffer.from('old timer error')],
     [`${TARGET.origin}/assets/debate-room.css?v=debate-v3-20260909`, Buffer.from('old room layout')],
     [`${TARGET.origin}/assets/debate-media.js`, Buffer.from('old media copy')],
+    ...refs.slice(0, 3).map(ref => [ref.url.replace('debate-v3-20260910-2', 'debate-v3-20260910-1'), Buffer.from('previous public wording')]),
     [refs[3].url.replace('&responsiveness=catalog-read-20260910-1',''), Buffer.from('old catalog refresh')],
   ]);
   const verified = await verifyRoomAssetReferences({ ...source, fetcher: async (url, options) => {
@@ -63,7 +64,7 @@ test('returning browsers bypass the prior room cache keys and the verifier uses 
     return new Response(source.files[new URL(url).pathname.slice(1)]);
   } });
   assert.deepEqual(verified, refs); assert.deepEqual(requested, refs.map(ref => ref.url));
-  assert.equal(cache.size, 4, 'Refreshing references does not require clearing anyone’s browser storage');
+  assert.equal(cache.size, 7, 'Refreshing references does not require clearing anyone’s browser storage');
 });
 
 test('stale content at any actual room URL fails even when a release-query request would return current bytes', async () => {
@@ -96,9 +97,9 @@ test('source-linked verification rejects failed or redirected requests without f
 
 test('missing, duplicated, unversioned or off-origin room references fail before any request', async () => {
   for (const mutate of [
-    files => files['assets/debate-room.js'] = String(files['assets/debate-room.js']).replace('./debate-media.js?v=debate-v3-20260910-1', './debate-media.js'),
-    files => files['assets/debate-room.js'] = String(files['assets/debate-room.js']).replace('./debate-media.js?v=debate-v3-20260910-1', 'https://other.example/assets/debate-media.js?v=debate-v3-20260910-1'),
-    files => files['assets/debate-room.js'] = String(files['assets/debate-room.js']).replace('./debate-media.js?v=debate-v3-20260910-1', './debate-media.js?v=current&release=other'),
+    files => files['assets/debate-room.js'] = String(files['assets/debate-room.js']).replace('./debate-media.js?v=debate-v3-20260910-2', './debate-media.js'),
+    files => files['assets/debate-room.js'] = String(files['assets/debate-room.js']).replace('./debate-media.js?v=debate-v3-20260910-2', 'https://other.example/assets/debate-media.js?v=debate-v3-20260910-2'),
+    files => files['assets/debate-room.js'] = String(files['assets/debate-room.js']).replace('./debate-media.js?v=debate-v3-20260910-2', './debate-media.js?v=current&release=other'),
     files => files['debate-room/index.html'] = String(files['debate-room/index.html']).replace('debate-room.css?', 'missing.css?'),
     files => files['debate-room/index.html'] = String(files['debate-room/index.html']) + '<script src="../assets/debate-room.js?v=duplicate"></script>',
   ]) {

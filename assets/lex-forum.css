@@ -3046,6 +3046,10 @@ body.quorum-drawer-open { overflow: hidden; }
   color: var(--home-navy);
 }
 
+#page-community .lex-notice-card p {
+  color: var(--home-ink);
+}
+
 #page-community .quorum-card-head .quorum-icon-button {
   width: 44px;
   min-width: 44px;

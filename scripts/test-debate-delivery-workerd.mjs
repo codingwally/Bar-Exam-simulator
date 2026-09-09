@@ -86,11 +86,12 @@ try {
     report.effectiveCompatibilityDate = null; // Only the requested setting and actual emitted warnings are evidence here.
     active = 'workerd startup';
     report.requestCfExternalLookup = false;
+    report.unexpectedFakeStorageOutboundCalls = 0;
     mf = new Miniflare({ host: '127.0.0.1', port: 0, cf: false, log: new ReceiptLog(LogLevel.WARN), handleRuntimeStdio(stdout, stderr) {
       for (const [source, stream] of [['workerd.stdout', stdout], ['workerd.stderr', stderr]]) createInterface(stream).on('line', line => runtimeDiagnostic(source, line));
     }, workers: [
       { name: 'delivery-repro', modules: true, script: bundle.outputFiles[0].text, compatibilityDate, compatibilityFlags: ['nodejs_compat'], bindings: { SUPABASE_URL: 'https://storage.fixture.invalid', SUPABASE_SERVICE_ROLE_KEY: INERT_KEY, DEBATE_STORAGE_BUCKET: 'debate-private-v3', OUTBOUND_EMAIL_MODE: 'suppressed' }, outboundService: 'fake-storage' },
-      { name: 'fake-storage', modules: true, script: storageBundle.outputFiles[0].text, compatibilityDate, outboundService: { network: { allow: [], deny: ['public', 'private'] } } },
+      { name: 'fake-storage', modules: true, script: storageBundle.outputFiles[0].text, compatibilityDate, outboundService() { report.unexpectedFakeStorageOutboundCalls++; throw new Error('INERT_EGRESS_REJECTED'); } },
     ] });
     await mf.ready; report.runtimeStarted = true;
     const pdf = blankPdf(); assert.ok(pdf.length < 1024); report.inertFile = { size: pdf.length, sha256: hash(pdf) };
@@ -103,6 +104,7 @@ try {
     });
     await check('fake Storage contains only the bounded expected operations and no residual objects', async () => {
       const fake = await mf.getWorker('fake-storage'); const observed = await (await fake.fetch('https://storage.fixture.invalid/__report')).json(); report.fakeStorage = observed;
+      assert.equal(report.unexpectedFakeStorageOutboundCalls, 0);
       assert.equal(observed.objectsRemaining, 0);
       assert.deepEqual(observed.calls.map(call => call.operation), Array(2).fill(['private_bucket', 'private_write', 'private_bucket', 'private_read', 'private_bucket', 'private_read', 'private_bucket', 'private_delete']).flat());
     });

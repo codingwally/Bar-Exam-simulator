@@ -334,8 +334,101 @@ test('hosted smoke requires exact assets plus genuine allow/deny-shaped authenti
   assert.deepEqual(calls.slice(0, 4).map(call => new URL(call.url).pathname), ['/', '/debate-room/', '/study-room/', '/assets/debate-room.js']);
   assert.ok(calls.slice(0, 4).every(call => !call.options.headers.Authorization), 'Asset checks carry no bearer');
   await assert.rejects(smokeStaging({ allowedToken: 'same', deniedToken: 'same', manifest, fetcher }), { code: 'SMOKE_CREDENTIAL_MISSING' });
-  await assert.rejects(smokeStaging({ allowedToken: 'allowed', deniedToken: 'excluded', manifest, fetcher: async () => new Response('wrong deployed source') }), { code: 'DEPLOYED_ASSET_MISMATCH' });
+  let staleTime = 0;
+  await assert.rejects(smokeStaging({ allowedToken: 'allowed', deniedToken: 'excluded', manifest, assetNow: () => staleTime, assetWait: async ms => { staleTime += ms; }, fetcher: async () => new Response('wrong deployed source') }), { code: 'DEPLOYED_ASSET_MISMATCH' });
   await assert.rejects(smokeStaging({ allowedToken: 'allowed', deniedToken: 'excluded', manifest: { hashes: { '../foreign': hash('bad') } }, fetcher }), { code: 'INVALID_SMOKE_MANIFEST' });
+});
+
+function assetSmokeFixture() {
+  let elapsed = 0;
+  const calls = [], waits = [], bytes = 'reviewed static candidate';
+  const input = {
+    allowedToken: 'private-allowed', deniedToken: 'private-excluded',
+    manifest: { hashes: { 'debate-room/index.html': hash(bytes) } },
+    assetNow: () => elapsed,
+    assetWait: async ms => { waits.push(ms); elapsed += ms; }
+  };
+  const authResponse = (url, options) => {
+    if (url.endsWith('/access')) return Response.json({ ok: true, enabled: false });
+    if (!options.headers.Authorization) return Response.json({ ok: false }, { status: 401 });
+    if (options.headers.Authorization === 'Bearer private-excluded') return Response.json({ ok: false, error: { code: 'DEBATE_PREVIEW_RESTRICTED' } }, { status: 403 });
+    return Response.json({ ok: true, events: [] });
+  };
+  return { input, calls, waits, bytes, authResponse, advance: ms => { elapsed += ms; } };
+}
+
+test('static smoke converges to exact bytes before one-shot auth and retains only bounded sanitized observations', async () => {
+  const f = assetSmokeFixture(); let assets = 0;
+  const result = await smokeStaging({ ...f.input, fetcher: async (url, options) => {
+    f.calls.push({ url, options });
+    if (url === TARGET.origin + '/debate-room/') {
+      assets++;
+      assert.equal(options.redirect, 'error'); assert.equal(options.cache, 'no-store'); assert.equal(options.method, 'GET');
+      assert.equal(options.headers.Authorization, undefined);
+      return assets === 1 ? new Response('old deployment PRIVATE_BODY', { status: 200, headers: { 'x-private-fixture': 'PRIVATE_HEADER' } })
+        : assets === 2 ? new Response('temporarily unavailable', { status: 503 }) : new Response(f.bytes);
+    }
+    assert.equal(assets, 3, 'No auth request may run before exact static bytes converge');
+    return f.authResponse(url, options);
+  } });
+  assert.equal(result.status, 'PASS_STAGING_ASSETS_AND_AUTH_ONLY');
+  assert.deepEqual(f.waits, [2000, 2000]);
+  assert.equal(f.calls.length, 7, 'Three static attempts and exactly four original auth/access checks');
+  assert.deepEqual(result.assetObservations.map(x => [x.status, x.attempt]), [[200, 1], [503, 2], [200, 3]]);
+  assert.equal(result.assetObservations[2].hash, hash(f.bytes));
+  for (const row of result.assetObservations) assert.deepEqual(Object.keys(row).sort(), ['attempt', 'hash', 'path', 'status']);
+  assert.doesNotMatch(JSON.stringify(result), /PRIVATE_BODY|PRIVATE_HEADER|private-allowed|private-excluded/);
+});
+
+test('persistent stale static bytes exhaust the fixed deadline and never reach auth', async () => {
+  const f = assetSmokeFixture();
+  await assert.rejects(smokeStaging({ ...f.input, fetcher: async (url, options) => {
+    f.calls.push(url); assert.equal(url, TARGET.origin + '/debate-room/'); assert.equal(options.headers.Authorization, undefined);
+    return new Response('persistent old bytes');
+  } }), error => {
+    assert.equal(error.code, 'DEPLOYED_ASSET_MISMATCH');
+    assert.equal(error.assetObservations.length, 30);
+    assert.equal(error.assetObservations.at(-1).hash, hash('persistent old bytes'));
+    assert.doesNotMatch(JSON.stringify(error), /persistent old bytes|private-allowed|private-excluded/);
+    return true;
+  });
+  assert.equal(f.calls.length, 30); assert.equal(f.waits.reduce((sum, ms) => sum + ms, 0), 60000);
+});
+
+test('static convergence rejects late exact bytes and caps attempts even if an injected clock does not advance', async () => {
+  const late = assetSmokeFixture();
+  await assert.rejects(smokeStaging({ ...late.input, fetcher: async () => { late.advance(60000); return new Response(late.bytes); } }), { code: 'DEPLOYED_ASSET_MISMATCH' });
+  assert.equal(late.waits.length, 0);
+  const frozen = assetSmokeFixture(); let calls = 0;
+  await assert.rejects(smokeStaging({ ...frozen.input, assetWait: async () => {}, fetcher: async () => { calls++; return new Response('stale'); } }), error => {
+    assert.equal(error.code, 'DEPLOYED_ASSET_MISMATCH'); assert.equal(error.assetObservations.length, 31); return true;
+  });
+  assert.equal(calls, 31);
+});
+
+test('static redirect or transport failure fails immediately without following, retrying or retaining raw errors', async () => {
+  for (const returnedRedirect of [false, true]) {
+    const f = assetSmokeFixture(); let calls = 0;
+    await assert.rejects(smokeStaging({ ...f.input, fetcher: async (url, options) => {
+      calls++; assert.equal(url, TARGET.origin + '/debate-room/'); assert.equal(options.redirect, 'error');
+      if (returnedRedirect) return new Response('private redirect body', { status: 302, headers: { Location: 'https://foreign.invalid/private' } });
+      throw new TypeError('unexpected redirect https://foreign.invalid/private?token=DO_NOT_STORE');
+    } }), error => {
+      assert.equal(error.code, 'DEPLOYED_ASSET_FETCH_FAILED'); assert.equal(error.assetObservations.length, 1);
+      assert.doesNotMatch(error.message + JSON.stringify(error), /foreign|DO_NOT_STORE|private redirect body/); return true;
+    });
+    assert.equal(calls, 1); assert.deepEqual(f.waits, []);
+  }
+});
+
+test('asset convergence never retries a failing authenticated event check', async () => {
+  const f = assetSmokeFixture(); let assets = 0, allowed = 0;
+  await assert.rejects(smokeStaging({ ...f.input, fetcher: async (url, options) => {
+    if (url === TARGET.origin + '/debate-room/') { assets++; return new Response(f.bytes); }
+    if (options.headers.Authorization === 'Bearer private-allowed') { allowed++; return Response.json({ ok: false }, { status: 503 }); }
+    return f.authResponse(url, options);
+  } }), { code: 'AUTH_SMOKE_FAILED' });
+  assert.equal(assets, 1); assert.equal(allowed, 1); assert.deepEqual(f.waits, []);
 });
 
 test('predeploy session verification rejects expired and wrongly scoped real-account responses before mutation', async () => {

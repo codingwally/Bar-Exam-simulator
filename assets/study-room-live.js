@@ -89,6 +89,7 @@
     accountGeneration: 0,
     currentRoomKey: '',
     roomCatalogBusy: false,
+    roomCatalogQuiet: false,
     roomCatalogPromise: null,
     roomCatalogLoaded: false,
     roomEditor: null,
@@ -321,7 +322,7 @@
     return new Promise((resolve) => global.setTimeout(resolve, delayMs));
   }
 
-  async function workerRequest(path, body = {}, requestSession = state.session) {
+  async function workerRequest(path, body = {}, requestSession = state.session, signal) {
     const token = String(requestSession?.access_token || '');
     if (!token) {
       const error = new Error('Sign in before opening the Study Room.');
@@ -340,6 +341,7 @@
         },
         body: JSON.stringify(body),
         cache: 'no-store',
+        ...(signal ? { signal } : {}),
       });
     } catch {
       throw new Error('The Study Room could not reach the secure service. Check your connection and try again.');
@@ -762,7 +764,7 @@
     button.dataset.roomKey = room.roomKey;
     button.dataset.roomAction = 'select';
     button.dataset.roomState = available ? 'available' : room.canJoin === false ? 'restricted' : 'closed';
-    button.disabled = state.roomCatalogBusy
+    button.disabled = (state.roomCatalogBusy && !state.roomCatalogQuiet)
       || state.roomMutationBusy
       || state.joining
       || state.switchingRoom
@@ -892,17 +894,39 @@
     });
   }
 
+  async function readRoomCatalog(session) {
+    // Bound only this read, including its response body. Never time out and
+    // replay a room creation, admission decision, or other mutation here.
+    const controller = new global.AbortController();
+    let timer;
+    const deadline = new Promise((_resolve, reject) => {
+      timer = global.setTimeout(() => {
+        reject(new Error('The Study Room list took too long to refresh. Your last loaded rooms are still shown.'));
+        controller.abort();
+      }, 12000);
+    });
+    try {
+      return await Promise.race([
+        workerRequest('/study-room/rooms', { operation: 'list' }, session, controller.signal),
+        deadline,
+      ]);
+    } finally {
+      global.clearTimeout(timer);
+    }
+  }
+
   async function refreshRoomCatalog(options = {}) {
     if (state.roomCatalogPromise) return state.roomCatalogPromise;
     const session = state.session;
     const administrator = state.isAdministrator;
     state.roomCatalogBusy = true;
+    state.roomCatalogQuiet = options.quiet === true && state.roomCatalogLoaded;
     renderRoomCatalog();
     const operation = (async () => {
       try {
         const payload = LOCAL_TEST_MODE
           ? { rooms: state.rooms.length ? state.rooms : localQualityRoomCatalog() }
-          : await workerRequest('/study-room/rooms', { operation: 'list' });
+          : await readRoomCatalog(session);
         if (state.session !== session || state.isAdministrator !== administrator) throw new Error('The signed-in session changed before the catalog loaded.');
         if (!Array.isArray(payload?.rooms)) throw new Error('The Study Room catalog could not be verified.');
         const rooms = normalizeRoomCatalog(payload);
@@ -930,6 +954,7 @@
     } finally {
       if (state.roomCatalogPromise === operation) state.roomCatalogPromise = null;
       state.roomCatalogBusy = false;
+      state.roomCatalogQuiet = false;
       renderRoomCatalog();
     }
   }

@@ -53,7 +53,7 @@ export class DebateMedia {
       ++this.permissionEpochs[source];
     }
     const stoppingOperations=[];
-    if(revoked.includes(SOURCE.camera)&&this.cameraOn)stoppingOperations.push(this.stopCameraSafely());
+    if(revoked.includes(SOURCE.camera)&&(this.cameraOn||this.captureEpoch===this.generation))stoppingOperations.push(this.stopCameraSafely());
     if(revoked.includes(SOURCE.microphone))stoppingOperations.push(this.stopMicrophoneSafely());
     if(revoked.includes(SOURCE.screen)||revoked.includes(SOURCE.shareAudio))stoppingOperations.push(this.stopShareSafely());
     for(const stopping of stoppingOperations){
@@ -243,6 +243,14 @@ export class DebateMedia {
       await controller.switchBackground(await this.effectRequest(this.effect));
       if(!this.cameraCaptureCurrent()){await this.stopCameraSafely();return;}
       if(changed&&this.ownedCamera?.actual)await controller.switchCamera(options);else await controller.enableCamera(options);
+      const owned=this.ownedCamera,room=this.room;
+      if(owned&&!owned.actual){
+        if(!this.cameraCaptureCurrent()){await this.stopCameraSafely();return;}
+        if(!liveTrack(owned.track)||(this.effect!=='none'&&!controller.snapshot().processorAttached))throw new Error('Your protected camera needs an explicit retry before it can publish.');
+        // The controller retains its track and facade across room transfers.
+        // An explicit retry must replace the missing transport publication too.
+        owned.actual=await room.localParticipant.publishTrack(owned.track,{source:SOURCE.camera});owned.room=room;
+      }
     }else{
       const room=this.room;
       if(this.ownedCamera?.actual&&liveTrack(this.ownedCamera.track)){

@@ -341,6 +341,42 @@ for(const effect of ['none','blur'])for(const regrant of [false,true])test(`reta
  assert.equal(h.captures.length,1);assert.equal(h.processors.length,effect==='blur'?1:0);
 }));
 
+test('explicit protected camera retry after a restricted transfer republishes its retained track and processor',()=>harness(async h=>{
+ await h.media.join(credential());await h.media.setEffect('blur');await h.media.camera(true,'camera-A');
+ const track=h.media.ownedCamera.track,processor=track.getProcessor();
+ await h.media.join(credential('restricted',[]));await h.media.join(credential('permitted-again'));
+ assert.equal(h.media.cameraOn,false);assert.equal(track.rawTrack.enabled,false);assert.equal(h.media.ownedCamera.actual,null);
+ await h.media.camera(true);
+ assert.equal(h.media.room.localParticipant.getTrackPublication('camera').track,track);assert.equal(h.media.ownedCamera.actual.track,track);
+ assert.equal(h.media.cameraOn,true);assert.equal(track.rawTrack.enabled,true);assert.equal(track.getProcessor(),processor);
+ assert.equal(h.media.effect,'blur');assert.equal(h.media.cameraDevice,'camera-A');assert.equal(h.captures.length,1);assert.equal(h.processors.length,1);
+}));
+
+test('protected retry publication crossing camera revocation stays muted despite regrant',()=>harness(async h=>{
+ await h.media.join(credential());await h.media.setEffect('blur');await h.media.camera(true,'camera-A');
+ const track=h.media.ownedCamera.track;await h.media.join(credential('restricted',[]));await h.media.join(credential('permitted-again'));
+ const participant=h.media.room.localParticipant,publish=participant.publishTrack.bind(participant),started=deferred(),finish=deferred();
+ participant.publishTrack=async(input,options)=>{started.resolve();await finish.promise;return publish(input,options);};
+ const retrying=h.media.camera(true);await started.promise;
+ assert.equal(h.media.cameraOn,false);assert.equal(track.rawTrack.enabled,true);
+ publishSources(h,['microphone']);await new Promise(resolve=>setImmediate(resolve));assert.equal(track.rawTrack.enabled,false);
+ publishSources(h,['camera','microphone']);finish.resolve();await retrying;await h.media.operation;
+ assert.equal(h.media.cameraOn,false);assert.equal(track.rawTrack.enabled,false);assert.equal(h.media.ownedCamera.actual.isMuted,true);
+ assert.equal(h.media.effect,'blur');assert.equal(h.captures.length,1);assert.equal(h.processors.length,1);
+ await h.media.camera(true);assert.equal(h.media.cameraOn,true);assert.equal(track.rawTrack.enabled,true);
+}));
+
+test('leaving during a protected retry publication cannot keep the old capture or room alive',()=>harness(async h=>{
+ await h.media.join(credential());await h.media.setEffect('blur');await h.media.camera(true);
+ const track=h.media.ownedCamera.track;await h.media.join(credential('restricted',[]));await h.media.join(credential('permitted-again'));
+ const participant=h.media.room.localParticipant,publish=participant.publishTrack.bind(participant),started=deferred(),finish=deferred();
+ participant.publishTrack=async(input,options)=>{started.resolve();await finish.promise;return publish(input,options);};
+ const retrying=h.media.camera(true);await started.promise;const leaving=h.media.leave();finish.resolve();
+ const settled=await Promise.allSettled([retrying,leaving]);assert.equal(settled[1].status,'fulfilled');
+ assert.equal(h.media.cameraOn,false);assert.equal(h.media.room,null);assert.equal(h.media.ownedCamera,null);assert.equal(h.media.background,null);
+ assert.equal(track.rawTrack.enabled,false);assert.equal(track.mediaStreamTrack.readyState,'ended');
+}));
+
 for(const revoked of ['screen_share','screen_share_audio','both'])test(`pending screen capture is stopped after ${revoked} revocation and regrant`,()=>harness(async h=>{
  await h.media.join(credential());const participant=h.media.room.localParticipant,setShare=participant.setScreenShareEnabled.bind(participant);
  const started=deferred(),finish=deferred(),captured=[];

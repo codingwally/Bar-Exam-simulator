@@ -35,7 +35,7 @@ begin
       else 'aec0459bac58aee8fc65057c1d9408f4b3e3842c059e38dbcdfa18fb834dcfd2' end;
     if encode(sha256(convert_to(v_proc.prosrc,'UTF8')),'hex') is distinct from v_expected_hash
       or v_proc.rolname<>'postgres' or v_proc.prosecdef is distinct from (v_schema='private')
-      or v_proc.lanname is distinct from case when v_schema='private' then 'plpgsql' else 'sql' end
+      or v_proc.lanname is distinct from (case when v_schema='private' then 'plpgsql' else 'sql' end)
       or v_proc.provolatile<>'v' or v_proc.proparallel<>'u' or v_proc.proisstrict or v_proc.proleakproof
       or v_proc.prokind<>'f' or v_proc.prorettype<>'jsonb'::regtype or v_proc.pronargs<>2
       or v_proc.pronargdefaults<>0 or v_proc.proargnames is distinct from array['p_manifest','p_expected']

@@ -1,0 +1,279 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-09T20:39:59.390Z",
+  "candidate": "44451be2f1cc677993d78039400eac4fbd157a0d",
+  "runId": 34401062163,
+  "runUrl": "https://github.com/codingwally/Bar-Exam-simulator/actions/runs/34401062163",
+  "status": "PUBLISHED_WITH_RETURNING_BROWSER_CACHE_GAP",
+  "publicLaunch": true,
+  "fullAcceptance": false,
+  "accessPolicy": "all-signed-in-paid-and-unpaid",
+  "workerCompletedAt": "2026-09-09T20:27:45.431Z",
+  "workers": [
+    {
+      "name": "duediligence-gemini-examiner",
+      "versionId": "8254ea4e-118b-45a8-aba6-41e5fc10a2d2",
+      "deploymentId": "e2610ac2-8942-4531-8b31-6d47c8459978",
+      "crons": [
+        "*/2 * * * *"
+      ]
+    },
+    {
+      "name": "duediligence-api",
+      "versionId": "29374d92-ee30-49c7-a99f-923223e36cd1",
+      "deploymentId": "b025b568-8672-4744-a6e8-2225ae45dbbb",
+      "crons": []
+    }
+  ],
+  "productionFingerprint": "2062e00547a605e06e46833f81d6ea39134078157b770f098a7a4eaf5a87ed9d",
+  "workerReceipt": {
+    "path": "artifacts/debate-local-rehearsal/production-34401062163/debate-v3-production-44451be2f1cc677993d78039400eac4fbd157a0d/release.json",
+    "sha256": "e30596a12cbc16964b6fe4e3affd832cb3c9c56c19840d44010c5715f98d2c28"
+  },
+  "pagesReceipt": {
+    "path": "artifacts/debate-local-rehearsal/production-34401062163/debate-v3-public-assets-44451be2f1cc677993d78039400eac4fbd157a0d/pages-verification.json",
+    "sha256": "4bc104169935812f23470b7b11001dcdf12a32af29bb4914eb960dff7c4bf28a"
+  },
+  "liveAssets": [
+    {
+      "file": ".well-known/duediligence-release.txt",
+      "sha256": "1886cc3f48ae8ffcf138ff0f88eb8bd0f10e98df4621187a6e4d40b888211f57"
+    },
+    {
+      "file": "index.html",
+      "sha256": "dee34326f415a2589c9f7bf8a36eadabcccddbcca8020963d34d5dbe9c66820b"
+    },
+    {
+      "file": "debate-room/index.html",
+      "sha256": "05c7b82a0ea7917e3daffc90ce33f58d9b81c62bddaf762a37a74ee7d372668b"
+    },
+    {
+      "file": "study-room/index.html",
+      "sha256": "54c96a2eff695deacd935fad05cc0d44413c4e7144adcd4c44e40f84f3c31bc8"
+    },
+    {
+      "file": "assets/debate-room.js",
+      "sha256": "7d00aa998e40c8b9396aae59b6b94a4da297209e1810ab6842fcb9c848444548"
+    },
+    {
+      "file": "assets/debate-domain.js",
+      "sha256": "a024c94b56e708ce395d2bef8e19566cfac69719a8a580637819ff4b8b1707bc"
+    },
+    {
+      "file": "assets/debate-sanctions.js",
+      "sha256": "f43af5803e097b26836b217086d3e6d93c6e769c0867a2aaaeb6ef05f642119b"
+    },
+    {
+      "file": "assets/debate-media.js",
+      "sha256": "aa502ea252cb79d752272fd6de2acbcabdf3e55b5ec5a9270457ace25583603f"
+    },
+    {
+      "file": "assets/debate-dates.js",
+      "sha256": "7549422128267aff3d7de4aafc535b5f40290df456a33fd5b85ddd4f7fcd0b12"
+    },
+    {
+      "file": "assets/debate-entry.js",
+      "sha256": "81fc674a29b4c4997b8bdd40fe5e49b56e37592cbd573b26675274a9d7894563"
+    },
+    {
+      "file": "assets/debate-room.css",
+      "sha256": "f53736d53c7e69f93671531ad35d6fc4f1aeb1a8d34669e36a36619a7f7deffa"
+    },
+    {
+      "file": "assets/study-room-live.js",
+      "sha256": "45ce9d9d95de2b7cbd1d168c4b4220d7c2f54de6a9e0854754f4f7da776e984b"
+    },
+    {
+      "file": "assets/study-room-live.css",
+      "sha256": "b03ee186567cf1f027b699cc12979dcad4f89279d7563e11d8fe91218f1520c2"
+    },
+    {
+      "file": "assets/study-room-preview.js",
+      "sha256": "00477d0c99c0df301beed26eeea970facdc9094766984f3deefad716eb3d9a7d"
+    },
+    {
+      "file": "assets/phase2-experience.js",
+      "sha256": "60f59903d92240b4869e9cb7edbbdfb2a1f72a0ce2229790b562f85815375edc"
+    },
+    {
+      "file": "assets/feature-loader.js",
+      "sha256": "e93faeb186624afc009998303597f2dba9f4dd2e883c47ea0f325ba7b89eefc8"
+    },
+    {
+      "file": "assets/phase2.css",
+      "sha256": "daa402e9e2cc6142f38a024f50b410a7e04396547288c5d6ebdefd9ff0b5a965"
+    },
+    {
+      "file": "assets/vendor/supabase-2.49.8.umd.js",
+      "sha256": "522e844a8554c84631063fa630d0b824b8042f346a0222da04460f81d942dcf8"
+    },
+    {
+      "file": "assets/phase2-config.js",
+      "sha256": "6ac37e57756468da4b20e5982b82490c437b92f8b0b5a91c19bf07416fef2357"
+    },
+    {
+      "file": "assets/vendor/debate-fonts/fraunces-v38-latin-ext.woff2",
+      "sha256": "a21ecfbf41fbc393e24ef9b7e38532a27e8da5e0a074aa7d66802d1b5ccec2f0"
+    },
+    {
+      "file": "assets/vendor/debate-fonts/fraunces-v38-latin.woff2",
+      "sha256": "7f9d191d999336d3b9790afa72e1358e50a13b06d4f289341e92a311967a80f9"
+    },
+    {
+      "file": "assets/vendor/debate-fonts/inter-v20-latin-ext.woff2",
+      "sha256": "34b9c504cab7a73e37b746343a449132e56cf7b5481af2cb81dc74dcff25c956"
+    },
+    {
+      "file": "assets/vendor/debate-fonts/inter-v20-latin.woff2",
+      "sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62"
+    },
+    {
+      "file": "service-worker.js",
+      "sha256": "44e543a35f63adba8577412678af6262176546e02cc1e236a122acbfe9b3a4f2"
+    },
+    {
+      "file": "admin/index.html",
+      "sha256": "e2f78152ff8d6e09c1f4dda1e6a295912ecbb81166d231021c09c8e951f6eb0a"
+    },
+    {
+      "file": "assets/pricing-renderer.js",
+      "sha256": "81153621c2b4ac401dcf4c8d8f6f3fb35040a06ecf64efc5a730f30a7dbcb746"
+    },
+    {
+      "file": "assets/pricing-renderer.css",
+      "sha256": "295ff1f3b7c0eb91e6bc6e8088a58c83d6fb97d18c99b6427adf72a05bda6708"
+    },
+    {
+      "file": "assets/pricing-checkout-safety.js",
+      "sha256": "d0df8ffd104f9ca6500abcddd5c35d04889ae940957949465035e1f8110a6832"
+    },
+    {
+      "file": "assets/vendor/591.supabase.js",
+      "sha256": "9c305b77dab63dd79eb96efab9069366fb2255bd8731d6b862287558d2560406"
+    }
+  ],
+  "publicApiBoundaries": [
+    {
+      "api": "https://duediligence-api.wallyesteban1993.workers.dev",
+      "route": "/debate-room/access",
+      "status": 200
+    },
+    {
+      "api": "https://duediligence-api.wallyesteban1993.workers.dev",
+      "route": "/debate-room/events",
+      "status": 401
+    },
+    {
+      "api": "https://duediligence-api.wallyesteban1993.workers.dev",
+      "route": "/plans",
+      "status": 200
+    },
+    {
+      "api": "https://duediligence-api.wallyesteban1993.workers.dev",
+      "route": "/admin/pricing/query",
+      "status": 401
+    },
+    {
+      "api": "https://duediligence-gemini-examiner.wallyesteban1993.workers.dev",
+      "route": "/debate-room/access",
+      "status": 200
+    },
+    {
+      "api": "https://duediligence-gemini-examiner.wallyesteban1993.workers.dev",
+      "route": "/debate-room/events",
+      "status": 401
+    },
+    {
+      "api": "https://duediligence-gemini-examiner.wallyesteban1993.workers.dev",
+      "route": "/plans",
+      "status": 200
+    },
+    {
+      "api": "https://duediligence-gemini-examiner.wallyesteban1993.workers.dev",
+      "route": "/admin/pricing/query",
+      "status": 401
+    }
+  ],
+  "liveBrowser": {
+    "schemaVersion": 1,
+    "recordedAt": "2026-09-09T20:39:57.781Z",
+    "candidate": "44451be2f1cc677993d78039400eac4fbd157a0d",
+    "status": "FAIL_RETURNING_BROWSER_REUSES_OLD_ROOM_MODULES",
+    "source": "Actual signed-in Chrome tab 1879717059; ordinary reload and browser network response observations",
+    "url": "https://duediligence.ph/debate-room/",
+    "productionDataCreated": false,
+    "observations": [
+      "Updated HTML labels Invitation link or event reference and Invitation code (only needed with an event reference) are visible.",
+      "Empty lobby still displays Cannot read properties of undefined (reading timer) after ordinary reload and more than ten seconds.",
+      "Create debate opens the setup form; Cancel returns to the lobby without saving.",
+      "Setup form shows Practice debate (excluded from competition standings)."
+    ],
+    "browserNetwork": [
+      {
+        "path": "/assets/debate-room.js?v=debate-v3-20260909",
+        "status": 200,
+        "fromDiskCache": true,
+        "fromServiceWorker": false
+      },
+      {
+        "path": "/assets/debate-media.js",
+        "status": 200,
+        "fromDiskCache": true,
+        "fromServiceWorker": false
+      },
+      {
+        "path": "/assets/debate-room.css?v=debate-v3-20260909",
+        "status": 200,
+        "fromDiskCache": false,
+        "fromServiceWorker": false
+      }
+    ],
+    "independentFreshHttpReceipt": "artifacts/debate-local-rehearsal/public-normal-dependencies-44451be.json",
+    "currentCodeAvailableFromServer": true,
+    "returningBrowserFixVerified": false,
+    "limitation": "Publishing current bytes did not invalidate previously cached script URLs. Complete live wording, lobby fix, and Study refresh behavior remain unverified for returning visitors."
+  },
+  "liveBrowserReceipt": {
+    "path": "artifacts/debate-local-rehearsal/live-browser-cache-gap-44451be.json",
+    "sha256": "ac7e737bce66ce63fd6360d4221a13d7aaa0743589cd634f57ffb295f689d39a"
+  },
+  "sourceVerification": {
+    "path": "artifacts/debate-local-rehearsal/ci-34396607503/verified-receipt.json",
+    "sha256": "19decd957a3083436d891a7f6c4b1956f3e840a39ccdc030b38ee16aa13f5956",
+    "observations": {
+      "suiteGroups": 13,
+      "nativeChecks": 35,
+      "nativeExpectedDenials": 38,
+      "metadataChecks": 11,
+      "debateChecks": 444,
+      "debateActions": 196,
+      "debateStages": 16,
+      "debateDurationMs": 57965,
+      "studyHttpChecks": 5,
+      "studyDomChecks": 15
+    },
+    "verifiedSourcePairs": 213
+  },
+  "releaseCheckVerification": {
+    "path": "artifacts/debate-local-rehearsal/ci-34400186403/verified-receipt.json",
+    "sha256": "84615c71057af4ef305532e8f8683ca7cb5f2a19ff529c8ca98f89357dba51cb",
+    "status": "PASS_EXACT_RELEASE_CHECK_CHANGE_WITH_UNCHANGED_APPLICATION_EVIDENCE",
+    "currentSourceHashCount": 138,
+    "priorApplicationSourcePairsVerified": 209
+  },
+  "visualVerification": {
+    "path": "artifacts/debate-local-rehearsal/ci-34396607503/desktop-visual-review.json",
+    "sha256": "bc5cf35157e944ea8f8a768c77dba912f5bef6a3dbfd87c5d7244c462d4de7e5",
+    "status": "PASS_NO_REMAINING_PIXEL_BLOCKER_IN_REVIEWED_IMAGES"
+  },
+  "limitations": [
+    "Actual returning browser retains old room scripts; the empty-lobby error remains visible. Asset-reference versioning and repeat live verification are required.",
+    "Live audio and video remain disabled.",
+    "Invitation and results email are suppressed.",
+    "Full hosted 93-minute rehearsal and physical-device checks remain incomplete.",
+    "Private file upload and download remain unverified.",
+    "Desktop layout passed controlled browser rehearsal and pixel review; no production match was created for this release.",
+    "Separate real production paid/unpaid account journeys remain unverified.",
+    "Whole website audit is in progress, not complete."
+  ]
+}

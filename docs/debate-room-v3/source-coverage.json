@@ -3007,7 +3007,7 @@
     }
   ],
   "audit": {
-    "updatedAt": "2026-09-09T09:59:22.688Z",
+    "updatedAt": "2026-09-09T10:30:27.925Z",
     "sourceCoverageStatus": "SOURCE_COVERAGE_VERIFIED",
     "productAcceptanceStatus": "UNVERIFIED",
     "counts": {
@@ -3028,15 +3028,17 @@
     "evidenceIndex": "verification-index.md",
     "latestCandidateSuite": {
       "status": "PASS_LOCAL_SUITE",
-      "report": "artifacts/debate-local-rehearsal/suite-2026-09-09T09-54-38.432Z/report.json",
+      "report": "artifacts/debate-local-rehearsal/suite-2026-09-09T10-27-12.512Z/report.json",
       "pointer": "verification-index.md#latest-candidate-suite",
       "permanentEvidence": "docs/debate-room-v3/evidence/local-verification-20260909.json",
-      "startedAt": "2026-09-09T09:54:38.853Z",
-      "finishedAt": "2026-09-09T09:56:24.648Z",
-      "sourceHashCount": 74,
+      "startedAt": "2026-09-09T10:27:14.002Z",
+      "finishedAt": "2026-09-09T10:28:36.953Z",
+      "sourceHashCount": 89,
       "changedDuringRun": [],
-      "head": "9053390cb4f69da7627e0f079ebbbb3f0da0ea1d",
-      "workingTree": "Candidate bytes identified by report source hashes; recorded HEAD predates uncommitted candidate files."
+      "head": "7be9f9d17831ef430a355589fa47e8b76421375a",
+      "requiredGroupCount": 13,
+      "criticalSourceCount": 65,
+      "workingTree": "Current source hashes include fixes beyond the first pushed draft PR candidate; HEAD alone is insufficient."
     },
     "interpretation": "Every supplied source clause is preserved and mapped. Classification and local test passes do not establish complete acceptance, hosted state, physical performance or launch approval.",
     "documentValidation": {
@@ -3046,7 +3048,7 @@
       "sourceClassificationLines": 599,
       "mappedPathsMissing": [],
       "evidenceIdsMissing": [],
-      "latestSourceHashesChecked": 74,
+      "latestSourceHashesChecked": 89,
       "latestSourceHashMismatches": [],
       "permanentSampleHashesChecked": 9
     },

@@ -19,5 +19,6 @@ supabase/migrations/20260909080139_debate_room_v3.sql -text
 supabase/migrations/20260909080143_study_room_admission_v3.sql -text
 worker/debate-schema-draft.sql -text
 worker/study-room-admission-schema-draft.sql -text
+docs/debate-room-v3/evidence/staging-rollback-probe.sql -text
 docs/debate-room-v3/evidence/samples/* -text
 docs/debate-room-v3/evidence/samples/*.csv whitespace=cr-at-eol

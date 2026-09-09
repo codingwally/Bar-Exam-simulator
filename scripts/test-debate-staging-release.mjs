@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile, mkdir, mkdtemp, copyFile, writeFile, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { TARGET, CRITICAL_ASSETS, hash, parseBase, previewIds, validatePolicy, buildConfig, sanitizeBaseline, validateBaseline, validatePreservation, captureRemote, validateEvidence, inspectArtifact, resolveStagingPublishableKey, validateSmokeSessions, smokeStaging } from './debate-staging-release.mjs';
+import { TARGET, CRITICAL_ASSETS, CRITICAL_SOURCES, REQUIRED_SUITE_GROUPS, hash, parseBase, previewIds, validatePolicy, buildConfig, sanitizeBaseline, validateBaseline, validatePreservation, captureRemote, validateEvidence, inspectArtifact, resolveStagingPublishableKey, validateSmokeSessions, smokeStaging } from './debate-staging-release.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const policy = JSON.parse(await readFile(path.join(ROOT, 'worker/debate-staging-policy.json'), 'utf8'));
@@ -95,10 +95,10 @@ test('postflight permits precisely the reviewed Debate additions and detects rem
 });
 
 function evidenceFixture() {
-  const candidate = '1'.repeat(40), sourceHashes = Object.fromEntries(Array.from({ length: 10 }, (_, i) => [`file-${i}`, hash(`source-${i}`)]));
+  const candidate = '1'.repeat(40), sourceHashes = Object.fromEntries(CRITICAL_SOURCES.map(file => [file, hash(`reviewed-source:${file}`)]));
   const migrationHashes = Object.fromEntries(policy.migrations.map(file => [file, hash(file)]));
   return { candidate, changedPaths: ['worker/debate-service.mjs'], migrationHashes, sourceHashes,
-    suite: { head: candidate, status: 'PASS_LOCAL_SUITE', gitStatus: '', changedDuringRun: [], sourceHashes: { ...sourceHashes }, groups: Array.from({ length: 8 }, () => ({ status: 'PASS' })) },
+    suite: { head: candidate, status: 'PASS_LOCAL_SUITE', gitStatus: '', changedDuringRun: [], sourceHashes: { ...sourceHashes }, groups: REQUIRED_SUITE_GROUPS.map(name => ({ name, status: 'PASS', exitCode: 0 })) },
     review: { candidateSha: candidate, baseSha: '2'.repeat(40), approvedPaths: ['worker/debate-service.mjs'], studyRoomPreserved: true, recoveryPreserved: true, retiredRuntimeAbsent: true, evidenceReferences: ['reviewed-evidence'], approvalReference: 'Owner staging change reference',
       databaseProof: { projectRef: TARGET.project, applied: true, rollbackProbePassed: true, privilegesPassed: true, evidenceReference: 'reviewed-probe', reviewedBy: 'Release reviewer', verifiedAt: '2026-09-09T00:00:00Z', migrationHashes: { ...migrationHashes } } } };
 }
@@ -106,12 +106,54 @@ test('release evidence binds complete reviewed scope, unchanged suite, exact mig
   validateEvidence(evidenceFixture());
   for (const mutate of [
     input => { input.suite.gitStatus = ' M worker/debate-service.mjs'; },
-    input => { input.sourceHashes['file-1'] = hash('later edit'); },
+    input => { input.sourceHashes['worker/debate-service.mjs'] = hash('later edit'); },
     input => { input.changedPaths.push('assets/unrelated-feature.js'); },
     input => { input.review.databaseProof.projectRef = 'production-project'; },
     input => { input.review.databaseProof.applied = false; },
     input => { input.migrationHashes[policy.migrations[0]] = hash('different SQL'); },
   ]) { const input = evidenceFixture(); mutate(input); assert.throws(() => validateEvidence(input)); }
+});
+
+test('release evidence requires every named runner group exactly once and rejects missing new checks despite a padded PASS count', () => {
+  for (const missing of REQUIRED_SUITE_GROUPS) {
+    const input = evidenceFixture();
+    input.suite.groups = input.suite.groups.filter(group => group.name !== missing);
+    input.suite.groups.push({ name: 'unrelated-passing-check', status: 'PASS', exitCode: 0 });
+    assert.throws(() => validateEvidence(input), { code: 'LOCAL_SUITE_REQUIRED' }, missing);
+  }
+  for (const mutate of [
+    input => { input.suite.groups.push({ ...input.suite.groups[0] }); },
+    input => { input.suite.groups[0].status = 'FAIL'; },
+    input => { input.suite.groups[0].exitCode = 1; },
+    input => { delete input.suite.groups[0].name; },
+    input => { delete input.suite.changedDuringRun; },
+    input => { delete input.suite.gitStatus; },
+  ]) { const input = evidenceFixture(); mutate(input); assert.throws(() => validateEvidence(input), { code: 'LOCAL_SUITE_REQUIRED' }); }
+  const input = evidenceFixture(); input.suite.groups.push({ name: 'additional-independent-check', status: 'PASS', exitCode: 0 });
+  validateEvidence(input);
+});
+
+test('release evidence requires actual critical source paths and valid hashes, including Study migration and staging configuration', async () => {
+  assert.equal(new Set(CRITICAL_SOURCES).size, CRITICAL_SOURCES.length);
+  for (const file of CRITICAL_SOURCES) {
+    assert.ok((await readFile(path.join(ROOT, file))).byteLength > 0, 'Critical source exists: ' + file);
+    const input = evidenceFixture(); delete input.suite.sourceHashes[file];
+    input.suite.sourceHashes['arbitrary-padding-file'] = hash('passing-count-is-insufficient');
+    input.sourceHashes['arbitrary-padding-file'] = input.suite.sourceHashes['arbitrary-padding-file'];
+    assert.throws(() => validateEvidence(input), { code: 'LOCAL_SUITE_REQUIRED' }, file);
+  }
+  for (const mutate of [
+    input => { delete input.sourceHashes['worker/commercial-entry.mjs']; },
+    input => { input.suite.sourceHashes['worker/debate-service.mjs'] = input.sourceHashes['worker/debate-service.mjs'] = 'not-a-hash'; },
+  ]) { const input = evidenceFixture(); mutate(input); assert.throws(() => validateEvidence(input), { code: 'LOCAL_SUITE_REQUIRED' }); }
+  for (const file of ['supabase/migrations/20260909080143_study_room_admission_v3.sql', 'worker/wrangler.staging.toml', 'worker/package-lock.json']) {
+    const input = evidenceFixture(); input.sourceHashes[file] = hash('unverified-later-change');
+    assert.throws(() => validateEvidence(input), { code: 'SOURCE_DRIFT' }, file);
+  }
+  for (const file of ['../outside-source', 'worker\\debate-service.mjs']) {
+    const input = evidenceFixture(); input.suite.sourceHashes[file] = input.sourceHashes[file] = hash('invalid-path');
+    assert.throws(() => validateEvidence(input), { code: 'INVALID_SOURCE_MANIFEST' });
+  }
 });
 
 test('actual candidate assets remain byte-identical; sanitized target, dependencies and retired-source boundary are enforced', async () => {
@@ -145,6 +187,10 @@ test('hosted smoke requires exact assets plus genuine allow/deny-shaped authenti
   const manifest = { hashes: { 'debate-room/index.html': hash('exact candidate bytes') } }, calls = [];
   const fetcher = async (url, options) => {
     calls.push({ url, options }); assert.ok(url.startsWith(TARGET.origin + '/'));
+    assert.equal(new Headers(options.headers).has('Origin'), false, 'Do not invent a header omitted by same-origin browser GET');
+    assert.equal(options.headers['Sec-Fetch-Site'], 'same-origin');
+    assert.equal(options.headers['Sec-Fetch-Mode'], 'cors');
+    assert.equal(new URL(options.headers.Referer).origin, TARGET.origin);
     if (url.endsWith('index.html')) return new Response('exact candidate bytes');
     if (url.endsWith('/access')) return Response.json({ ok: true, enabled: false });
     const token = options.headers.Authorization;

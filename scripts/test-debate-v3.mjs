@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { CRITICAL_SOURCES } from './debate-staging-release.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const output = path.join(root, 'artifacts/debate-local-rehearsal', 'suite-' + new Date().toISOString().replaceAll(':', '-'));
@@ -29,7 +30,7 @@ for (const directory of ['assets', 'debate-room', 'worker', 'scripts', 'supabase
     if (file.includes('debate') || directory === 'debate-room' || /study-room/.test(file) && !file.includes('staging-positive-smoke')) sourceFiles.push(directory + '/' + file);
   }
 }
-sourceFiles.push('worker/index.mjs', 'worker/wrangler.toml', 'index.html', 'study-room/index.html', 'scripts/build-pages-artifact.mjs');
+sourceFiles.push(...CRITICAL_SOURCES, 'worker/index.mjs', 'worker/wrangler.toml', 'index.html', 'study-room/index.html', 'scripts/build-pages-artifact.mjs', 'scripts/test-worker-cpu-limit-contract.mjs');
 const sourceHashes = {};
 for (const file of [...new Set(sourceFiles)].sort()) sourceHashes[file] = createHash('sha256').update(await readFile(path.join(root, file))).digest('hex');
 const workerTests = (await readdir(path.join(root, 'worker'))).filter(file => /^(debate-.*|study-room(?:-.*)?)\.test\.mjs$/.test(file)).map(file => 'worker/' + file);
@@ -42,6 +43,7 @@ const groups = [
   ['accelerated-organizer', ['scripts/test-debate-organizer-rehearsal.mjs']],
   ['eligible-tournament-exports', ['scripts/test-debate-tournament-export.mjs']],
   ['staging-preflight-gates', ['--test', 'scripts/test-debate-staging-release.mjs']],
+  ['worker-configuration-contract', ['--test', 'scripts/test-worker-cpu-limit-contract.mjs']],
 ];
 const report = { startedAt: new Date().toISOString(), environment: 'Local Node / disposable PGlite / inert media; no provider or real mail', head: head.stdout.trim(), gitStatus: status.stdout.trim(), sourceHashes, groups: [], limitations: ['Not a physical camera/audio test', 'Not a90-minute endurance run', 'Not native multi-connection PostgreSQL load', 'No hosted migration, approved capacity ramp, real mail delivery or deployment proof'] };
 for (const [name, args] of groups) {

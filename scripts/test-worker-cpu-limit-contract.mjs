@@ -42,14 +42,23 @@ test('explicit custom CPU settings cannot silently require a paid-plan upgrade',
 });
 
 test('CPU configuration does not change grading, authorization, cron, or automatic mail controls', () => {
-  for (const config of [staging, production]) {
+  for (const [name, config, expectedCrons] of [
+    ['staging', staging, ['*/2 * * * *']],
+    ['production', production, ['*/2 * * * *', '* * * * *']],
+  ]) {
     for (const line of [
       'compatibility_date = "2026-07-26"', 'compatibility_flags = ["nodejs_compat"]',
       'GEMINI_MODEL = "gemini-3.5-flash-lite"', 'GEMINI_GROUNDING_ENABLED = "false"',
       'ALLOW_LEGACY_GUESTS = "false"', 'PHASE4_ACCESS_ENFORCEMENT = "true"',
       'PHASE4_MODEL_QUALITY_ENFORCEMENT = "true"', 'REQUIRE_AUTHENTICATED_SUBMISSIONS = "true"',
-      'OUTBOUND_EMAIL_MODE = "suppressed"', 'crons = ["*/2 * * * *"]',
+      'OUTBOUND_EMAIL_MODE = "suppressed"',
     ]) assert.ok(config.split(/\r?\n/u).includes(line), `Existing control must remain: ${line}`);
+    const cronLines = config.split(/\r?\n/u).filter(line => /^\s*crons\s*=/u.test(line));
+    assert.equal(cronLines.length, 1, `${name} must declare its schedule exactly once`);
+    const crons = JSON.parse(cronLines[0].replace(/^\s*crons\s*=\s*/u, ''));
+    assert.deepEqual(crons, expectedCrons, `${name} must retain only its approved cron triggers`);
+    assert.equal(crons.filter(cron => cron === '*/2 * * * *').length, 1,
+      `${name} must preserve the original two-minute trigger exactly once`);
   }
   assert.match(staging, /^FORECAST_RESULTS_EMAIL_MODE = "suppressed"$/mu);
   assert.match(production, /^FORECAST_RESULTS_EMAIL_MODE = "enabled"$/mu);

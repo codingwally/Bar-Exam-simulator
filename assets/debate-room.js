@@ -98,7 +98,7 @@ async function loadEvents() {
 }
 async function loadDiscovery(cursor){const result=await request('/debate-room/discover'+(cursor?'?cursor='+encodeURIComponent(cursor):''));const html=result.events.map(e=>`<article><h3>${esc(e.title)}</h3><p>${esc(e.description)}</p><p class="muted">${esc(e.timezone)} · ${esc(e.language)} · ${esc(e.status)}</p>${button('Request entry','join-public',`data-event="${esc(e.id)}"`)}</article>`).join('');if(cursor)$('discover-events').insertAdjacentHTML('beforeend',html);else $('discover-events').innerHTML=html||'<p>No open events are listed right now. You can still join with an invitation.</p>';$('discover-more').hidden=!result.nextCursor;$('discover-more').onclick=()=>guarded(()=>loadDiscovery(result.nextCursor));}
 async function openEvent(eventId) {
-  await leaveCurrentMedia();clearSensitiveViews();$('context-change-note').hidden=true; state.judgeDirty=false;
+  const view=state.viewGeneration,account=state.accountGeneration;await leaveCurrentMedia();if(view!==state.viewGeneration||account!==state.accountGeneration)return;clearSensitiveViews();$('context-change-note').hidden=true; state.judgeDirty=false;
   const result=await request(`/debate-room/snapshot?eventId=${encodeURIComponent(eventId)}`); state.event=null; adopt(result.event,true); status('Event opened.');
 }
 function openDialog(title,fields,onSubmit,submitLabel='Save') {
@@ -341,7 +341,7 @@ async function boot(){
 document.addEventListener('click',event=>{const b=event.target.closest('[data-action]');if(b)guarded(()=>actions[b.dataset.action]?.(b));});
 $('event-tabs').addEventListener('click',event=>{const b=event.target.closest('[data-panel]');if(!b)return;guarded(async()=>{if(state.judgeDirty)await saveDraft();state.panel=b.dataset.panel;renderPanel();});});
 $('create-event').onclick=()=>guarded(()=>{if(!state.session)throw new Error('Sign in before creating your event.');eventDialog();});
-$('back-lobby').onclick=()=>guarded(async()=>{if(state.judgeDirty)await saveDraft();await leaveCurrentMedia();discardEventView();await loadEvents();});
+$('back-lobby').onclick=()=>{const view=state.viewGeneration,account=state.accountGeneration;return guarded(async()=>{if(state.judgeDirty)await saveDraft();await leaveCurrentMedia();if(view!==state.viewGeneration||account!==state.accountGeneration)return;discardEventView();await loadEvents();});};
 $('refresh').onclick=refresh;$('check-in').onclick=()=>guarded(()=>command('check_in',currentMatch()?matchPayload():{}));
 $('dialog-close').onclick=$('dialog-cancel').onclick=()=>$('dialog').close();
 $('open-rulebook').onclick=()=>openDialog('Rules and quick-start',rulebook(),async()=>{},'Done');

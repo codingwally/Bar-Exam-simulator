@@ -135,11 +135,44 @@ export async function captureRemote({ token, accountId, fetcher = fetch, base })
   need(equal(rechecked.deployments?.[0], deployments.deployments[0]), 'BASELINE_DRIFT', 'Staging changed while the baseline was captured.');
   return sanitizeBaseline({ deployments, settings, scriptSettings, version, schedules, subdomain }, base);
 }
+export const REQUIRED_SUITE_GROUPS = Object.freeze([
+  'server-domain-database', 'client-state-media-dates', 'study-admission-sql',
+  'study-always-open', 'study-backgrounds', 'study-background-picker', 'study-hotfix-behavior', 'study-live',
+  'local-http-boundaries', 'accelerated-organizer', 'eligible-tournament-exports', 'staging-preflight-gates', 'worker-configuration-contract',
+]);
+// The runner also discovers feature files. These explicit release dependencies
+// prevent a fabricated or accidentally truncated manifest from passing by size.
+export const CRITICAL_SOURCES = Object.freeze([
+  'index.html', 'debate-room/index.html', 'study-room/index.html',
+  'assets/debate-room.js', 'assets/debate-room.css', 'assets/debate-media.js', 'assets/debate-dates.js', 'assets/debate-entry.js',
+  'assets/study-room-live.js', 'assets/study-room-live.css', 'assets/study-room-preview.js', 'assets/study-room-preview.css', 'assets/study-room-backgrounds.js',
+  'assets/phase2-experience.js', 'assets/phase2-config.js', 'assets/phase2.css', 'assets/feature-loader.js', 'assets/vendor/supabase-2.49.8.umd.js',
+  'worker/index.mjs', 'worker/commercial-entry.mjs', 'worker/wrangler.toml', 'worker/wrangler.staging.toml', 'worker/debate-staging-policy.json',
+  'worker/package.json', 'worker/package-lock.json',
+  'worker/debate-domain.mjs', 'worker/debate-fixtures.mjs', 'worker/debate-tournament.mjs', 'worker/debate-sanctions.mjs',
+  'worker/debate-service.mjs', 'worker/debate-store.mjs', 'worker/debate-routes.mjs', 'worker/debate-integration.mjs',
+  'worker/debate-media.mjs', 'worker/debate-documents.mjs', 'worker/debate-delivery.mjs', 'worker/debate-schema-draft.sql',
+  'worker/study-room-core.mjs', 'worker/study-room-routes.mjs', 'worker/study-room-admission.mjs', 'worker/study-room-admission-schema-draft.sql',
+  'supabase/migrations/20260909080139_debate_room_v3.sql', 'supabase/migrations/20260909080143_study_room_admission_v3.sql',
+  '.github/workflows/debate-v3-staging.yml', 'scripts/debate-staging-release.mjs', 'scripts/test-debate-staging-release.mjs',
+  'scripts/test-debate-v3.mjs', 'scripts/build-pages-artifact.mjs', 'scripts/build-staging-artifact.mjs',
+  'scripts/test-feature-decommission-boundary.mjs', 'scripts/test-debate-artifact.mjs', 'scripts/test-worker-cpu-limit-contract.mjs',
+  'scripts/test-debate-client-state.mjs', 'scripts/test-debate-media.mjs', 'scripts/test-debate-dates.mjs',
+  'scripts/serve-debate-rehearsal.mjs', 'scripts/test-debate-rehearsal-server.mjs', 'scripts/test-debate-organizer-rehearsal.mjs', 'scripts/test-debate-tournament-export.mjs',
+  'scripts/test-study-room-admission-sql.mjs', 'scripts/test-study-room-always-open.mjs', 'scripts/test-study-room-backgrounds.mjs',
+  'scripts/test-study-room-background-picker.mjs', 'scripts/test-study-room-hotfix-behavior.mjs', 'scripts/test-study-room-live.mjs',
+]);
 export function validateEvidence({ review, suite, candidate, changedPaths, migrationHashes, sourceHashes }) {
   need(SHA.test(candidate || '') && review.candidateSha === candidate && suite.head === candidate && SHA.test(review.baseSha || ''), 'CANDIDATE_MISMATCH', 'Review, local evidence and checkout must identify the same exact commit.');
-  need(suite.status === 'PASS_LOCAL_SUITE' && !suite.gitStatus && !suite.changedDuringRun?.length && suite.groups?.length >= 8 && suite.groups.every(group => group.status === 'PASS'), 'LOCAL_SUITE_REQUIRED', 'Require the complete passing suite on unchanged committed source.');
-  for (const [file, before] of Object.entries(suite.sourceHashes || {})) need(sourceHashes[file] === before, 'SOURCE_DRIFT', `Source changed after local verification: ${file}`);
-  need(Object.keys(suite.sourceHashes || {}).length >= 10, 'LOCAL_SUITE_REQUIRED', 'The local suite source manifest is incomplete.');
+  need(suite.status === 'PASS_LOCAL_SUITE' && suite.gitStatus === '' && Array.isArray(suite.changedDuringRun) && suite.changedDuringRun.length === 0 && Array.isArray(suite.groups), 'LOCAL_SUITE_REQUIRED', 'Require the complete passing suite on unchanged committed source.');
+  const groupNames = suite.groups.map(group => group?.name);
+  need(suite.groups.every(group => typeof group?.name === 'string' && group.name.trim() === group.name && group.name.length > 0 && group.status === 'PASS' && group.exitCode === 0)
+    && new Set(groupNames).size === groupNames.length && REQUIRED_SUITE_GROUPS.every(name => groupNames.includes(name)), 'LOCAL_SUITE_REQUIRED', 'Every required local verification group must pass exactly once, including export, staging and Worker configuration checks.');
+  need(CRITICAL_SOURCES.every(file => Object.hasOwn(suite.sourceHashes || {}, file) && HASH.test(suite.sourceHashes[file]) && Object.hasOwn(sourceHashes || {}, file)), 'LOCAL_SUITE_REQUIRED', 'The local suite source manifest must cover the current critical application, migration, build and release files.');
+  for (const [file, before] of Object.entries(suite.sourceHashes)) {
+    need(!file.includes('..') && !file.includes('\\') && !path.isAbsolute(file) && HASH.test(before), 'INVALID_SOURCE_MANIFEST', 'Source manifest entries must be repository paths and SHA-256 hashes.');
+    need(sourceHashes[file] === before, 'SOURCE_DRIFT', `Source changed after local verification: ${file}`);
+  }
   need(equal(sorted(review.approvedPaths || []), sorted(changedPaths)) && review.studyRoomPreserved === true && review.recoveryPreserved === true && review.retiredRuntimeAbsent === true && review.evidenceReferences?.length > 0 && review.approvalReference?.trim(), 'SCOPE_REVIEW_REQUIRED', 'A concrete complete file scope and Study/recovery review reference are required.');
   const proof = review.databaseProof;
   need(proof?.projectRef === TARGET.project && proof.applied === true && proof.rollbackProbePassed === true && proof.privilegesPassed === true && proof.evidenceReference?.trim() && proof.reviewedBy?.trim() && Number.isFinite(Date.parse(proof.verifiedAt)), 'DATABASE_PROOF_REQUIRED', 'Record the reviewed manually applied staging migration and privilege/rollback probe evidence. This package never applies migrations.');
@@ -198,7 +231,9 @@ export async function validateSmokeSessions({ allowedToken, deniedToken, publish
 
 export async function smokeStaging({ allowedToken, deniedToken, manifest, fetcher = fetch }) {
   need(allowedToken && deniedToken && allowedToken !== deniedToken, 'SMOKE_CREDENTIAL_MISSING', 'Two distinct real staging sessions are required for allowlisted and excluded-account smoke.');
-  const get = async (pathname, token) => fetcher(TARGET.origin + pathname, { method: 'GET', redirect: 'error', cache: 'no-store', headers: { Origin: TARGET.origin, ...(token ? { Authorization: `Bearer ${token}` } : {}) }, signal: AbortSignal.timeout(20000) });
+  // Model a fetch from the same-origin staging page: browsers omit Origin for
+  // this GET. Supplying it here would hide an incompatible Worker boundary.
+  const get = async (pathname, token) => fetcher(TARGET.origin + pathname, { method: 'GET', redirect: 'error', cache: 'no-store', headers: { 'Sec-Fetch-Site': 'same-origin', 'Sec-Fetch-Mode': 'cors', 'Sec-Fetch-Dest': 'empty', Referer: TARGET.origin + '/debate-room/', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, signal: AbortSignal.timeout(20000) });
   for (const [file, digest] of Object.entries(manifest.hashes)) { const response = await get('/' + file); need(response.ok && hash(new Uint8Array(await response.arrayBuffer())) === digest, 'DEPLOYED_ASSET_MISMATCH', `Hosted candidate asset differs: ${file}`); }
   const access = await get('/debate-room/access'); const accessBody = await access.json(); need(access.ok && accessBody.enabled === false, 'PUBLIC_ACCESS_OPEN', 'Debate public access must remain closed.');
   const anonymous = await get('/debate-room/events'); need(anonymous.status === 401, 'AUTH_SMOKE_FAILED', 'Anonymous event access must be denied.');

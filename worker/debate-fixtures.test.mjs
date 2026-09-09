@@ -167,7 +167,7 @@ test('actual service finalization pins tournament records privately and recorded
   const finalView = await env.service.snapshot({ actor: actor(1), eventId: env.eventId });
   assert.equal(finalView.event.eventAwards.comparableGroups[0].bestDebater.status, 'AWARDED'); assert.deepEqual(finalView.event.eventAwards.comparableGroups[0].bestDebater.winners, [actor(1).id]);
   assert.equal(finalView.event.eventAwards.comparableGroups[0].bestSpeaker.eligibility.every(row => row.matchCount === 2), true);
-  const artifactDir = fileURLToPath(new URL('../artifacts/', import.meta.url)); await mkdir(artifactDir, { recursive: true });
+  const artifactDir = fileURLToPath(new URL('../artifacts/debate-local-rehearsal/', import.meta.url)); await mkdir(artifactDir, { recursive: true });
   await writeFile(path.join(artifactDir, 'debate-tournament-service-integration.json'), JSON.stringify({ environment: 'Actual service commands using explicit test MemoryStore; not SQL evidence.', eventId: env.eventId, eventAwards: finalView.event.eventAwards, commands: { matchNomination: { command: 'nominate_award', payload: { matchId: matchIds[0], nomineeId: 'A1', reason: 'Reasoned choice', runoff: true } }, tournamentRunoff: { command: 'nominate_tournament_award', payload: { rubric: group.rubric, nomineeId: actor(1).id, reason: 'Reasoned choice', confirmed: true } } } }, null, 2));
   await env.command('correct_result', { matchId: matchIds[0], reason: 'Reopen one performance for a real correction.' });
   const after = (await env.service.snapshot({ actor: actor(1), eventId: env.eventId })).event.eventAwards;

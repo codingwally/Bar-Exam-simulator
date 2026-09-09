@@ -1,33 +1,48 @@
 # Debate Room V3 verification index
 
-Updated 2026-09-09T09:59:22.688Z. **READY FOR REVIEW, NOT FULL ACCEPTANCE. Not deployed.**
+Updated 2026-09-09T10:30:27.925Z. **READY FOR REVIEW, NOT FULL ACCEPTANCE. Not deployed.**
 
-All 315 rows are individually mapped: 267 source subrequirements, 44 acceptance IDs and four owner directives. Bounded states are 61 LOCAL_VERIFIED, 230 PARTIAL and 24 UNVERIFIED; zero complete acceptance passes. All 311 attachment-derived clauses still match their original source spans after whitespace normalization.
+All **315 rows** remain individually mapped: 267 source subrequirements, 44 acceptance IDs and four owner directives. Bounded states remain **61 LOCAL_VERIFIED / 230 PARTIAL / 24 UNVERIFIED**, with zero complete acceptance passes. All 311 attachment-derived clauses match original source spans after whitespace normalization; all 599 split source lines are classified.
 
 ## Latest candidate suite
 
-[artifacts/debate-local-rehearsal/suite-2026-09-09T09-54-38.432Z/report.json](../../artifacts/debate-local-rehearsal/suite-2026-09-09T09-54-38.432Z/report.json) — **PASS_LOCAL_SUITE**, all **12 groups**, 2026-09-09T09:54:38.853Z through 2026-09-09T09:56:24.648Z. **74 source hashes**, **changedDuringRun = []**; this audit rechecked every hash with zero mismatches. Permanent evidence: [docs/debate-room-v3/evidence/local-verification-20260909.json](../../docs/debate-room-v3/evidence/local-verification-20260909.json) and [docs/debate-room-v3/evidence/README.md](../../docs/debate-room-v3/evidence/README.md).
+[artifacts/debate-local-rehearsal/suite-2026-09-09T10-27-12.512Z/report.json](../../artifacts/debate-local-rehearsal/suite-2026-09-09T10-27-12.512Z/report.json) — **PASS_LOCAL_SUITE**, all **13 groups**, 2026-09-09T10:27:14.002Z through 2026-09-09T10:28:36.953Z. **89 source SHA-256 hashes**, **changedDuringRun = []**. This audit independently rechecked all 89 hashes with zero mismatches, the package-to-report hash, and all nine reviewed export sample hashes.
 
-The suite records HEAD `9053390cb4f69da7627e0f079ebbbb3f0da0ea1d` plus dirty candidate source hashes. HEAD alone does not identify the tested bytes. Per-row `candidateTests` distinguishes checks actually run in the suite from other mapped checks; `candidateSourceHashCoverage` identifies source files not individually hashed. Local artifact packaging is separately recorded in PACKAGE.
+Permanent evidence: [docs/debate-room-v3/evidence/local-verification-20260909.json](../../docs/debate-room-v3/evidence/local-verification-20260909.json) and [docs/debate-room-v3/evidence/README.md](../../docs/debate-room-v3/evidence/README.md). The suite records HEAD `7be9f9d17831ef430a355589fa47e8b76421375a` plus current uncommitted source hashes. That HEAD is the first pushed draft PR candidate and alone does not identify later tested fixes. The coordinator owns subsequent commit/CI receipts. Per-row `candidateTests` distinguishes executed suite files from mapped-only checks; `candidateSourceHashCoverage` identifies source files not individually hashed.
 
-| Group | Result | Command / log |
+| Group | Result | Reported tests / pass / fail | Log |
+| --- | --- | --- | --- |
+| server-domain-database | PASS | 260 / 260 / 0 | [artifacts/debate-local-rehearsal/suite-2026-09-09T10-27-12.512Z/server-domain-database.txt](../../artifacts/debate-local-rehearsal/suite-2026-09-09T10-27-12.512Z/server-domain-database.txt) |
+| client-state-media-dates | PASS | 38 / 38 / 0 | [artifacts/debate-local-rehearsal/suite-2026-09-09T10-27-12.512Z/client-state-media-dates.txt](../../artifacts/debate-local-rehearsal/suite-2026-09-09T10-27-12.512Z/client-state-media-dates.txt) |
+| study-admission-sql | PASS | 11 / 11 / 0 | [artifacts/debate-local-rehearsal/suite-2026-09-09T10-27-12.512Z/study-admission-sql.txt](../../artifacts/debate-local-rehearsal/suite-2026-09-09T10-27-12.512Z/study-admission-sql.txt) |
+| study-always-open | PASS | 37 / 37 / 0 | [artifacts/debate-local-rehearsal/suite-2026-09-09T10-27-12.512Z/study-always-open.txt](../../artifacts/debate-local-rehearsal/suite-2026-09-09T10-27-12.512Z/study-always-open.txt) |
+| study-backgrounds | PASS | Scenario runner; count not emitted | [artifacts/debate-local-rehearsal/suite-2026-09-09T10-27-12.512Z/study-backgrounds.txt](../../artifacts/debate-local-rehearsal/suite-2026-09-09T10-27-12.512Z/study-backgrounds.txt) |
+| study-background-picker | PASS | 23 / 23 / 0 | [artifacts/debate-local-rehearsal/suite-2026-09-09T10-27-12.512Z/study-background-picker.txt](../../artifacts/debate-local-rehearsal/suite-2026-09-09T10-27-12.512Z/study-background-picker.txt) |
+| study-hotfix-behavior | PASS | Scenario runner; count not emitted | [artifacts/debate-local-rehearsal/suite-2026-09-09T10-27-12.512Z/study-hotfix-behavior.txt](../../artifacts/debate-local-rehearsal/suite-2026-09-09T10-27-12.512Z/study-hotfix-behavior.txt) |
+| study-live | PASS | Scenario runner; count not emitted | [artifacts/debate-local-rehearsal/suite-2026-09-09T10-27-12.512Z/study-live.txt](../../artifacts/debate-local-rehearsal/suite-2026-09-09T10-27-12.512Z/study-live.txt) |
+| local-http-boundaries | PASS | 2 / 2 / 0 | [artifacts/debate-local-rehearsal/suite-2026-09-09T10-27-12.512Z/local-http-boundaries.txt](../../artifacts/debate-local-rehearsal/suite-2026-09-09T10-27-12.512Z/local-http-boundaries.txt) |
+| accelerated-organizer | PASS | Scenario runner; count not emitted | [artifacts/debate-local-rehearsal/suite-2026-09-09T10-27-12.512Z/accelerated-organizer.txt](../../artifacts/debate-local-rehearsal/suite-2026-09-09T10-27-12.512Z/accelerated-organizer.txt) |
+| eligible-tournament-exports | PASS | Scenario runner; count not emitted | [artifacts/debate-local-rehearsal/suite-2026-09-09T10-27-12.512Z/eligible-tournament-exports.txt](../../artifacts/debate-local-rehearsal/suite-2026-09-09T10-27-12.512Z/eligible-tournament-exports.txt) |
+| staging-preflight-gates | PASS | 12 / 12 / 0 | [artifacts/debate-local-rehearsal/suite-2026-09-09T10-27-12.512Z/staging-preflight-gates.txt](../../artifacts/debate-local-rehearsal/suite-2026-09-09T10-27-12.512Z/staging-preflight-gates.txt) |
+| worker-configuration-contract | PASS | 4 / 4 / 0 | [artifacts/debate-local-rehearsal/suite-2026-09-09T10-27-12.512Z/worker-configuration-contract.txt](../../artifacts/debate-local-rehearsal/suite-2026-09-09T10-27-12.512Z/worker-configuration-contract.txt) |
+
+The server group includes **260 tests**, including actual main-Worker origin checks and five real PGlite SQL tests. The client group has **38 tests** (including the 28 client-state checks), the CPU configuration contract has **four**, and staging gate tests have **12**. The release policy separately requires **13 named suite groups exactly once and all 65 critical source hashes**; those numbers are policy coverage, not the staging test count.
+
+The current organizer journey completed **184 commands / 59 checks**, all 14 speaking stages plus preparation/break, six genuine local outputs and the next formal match. Actual time was **23510 ms**, with 5625743 ms simulated. The positive tournament journey ran 229 commands and two fully completed matches; four raw-performance awards remain eligible despite disclosed official A100-to-A90 deductions against N92. Neither accelerated journey is a 90-minute physical rehearsal.
+
+Current fixes cover same-origin GET through the actual Worker without manufacturing Origin, preserved explicit foreign/null/mutation denials and fresh auth, delayed navigation response guards, original two-minute cron preservation plus independent minute sweep, strict staging evidence, and ignored fresh fixture output without changing historical tracked samples. Full browser automation remains blocked; these local checks do not convert that gate to PASS.
+
+The intervening 10:24 run failed with organizer Node resource exhaustion while twelve groups passed. Root paused only the task-owned local PGlite server and reran unchanged source successfully. The failed run is preserved as OOM_HISTORY. The earlier 10:19 pass is OUTPUT_HISTORY because its test output handling changed afterward.
+
+## Draft PR and historical CI
+
+Read-only inspection confirmed [Add separate Debate Room V3 and optional Study admission](https://github.com/codingwally/Bar-Exam-simulator/pull/356) is draft/open at first-candidate SHA `7be9f9d17831ef430a355589fa47e8b76421375a`. These first-candidate checks are historical; no new-candidate CI or merge outcome is inferred.
+
+| Historical run | Outcome | Finding |
 | --- | --- | --- |
-| server-domain-database | PASS | [artifacts/debate-local-rehearsal/suite-2026-09-09T09-54-38.432Z/server-domain-database.txt](../../artifacts/debate-local-rehearsal/suite-2026-09-09T09-54-38.432Z/server-domain-database.txt)<br>`node --test --test-concurrency=1 worker/debate-delivery.test.mjs worker/debate-domain.test.mjs worker/debate-fixtures.test.mjs worker/debate-integration.test.mjs worker/debate-media.test.mjs worker/debate-procedures.test.mjs worker/debate-rosters.test.mjs worker/debate-sanctions.test.mjs worker/debate-service.test.mjs worker/debate-standings-sanctions.test.mjs worker/debate-store-sql.test.mjs worker/debate-substitutions.test.mjs worker/debate-tournament.test.mjs worker/study-room-admission.test.mjs worker/study-room-catalog.test.mjs worker/study-room.test.mjs` |
-| client-state-media-dates | PASS | [artifacts/debate-local-rehearsal/suite-2026-09-09T09-54-38.432Z/client-state-media-dates.txt](../../artifacts/debate-local-rehearsal/suite-2026-09-09T09-54-38.432Z/client-state-media-dates.txt)<br>`node --test scripts/test-debate-client-state.mjs scripts/test-debate-media.mjs scripts/test-debate-dates.mjs` |
-| study-admission-sql | PASS | [artifacts/debate-local-rehearsal/suite-2026-09-09T09-54-38.432Z/study-admission-sql.txt](../../artifacts/debate-local-rehearsal/suite-2026-09-09T09-54-38.432Z/study-admission-sql.txt)<br>`node scripts/test-study-room-admission-sql.mjs` |
-| study-always-open | PASS | [artifacts/debate-local-rehearsal/suite-2026-09-09T09-54-38.432Z/study-always-open.txt](../../artifacts/debate-local-rehearsal/suite-2026-09-09T09-54-38.432Z/study-always-open.txt)<br>`node scripts/test-study-room-always-open.mjs` |
-| study-backgrounds | PASS | [artifacts/debate-local-rehearsal/suite-2026-09-09T09-54-38.432Z/study-backgrounds.txt](../../artifacts/debate-local-rehearsal/suite-2026-09-09T09-54-38.432Z/study-backgrounds.txt)<br>`node scripts/test-study-room-backgrounds.mjs` |
-| study-background-picker | PASS | [artifacts/debate-local-rehearsal/suite-2026-09-09T09-54-38.432Z/study-background-picker.txt](../../artifacts/debate-local-rehearsal/suite-2026-09-09T09-54-38.432Z/study-background-picker.txt)<br>`node scripts/test-study-room-background-picker.mjs` |
-| study-hotfix-behavior | PASS | [artifacts/debate-local-rehearsal/suite-2026-09-09T09-54-38.432Z/study-hotfix-behavior.txt](../../artifacts/debate-local-rehearsal/suite-2026-09-09T09-54-38.432Z/study-hotfix-behavior.txt)<br>`node scripts/test-study-room-hotfix-behavior.mjs` |
-| study-live | PASS | [artifacts/debate-local-rehearsal/suite-2026-09-09T09-54-38.432Z/study-live.txt](../../artifacts/debate-local-rehearsal/suite-2026-09-09T09-54-38.432Z/study-live.txt)<br>`node scripts/test-study-room-live.mjs` |
-| local-http-boundaries | PASS | [artifacts/debate-local-rehearsal/suite-2026-09-09T09-54-38.432Z/local-http-boundaries.txt](../../artifacts/debate-local-rehearsal/suite-2026-09-09T09-54-38.432Z/local-http-boundaries.txt)<br>`node --test scripts/test-debate-rehearsal-server.mjs` |
-| accelerated-organizer | PASS | [artifacts/debate-local-rehearsal/suite-2026-09-09T09-54-38.432Z/accelerated-organizer.txt](../../artifacts/debate-local-rehearsal/suite-2026-09-09T09-54-38.432Z/accelerated-organizer.txt)<br>`node scripts/test-debate-organizer-rehearsal.mjs` |
-| eligible-tournament-exports | PASS | [artifacts/debate-local-rehearsal/suite-2026-09-09T09-54-38.432Z/eligible-tournament-exports.txt](../../artifacts/debate-local-rehearsal/suite-2026-09-09T09-54-38.432Z/eligible-tournament-exports.txt)<br>`node scripts/test-debate-tournament-export.mjs` |
-| staging-preflight-gates | PASS | [artifacts/debate-local-rehearsal/suite-2026-09-09T09-54-38.432Z/staging-preflight-gates.txt](../../artifacts/debate-local-rehearsal/suite-2026-09-09T09-54-38.432Z/staging-preflight-gates.txt)<br>`node --test scripts/test-debate-staging-release.mjs` |
-
-The post-ACL suite includes **253 server/domain/database tests** and **five actual PGlite SQL tests**. The organizer journey completed **184 commands / 59 checks** in **5259 ms**, simulating 5607494 ms. It covered all 14 stages, preparation/break, six genuine local outputs and the next match. The 229-command positive tournament journey proves two eligible final results and four awards while preserving raw A100/N92 and disclosed adjusted A90/N92. These accelerated synthetic journeys are not 90 real-minute physical rehearsals.
-
-The local default-ACL regression reproduced inherited service-role audit grants, then verified explicit revocation before narrow grants. Current Debate SQL SHA-256: `89d4f46b1e1b2991202880114387a1356b5eedfcf562129079de83d55a94b53c`. The original 09:43 pass is retained as ACL_HISTORY. The hosted prerequisite review remains read-only; no remote schema was applied.
+| [Debate V3 local validation](https://github.com/codingwally/Bar-Exam-simulator/actions/runs/34338121568) | SUCCESS | Debate local verification passed its then-current candidate. |
+| [Validate soft-launch five-token release](https://github.com/codingwally/Bar-Exam-simulator/actions/runs/34338121570) | FAILURE | Obsolete exact single-cron array literal in CPU configuration test; corrected local check is included in the replacement suite. |
+| [Temporary promotional video media transfer](https://github.com/codingwally/Bar-Exam-simulator/actions/runs/34338121602) | FAILURE | Unchanged narration download URL returned HTTP404. |
 
 ## Evidence records
 
@@ -39,17 +54,17 @@ MD and TXT are byte-identical; all 599 split lines classified and all 267 source
 
 Limit: Supplied external research was not independently refreshed by this ledger audit.
 
-Artifact SHA-256: `b8d49b04ddc0042fbed2cba97dc06bd800a4454c89c75907d972b16fde973ea2`.
+Artifact SHA-256: `e0b3e5523696e8132ea9382f1e2633faf1448e1280eeaaf4674fd41dbf4eb35e`.
 
 ### Evidence LATEST
 
-**PASS_LOCAL_SUITE** — [artifacts/debate-local-rehearsal/suite-2026-09-09T09-54-38.432Z/report.json](../../artifacts/debate-local-rehearsal/suite-2026-09-09T09-54-38.432Z/report.json).
+**PASS_LOCAL_SUITE** — [artifacts/debate-local-rehearsal/suite-2026-09-09T10-27-12.512Z/report.json](../../artifacts/debate-local-rehearsal/suite-2026-09-09T10-27-12.512Z/report.json).
 
-Final post-ACL twelve-group suite passes, including 253 server/domain/database tests and five actual PGlite SQL tests. Explicit default service-role grants are revoked before narrow grants, so audit UPDATE/TRUNCATE denial is verified against the reproduced hosted default-ACL shape.
+Final thirteen-group suite passes actual Worker same-origin GET, stale navigation guards, CPU/security configuration, database/service/domain behavior and strict release evidence requirements. Staging evidence requires thirteen named groups exactly once and 65 critical source paths; this suite captures 89 source hashes.
 
-Limit: Local Node/disposable PGlite and inert adapters only. Not hosted migration, native multi-connection load, actual media/capacity/mail, complete current browser or public deployment.
+Limit: Local Node/disposable PGlite and inert adapters only. Full current browser flow, hosted migration, native multi-connection load, actual media/capacity/mail and deployment remain unverified.
 
-Artifact SHA-256: `7f212fdbd5298eab13f073ada00d1f611368a7ca5775418443b7824f010de8d7`.
+Artifact SHA-256: `bbd593f4cccbcaf99bfc78e67dd483c3db396131fb845f86a3c6a009105b8dc6`.
 
 Permanent record: [docs/debate-room-v3/evidence/local-verification-20260909.json](../../docs/debate-room-v3/evidence/local-verification-20260909.json).
 
@@ -65,13 +80,13 @@ Artifact SHA-256: `debbfb256afe33d30af26d99c6dcd096fd27fe37fabe949c582e320b01b22
 
 ### Evidence ORGANIZER
 
-**SOFTWARE_JOURNEY_PASS** — [artifacts/debate-local-rehearsal/2026-09-09T09-55-47-855Z-17b100/organizer-rehearsal-de-23a37c2b0a1523a4a2863f5a4cc91495.json](../../artifacts/debate-local-rehearsal/2026-09-09T09-55-47-855Z-17b100/organizer-rehearsal-de-23a37c2b0a1523a4a2863f5a4cc91495.json).
+**SOFTWARE_JOURNEY_PASS** — [artifacts/debate-local-rehearsal/2026-09-09T10-27-43-305Z-433d34/organizer-rehearsal-de-8810015690a05d28b6a7ef952d3a75a6.json](../../artifacts/debate-local-rehearsal/2026-09-09T10-27-43-305Z-433d34/organizer-rehearsal-de-8810015690a05d28b6a7ef952d3a75a6.json).
 
-Latest post-ACL organizer journey: 184 committed commands, 59 checks, five motions, all 14 speaking stages plus preparation/break, independent ballots/poll, finalization, six real local outputs and next formal match. Actual duration 5259 ms; simulated timeline 5607494 ms.
+Latest organizer journey: 184 commands and 59 checks; five motions, all 14 stages plus preparation/break, private drafts, independent poll, explicit finalization, six real local outputs and next formal match. Actual duration 23510 ms; simulated timeline 5625743 ms.
 
 Limit: Accelerated synthetic identities and disposable PGlite. Not 90 real minutes, physical media, real email, hosted identity or public deployment.
 
-Artifact SHA-256: `0f2b3b215b5045889908140d86e41f31c4ed713779718b1be279c5985c0add6a`.
+Artifact SHA-256: `27c92b7b7dc509e20233b70142e8747f2ccf27125db520a340555075ad7a38fa`.
 
 Permanent record: [docs/debate-room-v3/evidence/local-verification-20260909.json](../../docs/debate-room-v3/evidence/local-verification-20260909.json).
 
@@ -87,13 +102,13 @@ Artifact SHA-256: `56b71f827b74874d1fc36ce0e2ec7dc5e28752975e11ecd9b849287e7590c
 
 ### Evidence TOURNAMENT
 
-**PASS_LOCAL_ELIGIBLE_TOURNAMENT_SANCTION_EXPORT** — [artifacts/debate-local-rehearsal/2026-09-09T09-55-57-068Z-a4a2e5/positive-tournament-sanctions-export.json](../../artifacts/debate-local-rehearsal/2026-09-09T09-55-57-068Z-a4a2e5/positive-tournament-sanctions-export.json).
+**PASS_LOCAL_ELIGIBLE_TOURNAMENT_SANCTION_EXPORT** — [artifacts/debate-local-rehearsal/2026-09-09T10-28-18-568Z-7ddffd/positive-tournament-sanctions-export.json](../../artifacts/debate-local-rehearsal/2026-09-09T10-28-18-568Z-7ddffd/positive-tournament-sanctions-export.json).
 
 Latest suite: 229 commands, two completed 14-stage finalized matches, two eligible frozen source results, one comparable group, all four awards. Raw A100/N92; declared 10-point A deduction yields official A90/N92. Raw performance awards unchanged. Three genuine private PDFs plus current-owner download and other-actor denial.
 
 Limit: Synthetic local PGlite only; no real competition, hosted object storage, provider, mail, load or deployment.
 
-Artifact SHA-256: `7217f10c64f324e14ea553f932f011579e84c35a643d0b464972bcfd7817859d`.
+Artifact SHA-256: `992455062f23d0c2b8a7efc75446a79b7109c5a4a7716012ff60951778560a78`.
 
 Permanent record: [docs/debate-room-v3/evidence/local-verification-20260909.json](../../docs/debate-room-v3/evidence/local-verification-20260909.json).
 
@@ -111,15 +126,15 @@ Artifact SHA-256: `6ab08b23450a1c9c3a1c7e256c7cbb97a9af7d0fb48cb28d700a9bcfca3ed
 
 **HISTORICAL_PARTIAL_BROWSER_QA** — [artifacts/debate-local-rehearsal/2026-09-09T07-59-52-481Z-c1f4ba/browser-qa.md](../../artifacts/debate-local-rehearsal/2026-09-09T07-59-52-481Z-c1f4ba/browser-qa.md).
 
-Actual Chrome with synthetic local identities covered saved setup, invite claim, prep start/pause, private scorecard refresh, export request and fixtures; observer privacy held. Later frozen-browser attempts were blocked by repeated CUA CDP Emulation.setFocusEmulationEnabled and Page.navigate timeouts in Chrome and IAB.
+Actual Chrome with synthetic local identities covered saved setup, invite claim, prep start/pause, private scorecard refresh, export request and fixtures; observer privacy held. Later frozen-browser attempts were blocked by repeated CUA CDP Emulation.setFocusEmulationEnabled and Page.navigate timeouts in Chrome and IAB. Later appended notes record a local server resume and read-only staging workflow inventory, not fresh browser interaction. That task-owned server was subsequently paused for the OOM rerun; the historical running-server statement is not current status.
 
 Limit: Not current complete browser pass, full 14-stage visual rehearsal, mobile, physical camera/audio or inspected browser-download destination. Tool failure is a verification gap, not product success or product failure.
 
-Artifact SHA-256: `dea0b36902f7c6aa8326acaac9670b5a55ac25f833b3b4e0ec70f8c0ce4b0680`.
+Artifact SHA-256: `1a3492ace282ff032ea7bb7681a1261d82245148cd5a380e13ffe1076b3f94f1`.
 
 ### Evidence TARGETED
 
-**HISTORICAL_TARGETED_TEST_OBSERVATIONS** — historical task transcript, no standalone run manifest.
+**HISTORICAL_TARGETED_TEST_OBSERVATIONS** — direct task/CI inspection; see linked history above.
 
 Task transcript recorded targeted service/domain/SQL/fixtures/roster/substitution/sanctions/tournament passes while fixes were developed. Applicable files are now independently covered by LATEST logs.
 
@@ -127,13 +142,13 @@ Limit: Earlier transcript-only counts are historical; use the current source-has
 
 ### Evidence MEDIA
 
-**LOCAL_DOUBLE_BASED_MEDIA_TESTS** — [artifacts/debate-local-rehearsal/suite-2026-09-09T09-54-38.432Z/server-domain-database.txt](../../artifacts/debate-local-rehearsal/suite-2026-09-09T09-54-38.432Z/server-domain-database.txt).
+**LOCAL_DOUBLE_BASED_MEDIA_TESTS** — [artifacts/debate-local-rehearsal/suite-2026-09-09T10-27-12.512Z/server-domain-database.txt](../../artifacts/debate-local-rehearsal/suite-2026-09-09T10-27-12.512Z/server-domain-database.txt).
 
 Current server-media and delivery tests pass with installed SDK interfaces, local token signing and inert provider responses; client transition tests pass in the client-state-media-dates group.
 
 Limit: No network traffic to the provider, consenting devices, GPU/camera compatibility, stale-token Cloud measurements or physical privacy proof.
 
-Artifact SHA-256: `a7f963bb14fca0ae7c8d4edf61499ef95bfe5dd88eda86e111ec6fcbf2dd9e76`.
+Artifact SHA-256: `fd9115aeaa7d846efb095492b2d2adc37872a503886890ef5a2a71cf59e6a577`.
 
 ### Evidence STAGING
 
@@ -169,11 +184,11 @@ Artifact SHA-256: `c61758ee9478bce41a01a41640fbb5885f3623332c6c00708ac70ef4f10b6
 
 **PASS_LOCAL_IMPLEMENTATION_CHECKS_NOT_FULL_ACCEPTANCE** — [docs/debate-room-v3/evidence/local-verification-20260909.json](../../docs/debate-room-v3/evidence/local-verification-20260909.json).
 
-Permanent reviewed evidence package contains final source/log hashes, actual group counts, preserved broad failures and affected-file retests, local Pages and locked staging artifact checks, browser limits and nine synthetic output samples. This audit verified all nine sample byte hashes.
+Permanent package records current thirteen-group source/log hashes and counts, preserved broad/CI and OOM history, actual local Pages/staging artifact checks, browser limits, and nine reviewed synthetic samples. This audit verified all nine sample hashes.
 
 Limit: Packaged synthetic outputs and local artifact inspection are not deployment, physical-media, real mail or public launch evidence.
 
-Artifact SHA-256: `b8b1de8257fe58d86a785009a198c93670b191a8b6e71f62f42b7798d4436398`.
+Artifact SHA-256: `773cf7b899407dfd074710a86a7af3127fb02042bd88fdbd5573e81e8abbd7a0`.
 
 ### Evidence DB_PREREQ
 
@@ -185,12 +200,67 @@ Limit: No remote schema change or hosted transaction/rollback probe. Revalidate 
 
 Artifact SHA-256: `dc346e940cea82f28041dca5072ee34d4b124d86f9773543f2760ae75a7baa5a`.
 
+### Evidence PRE_ORIGIN_HISTORY
+
+**HISTORICAL_PASS_BEFORE_ORIGIN_NAVIGATION_CONFIGURATION_FIXES** — [artifacts/debate-local-rehearsal/suite-2026-09-09T09-54-38.432Z/report.json](../../artifacts/debate-local-rehearsal/suite-2026-09-09T09-54-38.432Z/report.json).
+
+The earlier twelve-group suite passed its recorded bytes before the main Worker same-origin GET, navigation, CPU contract and evidence-manifest fixes.
+
+Limit: Retained history only; latest candidate requires the thirteen-group suite.
+
+Artifact SHA-256: `7f212fdbd5298eab13f073ada00d1f611368a7ca5775418443b7824f010de8d7`.
+
+Permanent record: [docs/debate-room-v3/evidence/local-verification-20260909.json](../../docs/debate-room-v3/evidence/local-verification-20260909.json).
+
+### Evidence ROLLBACK_PROBE
+
+**LOCAL_ADAPTED_ROLLBACK_ONLY_NOT_HOSTED** — [docs/debate-room-v3/evidence/staging-rollback-probe.md](../../docs/debate-room-v3/evidence/staging-rollback-probe.md).
+
+Concrete rollback probe embeds exact migration bodies and checks collisions, prerequisites, privileges, actual service commands, immutable audit and restoration. Documented local PG18 version/helper-fingerprint adaptations and five negative cases passed; the unmodified PG17-targeted artifact rejects that local runtime.
+
+Limit: No hosted probe or migration. A separately approved transport preserving the complete transaction and rollback/readback remains unresolved; execute_sql/apply_migration are not substitute rollback transports.
+
+Artifact SHA-256: `7d09e4d5a3d242742e3d2efa9be97a1ae1f9d1ef4d6515a4fddfa1d16a6a5287`.
+
+SQL artifact: [docs/debate-room-v3/evidence/staging-rollback-probe.sql](../../docs/debate-room-v3/evidence/staging-rollback-probe.sql), SHA-256 `ce653a3902b58c038c4fc44ff24d136a05fa1723699288bbf436d6111b6e6a9b`.
+
+### Evidence CI_HISTORY
+
+**FIRST_DRAFT_CANDIDATE_CI_HISTORY** — direct task/CI inspection; see linked history above.
+
+Read-only GitHub inspection confirmed draft PR356 at its first candidate and these three CI conclusions. The failed runs remain failures in history.
+
+Limit: These checks predate newer candidate fixes. Root owns subsequent CI receipts; none establishes merge, hosted behavior or deployment.
+
+### Evidence OOM_HISTORY
+
+**FAILED_LOCAL_RUN_RESOURCE_EXHAUSTION** — [artifacts/debate-local-rehearsal/suite-2026-09-09T10-24-11.761Z/report.json](../../artifacts/debate-local-rehearsal/suite-2026-09-09T10-24-11.761Z/report.json).
+
+The intervening thirteen-group run had twelve groups pass and the organizer process exit2147483651 with Fatal process out of memory: Zone. Its source hashes did not change during the run. Root paused only the task-owned local PGlite server, then the unchanged source passed all thirteen groups.
+
+Limit: This was a failed complete run and remains failed. It is a Node resource failure, not a passing rehearsal or a demonstrated product assertion failure. No physical or hosted conclusion follows.
+
+Artifact SHA-256: `c6ff1e06d714070f769ce2cb8f32b3e13d2ef97136564125c22f63c4c3d6eaed`.
+
+Permanent record: [docs/debate-room-v3/evidence/local-verification-20260909.json](../../docs/debate-room-v3/evidence/local-verification-20260909.json).
+
+### Evidence OUTPUT_HISTORY
+
+**HISTORICAL_PASS_BEFORE_FIXTURE_OUTPUT_HYGIENE** — [artifacts/debate-local-rehearsal/suite-2026-09-09T10-19-47.413Z/report.json](../../artifacts/debate-local-rehearsal/suite-2026-09-09T10-19-47.413Z/report.json).
+
+The first thirteen-group suite passed but its fixture wrote a random-UUID result into a tracked historical sample. The test output was moved to ignored local evidence; the historical tracked sample was preserved. LATEST covers the corrected test bytes.
+
+Limit: The old pass is not current source-hash evidence. No runtime feature changes were made for output hygiene.
+
+Artifact SHA-256: `5580ff11490a5fbc5da78ebac355837e5183088f8edc730037cd0db18f708f55`.
+
 ## Open acceptance and release gates
 
 - **Current complete browser journey:** latest Chrome and in-app-browser attempts were blocked by repeated CUA CDP focus/navigation timeouts. Historical partial Chrome QA remains evidence only for its tested flow. Full frozen UI, mobile/320px, zoom, keyboard, screen reader, contrast, reconnect and real-account cohort checks remain open.
 - **Physical media and endurance:** consenting independent camera/microphone devices, simultaneous questioning/responding, background effects, private-room leakage, controlled tab sleep/network failure, measured timer agreement and at least 90 real minutes of full-flow operation have not been verified. A synthetic clock advance or API journey does not satisfy these checks.
 - **Capacity and spend:** no approved 10/25/50/100 participant ramp, measured provider overhead/reconnect headroom, concurrent event limit or cost evidence. 100 is a requested target, not verified capacity. New media stays disabled until configured verified limits, revocation assumptions and independent minute sweep operation are proved.
 - **External delivery and persistence:** no actual approved-recipient inbox delivery, production email send, hosted private-object lifecycle, native multi-connection database load, hosted migration, backup/restore or live rollback proof. Provider/mail success doubles verify boundary behavior only. Proposed retention defaults require actual owner/operator approval.
+- **Rollback probe transport:** the concrete PG17-targeted SQL has local adapted PG18 evidence only. Hosted execution needs a separately approved single-connection transaction/rollback transport and independent readback; no hosted probe has run.
 - **Deployment and launch:** new migrations, Worker and Pages have not been deployed by this work. No new Debate deployment IDs, live SHA/asset/auth/navigation smoke or approved public launch are claimed. Read-only staging inventory and local release-gate tests do not fulfill deployment evidence.
 
 ## Historical failures and source boundaries

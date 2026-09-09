@@ -360,6 +360,32 @@ function assertOrigin(request, allowedOrigin) {
   return origin;
 }
 
+const SAME_ORIGIN_DEBATE_READ_PATHS = new Set([
+  '/debate-room/access', '/debate-room/events', '/debate-room/discover',
+  '/debate-room/snapshot', '/debate-room/messages', '/debate-room/download',
+  '/debate-room/evidence/download',
+]);
+
+function isAllowedSameOriginDebateRead(request, allowedOrigin, pathname) {
+  // Fetch §3.2 omits Origin on ordinary same-origin GET. Fetch Metadata §2.3
+  // supplies a browser-controlled same-origin assertion; this never grants a role.
+  // https://fetch.spec.whatwg.org/#origin-header
+  // https://www.w3.org/TR/fetch-metadata/#sec-fetch-site-header
+  if (request.method !== 'GET' || request.headers.has('Origin')
+      || !SAME_ORIGIN_DEBATE_READ_PATHS.has(pathname)
+      || new URL(request.url).origin !== allowedOrigin
+      || request.headers.get('Sec-Fetch-Site') !== 'same-origin') return false;
+  // Referrer policy/privacy controls can omit Referer. A supplied conflicting
+  // value is rejected; neither Referer alone nor missing metadata is sufficient.
+  if (request.headers.has('Referer')) {
+    try {
+      const referrer = new URL(request.headers.get('Referer'));
+      if (referrer.origin !== allowedOrigin || referrer.username || referrer.password) return false;
+    } catch { return false; }
+  }
+  return true;
+}
+
 async function transientRateKey(request, env, scope) {
   const ip = request.headers.get('CF-Connecting-IP') || 'unavailable';
   return hmacHex(env.GUEST_USAGE_HMAC_KEY || 'local-transient-rate-key', `${scope}\0${ip}`);
@@ -10468,7 +10494,8 @@ export default {
           allowedOrigin,
         );
       }
-      const origin = assertOrigin(request, allowedOrigin);
+      const origin = isAllowedSameOriginDebateRead(request, allowedOrigin, pathname)
+        ? allowedOrigin : assertOrigin(request, allowedOrigin);
       if (request.method === 'OPTIONS') {
         return new Response(null, { status: 204, headers: corsHeaders(origin, allowedOrigin) });
       }
@@ -10483,7 +10510,7 @@ export default {
         if (response) {
           const headers = new Headers(response.headers);
           for (const [key, value] of Object.entries(corsHeaders(origin, allowedOrigin))) if (key !== 'Vary') headers.set(key, value);
-          headers.set('Vary', 'Origin, Authorization, Cookie');
+          headers.set('Vary', 'Origin, Sec-Fetch-Site, Referer, Authorization, Cookie');
           return new Response(response.body, { status: response.status, headers });
         }
       }

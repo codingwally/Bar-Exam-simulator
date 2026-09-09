@@ -15,6 +15,7 @@ on:
       - 'scripts/*debate*'
       - 'scripts/*study-room*'
       - 'scripts/build-pages-artifact.mjs'
+      - 'scripts/test-worker-cpu-limit-contract.mjs'
       - 'supabase/migrations/20260909*'
       - 'index.html'
       - '.github/workflows/debate-v3-validation.yml'

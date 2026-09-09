@@ -1,6 +1,6 @@
 # Debate V3 restricted staging operating package
 
-This package is prepared code, not permission to deploy and not evidence of a successful staging run. It has not been dispatched, pushed, deployed or used to apply database changes. Its unit tests use local fixtures; real staging authorization remains unverified until the restricted workflow and the subsequent organizer rehearsal succeed.
+This package is prepared code in draft PR 356, not permission to deploy and not evidence of a successful staging run. The workflow has not been dispatched or used to deploy or apply database changes. Its unit tests use local fixtures; real staging authorization remains unverified until the restricted workflow and the subsequent organizer rehearsal succeed.
 
 The only target is `https://duediligence-examinations-staging.wallyesteban1993.workers.dev`, backed by Supabase project `hlzqmreeoghbldnhlybr`. The historical Worker name is an environment identifier. The established decommission guard rejects the retired implementation. Existing permitted public compatibility files remain byte-identical to the reviewed candidate and supply no Debate feature behavior.
 
@@ -56,7 +56,7 @@ Use this schema with real values; these placeholders are intentionally invalid a
 }
 ```
 
-The workflow creates fresh complete local-suite evidence itself and verifies all recorded source hashes against the clean candidate, plus the approved path list against the actual Git diff. Local tests, build success or a manually filled JSON record alone do not authorize deployment.
+The workflow creates fresh complete local-suite evidence itself. All thirteen required groups must appear exactly once with PASS and exit code zero, and the source manifest must include the 65 explicitly required application, migration, build and release dependencies. It verifies every recorded source hash against the clean candidate, plus the approved path list against the actual Git diff. Local tests, build success or a manually filled JSON record alone do not authorize deployment.
 
 ## Controlled staging sequence
 

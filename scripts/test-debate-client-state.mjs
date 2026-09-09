@@ -24,6 +24,8 @@ assert.ok(evidenceStart > startup && evidenceEnd > evidenceStart, 'Extract the r
 const evidenceDeclaration = source.slice(evidenceStart, evidenceEnd);
 const matchChangeWiring = source.match(/^\$\('active-match'\)\.onchange=.*$/m)?.[0];
 assert.ok(matchChangeWiring, 'Exercise the actual active-match selection handler');
+const lobbyWiring = source.match(/^\$\('back-lobby'\)\.onclick=.*$/m)?.[0];
+assert.ok(lobbyWiring, 'Exercise the actual return-to-lobby handler');
 
 class Element {
   constructor(tagName = 'div') {
@@ -120,8 +122,9 @@ function harness() {
     loadEvents = async () => { counters.discovery++; };
     globalThis.client = {state, media, request, refresh, command, retryPending, adopt,
       loadHistory, ensureTile, clearSensitiveViews, discardEventView, messageHistoryKey, signOutCleanup, submitEvidence,
-      currentMatch, usableMatches, actualRenderLive, renderSchedule, renderRules, actions, leaveCurrentMedia};
+      currentMatch, usableMatches, actualRenderLive, renderSchedule, renderRules, actions, leaveCurrentMedia, openEvent};
     ${matchChangeWiring}
+    ${lobbyWiring}
   `, context, { filename: filename.pathname });
   return { ...context.client, document, elements, timers, clearedTimers, fetches, counters, context,
     timer(callback = () => {}) { return context.setTimeout(callback, 650); },
@@ -205,12 +208,12 @@ test('sign-out removes the prior live motion and controls in addition to private
   const h = harness(); openFixture(h); const live = privateLiveView(h); await h.signOutCleanup(); assertPrivateLiveCleared(h, live);
 });
 
-for (const transition of ['leave', 'select']) {
+for (const transition of ['leave', 'select', 'open-event', 'lobby']) {
   test(`a delayed media ${transition} cannot leave or navigate in a newly opened event`, async () => {
     const h = harness(), oldEvent = openFixture(h); oldEvent.matches[0].myMedia = { identity: 'old-private-media' };
     let completeLeave;
     h.media.leave = () => new Promise(resolve => { completeLeave = resolve; });
-    const operation = transition === 'leave' ? h.leaveCurrentMedia() : h.actions['select-match']({ dataset: { match: 'old-second-match' } });
+    const operation = transition === 'leave' ? h.leaveCurrentMedia() : transition === 'select' ? h.actions['select-match']({ dataset: { match: 'old-second-match' } }) : transition === 'open-event' ? h.openEvent('old-target-event') : h.element('back-lobby').onclick();
     h.discardEventView(); const newEvent = openFixture(h, eventFixture('new-event'));
     const newPrivateView = addSecret(h, 'live-motion', 'NEW_EVENT_MOTION'), newGeneration = h.state.viewGeneration;
     completeLeave(); await operation;

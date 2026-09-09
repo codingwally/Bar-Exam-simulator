@@ -13,6 +13,7 @@ The first application change is image-removal commit `6431715`. Recovery commit 
 - [Rehearsal and release gates](rehearsal-and-release-gates.md): complete organizer journey and focused procedures for each unavailable external check.
 - [Operations and release plan](operations.md): flags, migrations, privacy, scheduling, monitoring, and rollback.
 - [Synthetic sample exports and local evidence](evidence/README.md).
+- [Draft review receipt and remaining acceptance gates](review-receipt.md).
 - [Restricted staging package](../debate-v3-staging-release.md) and [read-only target inventory](staging-inventory.md).
 - [Backend API contract](../../worker/debate-backend-contract.md).
 

@@ -384,6 +384,7 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
         const clockGeometry = await host.locator('#clock').evaluate(element => ({ fontSize: parseFloat(getComputedStyle(element).fontSize),
           lineHeight: parseFloat(getComputedStyle(element).lineHeight), height: element.clientHeight, width: element.clientWidth,
           scrollHeight: element.scrollHeight, scrollWidth: element.scrollWidth }));
+        (report.layoutMeasurements ||= []).push({ kind: 'questioning-overtime-clock', width, height, ...clockGeometry });
         check('Desktop overtime is readable on one complete line without clipping', clockGeometry.fontSize >= 28
           && clockGeometry.height <= clockGeometry.lineHeight + 2 && clockGeometry.scrollHeight <= clockGeometry.height + 1
           && clockGeometry.scrollWidth <= clockGeometry.width + 1, { width, height, clockGeometry });

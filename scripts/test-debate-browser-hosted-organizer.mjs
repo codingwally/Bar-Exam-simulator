@@ -13,6 +13,98 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const sha = value => createHash('sha256').update(value).digest('hex');
 const PRIVATE_NOTE = 'CI_JUDGE_PRIVATE_NOTE_DO_NOT_DISCLOSE';
 const PRIVATE_TEAM = 'CI_AFFIRMATIVE_PRIVATE_STRATEGY_DO_NOT_DISCLOSE';
+// Independent V3 section 09 oracle: do not import the product's stage generator.
+export const HOSTED_DEFAULT_TIMED_STAGES = Object.freeze([
+  ['preparation', 'preparation', [], 900000],
+  ['stage-01', 'constructive', ['A1'], 300000],
+  ['stage-02', 'interpellation', ['N1', 'A1'], 180000],
+  ['stage-03', 'constructive', ['N1'], 300000],
+  ['stage-04', 'interpellation', ['A1', 'N1'], 180000],
+  ['stage-05', 'constructive', ['A2'], 300000],
+  ['stage-06', 'interpellation', ['N2', 'A2'], 180000],
+  ['stage-07', 'constructive', ['N2'], 300000],
+  ['stage-08', 'interpellation', ['A2', 'N2'], 180000],
+  ['stage-09', 'constructive', ['A3'], 300000],
+  ['stage-10', 'interpellation', ['N3', 'A3'], 180000],
+  ['stage-11', 'constructive', ['N3'], 300000],
+  ['stage-12', 'interpellation', ['A3', 'N3'], 180000],
+  ['closing-break', 'break', [], 300000],
+  ['stage-13', 'rebuttal', ['N1'], 300000],
+  ['stage-14', 'rebuttal', ['A1'], 300000],
+].map(([id, kind, speakerSeats, durationMs]) => Object.freeze({ id, kind, speakerSeats: Object.freeze(speakerSeats), durationMs })));
+
+export function assertHostedDefaultRunOfShow(stages) {
+  assert.deepEqual(stages.map(({ id, kind, speakerSeats, durationMs }) => ({ id, kind, speakerSeats, durationMs })),
+    [...HOSTED_DEFAULT_TIMED_STAGES, { id: 'deliberation', kind: 'deliberation', speakerSeats: [], durationMs: null }]);
+}
+
+export function assertHostedFinishedAttempt(attempt, index, seats) {
+  const expected = HOSTED_DEFAULT_TIMED_STAGES[index]; assert.ok(expected && attempt);
+  assert.equal(attempt.stageId, expected.id); assert.equal(attempt.stageIndex, index);
+  assert.equal(attempt.state, 'FINISHED'); assert.equal(attempt.number, 1); assert.equal(attempt.ruleVersion, 1);
+  assert.deepEqual(attempt.speakerSeats, expected.speakerSeats);
+  assert.deepEqual(attempt.speakerIds, expected.speakerSeats.map(seat => seats[seat]));
+  const types = index === 1 ? ['START', 'PAUSE', 'RESUME', 'FINISH'] : ['START', 'FINISH'];
+  assert.deepEqual(attempt.adjustments.map(item => item.type), types);
+  let runningAt = null, elapsedMs = 0, previousAt = attempt.createdAt;
+  assert.ok(Number.isSafeInteger(previousAt));
+  for (const adjustment of attempt.adjustments) {
+    assert.ok(Number.isSafeInteger(adjustment.at) && adjustment.at >= previousAt);
+    assert.equal(adjustment.durationMs, expected.durationMs);
+    if (['START', 'RESUME'].includes(adjustment.type)) { assert.equal(runningAt, null); runningAt = adjustment.at; }
+    else { assert.ok(runningAt !== null); elapsedMs += adjustment.at - runningAt; runningAt = null; }
+    previousAt = adjustment.at;
+  }
+  assert.equal(runningAt, null); assert.equal(attempt.finishedAt, previousAt);
+  assert.equal(attempt.elapsedMs, elapsedMs); assert.ok(elapsedMs >= expected.durationMs + 1000);
+  assert.equal(attempt.overtimeMs, elapsedMs - expected.durationMs);
+  return { id: expected.id, kind: expected.kind, seats: [...expected.speakerSeats], attemptId: attempt.id,
+    state: 'FINISHED', durationMs: expected.durationMs, startedAt: attempt.adjustments[0].at,
+    finishedAt: attempt.finishedAt, elapsedMs, overtimeMs: attempt.overtimeMs, adjustmentTypes: types };
+}
+
+export function assertHostedCorrectedAwards(final) {
+  assert.equal(final.state, 'FINAL'); assert.equal(final.winner, 'affirmative');
+  assert.equal(final.awards?.status, 'AVAILABLE');
+  const expected = { bestSpeaker: ['A2', 'A3'], bestInterpellator: ['A1', 'A2', 'A3', 'N1', 'N2', 'N3'],
+    bestRebuttalSpeaker: ['A1'], bestDebater: ['A2'] };
+  for (const [name, winners] of Object.entries(expected)) {
+    assert.equal(final.awards[name]?.status, winners.length > 1 ? 'COAWARD' : 'AWARDED');
+    assert.deepEqual(final.awards[name].winners.slice().sort(), winners);
+  }
+  assert.deepEqual(final.awards.bestRebuttalSpeaker.candidates.map(candidate => candidate.id).sort(), ['A1', 'N1']);
+  return expected;
+}
+
+export function assertHostedExportVersion(kind, job, final) {
+  assert.equal(job?.type, 'export');
+  if (['result', 'event_report', 'csv', 'certificate'].includes(kind)) assert.equal(job.resultVersion, final.id);
+  else { assert.ok(['rules', 'scorecard'].includes(kind)); assert.ok(job.resultVersion == null); }
+}
+
+export function assertHostedNextMatchState(next, prior, motionId, { started = false } = {}) {
+  assert.ok(next?.id && next.id !== prior.id); assert.equal(next.motionId, motionId); assert.notEqual(motionId, prior.motionId);
+  for (const key of ['drafts', 'ballots', 'polls', 'nominations']) assert.deepEqual(next[key], {});
+  for (const key of ['ballotHistory', 'resultVersions', 'messages', 'evidence', 'incidents', 'protests']) assert.deepEqual(next[key], []);
+  assert.equal(next.ballotRound, 1); assert.equal(next.ballotState, 'DRAFT'); assert.equal(next.activePollId, null);
+  if (!started) {
+    assert.equal(next.phase, 'setup'); assert.equal(next.rulesLockedAt, null); assert.equal(next.timer, null);
+    assert.deepEqual(next.runOfShow, []); assert.deepEqual(next.attempts, []); assert.deepEqual(next.acknowledgments, {});
+    assert.ok(next.motionReleasedAt == null);
+  } else {
+    assert.equal(next.phase, 'preparation'); assert.equal(next.currentStageIndex, 0); assertHostedDefaultRunOfShow(next.runOfShow);
+    assert.ok(Number.isSafeInteger(next.motionReleasedAt) && next.motionReleasedAt > prior.motionReleasedAt);
+    assert.equal(next.attempts.length, 1); const attempt = next.attempts[0];
+    assert.equal(attempt.stageId, 'preparation'); assert.equal(attempt.state, 'READY'); assert.deepEqual(attempt.adjustments, []);
+    assert.ok(!prior.attempts.some(item => item.id === attempt.id));
+    assert.equal(next.timer?.matchId, next.id); assert.equal(next.timer.stageAttemptId, attempt.id);
+    assert.equal(next.timer.state, 'READY'); assert.equal(next.timer.durationMs, 900000);
+    assert.equal(next.timer.elapsedBeforeRunMs, 0); assert.equal(next.timer.startedAtServerMs, null); assert.equal(next.timer.controllerId, null);
+  }
+}
+
+export function assertHostedPriorMatchPreserved(before, after) { assert.deepEqual(after, before); }
+
 export function hostedBrowserEnvironment(env = process.env) {
   return Object.fromEntries(['PATH', 'HOME', 'TMPDIR', 'TMP', 'TEMP', 'LANG', 'LC_ALL', 'DISPLAY', 'XDG_RUNTIME_DIR']
     .filter(key => typeof env[key] === 'string').map(key => [key, env[key]]));
@@ -350,6 +442,8 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
     await tab(host, 'overview'); await command(host, 'start_match', () => action(host, 'start-match').click(), { reject: 'MATCH_NOT_READY' });
     await prepareMatch(matchId); await screenshot(host, 'ready-with-explicit-accommodations');
     await command(host, 'start_match', () => action(host, 'start-match').click()); await tab(host, 'live');
+    assertHostedDefaultRunOfShow(matchFor(host).runOfShow);
+    check('Independent V3 oracle confirms every default stage, question pair and duration', true);
     await checkLiveMediaLayout(1365); await checkLiveMediaLayout(320); await host.setViewportSize({ width: 1365, height: 900 });
     check('Default preparation loads READY for 15 minutes', matchFor(host).timer.state === 'READY' && matchFor(host).timer.durationMs === 900000);
     const first = matchFor(host), aCaptain = first.captains.affirmative, nCaptain = first.captains.negative;
@@ -374,6 +468,8 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
     for (;;) {
       const current = matchFor(host); if (current.phase === 'deliberation') break;
       const stage = current.runOfShow[current.currentStageIndex];
+      assert.equal(current.currentStageIndex, report.stages.length);
+      assert.equal(stage.id, HOSTED_DEFAULT_TIMED_STAGES[report.stages.length].id);
       check(stage.id + ' begins READY without automatic start', current.timer.state === 'READY');
       await textIncludes(host, '#clock-status', 'READY');
       await command(host, 'claim_clock', () => action(host, 'claim-clock').click());
@@ -390,7 +486,10 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
       if (stage.id === 'stage-02') await screenshot(host, 'questioning-overtime');
       await command(host, 'claim_clock', () => action(host, 'claim-clock').click());
       await command(host, 'timer', () => action(host, 'timer', '[data-type="FINISH"]').click()); await textIncludes(host, '#clock-status', 'FINISHED');
-      report.stages.push({ id: stage.id, kind: stage.kind, seats: stage.speakerSeats, attemptId: matchFor(host).timer.stageAttemptId, state: 'FINISHED', durationMs: stage.durationMs });
+      const finished = matchFor(host), attempt = finished.attempts.find(item => item.id === finished.timer.stageAttemptId);
+      const stageEvidence = assertHostedFinishedAttempt(attempt, report.stages.length, finished.seats);
+      assert.equal(finished.timer.durationMs, stageEvidence.durationMs); assert.equal(finished.timer.elapsedBeforeRunMs, stageEvidence.elapsedMs);
+      report.stages.push(stageEvidence);
       await command(host, 'next_stage', () => action(host, 'next-stage').click());
     }
     check('All fourteen speaking stages and both preparation periods completed through the DOM', report.stages.filter(s => s.id.startsWith('stage-')).length === 14 && report.stages.some(s => s.id === 'preparation') && report.stages.some(s => s.id === 'closing-break'));
@@ -420,6 +519,8 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
     await closeGuest(); await waitReal(900001); await command(host, 'finalize_result', () => action(host, 'finalize-result').click());
     const final = structuredClone(matchFor(host).resultVersions.at(-1)); report.finalResult = { id: final.id, revision: final.revision, state: final.state, winner: final.winner };
     check('Corrected final version retains independent judging and nominated award', final.state === 'FINAL' && final.id !== originalResult.id && final.winner === 'affirmative' && final.awards.bestDebater.winners.includes('A2'));
+    report.finalAwards = assertHostedCorrectedAwards(final);
+    check('All four corrected awards match the independent score and nomination expectations', true);
     await textIncludes(host, '#result-summary', '99.67'); await screenshot(host, 'corrected-final-result');
     await host.setViewportSize({ width: 320, height: 800 });
     // Browser layout metrics are a read-only protocol observation, requiring no
@@ -443,21 +544,44 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
       check(kind + ' browser download matches the real generated artifact', bytes.length > 0 && sha(bytes) === sha(stored));
       const pages = extension === 'pdf' ? (assert.equal(bytes.subarray(0, 5).toString(), '%PDF-'), (await PDFDocument.load(bytes)).getPageCount()) : null;
       if (pages !== null) check(kind + ' has a parseable nonempty PDF', pages > 0); else check('CSV has actual rows', bytes.toString('utf8').split(/\r?\n/).length > 2);
-      report.downloads.push({ kind, jobId, file: relative, bytes: bytes.length, sha256: sha(bytes), pages, resultVersion: snapshotFor(host).outbox.find(j => j.id === jobId)?.resultVersion });
+      const visibleJob = snapshotFor(host).outbox.find(j => j.id === jobId); assertHostedExportVersion(kind, visibleJob, final);
+      check(kind + ' export preserves its required result-version binding', true);
+      report.downloads.push({ kind, jobId, file: relative, bytes: bytes.length, sha256: sha(bytes), pages, resultVersion: visibleJob.resultVersion });
     }
     const resultPrivacyCutoff = trafficSequence; await useGuest(ACTOR(9)); await tab(guest, 'results');
     check('Observer cannot download another actor’s private exports', await guest.locator('[data-action="download"]').count() === 0);
     await assertPrivateAbsent(guest, [PRIVATE_NOTE, PRIVATE_TEAM, 'CI_TEAM_A_FEEDBACK_PRIVATE', 'CI_TEAM_N_FEEDBACK_PRIVATE'], resultPrivacyCutoff);
     await fresh(host); await tab(host, 'schedule'); await textIncludes(host, '#schedule-content', 'Final'); await screenshot(host, 'final-fixture-and-standings');
-    const beforeNext = await lifecycle.readEvent(eventId); const savedFirst = JSON.stringify({ attempts: beforeNext.matches[matchId].attempts, results: beforeNext.matches[matchId].resultVersions });
+    const beforeNext = await lifecycle.readEvent(eventId), savedFirst = structuredClone(beforeNext.matches[matchId]);
+    assert.deepEqual(savedFirst.attempts.filter(attempt => attempt.stageId !== 'deliberation').map((attempt, index) =>
+      assertHostedFinishedAttempt(attempt, index, savedFirst.seats)), report.stages);
+    for (const download of report.downloads) assertHostedExportVersion(download.kind, beforeNext.jobs[download.jobId], final);
+    check('Independent saved-state readback retains every stage duration and current export version', true);
+    const nextMotion = Object.values(beforeNext.motions).find(motion => motion.id !== savedFirst.motionId && motion.releasedAt == null);
+    assert.ok(nextMotion, 'The next match requires a separate still-private prepared motion.');
     await open(host, 'match', 'Set up match'); await field(host, 'title').fill('CI next formal three-judge match');
+    await field(host, 'motionId').selectOption(nextMotion.id);
     for (const [name, id] of [['judge1', ACTOR(0)], ['judge2', ACTOR(7)], ['judge3', ACTOR(8)]]) await field(host, name).selectOption(id);
     const nextCreated = await submit(host, 'create_match'), nextId = nextCreated.receipt.result.matchId; report.nextMatchId = nextId;
+    const createdNext = await lifecycle.readEvent(eventId);
+    assertHostedNextMatchState(createdNext.matches[nextId], savedFirst, nextMotion.id);
+    assertHostedPriorMatchPreserved(savedFirst, createdNext.matches[matchId]);
+    assert.equal(createdNext.motions[nextMotion.id].releasedAt, null);
+    const privateNextCutoff = trafficSequence; await useGuest(ACTOR(9), { selectedMatch: nextId });
+    check('Next motion remains absent from an admitted observer before its own release', !snapshotFor(guest).motions.some(motion => motion.id === nextMotion.id));
+    await assertPrivateAbsent(guest, [nextMotion.text], privateNextCutoff);
     await action(host, 'select-match', `[data-match="${nextId}"]`).click(); await host.waitForURL(url => new URLSearchParams(url.hash.slice(1)).get('match') === nextId);
     await prepareMatch(nextId); await tab(host, 'schedule'); await command(host, 'advance_match', () => action(host, 'advance-match', `[data-match="${nextId}"]`).click());
     await tab(host, 'overview'); await command(host, 'start_match', () => action(host, 'start-match').click());
     const afterNext = await lifecycle.readEvent(eventId);
-    check('Next three-judge match starts without changing prior attempts or results', afterNext.activeMatchId === nextId && afterNext.matches[nextId].judgeIds.length === 3 && savedFirst === JSON.stringify({ attempts: afterNext.matches[matchId].attempts, results: afterNext.matches[matchId].resultVersions }));
+    assertHostedPriorMatchPreserved(savedFirst, afterNext.matches[matchId]);
+    assertHostedNextMatchState(afterNext.matches[nextId], savedFirst, nextMotion.id, { started: true });
+    assert.deepEqual(afterNext.motions[savedFirst.motionId], beforeNext.motions[savedFirst.motionId]);
+    assert.equal(afterNext.motions[nextMotion.id].releasedAt, afterNext.matches[nextId].motionReleasedAt);
+    check('Next three-judge match starts cleanly on its own motion without changing any prior match record', afterNext.activeMatchId === nextId && afterNext.matches[nextId].judgeIds.length === 3);
+    report.nextMatchIsolation = { priorMatchId: matchId, nextMatchId: nextId, priorMotionId: savedFirst.motionId,
+      nextMotionId: nextMotion.id, nextMotionReleasedAt: afterNext.matches[nextId].motionReleasedAt,
+      entirePriorMatchPreserved: true, newMatchRecordsClean: true };
     await tab(host, 'live'); await textIncludes(host, '#clock-status', 'READY'); await screenshot(host, 'next-match-ready');
     check('Actual saved first match has all fourteen finished speaking attempts', afterNext.matches[matchId].attempts.filter(a => a.stageId.startsWith('stage-') && a.state === 'FINISHED').length === 14);
     check('Fixture finalization recorded its exact saved winner', afterNext.fixtures.some(f => f.matchId === matchId && f.status === 'FINAL' && f.resultId === final.id));

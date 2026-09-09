@@ -1,6 +1,111 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { assertCiExecution, hostedBrowserEnvironment, finalizeHostedBrowserShutdown } from './test-debate-browser-hosted-organizer.mjs';
+import { assertCiExecution, hostedBrowserEnvironment, finalizeHostedBrowserShutdown, HOSTED_DEFAULT_TIMED_STAGES,
+  assertHostedDefaultRunOfShow, assertHostedFinishedAttempt, assertHostedCorrectedAwards, assertHostedExportVersion,
+  assertHostedNextMatchState, assertHostedPriorMatchPreserved } from './test-debate-browser-hosted-organizer.mjs';
+import { createRunOfShow, calculateAwards } from '../worker/debate-domain.mjs';
+
+const seats = Object.fromEntries(['A1', 'A2', 'A3', 'N1', 'N2', 'N3'].map(seat => [seat, `inert-${seat}`]));
+
+test('independent hosted timetable rejects reordered stages, reversed question pairs and redistributed durations even with the same total', () => {
+  assertHostedDefaultRunOfShow(createRunOfShow());
+  assert.equal(HOSTED_DEFAULT_TIMED_STAGES.length, 16);
+  assert.equal(HOSTED_DEFAULT_TIMED_STAGES.reduce((sum, stage) => sum + stage.durationMs, 0), 4680000);
+  for (const change of [
+    stages => { [stages[1], stages[3]] = [stages[3], stages[1]]; },
+    stages => stages[2].speakerSeats.reverse(),
+    stages => { stages[1].durationMs += 1000; stages[2].durationMs -= 1000; },
+    stages => { [stages[14].speakerSeats, stages[15].speakerSeats] = [stages[15].speakerSeats, stages[14].speakerSeats]; },
+    stages => { stages.at(-1).durationMs = 0; },
+  ]) { const stages = structuredClone(createRunOfShow()); change(stages); assert.throws(() => assertHostedDefaultRunOfShow(stages)); }
+});
+
+function finishedAttempt(index) {
+  const stage = HOSTED_DEFAULT_TIMED_STAGES[index], start = 1800000000000, adjustments = [{ type: 'START', at: start, durationMs: stage.durationMs }];
+  if (index === 1) adjustments.push({ type: 'PAUSE', at: start + 1234, durationMs: stage.durationMs },
+    { type: 'RESUME', at: start + 6234, durationMs: stage.durationMs });
+  const elapsedMs = stage.durationMs + 1100, finishedAt = start + elapsedMs + (index === 1 ? 5000 : 0);
+  adjustments.push({ type: 'FINISH', at: finishedAt, durationMs: stage.durationMs });
+  return { id: `inert-attempt-${index}`, stageId: stage.id, stageIndex: index, number: 1, ruleVersion: 1,
+    state: 'FINISHED', speakerSeats: [...stage.speakerSeats], speakerIds: stage.speakerSeats.map(seat => seats[seat]),
+    createdAt: start - 10, elapsedMs, overtimeMs: 1100, finishedAt, adjustments };
+}
+
+test('hosted persisted attempt proof uses acknowledged timestamps and excludes paused time', () => {
+  for (let index = 0; index < 16; index++) {
+    const attempt = finishedAttempt(index), evidence = assertHostedFinishedAttempt(attempt, index, seats);
+    assert.equal(evidence.elapsedMs, HOSTED_DEFAULT_TIMED_STAGES[index].durationMs + 1100);
+    assert.equal(evidence.finishedAt - evidence.startedAt - evidence.elapsedMs, index === 1 ? 5000 : 0);
+  }
+  for (const change of [
+    attempt => { attempt.elapsedMs += 5000; attempt.overtimeMs += 5000; },
+    attempt => { attempt.adjustments[0].durationMs = 1; },
+    attempt => { attempt.speakerIds = ['inert-N1']; },
+    attempt => { attempt.adjustments[1].type = 'RESET'; },
+    attempt => { attempt.finishedAt += 1; },
+    attempt => { attempt.elapsedMs = 299999; },
+  ]) { const attempt = finishedAttempt(1); change(attempt); assert.throws(() => assertHostedFinishedAttempt(attempt, 1, seats)); }
+});
+
+test('corrected full scorecard awards match exact independent winners and closing eligibility', () => {
+  const speakers = Object.fromEntries(Object.keys(seats).map(seat => [seat,
+    { evidence: seat[0] === 'N' ? 20 : seat === 'A1' ? 24 : 25, delivery: 30, questioning: 15, responding: 15 }]));
+  const final = { id: 'inert-final-corrected', state: 'FINAL', winner: 'affirmative', awards: calculateAwards({
+    ballots: [{ judgeId: 'inert-judge', scorecard: { speakers, closing: { affirmative: 15, negative: 12 } } }],
+    activeJudgeIds: ['inert-judge'], nominations: [{ judgeId: 'inert-judge', nomineeId: 'A2', reason: 'Synthetic nomination.' }], matchStatus: 'FINAL' }) };
+  assertHostedCorrectedAwards(final);
+  for (const name of ['bestSpeaker', 'bestInterpellator', 'bestRebuttalSpeaker', 'bestDebater']) {
+    const wrong = structuredClone(final); wrong.awards[name].winners = ['N3']; assert.throws(() => assertHostedCorrectedAwards(wrong));
+  }
+  const wrong = structuredClone(final); wrong.awards.bestRebuttalSpeaker.candidates.push({ id: 'A2' });
+  assert.throws(() => assertHostedCorrectedAwards(wrong));
+});
+
+test('hosted exports reject the superseded result version and do not invent result linkage for rules or private scorecards', () => {
+  const final = { id: 'inert-final-corrected' };
+  for (const kind of ['result', 'event_report', 'csv', 'certificate']) {
+    assertHostedExportVersion(kind, { type: 'export', resultVersion: final.id }, final);
+    for (const resultVersion of [undefined, null, 'inert-superseded'])
+      assert.throws(() => assertHostedExportVersion(kind, { type: 'export', resultVersion }, final));
+  }
+  for (const kind of ['rules', 'scorecard']) {
+    assertHostedExportVersion(kind, { type: 'export' }, final);
+    assert.throws(() => assertHostedExportVersion(kind, { type: 'export', resultVersion: final.id }, final));
+  }
+});
+
+function nextMatch(started = false) {
+  const next = { id: 'inert-next', motionId: 'inert-new-private-motion', phase: 'setup', rulesLockedAt: null, timer: null,
+    drafts: {}, ballots: {}, polls: {}, nominations: {}, ballotHistory: [], resultVersions: [], messages: [], evidence: [],
+    incidents: [], protests: [], ballotRound: 1, ballotState: 'DRAFT', activePollId: null, runOfShow: [], attempts: [], acknowledgments: {} };
+  if (started) Object.assign(next, { phase: 'preparation', currentStageIndex: 0, motionReleasedAt: 2000,
+    runOfShow: createRunOfShow(), attempts: [{ id: 'inert-next-attempt', stageId: 'preparation', state: 'READY', adjustments: [] }],
+    timer: { matchId: next.id, stageAttemptId: 'inert-next-attempt', state: 'READY', durationMs: 900000,
+      elapsedBeforeRunMs: 0, startedAtServerMs: null, controllerId: null } });
+  return next;
+}
+
+test('next match must have a different private motion and empty competitive records before and after its READY start', () => {
+  const prior = { id: 'inert-first', motionId: 'inert-first-motion', motionReleasedAt: 1000, attempts: [{ id: 'inert-first-attempt' }] };
+  for (const started of [false, true]) {
+    assertHostedNextMatchState(nextMatch(started), prior, 'inert-new-private-motion', { started });
+    for (const change of [
+      next => { next.motionId = prior.motionId; }, next => { next.ballots.current = { winner: 'affirmative' }; },
+      next => { next.drafts.judge = { private: 'inert draft' }; }, next => { next.resultVersions.push({ id: 'inert-old' }); },
+      next => { next.polls.old = { votes: 1 }; }, next => { next.messages.push({ id: 'inert-old-message' }); },
+    ]) { const next = nextMatch(started); change(next); assert.throws(() => assertHostedNextMatchState(next, prior, 'inert-new-private-motion', { started })); }
+  }
+  const next = nextMatch(true); next.timer.elapsedBeforeRunMs = 1;
+  assert.throws(() => assertHostedNextMatchState(next, prior, 'inert-new-private-motion', { started: true }));
+});
+
+test('next-match isolation compares the entire previous match including timer, ballot history, private drafts and polls', () => {
+  const before = { timer: { elapsedBeforeRunMs: 301100 }, ballots: { current: { winner: 'affirmative' } },
+    ballotHistory: [{ round: 1 }], drafts: { judge: { notes: 'inert-private-note' } }, polls: { first: { votes: 1 } },
+    rules: { constructiveMs: 300000 }, attempts: [{ id: 'inert-attempt' }], resultVersions: [{ id: 'inert-final' }] };
+  assertHostedPriorMatchPreserved(before, structuredClone(before));
+  for (const key of Object.keys(before)) { const after = structuredClone(before); delete after[key]; assert.throws(() => assertHostedPriorMatchPreserved(before, after)); }
+});
 
 test('hosted browser cannot launch on the desktop or without the dedicated CI opt-in', () => {
   for (const configuration of [

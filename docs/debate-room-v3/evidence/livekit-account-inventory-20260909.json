@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "kind": "ACTUAL_PROVIDER_ACCOUNT_READ_ONLY_INVENTORY",
+  "recordedAt": "2026-09-09T13:32:38Z",
+  "recordedAtAsiaManila": "2026-09-09T21:32:38+08:00",
+  "status": "PARTIAL_ACTUAL_ACCOUNT_QUOTAS_WITH_UNRESOLVED_RESOURCE_BUDGET",
+  "method": "Codex CUA browser read of existing owner account; routine sign-in to an existing LiveKit account; no new account, grant, purchase, setting change or media connection",
+  "sourceSha": "40d78a367987a0a31243ae0c77be2e697064da18",
+  "provider": "LiveKit Cloud",
+  "project": {
+    "id": "p_4cflvlkc92x",
+    "name": "duediligence",
+    "dashboardDataRegion": "United States",
+    "mediaServingRegion": "UNVERIFIED"
+  },
+  "observations": [
+    {
+      "url": "https://cloud.livekit.io/projects/p_4cflvlkc92x/settings/quotas",
+      "plan": "Build",
+      "concurrentParticipantLimit": 100,
+      "peakConcurrentParticipantsPast7Days": 7,
+      "apiRequestsPerMinuteLimitDisplayed": "10K",
+      "peakApiRequestsPerMinutePast7Days": 47,
+      "concurrentEgressLimit": 2,
+      "totalIngressLimit": 2
+    },
+    {
+      "url": "https://cloud.livekit.io/projects/p_4cflvlkc92x/settings/billing",
+      "billingPeriod": "September 2026",
+      "includedWebRtcParticipantMinutes": 5000,
+      "usedWebRtcParticipantMinutesDisplayed": 1609,
+      "includedDownstreamGb": 50,
+      "usedDownstreamGbDisplayed": 9,
+      "nextInvoiceDisplayed": "$0.00",
+      "displayedUsageCost": "$0.00"
+    },
+    {
+      "url": "https://cloud.livekit.io/projects/p_4cflvlkc92x/usage",
+      "window": "Past 7 days",
+      "webRtcParticipantMinutesDisplayed": 2166,
+      "upstreamGbDisplayed": 6.05,
+      "downstreamGbDisplayed": 8.61,
+      "totalRoomSessions": 24
+    },
+    {
+      "url": "https://cloud.livekit.io/projects/p_4cflvlkc92x/sessions",
+      "productionStudyRoomActiveObserved": true,
+      "productionRoomName": "dd-study-room-admin-beta-prod-v1-2",
+      "activeRowParticipantCountDisplayed": 4,
+      "activeRowDurationMinutesDisplayed": 378,
+      "participantCountMeaning": "Session table count; not proven current simultaneous connection count",
+      "stagingStudyRoomHistoryAlsoObserved": true,
+      "sessionIdsAndParticipantIdentitiesRetained": false
+    }
+  ],
+  "planningOnly": {
+    "nominalUnreservedMinutesFromBilling": 3391,
+    "nominalUnreservedDownstreamGbFromBilling": 41,
+    "hundredParticipantsDefault78Minutes": 7800,
+    "hundredParticipants93Minutes": 9300,
+    "verifiedSafeConcurrentDebateParticipants": null,
+    "approvedDebateParticipantMinutes": null,
+    "approvedDebateTransferGb": null
+  },
+  "sdkSource": {
+    "path": "worker/package.json",
+    "livekitClient": "2.22.1",
+    "livekitServerSdk": "2.18.0",
+    "trackProcessors": "0.7.2",
+    "physicalOrHostedMediaCompatibilityVerified": false
+  },
+  "documentation": {
+    "url": "https://docs.livekit.io/deploy/admin/quotas-and-limits/",
+    "readOn": "2026-09-09",
+    "notes": "Published documentation states quotas are shared across rooms and Build allowances are hard caps; current account dashboard takes precedence for its displayed limits. Published API default differs from this account's displayed10K."
+  },
+  "gaps": [
+    "Monthly billing1609 minutes is lower than the same-session past7days usage2166 minutes. Update lag or aggregation difference is unresolved; nominal subtraction is not a verified available budget.",
+    "An active production Study room shares this provider project. Current and planned Study commitments, reconnect overlap and approved isolated load window are not established.",
+    "Project100 concurrency leaves no room for simultaneous Study users or reconnect overlap at a100-person Debate load.",
+    "Full100-person78/93-minute arithmetic exceeds the entire5000-minute included monthly allowance before any prior use. No upgrade or purchase is authorized.",
+    "Project-specific media subscription limits, actual media region, storage/API allowance consumption and deployed SDK compatibility remain unverified.",
+    "The10/25/50/100 ramp and physical camera/microphone/screen-audio rehearsal have not run."
+  ],
+  "publicLaunch": false,
+  "mediaEnabledByThisInventory": false,
+  "providerSessionCreated": false,
+  "purchases": false,
+  "fullAcceptance": false,
+  "rawBrowserStateOrCredentialsStored": false
+}
+

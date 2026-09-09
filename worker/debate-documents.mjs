@@ -8,7 +8,7 @@ const awardTitles = { bestSpeaker: 'Best Speaker', bestDebater: 'Best Debater', 
 const documentTitle = document => document.kind === 'certificate' && document.certificateType === 'award' ? 'Certificate of award' : titles[document.kind];
 const side = value => value === 'affirmative' ? 'Affirmative' : value === 'negative' ? 'Negative' : 'Unresolved';
 const text = value => String(value ?? '').normalize('NFC').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '').replace(/[\u2010-\u2014]/g, '-');
-const label = key => text(key).replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, c => c.toUpperCase());
+const label = key => key === 'AWAITING_PREDECESSORS' ? 'Awaiting earlier match results' : text(key).replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, c => c.toUpperCase());
 const safeName = value => text(value).toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 70).replace(/^-|-$/g, '') || 'debate';
 const date = (value, zone = 'Asia/Manila') => value ? new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium', timeStyle: 'short', timeZone: zone }).format(new Date(value)) : 'Not recorded';
 const score = value => value?.display ?? (value == null ? 'Not available' : typeof value === 'number' ? String(value) : 'Not available');
@@ -123,9 +123,9 @@ function rowsFor(document) {
       if (!document.standings?.rows?.length) para('No finalized standings.');
       for (const row of document.standings?.rows || []) line(`${row.rank}${row.tied ? ' (tied)' : ''}. ${name(row.teamId)}`, `${row.wins} wins / ${row.played} played; ${row.scoredMatches} scored matches; comparable mean ${score(row.meanScore)}`);
       if (document.standings?.unresolvedQualification) para('Qualification remains tied. Schedule the required tie resolution.');
-      heading('Fixtures');
-      if (!document.fixtures?.length) para('No published fixtures.');
-      for (const fixture of document.fixtures || []) line(`Round ${fixture.round} - ${fixture.id}`, `${fixture.affirmativeTeamId ? name(fixture.affirmativeTeamId) : 'Awaiting predecessor'} vs ${fixture.negativeTeamId ? name(fixture.negativeTeamId) : 'Awaiting predecessor'}; ${label(fixture.status)}${fixture.winnerTeamId ? `; winner ${name(fixture.winnerTeamId)}` : ''}${fixture.requiresReview ? '; correction review required' : ''}`);
+      heading('Published pairings');
+      if (!document.fixtures?.length) para('No published pairings.');
+      for (const fixture of document.fixtures || []) line(`Round ${fixture.round} - ${fixture.id}`, `${fixture.affirmativeTeamId ? name(fixture.affirmativeTeamId) : 'Awaiting earlier match result'} vs ${fixture.negativeTeamId ? name(fixture.negativeTeamId) : 'Awaiting earlier match result'}; ${label(fixture.status)}${fixture.winnerTeamId ? `; winner ${name(fixture.winnerTeamId)}` : ''}${fixture.requiresReview ? '; correction review required' : ''}`);
       heading('Tournament awards');
       const tournament = document.eventAwards;
       para(`At least ${tournament?.minimumMatches || 2} actual completed comparable matches are required. Different rubrics are evaluated separately. Rehearsal and exceptional unplayed results do not supply invented scores.`);

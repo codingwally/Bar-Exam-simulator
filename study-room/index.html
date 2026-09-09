@@ -58,7 +58,7 @@
           </div>
           <p class="sr-room-note">
             <span class="sr-lock-dot" aria-hidden="true"></span>
-            Open to every signed-in member. No subscription required.
+            Rooms default to all signed-in members. Individual room entry rules may differ.
           </p>
         </div>
         <div class="sr-date-block" aria-label="Current date and time in the Philippines">
@@ -92,9 +92,10 @@
               </label>
               <label for="sr-room-audience">Who can enter
                 <select id="sr-room-audience" name="audience" aria-describedby="sr-room-audience-hint sr-room-fixed-audience">
-                  <option value="admin">Admin only</option>
-                  <option value="paid">Paying users</option>
-                  <option value="all">All signed-in users</option>
+                  <option value="all">All users</option>
+                  <option value="paid">Paid users</option>
+                  <option value="admin">Admin</option>
+                  <option value="approval">Admin approval</option>
                 </select>
               </label>
             </div>
@@ -184,6 +185,13 @@
             </div>
 
             <button class="sr-button sr-button-primary sr-button-wide sr-join-button" id="sr-join" type="button">Join Study Room</button>
+            <section class="sr-entry-admission" id="sr-entry-admission" aria-label="Room admission" hidden>
+              <p class="sr-status" id="sr-entry-admission-status" role="status" aria-live="polite"></p>
+              <div class="sr-admission-actions">
+                <button class="sr-text-button" id="sr-entry-admission-retry" type="button">Refresh status</button>
+                <button class="sr-text-button" id="sr-entry-admission-cancel" type="button" hidden>Cancel request</button>
+              </div>
+            </section>
             <p class="sr-status" id="sr-prejoin-status" role="status" aria-live="polite">Camera and microphone are off.</p>
           </aside>
         </div>
@@ -269,6 +277,13 @@
                 <span id="sr-people-count">1</span>
               </div>
               <div class="sr-people-list" id="sr-people-list"></div>
+              <section class="sr-waiting-room" id="sr-waiting-room" aria-label="Admin waiting room" hidden>
+                <div class="sr-section-title-row"><h3>Waiting room</h3><button class="sr-text-button" id="sr-waiting-refresh" type="button">Refresh</button></div>
+                <p class="sr-status" id="sr-waiting-status" role="status" aria-live="polite"></p>
+                <div id="sr-waiting-list"></div>
+                <p id="sr-waiting-page"></p>
+                <div class="sr-admission-actions"><button class="sr-text-button" id="sr-waiting-previous" type="button">Previous</button><button class="sr-text-button" id="sr-waiting-next" type="button">Next</button></div>
+              </section>
             </section>
 
             <section class="sr-panel-view sr-chat-panel" id="sr-panel-chat" data-panel-view="chat" hidden>

@@ -34,6 +34,10 @@ const instrumentedLiveClient = liveClient.replace(
     testDevices,
     openEntryDialog,
     closeEntryDialog,
+    joinRoom,
+    runEntryAdmission,
+    refreshWaitingQueue,
+    decideWaitingAdmission,
     stopDeviceTest,
     handleAuthSession,
     attachRemoteAudio,
@@ -1150,7 +1154,7 @@ async function waitForAuthorizedPrejoin(harness) {
   h.hooks.state.selectedRoomKey = '5';
   h.hooks.syncJoinButton();
   assert.equal(h.document.getElementById('sr-join').disabled, true);
-  assert.match(h.document.getElementById('sr-join').textContent, /Admin only/);
+  assert.match(h.document.getElementById('sr-join').textContent, /Inner Chamber · Admin/);
 
   const originalGuard = 'Object.prototype.hasOwnProperty.call(ROOM_AUDIENCES, audience)';
   const normalizationSource = h.hooks.normalizeRoomCatalog.toString();
@@ -2991,11 +2995,13 @@ for (const operation of ['mute', 'remove']) {
   const button = descendantWithText(row, operation === 'mute' ? 'Mute for room' : 'Remove');
   assert.equal(button.disabled, false);
   await button.emit('click');
-  assert.deepEqual(h.requests, [{ operation, roomKey: '2', participantIdentity: h.participant.identity,
-    ...(operation === 'mute' ? { trackSid: 'TR_inert_microphone' } : {}) }]);
+  const moderationRequests = h.requests.filter(body => body.operation === operation);
+  assert.deepEqual(moderationRequests, [{ operation, roomKey: '2', participantIdentity: h.participant.identity,
+    ...(operation === 'mute' ? { trackSid: 'TR_inert_microphone' } : { commandId: moderationRequests[0].commandId }) }]);
+  if (operation === 'remove') assert.match(moderationRequests[0].commandId,/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   assert.equal(h.confirmations.length, operation === 'remove' ? 1 : 0);
-  if (operation === 'remove') assert.match(h.confirmations[0], /They can rejoin; this is not a permanent block/);
-  assert.equal(h.toastNode.textContent, operation === 'mute' ? 'Microphone muted for the room.' : 'Removed from the room. They can rejoin.');
+  if (operation === 'remove') assert.match(h.confirmations[0], /revoke their room access/);
+  assert.equal(h.toastNode.textContent, operation === 'mute' ? 'Microphone muted for the room.' : 'Removed. Room access has been revoked.');
   assert.equal(h.publication.isMuted, false, 'Server acknowledgement must not forge a local LiveKit track event.');
   assert.equal(h.room.remoteParticipants.get(h.participant.identity), h.participant, 'Removal awaits authoritative RTC state.');
   assert.equal(h.state.pendingModeration.size, 0);
@@ -3188,6 +3194,90 @@ console.log('Study Room admin-window, device, microphone, and local-control beha
   assert.equal(h.document.getElementById('sr-experience').hidden, true);
 }
 console.log('Study Room V3: Library camera-only preview/source/playback, late preview cancellation, and account-switch privacy passed (inert devices).');
+
+async function approvalHarness(respond) {
+  const calls = []; let captures = 0; let rooms = 0;
+  const h = createLiveHarness({ fetch: async (url,options) => {
+    if (String(url).includes('/study-room/admission') || String(url).includes('/study-room/join')) {
+      const body = JSON.parse(options.body); calls.push({ path:String(url),body,token:options.headers.Authorization });
+      return respond(body,String(url));
+    }
+    return authorizedResponse();
+  }, enumerateDevices: async () => labeledDevices, getUserMedia: async () => {captures++; throw new Error('Waiting must not capture');},
+  liveKit: { Track: { Source:liveKitSources }, Room: class {constructor(){rooms++;} async disconnect(){} } } });
+  await waitForAuthorizedPrejoin(h); h.hooks.closeEntryDialog();
+  h.hooks.state.session={access_token:'member-token',user:{id:'member-one'}};
+  h.hooks.state.isAdministrator=false;
+  h.hooks.state.rooms=h.hooks.state.rooms.map(r=>r.roomKey==='2'?{...r,audience:'approval',accessRevision:2}:r);
+  return {...h,calls,captures:()=>captures,rooms:()=>rooms};
+}
+const admissionResponse = admission => response({ok:true,status:200,payload:{ok:true,admission}});
+const admissionRecord = status => ({requestId:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',roomKey:'2',accessRevision:2,
+  identity:'sr_111111111111111111111111',nickname:'Partner',status,version:status==='pending'?1:2,
+  expiresAt:new Date(Date.now()+900000).toISOString(),notBefore:new Date(Date.now()-1000).toISOString(),revokePending:false});
+{
+ let record=null;
+ const h=await approvalHarness(async body=>{if(body.operation==='request')record=admissionRecord('pending');if(body.operation==='cancel')record=admissionRecord('cancelled');return admissionResponse(record);});
+ h.hooks.openEntryDialog('2');await eventually(()=>h.calls.length===1&&!h.hooks.state.entryAdmission.busy,'Initial status did not settle');
+ assert.equal(h.calls[0].body.operation,'status');assert.equal(h.rooms(),0);assert.equal(h.captures(),0);
+ assert.equal(h.document.getElementById('sr-join').textContent,'Ask to enter');
+ await h.hooks.joinRoom();await h.hooks.testDevices();
+ assert.equal(h.calls.filter(c=>c.body.operation==='request').length,1);
+ assert.equal(h.hooks.state.entryAdmission.record.status,'pending');assert.equal(h.document.getElementById('sr-join').disabled,true);
+ assert.equal(h.document.getElementById('sr-test-devices').disabled,true);assert.equal(h.rooms(),0);assert.equal(h.captures(),0);
+ assert.ok(h.calls.every(c=>c.path.endsWith('/admission')),'Waiting never requests JWT/connect/media');
+ record=admissionRecord('approved');await h.hooks.runEntryAdmission('status');
+ assert.equal(h.document.getElementById('sr-join').textContent,'Enter room');assert.equal(h.rooms(),0,'Admission does not auto-connect');
+ assert.equal(h.hooks.state.joinWithMicrophone,false);assert.equal(h.hooks.state.joinWithCamera,false);
+ h.hooks.closeEntryDialog();await eventually(()=>h.calls.some(c=>c.body.operation==='cancel'),'Closing approved entry cancels unused grant');
+ assert.equal(h.hooks.state.entryAdmission,null);
+}
+{
+ let deliver;let record=null;
+ const h=await approvalHarness(async body=>{if(body.operation==='request')return new Promise(resolve=>{deliver=()=>{record=admissionRecord('pending');resolve(admissionResponse(record));};});return admissionResponse(record);});
+ h.hooks.openEntryDialog('2');await eventually(()=>!h.hooks.state.entryAdmission.busy,'Status did not settle');
+ const first=h.hooks.joinRoom();await eventually(()=>Boolean(deliver),'Request did not begin');await h.hooks.joinRoom();
+ assert.equal(h.calls.filter(c=>c.body.operation==='request').length,1,'Duplicate activation does not create duplicate requests');
+ await h.hooks.handleAuthSession({access_token:'new-account-token',user:{id:'member-two'}});
+ deliver();await first;
+ await eventually(()=>h.calls.some(c=>c.body.operation==='cancel'),'Late old-account request must be cancelled');
+ assert.equal(h.calls.find(c=>c.body.operation==='cancel').token,'Bearer member-token','Cleanup uses original actor, never the new account');
+ assert.equal(h.hooks.state.entryAdmission,null);assert.equal(h.hooks.state.room,null);assert.equal(h.rooms(),0);assert.equal(h.captures(),0);
+}
+{
+ let attempts=0;let record=null;
+ const h=await approvalHarness(async body=>{if(body.operation==='request'){attempts++;if(attempts===1)throw new Error('Uncertain response');record=admissionRecord('pending');}return admissionResponse(record);});
+ h.hooks.openEntryDialog('2');await eventually(()=>!h.hooks.state.entryAdmission.busy,'Status did not settle');
+ await h.hooks.joinRoom();const first=h.calls.find(c=>c.body.operation==='request').body;
+ assert.ok(h.hooks.state.entryAdmission.command);await h.hooks.runEntryAdmission('status');
+ const retried=h.calls.filter(c=>c.body.operation==='request');assert.equal(retried.length,2);assert.deepEqual(retried[1].body,first);
+ assert.equal(h.hooks.state.entryAdmission.record.status,'pending');assert.equal(h.rooms(),0);
+}
+{
+ let record=admissionRecord('pending');let deliver;
+ const h=await approvalHarness(async body=>{
+  if(body.operation==='list')return response({ok:true,status:200,payload:{ok:true,roomKey:'2',accessRevision:2,queue:[record]}});
+  if(body.operation==='admit')return new Promise(resolve=>{deliver=()=>{record=admissionRecord('approved');resolve(admissionResponse(record));};});
+  return admissionResponse(record);
+ });
+ const state=h.hooks.state;state.isAdministrator=true;state.currentRoomKey='2';state.room={localParticipant:{identity:'admin-identity'},remoteParticipants:new Map()};
+ await h.hooks.refreshWaitingQueue();assert.equal(state.waitingQueue.length,1);
+ const first=h.hooks.decideWaitingAdmission(record,'admit');await eventually(()=>Boolean(deliver),'Decision did not start');
+ await h.hooks.decideWaitingAdmission(record,'admit');assert.equal(h.calls.filter(c=>c.body.operation==='admit').length,1);
+ const decision=h.calls.find(c=>c.body.operation==='admit').body;assert.equal(decision.requestId,record.requestId);assert.equal(decision.expectedVersion,1);
+ assert.equal(Object.hasOwn(decision,'actor'),false);assert.equal(Object.hasOwn(decision,'presence'),false,'Browser does not attest administrator presence');
+ deliver();await first;assert.equal(state.waitingQueue[0].status,'approved');
+ state.isAdministrator=false;const count=h.calls.length;await h.hooks.decideWaitingAdmission(record,'deny');assert.equal(h.calls.length,count);
+}
+console.log('Study Room approval UI: pending zero-media, manual approved entry, close/account cleanup, duplicate/idempotent retry and in-room admin decisions passed.');
+
+{
+ const h=await approvalHarness(async()=>admissionResponse(admissionRecord('approved')));
+ h.hooks.state.room={localParticipant:{},disconnect:async()=>assert.fail('Closing the current-room dialog must preserve its active call')};
+ h.hooks.state.currentRoomKey='2';h.hooks.openEntryDialog('2');
+ assert.equal(h.hooks.state.entryAdmission,null);assert.equal(h.document.getElementById('sr-join').textContent,'Return to room');
+ await h.hooks.joinRoom();assert.equal(h.hooks.state.entryOpen,false);assert.equal(h.calls.length,0,'Current-room return cannot cancel an already-used admission');
+}
 
 {
   let rejectCapture; let calls = 0;

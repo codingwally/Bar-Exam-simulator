@@ -19,7 +19,7 @@
   const FALLBACK_NICKNAME = 'Participant #';
   const MAX_NICKNAME_LENGTH = 32;
   const MAX_ROOMS = 24;
-  const ROOM_AUDIENCES = Object.freeze({ admin: 'Admin only', paid: 'Paying users', all: 'All signed-in users' });
+  const ROOM_AUDIENCES = Object.freeze({ all: 'All users', paid: 'Paid users', admin: 'Admin', approval: 'Admin approval' });
   const MAX_ROOM_LABEL_LENGTH = 64;
   const ROOM_REFRESH_INTERVAL_MS = 15_000;
   const MEDIA_RELIABILITY_VERSION = 'study-room-always-open-20260908-1';
@@ -76,6 +76,14 @@
     entrySubmitting: false,
     entryGeneration: 0,
     entryTrigger: null,
+    entryAdmission: null,
+    waitingQueue: [],
+    waitingQueuePage: 0,
+    waitingQueueHasMore: false,
+    waitingQueueBusy: false,
+    waitingQueueTimer: 0,
+    waitingQueueCommands: new Map(),
+    removalCommands: new Map(),
     previewGeneration: 0,
     previewBusy: false,
     accountGeneration: 0,
@@ -313,8 +321,8 @@
     return new Promise((resolve) => global.setTimeout(resolve, delayMs));
   }
 
-  async function workerRequest(path, body = {}) {
-    const token = String(state.session?.access_token || '');
+  async function workerRequest(path, body = {}, requestSession = state.session) {
+    const token = String(requestSession?.access_token || '');
     if (!token) {
       const error = new Error('Sign in before opening the Study Room.');
       error.status = 401;
@@ -363,7 +371,7 @@
     copy.textContent = friendlyError(
       error,
       forbidden
-        ? 'Sign in on Due Diligence to join. No subscription is required.'
+        ? 'Sign in on Due Diligence, then check the room entry rules.'
         : 'Your camera and microphone stayed off. Check your connection and try again.',
     );
     if (error?.recovery && error.recovery !== copy.textContent) {
@@ -458,6 +466,189 @@
       : room
       ? `Waiting for ${roomPresentation(room.roomKey).name} to open`
       : 'Choose a room';
+    if (room?.audience === 'approval' && !state.isAdministrator) {
+      const admission = state.entryAdmission;
+      const status = admission?.record?.status;
+      button.disabled = button.disabled || admission?.busy === true || ['pending', 'denied', 'revoked'].includes(status);
+      button.textContent = admission?.busy ? 'Checking admission…' : status === 'approved' ? 'Enter room'
+        : status === 'pending' ? 'Waiting for an administrator' : ['denied','revoked'].includes(status) ? 'Admission unavailable' : 'Ask to enter';
+    }
+    if (state.room && state.currentRoomKey === room?.roomKey) { button.disabled = false; button.textContent = 'Return to room'; }
+  }
+
+  function admissionCommandId() {
+    if (global.crypto?.randomUUID) return global.crypto.randomUUID();
+    const bytes = global.crypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 15) | 64; bytes[8] = (bytes[8] & 63) | 128;
+    const hex = [...bytes].map(value => value.toString(16).padStart(2,'0')).join('');
+    return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+  }
+
+  function renderEntryAdmission() {
+    const panel = byId('sr-entry-admission');
+    if (!panel) return;
+    const admission = state.entryAdmission;
+    panel.hidden = !admission;
+    if (!admission) return;
+    const record = admission.record;
+    const status = record?.status;
+    const copy = { pending: 'You are in the waiting room. An administrator inside this room can admit you. You cannot hear or share room media while waiting.',
+      approved: 'You were admitted. Choose Enter room when ready. Camera and microphone remain off unless you opt in.',
+      denied: 'This request was declined. An administrator inside the room must allow another request.',
+      revoked: 'Your access to this room was removed. An administrator inside the room must allow another request.',
+      cancelled: 'Your request was cancelled. You can ask to enter again.', expired: 'Your request expired. You can ask to enter again.' };
+    setStatus('sr-entry-admission-status', admission.error || (admission.busy ? 'Checking your admission…' : copy[status]
+      || 'This room requires manual admission by an administrator inside it. Choose Ask to enter. No room media is available while waiting.'), admission.error ? 'error' : '');
+    const cancel = byId('sr-entry-admission-cancel');
+    if (cancel) { cancel.hidden = !['pending','approved'].includes(status); cancel.disabled = admission.busy; }
+    const retry = byId('sr-entry-admission-retry');
+    if (retry) { retry.disabled = admission.busy; retry.textContent = admission.command ? 'Retry request' : 'Refresh status'; }
+    const pending = status === 'pending' || admission.busy;
+    if (pending) stopDeviceTest();
+    for (const id of ['sr-test-devices','sr-join-camera','sr-nickname']) {
+      const control = byId(id); if (control) control.disabled = pending;
+    }
+    if (byId('sr-join-microphone')) byId('sr-join-microphone').disabled = pending || selectedRoom()?.microphoneAllowed === false;
+    syncJoinButton();
+  }
+
+  function clearEntryAdmission({ cancel = false } = {}) {
+    const admission = state.entryAdmission;
+    state.entryAdmission = null;
+    if (!admission) return;
+    global.clearTimeout(admission.timer);
+    admission.closed = true;
+    if (cancel && !(state.room && state.currentRoomKey === admission.roomKey) && ['pending','approved'].includes(admission.record?.status)) {
+      workerRequest('/study-room/admission', { operation: 'cancel', roomKey: admission.roomKey,
+        accessRevision: admission.accessRevision, commandId: admissionCommandId() }, admission.session).catch(() => {});
+    }
+    for (const id of ['sr-test-devices','sr-join-camera','sr-nickname']) {
+      const control = byId(id); if (control) control.disabled = false;
+    }
+    renderEntryAdmission();
+  }
+
+  async function runEntryAdmission(operation = 'status') {
+    const admission = state.entryAdmission;
+    if (!admission || admission.busy || !state.entryOpen) return false;
+    if (state.session?.user?.id === admission.session?.user?.id) admission.session = state.session;
+    global.clearTimeout(admission.timer);
+    const isCurrent = () => state.entryAdmission === admission && state.entryOpen && state.session?.user?.id === admission.session?.user?.id;
+    admission.busy = true; admission.error = '';
+    renderEntryAdmission();
+    let body = admission.command;
+    try {
+      if (!body || operation === 'cancel') {
+        body = { operation, roomKey: admission.roomKey, accessRevision: admission.accessRevision };
+        if (operation !== 'status') body.commandId = admissionCommandId();
+        if (operation === 'request') body.nickname = currentNickname();
+      }
+      if (body.operation !== 'status') admission.command = body;
+      const result = await workerRequest('/study-room/admission', body, admission.session);
+      if (!isCurrent()) {
+        if (body.operation === 'request' && ['pending','approved'].includes(result.admission?.status)) {
+          await workerRequest('/study-room/admission', { operation: 'cancel', roomKey: admission.roomKey,
+            accessRevision: admission.accessRevision, commandId: admissionCommandId() }, admission.session).catch(() => {});
+        }
+        return false;
+      }
+      if (result.admission && (result.admission.roomKey !== admission.roomKey || result.admission.accessRevision !== admission.accessRevision)) throw new Error('Room admission changed. Close this window and refresh the catalog.');
+      admission.command = null;
+      admission.record = result.admission;
+      return result.admission?.status === 'approved';
+    } catch (error) {
+      if (isCurrent()) admission.error = friendlyError(error, 'Admission could not be checked. Retry shortly.');
+      return false;
+    } finally {
+      admission.busy = false;
+      if (isCurrent()) {
+        renderEntryAdmission();
+        if (admission.record?.status === 'pending' && !admission.error) admission.timer = global.setTimeout(() => runEntryAdmission('status'), 5000);
+      }
+    }
+  }
+
+  function stopWaitingQueue() {
+    global.clearTimeout(state.waitingQueueTimer); state.waitingQueueTimer = 0;
+    state.waitingQueue = []; state.waitingQueueBusy = false;
+    state.waitingQueuePage = 0; state.waitingQueueHasMore = false;
+    state.waitingQueueCommands.clear();
+    if (byId('sr-waiting-room')) byId('sr-waiting-room').hidden = true;
+  }
+
+  function renderWaitingQueue() {
+    const panel = byId('sr-waiting-room'); const list = byId('sr-waiting-list');
+    if (!panel || !list) return;
+    panel.hidden = !state.isAdministrator || !state.room || !state.currentRoomKey;
+    list.replaceChildren();
+    if (panel.hidden) return;
+    byId('sr-waiting-page').textContent = `Page ${state.waitingQueuePage + 1} · Pending requests appear first`;
+    byId('sr-waiting-previous').disabled = state.waitingQueueBusy || state.waitingQueuePage === 0;
+    byId('sr-waiting-next').disabled = state.waitingQueueBusy || !state.waitingQueueHasMore;
+    for (const record of state.waitingQueue) {
+      const row = document.createElement('div'); row.className = 'sr-waiting-person';
+      const name = document.createElement('strong'); name.textContent = record.nickname;
+      const status = document.createElement('span'); status.textContent = record.revokePending ? 'Removal needs retry' : record.status;
+      row.append(name,status);
+      const retry = state.waitingQueueCommands.get(record.requestId);
+      const actions = retry ? [[retry.operation,'Retry decision']] : record.revokePending ? [['revoke','Retry removal']]
+        : record.status === 'pending' ? [['admit','Admit'],['deny','Decline']]
+        : record.status === 'approved' ? [['deny','Remove access']] : ['denied','revoked'].includes(record.status) && !record.revokePending ? [['reinstate','Allow new request']] : [];
+      for (const [operation,label] of actions) {
+        const button = document.createElement('button'); button.type = 'button'; button.className = 'sr-text-button';
+        button.textContent = label; button.disabled = state.waitingQueueBusy;
+        button.addEventListener('click', () => decideWaitingAdmission(record, operation)); row.append(button);
+      }
+      list.append(row);
+    }
+    if (!state.waitingQueue.length) { const empty = document.createElement('p'); empty.textContent = 'No one is waiting.'; list.append(empty); }
+  }
+
+  async function refreshWaitingQueue() {
+    if (!state.isAdministrator || !state.room || !state.currentRoomKey || state.waitingQueueBusy || LOCAL_TEST_MODE) return;
+    const room = state.room; const account = state.accountGeneration; const slot = state.rooms.find(r => r.roomKey === state.currentRoomKey);
+    if (!slot) return;
+    const isCurrent = () => state.room === room && state.currentRoomKey === slot.roomKey && state.isAdministrator && state.accountGeneration === account;
+    global.clearTimeout(state.waitingQueueTimer);
+    state.waitingQueueBusy = true;
+    try {
+      const result = await workerRequest('/study-room/admission', { operation: 'list', roomKey: slot.roomKey, accessRevision: slot.accessRevision, page: state.waitingQueuePage });
+      if (!isCurrent()) return;
+      if (!Array.isArray(result.queue) || result.roomKey !== slot.roomKey || result.accessRevision !== slot.accessRevision) throw new Error('The waiting list could not be confirmed.');
+      state.waitingQueue = result.queue;
+      state.waitingQueueHasMore = result.hasMore === true;
+      setStatus('sr-waiting-status', 'Only an administrator currently inside this room can admit a person.');
+    } catch (error) {
+      if (isCurrent()) { state.waitingQueue = []; setStatus('sr-waiting-status', friendlyError(error, 'Waiting list unavailable. Retry shortly.'), 'error'); }
+    } finally {
+      if (isCurrent()) { state.waitingQueueBusy = false; renderWaitingQueue(); state.waitingQueueTimer = global.setTimeout(refreshWaitingQueue, 8000); }
+    }
+  }
+
+  async function decideWaitingAdmission(record, operation) {
+    if (!state.isAdministrator || !state.room || state.waitingQueueBusy) return;
+    const room = state.room; const account = state.accountGeneration; const slot = state.rooms.find(r => r.roomKey === state.currentRoomKey);
+    if (!slot || record.roomKey !== slot.roomKey || record.accessRevision !== slot.accessRevision) return;
+    const isCurrent = () => state.room === room && state.isAdministrator && state.accountGeneration === account;
+    let command = state.waitingQueueCommands.get(record.requestId);
+    if (!command) command = { operation, roomKey: slot.roomKey, accessRevision: slot.accessRevision,
+      requestId: record.requestId, expectedVersion: record.version, commandId: admissionCommandId(),
+      ...(operation === 'revoke' ? { participantIdentity: record.identity } : {}) };
+    state.waitingQueueCommands.set(record.requestId, command);
+    state.waitingQueueBusy = true; renderWaitingQueue();
+    try {
+      await workerRequest('/study-room/admission', command);
+      if (!isCurrent()) return;
+      state.waitingQueueCommands.delete(record.requestId);
+      toast(operation === 'admit' ? 'Admitted. They can choose Enter room.' : operation === 'reinstate' ? 'They can request entry again.' : 'Room access declined.');
+    } catch (error) {
+      if (isCurrent()) {
+        if ([400,403,409].includes(error.status)) state.waitingQueueCommands.delete(record.requestId);
+        setStatus('sr-waiting-status', friendlyError(error, 'The decision could not be confirmed. Retry this decision.'), 'error');
+      }
+    } finally {
+      if (isCurrent()) { state.waitingQueueBusy = false; renderWaitingQueue(); await refreshWaitingQueue(); }
+    }
   }
 
   function selectRoom(roomKey) {
@@ -480,6 +671,11 @@
   function syncEntryDetails() {
     const room = selectedRoom();
     if (!room || !state.entryOpen) return;
+    if (state.entryAdmission && (room.roomKey !== state.entryAdmission.roomKey || room.accessRevision !== state.entryAdmission.accessRevision)) {
+      closeEntryDialog();
+      toast('Room access changed. Select the room again to check its current policy.');
+      return;
+    }
     byId('sr-entry-title').textContent = room.label;
     byId('sr-entry-purpose').textContent = room.microphoneAllowed === false
       ? 'Study quietly together with video, chat and silent screen sharing. Room audio is disabled.'
@@ -496,11 +692,16 @@
   function openEntryDialog(roomKey, trigger = document.activeElement) {
     if (state.joining || state.roomMutationBusy || state.leaving) return false;
     if (state.entryOpen && state.selectedRoomKey === String(roomKey)) return true;
+    clearEntryAdmission({ cancel: true });
     if (!selectRoom(roomKey)) return false;
     stopDeviceTest();
     state.entryGeneration += 1;
     state.entryOpen = true;
     state.entryTrigger = trigger;
+    const slot = selectedRoom();
+    if (slot.audience === 'approval' && !state.isAdministrator && !(state.room && state.currentRoomKey === slot.roomKey)) state.entryAdmission = {
+      roomKey: slot.roomKey, accessRevision: slot.accessRevision, session: state.session,
+      busy: false, record: null, command: null, error: '', timer: 0 };
     setJoinOption('microphone', false);
     setJoinOption('camera', false);
     syncEntryDetails();
@@ -512,10 +713,13 @@
     setStatus('sr-prejoin-status', 'Camera and microphone are off. Choose Enter room when ready.');
     byId('sr-nickname')?.focus();
     refreshDeviceLists().catch(() => {});
+    renderEntryAdmission();
+    if (state.entryAdmission) runEntryAdmission('status');
     return true;
   }
 
   function closeEntryDialog({ restoreFocus = true, cancelJoin = true } = {}) {
+    clearEntryAdmission({ cancel: cancelJoin });
     if (cancelJoin) state.entryGeneration += 1;
     if (cancelJoin && state.joining && state.room) {
       // Stop a connecting or partially-started room immediately. Its owning
@@ -814,7 +1018,7 @@
       revision: room?.revision || 0, needsReload: false, trigger };
     byId('sr-room-editor-title').textContent = room ? `Edit ${room.label}` : 'Add a Study Room';
     byId('sr-room-label').value = room?.label || '';
-    byId('sr-room-audience').value = room?.audience || 'admin';
+    byId('sr-room-audience').value = room?.audience || 'all';
     setStatus('sr-room-editor-status', '');
     renderRoomCatalog();
     byId('sr-room-label').focus();
@@ -1310,6 +1514,7 @@
   }
 
   async function testDevices() {
+    if (state.entryAdmission?.busy || state.entryAdmission?.record?.status === 'pending') return;
     if (state.previewBusy) return;
     if (state.previewStream) {
       stopDeviceTest();
@@ -1933,11 +2138,15 @@
       toast('Admin moderation is available in a connected Study Room.');
       return;
     }
-    if (operation === 'remove' && !global.confirm(`Remove ${displayName(participant)} from this room? They can rejoin; this is not a permanent block.`)) return;
+    if (operation === 'remove' && !global.confirm(`Remove ${displayName(participant)} and revoke their room access? An administrator inside this room must allow another request before they return.`)) return;
     if (!isCurrent()) return;
     const microphone = publicationFor(participant, LiveKit?.Track?.Source?.Microphone || 'microphone');
     if (operation === 'mute' && (!microphone?.trackSid || microphone.isMuted)) return;
     const body = { operation, roomKey, participantIdentity: identity };
+    if (operation === 'remove') {
+      if (!state.removalCommands.has(pendingKey)) state.removalCommands.set(pendingKey, admissionCommandId());
+      body.commandId = state.removalCommands.get(pendingKey);
+    }
     if (operation === 'mute') body.trackSid = microphone.trackSid;
     state.pendingModeration.add(pendingKey);
     renderPeople();
@@ -1948,7 +2157,9 @@
         || result.roomKey !== roomKey || result.participantIdentity !== identity
         || (operation === 'mute' && result.trackSid !== body.trackSid)) throw new Error('Unconfirmed moderation result');
       if (state.room === room && state.session === session && state.currentRoomKey === roomKey) {
-        toast(operation === 'mute' ? 'Microphone muted for the room.' : 'Removed from the room. They can rejoin.');
+        state.removalCommands.delete(pendingKey);
+        toast(operation === 'mute' ? 'Microphone muted for the room.' : 'Removed. Room access has been revoked.');
+        if (operation === 'remove') refreshWaitingQueue();
       }
     } catch {
       if (state.room === room && state.session === session && state.currentRoomKey === roomKey) {
@@ -3789,6 +4000,12 @@
       byId('sr-nickname').focus();
       return;
     }
+    if (roomToJoin.audience === 'approval' && !state.isAdministrator && state.entryAdmission?.record?.status !== 'approved') {
+      stopDeviceTest();
+      setJoinOption('microphone', false); setJoinOption('camera', false);
+      await runEntryAdmission('request');
+      return;
+    }
     if (!LiveKit?.Room) {
       setStatus('sr-prejoin-status', 'The secure video library could not load. Check your connection and try again.', 'error');
       return;
@@ -3851,6 +4068,7 @@
       syncInteractiveControls();
       syncBrandedBackdropState({ status: state.backdropEnabled ? 'idle' : 'off', supported: true });
       startFocusClock();
+      refreshWaitingQueue();
       await refreshDeviceLists();
       updateAudioPrompt();
       byId('sr-live-room').focus?.({ preventScroll: true });
@@ -3879,6 +4097,7 @@
       state.joining = false;
       button.disabled = false;
       syncJoinButton();
+      if (state.entryAdmission && entryIsCurrent()) runEntryAdmission('status');
     }
   }
 
@@ -4059,6 +4278,8 @@
   }
 
   function clearConnectedRoomState() {
+    stopWaitingQueue();
+    state.removalCommands.clear();
     state.room = null;
     state.currentRoomKey = '';
     state.focusStartedAt = null;
@@ -4265,6 +4486,17 @@
     });
     byId('sr-join').addEventListener('click', joinRoom);
     byId('sr-entry-close')?.addEventListener('click', () => closeEntryDialog());
+    byId('sr-entry-admission-retry')?.addEventListener('click', () => runEntryAdmission('status'));
+    byId('sr-entry-admission-cancel')?.addEventListener('click', () => runEntryAdmission('cancel'));
+    byId('sr-waiting-refresh')?.addEventListener('click', refreshWaitingQueue);
+    byId('sr-waiting-previous')?.addEventListener('click', () => {
+      if (state.waitingQueueBusy || !state.waitingQueuePage) return;
+      state.waitingQueuePage -= 1; refreshWaitingQueue();
+    });
+    byId('sr-waiting-next')?.addEventListener('click', () => {
+      if (state.waitingQueueBusy || !state.waitingQueueHasMore) return;
+      state.waitingQueuePage += 1; refreshWaitingQueue();
+    });
     byId('sr-entry-dialog')?.addEventListener('cancel', (event) => {
       event.preventDefault();
       closeEntryDialog();
@@ -4410,6 +4642,7 @@
     state.session = session || null;
     if (session && previousId === nextId) return;
     state.accountGeneration += 1;
+    stopWaitingQueue();
     closeEntryDialog({ restoreFocus: false });
     const oldRoom = state.room;
     detachTracks();

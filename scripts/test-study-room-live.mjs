@@ -17,6 +17,8 @@ const [page, css, client, backgroundClient, previewClient, workerPackage] = awai
 assert.match(page, /<html lang="en-PH">/);
 assert.match(page, /<meta name="robots" content="noindex,nofollow,noarchive">/);
 assert.match(page, /id="sr-access-state"/);
+assert.match(page, /Rooms default to all signed-in members\. Individual room entry rules may differ\./);
+assert.doesNotMatch(page, /Open to every signed-in member\. No subscription required\./);
 assert.match(page, /id="sr-prejoin"/);
 assert.match(page, /id="sr-live-room" hidden/);
 assert.match(page, /id="sr-live-room" hidden tabindex="-1"/);
@@ -51,7 +53,7 @@ assert.match(page, /value="Participant #"/);
 assert.match(page, /id="sr-room-lobby"[\s\S]*data-max-rooms="24"/u);
 assert.match(page, /id="sr-room-admin-controls"[^>]*hidden/u);
 assert.match(page, /id="sr-room-editor"[^>]*hidden/u);
-assert.match(page, /id="sr-room-audience"[\s\S]*value="admin"[\s\S]*value="paid"[\s\S]*value="all"/u);
+assert.match(page, /id="sr-room-audience"[\s\S]*value="all"[\s\S]*value="paid"[\s\S]*value="admin"[\s\S]*value="approval"/u);
 assert.match(page, /Inner Chamber always remains admin-only\./u);
 assert.match(page, /id="sr-room-lobby-count"/u);
 assert.match(page, /id="sr-room-card-grid"[^>]*><\/div>/u);

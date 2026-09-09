@@ -108,6 +108,12 @@ const studyRoomPreviewFiles = Object.freeze([
 const publicFiles = Object.freeze([
   'index.html',
   'study-room/index.html',
+  'debate-room/index.html',
+  'assets/debate-entry.js',
+  'assets/debate-room.css',
+  'assets/debate-room.js',
+  'assets/debate-media.js',
+  'assets/debate-dates.js',
   'CNAME',
   'favicon.svg',
   'manifest.webmanifest',
@@ -503,6 +509,9 @@ async function buildForecastPdfRuntime() {
 await rm(outputRoot, { recursive: true, force: true });
 await mkdir(outputRoot, { recursive: true });
 await Promise.all(publicFiles.map(copyPublicFile));
+// Both environments execute the same sources; only the browser import suffix changes.
+await writeFile(path.join(outputRoot, 'assets/debate-domain.js'), (await readFile(path.join(repositoryRoot, 'worker/debate-domain.mjs'), 'utf8')).replace("'./debate-sanctions.mjs'", "'./debate-sanctions.js'"));
+await cp(path.join(repositoryRoot, 'worker/debate-sanctions.mjs'), path.join(outputRoot, 'assets/debate-sanctions.js'));
 await mkdir(path.join(outputRoot, 'assets/vendor'), { recursive: true });
 await Promise.all([
   cp(

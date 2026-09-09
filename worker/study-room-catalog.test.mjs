@@ -218,8 +218,13 @@ async function withWorker({ admin = false, c = catalog(), paidRows = [], mutate 
     if (url.pathname === '/rest/v1/rpc/admin_authorization_context') return Response.json({ authorized: admin, role: admin ? 'admin' : 'student' });
     if (url.pathname.startsWith('/rest/v1/')) {
       assert.equal(init.headers.Authorization, 'Bearer inert-service-key');
-      if (url.pathname.endsWith('/study_room_catalog_v1')) return Response.json(c);
-      if (url.pathname.endsWith('/study_room_configure_v1')) return mutate(JSON.parse(init.body));
+      if (url.pathname.endsWith('/study_room_catalog_v2')) return Response.json(c);
+      if (url.pathname.endsWith('/study_room_admission_v1')) {
+        const command=JSON.parse(init.body).p_command;
+        assert.equal(command.actor,owner); assert.equal(command.operation,'authorize');
+        return Response.json({ok:true,allowed:true,admission:{status:'approved',version:1,expiresAt:new Date(Date.now()+600000).toISOString()}});
+      }
+      if (url.pathname.endsWith('/study_room_configure_v2')) return mutate(JSON.parse(init.body));
       if (url.pathname === '/rest/v1/subscriptions') {
         assert.equal(url.searchParams.get('user_id'), `eq.${owner}`);
         assert.equal(url.searchParams.get('status'), 'eq.active');

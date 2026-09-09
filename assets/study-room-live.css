@@ -3048,6 +3048,15 @@ body.sr-in-call.sr-compact-mode #sr-toggle-compact,
 }
 
 /* Keep every call action, including Leave, visible on portrait phones. */
+.sr-entry-admission { margin-top: 12px; padding: 12px; border: 1px solid var(--sr-border, #dfe5df); border-radius: 12px; background: #f7faf7; }
+.sr-admission-actions { display: flex; flex-wrap: wrap; gap: 8px 14px; }
+.sr-admission-actions button, .sr-waiting-room button { min-height: 44px; }
+.sr-waiting-room { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--sr-border, #dfe5df); }
+.sr-waiting-person { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 12px 0; border-bottom: 1px solid #e7ece7; }
+.sr-waiting-person strong { flex: 1 1 100%; overflow-wrap: anywhere; }
+.sr-waiting-person > span { flex: 1 1 auto; font-size: 12px; }
+.sr-entry-admission[hidden], .sr-waiting-room[hidden] { display: none; }
+
 @media (max-width: 760px) and (max-height: 600px) and (orientation: portrait) {
   .sr-stage-header { min-height: 90px; }
 }

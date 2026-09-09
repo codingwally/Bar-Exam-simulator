@@ -131,7 +131,7 @@ function harness({ admin = false, rooms = catalog(admin), joinGate = null, signe
     document, location: { hostname: 'fixture.invalid', search: '' },
     DueDiligencePhase2Config: { workerUrl: 'https://study-room.fixture.invalid' },
     LivekitClient: { Room }, localStorage: { getItem: () => null, setItem() {} },
-    addEventListener() {}, clearInterval() {}, clearTimeout() {},
+    addEventListener() {}, clearInterval() {}, clearTimeout() {}, setTimeout: () => 1,
     __observations: observations,
     async fetch(url, options) {
       const parsed = new URL(url);
@@ -140,7 +140,7 @@ function harness({ admin = false, rooms = catalog(admin), joinGate = null, signe
       assert.equal(options.headers.Authorization, 'Bearer inert-session');
       const body = JSON.parse(options.body);
       observations.requests.push({ path: parsed.pathname, body });
-      assert.ok(['/study-room/join', '/study-room/rooms', '/admin/study-room/rooms'].includes(parsed.pathname));
+      assert.ok(['/study-room/join', '/study-room/rooms', '/admin/study-room/rooms', '/study-room/admission'].includes(parsed.pathname));
       if (parsed.pathname === '/study-room/join' && joinGate) await joinGate.promise;
       let data = parsed.pathname === '/study-room/join' ? {
         room_key: body.roomKey, server_url: 'wss://rtc.fixture.invalid',
@@ -150,6 +150,10 @@ function harness({ admin = false, rooms = catalog(admin), joinGate = null, signe
       if (parsed.pathname === '/study-room/rooms') {
         if (transport.listFailure) return { ok:false, status:503, json:async()=>({ok:false,error:{code:'STUDY_ROOM_CATALOG_UNAVAILABLE'}}) };
         data = { rooms: structuredClone(transport.rooms), schemaVersion:1, maxRooms:24 };
+      }
+      if (parsed.pathname === '/study-room/admission') {
+        assert.equal(admin,true); assert.equal(body.operation,'list');
+        data={roomKey:body.roomKey,accessRevision:body.accessRevision,queue:[]};
       }
       if (parsed.pathname === '/admin/study-room/rooms') {
         if (mutationGate) await mutationGate.promise;
@@ -306,7 +310,7 @@ test('administrator must still create an inactive private room before joining', 
   h.openEntryDialog('5');
   assert.match(h.get('sr-join').textContent, /^Open and enter/);
   await h.joinRoom();
-  assert.deepEqual(h.observations.requests.map((x) => x.path), ['/admin/study-room/rooms', '/study-room/rooms', '/study-room/join']);
+  assert.deepEqual(h.observations.requests.map((x) => x.path), ['/admin/study-room/rooms', '/study-room/rooms', '/study-room/join', '/study-room/admission']);
   assert.equal(h.state.currentRoomKey, '5');
 });
 
@@ -327,7 +331,7 @@ test('public administrator join never creates a room and Library selection disab
   assert.equal(h.state.joinWithMicrophone, false);
   assert.equal(h.get('sr-join-microphone').disabled, true);
   await h.joinRoom();
-  assert.deepEqual(h.observations.requests.map((x) => x.path), ['/study-room/join']);
+  assert.deepEqual(h.observations.requests.map((x) => x.path), ['/study-room/join', '/study-room/admission']);
 });
 
 test('missing catalog never invents always-open availability or normal-user create authority', async () => {
@@ -397,7 +401,7 @@ test('unknown or denied paid eligibility never becomes membership and Inner Cham
   const rows=catalog();rows[1]={...rows[1],audience:'paid'};delete rows[1].canJoin;
   rows[4]={...rows[4],audience:'all',adminOnly:false,canJoin:true,alwaysOpen:true};
   const h=harness({rooms:rows});assert.equal(h.card('2').disabled,true);
-  assert.match(h.card('2').getAttribute('aria-label'),/Paying users · Access unavailable/);
+  assert.match(h.card('2').getAttribute('aria-label'),/Paid users · Access unavailable/);
   assert.equal(h.state.rooms[4].audience,'admin');assert.equal(h.card('5').disabled,true);
   assert.equal(h.state.rooms[4].alwaysOpen,false);assert.equal(h.selectRoom('5'),false);
 });
@@ -450,7 +454,7 @@ test('bounded validation refuses invalid input without changing current catalog'
 });
 test('add uses one vacant physical key and cannot duplicate during an in-flight save',async()=>{
   const gate=deferred();const h=harness({admin:true,mutationGate:gate});h.openRoomEditor();
-  assert.equal(h.state.roomEditor.roomKey,'7');assert.equal(h.get('sr-room-audience').value,'admin');
+  assert.equal(h.state.roomEditor.roomKey,'7');assert.equal(h.get('sr-room-audience').value,'all');
   h.get('sr-room-label').value='Small Group';const saving=h.saveRoomConfiguration();
   assert.equal(await h.saveRoomConfiguration(),false);assert.equal(h.openRoomEditor(),false);
   assert.equal(h.state.rooms.some((room)=>room.roomKey==='7'),false);assert.equal(mutations(h).length,1);

@@ -286,8 +286,11 @@ assert.match(index, /phase2\.css[^"\n]*pricing=regular-checkout-r1[\s\S]*pricing
 assert.doesNotMatch(index, /20260914|2026-09-14/u, 'Public cache keys must not reveal the private cutover date.');
 assert.doesNotMatch(index, /href=["']\/study-room\//i);
 assert.match(studyRoomPage, /<title>Study Room — Due Diligence<\/title>/);
-assert.match(studyRoomPage, /Open to every signed-in member\. No subscription required\./);
-assert.match(studyRoomPage, /Double-click a room to enter/);
+assert.match(studyRoomPage, /Rooms default to all signed-in members\. Individual room entry rules may differ\./);
+assert.match(studyRoomPage, /Choose a room to review your devices, then enter/);
+assert.match(studyRoomPage, /<dialog[^>]+id="sr-entry-dialog"/);
+assert.match(studyRoomPage, /Closing this window stops the preview/);
+assert.doesNotMatch(studyRoomLive, /createElement\(['"]img['"]\)[\s\S]{0,140}sr-room-card-cover/);
 assert.match(studyRoomPage, /id="sr-background-file"[^>]+accept="image\/png,image\/jpeg,image\/webp"/);
 assert.match(studyRoomPage, /camera and microphone remain off/i);
 assert.match(studyRoomPage, /assets\/vendor\/livekit-client\.umd\.js\?v=2\.22\.1/);

@@ -120,7 +120,7 @@ export function createStudyRoomHandlers(dependencies) {
   }
 
   async function authorizedContext(request, env, scope) {
-    await rateLimit(request, env, scope);
+    if (scope !== 'admission') await rateLimit(request, env, scope);
     const user = await authenticate(request, env);
     if (!user) {
       throw new StudyRoomError(
@@ -130,6 +130,9 @@ export function createStudyRoomHandlers(dependencies) {
         'Return to Due Diligence, sign in, then open the Study Room again.',
       );
     }
+    // Waiting-list polling is actor-scoped; a school's shared IP must not turn
+    // one user's request budget into a denial for everyone in the room.
+    if (scope === 'admission') await rateLimit(request, env, scope, user);
     const authorization = authorizedAdministrator(await authorizeAdmin(env, user));
     if (authorization) {
       return {

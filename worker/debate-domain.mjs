@@ -1,4 +1,5 @@
 /** V3 competition rules and arithmetic. Pure browser-safe ESM; no I/O or implicit clock. */
+import { validateSanctionPolicy, applySanctions } from './debate-sanctions.mjs';
 export class DebateDomainError extends Error {
   constructor(code, message, details = null) { super(message); this.name = 'DebateDomainError'; this.code = code; this.details = details; }
 }
@@ -48,6 +49,7 @@ export const DEFAULT_RULES = freeze({
     aggregation: 'mean_speakers_plus_closing', provenance: 'DENR 25/30/30/15 weights; Due Diligence aggregation and award defaults',
   },
   awardPolicy: { scoreTies: 'coaward', bestDebaterTie: 'one_runoff_then_coaward', tournamentMinimumMatches: 2 },
+  sanctions: [],
   retentionDays: { operational: 30, chatAndDrafts: 30, evidence: 90, officialRecords: 365 },
 });
 
@@ -87,6 +89,7 @@ const scoreView = (ratio) => ({ ...ratio, display: formatRatio(exactRatio(ratio.
 
 export function validateRules(input = {}) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) fail('INVALID_RULES', 'Rules must be an object.');
+  if (Object.keys(input).some(key => /tie[_-]?break/i.test(key))) fail('TIEBREAK_CONFIGURATION_UNSUPPORTED', 'No tiebreak adjudicator is predeclared in this preset. An unresolved reconsideration uses a visibly linked rematch.');
   const rules = { ...clone(DEFAULT_RULES), ...clone(input) };
   if (!['majority', 'simple', 'aggregate'].includes(rules.judgingMode)) fail('INVALID_JUDGING_MODE', 'Choose majority, simple ballot or aggregate judging.');
   for (const key of ['constructiveMs', 'interpellationMs', 'rebuttalMs', 'preparationMs', 'closingBreakMs', 'correctionWindowMs', 'noShowGraceMs']) integer(rules[key], key, 0, 86400000);
@@ -125,6 +128,7 @@ export function validateRules(input = {}) {
   rules.awardPolicy = { ...clone(DEFAULT_RULES.awardPolicy), ...(input.awardPolicy || {}) };
   if (rules.awardPolicy.scoreTies !== 'coaward' || rules.awardPolicy.bestDebaterTie !== 'one_runoff_then_coaward') fail('UNSUPPORTED_AWARD_POLICY', 'Only disclosed co-awards and one Best Debater runoff are currently supported.');
   integer(rules.awardPolicy.tournamentMinimumMatches, 'Tournament award minimum', 2, 100);
+  rules.sanctions = validateSanctionPolicy(rules.sanctions, { judgingMode: rules.judgingMode });
   rules.retentionDays = { ...DEFAULT_RULES.retentionDays, ...(input.retentionDays || {}) };
   for (const value of Object.values(rules.retentionDays)) integer(value, 'Retention days', 1, 3650);
   return freeze(rules);
@@ -323,10 +327,10 @@ export function calculateNominationAward({ nominations = [], activeJudgeIds, eli
   if (final.missingJudgeIds.length) return { status: 'AWAITING_RUNOFF', counts: first.counts, runoffCounts: final.counts, candidates: first.winners, missingJudgeIds: final.missingJudgeIds, winners: [] };
   return { status: final.winners.length > 1 ? 'COAWARD' : 'AWARDED', counts: first.counts, runoffCounts: final.counts, winners: final.winners };
 }
-export function calculateAwards({ ballots = [], rules: input = DEFAULT_RULES, activeJudgeIds, closingSeats, nominations = [], runoff = null, matchStatus = 'DRAFT' }) {
+export function calculateAwards({ ballots = [], rules: input = DEFAULT_RULES, activeJudgeIds, closingSeats, nominations = [], runoff = null, matchStatus = 'DRAFT', sanctions = [] }) {
   const rules = validateRules(input), closing = validateClosingSeats(closingSeats), judges = uniqueIds(activeJudgeIds, 'Active judges', { min: 1, max: 31 });
   if (matchStatus !== 'FINAL') return { status: 'UNAVAILABLE', reason: 'Awards require a valid finalized played match.' };
-  const result = tabulateBallots(ballots, rules, judges); if (!result.complete || !result.winner) return { status: 'UNAVAILABLE', reason: 'A complete resolved valid match is required.', bestDebater: { status: 'UNAVAILABLE' } };
+  const result = tabulateBallots(ballots, rules, judges); if (!result.complete || !applySanctions(result, sanctions, rules.sanctions).adjustedTally.winner) return { status: 'UNAVAILABLE', reason: 'A complete resolved valid match is required.', bestDebater: { status: 'UNAVAILABLE' } };
   const bestDebater = calculateNominationAward({ nominations, activeJudgeIds: judges, runoff });
   if (rules.judgingMode === 'simple') return { status: 'PARTIAL', bestSpeaker: { status: 'UNAVAILABLE', reason: 'Simple ballots do not contain scores.' }, bestInterpellator: { status: 'UNAVAILABLE', reason: 'Simple ballots do not contain scores.' }, bestRebuttalSpeaker: { status: 'UNAVAILABLE', reason: 'Simple ballots do not contain scores.' }, bestDebater };
   const cards = ballots.map((b) => scoreScorecard(b.scorecard, rules)), individualMax = 10000 - rules.rubric.weightsHundredths.closing;
@@ -369,7 +373,7 @@ export function calculateTournamentAwards({ matches, minimumMatches = 2, nominat
   for (const match of matches) {
     if (match.matchStatus !== 'FINAL' || match.resultKind && match.resultKind !== 'normal') continue;
     const rules = validateRules(match.rules); if (rules.judgingMode === 'simple') continue;
-    const summary = tabulateBallots(match.ballots, rules, match.activeJudgeIds); if (!summary.complete || !summary.winner) continue;
+    const summary = tabulateBallots(match.ballots, rules, match.activeJudgeIds); if (!summary.complete || !applySanctions(summary, match.sanctions || [], rules.sanctions).adjustedTally.winner) continue;
     const fingerprint = rubricFingerprint(rules), bucket = buckets.get(fingerprint) || { bestSpeaker: {}, bestInterpellator: {}, bestRebuttalSpeaker: {}, matches: [], nominationScores: {}, missingNominations: [], judgeObserved: {} };
     const awards = calculateAwards({ ...match, rules, nominations: [] });
     uniqueIds(SEATS.map((seat) => match.seatParticipantIds?.[seat]), 'Speaker account identities', { min: 6, max: 6 });
@@ -448,7 +452,7 @@ export function generateElimination(teamIds, options = {}) {
       const a = inputs[2 * pair], b = inputs[2 * pair + 1], id = `se-${round}-${pair + 1}`;
       const bye = round === 1 && (!a.teamId || !b.teamId), winnerTeamId = bye ? a.teamId || b.teamId : null;
       const fixture = { id, round, affirmativeTeamId: a.teamId, negativeTeamId: b.teamId, affirmativeSource: a.sourceMatchId, negativeSource: b.sourceMatchId,
-        affirmativeSeed: a.seed || null, negativeSeed: b.seed || null, status: bye ? 'BYE' : round === 1 ? 'SCHEDULED' : 'AWAITING_PREDECESSORS',
+        affirmativeSeed: a.seed || null, negativeSeed: b.seed || null, status: bye ? 'BYE' : a.teamId && b.teamId ? 'SCHEDULED' : 'AWAITING_PREDECESSORS',
         winnerTeamId, motionId: bye ? null : motionFor(fixtures.filter((m) => m.status !== 'BYE').length, motionIds, motionReusePolicy), score: null };
       fixtures.push(fixture); if (bye) byes.push({ matchId: id, teamId: winnerTeamId, speechScore: null, ballotScore: null }); next.push({ teamId: winnerTeamId, sourceMatchId: id });
     }
@@ -481,6 +485,23 @@ export function applyFixtureResult(fixtures, matchId, result) {
   }
   return { fixtures: updated, downstreamReviewMatchIds: [...reviewSet] };
 }
+// Final, disclosed aggregate sanctions can produce signed totals. Keep this path
+// separate from raw scorecard validation, which must still reject negative marks.
+function standingsRatio(value) {
+  integer(value?.numerator, 'Standings numerator', Number.MIN_SAFE_INTEGER); integer(value?.denominator, 'Standings denominator', 1);
+  return { numerator: BigInt(value.numerator), denominator: BigInt(value.denominator) };
+}
+function standingsMeanScore(values) {
+  let numerator = 0n, denominator = 1n;
+  const reduce = () => {
+    const divisor = gcd(numerator < 0n ? -numerator : numerator, denominator); numerator /= divisor; denominator /= divisor;
+    if (numerator > BigInt(Number.MAX_SAFE_INTEGER) || numerator < BigInt(Number.MIN_SAFE_INTEGER) || denominator > BigInt(Number.MAX_SAFE_INTEGER)) fail('RATIO_LIMIT', 'Too many incomparable fractional standings values to tabulate safely.');
+  };
+  for (const value of values) { const next = standingsRatio(value); numerator = numerator * next.denominator + next.numerator * denominator; denominator *= next.denominator; reduce(); }
+  denominator *= BigInt(values.length); reduce();
+  const absolute = numerator < 0n ? -numerator : numerator, rounded = (2n * absolute + denominator) / (2n * denominator);
+  return { numerator: Number(numerator), denominator: Number(denominator), display: `${numerator < 0n && rounded ? '-' : ''}${rounded / 100n}.${String(rounded % 100n).padStart(2, '0')}` };
+}
 export function calculateStandings(teamIds, matches, { qualifyingPlaces = null } = {}) {
   const teams = uniqueIds(teamIds, 'Teams', { min: 2, max: 128 }); if (!Array.isArray(matches)) fail('INVALID_MATCHES', 'Matches must be a list.'); uniqueIds(matches.map((m) => m.id), 'Match IDs', { max: 10000 });
   if (qualifyingPlaces !== null) integer(qualifyingPlaces, 'Qualifying places', 1, teams.length);
@@ -492,7 +513,7 @@ export function calculateStandings(teamIds, matches, { qualifyingPlaces = null }
     if (match.resultKind === 'double_forfeit' && match.winnerTeamId) fail('INVALID_FORFEIT', 'A double forfeit awards neither team a win.');
     ids.forEach((id) => { rows[id].played += 1; }); if (match.winnerTeamId) rows[match.winnerTeamId].wins += 1;
     if ((!match.resultKind || match.resultKind === 'normal') && match.teamScores) for (const team of SIDES) {
-      const id = match[`${team}TeamId`], score = match.teamScores[team]; exactRatio(score.numerator, score.denominator);
+      const id = match[`${team}TeamId`], score = match.teamScores[team]; standingsRatio(score);
       const rubric = requiredText(match.rubricId, 'Comparable rubric ID', 20000); rows[id].scores.push(score); rows[id].rubrics.push(rubric); rows[id].scoredMatches += 1;
     }
   }
@@ -502,7 +523,7 @@ export function calculateStandings(teamIds, matches, { qualifyingPlaces = null }
     const ids = group.map((r) => r.teamId), completeMutual = ids.length > 1 && ids.every((id, i) => ids.slice(i + 1).every((other) => final.some((m) => [m.affirmativeTeamId, m.negativeTeamId].includes(id) && [m.affirmativeTeamId, m.negativeTeamId].includes(other))));
     if (completeMutual) group.forEach((r) => { r.miniLeagueWins = final.filter((m) => ids.includes(m.affirmativeTeamId) && ids.includes(m.negativeTeamId) && m.winnerTeamId === r.teamId).length; });
     const rubricIds = new Set(group.flatMap((r) => r.rubrics)), comparable = rubricIds.size === 1 && group.every((r) => r.scoredMatches > 0);
-    group.forEach((r) => { r.meanScore = r.scores.length && new Set(r.rubrics).size === 1 ? scoreView(meanRatio(r.scores)) : null; });
+    group.forEach((r) => { r.meanScore = r.scores.length && new Set(r.rubrics).size === 1 ? standingsMeanScore(r.scores) : null; });
     const compare = (a, b) => (completeMutual ? b.miniLeagueWins - a.miniLeagueWins : 0) || (comparable ? compareRatio(b.meanScore, a.meanScore) : 0);
     group.sort(compare); rulesApplied.push({ wins, teamIds: ids, miniLeagueApplied: completeMutual, comparableScoreApplied: comparable });
     let previous = null; for (const row of group) { const tiedPrevious = previous && compare(previous, row) === 0; row.rank = tiedPrevious ? previous.rank : ordered.length + 1; row.tied = Boolean(tiedPrevious); if (tiedPrevious) previous.tied = true; ordered.push(row); previous = row; }

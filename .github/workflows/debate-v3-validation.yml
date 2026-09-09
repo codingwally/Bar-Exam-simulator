@@ -1,0 +1,50 @@
+name: Debate V3 local validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'assets/debate-*'
+      - 'assets/study-room-*'
+      - 'debate-room/**'
+      - 'study-room/**'
+      - 'worker/debate-*'
+      - 'worker/study-room*'
+      - 'worker/index.mjs'
+      - 'worker/wrangler.toml'
+      - 'scripts/*debate*'
+      - 'scripts/*study-room*'
+      - 'scripts/build-pages-artifact.mjs'
+      - 'supabase/migrations/20260909*'
+      - 'index.html'
+      - '.github/workflows/debate-v3-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  local-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install locked local test dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+      - name: Run local competition and Study regression suites
+        run: node scripts/test-debate-v3.mjs
+      - name: Build the complete Pages artifact
+        run: |
+          node scripts/build-pages-artifact.mjs
+          node scripts/test-debate-artifact.mjs
+          node scripts/test-pages-artifact.mjs
+      - name: Preserve local verification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debate-v3-local-evidence
+          path: artifacts/debate-local-rehearsal/suite-*/*
+          if-no-files-found: warn
+          retention-days: 14

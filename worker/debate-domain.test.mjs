@@ -301,6 +301,7 @@ test('F03 seeded five-team elimination gives eight slots,three disclosed byes,no
   const result=generateElimination(['t1','t2','t3','t4','t5']);assert.equal(result.bracketSize,8);assert.equal(result.fixtures.length,7);assert.equal(result.byes.length,3);
   assert.deepEqual(result.byes.map((b)=>b.teamId).sort(),['t1','t2','t3']);assert.ok(result.byes.every((b)=>b.speechScore===null&&b.ballotScore===null));assert.equal(result.needsReview,true);
   assert.equal(result.fixtures.at(-1).status,'AWAITING_PREDECESSORS');assert.equal(result.fixtures.at(-1).winnerTeamId,null);
+  assert.equal(result.fixtures.find(f=>f.round===2&&f.affirmativeTeamId&&f.negativeTeamId).status,'SCHEDULED','two disclosed byes resolve their next pairing without a fictional match');
   const six=generateElimination(['1','2','3','4','5','6']);assert.equal(six.byes.length,2);assert.equal(generateElimination(['a','b']).byes.length,0);
 });
 test('F03 recorded random bracket requires exact logged outcome actor/time/reroll and never invents randomness', () => {

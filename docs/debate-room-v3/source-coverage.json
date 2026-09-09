@@ -1,0 +1,3055 @@
+{
+  "source": {
+    "md": "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.md",
+    "txt": "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.txt",
+    "byteIdentical": true,
+    "bytes": 76644,
+    "sha256": "14ddbb8173dc27c2ab869f593f4315989c33b88be1bf4e0f94d8f98ad121ab09",
+    "splitLines": 599,
+    "physicalLines": 598
+  },
+  "unclassifiedNonblankLines": [],
+  "lineClassifications": [
+    {
+      "line": 1,
+      "kind": "structural",
+      "requirementId": null
+    },
+    {
+      "line": 2,
+      "kind": "structural",
+      "requirementId": null
+    },
+    {
+      "line": 3,
+      "kind": "structural",
+      "requirementId": null
+    },
+    {
+      "line": 4,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 5,
+      "kind": "requirement",
+      "requirementId": "V3-00-001"
+    },
+    {
+      "line": 6,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 7,
+      "kind": "requirement",
+      "requirementId": "V3-00-002"
+    },
+    {
+      "line": 8,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 9,
+      "kind": "section-heading",
+      "requirementId": null
+    },
+    {
+      "line": 10,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 11,
+      "kind": "requirement",
+      "requirementId": "V3-01-001"
+    },
+    {
+      "line": 12,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 13,
+      "kind": "requirement",
+      "requirementId": "V3-01-002"
+    },
+    {
+      "line": 14,
+      "kind": "requirement",
+      "requirementId": "V3-01-003"
+    },
+    {
+      "line": 15,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 16,
+      "kind": "requirement",
+      "requirementId": "V3-01-004"
+    },
+    {
+      "line": 17,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 18,
+      "kind": "requirement",
+      "requirementId": "V3-01-005"
+    },
+    {
+      "line": 19,
+      "kind": "requirement",
+      "requirementId": "V3-01-005"
+    },
+    {
+      "line": 20,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 21,
+      "kind": "requirement",
+      "requirementId": "V3-01-006"
+    },
+    {
+      "line": 22,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 23,
+      "kind": "requirement",
+      "requirementId": "V3-01-007"
+    },
+    {
+      "line": 24,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 25,
+      "kind": "requirement",
+      "requirementId": "V3-01-008"
+    },
+    {
+      "line": 26,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 27,
+      "kind": "requirement",
+      "requirementId": "V3-01-009"
+    },
+    {
+      "line": 28,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 29,
+      "kind": "section-heading",
+      "requirementId": null
+    },
+    {
+      "line": 30,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 31,
+      "kind": "requirement",
+      "requirementId": "V3-02-001"
+    },
+    {
+      "line": 32,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 33,
+      "kind": "requirement",
+      "requirementId": "V3-02-002"
+    },
+    {
+      "line": 34,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 35,
+      "kind": "requirement",
+      "requirementId": "V3-02-003"
+    },
+    {
+      "line": 36,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 37,
+      "kind": "requirement",
+      "requirementId": "V3-02-004"
+    },
+    {
+      "line": 38,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 39,
+      "kind": "section-heading",
+      "requirementId": null
+    },
+    {
+      "line": 40,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 41,
+      "kind": "requirement",
+      "requirementId": "V3-03-001"
+    },
+    {
+      "line": 42,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 43,
+      "kind": "requirement",
+      "requirementId": "V3-03-002"
+    },
+    {
+      "line": 44,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 45,
+      "kind": "requirement",
+      "requirementId": "V3-03-003"
+    },
+    {
+      "line": 46,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 47,
+      "kind": "requirement",
+      "requirementId": "V3-03-004"
+    },
+    {
+      "line": 48,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 49,
+      "kind": "section-heading",
+      "requirementId": null
+    },
+    {
+      "line": 50,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 51,
+      "kind": "requirement",
+      "requirementId": "V3-04-001"
+    },
+    {
+      "line": 52,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 53,
+      "kind": "requirement",
+      "requirementId": "V3-04-002"
+    },
+    {
+      "line": 54,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 55,
+      "kind": "requirement",
+      "requirementId": "V3-04-003"
+    },
+    {
+      "line": 56,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 57,
+      "kind": "requirement",
+      "requirementId": "V3-04-004"
+    },
+    {
+      "line": 58,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 59,
+      "kind": "requirement",
+      "requirementId": "V3-04-005"
+    },
+    {
+      "line": 60,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 61,
+      "kind": "section-heading",
+      "requirementId": null
+    },
+    {
+      "line": 62,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 63,
+      "kind": "requirement",
+      "requirementId": "V3-05-001"
+    },
+    {
+      "line": 64,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 65,
+      "kind": "requirement",
+      "requirementId": "V3-05-002"
+    },
+    {
+      "line": 66,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 67,
+      "kind": "requirement",
+      "requirementId": "V3-05-003"
+    },
+    {
+      "line": 68,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 69,
+      "kind": "requirement",
+      "requirementId": "V3-05-004"
+    },
+    {
+      "line": 70,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 71,
+      "kind": "requirement",
+      "requirementId": "V3-05-005"
+    },
+    {
+      "line": 72,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 73,
+      "kind": "requirement",
+      "requirementId": "V3-05-006"
+    },
+    {
+      "line": 74,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 75,
+      "kind": "section-heading",
+      "requirementId": null
+    },
+    {
+      "line": 76,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 77,
+      "kind": "requirement",
+      "requirementId": "V3-06-001"
+    },
+    {
+      "line": 78,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 79,
+      "kind": "requirement",
+      "requirementId": "V3-06-002"
+    },
+    {
+      "line": 80,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 81,
+      "kind": "requirement",
+      "requirementId": "V3-06-003"
+    },
+    {
+      "line": 82,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 83,
+      "kind": "requirement",
+      "requirementId": "V3-06-004"
+    },
+    {
+      "line": 84,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 85,
+      "kind": "requirement",
+      "requirementId": "V3-06-005"
+    },
+    {
+      "line": 86,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 87,
+      "kind": "section-heading",
+      "requirementId": null
+    },
+    {
+      "line": 88,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 89,
+      "kind": "requirement",
+      "requirementId": "V3-07-001"
+    },
+    {
+      "line": 90,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 91,
+      "kind": "table-header",
+      "requirementId": null
+    },
+    {
+      "line": 92,
+      "kind": "table-header",
+      "requirementId": null
+    },
+    {
+      "line": 93,
+      "kind": "requirement",
+      "requirementId": "V3-07-002"
+    },
+    {
+      "line": 94,
+      "kind": "requirement",
+      "requirementId": "V3-07-003"
+    },
+    {
+      "line": 95,
+      "kind": "requirement",
+      "requirementId": "V3-07-004"
+    },
+    {
+      "line": 96,
+      "kind": "requirement",
+      "requirementId": "V3-07-005"
+    },
+    {
+      "line": 97,
+      "kind": "requirement",
+      "requirementId": "V3-07-006"
+    },
+    {
+      "line": 98,
+      "kind": "requirement",
+      "requirementId": "V3-07-007"
+    },
+    {
+      "line": 99,
+      "kind": "requirement",
+      "requirementId": "V3-07-008"
+    },
+    {
+      "line": 100,
+      "kind": "requirement",
+      "requirementId": "V3-07-009"
+    },
+    {
+      "line": 101,
+      "kind": "requirement",
+      "requirementId": "V3-07-010"
+    },
+    {
+      "line": 102,
+      "kind": "requirement",
+      "requirementId": "V3-07-011"
+    },
+    {
+      "line": 103,
+      "kind": "requirement",
+      "requirementId": "V3-07-012"
+    },
+    {
+      "line": 104,
+      "kind": "requirement",
+      "requirementId": "V3-07-013"
+    },
+    {
+      "line": 105,
+      "kind": "requirement",
+      "requirementId": "V3-07-014"
+    },
+    {
+      "line": 106,
+      "kind": "requirement",
+      "requirementId": "V3-07-015"
+    },
+    {
+      "line": 107,
+      "kind": "requirement",
+      "requirementId": "V3-07-016"
+    },
+    {
+      "line": 108,
+      "kind": "requirement",
+      "requirementId": "V3-07-017"
+    },
+    {
+      "line": 109,
+      "kind": "requirement",
+      "requirementId": "V3-07-018"
+    },
+    {
+      "line": 110,
+      "kind": "requirement",
+      "requirementId": "V3-07-019"
+    },
+    {
+      "line": 111,
+      "kind": "requirement",
+      "requirementId": "V3-07-020"
+    },
+    {
+      "line": 112,
+      "kind": "requirement",
+      "requirementId": "V3-07-021"
+    },
+    {
+      "line": 113,
+      "kind": "requirement",
+      "requirementId": "V3-07-022"
+    },
+    {
+      "line": 114,
+      "kind": "requirement",
+      "requirementId": "V3-07-023"
+    },
+    {
+      "line": 115,
+      "kind": "requirement",
+      "requirementId": "V3-07-024"
+    },
+    {
+      "line": 116,
+      "kind": "requirement",
+      "requirementId": "V3-07-025"
+    },
+    {
+      "line": 117,
+      "kind": "requirement",
+      "requirementId": "V3-07-026"
+    },
+    {
+      "line": 118,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 119,
+      "kind": "requirement",
+      "requirementId": "V3-07-027"
+    },
+    {
+      "line": 120,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 121,
+      "kind": "section-heading",
+      "requirementId": null
+    },
+    {
+      "line": 122,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 123,
+      "kind": "requirement",
+      "requirementId": "V3-08-001"
+    },
+    {
+      "line": 124,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 125,
+      "kind": "requirement",
+      "requirementId": "V3-08-002"
+    },
+    {
+      "line": 126,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 127,
+      "kind": "requirement",
+      "requirementId": "V3-08-003"
+    },
+    {
+      "line": 128,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 129,
+      "kind": "requirement",
+      "requirementId": "V3-08-004"
+    },
+    {
+      "line": 130,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 131,
+      "kind": "requirement",
+      "requirementId": "V3-08-005"
+    },
+    {
+      "line": 132,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 133,
+      "kind": "requirement",
+      "requirementId": "V3-08-006"
+    },
+    {
+      "line": 134,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 135,
+      "kind": "requirement",
+      "requirementId": "V3-08-007"
+    },
+    {
+      "line": 136,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 137,
+      "kind": "section-heading",
+      "requirementId": null
+    },
+    {
+      "line": 138,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 139,
+      "kind": "requirement",
+      "requirementId": "V3-09-001"
+    },
+    {
+      "line": 140,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 141,
+      "kind": "table-header",
+      "requirementId": null
+    },
+    {
+      "line": 142,
+      "kind": "table-header",
+      "requirementId": null
+    },
+    {
+      "line": 143,
+      "kind": "requirement",
+      "requirementId": "V3-09-002"
+    },
+    {
+      "line": 144,
+      "kind": "requirement",
+      "requirementId": "V3-09-003"
+    },
+    {
+      "line": 145,
+      "kind": "requirement",
+      "requirementId": "V3-09-004"
+    },
+    {
+      "line": 146,
+      "kind": "requirement",
+      "requirementId": "V3-09-005"
+    },
+    {
+      "line": 147,
+      "kind": "requirement",
+      "requirementId": "V3-09-006"
+    },
+    {
+      "line": 148,
+      "kind": "requirement",
+      "requirementId": "V3-09-007"
+    },
+    {
+      "line": 149,
+      "kind": "requirement",
+      "requirementId": "V3-09-008"
+    },
+    {
+      "line": 150,
+      "kind": "requirement",
+      "requirementId": "V3-09-009"
+    },
+    {
+      "line": 151,
+      "kind": "requirement",
+      "requirementId": "V3-09-010"
+    },
+    {
+      "line": 152,
+      "kind": "requirement",
+      "requirementId": "V3-09-011"
+    },
+    {
+      "line": 153,
+      "kind": "requirement",
+      "requirementId": "V3-09-012"
+    },
+    {
+      "line": 154,
+      "kind": "requirement",
+      "requirementId": "V3-09-013"
+    },
+    {
+      "line": 155,
+      "kind": "requirement",
+      "requirementId": "V3-09-014"
+    },
+    {
+      "line": 156,
+      "kind": "requirement",
+      "requirementId": "V3-09-015"
+    },
+    {
+      "line": 157,
+      "kind": "requirement",
+      "requirementId": "V3-09-016"
+    },
+    {
+      "line": 158,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 159,
+      "kind": "requirement",
+      "requirementId": "V3-09-017"
+    },
+    {
+      "line": 160,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 161,
+      "kind": "requirement",
+      "requirementId": "V3-09-018"
+    },
+    {
+      "line": 162,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 163,
+      "kind": "requirement",
+      "requirementId": "V3-09-019"
+    },
+    {
+      "line": 164,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 165,
+      "kind": "requirement",
+      "requirementId": "V3-09-020"
+    },
+    {
+      "line": 166,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 167,
+      "kind": "section-heading",
+      "requirementId": null
+    },
+    {
+      "line": 168,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 169,
+      "kind": "requirement",
+      "requirementId": "V3-10-001"
+    },
+    {
+      "line": 170,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 171,
+      "kind": "requirement",
+      "requirementId": "V3-10-002"
+    },
+    {
+      "line": 172,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 173,
+      "kind": "requirement",
+      "requirementId": "V3-10-003"
+    },
+    {
+      "line": 174,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 175,
+      "kind": "requirement",
+      "requirementId": "V3-10-004"
+    },
+    {
+      "line": 176,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 177,
+      "kind": "requirement",
+      "requirementId": "V3-10-005"
+    },
+    {
+      "line": 178,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 179,
+      "kind": "section-heading",
+      "requirementId": null
+    },
+    {
+      "line": 180,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 181,
+      "kind": "requirement",
+      "requirementId": "V3-11-001"
+    },
+    {
+      "line": 182,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 183,
+      "kind": "requirement",
+      "requirementId": "V3-11-002"
+    },
+    {
+      "line": 184,
+      "kind": "requirement",
+      "requirementId": "V3-11-002"
+    },
+    {
+      "line": 185,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 186,
+      "kind": "requirement",
+      "requirementId": "V3-11-003"
+    },
+    {
+      "line": 187,
+      "kind": "requirement",
+      "requirementId": "V3-11-003"
+    },
+    {
+      "line": 188,
+      "kind": "requirement",
+      "requirementId": "V3-11-003"
+    },
+    {
+      "line": 189,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 190,
+      "kind": "requirement",
+      "requirementId": "V3-11-004"
+    },
+    {
+      "line": 191,
+      "kind": "requirement",
+      "requirementId": "V3-11-004"
+    },
+    {
+      "line": 192,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 193,
+      "kind": "requirement",
+      "requirementId": "V3-11-005"
+    },
+    {
+      "line": 194,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 195,
+      "kind": "requirement",
+      "requirementId": "V3-11-006"
+    },
+    {
+      "line": 196,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 197,
+      "kind": "requirement",
+      "requirementId": "V3-11-007"
+    },
+    {
+      "line": 198,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 199,
+      "kind": "requirement",
+      "requirementId": "V3-11-008"
+    },
+    {
+      "line": 200,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 201,
+      "kind": "requirement",
+      "requirementId": "V3-11-009"
+    },
+    {
+      "line": 202,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 203,
+      "kind": "section-heading",
+      "requirementId": null
+    },
+    {
+      "line": 204,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 205,
+      "kind": "requirement",
+      "requirementId": "V3-12-001"
+    },
+    {
+      "line": 206,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 207,
+      "kind": "requirement",
+      "requirementId": "V3-12-002"
+    },
+    {
+      "line": 208,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 209,
+      "kind": "requirement",
+      "requirementId": "V3-12-003"
+    },
+    {
+      "line": 210,
+      "kind": "requirement",
+      "requirementId": "V3-12-004"
+    },
+    {
+      "line": 211,
+      "kind": "requirement",
+      "requirementId": "V3-12-005"
+    },
+    {
+      "line": 212,
+      "kind": "requirement",
+      "requirementId": "V3-12-006"
+    },
+    {
+      "line": 213,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 214,
+      "kind": "requirement",
+      "requirementId": "V3-12-007"
+    },
+    {
+      "line": 215,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 216,
+      "kind": "requirement",
+      "requirementId": "V3-12-008"
+    },
+    {
+      "line": 217,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 218,
+      "kind": "requirement",
+      "requirementId": "V3-12-009"
+    },
+    {
+      "line": 219,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 220,
+      "kind": "requirement",
+      "requirementId": "V3-12-010"
+    },
+    {
+      "line": 221,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 222,
+      "kind": "requirement",
+      "requirementId": "V3-12-011"
+    },
+    {
+      "line": 223,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 224,
+      "kind": "section-heading",
+      "requirementId": null
+    },
+    {
+      "line": 225,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 226,
+      "kind": "requirement",
+      "requirementId": "V3-13-001"
+    },
+    {
+      "line": 227,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 228,
+      "kind": "table-header",
+      "requirementId": null
+    },
+    {
+      "line": 229,
+      "kind": "table-header",
+      "requirementId": null
+    },
+    {
+      "line": 230,
+      "kind": "requirement",
+      "requirementId": "V3-13-002"
+    },
+    {
+      "line": 231,
+      "kind": "requirement",
+      "requirementId": "V3-13-003"
+    },
+    {
+      "line": 232,
+      "kind": "requirement",
+      "requirementId": "V3-13-004"
+    },
+    {
+      "line": 233,
+      "kind": "requirement",
+      "requirementId": "V3-13-005"
+    },
+    {
+      "line": 234,
+      "kind": "requirement",
+      "requirementId": "V3-13-006"
+    },
+    {
+      "line": 235,
+      "kind": "requirement",
+      "requirementId": "V3-13-007"
+    },
+    {
+      "line": 236,
+      "kind": "requirement",
+      "requirementId": "V3-13-008"
+    },
+    {
+      "line": 237,
+      "kind": "requirement",
+      "requirementId": "V3-13-009"
+    },
+    {
+      "line": 238,
+      "kind": "requirement",
+      "requirementId": "V3-13-010"
+    },
+    {
+      "line": 239,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 240,
+      "kind": "requirement",
+      "requirementId": "V3-13-011"
+    },
+    {
+      "line": 241,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 242,
+      "kind": "requirement",
+      "requirementId": "V3-13-012"
+    },
+    {
+      "line": 243,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 244,
+      "kind": "requirement",
+      "requirementId": "V3-13-013"
+    },
+    {
+      "line": 245,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 246,
+      "kind": "section-heading",
+      "requirementId": null
+    },
+    {
+      "line": 247,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 248,
+      "kind": "requirement",
+      "requirementId": "V3-14-001"
+    },
+    {
+      "line": 249,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 250,
+      "kind": "requirement",
+      "requirementId": "V3-14-002"
+    },
+    {
+      "line": 251,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 252,
+      "kind": "requirement",
+      "requirementId": "V3-14-003"
+    },
+    {
+      "line": 253,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 254,
+      "kind": "requirement",
+      "requirementId": "V3-14-004"
+    },
+    {
+      "line": 255,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 256,
+      "kind": "requirement",
+      "requirementId": "V3-14-005"
+    },
+    {
+      "line": 257,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 258,
+      "kind": "requirement",
+      "requirementId": "V3-14-006"
+    },
+    {
+      "line": 259,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 260,
+      "kind": "requirement",
+      "requirementId": "V3-14-007"
+    },
+    {
+      "line": 261,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 262,
+      "kind": "requirement",
+      "requirementId": "V3-14-008"
+    },
+    {
+      "line": 263,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 264,
+      "kind": "section-heading",
+      "requirementId": null
+    },
+    {
+      "line": 265,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 266,
+      "kind": "requirement",
+      "requirementId": "V3-15-001"
+    },
+    {
+      "line": 267,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 268,
+      "kind": "requirement",
+      "requirementId": "V3-15-002"
+    },
+    {
+      "line": 269,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 270,
+      "kind": "requirement",
+      "requirementId": "V3-15-003"
+    },
+    {
+      "line": 271,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 272,
+      "kind": "requirement",
+      "requirementId": "V3-15-004"
+    },
+    {
+      "line": 273,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 274,
+      "kind": "section-heading",
+      "requirementId": null
+    },
+    {
+      "line": 275,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 276,
+      "kind": "requirement",
+      "requirementId": "V3-16-001"
+    },
+    {
+      "line": 277,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 278,
+      "kind": "requirement",
+      "requirementId": "V3-16-002"
+    },
+    {
+      "line": 279,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 280,
+      "kind": "requirement",
+      "requirementId": "V3-16-003"
+    },
+    {
+      "line": 281,
+      "kind": "requirement",
+      "requirementId": "V3-16-004"
+    },
+    {
+      "line": 282,
+      "kind": "requirement",
+      "requirementId": "V3-16-005"
+    },
+    {
+      "line": 283,
+      "kind": "requirement",
+      "requirementId": "V3-16-006"
+    },
+    {
+      "line": 284,
+      "kind": "requirement",
+      "requirementId": "V3-16-007"
+    },
+    {
+      "line": 285,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 286,
+      "kind": "requirement",
+      "requirementId": "V3-16-008"
+    },
+    {
+      "line": 287,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 288,
+      "kind": "requirement",
+      "requirementId": "V3-16-009"
+    },
+    {
+      "line": 289,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 290,
+      "kind": "requirement",
+      "requirementId": "V3-16-010"
+    },
+    {
+      "line": 291,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 292,
+      "kind": "requirement",
+      "requirementId": "V3-16-011"
+    },
+    {
+      "line": 293,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 294,
+      "kind": "requirement",
+      "requirementId": "V3-16-012"
+    },
+    {
+      "line": 295,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 296,
+      "kind": "requirement",
+      "requirementId": "V3-16-013"
+    },
+    {
+      "line": 297,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 298,
+      "kind": "requirement",
+      "requirementId": "V3-16-014"
+    },
+    {
+      "line": 299,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 300,
+      "kind": "requirement",
+      "requirementId": "V3-16-015"
+    },
+    {
+      "line": 301,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 302,
+      "kind": "requirement",
+      "requirementId": "V3-16-016"
+    },
+    {
+      "line": 303,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 304,
+      "kind": "requirement",
+      "requirementId": "V3-16-017"
+    },
+    {
+      "line": 305,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 306,
+      "kind": "section-heading",
+      "requirementId": null
+    },
+    {
+      "line": 307,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 308,
+      "kind": "requirement",
+      "requirementId": "V3-17-001"
+    },
+    {
+      "line": 309,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 310,
+      "kind": "requirement",
+      "requirementId": "V3-17-002"
+    },
+    {
+      "line": 311,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 312,
+      "kind": "requirement",
+      "requirementId": "V3-17-003"
+    },
+    {
+      "line": 313,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 314,
+      "kind": "requirement",
+      "requirementId": "V3-17-004"
+    },
+    {
+      "line": 315,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 316,
+      "kind": "requirement",
+      "requirementId": "V3-17-005"
+    },
+    {
+      "line": 317,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 318,
+      "kind": "requirement",
+      "requirementId": "V3-17-006"
+    },
+    {
+      "line": 319,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 320,
+      "kind": "requirement",
+      "requirementId": "V3-17-007"
+    },
+    {
+      "line": 321,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 322,
+      "kind": "section-heading",
+      "requirementId": null
+    },
+    {
+      "line": 323,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 324,
+      "kind": "requirement",
+      "requirementId": "V3-18-001"
+    },
+    {
+      "line": 325,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 326,
+      "kind": "requirement",
+      "requirementId": "V3-18-002"
+    },
+    {
+      "line": 327,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 328,
+      "kind": "requirement",
+      "requirementId": "V3-18-003"
+    },
+    {
+      "line": 329,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 330,
+      "kind": "requirement",
+      "requirementId": "V3-18-004"
+    },
+    {
+      "line": 331,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 332,
+      "kind": "requirement",
+      "requirementId": "V3-18-005"
+    },
+    {
+      "line": 333,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 334,
+      "kind": "section-heading",
+      "requirementId": null
+    },
+    {
+      "line": 335,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 336,
+      "kind": "requirement",
+      "requirementId": "V3-19-001"
+    },
+    {
+      "line": 337,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 338,
+      "kind": "requirement",
+      "requirementId": "V3-19-002"
+    },
+    {
+      "line": 339,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 340,
+      "kind": "requirement",
+      "requirementId": "V3-19-003"
+    },
+    {
+      "line": 341,
+      "kind": "requirement",
+      "requirementId": "V3-19-004"
+    },
+    {
+      "line": 342,
+      "kind": "requirement",
+      "requirementId": "V3-19-005"
+    },
+    {
+      "line": 343,
+      "kind": "requirement",
+      "requirementId": "V3-19-006"
+    },
+    {
+      "line": 344,
+      "kind": "requirement",
+      "requirementId": "V3-19-007"
+    },
+    {
+      "line": 345,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 346,
+      "kind": "requirement",
+      "requirementId": "V3-19-008"
+    },
+    {
+      "line": 347,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 348,
+      "kind": "requirement",
+      "requirementId": "V3-19-009"
+    },
+    {
+      "line": 349,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 350,
+      "kind": "requirement",
+      "requirementId": "V3-19-010"
+    },
+    {
+      "line": 351,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 352,
+      "kind": "section-heading",
+      "requirementId": null
+    },
+    {
+      "line": 353,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 354,
+      "kind": "requirement",
+      "requirementId": "V3-20-001"
+    },
+    {
+      "line": 355,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 356,
+      "kind": "requirement",
+      "requirementId": "V3-20-002"
+    },
+    {
+      "line": 357,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 358,
+      "kind": "requirement",
+      "requirementId": "V3-20-003"
+    },
+    {
+      "line": 359,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 360,
+      "kind": "requirement",
+      "requirementId": "V3-20-004"
+    },
+    {
+      "line": 361,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 362,
+      "kind": "requirement",
+      "requirementId": "V3-20-005"
+    },
+    {
+      "line": 363,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 364,
+      "kind": "requirement",
+      "requirementId": "V3-20-006"
+    },
+    {
+      "line": 365,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 366,
+      "kind": "requirement",
+      "requirementId": "V3-20-007"
+    },
+    {
+      "line": 367,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 368,
+      "kind": "requirement",
+      "requirementId": "V3-20-008"
+    },
+    {
+      "line": 369,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 370,
+      "kind": "section-heading",
+      "requirementId": null
+    },
+    {
+      "line": 371,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 372,
+      "kind": "requirement",
+      "requirementId": "V3-21-001"
+    },
+    {
+      "line": 373,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 374,
+      "kind": "requirement",
+      "requirementId": "V3-21-002"
+    },
+    {
+      "line": 375,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 376,
+      "kind": "requirement",
+      "requirementId": "V3-21-003"
+    },
+    {
+      "line": 377,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 378,
+      "kind": "requirement",
+      "requirementId": "V3-21-004"
+    },
+    {
+      "line": 379,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 380,
+      "kind": "requirement",
+      "requirementId": "V3-21-005"
+    },
+    {
+      "line": 381,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 382,
+      "kind": "section-heading",
+      "requirementId": null
+    },
+    {
+      "line": 383,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 384,
+      "kind": "requirement",
+      "requirementId": "V3-22-001"
+    },
+    {
+      "line": 385,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 386,
+      "kind": "requirement",
+      "requirementId": "V3-22-002"
+    },
+    {
+      "line": 387,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 388,
+      "kind": "requirement",
+      "requirementId": "V3-22-003"
+    },
+    {
+      "line": 389,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 390,
+      "kind": "requirement",
+      "requirementId": "V3-22-004"
+    },
+    {
+      "line": 391,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 392,
+      "kind": "requirement",
+      "requirementId": "V3-22-005"
+    },
+    {
+      "line": 393,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 394,
+      "kind": "requirement",
+      "requirementId": "V3-22-006"
+    },
+    {
+      "line": 395,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 396,
+      "kind": "requirement",
+      "requirementId": "V3-22-007"
+    },
+    {
+      "line": 397,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 398,
+      "kind": "requirement",
+      "requirementId": "V3-22-008"
+    },
+    {
+      "line": 399,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 400,
+      "kind": "requirement",
+      "requirementId": "V3-22-009"
+    },
+    {
+      "line": 401,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 402,
+      "kind": "section-heading",
+      "requirementId": null
+    },
+    {
+      "line": 403,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 404,
+      "kind": "requirement",
+      "requirementId": "V3-23-001"
+    },
+    {
+      "line": 405,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 406,
+      "kind": "requirement",
+      "requirementId": "V3-23-002"
+    },
+    {
+      "line": 407,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 408,
+      "kind": "requirement",
+      "requirementId": "V3-23-003"
+    },
+    {
+      "line": 409,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 410,
+      "kind": "requirement",
+      "requirementId": "V3-23-004"
+    },
+    {
+      "line": 411,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 412,
+      "kind": "requirement",
+      "requirementId": "V3-23-005"
+    },
+    {
+      "line": 413,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 414,
+      "kind": "section-heading",
+      "requirementId": null
+    },
+    {
+      "line": 415,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 416,
+      "kind": "requirement",
+      "requirementId": "V3-24-001"
+    },
+    {
+      "line": 417,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 418,
+      "kind": "requirement",
+      "requirementId": "V3-24-002"
+    },
+    {
+      "line": 419,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 420,
+      "kind": "requirement",
+      "requirementId": "V3-24-003"
+    },
+    {
+      "line": 421,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 422,
+      "kind": "requirement",
+      "requirementId": "V3-24-004"
+    },
+    {
+      "line": 423,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 424,
+      "kind": "requirement",
+      "requirementId": "V3-24-005"
+    },
+    {
+      "line": 425,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 426,
+      "kind": "requirement",
+      "requirementId": "V3-24-006"
+    },
+    {
+      "line": 427,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 428,
+      "kind": "requirement",
+      "requirementId": "V3-24-007"
+    },
+    {
+      "line": 429,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 430,
+      "kind": "section-heading",
+      "requirementId": null
+    },
+    {
+      "line": 431,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 432,
+      "kind": "requirement",
+      "requirementId": "V3-25-001"
+    },
+    {
+      "line": 433,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 434,
+      "kind": "table-header",
+      "requirementId": null
+    },
+    {
+      "line": 435,
+      "kind": "table-header",
+      "requirementId": null
+    },
+    {
+      "line": 436,
+      "kind": "requirement",
+      "requirementId": "V3-25-002"
+    },
+    {
+      "line": 437,
+      "kind": "requirement",
+      "requirementId": "V3-25-003"
+    },
+    {
+      "line": 438,
+      "kind": "requirement",
+      "requirementId": "V3-25-004"
+    },
+    {
+      "line": 439,
+      "kind": "requirement",
+      "requirementId": "V3-25-005"
+    },
+    {
+      "line": 440,
+      "kind": "requirement",
+      "requirementId": "V3-25-006"
+    },
+    {
+      "line": 441,
+      "kind": "requirement",
+      "requirementId": "V3-25-007"
+    },
+    {
+      "line": 442,
+      "kind": "requirement",
+      "requirementId": "V3-25-008"
+    },
+    {
+      "line": 443,
+      "kind": "requirement",
+      "requirementId": "V3-25-009"
+    },
+    {
+      "line": 444,
+      "kind": "requirement",
+      "requirementId": "V3-25-010"
+    },
+    {
+      "line": 445,
+      "kind": "requirement",
+      "requirementId": "V3-25-011"
+    },
+    {
+      "line": 446,
+      "kind": "requirement",
+      "requirementId": "V3-25-012"
+    },
+    {
+      "line": 447,
+      "kind": "requirement",
+      "requirementId": "V3-25-013"
+    },
+    {
+      "line": 448,
+      "kind": "requirement",
+      "requirementId": "V3-25-014"
+    },
+    {
+      "line": 449,
+      "kind": "requirement",
+      "requirementId": "V3-25-015"
+    },
+    {
+      "line": 450,
+      "kind": "requirement",
+      "requirementId": "V3-25-016"
+    },
+    {
+      "line": 451,
+      "kind": "requirement",
+      "requirementId": "V3-25-017"
+    },
+    {
+      "line": 452,
+      "kind": "requirement",
+      "requirementId": "V3-25-018"
+    },
+    {
+      "line": 453,
+      "kind": "requirement",
+      "requirementId": "V3-25-019"
+    },
+    {
+      "line": 454,
+      "kind": "requirement",
+      "requirementId": "V3-25-020"
+    },
+    {
+      "line": 455,
+      "kind": "requirement",
+      "requirementId": "V3-25-021"
+    },
+    {
+      "line": 456,
+      "kind": "requirement",
+      "requirementId": "V3-25-022"
+    },
+    {
+      "line": 457,
+      "kind": "requirement",
+      "requirementId": "V3-25-023"
+    },
+    {
+      "line": 458,
+      "kind": "requirement",
+      "requirementId": "V3-25-024"
+    },
+    {
+      "line": 459,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 460,
+      "kind": "section-heading",
+      "requirementId": null
+    },
+    {
+      "line": 461,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 462,
+      "kind": "requirement",
+      "requirementId": "V3-26-001"
+    },
+    {
+      "line": 463,
+      "kind": "requirement",
+      "requirementId": "V3-26-002"
+    },
+    {
+      "line": 464,
+      "kind": "requirement",
+      "requirementId": "V3-26-003"
+    },
+    {
+      "line": 465,
+      "kind": "requirement",
+      "requirementId": "V3-26-004"
+    },
+    {
+      "line": 466,
+      "kind": "requirement",
+      "requirementId": "V3-26-005"
+    },
+    {
+      "line": 467,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 468,
+      "kind": "requirement",
+      "requirementId": "V3-26-006"
+    },
+    {
+      "line": 469,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 470,
+      "kind": "requirement",
+      "requirementId": "V3-26-007"
+    },
+    {
+      "line": 471,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 472,
+      "kind": "section-heading",
+      "requirementId": null
+    },
+    {
+      "line": 473,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 474,
+      "kind": "requirement",
+      "requirementId": "V3-27-001"
+    },
+    {
+      "line": 475,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 476,
+      "kind": "structural",
+      "requirementId": null
+    },
+    {
+      "line": 477,
+      "kind": "requirement",
+      "requirementId": "A01"
+    },
+    {
+      "line": 478,
+      "kind": "requirement",
+      "requirementId": "A02"
+    },
+    {
+      "line": 479,
+      "kind": "requirement",
+      "requirementId": "A03"
+    },
+    {
+      "line": 480,
+      "kind": "requirement",
+      "requirementId": "A04"
+    },
+    {
+      "line": 481,
+      "kind": "requirement",
+      "requirementId": "A05"
+    },
+    {
+      "line": 482,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 483,
+      "kind": "structural",
+      "requirementId": null
+    },
+    {
+      "line": 484,
+      "kind": "requirement",
+      "requirementId": "B01"
+    },
+    {
+      "line": 485,
+      "kind": "requirement",
+      "requirementId": "B02"
+    },
+    {
+      "line": 486,
+      "kind": "requirement",
+      "requirementId": "B03"
+    },
+    {
+      "line": 487,
+      "kind": "requirement",
+      "requirementId": "B04"
+    },
+    {
+      "line": 488,
+      "kind": "requirement",
+      "requirementId": "B05"
+    },
+    {
+      "line": 489,
+      "kind": "requirement",
+      "requirementId": "B06"
+    },
+    {
+      "line": 490,
+      "kind": "requirement",
+      "requirementId": "B07"
+    },
+    {
+      "line": 491,
+      "kind": "requirement",
+      "requirementId": "B08"
+    },
+    {
+      "line": 492,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 493,
+      "kind": "structural",
+      "requirementId": null
+    },
+    {
+      "line": 494,
+      "kind": "requirement",
+      "requirementId": "C01"
+    },
+    {
+      "line": 495,
+      "kind": "requirement",
+      "requirementId": "C02"
+    },
+    {
+      "line": 496,
+      "kind": "requirement",
+      "requirementId": "C03"
+    },
+    {
+      "line": 497,
+      "kind": "requirement",
+      "requirementId": "C04"
+    },
+    {
+      "line": 498,
+      "kind": "requirement",
+      "requirementId": "C05"
+    },
+    {
+      "line": 499,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 500,
+      "kind": "structural",
+      "requirementId": null
+    },
+    {
+      "line": 501,
+      "kind": "requirement",
+      "requirementId": "D01"
+    },
+    {
+      "line": 502,
+      "kind": "requirement",
+      "requirementId": "D02"
+    },
+    {
+      "line": 503,
+      "kind": "requirement",
+      "requirementId": "D03"
+    },
+    {
+      "line": 504,
+      "kind": "requirement",
+      "requirementId": "D04"
+    },
+    {
+      "line": 505,
+      "kind": "requirement",
+      "requirementId": "D05"
+    },
+    {
+      "line": 506,
+      "kind": "requirement",
+      "requirementId": "D06"
+    },
+    {
+      "line": 507,
+      "kind": "requirement",
+      "requirementId": "D07"
+    },
+    {
+      "line": 508,
+      "kind": "requirement",
+      "requirementId": "D08"
+    },
+    {
+      "line": 509,
+      "kind": "requirement",
+      "requirementId": "D09"
+    },
+    {
+      "line": 510,
+      "kind": "requirement",
+      "requirementId": "D10"
+    },
+    {
+      "line": 511,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 512,
+      "kind": "structural",
+      "requirementId": null
+    },
+    {
+      "line": 513,
+      "kind": "requirement",
+      "requirementId": "E01"
+    },
+    {
+      "line": 514,
+      "kind": "requirement",
+      "requirementId": "E02"
+    },
+    {
+      "line": 515,
+      "kind": "requirement",
+      "requirementId": "E03"
+    },
+    {
+      "line": 516,
+      "kind": "requirement",
+      "requirementId": "E04"
+    },
+    {
+      "line": 517,
+      "kind": "requirement",
+      "requirementId": "E05"
+    },
+    {
+      "line": 518,
+      "kind": "requirement",
+      "requirementId": "E06"
+    },
+    {
+      "line": 519,
+      "kind": "requirement",
+      "requirementId": "E07"
+    },
+    {
+      "line": 520,
+      "kind": "requirement",
+      "requirementId": "E08"
+    },
+    {
+      "line": 521,
+      "kind": "requirement",
+      "requirementId": "E09"
+    },
+    {
+      "line": 522,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 523,
+      "kind": "structural",
+      "requirementId": null
+    },
+    {
+      "line": 524,
+      "kind": "requirement",
+      "requirementId": "F01"
+    },
+    {
+      "line": 525,
+      "kind": "requirement",
+      "requirementId": "F02"
+    },
+    {
+      "line": 526,
+      "kind": "requirement",
+      "requirementId": "F03"
+    },
+    {
+      "line": 527,
+      "kind": "requirement",
+      "requirementId": "F04"
+    },
+    {
+      "line": 528,
+      "kind": "requirement",
+      "requirementId": "F05"
+    },
+    {
+      "line": 529,
+      "kind": "requirement",
+      "requirementId": "F06"
+    },
+    {
+      "line": 530,
+      "kind": "requirement",
+      "requirementId": "F07"
+    },
+    {
+      "line": 531,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 532,
+      "kind": "requirement",
+      "requirementId": "V3-27-046"
+    },
+    {
+      "line": 533,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 534,
+      "kind": "section-heading",
+      "requirementId": null
+    },
+    {
+      "line": 535,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 536,
+      "kind": "requirement",
+      "requirementId": "V3-28-001"
+    },
+    {
+      "line": 537,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 538,
+      "kind": "requirement",
+      "requirementId": "V3-28-002"
+    },
+    {
+      "line": 539,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 540,
+      "kind": "requirement",
+      "requirementId": "V3-28-003"
+    },
+    {
+      "line": 541,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 542,
+      "kind": "requirement",
+      "requirementId": "V3-28-004"
+    },
+    {
+      "line": 543,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 544,
+      "kind": "requirement",
+      "requirementId": "V3-28-005"
+    },
+    {
+      "line": 545,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 546,
+      "kind": "section-heading",
+      "requirementId": null
+    },
+    {
+      "line": 547,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 548,
+      "kind": "requirement",
+      "requirementId": "V3-29-001"
+    },
+    {
+      "line": 549,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 550,
+      "kind": "requirement",
+      "requirementId": "V3-29-002"
+    },
+    {
+      "line": 551,
+      "kind": "requirement",
+      "requirementId": "V3-29-002"
+    },
+    {
+      "line": 552,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 553,
+      "kind": "requirement",
+      "requirementId": "V3-29-003"
+    },
+    {
+      "line": 554,
+      "kind": "requirement",
+      "requirementId": "V3-29-003"
+    },
+    {
+      "line": 555,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 556,
+      "kind": "requirement",
+      "requirementId": "V3-29-004"
+    },
+    {
+      "line": 557,
+      "kind": "requirement",
+      "requirementId": "V3-29-004"
+    },
+    {
+      "line": 558,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 559,
+      "kind": "requirement",
+      "requirementId": "V3-29-005"
+    },
+    {
+      "line": 560,
+      "kind": "requirement",
+      "requirementId": "V3-29-005"
+    },
+    {
+      "line": 561,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 562,
+      "kind": "requirement",
+      "requirementId": "V3-29-006"
+    },
+    {
+      "line": 563,
+      "kind": "requirement",
+      "requirementId": "V3-29-006"
+    },
+    {
+      "line": 564,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 565,
+      "kind": "requirement",
+      "requirementId": "V3-29-007"
+    },
+    {
+      "line": 566,
+      "kind": "requirement",
+      "requirementId": "V3-29-007"
+    },
+    {
+      "line": 567,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 568,
+      "kind": "requirement",
+      "requirementId": "V3-29-008"
+    },
+    {
+      "line": 569,
+      "kind": "requirement",
+      "requirementId": "V3-29-008"
+    },
+    {
+      "line": 570,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 571,
+      "kind": "requirement",
+      "requirementId": "V3-29-009"
+    },
+    {
+      "line": 572,
+      "kind": "requirement",
+      "requirementId": "V3-29-009"
+    },
+    {
+      "line": 573,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 574,
+      "kind": "requirement",
+      "requirementId": "V3-29-010"
+    },
+    {
+      "line": 575,
+      "kind": "requirement",
+      "requirementId": "V3-29-010"
+    },
+    {
+      "line": 576,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 577,
+      "kind": "requirement",
+      "requirementId": "V3-29-011"
+    },
+    {
+      "line": 578,
+      "kind": "requirement",
+      "requirementId": "V3-29-011"
+    },
+    {
+      "line": 579,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 580,
+      "kind": "requirement",
+      "requirementId": "V3-29-012"
+    },
+    {
+      "line": 581,
+      "kind": "requirement",
+      "requirementId": "V3-29-012"
+    },
+    {
+      "line": 582,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 583,
+      "kind": "requirement",
+      "requirementId": "V3-29-013"
+    },
+    {
+      "line": 584,
+      "kind": "requirement",
+      "requirementId": "V3-29-013"
+    },
+    {
+      "line": 585,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 586,
+      "kind": "requirement",
+      "requirementId": "V3-29-014"
+    },
+    {
+      "line": 587,
+      "kind": "requirement",
+      "requirementId": "V3-29-014"
+    },
+    {
+      "line": 588,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 589,
+      "kind": "requirement",
+      "requirementId": "V3-29-015"
+    },
+    {
+      "line": 590,
+      "kind": "requirement",
+      "requirementId": "V3-29-015"
+    },
+    {
+      "line": 591,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 592,
+      "kind": "requirement",
+      "requirementId": "V3-29-016"
+    },
+    {
+      "line": 593,
+      "kind": "requirement",
+      "requirementId": "V3-29-016"
+    },
+    {
+      "line": 594,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 595,
+      "kind": "requirement",
+      "requirementId": "V3-29-017"
+    },
+    {
+      "line": 596,
+      "kind": "requirement",
+      "requirementId": "V3-29-017"
+    },
+    {
+      "line": 597,
+      "kind": "blank",
+      "requirementId": null
+    },
+    {
+      "line": 598,
+      "kind": "structural",
+      "requirementId": null
+    },
+    {
+      "line": 599,
+      "kind": "blank",
+      "requirementId": null
+    }
+  ],
+  "audit": {
+    "updatedAt": "2026-09-09T09:59:22.688Z",
+    "sourceCoverageStatus": "SOURCE_COVERAGE_VERIFIED",
+    "productAcceptanceStatus": "UNVERIFIED",
+    "counts": {
+      "total": 315,
+      "sourceSubrequirements": 267,
+      "acceptance": 44,
+      "ownerDirectives": 4,
+      "localVerified": 61,
+      "partial": 230,
+      "unverified": 24,
+      "completeAcceptancePasses": 0
+    },
+    "sourceByteParityVerified": true,
+    "classificationCount": 599,
+    "requirementIdsPreserved": true,
+    "ledger": "requirement-to-test-ledger.md",
+    "inventory": "requirement-inventory.json",
+    "evidenceIndex": "verification-index.md",
+    "latestCandidateSuite": {
+      "status": "PASS_LOCAL_SUITE",
+      "report": "artifacts/debate-local-rehearsal/suite-2026-09-09T09-54-38.432Z/report.json",
+      "pointer": "verification-index.md#latest-candidate-suite",
+      "permanentEvidence": "docs/debate-room-v3/evidence/local-verification-20260909.json",
+      "startedAt": "2026-09-09T09:54:38.853Z",
+      "finishedAt": "2026-09-09T09:56:24.648Z",
+      "sourceHashCount": 74,
+      "changedDuringRun": [],
+      "head": "9053390cb4f69da7627e0f079ebbbb3f0da0ea1d",
+      "workingTree": "Candidate bytes identified by report source hashes; recorded HEAD predates uncommitted candidate files."
+    },
+    "interpretation": "Every supplied source clause is preserved and mapped. Classification and local test passes do not establish complete acceptance, hosted state, physical performance or launch approval.",
+    "documentValidation": {
+      "requirementRows": 315,
+      "sourceRowsCheckedAgainstOriginalSpans": 311,
+      "sourceMismatchCount": 0,
+      "sourceClassificationLines": 599,
+      "mappedPathsMissing": [],
+      "evidenceIdsMissing": [],
+      "latestSourceHashesChecked": 74,
+      "latestSourceHashMismatches": [],
+      "permanentSampleHashesChecked": 9
+    },
+    "state": "READY_FOR_REVIEW_NOT_FULL_ACCEPTANCE"
+  }
+}

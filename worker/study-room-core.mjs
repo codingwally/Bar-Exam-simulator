@@ -608,6 +608,10 @@ export async function createStudyRoomJoinCredential(env, user, roomKey, nickname
   let admission = null;
   if (typeof options.authorizeAdmission === 'function') {
     admission = await options.authorizeAdmission(slot, normalizedNickname);
+    if (!Number.isSafeInteger(admission?.version) || admission.version < 1
+      || !Number.isFinite(Date.parse(admission?.expiresAt)) || Date.parse(admission.expiresAt) <= Date.now()) {
+      throw new StudyRoomError('STUDY_ROOM_ADMISSION_UNAVAILABLE', 'Room admission could not be confirmed.', 503);
+    }
   } else if (slot.audience === 'approval') {
     throw new StudyRoomError('STUDY_ROOM_ADMISSION_UNAVAILABLE', 'Room admission is temporarily unavailable.', 503);
   }
@@ -714,8 +718,12 @@ export async function revokeStudyRoomParticipantToken(env, roomKey, identity, op
   const targetIdentity = validateStudyRoomParticipantIdentity(identity);
   // Explicit cutoff also revokes an identity that already left. LiveKit Cloud
   // applies the documented one-minute buffer; never mint around that cutoff.
+  const cutoff = options.revokedAt == null ? Date.now() : Date.parse(options.revokedAt);
+  if (!Number.isFinite(cutoff) || cutoff > Date.now() + 2000) {
+    throw new StudyRoomError('STUDY_ROOM_ADMISSION_INVALID', 'The room revocation could not be confirmed.', 503);
+  }
   await liveKitCall('revoke_admission', () => resolvedService(configuration, options)
-    .removeParticipant(slot.roomName, targetIdentity, { revokeTokenTs: Math.floor(Date.now() / 1000) }));
+    .removeParticipant(slot.roomName, targetIdentity, { revokeTokenTs: BigInt(Math.floor(cutoff / 1000)) }));
 }
 
 export async function muteStudyRoomParticipant(env, roomKey, identity, trackSid, options = {}) {

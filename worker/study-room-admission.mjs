@@ -31,6 +31,11 @@ export function createStudyRoomAdmission({ rpc,
       const confirmed = await presence(env, user.id, slot.roomKey, options);
       payload.presence = { identity: confirmed.identity, roomKey: slot.roomKey,
         accessRevision: slot.accessRevision, checkedAt: new Date().toISOString() };
+      if (operation === 'list') {
+        const page = body?.page ?? 0;
+        if (!Number.isSafeInteger(page) || page < 0 || page > 100000) throw new StudyRoomError('STUDY_ROOM_ADMISSION_INVALID', 'Choose a valid waiting-list page.', 400);
+        payload.page = page;
+      }
       if (operation !== 'list') {
         payload.requestId = body?.requestId;
         payload.expectedVersion = body?.expectedVersion;
@@ -44,8 +49,9 @@ export function createStudyRoomAdmission({ rpc,
     // SQL denial comes first, so an outage can never mint a fresh credential
     // while provider removal is pending. The identical command safely retries
     // revocation even when its SQL receipt already exists.
-    if (['cancel', 'deny', 'revoke'].includes(operation) && result.admission?.identity) {
-      await revokeToken(env, slot.roomKey, result.admission.identity, options);
+    if (result.revokeRequired === true && result.admission?.identity) {
+      await revokeToken(env, slot.roomKey, result.admission.identity, { ...options, revokedAt: result.revokedAt });
+      await call(env, { ...payload, operation: 'confirm_revocation' });
     }
     return result;
   }
@@ -54,7 +60,17 @@ export function createStudyRoomAdmission({ rpc,
     const result = await call(env, { operation: 'authorize', actor: user.id, identity,
       roomKey: slot.roomKey, accessRevision: slot.accessRevision,
       nickname, expectedVersion });
-    if (!result.allowed) throw new StudyRoomError('STUDY_ROOM_APPROVAL_REQUIRED', 'An administrator inside this room must admit you before you enter.', 403);
+    if (!result.allowed) {
+      if (Date.parse(result.admission?.notBefore) > Date.now()) {
+        throw new StudyRoomError('STUDY_ROOM_ADMISSION_COOLDOWN', 'Your previous room access is closing. Wait one minute, then retry entry.', 409);
+      }
+      throw new StudyRoomError('STUDY_ROOM_APPROVAL_REQUIRED', 'An administrator inside this room must admit you before you enter.', 403);
+    }
+    if (result.admission?.status !== 'approved' || !Number.isSafeInteger(result.admission?.version)
+      || result.admission.version < 1 || !Number.isFinite(Date.parse(result.admission.expiresAt))
+      || Date.parse(result.admission.expiresAt) <= Date.now()) {
+      throw new StudyRoomError('STUDY_ROOM_ADMISSION_UNAVAILABLE', 'The admission response could not be confirmed. Retry shortly.', 503);
+    }
     return result.admission;
   }
   return Object.freeze({ command, authorize });

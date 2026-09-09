@@ -122,7 +122,7 @@ function harness() {
     loadEvents = async () => { counters.discovery++; };
     globalThis.client = {state, media, request, refresh, command, retryPending, adopt,
       loadHistory, ensureTile, clearSensitiveViews, discardEventView, messageHistoryKey, signOutCleanup, submitEvidence,
-      currentMatch, usableMatches, actualRenderLive, renderSchedule, renderRules, actions, leaveCurrentMedia, openEvent};
+      currentMatch, usableMatches, actualRenderLive, renderSchedule, renderRules, actions, leaveCurrentMedia, openEvent, renewOwnedClock};
     ${matchChangeWiring}
     ${lobbyWiring}
   `, context, { filename: filename.pathname });
@@ -161,6 +161,31 @@ test('sign-out closes the supporting native dialog and clears its private forms'
   assert.equal(tools.open, false);
   assert.equal(tools.closed, 1);
   assertDraftsCleared(fields);
+});
+
+test('clock renewal ignores an empty lobby and renews only the signed-in controller', async () => {
+  const h = harness();
+  vm.runInContext("const renewals=[]; command=async(name,payload)=>{renewals.push({name,payload});}; globalThis.renewals=renewals;", h.context);
+  await h.renewOwnedClock();
+  h.state.session = { user: { id: 'judge-one' } };
+  await h.renewOwnedClock();
+  const event = openFixture(h);
+  await h.renewOwnedClock();
+  event.matches[0].timer = { version: 9, controllerId: 'someone-else' };
+  await h.renewOwnedClock();
+  event.matches[0].timer.controllerId = event.myId;
+  h.state.busy = true;
+  await h.renewOwnedClock();
+  h.state.busy = false;
+  h.state.session = null;
+  await h.renewOwnedClock();
+  assert.equal(h.context.renewals.length, 0);
+  h.state.session = { user: { id: 'judge-one' } };
+  await h.renewOwnedClock();
+  assert.equal(h.context.renewals.length, 1);
+  assert.equal(h.context.renewals[0].name, 'renew_clock');
+  assert.equal(h.context.renewals[0].payload.timerVersion, 9);
+  assert.equal(h.element('status').textContent, '');
 });
 
 const expiredMatch = id => ({ id, title: 'Archived match', phase: 'expired', officialRecordsExpired: true });

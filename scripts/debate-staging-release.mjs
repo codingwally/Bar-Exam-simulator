@@ -353,25 +353,49 @@ export async function validateSmokeSessions({ allowedToken, deniedToken, publish
   return { status: 'PASS_STAGING_SESSION_SCOPE', verifiedAccounts: 2, tokensStored: false };
 }
 
-export async function smokeStaging({ allowedToken, deniedToken, manifest, fetcher = fetch }) {
+export async function smokeStaging({ allowedToken, deniedToken, manifest, fetcher = fetch, assetNow = () => performance.now(), assetWait = ms => new Promise(resolve => setTimeout(resolve, ms)) }) {
   need(allowedToken && deniedToken && allowedToken !== deniedToken, 'SMOKE_CREDENTIAL_MISSING', 'Two distinct real staging sessions are required for allowlisted and excluded-account smoke.');
   // Model a fetch from the same-origin staging page: browsers omit Origin for
   // this GET. Supplying it here would hide an incompatible Worker boundary.
-  const get = async (pathname, token) => fetcher(TARGET.origin + pathname, { method: 'GET', redirect: 'error', cache: 'no-store', headers: { 'Sec-Fetch-Site': 'same-origin', 'Sec-Fetch-Mode': 'cors', 'Sec-Fetch-Dest': 'empty', Referer: TARGET.origin + '/debate-room/', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, signal: AbortSignal.timeout(20000) });
+  const get = async (pathname, token, timeoutMs = 20000) => fetcher(TARGET.origin + pathname, { method: 'GET', redirect: 'error', cache: 'no-store', headers: { 'Sec-Fetch-Site': 'same-origin', 'Sec-Fetch-Mode': 'cors', 'Sec-Fetch-Dest': 'empty', Referer: TARGET.origin + '/debate-room/', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, signal: AbortSignal.timeout(timeoutMs) });
   // Static Assets serves directory indexes at their canonical trailing-slash
   // URLs. Request those directly; retain redirect:error so neither asset nor
   // authenticated requests can silently leave the reviewed origin.
-  for (const [file, digest] of Object.entries(manifest.hashes)) {
-    need(CRITICAL_ASSETS.includes(file) && HASH.test(digest), 'INVALID_SMOKE_MANIFEST', 'Smoke assets must be reviewed candidate paths and SHA-256 hashes.');
+  const assets = Object.entries(manifest.hashes);
+  for (const [file, digest] of assets) need(CRITICAL_ASSETS.includes(file) && HASH.test(digest), 'INVALID_SMOKE_MANIFEST', 'Smoke assets must be reviewed candidate paths and SHA-256 hashes.');
+  // Static delivery can briefly serve the prior version after deployment. Never
+  // relax a reviewed digest: wait at most 60 seconds in total, with no more than
+  // 31 GETs per asset. Redirect/network errors and all auth checks are not retried.
+  const assetObservations = [], assetDeadline = assetNow() + 60000;
+  const assetFailure = (code, file) => {
+    const error = new Error(code === 'DEPLOYED_ASSET_MISMATCH' ? `Hosted candidate asset differs: ${file}` : `Hosted candidate asset could not be read: ${file}`);
+    error.code = code; error.assetObservations = assetObservations; throw error;
+  };
+  for (const [file, digest] of assets) {
     const pathname = '/' + file.replace(/(^|\/)index\.html$/, '$1');
-    const response = await get(pathname);
-    need(response.ok && hash(new Uint8Array(await response.arrayBuffer())) === digest, 'DEPLOYED_ASSET_MISMATCH', `Hosted candidate asset differs: ${file}`);
+    for (let attempt = 1; ; attempt++) {
+      const remaining = assetDeadline - assetNow();
+      if (remaining <= 0) assetFailure('DEPLOYED_ASSET_MISMATCH', file);
+      let response, actual;
+      try {
+        response = await get(pathname, undefined, Math.max(1, Math.ceil(Math.min(20000, remaining))));
+        actual = hash(new Uint8Array(await response.arrayBuffer()));
+      } catch {
+        assetObservations.push({ path: file, status: 'FETCH_ERROR', attempt });
+        assetFailure('DEPLOYED_ASSET_FETCH_FAILED', file);
+      }
+      assetObservations.push({ path: file, status: response.status, hash: actual, attempt });
+      if (response.status >= 300 && response.status < 400) assetFailure('DEPLOYED_ASSET_FETCH_FAILED', file);
+      if (response.ok && actual === digest && assetNow() < assetDeadline) break;
+      if (attempt >= 31 || assetNow() >= assetDeadline) assetFailure('DEPLOYED_ASSET_MISMATCH', file);
+      await assetWait(Math.min(2000, assetDeadline - assetNow()));
+    }
   }
   const access = await get('/debate-room/access'); const accessBody = await access.json(); need(access.ok && accessBody.enabled === false, 'PUBLIC_ACCESS_OPEN', 'Debate public access must remain closed.');
   const anonymous = await get('/debate-room/events'); need(anonymous.status === 401, 'AUTH_SMOKE_FAILED', 'Anonymous event access must be denied.');
   const denied = await get('/debate-room/events', deniedToken), deniedBody = await denied.json(); need(denied.status === 403 && deniedBody.error?.code === 'DEBATE_PREVIEW_RESTRICTED', 'AUTH_SMOKE_FAILED', 'A real excluded account must fail the preview allowlist.');
   const allowed = await get('/debate-room/events', allowedToken), allowedBody = await allowed.json(); need(allowed.ok && allowedBody.ok === true && Array.isArray(allowedBody.events), 'AUTH_SMOKE_FAILED', 'A real allowlisted account must reach its authorized event list.');
-  return { status: 'PASS_STAGING_ASSETS_AND_AUTH_ONLY', physicalMedia: false, fullOrganizerJourney: false, endurance90Minutes: false, capacity: false, realMail: false, publicLaunch: false };
+  return { status: 'PASS_STAGING_ASSETS_AND_AUTH_ONLY', assetObservations, physicalMedia: false, fullOrganizerJourney: false, endurance90Minutes: false, capacity: false, realMail: false, publicLaunch: false };
 }
 
 async function main() {
@@ -379,7 +403,16 @@ async function main() {
   const policy = await readJson(path.join(ROOT, 'worker/debate-staging-policy.json')); validatePolicy(policy);
   const base = parseBase(await readFile(path.join(ROOT, policy.baseConfig), 'utf8'));
   const output = path.join(ROOT, 'artifacts/debate-local-rehearsal/staging-release'); await mkdir(output, { recursive: true });
-  if (mode === 'smoke') { const result = await smokeStaging({ allowedToken: process.env.DEBATE_STAGING_ALLOWED_BEARER, deniedToken: process.env.DEBATE_STAGING_DENIED_BEARER, manifest: await readJson(path.join(output, 'artifact.json')) }); await writeFile(path.join(output, 'smoke.json'), JSON.stringify(result, null, 2)); console.log(result.status); return; }
+  if (mode === 'smoke') {
+    try {
+      const result = await smokeStaging({ allowedToken: process.env.DEBATE_STAGING_ALLOWED_BEARER, deniedToken: process.env.DEBATE_STAGING_DENIED_BEARER, manifest: await readJson(path.join(output, 'artifact.json')) });
+      await writeFile(path.join(output, 'smoke.json'), JSON.stringify(result, null, 2)); console.log(result.status);
+    } catch (error) {
+      if (error.assetObservations) await writeFile(path.join(output, 'smoke.json'), JSON.stringify({ status: 'FAIL_STAGING_ASSETS', code: error.code, assetObservations: error.assetObservations }, null, 2));
+      throw error;
+    }
+    return;
+  }
   const baseline = await captureRemote({ token: process.env.CLOUDFLARE_API_TOKEN, accountId: process.env.CLOUDFLARE_ACCOUNT_ID, base });
   if (mode === 'postflight') {
     await writeFile(path.join(output, 'deployed-baseline.json'), JSON.stringify(baseline, null, 2));

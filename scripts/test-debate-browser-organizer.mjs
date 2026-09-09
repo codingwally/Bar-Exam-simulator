@@ -123,6 +123,9 @@ export async function runBrowserOrganizer() {
         check(`${selector} remains reachable in the mobile lobby`, contained(await host.locator(selector).boundingBox()));
       }
     }
+    // Return the document viewport to its origin after reachability checks so
+    // offscreen fixed controls are not drawn into a full-page composite.
+    await host.locator('.site-header').scrollIntoViewIfNeeded();
     await screenshot(host, `lobby-${populated ? 'populated' : 'empty'}-${width}x${height}`);
   };
   const checkLobbyCatalogs = async () => {

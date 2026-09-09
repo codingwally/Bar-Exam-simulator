@@ -5,13 +5,26 @@ export default { async fetch(request, env) {
   let stage = 'input';
   try {
     const mode = new URL(request.url).pathname;
-    need(request.method === 'POST' && ['/direct', '/multipart'].includes(mode), 'INERT_INPUT_ROUTE');
+    const redirectPhase = /^\/redirect\/(bucket|write|read|delete)$/.exec(mode)?.[1];
+    need(request.method === 'POST' && (['/direct', '/multipart'].includes(mode) || redirectPhase), 'INERT_INPUT_ROUTE');
     const body = mode === '/multipart' ? (await request.formData()).get('file').stream() : request.body;
     const context = { actorId: '10000000-0000-4000-8000-000000000001', eventId: 'de-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', matchId: '10000000-0000-4000-8000-000000000002', channel: 'public', mimeType: 'application/pdf' };
     const id = mode === '/direct' ? '10000000-0000-4000-8000-000000000003' : '10000000-0000-4000-8000-000000000004';
     const storageKey = `evidence/${context.eventId}/${context.matchId}/${id}.pdf`;
     const reservation = { ...context, id, storageKey, expiresAt: Date.now() + 60000 };
     const delivery = createDebateDelivery(env);
+    if (redirectPhase) {
+      stage = 'redirect_' + redirectPhase;
+      try {
+        if (redirectPhase === 'bucket' || redirectPhase === 'write') await delivery.upload({ ...context, body, name: 'inert.pdf', reservation });
+        else if (redirectPhase === 'read') await delivery.download(storageKey);
+        else await delivery.delete_evidence({ eventId: context.eventId, payload: { storageKey } });
+      } catch (error) {
+        need(error.code === 'DELIVERY_REDIRECT_REJECTED' && error.status === 503, 'INERT_REDIRECT_ERROR_SHAPE');
+        return Response.json({ ok: true, redirectRejected: true, phase: redirectPhase, code: error.code, status: error.status });
+      }
+      throw new Error('INERT_REDIRECT_WAS_ACCEPTED');
+    }
     stage = 'upload';
     const uploaded = await delivery.upload({ ...context, body, name: 'inert.pdf', reservation });
     need(uploaded.mimeType === context.mimeType && uploaded.size > 0 && typeof uploaded.uploadId === 'string', 'INERT_UPLOAD_SHAPE');

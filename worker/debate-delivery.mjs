@@ -55,7 +55,16 @@ export function createDebateDelivery(env, { fetcher = fetch, now = Date.now } = 
   }
   async function send(url, options = {}, max = 200000) {
     const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15000);
-    try { const response = await fetcher(url, { ...options, redirect: 'error', signal: controller.signal }); const bytes = response.body ? await boundedBytes(response.body, max) : new Uint8Array(); return { response, bytes }; }
+    try {
+      const response = await fetcher(url, { ...options, redirect: 'manual', signal: controller.signal });
+      if (response.status >= 300 && response.status < 400) {
+        // Never follow Location or read a redirect body with private credentials.
+        // Cancellation is best effort: a hostile cancel promise cannot delay rejection.
+        try { void response.body?.cancel().catch(() => {}); } catch { /* Reject below. */ }
+        throw new DebateDeliveryError('DELIVERY_REDIRECT_REJECTED', 'The request could not be confirmed. Refresh the event to check its status before trying again.');
+      }
+      const bytes = response.body ? await boundedBytes(response.body, max) : new Uint8Array(); return { response, bytes };
+    }
     finally { clearTimeout(timer); }
   }
   async function privateBucket() {

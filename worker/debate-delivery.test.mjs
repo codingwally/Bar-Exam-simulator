@@ -33,6 +33,51 @@ function storageFixture(isPublic = false) {
   };
   return { objects, calls, fetcher };
 }
+const redirectRejected = error => {
+  assert.ok(error instanceof DebateDeliveryError);
+  assert.equal(error.code, 'DELIVERY_REDIRECT_REJECTED'); assert.equal(error.status, 503);
+  assert.doesNotMatch(error.message + JSON.stringify(error), /PRIVATE_|https:|local-test-secret-only/);
+  assert.equal(Object.hasOwn(error, 'cause'), false); return true;
+};
+test('every 300–399 status is refused after one credential-scoped manual request', async () => {
+  for (let status = 300; status < 400; status++) for (const location of ['https://example.supabase.co/PRIVATE_redirect', 'https://other.invalid/PRIVATE_redirect']) {
+    const calls = [];
+    const delivery = createDebateDelivery(env, { fetcher: async (url, options) => {
+      calls.push(url); assert.equal(url, env.SUPABASE_URL + '/storage/v1/bucket/debate-private-v3');
+      assert.equal(options.redirect, 'manual'); assert.equal(options.method || 'GET', 'GET');
+      assert.equal(options.headers.apikey, env.SUPABASE_SERVICE_ROLE_KEY);
+      assert.equal(options.headers.Authorization, 'Bearer ' + env.SUPABASE_SERVICE_ROLE_KEY);
+      return new Response(null, { status, headers: { Location: location } });
+    } });
+    await assert.rejects(delivery.upload(uploadInput()), redirectRejected);
+    assert.equal(calls.length, 1, `${status}: no redirect target or retry is requested`);
+  }
+});
+for (const operation of ['write', 'read', 'delete', 'recipient']) test(`${operation} redirects preserve the initial request and never follow its Location`, async () => {
+  const calls = [], key = `evidence/${eventId}/${matchId}/upload-test-0001.png`;
+  const delivery = createDebateDelivery(env, { fetcher: async (url, options) => {
+    calls.push({ url, method: options.method || 'GET' });
+    assert.equal(new URL(url).origin, env.SUPABASE_URL); assert.equal(options.redirect, 'manual');
+    assert.equal(options.headers.apikey, env.SUPABASE_SERVICE_ROLE_KEY);
+    if (url.endsWith('/storage/v1/bucket/debate-private-v3')) return Response.json({ id: 'debate-private-v3', public: false });
+    assert.equal(options.method || 'GET', { write: 'POST', read: 'GET', delete: 'DELETE', recipient: 'GET' }[operation]);
+    if (operation === 'write') assert.deepEqual(options.body, png);
+    if (operation === 'delete') assert.deepEqual(JSON.parse(options.body), { prefixes: [key] });
+    return new Response(null, { status: 307, headers: { Location: 'https://other.invalid/PRIVATE_redirect' } });
+  } });
+  const action = { write: () => delivery.upload(uploadInput()), read: () => delivery.download(key),
+    delete: () => delivery.delete_evidence({ eventId, payload: { storageKey: key } }), recipient: () => delivery.recipientEmail(actorId) }[operation];
+  await assert.rejects(action(), redirectRejected);
+  assert.equal(calls.length, operation === 'recipient' ? 1 : 2);
+});
+for (const cancellation of ['rejects', 'never-settles']) test(`a redirect body whose cancellation ${cancellation} is never read and cannot delay rejection`, { timeout: 1000 }, async () => {
+  let reads = 0, cancelled = 0, calls = 0;
+  const body = new ReadableStream({ pull() { reads++; throw privateFailure(); }, cancel() { cancelled++; return cancellation === 'rejects' ? Promise.reject(privateFailure()) : new Promise(() => {}); } }, { highWaterMark: 0 });
+  const delivery = createDebateDelivery(env, { fetcher: async () => { calls++; return new Response(body, { status: 302, headers: { Location: 'https://other.invalid/PRIVATE_redirect' } }); } });
+  await assert.rejects(delivery.upload(uploadInput()), redirectRejected);
+  assert.equal(calls, 1); assert.equal(reads, 0); assert.equal(cancelled, 1);
+});
+
 test('private storage fails closed before any object is written to a public bucket', async () => {
   const fixture = storageFixture(true), delivery = createDebateDelivery(env, fixture);
   await assert.rejects(delivery.upload({ actorId,eventId,matchId,body:stream(png),mimeType:'image/png',name:'sample.png' }), { code: 'PRIVATE_STORAGE_UNCONFIRMED' });

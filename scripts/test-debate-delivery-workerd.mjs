@@ -38,7 +38,7 @@ async function harnessChecks() {
   await check('fake Storage refuses an external host before any request handling', async () => { await assert.rejects(storage.fetch(new Request('https://example.invalid/storage/v1/bucket/debate-private-v3')), /INERT_STORAGE_TARGET_REJECTED/); });
   await check('fake Storage refuses credentials other than its fixed inert value', async () => { await assert.rejects(storage.fetch(new Request('https://storage.fixture.invalid/storage/v1/bucket/debate-private-v3')), /INERT_STORAGE_HEADERS_REJECTED/); });
   await check('fake Storage rejects other buckets and methods', async () => { await assert.rejects(storage.fetch(new Request('https://storage.fixture.invalid/storage/v1/bucket/other', { headers: { apikey: INERT_KEY, Authorization: 'Bearer ' + INERT_KEY } })), /INERT_STORAGE_ROUTE_REJECTED/); await assert.rejects(storage.fetch(new Request('https://storage.fixture.invalid/__report', { method: 'POST' })), /INERT_REPORT_METHOD/); });
-  await check('rejected fake requests create no object or accepted call', async () => { assert.deepEqual(await (await storage.fetch(new Request('https://storage.fixture.invalid/__report'))).json(), { calls: [], objectsRemaining: 0 }); });
+  await check('rejected fake requests create no object or accepted call', async () => { assert.deepEqual(await (await storage.fetch(new Request('https://storage.fixture.invalid/__report'))).json(), { calls: [], objectsRemaining: 0, redirectTargetRequests: 0, credentialsForwarded: false, redirectResponses: 0 }); });
 }
 function blankPdf() {
   const objects = ['<< /Type /Catalog /Pages 2 0 R >>', '<< /Type /Pages /Kids [3 0 R] /Count 1 >>', '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 72 72] /Resources << >> >>'];
@@ -107,6 +107,20 @@ try {
       assert.equal(report.unexpectedFakeStorageOutboundCalls, 0);
       assert.equal(observed.objectsRemaining, 0);
       assert.deepEqual(observed.calls.map(call => call.operation), Array(2).fill(['private_bucket', 'private_write', 'private_bucket', 'private_read', 'private_bucket', 'private_read', 'private_bucket', 'private_delete']).flat());
+    });
+    report.redirectCases = [];
+    const fake = await mf.getWorker('fake-storage');
+    for (const status of [300,301,302,303,304,307,308,399]) for (const destination of ['same-origin','cross-origin']) for (const phase of ['bucket','write','read','delete']) await check(`actual workerd refuses ${status} ${destination} ${phase} redirect without a sink request`, async () => {
+      const before = await (await fake.fetch('https://storage.fixture.invalid/__report')).json();
+      const configured = await fake.fetch('https://storage.fixture.invalid/__redirect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status, destination, phase }) });
+      assert.equal(configured.status, 200);
+      const response = await mf.dispatchFetch('https://repro.fixture.invalid/redirect/' + phase, { method: 'POST', headers: { 'Content-Type': 'application/pdf' }, body: pdf });
+      const result = await response.json();
+      const observed = await (await fake.fetch('https://storage.fixture.invalid/__report')).json();
+      report.redirectCases.push({ status, destination, phase, responseStatus: response.status, result, redirectTargetRequests: observed.redirectTargetRequests, credentialsForwarded: observed.credentialsForwarded });
+      assert.equal(response.status, 200); assert.equal(result.redirectRejected, true); assert.equal(result.code, 'DELIVERY_REDIRECT_REJECTED'); assert.equal(result.status, 503);
+      assert.deepEqual(observed.calls.slice(before.calls.length).map(call => call.operation), phase === 'bucket' ? ['redirect'] : ['private_bucket','redirect']);
+      assert.equal(observed.redirectResponses, before.redirectResponses + 1); assert.equal(observed.redirectTargetRequests, 0); assert.equal(observed.credentialsForwarded, false); assert.equal(observed.objectsRemaining, 0); assert.equal(report.unexpectedFakeStorageOutboundCalls, 0);
     });
     await check('tested source files remain unchanged throughout the runtime run', async () => { for (const source of sources) assert.equal(hash(await readFile(path.join(ROOT, source))), report.sourceHashes[source], source); });
     report.status = 'PASS_WORKERD_INERT_STORAGE_DELIVERY';

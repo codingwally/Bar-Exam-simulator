@@ -3090,7 +3090,7 @@ function showCheckingError(message) {
   const card = document.getElementById('checking-card');
   card.classList.add('has-error');
   document.getElementById('checking-title').textContent = 'Assessment unavailable';
-  document.getElementById('checking-copy').textContent = 'Your answer was not graded or saved.';
+  document.getElementById('checking-copy').textContent = 'Your assessment could not be completed. Review the message below before trying again.';
   document.getElementById('checking-error').textContent = message;
   document.getElementById('checking-actions').style.display = 'flex';
 }

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "status": "CURRENT_DASHBOARD_NOT_READ_SIGN_IN_REQUIRED",
+  "observedLocalDate": "2026-09-10",
+  "timezone": "Asia/Manila",
+  "origin": "https://cloud.livekit.io/",
+  "surface": "Automatically selected Codex in-app browser",
+  "observation": "The existing tab inventory was empty. A temporary dashboard tab displayed Continue to LiveKit Cloud and Google, GitHub, SSO and email sign-in choices.",
+  "currentAccountLimitsRead": false,
+  "currentUsageRead": false,
+  "priorAccountEvidenceOverwritten": false,
+  "credentialsEntered": false,
+  "oauthGrantRequested": false,
+  "providerSettingChanged": false,
+  "newSpendingApproved": false,
+  "mediaSessionStarted": false,
+  "temporaryTabClosed": true,
+  "scopeLimit": "This only establishes that the selected browser surface was signed out; it does not establish that no other authorized sign-in context exists. Prior account observations are retained with their original dates. No public quota number is promoted to current usable account headroom."
+}

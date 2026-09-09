@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "kind": "ATTRIBUTED_R3_PRIMARY_PDF_VISUAL_RECHECK",
+  "recordedAt": "2026-09-09T15:58:48.143Z",
+  "observedDate": "2026-09-09",
+  "rowId": "V3-29-004",
+  "sourceUrl": "https://catanduanes.deped.gov.ph/files/UM---Inter-Schools-Debate-for-the-Environment-and-Battle-of-Best-Partnership-Initiatives-and-Awarding-Ceremonies.pdf",
+  "status": "PASS_BOUNDED_SOURCE_PAGES_VISUAL_RECHECK",
+  "reviewedBy": "root coordinator",
+  "recordedAndFileHashesVerifiedBy": "clock_ci",
+  "attribution": "Root reports directly viewing the rendered source PDF pages 5, 6 and 7. clock_ci verified the saved PDF and PNG file hashes and dimensions; it did not repeat the visual inspection.",
+  "pages": [
+    5,
+    6,
+    7
+  ],
+  "renderer": {
+    "tool": "Bundled Poppler, as reported by root",
+    "scaleTo": 1700,
+    "exactBinaryVersion": "NOT_RECORDED_BY_THIS_RECEIPT",
+    "guidance": "Root used the PDF skill; no rerender was performed by the recorder."
+  },
+  "files": [
+    {
+      "path": "artifacts/debate-local-rehearsal/r3-denr-mechanics-source.pdf",
+      "sha256": "ee30480dac7427974877fb50dc24ff80fed96a5529d69aec801ab4835904b06f",
+      "bytes": 3207555
+    },
+    {
+      "path": "artifacts/debate-local-rehearsal/r3-denr-page-05.png",
+      "sha256": "cffe259f9558110c7eda51e98b48106030bea71fe6023f0cbb5ecf787105904f",
+      "bytes": 796357,
+      "width": 1202,
+      "height": 1700
+    },
+    {
+      "path": "artifacts/debate-local-rehearsal/r3-denr-page-06.png",
+      "sha256": "2ba36abc69886dd6b52d8996b81869c7a2791bb2a49681ef4389d3bbcb22e985",
+      "bytes": 863893,
+      "width": 1202,
+      "height": 1700
+    },
+    {
+      "path": "artifacts/debate-local-rehearsal/r3-denr-page-07.png",
+      "sha256": "1757f6152aeccca6f0af5244cab5728828aabbf8db3d42be7ca8ba6e3f597b97",
+      "bytes": 590551,
+      "width": 1202,
+      "height": 1700
+    }
+  ],
+  "derivedClaimWordCount": 59,
+  "derivedClaims": [
+    {
+      "sourcePage": 5,
+      "claim": "Constructive speeches use five to seven minutes, interpellation five minutes and rebuttal three minutes. The negative captain closes before the affirmative captain."
+    },
+    {
+      "sourcePage": 6,
+      "claim": "Interpellation guidance addresses courtesy, questions and qualified answers. Moderator guidance covers order and clarification."
+    },
+    {
+      "sourcePage": 7,
+      "claim": "The rubric uses 25/30/30/15 weights. Listed awards include Best Debater, Best Interpellator and Best Speaker. The source event describes judges' decisions as final."
+    }
+  ],
+  "scopeLimits": [
+    "Only the three named source pages were visually reviewed; this is source-provenance evidence, not implementation or acceptance testing.",
+    "This event-specific timing, rubric, awards and finality language do not replace the owner's application defaults or disclosed correction procedure. No universal federation rule or legal conclusion is inferred."
+  ],
+  "earlierAudit": {
+    "path": "artifacts/debate-local-rehearsal/research-provenance-audit.json",
+    "sha256": "87d7719eacfa2961a1598caf71614068934c9164f8885c12ba4aa9ae044563da",
+    "preservedUnchanged": true,
+    "note": "The earlier audit honestly recorded that its screenshot channel did not expose the scanned images. This later attributed review adds separate evidence without rewriting that historical observation."
+  },
+  "trackedFilesChanged": false,
+  "ledgerStatusChanged": false,
+  "publicLaunch": false
+}

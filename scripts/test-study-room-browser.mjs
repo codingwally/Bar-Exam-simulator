@@ -24,10 +24,13 @@ const api = async (actor, route, body = {}, expected = 200) => {
   assert.equal(response.status, expected, `${actor} ${route} ${body.operation || ''}: ${JSON.stringify(result)}`); return result;
 };
 const room = async key => (await runtime.catalog()).rooms.find(entry => entry.roomKey === key);
-const admission = async (actor, operation, extra = {}, expected = 200) => api(actor, '/study-room/admission', {
-  operation, roomKey:'2', accessRevision:(await room('2')).accessRevision,
-  ...(!['status','list'].includes(operation) ? { commandId:randomUUID() } : {}), ...extra,
-}, expected);
+const admission = async (actor, operation, extra = {}, expected = 200) => {
+  const roomKey = extra.roomKey || '2';
+  return api(actor, '/study-room/admission', {
+    operation, roomKey, accessRevision:(await room(roomKey)).accessRevision,
+    ...(!['status','list'].includes(operation) ? { commandId:randomUUID() } : {}), ...extra,
+  }, expected);
+};
 const configure = async (key, audience) => { const current = await room(key); return api('admin','/admin/study-room/rooms', {
   operation:'update', roomKey:key, label:current.label, audience, expectedRevision:current.revision,
 }); };
@@ -36,6 +39,21 @@ const eventually = async (condition, label, timeout = 10000) => {
   while (Date.now() < deadline) { if (await condition()) return; await new Promise(resolve => setTimeout(resolve, 50)); }
   throw new Error(label);
 };
+
+function assertApprovalCredential(credential, roomKey) {
+  assert.ok(['1','7'].includes(roomKey));
+  assert.equal(credential.room_key, roomKey); assert.equal(credential.audience, 'approval');
+  assert.equal(credential.room_kind, roomKey === '1' ? 'library' : 'general');
+  assert.equal(credential.microphone_allowed, roomKey !== '1');
+  const claims = JSON.parse(Buffer.from(credential.participant_token.split('.')[1], 'base64url').toString('utf8'));
+  assert.equal(claims.sub, credential.participant_identity); assert.equal(claims.video.room, credential.room_name);
+  assert.equal(claims.video.roomJoin, true);
+  const allowedSources = roomKey === '1' ? ['camera','screen_share'] : ['camera','microphone','screen_share','screen_share_audio'];
+  assert.deepEqual(claims.video.canPublishSources, allowedSources);
+  // The inert connect endpoint verifies the actual signed credential. Keep only
+  // non-secret policy observations; never add the token to this report.
+  return { roomKey, roomKind: credential.room_kind, microphoneAllowed: credential.microphone_allowed, allowedSources };
+}
 
 async function verifyHarness() {
   check('Catalog defaults All users and preserves private Inner Chamber', (await runtime.catalog()).rooms.every(r => r.audience === (r.roomKey === '5' ? 'admin' : 'all')));
@@ -112,6 +130,15 @@ async function verifyBrowser() {
     await page.locator('#sr-room-editor').waitFor({state:'hidden'}); assert.equal((await room(key)).audience,audience);
   };
   const waitingRow = (page,name) => page.locator('#sr-waiting-list .sr-waiting-person').filter({has:page.locator('strong',{hasText:name})});
+  const resetBetweenCases = async page => {
+    // Close only the existing inert test connections, then reload the real
+    // client. This isolates room cases without claiming a user Leave journey.
+    await page.evaluate(()=>window.__studySynthetic.closeTransports());
+    await page.goto(runtime.origin+'/study-room/');
+    await page.locator('#sr-room-card-grid [data-room-key="2"]').waitFor();
+  };
+  const joinedCredential = (page,key) => page.waitForResponse(response => new URL(response.url()).pathname === '/study-room/join'
+    && response.request().method() === 'POST' && response.request().postDataJSON()?.roomKey === key && response.status() === 201);
   try {
     const admin = await newActor('admin');
     await admin.locator('#sr-room-add').click(); assert.equal(await admin.locator('#sr-room-audience').inputValue(),'all');
@@ -172,6 +199,65 @@ async function verifyBrowser() {
     await eventually(async()=> (await admission('member2','status')).admission?.status==='cancelled','Old actor request did not cancel after switch');
     assert.equal((await admission('paid','status')).admission,null);
     check('Late request after account switch cancels under the original identity and cannot enter for the new account');
+
+    report.additionalApprovalRooms = [];
+    for (const roomKey of ['1','7']) {
+      const label = roomKey === '1' ? 'Library' : 'new ordinary room7', nickname = `Synthetic ${roomKey === '1' ? 'Library' : 'new room'} applicant`;
+      await resetBetweenCases(admin); await changePolicy(admin,roomKey,'approval');
+      // Keep this administrator actually connected to a different room while
+      // attempting the forbidden list/admit requests for the target room.
+      await open(admin,'6'); await join(admin);
+      await resetBetweenCases(member); await open(member,roomKey); await member.locator('#sr-nickname').fill(nickname);
+      if (roomKey === '1') assert.equal(await member.locator('#sr-join-microphone').isDisabled(),true);
+      const beforeMember = await member.evaluate(()=>({...window.__studySynthetic.metrics})), beforeTokens = runtime.metrics.signedCredentials;
+      await waitForJoin(member,'Ask to enter'); await member.locator('#sr-join').click(); await waitForPending(member);
+      const pending = (await admission('member','status',{roomKey})).admission;
+      assert.equal(pending.status,'pending'); assert.equal(pending.roomKey,roomKey);
+      assert.equal(pending.accessRevision,(await room(roomKey)).accessRevision);
+      await api('member','/study-room/join',{roomKey,nickname},403);
+      const wrongRoomList = await admission('admin','list',{roomKey},403);
+      const wrongRoomAdmit = await admission('admin','admit',{roomKey,requestId:pending.requestId,expectedVersion:pending.version},403);
+      assert.equal(wrongRoomList.error.code,'STUDY_ROOM_ADMIN_NOT_PRESENT'); assert.equal(wrongRoomAdmit.error.code,'STUDY_ROOM_ADMIN_NOT_PRESENT');
+      assert.equal((await admission('member','status',{roomKey})).admission.status,'pending');
+      assert.equal(runtime.metrics.signedCredentials,beforeTokens);
+      assert.equal(await member.locator('#sr-join').isDisabled(),true);
+      const whilePending = await member.evaluate(()=>({...window.__studySynthetic.metrics}));
+      for (const key of ['constructors','connects','captures','publications']) assert.equal(whilePending[key],beforeMember[key]);
+      check(`${label}: waiting blocks credentials/connect/capture; an admin in another room cannot list or admit`);
+
+      await resetBetweenCases(admin); await open(admin,roomKey);
+      if (roomKey === '1') assert.equal(await admin.locator('#sr-join-microphone').isDisabled(),true);
+      const [administratorJoin] = await Promise.all([joinedCredential(admin,roomKey),join(admin)]);
+      const administratorPolicy = assertApprovalCredential(await administratorJoin.json(),roomKey);
+      await admin.locator('#sr-dock-people').click(); await admin.locator('#sr-waiting-refresh').click();
+      await waitingRow(admin,nickname).getByRole('button',{name:'Admit',exact:true}).click();
+      await waitingRow(admin,nickname).getByText('approved',{exact:true}).waitFor();
+      await member.locator('#sr-entry-admission-retry').click(); await waitForJoin(member,'Enter room'); await off(member);
+      const approved = (await admission('member','status',{roomKey})).admission;
+      assert.equal(approved.status,'approved'); assert.equal(approved.requestId,pending.requestId); assert.equal(approved.version,pending.version+1);
+      const beforeExplicitEntry = await member.evaluate(()=>({...window.__studySynthetic.metrics}));
+      for (const key of ['constructors','connects','captures','publications']) assert.equal(beforeExplicitEntry[key],beforeMember[key]);
+      assert.equal(runtime.metrics.signedCredentials,beforeTokens+1,'Only the administrator received a new credential before member entry');
+      await member.screenshot({path:path.join(output,`approval-room-${roomKey}-before-explicit-entry.png`),fullPage:true});
+      check(`${label}: exact-room admin manually admits; approval keeps the member disconnected with devices off`);
+
+      const [memberJoin] = await Promise.all([joinedCredential(member,roomKey),join(member)]);
+      const memberPolicy = assertApprovalCredential(await memberJoin.json(),roomKey);
+      const afterExplicitEntry = await member.evaluate(()=>({...window.__studySynthetic.metrics}));
+      assert.equal(afterExplicitEntry.constructors,beforeMember.constructors+1); assert.equal(afterExplicitEntry.connects,beforeMember.connects+1);
+      assert.equal(afterExplicitEntry.captures,0); assert.equal(afterExplicitEntry.publications,0);
+      assert.equal(runtime.metrics.signedCredentials,beforeTokens+2,'Exactly one member credential follows explicit Enter');
+      if (roomKey === '1') {
+        assert.equal(await member.locator('#sr-toggle-microphone').isDisabled(),true);
+        assert.equal(await admin.locator('#sr-toggle-microphone').isDisabled(),true);
+      }
+      await member.screenshot({path:path.join(output,`approval-room-${roomKey}-after-explicit-entry.png`),fullPage:true});
+      report.additionalApprovalRooms.push({status:'PASS',roomKey,administratorPolicy,memberPolicy,
+        exactRoomAdministratorRequired:true,pendingIssuedNoCredential:true,approvalDidNotConnect:true,explicitEntryConnections:1,
+        synthetic:true,hostedAuth:false,providerPresence:false,physicalMedia:false});
+      check(`${label}: explicit Enter connects once; signed administrator/member grants retain ${roomKey === '1' ? 'silent camera/screen-only Library' : 'ordinary-room'} policy`);
+      await resetBetweenCases(member); await resetBetweenCases(admin);
+    }
     assert.equal(blocked.length,0,'No external network request is attempted');
     for (const page of pages) { const m = await page.evaluate(()=>window.__studySynthetic.metrics); assert.equal(m.captures,0); assert.equal(m.publications,0); assert.deepEqual(m.forbidden,[]); }
     assert.deepEqual(errors,[],'Actual DOM has no uncaught runtime errors'); check('Every browser remained free of capture, publication, WebRTC, WebSocket and external network');

@@ -1,0 +1,281 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-09T16:26:39.021Z",
+  "status": "PASS_VISUAL_REVIEW_EXACT_SYNTHETIC_EXPORT_FILES",
+  "candidate": "ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34",
+  "tree": "a8c7a0217a64208e3082ed6bb0eeef9297a963b2",
+  "ciRun": 34373407854,
+  "testedCheckout": "471618403d7f8a41d6cb7a33031be6ed684613a6",
+  "sourceReceipt": {
+    "path": "docs/debate-room-v3/evidence/ci-validation-ea3c1e2.json",
+    "sha256": "baf2e6be33deb9c8dce894c4c1a182dc1fa2169d49a34e77a402e6b907fecc3e"
+  },
+  "browserReceipt": {
+    "path": "artifacts/debate-local-rehearsal/ci-34373407854/debate-v3-synthetic-browser-evidence/browser-organizer-ci/report.json",
+    "sha256": "7e9d621ee6c9bb3b83b8f294eb8e1934fcd2665f4ea2ab570a06972fd8750e10"
+  },
+  "renderManifest": {
+    "path": "artifacts/debate-local-rehearsal/ci-34373407854/export-visual-review/render-manifest.json",
+    "sha256": "b4ea513b4fab0a69230ec916f1604c05f43dc157fdfd76e62573181f00805196"
+  },
+  "renderer": {
+    "path": "C:\\Users\\wally\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\poppler\\Library\\bin\\pdftoppm.exe",
+    "dpi": 130,
+    "transport": "original bytes over stdin to avoid Windows long-path limitations; no source copies or re-export"
+  },
+  "reviewer": "staging_setup",
+  "inspectedPdfCount": 5,
+  "inspectedPageCount": 9,
+  "inspectedCsvCount": 1,
+  "items": [
+    {
+      "kind": "rules",
+      "path": "artifacts/debate-local-rehearsal/ci-34373407854/debate-v3-synthetic-browser-evidence/browser-organizer-ci/downloads/rules-duediligence-debate-ci-full-browser-debate-2026-09-09t15-56-50-660z-rules-r1.pdf",
+      "absolutePath": "C:\\Users\\wally\\OneDrive\\Desktop\\DUEDILLEGENCE PROGRAM\\Bar-Exam-simulator-debate-room-v3-20260909\\artifacts\\debate-local-rehearsal\\ci-34373407854\\debate-v3-synthetic-browser-evidence\\browser-organizer-ci\\downloads\\rules-duediligence-debate-ci-full-browser-debate-2026-09-09t15-56-50-660z-rules-r1.pdf",
+      "sha256": "7d67c3e9b6f8e0ab48101f7da262dbd3b293304f41eceb704a9cfff1a32a10d4",
+      "bytes": 14819,
+      "hashMatchesOriginalBrowserReceipt": true,
+      "resultVersion": null,
+      "inspectedPageNumbers": [
+        1,
+        2
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "renderPath": "C:\\Users\\wally\\OneDrive\\Desktop\\DUEDILLEGENCE PROGRAM\\Bar-Exam-simulator-debate-room-v3-20260909\\artifacts\\debate-local-rehearsal\\ci-34373407854\\export-visual-review\\rules-1.png",
+          "renderSha256": "b0b740529eddb636a6502a88ba05d9be13cd8599d4841cd1411f7118be2da002",
+          "renderBytes": 181944,
+          "visuallyInspected": true,
+          "clippedTextObserved": false,
+          "overlapObserved": false,
+          "unreadableGlyphsObserved": false,
+          "headersAndFootersReadable": true,
+          "inspection": "Complete page visually inspected at original rendered resolution; body, section headings, page counter and margins readable."
+        },
+        {
+          "pageNumber": 2,
+          "renderPath": "C:\\Users\\wally\\OneDrive\\Desktop\\DUEDILLEGENCE PROGRAM\\Bar-Exam-simulator-debate-room-v3-20260909\\artifacts\\debate-local-rehearsal\\ci-34373407854\\export-visual-review\\rules-2.png",
+          "renderSha256": "c3f1ba5ce7e440c7d52c0920860981c1b6f0c65e0420f5c575ddf2389d4367dd",
+          "renderBytes": 191696,
+          "visuallyInspected": true,
+          "clippedTextObserved": false,
+          "overlapObserved": false,
+          "unreadableGlyphsObserved": false,
+          "headersAndFootersReadable": true,
+          "inspection": "Complete page visually inspected at original rendered resolution; body, section headings, page counter and margins readable."
+        }
+      ],
+      "status": "PASS_VISUAL_SYNTHETIC_PDF",
+      "observations": [
+        "Both pages inspected; full accepted 5/3/5 sequence and untimed deliberation remain legible.",
+        "Scoring weights, no automatic overtime penalty,15-minute correction window and source notes are readable. Long source URLs wrap across lines without clipping."
+      ]
+    },
+    {
+      "kind": "scorecard",
+      "path": "artifacts/debate-local-rehearsal/ci-34373407854/debate-v3-synthetic-browser-evidence/browser-organizer-ci/downloads/scorecard-duediligence-debate-ci-full-browser-debate-2026-09-09t15-56-50-660z-scorecard-r1.pdf",
+      "absolutePath": "C:\\Users\\wally\\OneDrive\\Desktop\\DUEDILLEGENCE PROGRAM\\Bar-Exam-simulator-debate-room-v3-20260909\\artifacts\\debate-local-rehearsal\\ci-34373407854\\debate-v3-synthetic-browser-evidence\\browser-organizer-ci\\downloads\\scorecard-duediligence-debate-ci-full-browser-debate-2026-09-09t15-56-50-660z-scorecard-r1.pdf",
+      "sha256": "bcfc0173fc87201aa926d0f41b79e1ea164a7d913b029d8a096eb864f51c28ce",
+      "bytes": 12815,
+      "hashMatchesOriginalBrowserReceipt": true,
+      "resultVersion": null,
+      "inspectedPageNumbers": [
+        1,
+        2
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "renderPath": "C:\\Users\\wally\\OneDrive\\Desktop\\DUEDILLEGENCE PROGRAM\\Bar-Exam-simulator-debate-room-v3-20260909\\artifacts\\debate-local-rehearsal\\ci-34373407854\\export-visual-review\\scorecard-1.png",
+          "renderSha256": "b532648ab7fa8a8ed1ef5a41101193fb5e0accc5e4dfcc80c0008388c5c0f3e8",
+          "renderBytes": 151337,
+          "visuallyInspected": true,
+          "clippedTextObserved": false,
+          "overlapObserved": false,
+          "unreadableGlyphsObserved": false,
+          "headersAndFootersReadable": true,
+          "inspection": "Complete page visually inspected at original rendered resolution; body, section headings, page counter and margins readable."
+        },
+        {
+          "pageNumber": 2,
+          "renderPath": "C:\\Users\\wally\\OneDrive\\Desktop\\DUEDILLEGENCE PROGRAM\\Bar-Exam-simulator-debate-room-v3-20260909\\artifacts\\debate-local-rehearsal\\ci-34373407854\\export-visual-review\\scorecard-2.png",
+          "renderSha256": "2be79a67e89d6facd1b1817797dda2b590db1860e88c949a9778ed3b61b7ce3d",
+          "renderBytes": 98263,
+          "visuallyInspected": true,
+          "clippedTextObserved": false,
+          "overlapObserved": false,
+          "unreadableGlyphsObserved": false,
+          "headersAndFootersReadable": true,
+          "inspection": "Complete page visually inspected at original rendered resolution; body, section headings, page counter and margins readable."
+        }
+      ],
+      "status": "PASS_VISUAL_SYNTHETIC_PDF",
+      "observations": [
+        "Both pages inspected; PRIVATE and REHEARSAL labels readable.",
+        "Submitted ballot, corrected24/25 evidence score,99.67 vs92.00 totals and reasoned correction are visible.",
+        "Synthetic private-note marker appears only in this assigned-judge export."
+      ]
+    },
+    {
+      "kind": "result",
+      "path": "artifacts/debate-local-rehearsal/ci-34373407854/debate-v3-synthetic-browser-evidence/browser-organizer-ci/downloads/result-duediligence-debate-ci-full-browser-debate-2026-09-09t15-56-50-660z-result-r2.pdf",
+      "absolutePath": "C:\\Users\\wally\\OneDrive\\Desktop\\DUEDILLEGENCE PROGRAM\\Bar-Exam-simulator-debate-room-v3-20260909\\artifacts\\debate-local-rehearsal\\ci-34373407854\\debate-v3-synthetic-browser-evidence\\browser-organizer-ci\\downloads\\result-duediligence-debate-ci-full-browser-debate-2026-09-09t15-56-50-660z-result-r2.pdf",
+      "sha256": "62f7efb51f073d119e2970709f5b5a62a315f948fc64bacfb5d302ca20a133d0",
+      "bytes": 13523,
+      "hashMatchesOriginalBrowserReceipt": true,
+      "resultVersion": "7e863883-c07c-4739-bbb4-c177cb56c9e6",
+      "inspectedPageNumbers": [
+        1,
+        2
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "renderPath": "C:\\Users\\wally\\OneDrive\\Desktop\\DUEDILLEGENCE PROGRAM\\Bar-Exam-simulator-debate-room-v3-20260909\\artifacts\\debate-local-rehearsal\\ci-34373407854\\export-visual-review\\result-1.png",
+          "renderSha256": "6dba9855e0169eab11766af154395f3cd1c507fdb8101d71b6e618fae8adaaa8",
+          "renderBytes": 170973,
+          "visuallyInspected": true,
+          "clippedTextObserved": false,
+          "overlapObserved": false,
+          "unreadableGlyphsObserved": false,
+          "headersAndFootersReadable": true,
+          "inspection": "Complete page visually inspected at original rendered resolution; body, section headings, page counter and margins readable."
+        },
+        {
+          "pageNumber": 2,
+          "renderPath": "C:\\Users\\wally\\OneDrive\\Desktop\\DUEDILLEGENCE PROGRAM\\Bar-Exam-simulator-debate-room-v3-20260909\\artifacts\\debate-local-rehearsal\\ci-34373407854\\export-visual-review\\result-2.png",
+          "renderSha256": "22f78f26fae825b102c196eefb688e7554821997896804e4cfff5e2bf8849fc0",
+          "renderBytes": 88576,
+          "visuallyInspected": true,
+          "clippedTextObserved": false,
+          "overlapObserved": false,
+          "unreadableGlyphsObserved": false,
+          "headersAndFootersReadable": true,
+          "inspection": "Complete page visually inspected at original rendered resolution; body, section headings, page counter and margins readable."
+        }
+      ],
+      "status": "PASS_VISUAL_SYNTHETIC_PDF",
+      "observations": [
+        "Both pages inspected; Rules v1 and corrected Result v2 UUID match the saved browser export receipt.",
+        "Affirmative official winner and99.67/92.00 panel averages are legible. Shared speaker/interpellator names wrap within margins.",
+        "Audience Choice remains a separate Negative audience result; rebuttalist A1 and Best Debater A2 are readable."
+      ]
+    },
+    {
+      "kind": "event_report",
+      "path": "artifacts/debate-local-rehearsal/ci-34373407854/debate-v3-synthetic-browser-evidence/browser-organizer-ci/downloads/event_report-duediligence-debate-ci-full-browser-debate-2026-09-09t15-56-50-660z-event-report-r2.pdf",
+      "absolutePath": "C:\\Users\\wally\\OneDrive\\Desktop\\DUEDILLEGENCE PROGRAM\\Bar-Exam-simulator-debate-room-v3-20260909\\artifacts\\debate-local-rehearsal\\ci-34373407854\\debate-v3-synthetic-browser-evidence\\browser-organizer-ci\\downloads\\event_report-duediligence-debate-ci-full-browser-debate-2026-09-09t15-56-50-660z-event-report-r2.pdf",
+      "sha256": "8f7df715dc9a2567ebee8de66d8751c8d2e7b370271bbbff3b383d71025f3bb1",
+      "bytes": 14108,
+      "hashMatchesOriginalBrowserReceipt": true,
+      "resultVersion": "7e863883-c07c-4739-bbb4-c177cb56c9e6",
+      "inspectedPageNumbers": [
+        1,
+        2
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "renderPath": "C:\\Users\\wally\\OneDrive\\Desktop\\DUEDILLEGENCE PROGRAM\\Bar-Exam-simulator-debate-room-v3-20260909\\artifacts\\debate-local-rehearsal\\ci-34373407854\\export-visual-review\\event_report-1.png",
+          "renderSha256": "ede1ebf305a20f748d58c2020ce61d1733382a10d25d0a3f61a340d12e5428c0",
+          "renderBytes": 168807,
+          "visuallyInspected": true,
+          "clippedTextObserved": false,
+          "overlapObserved": false,
+          "unreadableGlyphsObserved": false,
+          "headersAndFootersReadable": true,
+          "inspection": "Complete page visually inspected at original rendered resolution; body, section headings, page counter and margins readable."
+        },
+        {
+          "pageNumber": 2,
+          "renderPath": "C:\\Users\\wally\\OneDrive\\Desktop\\DUEDILLEGENCE PROGRAM\\Bar-Exam-simulator-debate-room-v3-20260909\\artifacts\\debate-local-rehearsal\\ci-34373407854\\export-visual-review\\event_report-2.png",
+          "renderSha256": "794ed80cdff1e0c21917c373bd1dcd0ea40b397b4f354479225a36d9b56f405e",
+          "renderBytes": 157167,
+          "visuallyInspected": true,
+          "clippedTextObserved": false,
+          "overlapObserved": false,
+          "unreadableGlyphsObserved": false,
+          "headersAndFootersReadable": true,
+          "inspection": "Complete page visually inspected at original rendered resolution; body, section headings, page counter and margins readable."
+        }
+      ],
+      "status": "PASS_VISUAL_SYNTHETIC_PDF",
+      "observations": [
+        "Both pages inspected; final result and version labels match the result export.",
+        "Standings, final fixture, individual speech awards and separate Audience Choice remain readable.",
+        "Tournament section explicitly says rehearsal does not qualify for real tournament awards and no eligible comparable tournament group is available."
+      ]
+    },
+    {
+      "kind": "csv",
+      "path": "artifacts/debate-local-rehearsal/ci-34373407854/debate-v3-synthetic-browser-evidence/browser-organizer-ci/downloads/csv-duediligence-debate-ci-full-browser-debate-2026-09-09t15-56-50-660z-csv-r2.csv",
+      "absolutePath": "C:\\Users\\wally\\OneDrive\\Desktop\\DUEDILLEGENCE PROGRAM\\Bar-Exam-simulator-debate-room-v3-20260909\\artifacts\\debate-local-rehearsal\\ci-34373407854\\debate-v3-synthetic-browser-evidence\\browser-organizer-ci\\downloads\\csv-duediligence-debate-ci-full-browser-debate-2026-09-09t15-56-50-660z-csv-r2.csv",
+      "sha256": "1d9e39d5eafd4cb0e9d9e114c0d923285bb0840508dd9af62b5a8451b80911a9",
+      "bytes": 2116,
+      "hashMatchesOriginalBrowserReceipt": true,
+      "resultVersion": "7e863883-c07c-4739-bbb4-c177cb56c9e6",
+      "inspectedPageNumbers": [],
+      "pages": [],
+      "status": "PASS_PARSED_SYNTHETIC_CSV",
+      "observations": [
+        "Parsed as UTF-8 CSV without spreadsheet execution; every row has two fields and the Record/Value header is intact.",
+        "Saved result UUID, rehearsal marker, official winner, audience separation and award names match the PDF content.",
+        "No cells in this downloaded fixture begin with spreadsheet formula-trigger characters; this is a check of this file, not all possible CSV inputs."
+      ],
+      "rowCount": 40,
+      "columnCount": 2,
+      "formulaRiskCells": [],
+      "openedInSpreadsheet": false
+    },
+    {
+      "kind": "certificate",
+      "path": "artifacts/debate-local-rehearsal/ci-34373407854/debate-v3-synthetic-browser-evidence/browser-organizer-ci/downloads/certificate-duediligence-debate-ci-full-browser-debate-2026-09-09t15-56-50-660z-certificate-r2.pdf",
+      "absolutePath": "C:\\Users\\wally\\OneDrive\\Desktop\\DUEDILLEGENCE PROGRAM\\Bar-Exam-simulator-debate-room-v3-20260909\\artifacts\\debate-local-rehearsal\\ci-34373407854\\debate-v3-synthetic-browser-evidence\\browser-organizer-ci\\downloads\\certificate-duediligence-debate-ci-full-browser-debate-2026-09-09t15-56-50-660z-certificate-r2.pdf",
+      "sha256": "59fc2890e37bcc0c3d18250d8202b36eb3240aca18ea9858529e076204743302",
+      "bytes": 11017,
+      "hashMatchesOriginalBrowserReceipt": true,
+      "resultVersion": "7e863883-c07c-4739-bbb4-c177cb56c9e6",
+      "inspectedPageNumbers": [
+        1
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "renderPath": "C:\\Users\\wally\\OneDrive\\Desktop\\DUEDILLEGENCE PROGRAM\\Bar-Exam-simulator-debate-room-v3-20260909\\artifacts\\debate-local-rehearsal\\ci-34373407854\\export-visual-review\\certificate-1.png",
+          "renderSha256": "f77e72751ff026267ef1f72c7e7f32419fb4b7bf65a82e028742ed5c232ddfcf",
+          "renderBytes": 100016,
+          "visuallyInspected": true,
+          "clippedTextObserved": false,
+          "overlapObserved": false,
+          "unreadableGlyphsObserved": false,
+          "headersAndFootersReadable": true,
+          "inspection": "Complete page visually inspected at original rendered resolution; body, section headings, page counter and margins readable."
+        }
+      ],
+      "status": "PASS_VISUAL_SYNTHETIC_PDF",
+      "observations": [
+        "Entire page inspected; recipient Affirmative2, Best Debater award, attendance basis, issuer, finalization time and Rules v1/Result v2 labels are readable.",
+        "Rehearsal disclaimer and footer remain visible."
+      ]
+    }
+  ],
+  "scope": {
+    "syntheticOnly": true,
+    "actualSavedCiExports": true,
+    "sourceFilesModified": false,
+    "replacementDocumentsProduced": false,
+    "additionalDownloadCalls": 0,
+    "hostedExportProved": false,
+    "physicalMediaProved": false,
+    "fullAcceptance": false,
+    "publicLaunch": false
+  },
+  "limitations": [
+    "Visual review is limited to these exact downloaded synthetic fixture files and the9 explicitly listed pages.",
+    "No hosted export generation or authorization, physical media, actual elapsed rehearsal duration, real competition eligibility, PDF accessibility audit or every possible language/device is proved.",
+    "The CSV was safely parsed as text; it was not opened in Excel or another spreadsheet application.",
+    "The simulated fixture times are intentionally accelerated; displayed finalization timestamps do not establish elapsed wall-clock duration."
+  ],
+  "sourceHashRecheckedAfterRendering": true
+}

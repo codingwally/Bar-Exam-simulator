@@ -127,6 +127,76 @@ const BOOTSTRAP_PATHS = new Set(['/debate-room/events', '/debate-room/discover']
 const BOOTSTRAP_ERROR_CODES = new Set(['ORIGIN_NOT_ALLOWED', 'STUDY_ROOM_ACCOUNT_UNAVAILABLE',
   'DEBATE_PREVIEW_RESTRICTED', 'ADMIN_FORBIDDEN', 'ADMIN_DATA_UNAVAILABLE', 'SIGN_IN_REQUIRED',
   'AUTH_REQUIRED', 'INVALID_TOKEN', 'DEBATE_UNAVAILABLE']);
+// Fixed codes from the upload path in debate-integration, debate-delivery and
+// debate-service. Unknown errors remain OTHER_ERROR, never arbitrary server text.
+const UPLOAD_ERROR_CODES = new Set([...BOOTSTRAP_ERROR_CODES, 'METHOD_NOT_ALLOWED', 'FORBIDDEN',
+  'EVENT_NOT_FOUND', 'MATCH_NOT_FOUND', 'NOT_MEMBER', 'UNSAFE_FILE', 'UPLOAD_LIMIT', 'UPLOAD_INVALID',
+  'UPLOAD_CHANGED', 'UPLOAD_UNAVAILABLE', 'FILE_REQUIRED', 'FILE_TOO_LARGE', 'STORAGE_UNCONFIGURED',
+  'PRIVATE_STORAGE_UNCONFIRMED', 'INVALID_FILE_KEY', 'STORAGE_WRITE_UNCONFIRMED', 'DOWNLOAD_UNAVAILABLE']);
+const UPLOAD_PATH = '/debate-room/evidence/upload';
+const UPLOAD_MIME_TYPES = ['application/pdf', 'image/png', 'image/jpeg'];
+const classifiedMime = (value, allowed) => {
+  const type = typeof value === 'string' ? value.split(';', 1)[0].trim().toLowerCase() : '';
+  return !type ? 'ABSENT' : allowed.includes(type) ? type : 'OTHER';
+};
+
+export function summarizeHostedEvidenceUpload({ status, contentType, body, expected }) {
+  assert.ok(Number.isInteger(status) && status >= 100 && status <= 599);
+  assert.ok(UPLOAD_MIME_TYPES.includes(expected?.mimeType) && Number.isSafeInteger(expected?.size) &&
+    expected.size > 0 && expected.size <= 10485760 && /^[a-f0-9]{64}$/.test(expected.sha256 || ''));
+  const attachment = body?.attachment, size = attachment?.size;
+  return { path: UPLOAD_PATH, status, contentType: classifiedMime(contentType, ['application/json', 'text/html']),
+    ok: typeof body?.ok === 'boolean' ? body.ok : null,
+    errorCode: body?.error?.code == null ? null : UPLOAD_ERROR_CODES.has(body.error.code) ? body.error.code : 'OTHER_ERROR',
+    attachmentMimeType: classifiedMime(attachment?.mimeType, UPLOAD_MIME_TYPES),
+    attachmentSize: Number.isSafeInteger(size) && size > 0 && size <= 10485760 ? size : null,
+    uploadReceiptPresent: typeof attachment?.uploadId === 'string' && attachment.uploadId.length > 0,
+    expected: { mimeType: expected.mimeType, size: expected.size, sha256: expected.sha256 } };
+}
+
+// Both listeners are armed before the real form click. A failed upload cannot
+// leave a 30-second command waiter alive; a command alone cannot bypass upload.
+export async function submitHostedEvidenceWithUpload({ page, origin, eventId, matchId, expected, click, record }) {
+  let resolve, reject, commandResponse, uploadVerified = false, active = true;
+  const completed = new Promise((yes, no) => { resolve = yes; reject = no; });
+  const fail = code => { if (active) reject(Object.assign(new Error(code), { code })); };
+  const isUpload = request => {
+    const url = new URL(request.url());
+    return url.origin === origin && url.pathname === UPLOAD_PATH && request.method() === 'POST' &&
+      url.searchParams.get('eventId') === eventId && url.searchParams.get('matchId') === matchId;
+  };
+  const finish = () => { if (active && uploadVerified && commandResponse) resolve(commandResponse); };
+  const response = received => {
+    const request = received.request(), url = new URL(received.url());
+    if (isUpload(request)) {
+      (async () => {
+        const body = await received.json().catch(() => null);
+        if (!active) return;
+        const summary = summarizeHostedEvidenceUpload({ status: received.status(),
+          contentType: received.headers()['content-type'], body, expected });
+        record(summary);
+        if (summary.status !== 200 || summary.ok !== true) { fail('HOSTED_EVIDENCE_UPLOAD_FAILED'); return; }
+        if (summary.contentType !== 'application/json' || summary.errorCode !== null || !summary.uploadReceiptPresent ||
+          summary.attachmentMimeType !== expected.mimeType || summary.attachmentSize !== expected.size) {
+          fail('HOSTED_EVIDENCE_UPLOAD_INVALID_RESPONSE'); return;
+        }
+        uploadVerified = true; finish();
+      })().catch(() => fail('HOSTED_EVIDENCE_UPLOAD_OBSERVATION_FAILED'));
+    } else if (url.origin === origin && url.pathname === '/debate-room/command' && request.method() === 'POST') {
+      let input; try { input = request.postDataJSON(); } catch { return; }
+      if (input?.command === 'share_evidence' && input.eventId === eventId && input.payload?.matchId === matchId) {
+        commandResponse = received; finish();
+      }
+    }
+  };
+  const requestFailed = request => { if (isUpload(request)) {
+    record({ path: UPLOAD_PATH, status: null, outcome: 'TRANSPORT_FAILED' }); fail('HOSTED_EVIDENCE_UPLOAD_TRANSPORT_FAILED');
+  } };
+  page.on('response', response); page.on('requestfailed', requestFailed);
+  const timeout = setTimeout(() => fail(uploadVerified ? 'HOSTED_EVIDENCE_COMMAND_UNCONFIRMED' : 'HOSTED_EVIDENCE_UPLOAD_UNCONFIRMED'), 30000);
+  try { const [received] = await Promise.all([completed, click()]); return received; }
+  finally { active = false; clearTimeout(timeout); page.off('response', response); page.off('requestfailed', requestFailed); }
+}
 
 // Only classifications cross the artifact boundary. Never retain raw headers,
 // response bodies, full navigation URLs or invitation fragments.
@@ -182,7 +252,7 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
     defaultFlowDurationMs: 4680000, correctionWindowMs: 900000, credentialsStored: false, rawDomStored: false, tracesStored: false,
     testSha256: sha(await readFile(fileURLToPath(import.meta.url))), checks: [], actions: [], stages: [], downloads: [], screenshots: [],
     unexpectedNetwork: [], pageErrors: [], consoleErrors: [], expectedRejections: [], commandRejections: [],
-    clockClaims: [], bootstrap: [], navigation: [], sessionRefreshes: 0,
+    clockClaims: [], bootstrap: [], navigation: [], evidenceUploads: [], sessionRefreshes: 0,
     claims: { actualBrowserDom: true, actualHostedSql: true, syntheticIdentity: true, actualHostedAuth: true,
       mainWorkerBootstrap: true, studyRoomUi: false, physicalMedia: false, providerMedia: false,
       realEmail: false, nativePostgresConcurrency: false, controlEndurance90Minutes: false, hostedDeployment: true, googleOAuth: false },
@@ -225,12 +295,45 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
   };
   const checkLiveMediaLayout = async width => {
     await host.setViewportSize({ width, height: 900 });
+    await host.locator('.site-header').scrollIntoViewIfNeeded();
     const selectors = ['.media-dock', '#arena', '.judges-rail', '#affirmative-name', '#negative-name'];
     const boxes = await Promise.all(selectors.map(selector => host.locator(selector).boundingBox()));
     check(`Live room layout exposes the media controls, arena and headings at ${width}px`, boxes.every(box => box && box.width > 0 && box.height > 0));
     const [dock, arena, ...headings] = boxes;
     check(`Media controls stay above the arena without covering team or adjudicator headings at ${width}px`, dock.y + dock.height <= arena.y + 1
       && headings.every(box => dock.y + dock.height <= box.y + 1), { width, geometry: Object.fromEntries(selectors.map((selector, index) => [selector, boxes[index]])) });
+    const ids = ['join-media', 'mic', 'camera', 'share', 'devices', 'audio', 'leave-media'];
+    const controls = await Promise.all(ids.map(async id => ({ id, box: await host.locator(`.media-dock #${id}`).boundingBox(),
+      disabled: await host.locator(`.media-dock #${id}`).isDisabled() })));
+    const contained = (inner, outer) => inner && outer && inner.x >= outer.x - 1 && inner.y >= outer.y - 1
+      && inner.x + inner.width <= outer.x + outer.width + 1 && inner.y + inner.height <= outer.y + outer.height + 1;
+    const disjoint = (a, b) => a && b && (a.x + a.width <= b.x + 1 || b.x + b.width <= a.x + 1
+      || a.y + a.height <= b.y + 1 || b.y + b.height <= a.y + 1);
+    check(`All seven media controls fit inside the dock without horizontal viewport overflow at ${width}px`, await host.locator('.media-dock button').count() === ids.length
+      && controls.every(({ box }) => contained(box, dock) && box.x >= 0 && box.x + box.width <= width + 1
+        && box.width >= 44 && box.height >= 44), { width, controls });
+    check(`Media controls have separate hit areas at ${width}px`, controls.every(({ box }, index) => controls.slice(index + 1).every(other => disjoint(box, other.box))));
+    // Trial checks only: scroll and test visibility/stability/hit targeting,
+    // including disabled controls, without entering media or dispatching clicks.
+    for (const id of ids) await host.locator(`.media-dock #${id}`).hover({ trial: true });
+    check(`Every media control passes browser hit-target checks at ${width}px`, true, { width, controlIds: ids, action: 'hover trial only' });
+    await host.locator('.site-header').scrollIntoViewIfNeeded();
+    if (width === 320) {
+      const tiles = [];
+      for (const selector of ['.judge-tiles .tile', '.observer-tiles .tile']) {
+        const count = await host.locator(selector).count(); assert.ok(count > 0, selector + ' must contain an actual participant tile');
+        for (let index = 0; index < count; index++) {
+          const tile = host.locator(selector).nth(index);
+          const [box, pin, initials, caption] = await Promise.all([tile.boundingBox(), tile.locator('.tile-pin').boundingBox(),
+            tile.locator('.initials').boundingBox(), tile.locator('.caption').boundingBox()]);
+          assert.ok(contained(pin, box) && contained(initials, box) && contained(caption, box)
+            && pin.width >= 44 && pin.height >= 44 && initials.height >= 48 && caption.height > 0
+            && disjoint(pin, initials) && disjoint(pin, caption) && disjoint(initials, caption), selector + ' keeps Pin, initials and caption separate');
+          tiles.push({ selector, index, box, pin, initials, caption });
+        }
+      }
+      check('Narrow adjudicator and observer tiles reserve separate Pin, initials and caption areas', true, { width, tiles });
+    }
     await screenshot(host, `live-media-controls-${width}px`);
   };
   const observe = page => {
@@ -299,15 +402,23 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
     await notSaving(page);
   };
   const tab = async (page, panel) => { await page.locator(`#event-tabs [data-panel="${panel}"]`).click(); await page.locator(`#panel-${panel}`).waitFor({ state: 'visible' }); };
-  const command = async (page, name, click, { reject } = {}) => {
+  const command = async (page, name, click, { reject, upload } = {}) => {
     await notSaving(page);
     if (name === 'claim_clock') manualClaimIntents.set(page, ++manualClaimSequence);
-    const waiting = page.waitForResponse(response => {
-      if (new URL(response.url()).pathname !== '/debate-room/command') return false;
-      try { return response.request().postDataJSON()?.command === name; } catch { return false; }
-    });
     let response;
-    try { [response] = await Promise.all([waiting, click()]); } finally { if (name === 'claim_clock') manualClaimIntents.delete(page); }
+    try {
+      if (upload) {
+        assert.equal(name, 'share_evidence'); assert.equal(reject, undefined);
+        response = await submitHostedEvidenceWithUpload({ page, origin, eventId, matchId, click, expected: upload,
+          record: summary => report.evidenceUploads.push({ actorId: actorIds.get(page), at: Date.now(), ...summary }) });
+      } else {
+        const waiting = page.waitForResponse(response => {
+          if (new URL(response.url()).pathname !== '/debate-room/command') return false;
+          try { return response.request().postDataJSON()?.command === name; } catch { return false; }
+        });
+        [response] = await Promise.all([waiting, click()]);
+      }
+    } finally { if (name === 'claim_clock') manualClaimIntents.delete(page); }
     const body = await response.json(), observation = observedRequests.get(response.request());
     if (reject) {
       assert.equal(body.error?.code, reject); report.expectedRejections.push({ ...observation, command: name, code: reject, status: response.status(), at: Date.now(), url: response.url() });
@@ -507,7 +618,8 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
     const evidencePdf = await PDFDocument.create(); evidencePdf.addPage([300, 200]).drawText('Synthetic hosted Debate evidence.');
     const evidenceBytes = Buffer.from(await evidencePdf.save());
     await guest.locator('#evidence-form [name="file"]').setInputFiles({ name: 'hosted-control-evidence.pdf', mimeType: 'application/pdf', buffer: evidenceBytes });
-    await command(guest, 'share_evidence', () => guest.locator('#evidence-form button[type="submit"]').click());
+    await command(guest, 'share_evidence', () => guest.locator('#evidence-form button[type="submit"]').click(),
+      { upload: { mimeType: 'application/pdf', size: evidenceBytes.length, sha256: sha(evidenceBytes) } });
     await fresh(host); await tab(host, 'live'); await textIncludes(host, '#evidence-list', 'Synthetic community reference');
     const storedEvidence = matchFor(host).evidence.find(item => item.title === 'Synthetic community reference');
     check('Actual hosted upload retains a verified PDF digest', storedEvidence?.attachment?.digest === sha(evidenceBytes) && storedEvidence.attachment.size === evidenceBytes.length);

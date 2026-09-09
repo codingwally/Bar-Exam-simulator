@@ -1,0 +1,3151 @@
+{
+  "schemaVersion": 1,
+  "kind": "BOUNDED_FAILED_HOSTED_RUN_REQUIREMENT_EVIDENCE_MAPPING",
+  "recordedAt": "2026-09-09T16:48:24.191Z",
+  "source": {
+    "runId": "34376105917",
+    "sourceSha": "c7b3149f3f690f9ded2b4b44e80336f04b47cfda",
+    "sourceTree": "a8c7a0217a64208e3082ed6bb0eeef9297a963b2",
+    "browserReportPath": "artifacts/debate-local-rehearsal/staging-34376105917/debate-v3-staging-release-c7b3149f3f690f9ded2b4b44e80336f04b47cfda/staging-release/hosted-c7b3149f3f69-50cfe73f-4dea-4dcd-9815-c0b468102c7f/browser/report.json",
+    "browserReportSha256": "df030a04f0cc34cf3693eabf815e505ede7994ab9bc83c45da2259125fedb13b",
+    "browserScriptSha256": "9144a1494dc6f1e1d65d559360e41f9ea36c3b8a71a141901727b2b549ffb280",
+    "completeFailedCompositePath": "artifacts/debate-local-rehearsal/staging-34376105917/failed-attempt-evidence.json",
+    "completeFailedCompositeSha256": "61d0ac8951e2bdf384836e47ac778ee7b88b8e907e74a5357c9caa91c1cab361",
+    "method": "Map exact persisted PASS names/committed revisions, then read the exact c7 browser script to bound what each assertion actually checks. No run/download/replay was repeated."
+  },
+  "deployment": {
+    "deploymentId": "4f8b840b-13dc-4d73-94dc-f9f19e82346e",
+    "versionId": "d10a5718-7dcd-4a0e-a356-be8c31634381",
+    "fingerprint": "fb7e42a4be59d5b9bd1a31dd4c716b0ca9e68c77784cfe2c3e0e7dfb46017307",
+    "driverStartedAt": "2026-09-09T16:22:29.066Z",
+    "driverCompletedAt": "2026-09-09T16:31:19.756Z"
+  },
+  "coverage": {
+    "passingChecks": 47,
+    "mappedPassingChecks": 47,
+    "committedCommands": 66,
+    "mappedCommittedCommands": 66,
+    "distinctCommandNames": 15,
+    "requirementRows": 57,
+    "bootstrapResponses": 46,
+    "bootstrapStatusCounts": {
+      "200": 46
+    },
+    "originalRowStatesChanged": 0,
+    "acceptanceConclusionsChanged": 0
+  },
+  "groups": [
+    {
+      "id": "event_create_reload",
+      "ids": [
+        "V3-08-001",
+        "V3-22-001",
+        "V3-22-002",
+        "V3-22-004",
+        "V3-22-007"
+      ],
+      "checks": [
+        1
+      ],
+      "revisions": [
+        1
+      ],
+      "observation": "The host created an explicitly marked unlisted rehearsal event through the actual DOM/Worker path. The same event title and ID survived an actual browser reload and fresh snapshot.",
+      "limits": [
+        "One rehearsal event only; other setup branches, account cohorts, sign-in return, other entry routes and mobile devices were not established.",
+        "Committed revisions and reload support persistence for this operation; they do not prove every transactional/race/recovery clause."
+      ],
+      "sourceLines": [
+        439,
+        448
+      ]
+    },
+    {
+      "id": "invitation_links",
+      "ids": [
+        "V3-07-005",
+        "V3-08-003",
+        "V3-13-002"
+      ],
+      "checks": [
+        2,
+        6,
+        10,
+        14,
+        18,
+        22,
+        26,
+        30,
+        34
+      ],
+      "revisions": [
+        3,
+        4,
+        7,
+        8,
+        11,
+        12,
+        15,
+        16,
+        19,
+        20,
+        23,
+        24,
+        27,
+        28,
+        31,
+        32,
+        35,
+        36
+      ],
+      "observation": "Nine signed-in fixtures used host-created invitation links: six debater invitations, two judge invitations and one observer invitation. The link assertion checked the same origin and correct event; all nine claims were acknowledged.",
+      "limits": [
+        "The check name mentions a secret link, but its explicit assertion checks origin and event linkage. Actual successful claiming confirms usable invitations, not entropy, expiry, revocation, guessing resistance or every privilege restriction.",
+        "No invitation email was sent and inbox delivery remains open."
+      ],
+      "sourceLines": [
+        451,
+        462
+      ]
+    },
+    {
+      "id": "waiting_snapshot",
+      "ids": [
+        "V3-07-005",
+        "V3-08-003",
+        "V3-13-001",
+        "V3-13-009",
+        "V3-22-007",
+        "V3-22-009"
+      ],
+      "checks": [
+        3,
+        4,
+        7,
+        8,
+        11,
+        12,
+        15,
+        16,
+        19,
+        20,
+        23,
+        24,
+        27,
+        28,
+        31,
+        32,
+        35,
+        36
+      ],
+      "revisions": [
+        2,
+        5,
+        9,
+        13,
+        17,
+        21,
+        25,
+        29,
+        33,
+        37
+      ],
+      "observation": "Before host admission, each of the nine invited identities received an awaiting-admission snapshot containing one member and no matches or motions. Eight other workspace tabs remained disabled.",
+      "limits": [
+        "The disabled tabs are DOM evidence; the separate restricted snapshot is the bounded backend evidence. Neither proves every direct endpoint, provider subscription, cross-event query or role forgery is denied.",
+        "Debate waiting-state evidence does not prove Study Room admission or Library policy.",
+        "The explicit assertion counts one member but does not independently compare that member ID; the test name alone does not strengthen that assertion."
+      ],
+      "sourceLines": [
+        463,
+        467
+      ]
+    },
+    {
+      "id": "host_admission",
+      "ids": [
+        "V3-07-005",
+        "V3-08-003",
+        "V3-13-002"
+      ],
+      "checks": [
+        5,
+        9,
+        13,
+        17,
+        21,
+        25,
+        29,
+        33,
+        37
+      ],
+      "revisions": [
+        6,
+        10,
+        14,
+        18,
+        22,
+        26,
+        30,
+        34,
+        38
+      ],
+      "observation": "The host admitted each of the nine invited fixtures. After an actual refresh, awaiting-admission cleared and the People workspace became available.",
+      "limits": [
+        "Positive admissions only; removal/re-entry, reassignment, stale sessions and media grants were not exercised."
+      ],
+      "sourceLines": [
+        468,
+        470
+      ]
+    },
+    {
+      "id": "confirmed_rosters",
+      "ids": [
+        "V3-06-003",
+        "V3-07-006",
+        "V3-08-004"
+      ],
+      "checks": [],
+      "revisions": [
+        39,
+        40
+      ],
+      "observation": "The host confirmed two named teams with three distinct assigned speakers each and selected the first assigned speaker as captain. Both confirm_roster commands returned committed revisions.",
+      "limits": [
+        "No captain-proposed roster, fourth-speaker refusal, optional affiliation/reserve, substitution, conflict declaration or overlapping-match denial was exercised."
+      ],
+      "sourceLines": [
+        473,
+        476
+      ]
+    },
+    {
+      "id": "five_motions",
+      "ids": [
+        "V3-07-009",
+        "V3-07-025",
+        "V3-20-001"
+      ],
+      "checks": [],
+      "revisions": [
+        41,
+        42,
+        43,
+        44,
+        45
+      ],
+      "observation": "Five organizer-supplied private motion records were added through the DOM and acknowledged as five distinct committed commands.",
+      "limits": [
+        "This is motion-bank creation, not five completed matches, inter-match isolation, sequential continuation or measured concurrency."
+      ],
+      "sourceLines": [
+        478,
+        481
+      ]
+    },
+    {
+      "id": "reviewed_fixture",
+      "ids": [
+        "V3-20-002",
+        "V3-20-003"
+      ],
+      "checks": [
+        38
+      ],
+      "revisions": [
+        46,
+        47
+      ],
+      "observation": "The host generated the two-team round-robin fixture, reached the draft-review display and explicitly published it. The subsequent match dialog fixed both teams and its motion to the published fixture.",
+      "limits": [
+        "One two-team fixture only; five-team/10-match scheduling, byes, elimination, reuse policy, side balance and conflict handling were not verified.",
+        "The draft-review screenshot was captured but not visually reviewed by this mapping task."
+      ],
+      "sourceLines": [
+        483,
+        487
+      ]
+    },
+    {
+      "id": "match_readiness",
+      "ids": [
+        "V3-07-007",
+        "V3-07-008",
+        "V3-08-002",
+        "V3-08-006",
+        "V3-08-007",
+        "V3-25-004"
+      ],
+      "checks": [
+        39
+      ],
+      "revisions": [
+        48,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62,
+        49,
+        51,
+        52,
+        53,
+        55,
+        56
+      ],
+      "observation": "A fixture match assigned the neutral host as its single judge. Six speakers checked in; six explicit organizer accommodations stated that physical audio was not verified. After acknowledgements and motion release, readiness was persisted and rendered as ready. An earlier start_match attempt was rejected with 409 MATCH_NOT_READY.",
+      "limits": [
+        "These are approved control-rehearsal accommodations, not microphone/device PASS results.",
+        "The match was not adjudicated, and conflicting roles, separate moderator/timekeeper, camera refusal, reserves and other readiness exceptions remain open."
+      ],
+      "sourceLines": [
+        416,
+        430,
+        488,
+        490
+      ]
+    },
+    {
+      "id": "rule_acknowledgement_and_release",
+      "ids": [
+        "V3-07-001",
+        "V3-07-009",
+        "V3-08-005",
+        "V3-08-006"
+      ],
+      "checks": [
+        39
+      ],
+      "revisions": [
+        50,
+        54,
+        63
+      ],
+      "observation": "Both assigned captains used the Rules acknowledgement action, and the host released the selected motion before the successful start_match command.",
+      "limits": [
+        "No side draw/reroll, acknowledgement invalidation, changed rules, modified scoring or simultaneous physical release was tested."
+      ],
+      "sourceLines": [
+        418,
+        428
+      ]
+    },
+    {
+      "id": "saved_default_run_of_show",
+      "ids": [
+        "V3-06-002",
+        "V3-07-010",
+        "V3-07-011",
+        "V3-07-012",
+        "V3-07-027",
+        "V3-09-001",
+        "V3-09-002",
+        "V3-09-003",
+        "V3-09-004",
+        "V3-09-005",
+        "V3-09-006",
+        "V3-09-007",
+        "V3-09-008",
+        "V3-09-009",
+        "V3-09-010",
+        "V3-09-011",
+        "V3-09-012",
+        "V3-09-013",
+        "V3-09-014",
+        "V3-09-015",
+        "V3-09-016"
+      ],
+      "checks": [
+        40
+      ],
+      "revisions": [
+        64
+      ],
+      "observation": "The actual hosted match snapshot matched the independent default schedule oracle: all 14 speaking stages, six specified question/answer seat pairs, 15-minute preparation, 5-minute closing break, 5/3/5 durations and final deliberation configuration.",
+      "limits": [
+        "Configuration only. No timed stage completed, no pair audio was exercised and no real default-flow duration or overtime behavior was established."
+      ],
+      "sourceLines": [
+        492,
+        494
+      ]
+    },
+    {
+      "id": "live_control_geometry",
+      "ids": [
+        "V3-11-001",
+        "V3-11-007",
+        "V3-11-009"
+      ],
+      "checks": [
+        41,
+        42,
+        43,
+        44
+      ],
+      "revisions": [],
+      "observation": "At 1365 and 320 CSS-pixel viewports, the actual hosted DOM exposed media controls, arena, adjudicator rail and team headings with positive geometry. The dock remained above the arena and did not cover the measured headings.",
+      "limits": [
+        "Browser viewport resizing, not a physical mobile device. No complete target-size, overflow, keyboard, focus, contrast, screen-reader or all-control behavior audit.",
+        "Five screenshots exist, but this mapping task did not visually inspect them."
+      ],
+      "sourceLines": [
+        225,
+        234,
+        495
+      ]
+    },
+    {
+      "id": "preparation_ready",
+      "ids": [
+        "V3-07-010",
+        "V3-07-014",
+        "V3-09-018",
+        "V3-12-002"
+      ],
+      "checks": [
+        45
+      ],
+      "revisions": [
+        64
+      ],
+      "observation": "The first successful start_match loaded the preparation timer as READY with 900000 ms; no clock claim or timer-start command was recorded.",
+      "limits": [
+        "Only initial preparation state. No controller lease, clock agreement, actual stage start, pause/resume, overtime, finish or next-stage behavior was verified."
+      ],
+      "sourceLines": [
+        495,
+        496
+      ]
+    },
+    {
+      "id": "private_team_messages",
+      "ids": [
+        "V3-10-003",
+        "V3-13-007",
+        "V3-15-001",
+        "V3-22-007",
+        "V3-22-009"
+      ],
+      "checks": [
+        46,
+        47
+      ],
+      "revisions": [
+        65,
+        66
+      ],
+      "observation": "The affirmative captain sent the synthetic private-team marker and saw it in its own message DOM. The negative captain then opened its team channel: the marker was absent from its DOM and every captured authorized response after the privacy cutoff, with at least one such response observed. The negative captain subsequently committed its own team message.",
+      "limits": [
+        "Written-message separation for two real signed-in actors in preparation only. No judge deliberation, physical private audio, subscription metadata, stale-cache replay, account switch or return from private media space was tested.",
+        "No attachment was successfully shared: the following evidence upload returned 503."
+      ],
+      "sourceLines": [
+        382,
+        388,
+        497,
+        503
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "requirementId": "V3-06-002",
+      "originalRequirement": "Research supports event-specific variations: a seminary reports three-person teams and 5/3/5 timing; Mañebog supplies an alternating run-of-show with the affirmative closing last; DENR/DepEd mechanics use different times and judging weights. Ship a named **Due Diligence Modified Oxford–Oregon — 5/3/5** preset, not a purported national mandatory rulebook. [R1–R3]",
+      "existingState": "PARTIAL",
+      "proposedState": "PARTIAL",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Accepted rules acknowledge/release and rules browser download passed; complete help/custom-rule/exception UI review and hosted flow remain OPEN. Synthetic confirmed six-seat/captain/readiness flow passed. Roster exceptions, captain-proposal and side-draw/reroll browser branches remain OPEN.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "saved_default_run_of_show"
+      ],
+      "passingCheckIndices": [
+        40
+      ],
+      "committedRevisions": [
+        64
+      ],
+      "proposedObservation": "The actual hosted match snapshot matched the independent default schedule oracle: all 14 speaking stages, six specified question/answer seat pairs, 15-minute preparation, 5-minute closing break, 5/3/5 durations and final deliberation configuration.",
+      "requiredLimits": [
+        "Configuration only. No timed stage completed, no pair audio was exercised and no real default-flow duration or overtime behavior was established."
+      ],
+      "staleBlockerFragments": [
+        {
+          "phrase": "Synthetic confirmed six-seat/captain/readiness flow passed.",
+          "supersededScope": "Add actual host-confirmed six-seat/captain setup and accommodated readiness. Physical microphone checks and exceptional roster branches remain open."
+        }
+      ]
+    },
+    {
+      "requirementId": "V3-06-003",
+      "originalRequirement": "Exactly three active speakers per team. A captain is one of those three. Closing rebuttal defaults to the captain, but may be assigned to either other active speaker before rules lock; it never requires a fourth speaker. Optional coaches, scribes, and reserves are not additional speaking seats.",
+      "existingState": "LOCAL_VERIFIED",
+      "proposedState": "LOCAL_VERIFIED",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Synthetic confirmed six-seat/captain/readiness flow passed. Roster exceptions, captain-proposal and side-draw/reroll browser branches remain OPEN. Latest UI substitution and physical continuation OPEN. Physical microphone checks and other roster/moderator exception UI branches remain unverified.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "confirmed_rosters"
+      ],
+      "passingCheckIndices": [],
+      "committedRevisions": [
+        39,
+        40
+      ],
+      "proposedObservation": "The host confirmed two named teams with three distinct assigned speakers each and selected the first assigned speaker as captain. Both confirm_roster commands returned committed revisions.",
+      "requiredLimits": [
+        "No captain-proposed roster, fourth-speaker refusal, optional affiliation/reserve, substitution, conflict declaration or overlapping-match denial was exercised."
+      ],
+      "staleBlockerFragments": [
+        {
+          "phrase": "Synthetic confirmed six-seat/captain/readiness flow passed.",
+          "supersededScope": "Add actual host-confirmed six-seat/captain setup and accommodated readiness. Physical microphone checks and exceptional roster branches remain open."
+        }
+      ]
+    },
+    {
+      "requirementId": "V3-07-001",
+      "originalRequirement": "Apply these defaults without another product-design questionnaire. Label organizer-editable choices as such, then freeze the accepted rule version at start.",
+      "existingState": "LOCAL_VERIFIED",
+      "proposedState": "LOCAL_VERIFIED",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Accepted rules acknowledge/release and rules browser download passed; complete help/custom-rule/exception UI review and hosted flow remain OPEN.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "rule_acknowledgement_and_release"
+      ],
+      "passingCheckIndices": [
+        39
+      ],
+      "committedRevisions": [
+        50,
+        54,
+        63
+      ],
+      "proposedObservation": "Both assigned captains used the Rules acknowledgement action, and the host released the selected motion before the successful start_match command.",
+      "requiredLimits": [
+        "No side draw/reroll, acknowledgement invalidation, changed rules, modified scoring or simultaneous physical release was tested."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-07-005",
+      "originalRequirement": "| Event visibility | Unlisted, signed-in, invitation/code entry; host admits unassigned observers. |",
+      "existingState": "PARTIAL",
+      "proposedState": "PARTIAL",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Hosted verified identity claims and actual approved-recipient delivery OPEN. Actual free/paid/expired/payment-pending/trial-exhausted hosted cohorts and live subscription expiry OPEN.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "invitation_links",
+        "waiting_snapshot",
+        "host_admission"
+      ],
+      "passingCheckIndices": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37
+      ],
+      "committedRevisions": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38
+      ],
+      "proposedObservation": "Nine signed-in fixtures used host-created invitation links: six debater invitations, two judge invitations and one observer invitation. The link assertion checked the same origin and correct event; all nine claims were acknowledged. Before host admission, each of the nine invited identities received an awaiting-admission snapshot containing one member and no matches or motions. Eight other workspace tabs remained disabled. The host admitted each of the nine invited fixtures. After an actual refresh, awaiting-admission cleared and the People workspace became available.",
+      "requiredLimits": [
+        "The check name mentions a secret link, but its explicit assertion checks origin and event linkage. Actual successful claiming confirms usable invitations, not entropy, expiry, revocation, guessing resistance or every privilege restriction.",
+        "No invitation email was sent and inbox delivery remains open.",
+        "The disabled tabs are DOM evidence; the separate restricted snapshot is the bounded backend evidence. Neither proves every direct endpoint, provider subscription, cross-event query or role forgery is denied.",
+        "Debate waiting-state evidence does not prove Study Room admission or Library policy.",
+        "The explicit assertion counts one member but does not independently compare that member ID; the test name alone does not strengthen that assertion.",
+        "Positive admissions only; removal/re-entry, reassignment, stale sessions and media grants were not exercised."
+      ],
+      "staleBlockerFragments": [
+        {
+          "phrase": "Hosted verified identity claims",
+          "supersededScope": "Nine positive invitation claims and host approvals passed; expiry, revocation, guessing, forged claims and delivery remain open."
+        }
+      ]
+    },
+    {
+      "requirementId": "V3-07-006",
+      "originalRequirement": "| Teams | Two teams, three active speakers each; team names and optional school affiliation. |",
+      "existingState": "LOCAL_VERIFIED",
+      "proposedState": "LOCAL_VERIFIED",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Synthetic confirmed six-seat/captain/readiness flow passed. Roster exceptions, captain-proposal and side-draw/reroll browser branches remain OPEN. Physical microphone checks and other roster/moderator exception UI branches remain unverified.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "confirmed_rosters"
+      ],
+      "passingCheckIndices": [],
+      "committedRevisions": [
+        39,
+        40
+      ],
+      "proposedObservation": "The host confirmed two named teams with three distinct assigned speakers each and selected the first assigned speaker as captain. Both confirm_roster commands returned committed revisions.",
+      "requiredLimits": [
+        "No captain-proposed roster, fourth-speaker refusal, optional affiliation/reserve, substitution, conflict declaration or overlapping-match denial was exercised."
+      ],
+      "staleBlockerFragments": [
+        {
+          "phrase": "Synthetic confirmed six-seat/captain/readiness flow passed.",
+          "supersededScope": "Add actual host-confirmed six-seat/captain setup and accommodated readiness. Physical microphone checks and exceptional roster branches remain open."
+        }
+      ]
+    },
+    {
+      "requirementId": "V3-07-007",
+      "originalRequirement": "| Judges | One required for Quick Match; offer a three-judge panel for formal events. Odd panels recommended. |",
+      "existingState": "PARTIAL",
+      "proposedState": "PARTIAL",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Synthetic confirmed six-seat/captain/readiness flow passed. Roster exceptions, captain-proposal and side-draw/reroll browser branches remain OPEN. Synthetic one-judge full-scorecard draft/reload/submission/correction passed. Three-judge full browser adjudication, exceptional ballot UI branches and hosted identity/privacy/native concurrency remain OPEN. Physical microphone checks and other roster/moderator exception UI branches remain unverified.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "match_readiness"
+      ],
+      "passingCheckIndices": [
+        39
+      ],
+      "committedRevisions": [
+        48,
+        49,
+        51,
+        52,
+        53,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62
+      ],
+      "proposedObservation": "A fixture match assigned the neutral host as its single judge. Six speakers checked in; six explicit organizer accommodations stated that physical audio was not verified. After acknowledgements and motion release, readiness was persisted and rendered as ready. An earlier start_match attempt was rejected with 409 MATCH_NOT_READY.",
+      "requiredLimits": [
+        "These are approved control-rehearsal accommodations, not microphone/device PASS results.",
+        "The match was not adjudicated, and conflicting roles, separate moderator/timekeeper, camera refusal, reserves and other readiness exceptions remain open."
+      ],
+      "staleBlockerFragments": [
+        {
+          "phrase": "Synthetic confirmed six-seat/captain/readiness flow passed.",
+          "supersededScope": "Add actual host-confirmed six-seat/captain setup and accommodated readiness. Physical microphone checks and exceptional roster branches remain open."
+        }
+      ]
+    },
+    {
+      "requirementId": "V3-07-008",
+      "originalRequirement": "| Other officials | Host may also be moderator/timekeeper; an eligible judge may hold those roles. Do not require extra humans unnecessarily. |",
+      "existingState": "PARTIAL",
+      "proposedState": "PARTIAL",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Hosted authorization and provider stale-token revocation OPEN. Physical microphone checks and other roster/moderator exception UI branches remain unverified.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "match_readiness"
+      ],
+      "passingCheckIndices": [
+        39
+      ],
+      "committedRevisions": [
+        48,
+        49,
+        51,
+        52,
+        53,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62
+      ],
+      "proposedObservation": "A fixture match assigned the neutral host as its single judge. Six speakers checked in; six explicit organizer accommodations stated that physical audio was not verified. After acknowledgements and motion release, readiness was persisted and rendered as ready. An earlier start_match attempt was rejected with 409 MATCH_NOT_READY.",
+      "requiredLimits": [
+        "These are approved control-rehearsal accommodations, not microphone/device PASS results.",
+        "The match was not adjudicated, and conflicting roles, separate moderator/timekeeper, camera refusal, reserves and other readiness exceptions remain open."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-07-009",
+      "originalRequirement": "| Motion | Organizer-supplied; private until host release by default. No unrequested AI generation. |",
+      "existingState": "PARTIAL",
+      "proposedState": "PARTIAL",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Synthetic event create/reload, fixtures, readiness and motion release passed. Untested setup options, actual hosted account setup and full live organizer flow remain OPEN.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "five_motions",
+        "rule_acknowledgement_and_release"
+      ],
+      "passingCheckIndices": [
+        39
+      ],
+      "committedRevisions": [
+        41,
+        42,
+        43,
+        44,
+        45,
+        50,
+        54,
+        63
+      ],
+      "proposedObservation": "Five organizer-supplied private motion records were added through the DOM and acknowledged as five distinct committed commands. Both assigned captains used the Rules acknowledgement action, and the host released the selected motion before the successful start_match command.",
+      "requiredLimits": [
+        "This is motion-bank creation, not five completed matches, inter-match isolation, sequential continuation or measured concurrency.",
+        "No side draw/reroll, acknowledgement invalidation, changed rules, modified scoring or simultaneous physical release was tested."
+      ],
+      "staleBlockerFragments": [
+        {
+          "phrase": "actual hosted account setup",
+          "supersededScope": "Eleven real temporary Auth sessions and the enumerated event/member setup path were exercised; untested setup branches and full organizer flow remain open."
+        },
+        {
+          "phrase": "Synthetic event create/reload, fixtures, readiness and motion release passed.",
+          "supersededScope": "Keep synthetic history and add the narrower current hosted path: create/reload, two-team fixture, accommodated readiness and release. Full hosted flow is still open."
+        }
+      ]
+    },
+    {
+      "requirementId": "V3-07-010",
+      "originalRequirement": "| Initial preparation | 15 minutes after simultaneous motion release; may be set to zero/skipped for a prepared motion. |",
+      "existingState": "PARTIAL",
+      "proposedState": "PARTIAL",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Physical simultaneous question/answer audio and full real-time flow OPEN. Actual private-room subscriptions/audio/transfer and stale-provider credentials OPEN. Simultaneous physical pair audio and Return/Repeat/technical-pause/end-match browser branches are not proved by this run.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "saved_default_run_of_show",
+        "preparation_ready"
+      ],
+      "passingCheckIndices": [
+        40,
+        45
+      ],
+      "committedRevisions": [
+        64
+      ],
+      "proposedObservation": "The actual hosted match snapshot matched the independent default schedule oracle: all 14 speaking stages, six specified question/answer seat pairs, 15-minute preparation, 5-minute closing break, 5/3/5 durations and final deliberation configuration. The first successful start_match loaded the preparation timer as READY with 900000 ms; no clock claim or timer-start command was recorded.",
+      "requiredLimits": [
+        "Configuration only. No timed stage completed, no pair audio was exercised and no real default-flow duration or overtime behavior was established.",
+        "Only initial preparation state. No controller lease, clock agreement, actual stage start, pause/resume, overtime, finish or next-stage behavior was verified."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-07-011",
+      "originalRequirement": "| Constructive / interpellation / rebuttal | 5:00 / 3:00 / 5:00. Each interpellation period covers both asking and answering. |",
+      "existingState": "LOCAL_VERIFIED",
+      "proposedState": "LOCAL_VERIFIED",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Physical simultaneous question/answer audio and full real-time flow OPEN. Simultaneous physical pair audio and Return/Repeat/technical-pause/end-match browser branches are not proved by this run.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "saved_default_run_of_show"
+      ],
+      "passingCheckIndices": [
+        40
+      ],
+      "committedRevisions": [
+        64
+      ],
+      "proposedObservation": "The actual hosted match snapshot matched the independent default schedule oracle: all 14 speaking stages, six specified question/answer seat pairs, 15-minute preparation, 5-minute closing break, 5/3/5 durations and final deliberation configuration.",
+      "requiredLimits": [
+        "Configuration only. No timed stage completed, no pair audio was exercised and no real default-flow duration or overtime behavior was established."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-07-012",
+      "originalRequirement": "| Before closing rebuttals | One 5-minute private preparation break, enabled; organizer may disable before start. |",
+      "existingState": "PARTIAL",
+      "proposedState": "PARTIAL",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Physical simultaneous question/answer audio and full real-time flow OPEN. Actual private-room subscriptions/audio/transfer and stale-provider credentials OPEN. Simultaneous physical pair audio and Return/Repeat/technical-pause/end-match browser branches are not proved by this run.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "saved_default_run_of_show"
+      ],
+      "passingCheckIndices": [
+        40
+      ],
+      "committedRevisions": [
+        64
+      ],
+      "proposedObservation": "The actual hosted match snapshot matched the independent default schedule oracle: all 14 speaking stages, six specified question/answer seat pairs, 15-minute preparation, 5-minute closing break, 5/3/5 durations and final deliberation configuration.",
+      "requiredLimits": [
+        "Configuration only. No timed stage completed, no pair audio was exercised and no real default-flow duration or overtime behavior was established."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-07-014",
+      "originalRequirement": "| Stage start | Authorized controller explicitly starts; no voice-triggered timing. |",
+      "existingState": "LOCAL_VERIFIED",
+      "proposedState": "LOCAL_VERIFIED",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Measured <=1-second client agreement and physical reconnect/tab sleep OPEN. Clock-skew/physical reconnect/tab sleep, healthy display agreement and unexecuted timer boundary/control UI cases remain unverified.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "preparation_ready"
+      ],
+      "passingCheckIndices": [
+        45
+      ],
+      "committedRevisions": [
+        64
+      ],
+      "proposedObservation": "The first successful start_match loaded the preparation timer as READY with 900000 ms; no clock claim or timer-start command was recorded.",
+      "requiredLimits": [
+        "Only initial preparation state. No controller lease, clock agreement, actual stage start, pause/resume, overtime, finish or next-stage behavior was verified."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-07-025",
+      "originalRequirement": "| Five-matter use | Five prepared motions, sequential matches by default; not five simultaneous 100-person calls. |",
+      "existingState": "PARTIAL",
+      "proposedState": "PARTIAL",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Synthetic reviewed/published fixture, exact final winner and next three-judge match startup passed. Full fixture/rematch/exception UI and actual concurrency limits remain OPEN. Actual plan/allowance, Study overhead/reconnect headroom, approved 10/25/50/100 ramp, measured media and cost OPEN. The second match was only started; full formal adjudication, five-team/bye/exception fixture UI and actual concurrency remain open.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "five_motions"
+      ],
+      "passingCheckIndices": [],
+      "committedRevisions": [
+        41,
+        42,
+        43,
+        44,
+        45
+      ],
+      "proposedObservation": "Five organizer-supplied private motion records were added through the DOM and acknowledged as five distinct committed commands.",
+      "requiredLimits": [
+        "This is motion-bank creation, not five completed matches, inter-match isolation, sequential continuation or measured concurrency."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-07-027",
+      "originalRequirement": "The default timed debate is 6×5 + 6×3 + 2×5 = 58 minutes, or 63 with the pre-closing break. Initial preparation adds 15 if used. Scheduling must also allow introductions, judging, transitions, and uncontrolled overtime; do not promise a 63-minute event completion.",
+      "existingState": "LOCAL_VERIFIED",
+      "proposedState": "LOCAL_VERIFIED",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Physical simultaneous question/answer audio and full real-time flow OPEN. Exact local arithmetic assertions passed; this does not establish hosted or whole-product acceptance. Simultaneous physical pair audio and Return/Repeat/technical-pause/end-match browser branches are not proved by this run.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "saved_default_run_of_show"
+      ],
+      "passingCheckIndices": [
+        40
+      ],
+      "committedRevisions": [
+        64
+      ],
+      "proposedObservation": "The actual hosted match snapshot matched the independent default schedule oracle: all 14 speaking stages, six specified question/answer seat pairs, 15-minute preparation, 5-minute closing break, 5/3/5 durations and final deliberation configuration.",
+      "requiredLimits": [
+        "Configuration only. No timed stage completed, no pair audio was exercised and no real default-flow duration or overtime behavior was established."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-08-001",
+      "originalRequirement": "Lobby actions: **Create debate**, **Join with link/code**, **My events**, and permitted upcoming/live/completed events. Create flow: Event → Participants → Rules/motion → Review and create. Autosave event setup; show exactly what is saved. Supply functional sample/rehearsal data only within a clearly marked rehearsal event, never fabricated real events, occupancy, or awards.",
+      "existingState": "PARTIAL",
+      "proposedState": "PARTIAL",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Synthetic event create/reload, fixtures, readiness and motion release passed. Untested setup options, actual hosted account setup and full live organizer flow remain OPEN.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "event_create_reload"
+      ],
+      "passingCheckIndices": [
+        1
+      ],
+      "committedRevisions": [
+        1
+      ],
+      "proposedObservation": "The host created an explicitly marked unlisted rehearsal event through the actual DOM/Worker path. The same event title and ID survived an actual browser reload and fresh snapshot.",
+      "requiredLimits": [
+        "One rehearsal event only; other setup branches, account cohorts, sign-in return, other entry routes and mobile devices were not established.",
+        "Committed revisions and reload support persistence for this operation; they do not prove every transactional/race/recovery clause."
+      ],
+      "staleBlockerFragments": [
+        {
+          "phrase": "actual hosted account setup",
+          "supersededScope": "Eleven real temporary Auth sessions and the enumerated event/member setup path were exercised; untested setup branches and full organizer flow remain open."
+        },
+        {
+          "phrase": "Synthetic event create/reload, fixtures, readiness and motion release passed.",
+          "supersededScope": "Keep synthetic history and add the narrower current hosted path: create/reload, two-team fixture, accommodated readiness and release. Full hosted flow is still open."
+        }
+      ]
+    },
+    {
+      "requirementId": "V3-08-002",
+      "originalRequirement": "Support title, description, schedule, visibility, event contacts, motion bank, teams, captain, speaker order, rebuttal assignment, judges/chief adjudicator, host/co-host, moderator, timekeeper, optional coaches/reserves, and observers. A participant has an account identity plus per-event/per-match roles; one email/name is not a substitute for secure identity.",
+      "existingState": "PARTIAL",
+      "proposedState": "PARTIAL",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Synthetic event create/reload, fixtures, readiness and motion release passed. Untested setup options, actual hosted account setup and full live organizer flow remain OPEN.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "match_readiness"
+      ],
+      "passingCheckIndices": [
+        39
+      ],
+      "committedRevisions": [
+        48,
+        49,
+        51,
+        52,
+        53,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62
+      ],
+      "proposedObservation": "A fixture match assigned the neutral host as its single judge. Six speakers checked in; six explicit organizer accommodations stated that physical audio was not verified. After acknowledgements and motion release, readiness was persisted and rendered as ready. An earlier start_match attempt was rejected with 409 MATCH_NOT_READY.",
+      "requiredLimits": [
+        "These are approved control-rehearsal accommodations, not microphone/device PASS results.",
+        "The match was not adjudicated, and conflicting roles, separate moderator/timekeeper, camera refusal, reserves and other readiness exceptions remain open."
+      ],
+      "staleBlockerFragments": [
+        {
+          "phrase": "actual hosted account setup",
+          "supersededScope": "Eleven real temporary Auth sessions and the enumerated event/member setup path were exercised; untested setup branches and full organizer flow remain open."
+        },
+        {
+          "phrase": "Synthetic event create/reload, fixtures, readiness and motion release passed.",
+          "supersededScope": "Keep synthetic history and add the narrower current hosted path: create/reload, two-team fixture, accommodated readiness and release. Full hosted flow is still open."
+        }
+      ]
+    },
+    {
+      "requirementId": "V3-08-003",
+      "originalRequirement": "Use high-entropy revocable invitation links and a human-readable 12-character random code, or existing stronger project conventions. General observer invitations never automatically grant judge, host, or speaking privileges. Privileged invites bind to the intended account/verified email or require explicit host approval after sign-in. Store invite secrets safely; expiry defaults to seven days or event end, whichever is sooner. Throttle guessing without blocking legitimate campus networks. Regenerate/revoke codes without changing match history.",
+      "existingState": "PARTIAL",
+      "proposedState": "PARTIAL",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Hosted verified identity claims and actual approved-recipient delivery OPEN.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "invitation_links",
+        "waiting_snapshot",
+        "host_admission"
+      ],
+      "passingCheckIndices": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37
+      ],
+      "committedRevisions": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38
+      ],
+      "proposedObservation": "Nine signed-in fixtures used host-created invitation links: six debater invitations, two judge invitations and one observer invitation. The link assertion checked the same origin and correct event; all nine claims were acknowledged. Before host admission, each of the nine invited identities received an awaiting-admission snapshot containing one member and no matches or motions. Eight other workspace tabs remained disabled. The host admitted each of the nine invited fixtures. After an actual refresh, awaiting-admission cleared and the People workspace became available.",
+      "requiredLimits": [
+        "The check name mentions a secret link, but its explicit assertion checks origin and event linkage. Actual successful claiming confirms usable invitations, not entropy, expiry, revocation, guessing resistance or every privilege restriction.",
+        "No invitation email was sent and inbox delivery remains open.",
+        "The disabled tabs are DOM evidence; the separate restricted snapshot is the bounded backend evidence. Neither proves every direct endpoint, provider subscription, cross-event query or role forgery is denied.",
+        "Debate waiting-state evidence does not prove Study Room admission or Library policy.",
+        "The explicit assertion counts one member but does not independently compare that member ID; the test name alone does not strengthen that assertion.",
+        "Positive admissions only; removal/re-entry, reassignment, stale sessions and media grants were not exercised."
+      ],
+      "staleBlockerFragments": [
+        {
+          "phrase": "Hosted verified identity claims",
+          "supersededScope": "Nine positive invitation claims and host approvals passed; expiry, revocation, guessing, forged claims and delivery remain open."
+        }
+      ]
+    },
+    {
+      "requirementId": "V3-08-004",
+      "originalRequirement": "Allow team captains to propose their roster; organizer confirms final seats. A competitor cannot be a judge in their own match. Declared school/team conflicts of interest must be visible to the organizer and chief; absence of a recorded declaration is not proof there is no conflict. Refuse simultaneous assignments that require a person to compete/judge in overlapping matches.",
+      "existingState": "PARTIAL",
+      "proposedState": "PARTIAL",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Synthetic confirmed six-seat/captain/readiness flow passed. Roster exceptions, captain-proposal and side-draw/reroll browser branches remain OPEN. Hosted authorization and provider stale-token revocation OPEN.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "confirmed_rosters"
+      ],
+      "passingCheckIndices": [],
+      "committedRevisions": [
+        39,
+        40
+      ],
+      "proposedObservation": "The host confirmed two named teams with three distinct assigned speakers each and selected the first assigned speaker as captain. Both confirm_roster commands returned committed revisions.",
+      "requiredLimits": [
+        "No captain-proposed roster, fourth-speaker refusal, optional affiliation/reserve, substitution, conflict declaration or overlapping-match denial was exercised."
+      ],
+      "staleBlockerFragments": [
+        {
+          "phrase": "Synthetic confirmed six-seat/captain/readiness flow passed.",
+          "supersededScope": "Add actual host-confirmed six-seat/captain setup and accommodated readiness. Physical microphone checks and exceptional roster branches remain open."
+        }
+      ]
+    },
+    {
+      "requirementId": "V3-08-005",
+      "originalRequirement": "Allow manual side assignment and an explicit randomized side draw. Log random outcome, actor, time, and rerolls; do not pretend deterministic alternation is random. For sequential matches, show side balance and allow review before publication. Captain approval of sides/rules must be recorded; changing motion, role order, or rubric after acknowledgment requests fresh acknowledgment.",
+      "existingState": "PARTIAL",
+      "proposedState": "PARTIAL",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Synthetic confirmed six-seat/captain/readiness flow passed. Roster exceptions, captain-proposal and side-draw/reroll browser branches remain OPEN. Synthetic reviewed/published fixture, exact final winner and next three-judge match startup passed. Full fixture/rematch/exception UI and actual concurrency limits remain OPEN.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "rule_acknowledgement_and_release"
+      ],
+      "passingCheckIndices": [
+        39
+      ],
+      "committedRevisions": [
+        50,
+        54,
+        63
+      ],
+      "proposedObservation": "Both assigned captains used the Rules acknowledgement action, and the host released the selected motion before the successful start_match command.",
+      "requiredLimits": [
+        "No side draw/reroll, acknowledgement invalidation, changed rules, modified scoring or simultaneous physical release was tested."
+      ],
+      "staleBlockerFragments": [
+        {
+          "phrase": "Synthetic confirmed six-seat/captain/readiness flow passed.",
+          "supersededScope": "Add actual host-confirmed six-seat/captain setup and accommodated readiness. Physical microphone checks and exceptional roster branches remain open."
+        }
+      ]
+    },
+    {
+      "requirementId": "V3-08-006",
+      "originalRequirement": "Pre-start readiness: both teams have three distinct confirmed speakers; a closing speaker belongs to each team; assigned judge count is valid; neutral officials/floor controller identified; motion released or release ready; captains accept the same rules; needed microphone checks pass or an accommodation is recorded; all required participants present. Camera refusal alone does not disqualify a speaker unless the event expressly adopted an approved camera rule. Audio failure must be resolved, accommodated, or recorded—not hidden behind a green “Ready.”",
+      "existingState": "PARTIAL",
+      "proposedState": "PARTIAL",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Synthetic confirmed six-seat/captain/readiness flow passed. Roster exceptions, captain-proposal and side-draw/reroll browser branches remain OPEN. Accepted rules acknowledge/release and rules browser download passed; complete help/custom-rule/exception UI review and hosted flow remain OPEN. Real Cloud revocation/cache behavior, remote audio/video, capture permissions and measured reconnect interruption OPEN. Physical microphone checks and other roster/moderator exception UI branches remain unverified.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "match_readiness",
+        "rule_acknowledgement_and_release"
+      ],
+      "passingCheckIndices": [
+        39
+      ],
+      "committedRevisions": [
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63
+      ],
+      "proposedObservation": "A fixture match assigned the neutral host as its single judge. Six speakers checked in; six explicit organizer accommodations stated that physical audio was not verified. After acknowledgements and motion release, readiness was persisted and rendered as ready. An earlier start_match attempt was rejected with 409 MATCH_NOT_READY. Both assigned captains used the Rules acknowledgement action, and the host released the selected motion before the successful start_match command.",
+      "requiredLimits": [
+        "These are approved control-rehearsal accommodations, not microphone/device PASS results.",
+        "The match was not adjudicated, and conflicting roles, separate moderator/timekeeper, camera refusal, reserves and other readiness exceptions remain open.",
+        "No side draw/reroll, acknowledgement invalidation, changed rules, modified scoring or simultaneous physical release was tested."
+      ],
+      "staleBlockerFragments": [
+        {
+          "phrase": "Synthetic confirmed six-seat/captain/readiness flow passed.",
+          "supersededScope": "Add actual host-confirmed six-seat/captain setup and accommodated readiness. Physical microphone checks and exceptional roster branches remain open."
+        }
+      ]
+    },
+    {
+      "requirementId": "V3-08-007",
+      "originalRequirement": "The minimum normal one-judge match can use six debaters plus one neutral person combining host/moderator/timekeeper/adjudicator. A debater may create an event, but operational conflict controls require a neutral controller for their own speaking stage and prevent access to confidential judging.",
+      "existingState": "PARTIAL",
+      "proposedState": "PARTIAL",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Synthetic confirmed six-seat/captain/readiness flow passed. Roster exceptions, captain-proposal and side-draw/reroll browser branches remain OPEN. Hosted authorization and provider stale-token revocation OPEN. Actual private-room subscriptions/audio/transfer and stale-provider credentials OPEN. Physical microphone checks and other roster/moderator exception UI branches remain unverified.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "match_readiness"
+      ],
+      "passingCheckIndices": [
+        39
+      ],
+      "committedRevisions": [
+        48,
+        49,
+        51,
+        52,
+        53,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62
+      ],
+      "proposedObservation": "A fixture match assigned the neutral host as its single judge. Six speakers checked in; six explicit organizer accommodations stated that physical audio was not verified. After acknowledgements and motion release, readiness was persisted and rendered as ready. An earlier start_match attempt was rejected with 409 MATCH_NOT_READY.",
+      "requiredLimits": [
+        "These are approved control-rehearsal accommodations, not microphone/device PASS results.",
+        "The match was not adjudicated, and conflicting roles, separate moderator/timekeeper, camera refusal, reserves and other readiness exceptions remain open."
+      ],
+      "staleBlockerFragments": [
+        {
+          "phrase": "Synthetic confirmed six-seat/captain/readiness flow passed.",
+          "supersededScope": "Add actual host-confirmed six-seat/captain setup and accommodated readiness. Physical microphone checks and exceptional roster branches remain open."
+        }
+      ]
+    },
+    {
+      "requirementId": "V3-09-001",
+      "originalRequirement": "Initialize these 14 stages. A1–A3 and N1–N3 refer to stable assigned affirmative/negative seats. [R2]",
+      "existingState": "PARTIAL",
+      "proposedState": "PARTIAL",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Physical simultaneous question/answer audio and full real-time flow OPEN. Simultaneous physical pair audio and Return/Repeat/technical-pause/end-match browser branches are not proved by this run.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "saved_default_run_of_show"
+      ],
+      "passingCheckIndices": [
+        40
+      ],
+      "committedRevisions": [
+        64
+      ],
+      "proposedObservation": "The actual hosted match snapshot matched the independent default schedule oracle: all 14 speaking stages, six specified question/answer seat pairs, 15-minute preparation, 5-minute closing break, 5/3/5 durations and final deliberation configuration.",
+      "requiredLimits": [
+        "Configuration only. No timed stage completed, no pair audio was exercised and no real default-flow duration or overtime behavior was established."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-09-002",
+      "originalRequirement": "| 01 | A1 constructive | 5:00 |",
+      "existingState": "LOCAL_VERIFIED",
+      "proposedState": "LOCAL_VERIFIED",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Physical simultaneous question/answer audio and full real-time flow OPEN. Simultaneous physical pair audio and Return/Repeat/technical-pause/end-match browser branches are not proved by this run.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "saved_default_run_of_show"
+      ],
+      "passingCheckIndices": [
+        40
+      ],
+      "committedRevisions": [
+        64
+      ],
+      "proposedObservation": "The actual hosted match snapshot matched the independent default schedule oracle: all 14 speaking stages, six specified question/answer seat pairs, 15-minute preparation, 5-minute closing break, 5/3/5 durations and final deliberation configuration.",
+      "requiredLimits": [
+        "Configuration only. No timed stage completed, no pair audio was exercised and no real default-flow duration or overtime behavior was established."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-09-003",
+      "originalRequirement": "| 02 | N1 asks; A1 answers | 3:00 |",
+      "existingState": "LOCAL_VERIFIED",
+      "proposedState": "LOCAL_VERIFIED",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Physical simultaneous question/answer audio and full real-time flow OPEN. Simultaneous physical pair audio and Return/Repeat/technical-pause/end-match browser branches are not proved by this run.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "saved_default_run_of_show"
+      ],
+      "passingCheckIndices": [
+        40
+      ],
+      "committedRevisions": [
+        64
+      ],
+      "proposedObservation": "The actual hosted match snapshot matched the independent default schedule oracle: all 14 speaking stages, six specified question/answer seat pairs, 15-minute preparation, 5-minute closing break, 5/3/5 durations and final deliberation configuration.",
+      "requiredLimits": [
+        "Configuration only. No timed stage completed, no pair audio was exercised and no real default-flow duration or overtime behavior was established."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-09-004",
+      "originalRequirement": "| 03 | N1 constructive | 5:00 |",
+      "existingState": "LOCAL_VERIFIED",
+      "proposedState": "LOCAL_VERIFIED",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Physical simultaneous question/answer audio and full real-time flow OPEN. Simultaneous physical pair audio and Return/Repeat/technical-pause/end-match browser branches are not proved by this run.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "saved_default_run_of_show"
+      ],
+      "passingCheckIndices": [
+        40
+      ],
+      "committedRevisions": [
+        64
+      ],
+      "proposedObservation": "The actual hosted match snapshot matched the independent default schedule oracle: all 14 speaking stages, six specified question/answer seat pairs, 15-minute preparation, 5-minute closing break, 5/3/5 durations and final deliberation configuration.",
+      "requiredLimits": [
+        "Configuration only. No timed stage completed, no pair audio was exercised and no real default-flow duration or overtime behavior was established."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-09-005",
+      "originalRequirement": "| 04 | A1 asks; N1 answers | 3:00 |",
+      "existingState": "LOCAL_VERIFIED",
+      "proposedState": "LOCAL_VERIFIED",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Physical simultaneous question/answer audio and full real-time flow OPEN. Simultaneous physical pair audio and Return/Repeat/technical-pause/end-match browser branches are not proved by this run.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "saved_default_run_of_show"
+      ],
+      "passingCheckIndices": [
+        40
+      ],
+      "committedRevisions": [
+        64
+      ],
+      "proposedObservation": "The actual hosted match snapshot matched the independent default schedule oracle: all 14 speaking stages, six specified question/answer seat pairs, 15-minute preparation, 5-minute closing break, 5/3/5 durations and final deliberation configuration.",
+      "requiredLimits": [
+        "Configuration only. No timed stage completed, no pair audio was exercised and no real default-flow duration or overtime behavior was established."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-09-006",
+      "originalRequirement": "| 05 | A2 constructive | 5:00 |",
+      "existingState": "LOCAL_VERIFIED",
+      "proposedState": "LOCAL_VERIFIED",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Physical simultaneous question/answer audio and full real-time flow OPEN. Simultaneous physical pair audio and Return/Repeat/technical-pause/end-match browser branches are not proved by this run.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "saved_default_run_of_show"
+      ],
+      "passingCheckIndices": [
+        40
+      ],
+      "committedRevisions": [
+        64
+      ],
+      "proposedObservation": "The actual hosted match snapshot matched the independent default schedule oracle: all 14 speaking stages, six specified question/answer seat pairs, 15-minute preparation, 5-minute closing break, 5/3/5 durations and final deliberation configuration.",
+      "requiredLimits": [
+        "Configuration only. No timed stage completed, no pair audio was exercised and no real default-flow duration or overtime behavior was established."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-09-007",
+      "originalRequirement": "| 06 | N2 asks; A2 answers | 3:00 |",
+      "existingState": "LOCAL_VERIFIED",
+      "proposedState": "LOCAL_VERIFIED",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Physical simultaneous question/answer audio and full real-time flow OPEN. Simultaneous physical pair audio and Return/Repeat/technical-pause/end-match browser branches are not proved by this run.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "saved_default_run_of_show"
+      ],
+      "passingCheckIndices": [
+        40
+      ],
+      "committedRevisions": [
+        64
+      ],
+      "proposedObservation": "The actual hosted match snapshot matched the independent default schedule oracle: all 14 speaking stages, six specified question/answer seat pairs, 15-minute preparation, 5-minute closing break, 5/3/5 durations and final deliberation configuration.",
+      "requiredLimits": [
+        "Configuration only. No timed stage completed, no pair audio was exercised and no real default-flow duration or overtime behavior was established."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-09-008",
+      "originalRequirement": "| 07 | N2 constructive | 5:00 |",
+      "existingState": "LOCAL_VERIFIED",
+      "proposedState": "LOCAL_VERIFIED",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Physical simultaneous question/answer audio and full real-time flow OPEN. Simultaneous physical pair audio and Return/Repeat/technical-pause/end-match browser branches are not proved by this run.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "saved_default_run_of_show"
+      ],
+      "passingCheckIndices": [
+        40
+      ],
+      "committedRevisions": [
+        64
+      ],
+      "proposedObservation": "The actual hosted match snapshot matched the independent default schedule oracle: all 14 speaking stages, six specified question/answer seat pairs, 15-minute preparation, 5-minute closing break, 5/3/5 durations and final deliberation configuration.",
+      "requiredLimits": [
+        "Configuration only. No timed stage completed, no pair audio was exercised and no real default-flow duration or overtime behavior was established."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-09-009",
+      "originalRequirement": "| 08 | A2 asks; N2 answers | 3:00 |",
+      "existingState": "LOCAL_VERIFIED",
+      "proposedState": "LOCAL_VERIFIED",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Physical simultaneous question/answer audio and full real-time flow OPEN. Simultaneous physical pair audio and Return/Repeat/technical-pause/end-match browser branches are not proved by this run.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "saved_default_run_of_show"
+      ],
+      "passingCheckIndices": [
+        40
+      ],
+      "committedRevisions": [
+        64
+      ],
+      "proposedObservation": "The actual hosted match snapshot matched the independent default schedule oracle: all 14 speaking stages, six specified question/answer seat pairs, 15-minute preparation, 5-minute closing break, 5/3/5 durations and final deliberation configuration.",
+      "requiredLimits": [
+        "Configuration only. No timed stage completed, no pair audio was exercised and no real default-flow duration or overtime behavior was established."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-09-010",
+      "originalRequirement": "| 09 | A3 constructive | 5:00 |",
+      "existingState": "LOCAL_VERIFIED",
+      "proposedState": "LOCAL_VERIFIED",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Physical simultaneous question/answer audio and full real-time flow OPEN. Simultaneous physical pair audio and Return/Repeat/technical-pause/end-match browser branches are not proved by this run.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "saved_default_run_of_show"
+      ],
+      "passingCheckIndices": [
+        40
+      ],
+      "committedRevisions": [
+        64
+      ],
+      "proposedObservation": "The actual hosted match snapshot matched the independent default schedule oracle: all 14 speaking stages, six specified question/answer seat pairs, 15-minute preparation, 5-minute closing break, 5/3/5 durations and final deliberation configuration.",
+      "requiredLimits": [
+        "Configuration only. No timed stage completed, no pair audio was exercised and no real default-flow duration or overtime behavior was established."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-09-011",
+      "originalRequirement": "| 10 | N3 asks; A3 answers | 3:00 |",
+      "existingState": "LOCAL_VERIFIED",
+      "proposedState": "LOCAL_VERIFIED",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Physical simultaneous question/answer audio and full real-time flow OPEN. Simultaneous physical pair audio and Return/Repeat/technical-pause/end-match browser branches are not proved by this run.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "saved_default_run_of_show"
+      ],
+      "passingCheckIndices": [
+        40
+      ],
+      "committedRevisions": [
+        64
+      ],
+      "proposedObservation": "The actual hosted match snapshot matched the independent default schedule oracle: all 14 speaking stages, six specified question/answer seat pairs, 15-minute preparation, 5-minute closing break, 5/3/5 durations and final deliberation configuration.",
+      "requiredLimits": [
+        "Configuration only. No timed stage completed, no pair audio was exercised and no real default-flow duration or overtime behavior was established."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-09-012",
+      "originalRequirement": "| 11 | N3 constructive | 5:00 |",
+      "existingState": "LOCAL_VERIFIED",
+      "proposedState": "LOCAL_VERIFIED",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Physical simultaneous question/answer audio and full real-time flow OPEN. Simultaneous physical pair audio and Return/Repeat/technical-pause/end-match browser branches are not proved by this run.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "saved_default_run_of_show"
+      ],
+      "passingCheckIndices": [
+        40
+      ],
+      "committedRevisions": [
+        64
+      ],
+      "proposedObservation": "The actual hosted match snapshot matched the independent default schedule oracle: all 14 speaking stages, six specified question/answer seat pairs, 15-minute preparation, 5-minute closing break, 5/3/5 durations and final deliberation configuration.",
+      "requiredLimits": [
+        "Configuration only. No timed stage completed, no pair audio was exercised and no real default-flow duration or overtime behavior was established."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-09-013",
+      "originalRequirement": "| 12 | A3 asks; N3 answers | 3:00 |",
+      "existingState": "LOCAL_VERIFIED",
+      "proposedState": "LOCAL_VERIFIED",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Physical simultaneous question/answer audio and full real-time flow OPEN. Simultaneous physical pair audio and Return/Repeat/technical-pause/end-match browser branches are not proved by this run.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "saved_default_run_of_show"
+      ],
+      "passingCheckIndices": [
+        40
+      ],
+      "committedRevisions": [
+        64
+      ],
+      "proposedObservation": "The actual hosted match snapshot matched the independent default schedule oracle: all 14 speaking stages, six specified question/answer seat pairs, 15-minute preparation, 5-minute closing break, 5/3/5 durations and final deliberation configuration.",
+      "requiredLimits": [
+        "Configuration only. No timed stage completed, no pair audio was exercised and no real default-flow duration or overtime behavior was established."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-09-014",
+      "originalRequirement": "| Break | Private preparation, when enabled | 5:00 |",
+      "existingState": "LOCAL_VERIFIED",
+      "proposedState": "LOCAL_VERIFIED",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Physical simultaneous question/answer audio and full real-time flow OPEN. Simultaneous physical pair audio and Return/Repeat/technical-pause/end-match browser branches are not proved by this run.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "saved_default_run_of_show"
+      ],
+      "passingCheckIndices": [
+        40
+      ],
+      "committedRevisions": [
+        64
+      ],
+      "proposedObservation": "The actual hosted match snapshot matched the independent default schedule oracle: all 14 speaking stages, six specified question/answer seat pairs, 15-minute preparation, 5-minute closing break, 5/3/5 durations and final deliberation configuration.",
+      "requiredLimits": [
+        "Configuration only. No timed stage completed, no pair audio was exercised and no real default-flow duration or overtime behavior was established."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-09-015",
+      "originalRequirement": "| 13 | Negative closing speaker | 5:00 |",
+      "existingState": "LOCAL_VERIFIED",
+      "proposedState": "LOCAL_VERIFIED",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Physical simultaneous question/answer audio and full real-time flow OPEN. Simultaneous physical pair audio and Return/Repeat/technical-pause/end-match browser branches are not proved by this run.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "saved_default_run_of_show"
+      ],
+      "passingCheckIndices": [
+        40
+      ],
+      "committedRevisions": [
+        64
+      ],
+      "proposedObservation": "The actual hosted match snapshot matched the independent default schedule oracle: all 14 speaking stages, six specified question/answer seat pairs, 15-minute preparation, 5-minute closing break, 5/3/5 durations and final deliberation configuration.",
+      "requiredLimits": [
+        "Configuration only. No timed stage completed, no pair audio was exercised and no real default-flow duration or overtime behavior was established."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-09-016",
+      "originalRequirement": "| 14 | Affirmative closing speaker | 5:00 |",
+      "existingState": "LOCAL_VERIFIED",
+      "proposedState": "LOCAL_VERIFIED",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Physical simultaneous question/answer audio and full real-time flow OPEN. Simultaneous physical pair audio and Return/Repeat/technical-pause/end-match browser branches are not proved by this run.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "saved_default_run_of_show"
+      ],
+      "passingCheckIndices": [
+        40
+      ],
+      "committedRevisions": [
+        64
+      ],
+      "proposedObservation": "The actual hosted match snapshot matched the independent default schedule oracle: all 14 speaking stages, six specified question/answer seat pairs, 15-minute preparation, 5-minute closing break, 5/3/5 durations and final deliberation configuration.",
+      "requiredLimits": [
+        "Configuration only. No timed stage completed, no pair audio was exercised and no real default-flow duration or overtime behavior was established."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-09-018",
+      "originalRequirement": "Show current motion, stage, assigned speaker/pair, clock, next stage, and an expandable run-of-show. Preparation and judging are distinct phases, not secretly counted as one of the 14 speaking stages.",
+      "existingState": "PARTIAL",
+      "proposedState": "PARTIAL",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Physical simultaneous question/answer audio and full real-time flow OPEN. Simultaneous physical pair audio and Return/Repeat/technical-pause/end-match browser branches are not proved by this run.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "preparation_ready"
+      ],
+      "passingCheckIndices": [
+        45
+      ],
+      "committedRevisions": [
+        64
+      ],
+      "proposedObservation": "The first successful start_match loaded the preparation timer as READY with 900000 ms; no clock claim or timer-start command was recorded.",
+      "requiredLimits": [
+        "Only initial preparation state. No controller lease, clock agreement, actual stage start, pause/resume, overtime, finish or next-stage behavior was verified."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-10-003",
+      "originalRequirement": "Private team communication is permitted in preparation and the declared break. During interpellation, block new in-app teammate/coach communications to either active questioner/respondent until the stage ends; clearly explain that previously received notes remain and external devices cannot be controlled. For ordinary speeches, permit private written consultation only for non-floor teammates under the event policy. Coaches have no live coaching access during scored stages by default. Apply channel restrictions on the server, not only in the visible input box.",
+      "existingState": "PARTIAL",
+      "proposedState": "PARTIAL",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Synthetic team message/evidence and cross-team DOM/snapshot privacy passed. History/block/quiet UI branches, physical private audio and hosted reconnect remain OPEN. Actual private-room subscriptions/audio/transfer and stale-provider credentials OPEN. No actual provider private-room transition, subscription or audio isolation was exercised.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "private_team_messages"
+      ],
+      "passingCheckIndices": [
+        46,
+        47
+      ],
+      "committedRevisions": [
+        65,
+        66
+      ],
+      "proposedObservation": "The affirmative captain sent the synthetic private-team marker and saw it in its own message DOM. The negative captain then opened its team channel: the marker was absent from its DOM and every captured authorized response after the privacy cutoff, with at least one such response observed. The negative captain subsequently committed its own team message.",
+      "requiredLimits": [
+        "Written-message separation for two real signed-in actors in preparation only. No judge deliberation, physical private audio, subscription metadata, stale-cache replay, account switch or return from private media space was tested.",
+        "No attachment was successfully shared: the following evidence upload returned 503."
+      ],
+      "staleBlockerFragments": [
+        {
+          "phrase": "Synthetic team message/evidence and cross-team DOM/snapshot privacy passed.",
+          "supersededScope": "Keep synthetic evidence history. Add hosted team-message and captured-response separation only; hosted evidence upload failed503."
+        }
+      ]
+    },
+    {
+      "requirementId": "V3-11-001",
+      "originalRequirement": "Desktop arrangement:",
+      "existingState": "PARTIAL",
+      "proposedState": "PARTIAL",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Recorded1365px/320px dock/arena geometry, narrow results and three root-reviewed screenshots passed. Zoom, keyboard, screen reader, contrast, all responsive states and physical browser/device matrix remain OPEN. This is emulated width with camera-off tiles; remaining accessibility and physical mobile checks stay open.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "live_control_geometry"
+      ],
+      "passingCheckIndices": [
+        41,
+        42,
+        43,
+        44
+      ],
+      "committedRevisions": [],
+      "proposedObservation": "At 1365 and 320 CSS-pixel viewports, the actual hosted DOM exposed media controls, arena, adjudicator rail and team headings with positive geometry. The dock remained above the arena and did not cover the measured headings.",
+      "requiredLimits": [
+        "Browser viewport resizing, not a physical mobile device. No complete target-size, overflow, keyboard, focus, contrast, screen-reader or all-control behavior audit.",
+        "Five screenshots exist, but this mapping task did not visually inspect them."
+      ],
+      "staleBlockerFragments": [
+        {
+          "phrase": "Recorded1365px/320px dock/arena geometry",
+          "supersededScope": "Add actual hosted1365/320 geometry without claiming a fresh visual audit or physical mobile test."
+        }
+      ]
+    },
+    {
+      "requirementId": "V3-11-007",
+      "originalRequirement": "Mobile: readable team sections, adjudicator above, persistent clock, observers below; use focused speaker/pair view plus named seat access rather than six microscopic cameras. No horizontal overflow at 320 CSS pixels. Main live controls target 44×44 CSS pixels as a product preference; follow current WCAG guidance for the rest. Do not advertise accessibility certification without an actual audit. [T9]",
+      "existingState": "PARTIAL",
+      "proposedState": "PARTIAL",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Recorded1365px/320px dock/arena geometry, narrow results and three root-reviewed screenshots passed. Zoom, keyboard, screen reader, contrast, all responsive states and physical browser/device matrix remain OPEN. This is emulated width with camera-off tiles; remaining accessibility and physical mobile checks stay open.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "live_control_geometry"
+      ],
+      "passingCheckIndices": [
+        41,
+        42,
+        43,
+        44
+      ],
+      "committedRevisions": [],
+      "proposedObservation": "At 1365 and 320 CSS-pixel viewports, the actual hosted DOM exposed media controls, arena, adjudicator rail and team headings with positive geometry. The dock remained above the arena and did not cover the measured headings.",
+      "requiredLimits": [
+        "Browser viewport resizing, not a physical mobile device. No complete target-size, overflow, keyboard, focus, contrast, screen-reader or all-control behavior audit.",
+        "Five screenshots exist, but this mapping task did not visually inspect them."
+      ],
+      "staleBlockerFragments": [
+        {
+          "phrase": "Recorded1365px/320px dock/arena geometry",
+          "supersededScope": "Add actual hosted1365/320 geometry without claiming a fresh visual audit or physical mobile test."
+        }
+      ]
+    },
+    {
+      "requirementId": "V3-11-009",
+      "originalRequirement": "Use familiar labels: Mic, Camera, Share, People, Chat, Rules, Timer, Judge, Vote, Results, Leave. Clearly distinguish organizer controls, judging workspace, and personal device controls. Every visible action must work or explain a genuine permission/device reason.",
+      "existingState": "PARTIAL",
+      "proposedState": "PARTIAL",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Recorded1365px/320px dock/arena geometry, narrow results and three root-reviewed screenshots passed. Zoom, keyboard, screen reader, contrast, all responsive states and physical browser/device matrix remain OPEN. This is emulated width with camera-off tiles; remaining accessibility and physical mobile checks stay open.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "live_control_geometry"
+      ],
+      "passingCheckIndices": [
+        41,
+        42,
+        43,
+        44
+      ],
+      "committedRevisions": [],
+      "proposedObservation": "At 1365 and 320 CSS-pixel viewports, the actual hosted DOM exposed media controls, arena, adjudicator rail and team headings with positive geometry. The dock remained above the arena and did not cover the measured headings.",
+      "requiredLimits": [
+        "Browser viewport resizing, not a physical mobile device. No complete target-size, overflow, keyboard, focus, contrast, screen-reader or all-control behavior audit.",
+        "Five screenshots exist, but this mapping task did not visually inspect them."
+      ],
+      "staleBlockerFragments": [
+        {
+          "phrase": "Recorded1365px/320px dock/arena geometry",
+          "supersededScope": "Add actual hosted1365/320 geometry without claiming a fresh visual audit or physical mobile test."
+        }
+      ]
+    },
+    {
+      "requirementId": "V3-12-002",
+      "originalRequirement": "Represent stage timer with matchId, stageAttemptId, durationMs ≥ 0, elapsedBeforeRunMs ≥ 0, startedAtServerMs or null, state READY/RUNNING/PAUSED/FINISHED, controller identity/lease, and version. Derive elapsed from persisted state and authoritative time; do not accumulate independent client ticks.",
+      "existingState": "LOCAL_VERIFIED",
+      "proposedState": "LOCAL_VERIFIED",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Measured <=1-second client agreement and physical reconnect/tab sleep OPEN. Clock-skew/physical reconnect/tab sleep, healthy display agreement and unexecuted timer boundary/control UI cases remain unverified.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "preparation_ready"
+      ],
+      "passingCheckIndices": [
+        45
+      ],
+      "committedRevisions": [
+        64
+      ],
+      "proposedObservation": "The first successful start_match loaded the preparation timer as READY with 900000 ms; no clock claim or timer-start command was recorded.",
+      "requiredLimits": [
+        "Only initial preparation state. No controller lease, clock agreement, actual stage start, pause/resume, overtime, finish or next-stage behavior was verified."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-13-001",
+      "originalRequirement": "Enforce rights in backend commands and provider grants, not role badges. Publishing camera, microphone, screen video, screen audio, and data are distinct permissions. LiveKit token/permission behavior differs between Cloud and self-hosting; verify the actual deployment and prevent stale-role re-entry accordingly. [T2]",
+      "existingState": "PARTIAL",
+      "proposedState": "PARTIAL",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Hosted authorization and provider stale-token revocation OPEN. Real Cloud revocation/cache behavior, remote audio/video, capture permissions and measured reconnect interruption OPEN.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "waiting_snapshot"
+      ],
+      "passingCheckIndices": [
+        3,
+        4,
+        7,
+        8,
+        11,
+        12,
+        15,
+        16,
+        19,
+        20,
+        23,
+        24,
+        27,
+        28,
+        31,
+        32,
+        35,
+        36
+      ],
+      "committedRevisions": [
+        2,
+        5,
+        9,
+        13,
+        17,
+        21,
+        25,
+        29,
+        33,
+        37
+      ],
+      "proposedObservation": "Before host admission, each of the nine invited identities received an awaiting-admission snapshot containing one member and no matches or motions. Eight other workspace tabs remained disabled.",
+      "requiredLimits": [
+        "The disabled tabs are DOM evidence; the separate restricted snapshot is the bounded backend evidence. Neither proves every direct endpoint, provider subscription, cross-event query or role forgery is denied.",
+        "Debate waiting-state evidence does not prove Study Room admission or Library policy.",
+        "The explicit assertion counts one member but does not independently compare that member ID; the test name alone does not strengthen that assertion."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-13-002",
+      "originalRequirement": "| Event organizer/co-host | Setup, invitations, admission, assignment, moderation, publishing approved results, exports. No automatic access to private judge drafts or power to impersonate ballots. |",
+      "existingState": "PARTIAL",
+      "proposedState": "PARTIAL",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Hosted authorization and provider stale-token revocation OPEN.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "invitation_links",
+        "host_admission"
+      ],
+      "passingCheckIndices": [
+        2,
+        5,
+        6,
+        9,
+        10,
+        13,
+        14,
+        17,
+        18,
+        21,
+        22,
+        25,
+        26,
+        29,
+        30,
+        33,
+        34,
+        37
+      ],
+      "committedRevisions": [
+        3,
+        4,
+        6,
+        7,
+        8,
+        10,
+        11,
+        12,
+        14,
+        15,
+        16,
+        18,
+        19,
+        20,
+        22,
+        23,
+        24,
+        26,
+        27,
+        28,
+        30,
+        31,
+        32,
+        34,
+        35,
+        36,
+        38
+      ],
+      "proposedObservation": "Nine signed-in fixtures used host-created invitation links: six debater invitations, two judge invitations and one observer invitation. The link assertion checked the same origin and correct event; all nine claims were acknowledged. The host admitted each of the nine invited fixtures. After an actual refresh, awaiting-admission cleared and the People workspace became available.",
+      "requiredLimits": [
+        "The check name mentions a secret link, but its explicit assertion checks origin and event linkage. Actual successful claiming confirms usable invitations, not entropy, expiry, revocation, guessing resistance or every privilege restriction.",
+        "No invitation email was sent and inbox delivery remains open.",
+        "Positive admissions only; removal/re-entry, reassignment, stale sessions and media grants were not exercised."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-13-007",
+      "originalRequirement": "| Debater | Assigned seat, personal camera, microphone when given floor, team workspace as permitted, own released feedback. |",
+      "existingState": "PARTIAL",
+      "proposedState": "PARTIAL",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Hosted authorization and provider stale-token revocation OPEN.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "private_team_messages"
+      ],
+      "passingCheckIndices": [
+        46,
+        47
+      ],
+      "committedRevisions": [
+        65,
+        66
+      ],
+      "proposedObservation": "The affirmative captain sent the synthetic private-team marker and saw it in its own message DOM. The negative captain then opened its team channel: the marker was absent from its DOM and every captured authorized response after the privacy cutoff, with at least one such response observed. The negative captain subsequently committed its own team message.",
+      "requiredLimits": [
+        "Written-message separation for two real signed-in actors in preparation only. No judge deliberation, physical private audio, subscription metadata, stale-cache replay, account switch or return from private media space was tested.",
+        "No attachment was successfully shared: the following evidence upload returned 503."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-13-009",
+      "originalRequirement": "| Observer | Receive stage, permitted camera, public chat/poll, request floor. No direct microphone, time, role, or official-ballot authority. |",
+      "existingState": "PARTIAL",
+      "proposedState": "PARTIAL",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Hosted authorization and provider stale-token revocation OPEN. This proves only observed HTTP/DOM boundaries, not provider subscriptions or complete hosted adversarial coverage.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "waiting_snapshot"
+      ],
+      "passingCheckIndices": [
+        3,
+        4,
+        7,
+        8,
+        11,
+        12,
+        15,
+        16,
+        19,
+        20,
+        23,
+        24,
+        27,
+        28,
+        31,
+        32,
+        35,
+        36
+      ],
+      "committedRevisions": [
+        2,
+        5,
+        9,
+        13,
+        17,
+        21,
+        25,
+        29,
+        33,
+        37
+      ],
+      "proposedObservation": "Before host admission, each of the nine invited identities received an awaiting-admission snapshot containing one member and no matches or motions. Eight other workspace tabs remained disabled.",
+      "requiredLimits": [
+        "The disabled tabs are DOM evidence; the separate restricted snapshot is the bounded backend evidence. Neither proves every direct endpoint, provider subscription, cross-event query or role forgery is denied.",
+        "Debate waiting-state evidence does not prove Study Room admission or Library policy.",
+        "The explicit assertion counts one member but does not independently compare that member ID; the test name alone does not strengthen that assertion."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-15-001",
+      "originalRequirement": "Provide main-room announcements/chat, team channels, judge deliberation chat, technical/ruling requests, and shared evidence. Use visible audience labels and send confirmation. Moderator can quiet observer chat/reactions during speeches while preserving technical help. Personal block/mute remains separate from an official ruling.",
+      "existingState": "PARTIAL",
+      "proposedState": "PARTIAL",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Synthetic team message/evidence and cross-team DOM/snapshot privacy passed. History/block/quiet UI branches, physical private audio and hosted reconnect remain OPEN. No actual provider private-room transition, subscription or audio isolation was exercised.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "private_team_messages"
+      ],
+      "passingCheckIndices": [
+        46,
+        47
+      ],
+      "committedRevisions": [
+        65,
+        66
+      ],
+      "proposedObservation": "The affirmative captain sent the synthetic private-team marker and saw it in its own message DOM. The negative captain then opened its team channel: the marker was absent from its DOM and every captured authorized response after the privacy cutoff, with at least one such response observed. The negative captain subsequently committed its own team message.",
+      "requiredLimits": [
+        "Written-message separation for two real signed-in actors in preparation only. No judge deliberation, physical private audio, subscription metadata, stale-cache replay, account switch or return from private media space was tested.",
+        "No attachment was successfully shared: the following evidence upload returned 503."
+      ],
+      "staleBlockerFragments": [
+        {
+          "phrase": "Synthetic team message/evidence and cross-team DOM/snapshot privacy passed.",
+          "supersededScope": "Keep synthetic evidence history. Add hosted team-message and captured-response separation only; hosted evidence upload failed503."
+        }
+      ]
+    },
+    {
+      "requirementId": "V3-20-001",
+      "originalRequirement": "Allow at least five prepared motions and an arbitrary reasonable number of matches per event. A motion is not a match, team, round, or provider room. Each match owns assignments, rules snapshot, stage attempts, clocks, ballots, awards, and result history. Never reset a completed match to reuse its ID for the next motion.",
+      "existingState": "PARTIAL",
+      "proposedState": "PARTIAL",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Synthetic reviewed/published fixture, exact final winner and next three-judge match startup passed. Full fixture/rematch/exception UI and actual concurrency limits remain OPEN. Exact hosted additive migrations, DML rollback/absence readback and direct-role denials passed. Native independent sessions, hosted backup/schema-installation rollback and deployed recovery remain OPEN. The second match was only started; full formal adjudication, five-team/bye/exception fixture UI and actual concurrency remain open.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "five_motions"
+      ],
+      "passingCheckIndices": [],
+      "committedRevisions": [
+        41,
+        42,
+        43,
+        44,
+        45
+      ],
+      "proposedObservation": "Five organizer-supplied private motion records were added through the DOM and acknowledged as five distinct committed commands.",
+      "requiredLimits": [
+        "This is motion-bank creation, not five completed matches, inter-match isolation, sequential continuation or measured concurrency."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-20-002",
+      "originalRequirement": "Include manual fixtures, single round-robin, and single elimination. These are product competition tools, not claims about mandatory Oxford–Oregon tournament rules. No unrequested Swiss/double-elimination/complex power-pairing implementation is needed for this release.",
+      "existingState": "PARTIAL",
+      "proposedState": "PARTIAL",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Synthetic reviewed/published fixture, exact final winner and next three-judge match startup passed. Full fixture/rematch/exception UI and actual concurrency limits remain OPEN. The second match was only started; full formal adjudication, five-team/bye/exception fixture UI and actual concurrency remain open.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "reviewed_fixture"
+      ],
+      "passingCheckIndices": [
+        38
+      ],
+      "committedRevisions": [
+        46,
+        47
+      ],
+      "proposedObservation": "The host generated the two-team round-robin fixture, reached the draft-review display and explicitly published it. The subsequent match dialog fixed both teams and its motion to the published fixture.",
+      "requiredLimits": [
+        "One two-team fixture only; five-team/10-match scheduling, byes, elimination, reuse policy, side balance and conflict handling were not verified.",
+        "The draft-review screenshot was captured but not visually reviewed by this mapping task."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-20-003",
+      "originalRequirement": "Manual fixtures let organizers pair teams/motions/officials and validate conflicts. Round-robin schedules every team against every other once, using an idle slot for odd team counts. For five teams that is 10 matches; five motions can be assigned under an explicit reuse policy. Unreleased-motion protection matters where later teams observe an earlier use.",
+      "existingState": "PARTIAL",
+      "proposedState": "PARTIAL",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Synthetic reviewed/published fixture, exact final winner and next three-judge match startup passed. Full fixture/rematch/exception UI and actual concurrency limits remain OPEN.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "reviewed_fixture"
+      ],
+      "passingCheckIndices": [
+        38
+      ],
+      "committedRevisions": [
+        46,
+        47
+      ],
+      "proposedObservation": "The host generated the two-team round-robin fixture, reached the draft-review display and explicitly published it. The subsequent match dialog fixed both teams and its motion to the published fixture.",
+      "requiredLimits": [
+        "One two-team fixture only; five-team/10-match scheduling, byes, elimination, reuse policy, side balance and conflict handling were not verified.",
+        "The draft-review screenshot was captured but not visually reviewed by this mapping task."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-22-001",
+      "originalRequirement": "Reuse the current supported stack after inspection. Prefer the existing authenticated Worker/API plus transactional database for official state; if it is the current Supabase/Postgres backend, keep it rather than inventing a second database. A per-match Durable Object coordinator may provide ordered commands/WebSockets when justified and available, but document one authority and recovery path; do not maintain conflicting authoritative clocks in two stores. [T5]",
+      "existingState": "PARTIAL",
+      "proposedState": "PARTIAL",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Exact hosted additive migrations, DML rollback/absence readback and direct-role denials passed. Native independent sessions, hosted backup/schema-installation rollback and deployed recovery remain OPEN.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "event_create_reload"
+      ],
+      "passingCheckIndices": [
+        1
+      ],
+      "committedRevisions": [
+        1
+      ],
+      "proposedObservation": "The host created an explicitly marked unlisted rehearsal event through the actual DOM/Worker path. The same event title and ID survived an actual browser reload and fresh snapshot.",
+      "requiredLimits": [
+        "One rehearsal event only; other setup branches, account cohorts, sign-in return, other entry routes and mobile devices were not established.",
+        "Committed revisions and reload support persistence for this operation; they do not prove every transactional/race/recovery clause."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-22-002",
+      "originalRequirement": "Workers KV is eventually consistent and not a suitable sole authority for live ballots, result locks, or clock transitions. Ordinary room data packets are not durable storage for late joiners or disconnect recovery. Persist authoritative decisions transactionally; live transport announces committed revisions. [T6, T7]",
+      "existingState": "PARTIAL",
+      "proposedState": "PARTIAL",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Exact hosted additive migrations, DML rollback/absence readback and direct-role denials passed. Native independent sessions, hosted backup/schema-installation rollback and deployed recovery remain OPEN.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "event_create_reload"
+      ],
+      "passingCheckIndices": [
+        1
+      ],
+      "committedRevisions": [
+        1
+      ],
+      "proposedObservation": "The host created an explicitly marked unlisted rehearsal event through the actual DOM/Worker path. The same event title and ID survived an actual browser reload and fresh snapshot.",
+      "requiredLimits": [
+        "One rehearsal event only; other setup branches, account cohorts, sign-in return, other entry routes and mobile devices were not established.",
+        "Committed revisions and reload support persistence for this operation; they do not prove every transactional/race/recovery clause."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-22-004",
+      "originalRequirement": "Use authenticated commands such as create/update event, claim invite, confirm roster, release motion, acknowledge rules, request admission, assign role, start/pause/finish stage, enter/leave private space, save/submit ballot, open/close poll, publish/finalize/correct result, generate export, and send results. Route names should match the existing API convention; do not invent parallel auth.",
+      "existingState": "PARTIAL",
+      "proposedState": "PARTIAL",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Hosted authorization and provider stale-token revocation OPEN. Exact hosted additive migrations, DML rollback/absence readback and direct-role denials passed. Native independent sessions, hosted backup/schema-installation rollback and deployed recovery remain OPEN.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "event_create_reload"
+      ],
+      "passingCheckIndices": [
+        1
+      ],
+      "committedRevisions": [
+        1
+      ],
+      "proposedObservation": "The host created an explicitly marked unlisted rehearsal event through the actual DOM/Worker path. The same event title and ID survived an actual browser reload and fresh snapshot.",
+      "requiredLimits": [
+        "One rehearsal event only; other setup branches, account cohorts, sign-in return, other entry routes and mobile devices were not established.",
+        "Committed revisions and reload support persistence for this operation; they do not prove every transactional/race/recovery clause."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-22-007",
+      "originalRequirement": "Authorize WebSocket/SSE/realtime channels and sanitize snapshots by viewer role. New join/reconnect fetches a fresh authorized snapshot with version, then reconciles later events; ignore duplicates/stale revisions. Client disconnection must not manufacture missing votes. When a notification is missed, replay/read repair restores state.",
+      "existingState": "PARTIAL",
+      "proposedState": "PARTIAL",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Hosted auth/CORS/storage and actual adversarial provider subscriptions/replay OPEN. Continuously operating hosted minute sweep/backlog and actual provider failure/recovery OPEN. This proves only observed HTTP/DOM boundaries, not provider subscriptions or complete hosted adversarial coverage.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "event_create_reload",
+        "waiting_snapshot",
+        "private_team_messages"
+      ],
+      "passingCheckIndices": [
+        1,
+        3,
+        4,
+        7,
+        8,
+        11,
+        12,
+        15,
+        16,
+        19,
+        20,
+        23,
+        24,
+        27,
+        28,
+        31,
+        32,
+        35,
+        36,
+        46,
+        47
+      ],
+      "committedRevisions": [
+        1,
+        2,
+        5,
+        9,
+        13,
+        17,
+        21,
+        25,
+        29,
+        33,
+        37,
+        65,
+        66
+      ],
+      "proposedObservation": "The host created an explicitly marked unlisted rehearsal event through the actual DOM/Worker path. The same event title and ID survived an actual browser reload and fresh snapshot. Before host admission, each of the nine invited identities received an awaiting-admission snapshot containing one member and no matches or motions. Eight other workspace tabs remained disabled. The affirmative captain sent the synthetic private-team marker and saw it in its own message DOM. The negative captain then opened its team channel: the marker was absent from its DOM and every captured authorized response after the privacy cutoff, with at least one such response observed. The negative captain subsequently committed its own team message.",
+      "requiredLimits": [
+        "One rehearsal event only; other setup branches, account cohorts, sign-in return, other entry routes and mobile devices were not established.",
+        "Committed revisions and reload support persistence for this operation; they do not prove every transactional/race/recovery clause.",
+        "The disabled tabs are DOM evidence; the separate restricted snapshot is the bounded backend evidence. Neither proves every direct endpoint, provider subscription, cross-event query or role forgery is denied.",
+        "Debate waiting-state evidence does not prove Study Room admission or Library policy.",
+        "The explicit assertion counts one member but does not independently compare that member ID; the test name alone does not strengthen that assertion.",
+        "Written-message separation for two real signed-in actors in preparation only. No judge deliberation, physical private audio, subscription metadata, stale-cache replay, account switch or return from private media space was tested.",
+        "No attachment was successfully shared: the following evidence upload returned 503."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-22-009",
+      "originalRequirement": "Keep sensitive private content out of shared metadata, analytics, URL query parameters, public logs, service-worker caches, and broad snapshot payloads. Apply no-store where required; clear account-specific caches on sign-out/switch. Validate CORS/CSRF/origin handling under existing auth; never solve integration errors by permitting every origin or disabling authentication.",
+      "existingState": "PARTIAL",
+      "proposedState": "PARTIAL",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Hosted auth/CORS/storage and actual adversarial provider subscriptions/replay OPEN. This proves only observed HTTP/DOM boundaries, not provider subscriptions or complete hosted adversarial coverage.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "waiting_snapshot",
+        "private_team_messages"
+      ],
+      "passingCheckIndices": [
+        3,
+        4,
+        7,
+        8,
+        11,
+        12,
+        15,
+        16,
+        19,
+        20,
+        23,
+        24,
+        27,
+        28,
+        31,
+        32,
+        35,
+        36,
+        46,
+        47
+      ],
+      "committedRevisions": [
+        2,
+        5,
+        9,
+        13,
+        17,
+        21,
+        25,
+        29,
+        33,
+        37,
+        65,
+        66
+      ],
+      "proposedObservation": "Before host admission, each of the nine invited identities received an awaiting-admission snapshot containing one member and no matches or motions. Eight other workspace tabs remained disabled. The affirmative captain sent the synthetic private-team marker and saw it in its own message DOM. The negative captain then opened its team channel: the marker was absent from its DOM and every captured authorized response after the privacy cutoff, with at least one such response observed. The negative captain subsequently committed its own team message.",
+      "requiredLimits": [
+        "The disabled tabs are DOM evidence; the separate restricted snapshot is the bounded backend evidence. Neither proves every direct endpoint, provider subscription, cross-event query or role forgery is denied.",
+        "Debate waiting-state evidence does not prove Study Room admission or Library policy.",
+        "The explicit assertion counts one member but does not independently compare that member ID; the test name alone does not strengthen that assertion.",
+        "Written-message separation for two real signed-in actors in preparation only. No judge deliberation, physical private audio, subscription metadata, stale-cache replay, account switch or return from private media space was tested.",
+        "No attachment was successfully shared: the following evidence upload returned 503."
+      ],
+      "staleBlockerFragments": []
+    },
+    {
+      "requirementId": "V3-25-004",
+      "originalRequirement": "| Microphone unavailable for next speaker | Not Ready + device help; official decides pause/accommodation, no fabricated speech. |",
+      "existingState": "PARTIAL",
+      "proposedState": "PARTIAL",
+      "existingAcceptanceConclusion": "UNVERIFIED",
+      "existingBlocker": "Synthetic confirmed six-seat/captain/readiness flow passed. Roster exceptions, captain-proposal and side-draw/reroll browser branches remain OPEN. Synthetic accommodation and procedural protest/resolution passed. Other moderator help/exception UI paths and real disconnected-speaker recovery remain OPEN. Consenting physical two-way media/browser tests and >=90 real-minute full-flow rehearsal OPEN. Physical microphone checks and other roster/moderator exception UI branches remain unverified.",
+      "sourceTestDefinitionsUnchanged": true,
+      "evidenceGroups": [
+        "match_readiness"
+      ],
+      "passingCheckIndices": [
+        39
+      ],
+      "committedRevisions": [
+        48,
+        49,
+        51,
+        52,
+        53,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62
+      ],
+      "proposedObservation": "A fixture match assigned the neutral host as its single judge. Six speakers checked in; six explicit organizer accommodations stated that physical audio was not verified. After acknowledgements and motion release, readiness was persisted and rendered as ready. An earlier start_match attempt was rejected with 409 MATCH_NOT_READY.",
+      "requiredLimits": [
+        "These are approved control-rehearsal accommodations, not microphone/device PASS results.",
+        "The match was not adjudicated, and conflicting roles, separate moderator/timekeeper, camera refusal, reserves and other readiness exceptions remain open."
+      ],
+      "staleBlockerFragments": [
+        {
+          "phrase": "Synthetic confirmed six-seat/captain/readiness flow passed.",
+          "supersededScope": "Add actual host-confirmed six-seat/captain setup and accommodated readiness. Physical microphone checks and exceptional roster branches remain open."
+        }
+      ]
+    }
+  ],
+  "checkMapping": [
+    {
+      "index": 1,
+      "name": "New event survives actual browser reload",
+      "groupIds": [
+        "event_create_reload"
+      ]
+    },
+    {
+      "index": 2,
+      "name": "Invitation contains a complete same-origin event and secret link",
+      "groupIds": [
+        "invitation_links"
+      ]
+    },
+    {
+      "index": 3,
+      "name": "Unadmitted identity receives only its own waiting snapshot",
+      "groupIds": [
+        "waiting_snapshot"
+      ]
+    },
+    {
+      "index": 4,
+      "name": "Waiting participant cannot open other workspaces",
+      "groupIds": [
+        "waiting_snapshot"
+      ]
+    },
+    {
+      "index": 5,
+      "name": "Host admission unlocks People after a real refresh",
+      "groupIds": [
+        "host_admission"
+      ]
+    },
+    {
+      "index": 6,
+      "name": "Invitation contains a complete same-origin event and secret link",
+      "groupIds": [
+        "invitation_links"
+      ]
+    },
+    {
+      "index": 7,
+      "name": "Unadmitted identity receives only its own waiting snapshot",
+      "groupIds": [
+        "waiting_snapshot"
+      ]
+    },
+    {
+      "index": 8,
+      "name": "Waiting participant cannot open other workspaces",
+      "groupIds": [
+        "waiting_snapshot"
+      ]
+    },
+    {
+      "index": 9,
+      "name": "Host admission unlocks People after a real refresh",
+      "groupIds": [
+        "host_admission"
+      ]
+    },
+    {
+      "index": 10,
+      "name": "Invitation contains a complete same-origin event and secret link",
+      "groupIds": [
+        "invitation_links"
+      ]
+    },
+    {
+      "index": 11,
+      "name": "Unadmitted identity receives only its own waiting snapshot",
+      "groupIds": [
+        "waiting_snapshot"
+      ]
+    },
+    {
+      "index": 12,
+      "name": "Waiting participant cannot open other workspaces",
+      "groupIds": [
+        "waiting_snapshot"
+      ]
+    },
+    {
+      "index": 13,
+      "name": "Host admission unlocks People after a real refresh",
+      "groupIds": [
+        "host_admission"
+      ]
+    },
+    {
+      "index": 14,
+      "name": "Invitation contains a complete same-origin event and secret link",
+      "groupIds": [
+        "invitation_links"
+      ]
+    },
+    {
+      "index": 15,
+      "name": "Unadmitted identity receives only its own waiting snapshot",
+      "groupIds": [
+        "waiting_snapshot"
+      ]
+    },
+    {
+      "index": 16,
+      "name": "Waiting participant cannot open other workspaces",
+      "groupIds": [
+        "waiting_snapshot"
+      ]
+    },
+    {
+      "index": 17,
+      "name": "Host admission unlocks People after a real refresh",
+      "groupIds": [
+        "host_admission"
+      ]
+    },
+    {
+      "index": 18,
+      "name": "Invitation contains a complete same-origin event and secret link",
+      "groupIds": [
+        "invitation_links"
+      ]
+    },
+    {
+      "index": 19,
+      "name": "Unadmitted identity receives only its own waiting snapshot",
+      "groupIds": [
+        "waiting_snapshot"
+      ]
+    },
+    {
+      "index": 20,
+      "name": "Waiting participant cannot open other workspaces",
+      "groupIds": [
+        "waiting_snapshot"
+      ]
+    },
+    {
+      "index": 21,
+      "name": "Host admission unlocks People after a real refresh",
+      "groupIds": [
+        "host_admission"
+      ]
+    },
+    {
+      "index": 22,
+      "name": "Invitation contains a complete same-origin event and secret link",
+      "groupIds": [
+        "invitation_links"
+      ]
+    },
+    {
+      "index": 23,
+      "name": "Unadmitted identity receives only its own waiting snapshot",
+      "groupIds": [
+        "waiting_snapshot"
+      ]
+    },
+    {
+      "index": 24,
+      "name": "Waiting participant cannot open other workspaces",
+      "groupIds": [
+        "waiting_snapshot"
+      ]
+    },
+    {
+      "index": 25,
+      "name": "Host admission unlocks People after a real refresh",
+      "groupIds": [
+        "host_admission"
+      ]
+    },
+    {
+      "index": 26,
+      "name": "Invitation contains a complete same-origin event and secret link",
+      "groupIds": [
+        "invitation_links"
+      ]
+    },
+    {
+      "index": 27,
+      "name": "Unadmitted identity receives only its own waiting snapshot",
+      "groupIds": [
+        "waiting_snapshot"
+      ]
+    },
+    {
+      "index": 28,
+      "name": "Waiting participant cannot open other workspaces",
+      "groupIds": [
+        "waiting_snapshot"
+      ]
+    },
+    {
+      "index": 29,
+      "name": "Host admission unlocks People after a real refresh",
+      "groupIds": [
+        "host_admission"
+      ]
+    },
+    {
+      "index": 30,
+      "name": "Invitation contains a complete same-origin event and secret link",
+      "groupIds": [
+        "invitation_links"
+      ]
+    },
+    {
+      "index": 31,
+      "name": "Unadmitted identity receives only its own waiting snapshot",
+      "groupIds": [
+        "waiting_snapshot"
+      ]
+    },
+    {
+      "index": 32,
+      "name": "Waiting participant cannot open other workspaces",
+      "groupIds": [
+        "waiting_snapshot"
+      ]
+    },
+    {
+      "index": 33,
+      "name": "Host admission unlocks People after a real refresh",
+      "groupIds": [
+        "host_admission"
+      ]
+    },
+    {
+      "index": 34,
+      "name": "Invitation contains a complete same-origin event and secret link",
+      "groupIds": [
+        "invitation_links"
+      ]
+    },
+    {
+      "index": 35,
+      "name": "Unadmitted identity receives only its own waiting snapshot",
+      "groupIds": [
+        "waiting_snapshot"
+      ]
+    },
+    {
+      "index": 36,
+      "name": "Waiting participant cannot open other workspaces",
+      "groupIds": [
+        "waiting_snapshot"
+      ]
+    },
+    {
+      "index": 37,
+      "name": "Host admission unlocks People after a real refresh",
+      "groupIds": [
+        "host_admission"
+      ]
+    },
+    {
+      "index": 38,
+      "name": "Published fixture fixes both teams and motion in the dialog",
+      "groupIds": [
+        "reviewed_fixture"
+      ]
+    },
+    {
+      "index": 39,
+      "name": "Current match readiness is saved and rendered",
+      "groupIds": [
+        "match_readiness",
+        "rule_acknowledgement_and_release"
+      ]
+    },
+    {
+      "index": 40,
+      "name": "Independent V3 oracle confirms every default stage, question pair and duration",
+      "groupIds": [
+        "saved_default_run_of_show"
+      ]
+    },
+    {
+      "index": 41,
+      "name": "Live room layout exposes the media controls, arena and headings at 1365px",
+      "groupIds": [
+        "live_control_geometry"
+      ]
+    },
+    {
+      "index": 42,
+      "name": "Media controls stay above the arena without covering team or adjudicator headings at 1365px",
+      "groupIds": [
+        "live_control_geometry"
+      ]
+    },
+    {
+      "index": 43,
+      "name": "Live room layout exposes the media controls, arena and headings at 320px",
+      "groupIds": [
+        "live_control_geometry"
+      ]
+    },
+    {
+      "index": 44,
+      "name": "Media controls stay above the arena without covering team or adjudicator headings at 320px",
+      "groupIds": [
+        "live_control_geometry"
+      ]
+    },
+    {
+      "index": 45,
+      "name": "Default preparation loads READY for 15 minutes",
+      "groupIds": [
+        "preparation_ready"
+      ]
+    },
+    {
+      "index": 46,
+      "name": "Private marker absent from unauthorized DOM: CI_AFFIRMATIVE_PRIVATE_STRATEGY_DO_NOT_DISCLOSE",
+      "groupIds": [
+        "private_team_messages"
+      ]
+    },
+    {
+      "index": 47,
+      "name": "Private marker absent from unauthorized snapshots: CI_AFFIRMATIVE_PRIVATE_STRATEGY_DO_NOT_DISCLOSE",
+      "groupIds": [
+        "private_team_messages"
+      ]
+    }
+  ],
+  "commandMapping": [
+    {
+      "revision": 1,
+      "command": "create_event",
+      "groupIds": [
+        "event_create_reload"
+      ]
+    },
+    {
+      "revision": 2,
+      "command": "check_in",
+      "groupIds": [
+        "waiting_snapshot"
+      ]
+    },
+    {
+      "revision": 3,
+      "command": "create_invite",
+      "groupIds": [
+        "invitation_links"
+      ]
+    },
+    {
+      "revision": 4,
+      "command": "claim_invite",
+      "groupIds": [
+        "invitation_links"
+      ]
+    },
+    {
+      "revision": 5,
+      "command": "check_in",
+      "groupIds": [
+        "waiting_snapshot"
+      ]
+    },
+    {
+      "revision": 6,
+      "command": "admit_member",
+      "groupIds": [
+        "host_admission"
+      ]
+    },
+    {
+      "revision": 7,
+      "command": "create_invite",
+      "groupIds": [
+        "invitation_links"
+      ]
+    },
+    {
+      "revision": 8,
+      "command": "claim_invite",
+      "groupIds": [
+        "invitation_links"
+      ]
+    },
+    {
+      "revision": 9,
+      "command": "check_in",
+      "groupIds": [
+        "waiting_snapshot"
+      ]
+    },
+    {
+      "revision": 10,
+      "command": "admit_member",
+      "groupIds": [
+        "host_admission"
+      ]
+    },
+    {
+      "revision": 11,
+      "command": "create_invite",
+      "groupIds": [
+        "invitation_links"
+      ]
+    },
+    {
+      "revision": 12,
+      "command": "claim_invite",
+      "groupIds": [
+        "invitation_links"
+      ]
+    },
+    {
+      "revision": 13,
+      "command": "check_in",
+      "groupIds": [
+        "waiting_snapshot"
+      ]
+    },
+    {
+      "revision": 14,
+      "command": "admit_member",
+      "groupIds": [
+        "host_admission"
+      ]
+    },
+    {
+      "revision": 15,
+      "command": "create_invite",
+      "groupIds": [
+        "invitation_links"
+      ]
+    },
+    {
+      "revision": 16,
+      "command": "claim_invite",
+      "groupIds": [
+        "invitation_links"
+      ]
+    },
+    {
+      "revision": 17,
+      "command": "check_in",
+      "groupIds": [
+        "waiting_snapshot"
+      ]
+    },
+    {
+      "revision": 18,
+      "command": "admit_member",
+      "groupIds": [
+        "host_admission"
+      ]
+    },
+    {
+      "revision": 19,
+      "command": "create_invite",
+      "groupIds": [
+        "invitation_links"
+      ]
+    },
+    {
+      "revision": 20,
+      "command": "claim_invite",
+      "groupIds": [
+        "invitation_links"
+      ]
+    },
+    {
+      "revision": 21,
+      "command": "check_in",
+      "groupIds": [
+        "waiting_snapshot"
+      ]
+    },
+    {
+      "revision": 22,
+      "command": "admit_member",
+      "groupIds": [
+        "host_admission"
+      ]
+    },
+    {
+      "revision": 23,
+      "command": "create_invite",
+      "groupIds": [
+        "invitation_links"
+      ]
+    },
+    {
+      "revision": 24,
+      "command": "claim_invite",
+      "groupIds": [
+        "invitation_links"
+      ]
+    },
+    {
+      "revision": 25,
+      "command": "check_in",
+      "groupIds": [
+        "waiting_snapshot"
+      ]
+    },
+    {
+      "revision": 26,
+      "command": "admit_member",
+      "groupIds": [
+        "host_admission"
+      ]
+    },
+    {
+      "revision": 27,
+      "command": "create_invite",
+      "groupIds": [
+        "invitation_links"
+      ]
+    },
+    {
+      "revision": 28,
+      "command": "claim_invite",
+      "groupIds": [
+        "invitation_links"
+      ]
+    },
+    {
+      "revision": 29,
+      "command": "check_in",
+      "groupIds": [
+        "waiting_snapshot"
+      ]
+    },
+    {
+      "revision": 30,
+      "command": "admit_member",
+      "groupIds": [
+        "host_admission"
+      ]
+    },
+    {
+      "revision": 31,
+      "command": "create_invite",
+      "groupIds": [
+        "invitation_links"
+      ]
+    },
+    {
+      "revision": 32,
+      "command": "claim_invite",
+      "groupIds": [
+        "invitation_links"
+      ]
+    },
+    {
+      "revision": 33,
+      "command": "check_in",
+      "groupIds": [
+        "waiting_snapshot"
+      ]
+    },
+    {
+      "revision": 34,
+      "command": "admit_member",
+      "groupIds": [
+        "host_admission"
+      ]
+    },
+    {
+      "revision": 35,
+      "command": "create_invite",
+      "groupIds": [
+        "invitation_links"
+      ]
+    },
+    {
+      "revision": 36,
+      "command": "claim_invite",
+      "groupIds": [
+        "invitation_links"
+      ]
+    },
+    {
+      "revision": 37,
+      "command": "check_in",
+      "groupIds": [
+        "waiting_snapshot"
+      ]
+    },
+    {
+      "revision": 38,
+      "command": "admit_member",
+      "groupIds": [
+        "host_admission"
+      ]
+    },
+    {
+      "revision": 39,
+      "command": "confirm_roster",
+      "groupIds": [
+        "confirmed_rosters"
+      ]
+    },
+    {
+      "revision": 40,
+      "command": "confirm_roster",
+      "groupIds": [
+        "confirmed_rosters"
+      ]
+    },
+    {
+      "revision": 41,
+      "command": "add_motion",
+      "groupIds": [
+        "five_motions"
+      ]
+    },
+    {
+      "revision": 42,
+      "command": "add_motion",
+      "groupIds": [
+        "five_motions"
+      ]
+    },
+    {
+      "revision": 43,
+      "command": "add_motion",
+      "groupIds": [
+        "five_motions"
+      ]
+    },
+    {
+      "revision": 44,
+      "command": "add_motion",
+      "groupIds": [
+        "five_motions"
+      ]
+    },
+    {
+      "revision": 45,
+      "command": "add_motion",
+      "groupIds": [
+        "five_motions"
+      ]
+    },
+    {
+      "revision": 46,
+      "command": "generate_fixtures",
+      "groupIds": [
+        "reviewed_fixture"
+      ]
+    },
+    {
+      "revision": 47,
+      "command": "publish_fixtures",
+      "groupIds": [
+        "reviewed_fixture"
+      ]
+    },
+    {
+      "revision": 48,
+      "command": "create_match",
+      "groupIds": [
+        "match_readiness"
+      ]
+    },
+    {
+      "revision": 49,
+      "command": "check_in",
+      "groupIds": [
+        "match_readiness"
+      ]
+    },
+    {
+      "revision": 50,
+      "command": "acknowledge_rules",
+      "groupIds": [
+        "rule_acknowledgement_and_release"
+      ]
+    },
+    {
+      "revision": 51,
+      "command": "check_in",
+      "groupIds": [
+        "match_readiness"
+      ]
+    },
+    {
+      "revision": 52,
+      "command": "check_in",
+      "groupIds": [
+        "match_readiness"
+      ]
+    },
+    {
+      "revision": 53,
+      "command": "check_in",
+      "groupIds": [
+        "match_readiness"
+      ]
+    },
+    {
+      "revision": 54,
+      "command": "acknowledge_rules",
+      "groupIds": [
+        "rule_acknowledgement_and_release"
+      ]
+    },
+    {
+      "revision": 55,
+      "command": "check_in",
+      "groupIds": [
+        "match_readiness"
+      ]
+    },
+    {
+      "revision": 56,
+      "command": "check_in",
+      "groupIds": [
+        "match_readiness"
+      ]
+    },
+    {
+      "revision": 57,
+      "command": "record_device_check",
+      "groupIds": [
+        "match_readiness"
+      ]
+    },
+    {
+      "revision": 58,
+      "command": "record_device_check",
+      "groupIds": [
+        "match_readiness"
+      ]
+    },
+    {
+      "revision": 59,
+      "command": "record_device_check",
+      "groupIds": [
+        "match_readiness"
+      ]
+    },
+    {
+      "revision": 60,
+      "command": "record_device_check",
+      "groupIds": [
+        "match_readiness"
+      ]
+    },
+    {
+      "revision": 61,
+      "command": "record_device_check",
+      "groupIds": [
+        "match_readiness"
+      ]
+    },
+    {
+      "revision": 62,
+      "command": "record_device_check",
+      "groupIds": [
+        "match_readiness"
+      ]
+    },
+    {
+      "revision": 63,
+      "command": "release_motion",
+      "groupIds": [
+        "rule_acknowledgement_and_release"
+      ]
+    },
+    {
+      "revision": 64,
+      "command": "start_match",
+      "groupIds": [
+        "saved_default_run_of_show",
+        "preparation_ready"
+      ]
+    },
+    {
+      "revision": 65,
+      "command": "send_message",
+      "groupIds": [
+        "private_team_messages"
+      ]
+    },
+    {
+      "revision": 66,
+      "command": "send_message",
+      "groupIds": [
+        "private_team_messages"
+      ]
+    }
+  ],
+  "failureLimits": {
+    "runConclusion": "FAILURE",
+    "browserElapsedMs": 243118,
+    "completedTimedStages": 0,
+    "clockClaims": 0,
+    "sessionRefreshes": 0,
+    "exports": 0,
+    "evidenceUploadStatus": 503,
+    "originalFailure": "HOSTED_BROWSER_JOURNEY_FAILED",
+    "exactMatchedBrowserError": "page.waitForResponse: Timeout 30000ms exceeded while waiting for event \"response\"",
+    "cleanupAtAttemptEnd": "10 fixture identities held; all11 global logout fences confirmed; one excluded identity deleted. Atomic capture comparison failed, no cleanup completion claim.",
+    "laterReconciliation": "Root is handling separately. This mapping preserves the failed-attempt held state and does not substitute any later cleanup evidence.",
+    "physicalMedia": false,
+    "providerMedia": false,
+    "realMail": false,
+    "controlEndurance": false,
+    "fullAcceptance": false
+  },
+  "limits": [
+    "No entire requirement or acceptance case is promoted by this mapping.",
+    "All original requirement/source/test definitions and acceptance conclusions remain unchanged.",
+    "Positive normal paths do not close adversarial, concurrency, optional product branches or provider boundaries.",
+    "The prior run34369187490 events403 remains unclassified; this successful reload does not establish its cause.",
+    "This task changed no tracked files and made no provider calls."
+  ]
+}

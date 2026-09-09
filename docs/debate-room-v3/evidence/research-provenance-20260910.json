@@ -1,0 +1,644 @@
+{
+  "schemaVersion": 1,
+  "kind": "BOUNDED_PRIMARY_SOURCE_RESEARCH_PROVENANCE_AUDIT",
+  "recordedAt": "2026-09-09T15:53:10.583Z",
+  "observedDate": "2026-09-09",
+  "scope": "Seventeen section29 research/provenance rows only. Primary public docs, exact remote repository source and installed package API inspection. No tracked file edits, provider account queries/mutations, purchases, sessions or load tests.",
+  "summary": {
+    "rows": 17,
+    "referenceFactsEligibleForReview": 14,
+    "partiallyVerifiedRows": [
+      "V3-29-001",
+      "V3-29-004",
+      "V3-29-015"
+    ],
+    "ledgerStatesChanged": 0,
+    "fullProductAcceptance": false
+  },
+  "inventory": {
+    "path": "docs/debate-room-v3/requirement-inventory.json",
+    "sha256": "e522ad52ff8454d9814e2a4087b16099315d9e920be1ed9398fecf657a8f7e53",
+    "totalRows": 315,
+    "stateCounts": {
+      "PARTIAL": 230,
+      "UNVERIFIED": 24,
+      "LOCAL_VERIFIED": 61
+    }
+  },
+  "method": {
+    "primarySources": "Named vendor/institution/author/standards URLs were opened during this pass. Normative W3C screen-capture text supplements MDN. Only short paraphrases are retained; web cache publication/retrieval dates do not certify permanent source contents.",
+    "repository": "Fresh read-only GitHub API main/contents calls resolved exact e9 source. Raw local Git blobs at that same SHA independently reproduce the retained package/lock/agent hashes. No repository content was mutated.",
+    "remoteMainObserved": "e9e6608302b78649af3409febb06ed6f16e6c36e",
+    "remoteTreeObserved": "9b3afd08c6c5f9d82e441bbae5a32a62aef0d559",
+    "installedPackages": "Existing installed package source was read only; no installation or provider connection was performed. Package version/API existence was checked against the exact repository lock. Package tarball integrities were not independently re-downloaded in this audit.",
+    "sourceSnapshotLimit": "Full website/SDK artifacts and HTTP response headers are not archived. These observed claims need fresh verification if relied on after source drift."
+  },
+  "repositorySourceHashes": [
+    {
+      "path": "worker/package.json",
+      "sourceUrl": "https://github.com/codingwally/Bar-Exam-simulator/blob/e9e6608302b78649af3409febb06ed6f16e6c36e/worker/package.json",
+      "sha256": "0f8f309064930ca8c2b9987fa390eda563ba6bbcc9eb38aa5df83de5aaadeb2f"
+    },
+    {
+      "path": "worker/package-lock.json",
+      "sourceUrl": "https://github.com/codingwally/Bar-Exam-simulator/blob/e9e6608302b78649af3409febb06ed6f16e6c36e/worker/package-lock.json",
+      "sha256": "630a53a5c2d768ca56b43a049f5a365432081562ed0d4acf547d33a214db8184"
+    },
+    {
+      "path": "agent.md",
+      "sourceUrl": "https://github.com/codingwally/Bar-Exam-simulator/blob/e9e6608302b78649af3409febb06ed6f16e6c36e/agent.md",
+      "sha256": "255dd465c2b8fd9631a8cfcde9eb000a866baa10810828d80e001a9d01faac50"
+    }
+  ],
+  "installedPackageSourceHashes": [
+    {
+      "path": "worker/node_modules/@livekit/track-processors/src/index.ts",
+      "sha256": "dda7c55cac3892ffab28fa3e814da7552127829c4c4a5671d7d80d04372bee76"
+    },
+    {
+      "path": "worker/node_modules/livekit-server-sdk/src/RoomServiceClient.ts",
+      "sha256": "3c8bf93a798d059ad513fcd997ba86032fc6823608c6a398e3c54d8d5243d2a3"
+    },
+    {
+      "path": "worker/node_modules/livekit-server-sdk/src/grants.ts",
+      "sha256": "ef0b7ec2913d02c7909c1de61fc95c467e14c6aef2dd251e3a08bfe603c88422"
+    },
+    {
+      "path": "worker/node_modules/livekit-client/src/room/Room.ts",
+      "sha256": "5321c56fb3f32a5a325766b95ed23f6da99d3e61f9ec8ccf57ec6fcfb4004560"
+    },
+    {
+      "path": "worker/node_modules/livekit-client/src/room/participant/LocalParticipant.ts",
+      "sha256": "153a7401b930ad5141814e0dbc1be83bd441d09b3899f950d05feae588abf48b"
+    },
+    {
+      "path": "worker/node_modules/livekit-client/src/room/track/RemoteTrackPublication.ts",
+      "sha256": "4bd1f962442a3558d8e56a4af1302064f70201c7cb8caba42a2bb8bb224f6bbe"
+    }
+  ],
+  "rows": [
+    {
+      "rowId": "V3-29-001",
+      "originalRequirement": "Rechecked 9 September 2026. References support only the facts attributed to them. Owner requirements and proposed product defaults—overtime behavior, score aggregation, award definitions, audience separation, privacy/retention, tournament standings, and fault recovery—are not presented as universal debate rules. Source pages can change; match SDK documentation to installed versions.",
+      "originalTestId": "T-V3-29-001",
+      "originalSource": {
+        "files": [
+          "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.md",
+          "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.txt"
+        ],
+        "startLine": 548,
+        "endLine": 548,
+        "sha256": "14ddbb8173dc27c2ab869f593f4315989c33b88be1bf4e0f94d8f98ad121ab09"
+      },
+      "originalLedgerState": "UNVERIFIED",
+      "observedDate": "2026-09-09",
+      "classification": "PARTIAL_META_PROVENANCE_REVIEW",
+      "sourceUrls": [],
+      "supportedClaims": [
+        "All seventeen reference/provenance rows were reviewed in this bounded pass. Technical documentation supports named provider/API facts only; the attached prompt separately supplies product defaults."
+      ],
+      "gaps": [
+        "The scanned R3 mechanics were retrieved but not freshly visually inspected through the available screenshot output.",
+        "A comprehensive audit of every in-product/export provenance label was not performed."
+      ],
+      "researchClaimClosureReady": false,
+      "ledgerStateChanged": false,
+      "fullProductAcceptance": false
+    },
+    {
+      "rowId": "V3-29-002",
+      "originalRequirement": "[R1] Casiciaco Recoletos Seminary, 6 April 2022: institutional account of a three-person Modified Oregon–Oxford event using 5/3/5 timing.\nhttps://www.recoletosdebaguio.edu.ph/2022/04/06/cares-holds-philosophical-debate-during-jornadas-de-filosofia-2022/",
+      "originalTestId": "T-V3-29-002",
+      "originalSource": {
+        "files": [
+          "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.md",
+          "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.txt"
+        ],
+        "startLine": 550,
+        "endLine": 551,
+        "sha256": "14ddbb8173dc27c2ab869f593f4315989c33b88be1bf4e0f94d8f98ad121ab09"
+      },
+      "originalLedgerState": "UNVERIFIED",
+      "observedDate": "2026-09-09",
+      "classification": "RESEARCH_FACTS_VERIFIED",
+      "sourceUrls": [
+        "https://www.recoletosdebaguio.edu.ph/2022/04/06/cares-holds-philosophical-debate-during-jornadas-de-filosofia-2022/"
+      ],
+      "supportedClaims": [
+        "The seminary's account describes six participants in two three-person teams using Modified Oregon–Oxford 5/3/5 timing: five-minute speeches, three-minute interpellation and five-minute rebuttal."
+      ],
+      "gaps": [
+        "This is an institution's event account, not a universal federation rule or application acceptance test."
+      ],
+      "retrievalNote": "Web retrieval initially exposed the page and then timed out on follow-up; a direct unauthenticated request to the same primary URL returned HTTP200 and the relevant article paragraph.",
+      "researchClaimClosureReady": true,
+      "ledgerStateChanged": false,
+      "fullProductAcceptance": false
+    },
+    {
+      "rowId": "V3-29-003",
+      "originalRequirement": "[R2] Prof. Jensen DG. Mañebog, author-contributed tournament framework: full alternating sequence, preparation break and affirmative-last closing. It is an author's framework, not a national federation rulebook; its own case-label order and rubric differ from some other organizers.\nhttps://ourhappyschool.com/debate/debate-tournament-framework-mechanics-guidelines-etc",
+      "originalTestId": "T-V3-29-003",
+      "originalSource": {
+        "files": [
+          "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.md",
+          "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.txt"
+        ],
+        "startLine": 553,
+        "endLine": 554,
+        "sha256": "14ddbb8173dc27c2ab869f593f4315989c33b88be1bf4e0f94d8f98ad121ab09"
+      },
+      "originalLedgerState": "UNVERIFIED",
+      "observedDate": "2026-09-09",
+      "classification": "RESEARCH_FACTS_VERIFIED",
+      "sourceUrls": [
+        "https://ourhappyschool.com/debate/debate-tournament-framework-mechanics-guidelines-etc"
+      ],
+      "supportedClaims": [
+        "The page credits Jensen DG. Mañebog as preparer/contributor. It describes three-person teams, alternating 5/3 stages, a five-minute break, negative closing before affirmative closing, and its own 50/20/15/15 criteria."
+      ],
+      "gaps": [
+        "Author-contributed framework only. Its case-label order and rubric must not be silently substituted for the owner's disclosed defaults."
+      ],
+      "researchClaimClosureReady": true,
+      "ledgerStateChanged": false,
+      "fullProductAcceptance": false
+    },
+    {
+      "rowId": "V3-29-004",
+      "originalRequirement": "[R3] DENR Region V mechanics circulated by DepEd Catanduanes, 2023: PDF pages 5–7 visually inspected. Different timing, interpellation/moderator guidance, 25/30/30/15 weights, and listed awards. Its event's finality language is not a bar to this application's explicitly disclosed correction procedure. Do not copy apparent sequence typos from scans.\nhttps://catanduanes.deped.gov.ph/files/UM---Inter-Schools-Debate-for-the-Environment-and-Battle-of-Best-Partnership-Initiatives-and-Awarding-Ceremonies.pdf",
+      "originalTestId": "T-V3-29-004",
+      "originalSource": {
+        "files": [
+          "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.md",
+          "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.txt"
+        ],
+        "startLine": 556,
+        "endLine": 557,
+        "sha256": "14ddbb8173dc27c2ab869f593f4315989c33b88be1bf4e0f94d8f98ad121ab09"
+      },
+      "originalLedgerState": "UNVERIFIED",
+      "observedDate": "2026-09-09",
+      "classification": "SOURCE_RETRIEVED_VISUAL_RECHECK_PENDING",
+      "sourceUrls": [
+        "https://catanduanes.deped.gov.ph/files/UM---Inter-Schools-Debate-for-the-Environment-and-Battle-of-Best-Partnership-Initiatives-and-Awarding-Ceremonies.pdf"
+      ],
+      "supportedClaims": [
+        "The exact primary URL was accessible as a ten-page scanned PDF."
+      ],
+      "gaps": [
+        "No text layer was returned. Screenshot requests for zero-based pages4/5/6 returned references but no model-visible image payload in this tool path; therefore timing, weights, listed awards and sequence typos were not independently visually rechecked.",
+        "The prompt's prior visual-inspection statement is preserved as supplied provenance, not adopted as this audit's observation."
+      ],
+      "researchClaimClosureReady": false,
+      "ledgerStateChanged": false,
+      "fullProductAcceptance": false
+    },
+    {
+      "rowId": "V3-29-005",
+      "originalRequirement": "[T1] LiveKit background processor lifecycle and compatibility helpers.\nhttps://github.com/livekit/track-processors-js/blob/main/processor-docs/video-processors.md",
+      "originalTestId": "T-V3-29-005",
+      "originalSource": {
+        "files": [
+          "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.md",
+          "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.txt"
+        ],
+        "startLine": 559,
+        "endLine": 560,
+        "sha256": "14ddbb8173dc27c2ab869f593f4315989c33b88be1bf4e0f94d8f98ad121ab09"
+      },
+      "originalLedgerState": "UNVERIFIED",
+      "observedDate": "2026-09-09",
+      "classification": "RESEARCH_FACTS_AND_INSTALLED_API_VERIFIED",
+      "sourceUrls": [
+        "https://github.com/livekit/track-processors-js/blob/main/processor-docs/video-processors.md",
+        "https://registry.npmjs.org/@livekit/track-processors/-/track-processors-0.7.2.tgz"
+      ],
+      "supportedClaims": [
+        "Current vendor documentation exposes compatibility helpers and a disabled passthrough processor whose switchTo method changes effects while attachment is retained.",
+        "Installed package0.7.2 source contains disabled mode, switchTo, supportsBackgroundProcessors and supportsModernBackgroundProcessors, matching the exact repository lock."
+      ],
+      "gaps": [
+        "Main-branch vendor docs are mutable. API existence does not prove leak-free lifecycle, moving remote video or physical-camera endurance."
+      ],
+      "researchClaimClosureReady": true,
+      "ledgerStateChanged": false,
+      "fullProductAcceptance": false
+    },
+    {
+      "rowId": "V3-29-006",
+      "originalRequirement": "[T2] LiveKit signed access tokens, publish-source permissions, runtime updates, and Cloud vs self-hosted revocation behavior.\nhttps://docs.livekit.io/frontends/reference/tokens-grants/",
+      "originalTestId": "T-V3-29-006",
+      "originalSource": {
+        "files": [
+          "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.md",
+          "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.txt"
+        ],
+        "startLine": 562,
+        "endLine": 563,
+        "sha256": "14ddbb8173dc27c2ab869f593f4315989c33b88be1bf4e0f94d8f98ad121ab09"
+      },
+      "originalLedgerState": "UNVERIFIED",
+      "observedDate": "2026-09-09",
+      "classification": "RESEARCH_FACTS_AND_INSTALLED_API_VERIFIED",
+      "sourceUrls": [
+        "https://docs.livekit.io/frontends/reference/tokens-grants/",
+        "https://registry.npmjs.org/livekit-server-sdk/-/livekit-server-sdk-2.18.0.tgz"
+      ],
+      "supportedClaims": [
+        "LiveKit uses secret-signed JWT grants with independent camera, microphone, screen_share and screen_share_audio publish-source restrictions and runtime permission updates.",
+        "Current docs state automatic stale-token revocation on removal/permission changes is Cloud-only; self-hosted removal alone does not invalidate existing tokens. Token expiry controls initial connection, while connected clients receive refreshed tokens.",
+        "Installed server SDK2.18.0 exposes removeParticipant with revokeTokenTs, updateParticipant and canPublishSources."
+      ],
+      "gaps": [
+        "The project's actual LiveKit deployment type, configured limits and real stale-role reconnect denial were not queried or exercised."
+      ],
+      "researchClaimClosureReady": true,
+      "ledgerStateChanged": false,
+      "fullProductAcceptance": false
+    },
+    {
+      "rowId": "V3-29-007",
+      "originalRequirement": "[T3] LiveKit subscriptions, selective delivery, and adaptive stream.\nhttps://docs.livekit.io/transport/media/subscribe/",
+      "originalTestId": "T-V3-29-007",
+      "originalSource": {
+        "files": [
+          "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.md",
+          "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.txt"
+        ],
+        "startLine": 565,
+        "endLine": 566,
+        "sha256": "14ddbb8173dc27c2ab869f593f4315989c33b88be1bf4e0f94d8f98ad121ab09"
+      },
+      "originalLedgerState": "UNVERIFIED",
+      "observedDate": "2026-09-09",
+      "classification": "RESEARCH_FACTS_AND_INSTALLED_API_VERIFIED",
+      "sourceUrls": [
+        "https://docs.livekit.io/transport/media/subscribe/",
+        "https://registry.npmjs.org/livekit-client/-/livekit-client-2.22.1.tgz"
+      ],
+      "supportedClaims": [
+        "LiveKit documents selective subscription and track enable/disable controls. Adaptive stream selects layers from attached element size/visibility and pauses hidden tracks; JavaScript requires Track.attach for this behavior.",
+        "Installed client2.22.1 includes adaptive-stream handling and RemoteTrackPublication.setSubscribed."
+      ],
+      "gaps": [
+        "Selective delivery is not an authorization boundary by itself. Actual subscriptions, private-room isolation and measured bandwidth/media quality still require live tests."
+      ],
+      "researchClaimClosureReady": true,
+      "ledgerStateChanged": false,
+      "fullProductAcceptance": false
+    },
+    {
+      "rowId": "V3-29-008",
+      "originalRequirement": "[T4] LiveKit screen sharing and separate screen-share audio.\nhttps://docs.livekit.io/transport/media/screenshare/",
+      "originalTestId": "T-V3-29-008",
+      "originalSource": {
+        "files": [
+          "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.md",
+          "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.txt"
+        ],
+        "startLine": 568,
+        "endLine": 569,
+        "sha256": "14ddbb8173dc27c2ab869f593f4315989c33b88be1bf4e0f94d8f98ad121ab09"
+      },
+      "originalLedgerState": "UNVERIFIED",
+      "observedDate": "2026-09-09",
+      "classification": "RESEARCH_FACTS_AND_INSTALLED_API_VERIFIED",
+      "sourceUrls": [
+        "https://docs.livekit.io/transport/media/screenshare/",
+        "https://registry.npmjs.org/livekit-client/-/livekit-client-2.22.1.tgz"
+      ],
+      "supportedClaims": [
+        "Vendor docs show createScreenTracks with audio enabled and publishing each returned track. Screen-share audio has its own screen_share_audio publication, which must be received and played independently.",
+        "Installed client2.22.1 exposes createScreenTracks. The docs explicitly limit browser audio support and describe selecting a tab with audio consent."
+      ],
+      "gaps": [
+        "No actual audio track, remote audibility, device consent or mobile publishing was tested. Screen video alone cannot close audio acceptance."
+      ],
+      "researchClaimClosureReady": true,
+      "ledgerStateChanged": false,
+      "fullProductAcceptance": false
+    },
+    {
+      "rowId": "V3-29-009",
+      "originalRequirement": "[T5] Cloudflare Durable Objects: coordination and strongly consistent storage option, not a mandate to change the stack.\nhttps://developers.cloudflare.com/durable-objects/",
+      "originalTestId": "T-V3-29-009",
+      "originalSource": {
+        "files": [
+          "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.md",
+          "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.txt"
+        ],
+        "startLine": 571,
+        "endLine": 572,
+        "sha256": "14ddbb8173dc27c2ab869f593f4315989c33b88be1bf4e0f94d8f98ad121ab09"
+      },
+      "originalLedgerState": "UNVERIFIED",
+      "observedDate": "2026-09-09",
+      "classification": "RESEARCH_FACTS_VERIFIED",
+      "sourceUrls": [
+        "https://developers.cloudflare.com/durable-objects/"
+      ],
+      "supportedClaims": [
+        "Cloudflare documents named Durable Objects for coordination among clients and colocated transactional, strongly consistent storage."
+      ],
+      "gaps": [
+        "This verifies an architectural option only; it does not require replacing the current transactional database or prove the application uses Durable Objects."
+      ],
+      "researchClaimClosureReady": true,
+      "ledgerStateChanged": false,
+      "fullProductAcceptance": false
+    },
+    {
+      "rowId": "V3-29-010",
+      "originalRequirement": "[T6] Cloudflare KV consistency limitations.\nhttps://developers.cloudflare.com/kv/concepts/how-kv-works/",
+      "originalTestId": "T-V3-29-010",
+      "originalSource": {
+        "files": [
+          "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.md",
+          "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.txt"
+        ],
+        "startLine": 574,
+        "endLine": 575,
+        "sha256": "14ddbb8173dc27c2ab869f593f4315989c33b88be1bf4e0f94d8f98ad121ab09"
+      },
+      "originalLedgerState": "UNVERIFIED",
+      "observedDate": "2026-09-09",
+      "classification": "RESEARCH_FACTS_VERIFIED",
+      "sourceUrls": [
+        "https://developers.cloudflare.com/kv/concepts/how-kv-works/"
+      ],
+      "supportedClaims": [
+        "Workers KV is eventually consistent; cross-location updates and previously cached negative lookups may remain stale for60 seconds or more. Cloudflare does not recommend it for atomic read/write transactions requiring stronger consistency."
+      ],
+      "gaps": [
+        "This supports the persistence boundary, not a measurement of the actual application clock/state latency."
+      ],
+      "researchClaimClosureReady": true,
+      "ledgerStateChanged": false,
+      "fullProductAcceptance": false
+    },
+    {
+      "rowId": "V3-29-011",
+      "originalRequirement": "[T7] LiveKit data transport; do not use room messages as the only persisted competition record.\nhttps://docs.livekit.io/transport/data/packets/",
+      "originalTestId": "T-V3-29-011",
+      "originalSource": {
+        "files": [
+          "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.md",
+          "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.txt"
+        ],
+        "startLine": 577,
+        "endLine": 578,
+        "sha256": "14ddbb8173dc27c2ab869f593f4315989c33b88be1bf4e0f94d8f98ad121ab09"
+      },
+      "originalLedgerState": "UNVERIFIED",
+      "observedDate": "2026-09-09",
+      "classification": "RESEARCH_FACTS_VERIFIED",
+      "sourceUrls": [
+        "https://docs.livekit.io/transport/data/packets/"
+      ],
+      "supportedClaims": [
+        "Reliable data packets are ordered and retransmitted on a best-effort basis; disconnected receivers can miss packets, and the server does not buffer them. Selective destination identities are supported."
+      ],
+      "gaps": [
+        "Keeping official results in durable application storage is the architecture conclusion drawn from those limits; the vendor page is not evidence of this application's persistence or recovery correctness."
+      ],
+      "researchClaimClosureReady": true,
+      "ledgerStateChanged": false,
+      "fullProductAcceptance": false
+    },
+    {
+      "rowId": "V3-29-012",
+      "originalRequirement": "[T8] MDN getDisplayMedia browser security/user-action requirements and compatibility.\nhttps://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getDisplayMedia",
+      "originalTestId": "T-V3-29-012",
+      "originalSource": {
+        "files": [
+          "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.md",
+          "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.txt"
+        ],
+        "startLine": 580,
+        "endLine": 581,
+        "sha256": "14ddbb8173dc27c2ab869f593f4315989c33b88be1bf4e0f94d8f98ad121ab09"
+      },
+      "originalLedgerState": "UNVERIFIED",
+      "observedDate": "2026-09-09",
+      "classification": "RESEARCH_FACTS_VERIFIED",
+      "sourceUrls": [
+        "https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getDisplayMedia",
+        "https://www.w3.org/TR/screen-capture/"
+      ],
+      "supportedClaims": [
+        "The normative Screen Capture API requires transient activation, a fully active/focused document and user selection; capture permission is not reusable as a persisted grant.",
+        "Audio is optional even when requested. MDN likewise documents per-browser/source variation and user-action requirements."
+      ],
+      "gaps": [
+        "Current standards and documentation do not prove actual Chrome/Safari/mobile behavior, renewed consent, supported audio sources or this application's handling."
+      ],
+      "researchClaimClosureReady": true,
+      "ledgerStateChanged": false,
+      "fullProductAcceptance": false
+    },
+    {
+      "rowId": "V3-29-013",
+      "originalRequirement": "[T9] W3C accessibility guidance for pointer target size. The 44-pixel main-control preference in this prompt is a product choice, not a misstatement of the 24-pixel WCAG 2.2 minimum criterion and its exceptions.\nhttps://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html",
+      "originalTestId": "T-V3-29-013",
+      "originalSource": {
+        "files": [
+          "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.md",
+          "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.txt"
+        ],
+        "startLine": 583,
+        "endLine": 584,
+        "sha256": "14ddbb8173dc27c2ab869f593f4315989c33b88be1bf4e0f94d8f98ad121ab09"
+      },
+      "originalLedgerState": "UNVERIFIED",
+      "observedDate": "2026-09-09",
+      "classification": "RESEARCH_FACTS_VERIFIED",
+      "sourceUrls": [
+        "https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html"
+      ],
+      "supportedClaims": [
+        "WCAG2.2 criterion2.5.8 specifies24 by24 CSS pixels with spacing, equivalent-control, inline, user-agent-control and essential exceptions. The prompt's44-pixel main-control preference is a stricter product choice."
+      ],
+      "gaps": [
+        "No application-wide target geometry, keyboard, screen-reader, zoom or accessibility conformance audit was performed."
+      ],
+      "researchClaimClosureReady": true,
+      "ledgerStateChanged": false,
+      "fullProductAcceptance": false
+    },
+    {
+      "rowId": "V3-29-014",
+      "originalRequirement": "[T10] Supabase row-level authorization and service-key bypass considerations.\nhttps://supabase.com/features/row-level-security",
+      "originalTestId": "T-V3-29-014",
+      "originalSource": {
+        "files": [
+          "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.md",
+          "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.txt"
+        ],
+        "startLine": 586,
+        "endLine": 587,
+        "sha256": "14ddbb8173dc27c2ab869f593f4315989c33b88be1bf4e0f94d8f98ad121ab09"
+      },
+      "originalLedgerState": "UNVERIFIED",
+      "observedDate": "2026-09-09",
+      "classification": "RESEARCH_FACTS_VERIFIED",
+      "sourceUrls": [
+        "https://supabase.com/features/row-level-security",
+        "https://supabase.com/docs/guides/database/postgres/row-level-security"
+      ],
+      "supportedClaims": [
+        "Supabase documents database-level row authorization and separate grant/policy checks. Server secret/service_role access can bypass RLS and must not be exposed in a browser.",
+        "The detailed docs qualify that a request carrying a user's access token uses that user's RLS context even if its client was initialized with a secret key."
+      ],
+      "gaps": [
+        "Documentation does not prove the actual Worker authorizes every privileged path; existing scoped database/security receipts remain separate evidence."
+      ],
+      "researchClaimClosureReady": true,
+      "ledgerStateChanged": false,
+      "fullProductAcceptance": false
+    },
+    {
+      "rowId": "V3-29-015",
+      "originalRequirement": "[T11] LiveKit project-level quotas, participant-minutes and transfer metering. Verify actual account allowances before using any displayed number as deployment capacity.\nhttps://docs.livekit.io/deploy/admin/quotas-and-limits/",
+      "originalTestId": "T-V3-29-015",
+      "originalSource": {
+        "files": [
+          "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.md",
+          "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.txt"
+        ],
+        "startLine": 589,
+        "endLine": 590,
+        "sha256": "14ddbb8173dc27c2ab869f593f4315989c33b88be1bf4e0f94d8f98ad121ab09"
+      },
+      "originalLedgerState": "UNVERIFIED",
+      "observedDate": "2026-09-09",
+      "classification": "PUBLIC_POLICY_VERIFIED_ACCOUNT_ALLOWANCE_OPEN",
+      "sourceUrls": [
+        "https://docs.livekit.io/deploy/admin/quotas-and-limits/"
+      ],
+      "supportedClaims": [
+        "Current public documentation lists Build defaults of100 project-wide connected participants,5000 monthly WebRTC participant-minutes and50GB downstream transfer. It also lists100 video and100 audio subscriptions per active participant.",
+        "The provider directs operators to the project's dashboard settings for actual limits. Participant-minutes measure connected-user time; transfer includes media and data."
+      ],
+      "gaps": [
+        "Actual project plan, remaining allowance, Study Room commitments, reconnect/private-room headroom, approved spending and10/25/50/100 ramp remain unverified. Published defaults must not be presented as available capacity."
+      ],
+      "researchClaimClosureReady": false,
+      "publicPolicySubclaimVerified": true,
+      "ledgerStateChanged": false,
+      "fullProductAcceptance": false
+    },
+    {
+      "rowId": "V3-29-016",
+      "originalRequirement": "[P1] Project dependency manifest observed during prompt research; re-fetch at implementation time.\nhttps://github.com/codingwally/Bar-Exam-simulator/blob/main/worker/package.json",
+      "originalTestId": "T-V3-29-016",
+      "originalSource": {
+        "files": [
+          "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.md",
+          "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.txt"
+        ],
+        "startLine": 592,
+        "endLine": 593,
+        "sha256": "14ddbb8173dc27c2ab869f593f4315989c33b88be1bf4e0f94d8f98ad121ab09"
+      },
+      "originalLedgerState": "UNVERIFIED",
+      "observedDate": "2026-09-09",
+      "classification": "EXACT_REMOTE_REPOSITORY_PROVENANCE_VERIFIED",
+      "sourceUrls": [
+        "https://github.com/codingwally/Bar-Exam-simulator/blob/e9e6608302b78649af3409febb06ed6f16e6c36e/worker/package.json",
+        "https://github.com/codingwally/Bar-Exam-simulator/blob/e9e6608302b78649af3409febb06ed6f16e6c36e/worker/package-lock.json"
+      ],
+      "supportedClaims": [
+        "Read-only GitHub API re-fetch of main resolved to e9e6608302b78649af3409febb06ed6f16e6c36e/tree9b3afd08c6c5f9d82e441bbae5a32a62aef0d559. Manifest/lock retain livekit-client2.22.1, livekit-server-sdk2.18.0 and track-processors0.7.2."
+      ],
+      "gaps": [
+        "Lock provenance and inspected installed APIs do not prove the deployed provider's type or a completed physical media session."
+      ],
+      "researchClaimClosureReady": true,
+      "ledgerStateChanged": false,
+      "fullProductAcceptance": false
+    },
+    {
+      "rowId": "V3-29-017",
+      "originalRequirement": "[P2] Project agent/engineering instructions observed during research; preserve current design and decommission boundaries.\nhttps://github.com/codingwally/Bar-Exam-simulator/blob/main/agent.md",
+      "originalTestId": "T-V3-29-017",
+      "originalSource": {
+        "files": [
+          "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.md",
+          "C:/Users/wally/Downloads/ASTRA_CODEX_DEBATE_ROOM_ALL_IN_ONE_V3_RESEARCHED_20260909.txt"
+        ],
+        "startLine": 595,
+        "endLine": 596,
+        "sha256": "14ddbb8173dc27c2ab869f593f4315989c33b88be1bf4e0f94d8f98ad121ab09"
+      },
+      "originalLedgerState": "UNVERIFIED",
+      "observedDate": "2026-09-09",
+      "classification": "EXACT_REMOTE_REPOSITORY_PROVENANCE_VERIFIED",
+      "sourceUrls": [
+        "https://github.com/codingwally/Bar-Exam-simulator/blob/e9e6608302b78649af3409febb06ed6f16e6c36e/agent.md"
+      ],
+      "supportedClaims": [
+        "Fresh read-only GitHub source retains the Examination Room decommission boundary, protection of the separate Simulator engine and the established DueDiligence design standard. The source SHA256 is255dd465c2b8fd9631a8cfcde9eb000a866baa10810828d80e001a9d01faac50."
+      ],
+      "gaps": [
+        "Retrieval closes the source-provenance subclaim only; preservation/design compliance relies on separate source-diff, UI and deployment evidence, not this audit."
+      ],
+      "researchClaimClosureReady": true,
+      "ledgerStateChanged": false,
+      "fullProductAcceptance": false
+    }
+  ],
+  "remainingNonResearchUnverifiedRows": [
+    {
+      "rowId": "V3-05-006",
+      "requirement": "Verify remote microphone and screen-share audio separately. A local meter, a non-ended MediaStreamTrack, a successful token call, or synthetic-camera test is not proof that people can see moving video and hear one another.",
+      "whyResearchCannotClose": "Consenting physical two-way media/browser tests and >=90 real-minute full-flow rehearsal OPEN.",
+      "requiresPhysicalOrResourceEvidence": true
+    },
+    {
+      "rowId": "V3-14-004",
+      "requirement": "Media baseline: intelligible two-way audio, moving local/remote video, camera/microphone/device controls, supported background modes, screen sharing, supported share audio, reconnect, and cleanup. Use echo cancellation/noise handling supported by existing stack, not new paid AI services. Local preview is muted. Each remote audio publication has one playback path, including screen-share audio.",
+      "whyResearchCannotClose": "Consenting physical two-way media/browser tests and >=90 real-minute full-flow rehearsal OPEN.",
+      "requiresPhysicalOrResourceEvidence": true
+    },
+    {
+      "rowId": "V3-24-005",
+      "requirement": "Use controlled ramp testing: 10 → 25 → 50 → 100 connected participants, subject to approved resource budget. Exercise intended publisher/receiver counts, screen share, audience video policy, private spaces, ordinary-room concurrency, and duration. Never load-test occupied meetings or exhaust production monthly credits without approval. Synthetic load plus representative physical devices are complementary; neither proves every possible device/network.",
+      "whyResearchCannotClose": "Actual plan/allowance, Study overhead/reconnect headroom, approved 10/25/50/100 ramp, measured media and cost OPEN. Consenting physical two-way media/browser tests and >=90 real-minute full-flow rehearsal OPEN.",
+      "requiresPhysicalOrResourceEvidence": true
+    },
+    {
+      "rowId": "V3-24-006",
+      "requirement": "Report actual frame size/rate, freezes, bitrate, packet loss, latency diagnostics, reconnects, resource use, active publishers/subscribers, and clock/state latency. Label estimates, measurements, and untested configurations. No “zero lag,” “works on all browsers,” “unlimited,” or “HD” badges unsupported by evidence.",
+      "whyResearchCannotClose": "Actual plan/allowance, Study overhead/reconnect headroom, approved 10/25/50/100 ramp, measured media and cost OPEN. Consenting physical two-way media/browser tests and >=90 real-minute full-flow rehearsal OPEN.",
+      "requiresPhysicalOrResourceEvidence": true
+    },
+    {
+      "rowId": "E01",
+      "requirement": "E01 Physical cameras: moving local AND remote video; real speech audible in both directions. Document which clients are synthetic.",
+      "whyResearchCannotClose": "Consenting physical two-way media/browser tests and >=90 real-minute full-flow rehearsal OPEN.",
+      "requiresPhysicalOrResourceEvidence": true
+    },
+    {
+      "rowId": "E04",
+      "requirement": "E04 Sustained rehearsal at least 90 minutes including a full default flow; record freezes, drops, audio failures and actual duration. Accelerated stage tests do not substitute for this endurance run.",
+      "whyResearchCannotClose": "Consenting physical two-way media/browser tests and >=90 real-minute full-flow rehearsal OPEN.",
+      "requiresPhysicalOrResourceEvidence": true
+    },
+    {
+      "rowId": "F01",
+      "requirement": "F01 Test 10/25/50/100 under approved quota and budget with measured publishers/viewers, observer-camera policy, shared screen, private-room overhead and Study Room concurrency.",
+      "whyResearchCannotClose": "Actual plan/allowance, Study overhead/reconnect headroom, approved 10/25/50/100 ramp, measured media and cost OPEN. Consenting physical two-way media/browser tests and >=90 real-minute full-flow rehearsal OPEN.",
+      "requiresPhysicalOrResourceEvidence": true
+    }
+  ],
+  "limits": [
+    "A research-only fact becoming eligible for ledger review does not promote the entire row or any acceptance clause automatically. The parent must reconcile existing coverage and retain outstanding runtime/device/account gates.",
+    "The original prompt identifies owner defaults separately from cited tournament frameworks; no universal national rules, certification, legal authority or third-party endorsement is established.",
+    "The R3 scanned PDF was retrieved but current visual verification was not possible through the available tool output, so no fresh claim about its scanned weights/timings/awards is made.",
+    "Actual LiveKit plan/usage/deployment type, runtime permission revocation, real audio/video/share audio, physical device matrix, approved ramp, real mail and at-least90-minute physical endurance remain open."
+  ],
+  "providerMutations": false,
+  "spending": false,
+  "publicLaunch": false
+}

@@ -1,0 +1,812 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS_SEPARATE_EXACT_FIXTURE_DATABASE_RECONCILIATION",
+  "recordedAt": "2026-09-09 16:52:40 UTC",
+  "runId": 34376105917,
+  "originalFailureUnchanged": true,
+  "target": {
+    "projectRef": "hlzqmreeoghbldnhlybr",
+    "productionProjectMutated": false
+  },
+  "performedBy": "Root coordinator through fixed-project Supabase SQL tool; supporting SQL and frozen-source comparison prepared by staging_setup.",
+  "originalAttemptEvidence": "staging-hosted-rehearsal-34376105917.json",
+  "scope": {
+    "sourceSha": "c7b3149f3f690f9ded2b4b44e80336f04b47cfda",
+    "eventId": "de-5af7a09268b36d28911ac2beb236aeec",
+    "runTag": "dv3host-3a3fbe715fe23d30",
+    "heldAuthCount": 10,
+    "alreadyDeletedExcludedId": "0188a689-32c6-49cd-b6d9-476fccd58bf4",
+    "allFixtureIds": [
+      "052568a5-63e8-4d0a-bf1b-2aac4c561ec0",
+      "6f7991dc-0d48-4dab-9f5a-5a32c75025b0",
+      "0a0f678d-2bc6-4a62-8ef9-752868c211b3",
+      "2dd58d9e-8b72-4ac1-9725-6c43796f935e",
+      "4aa1ca52-6929-47e5-b95e-943353602d94",
+      "d69d69a0-5ac6-451e-8e2f-8ae12ff77b50",
+      "7988bcd4-44ec-4243-bd77-c826cc54e8bf",
+      "48201e93-dcbd-4f91-8924-c834bbe4a74a",
+      "f4dd58af-e436-4511-8347-7762ebf6af1f",
+      "5336877d-75eb-4e13-b04d-d3d15dac4b4a",
+      "0188a689-32c6-49cd-b6d9-476fccd58bf4"
+    ]
+  },
+  "preflight": [
+    {
+      "checked_at": "2026-09-09 16:35:16.937159+00",
+      "fixture_count": 10,
+      "auth_users": 10,
+      "auth_sessions": 0,
+      "refresh_tokens": 0,
+      "storage_objects": 0,
+      "event": {
+        "revision": 66,
+        "rehearsal": true,
+        "member_count": 10,
+        "updated_at_ms": 1788971221392
+      }
+    }
+  ],
+  "uploadReadbackBeforeDeletion": [
+    {
+      "checked_at": "2026-09-09 16:36:46.298014+00",
+      "uploads": [
+        {
+          "id": "2a86de8a-6ca5-43c2-8cc7-45a291353872",
+          "record": {
+            "id": "2a86de8a-6ca5-43c2-8cc7-45a291353872",
+            "actorId": "4aa1ca52-6929-47e5-b95e-943353602d94",
+            "channel": "public",
+            "eventId": "de-5af7a09268b36d28911ac2beb236aeec",
+            "matchId": "a605ddce-89f2-4c21-8722-76e3ce99d98d",
+            "mimeType": "application/pdf",
+            "createdAt": 1788971224284,
+            "expiresAt": 1788973024284,
+            "storageKey": "evidence/de-5af7a09268b36d28911ac2beb236aeec/a605ddce-89f2-4c21-8722-76e3ce99d98d/2a86de8a-6ca5-43c2-8cc7-45a291353872.pdf"
+          },
+          "status": "failed",
+          "cleanup_job_id": "upload-cleanup:2a86de8a-6ca5-43c2-8cc7-45a291353872"
+        }
+      ],
+      "jobs": [
+        {
+          "id": "upload-cleanup:2a86de8a-6ca5-43c2-8cc7-45a291353872",
+          "type": "delete_evidence",
+          "error": null,
+          "status": "queued",
+          "attempts": 0,
+          "next_attempt_ms": 1788971224560
+        }
+      ]
+    }
+  ],
+  "nativeHelper": {
+    "installationChanged": false,
+    "manifest": {
+      "projectRef": "hlzqmreeoghbldnhlybr",
+      "runTag": "dv3host-3a3fbe715fe23d30",
+      "fixtures": [
+        {
+          "id": "052568a5-63e8-4d0a-bf1b-2aac4c561ec0",
+          "runId": "dv3study-33e6b327",
+          "purpose": "host",
+          "createdAt": "2026-09-09T16:22:33.422291Z"
+        },
+        {
+          "id": "6f7991dc-0d48-4dab-9f5a-5a32c75025b0",
+          "runId": "dv3study-db757506",
+          "purpose": "A1",
+          "createdAt": "2026-09-09T16:22:39.168391Z"
+        },
+        {
+          "id": "0a0f678d-2bc6-4a62-8ef9-752868c211b3",
+          "runId": "dv3study-0bdc8d2f",
+          "purpose": "A2",
+          "createdAt": "2026-09-09T16:22:43.246746Z"
+        },
+        {
+          "id": "2dd58d9e-8b72-4ac1-9725-6c43796f935e",
+          "runId": "dv3study-8e1788b7",
+          "purpose": "A3",
+          "createdAt": "2026-09-09T16:22:47.706554Z"
+        },
+        {
+          "id": "4aa1ca52-6929-47e5-b95e-943353602d94",
+          "runId": "dv3study-d4359ed6",
+          "purpose": "N1",
+          "createdAt": "2026-09-09T16:22:51.594295Z"
+        },
+        {
+          "id": "d69d69a0-5ac6-451e-8e2f-8ae12ff77b50",
+          "runId": "dv3study-b3cbf24e",
+          "purpose": "N2",
+          "createdAt": "2026-09-09T16:22:54.148581Z"
+        },
+        {
+          "id": "7988bcd4-44ec-4243-bd77-c826cc54e8bf",
+          "runId": "dv3study-d665116f",
+          "purpose": "N3",
+          "createdAt": "2026-09-09T16:22:57.444294Z"
+        },
+        {
+          "id": "48201e93-dcbd-4f91-8924-c834bbe4a74a",
+          "runId": "dv3study-3afc064e",
+          "purpose": "judge2",
+          "createdAt": "2026-09-09T16:23:00.010658Z"
+        },
+        {
+          "id": "f4dd58af-e436-4511-8347-7762ebf6af1f",
+          "runId": "dv3study-4c503cb5",
+          "purpose": "judge3",
+          "createdAt": "2026-09-09T16:23:03.211501Z"
+        },
+        {
+          "id": "5336877d-75eb-4e13-b04d-d3d15dac4b4a",
+          "runId": "dv3study-3e27e4b4",
+          "purpose": "observer",
+          "createdAt": "2026-09-09T16:23:06.172573Z"
+        }
+      ],
+      "events": [
+        {
+          "id": "de-5af7a09268b36d28911ac2beb236aeec",
+          "title": "Hosted Debate dv3host-3a3fbe715fe23d30 main"
+        }
+      ]
+    },
+    "capture": [
+      {
+        "capture": {
+          "status": "CAPTURED",
+          "snapshot": {
+            "counts": {
+              "audit": 66,
+              "votes": 0,
+              "events": 1,
+              "outbox": 1,
+              "ballots": 0,
+              "uploads": 1,
+              "receipts": 66,
+              "rate_limits": 26,
+              "match_versions": 19
+            },
+            "version": 1,
+            "storageKeys": [
+              "evidence/de-5af7a09268b36d28911ac2beb236aeec/a605ddce-89f2-4c21-8722-76e3ce99d98d/2a86de8a-6ca5-43c2-8cc7-45a291353872.pdf"
+            ],
+            "manifestSha256": "c7068161a45e6511004580e19e2d5e569f6204f4efe01183fd67ac82dd435146",
+            "snapshotSha256": "0066030ead16a00216227b93e8a16895b13c39f9c01957e12dfd6a57839157be"
+          }
+        }
+      }
+    ],
+    "deletion": [
+      {
+        "reconciliation": {
+          "status": "DELETED_ATOMICALLY",
+          "snapshot": {
+            "counts": {
+              "audit": 66,
+              "votes": 0,
+              "events": 1,
+              "outbox": 1,
+              "ballots": 0,
+              "uploads": 1,
+              "receipts": 66,
+              "rate_limits": 26,
+              "match_versions": 19
+            },
+            "version": 1,
+            "storageKeys": [
+              "evidence/de-5af7a09268b36d28911ac2beb236aeec/a605ddce-89f2-4c21-8722-76e3ce99d98d/2a86de8a-6ca5-43c2-8cc7-45a291353872.pdf"
+            ],
+            "manifestSha256": "c7068161a45e6511004580e19e2d5e569f6204f4efe01183fd67ac82dd435146",
+            "snapshotSha256": "0066030ead16a00216227b93e8a16895b13c39f9c01957e12dfd6a57839157be"
+          },
+          "deletedCounts": {
+            "audit": 66,
+            "votes": 0,
+            "events": 1,
+            "outbox": 1,
+            "ballots": 0,
+            "uploads": 1,
+            "receipts": 66,
+            "rate_limits": 26,
+            "match_versions": 19
+          }
+        }
+      }
+    ],
+    "mutationCalls": 1,
+    "fullSnapshotCompareAndSwap": true,
+    "storageObjectMetadataAbsenceEnforced": true,
+    "sqlPath": "staging-hosted-rehearsal-34376105917-data-reconciliation.sql"
+  },
+  "auth": {
+    "capture": {
+      "runId": "34376105917",
+      "fixtures": [
+        {
+          "id": "052568a5-63e8-4d0a-bf1b-2aac4c561ec0",
+          "runId": "dv3study-33e6b327",
+          "createdAt": "2026-09-09T16:22:33.422291+00:00",
+          "identities": [
+            {
+              "id": "786b2c13-0878-454b-a601-4b11dec01790",
+              "provider": "email",
+              "createdAt": "2026-09-09T16:22:33.502878+00:00",
+              "rowSha256": "67b8ce9106f2e8b1bab120ba0cea68ecbbe2da1ca6985b0dcf9bfb9d3c466789",
+              "updatedAt": "2026-09-09T16:22:33.502878+00:00",
+              "providerId": "052568a5-63e8-4d0a-bf1b-2aac4c561ec0",
+              "subMatches": true,
+              "emailMatches": true,
+              "lastSignInAt": "2026-09-09T16:22:33.502807+00:00"
+            }
+          ],
+          "defaultRows": {
+            "profiles": {
+              "count": 1,
+              "sha256": "5662b06307e9d4952746e16ed6047db03b49254c374daf9b657da59f1508efac"
+            },
+            "user_roles": {
+              "count": 1,
+              "sha256": "edd8fcbaca452320399adb7a2164c2d98c4c48056bbc09b8bd95427e94d12ee7"
+            },
+            "forum_profile_settings": {
+              "count": 1,
+              "sha256": "50f9adb52d514e31bd3dd798ca3f404cfcb80d789dca764cb328ec5d96f6057e"
+            },
+            "internal_test_accounts": {
+              "count": 1,
+              "sha256": "da6e0ae8a12539ee8f0d1b7fb11ef47071c722cc35fd87993f6147411df12878"
+            }
+          },
+          "lastSignInAt": "2026-09-09T16:22:35.807146+00:00",
+          "studentRoleOnly": true,
+          "emailConfirmedAt": "2026-09-09T16:22:33.620205+00:00",
+          "appMetadataSha256": "2073771bed7cfc5e4d75a988b8af0dc9ec5e493a99c3dd72a94843ca6856ae4e",
+          "expectedCreatedAt": "2026-09-09T16:22:33.422291+00:00",
+          "userMetadataSha256": "3fb681e8e37fefdb0df0a27f56b2cabbcca123191fff0d47b4ee414846910d74",
+          "authOwnershipMatches": true,
+          "classificationMatches": true
+        },
+        {
+          "id": "0a0f678d-2bc6-4a62-8ef9-752868c211b3",
+          "runId": "dv3study-0bdc8d2f",
+          "createdAt": "2026-09-09T16:22:43.246746+00:00",
+          "identities": [
+            {
+              "id": "9e3b2bb5-154b-49e1-852e-3dc71feae6b0",
+              "provider": "email",
+              "createdAt": "2026-09-09T16:22:43.279169+00:00",
+              "rowSha256": "9d9a98cedb5a0fed7ebe2022f2c18ddcffecebcb2c5188512a5ef788af704ac0",
+              "updatedAt": "2026-09-09T16:22:43.279169+00:00",
+              "providerId": "0a0f678d-2bc6-4a62-8ef9-752868c211b3",
+              "subMatches": true,
+              "emailMatches": true,
+              "lastSignInAt": "2026-09-09T16:22:43.278429+00:00"
+            }
+          ],
+          "defaultRows": {
+            "profiles": {
+              "count": 1,
+              "sha256": "4357a059cd7759738598acb3ffbfd60f6cb69ed40cbaf20b32ffd956ba624b7e"
+            },
+            "user_roles": {
+              "count": 1,
+              "sha256": "5ee558fbff2806ef8221c66d44afb3df83c4260b4d0356f43134373ef1b18cc7"
+            },
+            "forum_profile_settings": {
+              "count": 1,
+              "sha256": "48ba0a4991779296fadbe20f01d4fa47dd6836950e135e3bdafffa4b9c6216d4"
+            },
+            "internal_test_accounts": {
+              "count": 1,
+              "sha256": "5a4719b0940ed9b00adc131c4190c6cd2ff1649ec6eea9b4106d9e761d4dda66"
+            }
+          },
+          "lastSignInAt": "2026-09-09T16:22:44.341652+00:00",
+          "studentRoleOnly": true,
+          "emailConfirmedAt": "2026-09-09T16:22:43.290473+00:00",
+          "appMetadataSha256": "3f8eb043a01a658de4d2bb57c764cf673e6a8cd1e18bc678de86922e80442e09",
+          "expectedCreatedAt": "2026-09-09T16:22:43.246746+00:00",
+          "userMetadataSha256": "3fb681e8e37fefdb0df0a27f56b2cabbcca123191fff0d47b4ee414846910d74",
+          "authOwnershipMatches": true,
+          "classificationMatches": true
+        },
+        {
+          "id": "2dd58d9e-8b72-4ac1-9725-6c43796f935e",
+          "runId": "dv3study-8e1788b7",
+          "createdAt": "2026-09-09T16:22:47.706554+00:00",
+          "identities": [
+            {
+              "id": "a3d4688b-d5a3-4a67-900f-6b67556e26f7",
+              "provider": "email",
+              "createdAt": "2026-09-09T16:22:47.708925+00:00",
+              "rowSha256": "1af1d89b52fd6f943022e0074b5a323c8056442d1a891c412f593c5f05d741d5",
+              "updatedAt": "2026-09-09T16:22:47.708925+00:00",
+              "providerId": "2dd58d9e-8b72-4ac1-9725-6c43796f935e",
+              "subMatches": true,
+              "emailMatches": true,
+              "lastSignInAt": "2026-09-09T16:22:47.708864+00:00"
+            }
+          ],
+          "defaultRows": {
+            "profiles": {
+              "count": 1,
+              "sha256": "cd78cb0aa69a951db99f36003b2d20594758de49bf898d15c0ff230643becb4a"
+            },
+            "user_roles": {
+              "count": 1,
+              "sha256": "48dd87e6e794102bd7e0ae9bd4e2119cc3c35e6388e69acd7b78203f60a1ffd2"
+            },
+            "forum_profile_settings": {
+              "count": 1,
+              "sha256": "3bcb265f6c50e5edc3773609b4cf6587c47a4135cd5b935444b95c19427c4ea9"
+            },
+            "internal_test_accounts": {
+              "count": 1,
+              "sha256": "0ced6e1ca68eb500cabf7dd053ebfc606724be013de3db68c17cf122815646fa"
+            }
+          },
+          "lastSignInAt": "2026-09-09T16:22:48.741739+00:00",
+          "studentRoleOnly": true,
+          "emailConfirmedAt": "2026-09-09T16:22:47.711664+00:00",
+          "appMetadataSha256": "3a5de9c03f1b17a354d558c584f9293e684641739dc2dee7b9ad6e3f6cb0040a",
+          "expectedCreatedAt": "2026-09-09T16:22:47.706554+00:00",
+          "userMetadataSha256": "3fb681e8e37fefdb0df0a27f56b2cabbcca123191fff0d47b4ee414846910d74",
+          "authOwnershipMatches": true,
+          "classificationMatches": true
+        },
+        {
+          "id": "48201e93-dcbd-4f91-8924-c834bbe4a74a",
+          "runId": "dv3study-3afc064e",
+          "createdAt": "2026-09-09T16:23:00.010658+00:00",
+          "identities": [
+            {
+              "id": "ee2c07fb-7684-465b-8b9b-2bb042312be1",
+              "provider": "email",
+              "createdAt": "2026-09-09T16:23:00.012454+00:00",
+              "rowSha256": "4d6f285f35ae86c5bf515f0c2aa3f2f5bcca93fb642c3278300a9ca318e9fb90",
+              "updatedAt": "2026-09-09T16:23:00.012454+00:00",
+              "providerId": "48201e93-dcbd-4f91-8924-c834bbe4a74a",
+              "subMatches": true,
+              "emailMatches": true,
+              "lastSignInAt": "2026-09-09T16:23:00.0124+00:00"
+            }
+          ],
+          "defaultRows": {
+            "profiles": {
+              "count": 1,
+              "sha256": "477260da735fc9b33ffe3ebb3817279d250d906e4af3d394e5f84d3715ba8f36"
+            },
+            "user_roles": {
+              "count": 1,
+              "sha256": "3dd43d55e0cb915421874a292139f02ea62f58feb22cf127eb4b4bfde95d748d"
+            },
+            "forum_profile_settings": {
+              "count": 1,
+              "sha256": "10c4c96f59dffda49a06bce4f385210d2e3b7372ad5c9d0a02832996c1012234"
+            },
+            "internal_test_accounts": {
+              "count": 1,
+              "sha256": "92055bf224b2a591fda87bf3d0ac1f4b020e73157f5ce254d2e952003dc84461"
+            }
+          },
+          "lastSignInAt": "2026-09-09T16:23:01.00341+00:00",
+          "studentRoleOnly": true,
+          "emailConfirmedAt": "2026-09-09T16:23:00.014531+00:00",
+          "appMetadataSha256": "8d700a5827ff56d6e70fa7fa14d6aba2bca48975a95b57f4ef7170a1bfdfa276",
+          "expectedCreatedAt": "2026-09-09T16:23:00.010658+00:00",
+          "userMetadataSha256": "3fb681e8e37fefdb0df0a27f56b2cabbcca123191fff0d47b4ee414846910d74",
+          "authOwnershipMatches": true,
+          "classificationMatches": true
+        },
+        {
+          "id": "4aa1ca52-6929-47e5-b95e-943353602d94",
+          "runId": "dv3study-d4359ed6",
+          "createdAt": "2026-09-09T16:22:51.594295+00:00",
+          "identities": [
+            {
+              "id": "6341f982-34db-482e-a4f5-b8222bcd5a88",
+              "provider": "email",
+              "createdAt": "2026-09-09T16:22:51.596535+00:00",
+              "rowSha256": "0a3d4509ff6bfeb62fdf239df77ce7510b8c65acbb080872d371a59375e91e26",
+              "updatedAt": "2026-09-09T16:22:51.596535+00:00",
+              "providerId": "4aa1ca52-6929-47e5-b95e-943353602d94",
+              "subMatches": true,
+              "emailMatches": true,
+              "lastSignInAt": "2026-09-09T16:22:51.596479+00:00"
+            }
+          ],
+          "defaultRows": {
+            "profiles": {
+              "count": 1,
+              "sha256": "15d0eea89eacaa3bf7c7b23a5e0cc90e53ed8899b004c1466b5b4330281f7747"
+            },
+            "user_roles": {
+              "count": 1,
+              "sha256": "fead38d021e092635604cb74b1ca0b1deea19d92b0a7fcc5011730149abcf4af"
+            },
+            "forum_profile_settings": {
+              "count": 1,
+              "sha256": "f7831e448c51507eda315d2baa03d4522116f3b45b080dbb99090d72b5101957"
+            },
+            "internal_test_accounts": {
+              "count": 1,
+              "sha256": "8039e3d7bd97425781f1be983e81bb4fd55cec1923e729360258470c1fb64e5b"
+            }
+          },
+          "lastSignInAt": "2026-09-09T16:22:52.617513+00:00",
+          "studentRoleOnly": true,
+          "emailConfirmedAt": "2026-09-09T16:22:51.599873+00:00",
+          "appMetadataSha256": "d97522a0880a70475e190a005aebfff517cb5a2a1f754a9f20c98f99ffebefa4",
+          "expectedCreatedAt": "2026-09-09T16:22:51.594295+00:00",
+          "userMetadataSha256": "3fb681e8e37fefdb0df0a27f56b2cabbcca123191fff0d47b4ee414846910d74",
+          "authOwnershipMatches": true,
+          "classificationMatches": true
+        },
+        {
+          "id": "5336877d-75eb-4e13-b04d-d3d15dac4b4a",
+          "runId": "dv3study-3e27e4b4",
+          "createdAt": "2026-09-09T16:23:06.172573+00:00",
+          "identities": [
+            {
+              "id": "bcdad900-d923-4c34-ad9d-2ad9cee83290",
+              "provider": "email",
+              "createdAt": "2026-09-09T16:23:06.174432+00:00",
+              "rowSha256": "05a9b95c6e1bf9f618b8d44ee1d5107548e8239681ac2232aff85085ece385c7",
+              "updatedAt": "2026-09-09T16:23:06.174432+00:00",
+              "providerId": "5336877d-75eb-4e13-b04d-d3d15dac4b4a",
+              "subMatches": true,
+              "emailMatches": true,
+              "lastSignInAt": "2026-09-09T16:23:06.17437+00:00"
+            }
+          ],
+          "defaultRows": {
+            "profiles": {
+              "count": 1,
+              "sha256": "08437ce97c113fabbe395ff048058af91e2221939e72fcf047bffb3de90edfea"
+            },
+            "user_roles": {
+              "count": 1,
+              "sha256": "f4d76ad16e2a2f43b4b8e18c49e9a3a447427309b8d3c16d2e463887d050968c"
+            },
+            "forum_profile_settings": {
+              "count": 1,
+              "sha256": "a7eec75d61e4299d822e7210dc159e734f839c102c2db75dd9cc72880ac36a58"
+            },
+            "internal_test_accounts": {
+              "count": 1,
+              "sha256": "0dbae72fa162b8289553c120f6a44dead45a870ddf3455e85338e391cfcede9a"
+            }
+          },
+          "lastSignInAt": "2026-09-09T16:23:07.161953+00:00",
+          "studentRoleOnly": true,
+          "emailConfirmedAt": "2026-09-09T16:23:06.17696+00:00",
+          "appMetadataSha256": "f3b6f8834738bf059b5966cfeb46c3b1ae0e0210f06cee8e0fde5e00a849ec3b",
+          "expectedCreatedAt": "2026-09-09T16:23:06.172573+00:00",
+          "userMetadataSha256": "3fb681e8e37fefdb0df0a27f56b2cabbcca123191fff0d47b4ee414846910d74",
+          "authOwnershipMatches": true,
+          "classificationMatches": true
+        },
+        {
+          "id": "6f7991dc-0d48-4dab-9f5a-5a32c75025b0",
+          "runId": "dv3study-db757506",
+          "createdAt": "2026-09-09T16:22:39.168391+00:00",
+          "identities": [
+            {
+              "id": "8a60438a-d5bf-4807-9cde-a1a6fab4f853",
+              "provider": "email",
+              "createdAt": "2026-09-09T16:22:39.170912+00:00",
+              "rowSha256": "ee6600d7ff61ef20feb91601c0c369c4cacd2851b7986d73afe644247e3a67e6",
+              "updatedAt": "2026-09-09T16:22:39.170912+00:00",
+              "providerId": "6f7991dc-0d48-4dab-9f5a-5a32c75025b0",
+              "subMatches": true,
+              "emailMatches": true,
+              "lastSignInAt": "2026-09-09T16:22:39.170803+00:00"
+            }
+          ],
+          "defaultRows": {
+            "profiles": {
+              "count": 1,
+              "sha256": "958b1756cc573ed9f936cbd29503c9bb66f7874e935b404f7831674cdd24d92c"
+            },
+            "user_roles": {
+              "count": 1,
+              "sha256": "6760b1e039a29a96b8c5b1e1e307d70c422d18d16840432d59518d53ca2ac23f"
+            },
+            "forum_profile_settings": {
+              "count": 1,
+              "sha256": "29a474a8e855f14c3c8074f9faad0b6ace6302a34dcbd887dcdf7b02513d198d"
+            },
+            "internal_test_accounts": {
+              "count": 1,
+              "sha256": "16cab82a63fb2a9a984bf557da533c7266f8569ceb3a108dc0ca0981f8abddea"
+            }
+          },
+          "lastSignInAt": "2026-09-09T16:22:40.729017+00:00",
+          "studentRoleOnly": true,
+          "emailConfirmedAt": "2026-09-09T16:22:39.173421+00:00",
+          "appMetadataSha256": "dc47c163476f4eff519ee17ee2c1e876d50d084c81721a05698a9b9a10c350e0",
+          "expectedCreatedAt": "2026-09-09T16:22:39.168391+00:00",
+          "userMetadataSha256": "3fb681e8e37fefdb0df0a27f56b2cabbcca123191fff0d47b4ee414846910d74",
+          "authOwnershipMatches": true,
+          "classificationMatches": true
+        },
+        {
+          "id": "7988bcd4-44ec-4243-bd77-c826cc54e8bf",
+          "runId": "dv3study-d665116f",
+          "createdAt": "2026-09-09T16:22:57.444294+00:00",
+          "identities": [
+            {
+              "id": "d6dea789-c8fa-490d-a88b-eaaa5df533e0",
+              "provider": "email",
+              "createdAt": "2026-09-09T16:22:57.447028+00:00",
+              "rowSha256": "d5ff38779769fa8de92d682b91b4fece931a9d200eab132c79b138153f95daf2",
+              "updatedAt": "2026-09-09T16:22:57.447028+00:00",
+              "providerId": "7988bcd4-44ec-4243-bd77-c826cc54e8bf",
+              "subMatches": true,
+              "emailMatches": true,
+              "lastSignInAt": "2026-09-09T16:22:57.446959+00:00"
+            }
+          ],
+          "defaultRows": {
+            "profiles": {
+              "count": 1,
+              "sha256": "5d6c644d33f6c4e86cb63d86a53446337a0b516a7d23c92256287e393be5c130"
+            },
+            "user_roles": {
+              "count": 1,
+              "sha256": "3eca8248b381d98c7071621f9537051cdd7e5a810d5d03dad95965258ffc12db"
+            },
+            "forum_profile_settings": {
+              "count": 1,
+              "sha256": "f775e2d2cedb0f6df0e4a99298c7542acd8fae2b0b2e236ac09f6445ffffeb69"
+            },
+            "internal_test_accounts": {
+              "count": 1,
+              "sha256": "bcd4152b309fb7ffcc308e05d22e4c7cd78bd290fbaf006873002b0619ca8f19"
+            }
+          },
+          "lastSignInAt": "2026-09-09T16:22:58.479851+00:00",
+          "studentRoleOnly": true,
+          "emailConfirmedAt": "2026-09-09T16:22:57.449218+00:00",
+          "appMetadataSha256": "d7c7a1209f9185ca4c98b73557620df1844aaa29dd924cd58d7bef4c96887df2",
+          "expectedCreatedAt": "2026-09-09T16:22:57.444294+00:00",
+          "userMetadataSha256": "3fb681e8e37fefdb0df0a27f56b2cabbcca123191fff0d47b4ee414846910d74",
+          "authOwnershipMatches": true,
+          "classificationMatches": true
+        },
+        {
+          "id": "d69d69a0-5ac6-451e-8e2f-8ae12ff77b50",
+          "runId": "dv3study-b3cbf24e",
+          "createdAt": "2026-09-09T16:22:54.148581+00:00",
+          "identities": [
+            {
+              "id": "0c4b7208-480c-46ea-a206-9e63913d3cec",
+              "provider": "email",
+              "createdAt": "2026-09-09T16:22:54.150852+00:00",
+              "rowSha256": "717960d225a5218272250b854d8d67e63b760db7ed787564e9d0fa8b7ae8a144",
+              "updatedAt": "2026-09-09T16:22:54.150852+00:00",
+              "providerId": "d69d69a0-5ac6-451e-8e2f-8ae12ff77b50",
+              "subMatches": true,
+              "emailMatches": true,
+              "lastSignInAt": "2026-09-09T16:22:54.150794+00:00"
+            }
+          ],
+          "defaultRows": {
+            "profiles": {
+              "count": 1,
+              "sha256": "adba480efa3407ef3408acf091cbc2ae08ffe8a857cc1022e3c9b2d52becd450"
+            },
+            "user_roles": {
+              "count": 1,
+              "sha256": "612a9667db66192ef73c4ca7aa03576d569e16b90c0407a504229507adb36d2d"
+            },
+            "forum_profile_settings": {
+              "count": 1,
+              "sha256": "ecfc38339b5ed10d215c3258c3f20f54b4d7a64d2ef6c6db9e681db9b10566f8"
+            },
+            "internal_test_accounts": {
+              "count": 1,
+              "sha256": "cf10953f2c69e9204c3a730773c1da6e62816794f011be5043b12c8acaea9405"
+            }
+          },
+          "lastSignInAt": "2026-09-09T16:22:55.169936+00:00",
+          "studentRoleOnly": true,
+          "emailConfirmedAt": "2026-09-09T16:22:54.15323+00:00",
+          "appMetadataSha256": "9d0c7851307e1f3df2eae059deba9a76786ffda576184b4da57a78dcf44ae828",
+          "expectedCreatedAt": "2026-09-09T16:22:54.148581+00:00",
+          "userMetadataSha256": "3fb681e8e37fefdb0df0a27f56b2cabbcca123191fff0d47b4ee414846910d74",
+          "authOwnershipMatches": true,
+          "classificationMatches": true
+        },
+        {
+          "id": "f4dd58af-e436-4511-8347-7762ebf6af1f",
+          "runId": "dv3study-4c503cb5",
+          "createdAt": "2026-09-09T16:23:03.211501+00:00",
+          "identities": [
+            {
+              "id": "fe29368b-e7e9-4abf-8b8b-43458f02d65c",
+              "provider": "email",
+              "createdAt": "2026-09-09T16:23:03.213507+00:00",
+              "rowSha256": "1eb887aad9b5e7c0fa7b5c5be68c513f76153b4513a11725bfca077a74963226",
+              "updatedAt": "2026-09-09T16:23:03.213507+00:00",
+              "providerId": "f4dd58af-e436-4511-8347-7762ebf6af1f",
+              "subMatches": true,
+              "emailMatches": true,
+              "lastSignInAt": "2026-09-09T16:23:03.213442+00:00"
+            }
+          ],
+          "defaultRows": {
+            "profiles": {
+              "count": 1,
+              "sha256": "0ae58828bb48278c449d166ba9438b1328d436f59469c7aafaf3f0183ce4f867"
+            },
+            "user_roles": {
+              "count": 1,
+              "sha256": "1363fb5dd0e8ebd1dfeaf4ee24da4bd81217538e13c852e5303b1844b76a5eb1"
+            },
+            "forum_profile_settings": {
+              "count": 1,
+              "sha256": "a7cfddcef02b6707765193b77f88c62e2e209c1dc0d47a08d961e610de2b90fc"
+            },
+            "internal_test_accounts": {
+              "count": 1,
+              "sha256": "6c0366af6054b3d00b06d4539dbcc5b1922632f4c883db22decb55a7a63508ed"
+            }
+          },
+          "lastSignInAt": "2026-09-09T16:23:04.222956+00:00",
+          "studentRoleOnly": true,
+          "emailConfirmedAt": "2026-09-09T16:23:03.216089+00:00",
+          "appMetadataSha256": "5af282b6c0e4dd9e281da77e23893b4e44b69ad66ea490eea2bbe349a1f92c19",
+          "expectedCreatedAt": "2026-09-09T16:23:03.211501+00:00",
+          "userMetadataSha256": "3fb681e8e37fefdb0df0a27f56b2cabbcca123191fff0d47b4ee414846910d74",
+          "authOwnershipMatches": true,
+          "classificationMatches": true
+        }
+      ],
+      "checkedAt": "2026-09-09T16:45:50.103795+00:00",
+      "nonFkUnexpected": [],
+      "authFkUnexpected": [],
+      "sessionFkCatalog": [
+        {
+          "name": "mfa_amr_claims_session_id_fkey",
+          "table": "auth.mfa_amr_claims",
+          "onDelete": "c"
+        },
+        {
+          "name": "refresh_tokens_session_id_fkey",
+          "table": "auth.refresh_tokens",
+          "onDelete": "c"
+        }
+      ],
+      "mutationRuleCount": 0,
+      "authFkCatalogCount": 257,
+      "deleteTriggerCount": 0,
+      "projectTargetContext": "hlzqmreeoghbldnhlybr",
+      "authFkExpectedNonzero": [
+        {
+          "matches": 10,
+          "expected": 10,
+          "table_name": "identities",
+          "column_name": "user_id",
+          "confdeltype": "c",
+          "schema_name": "auth",
+          "source_columns": 1,
+          "target_columns": 1
+        },
+        {
+          "matches": 10,
+          "expected": 10,
+          "table_name": "internal_test_accounts",
+          "column_name": "user_id",
+          "confdeltype": "c",
+          "schema_name": "private",
+          "source_columns": 1,
+          "target_columns": 1
+        },
+        {
+          "matches": 10,
+          "expected": 10,
+          "table_name": "forum_profile_settings",
+          "column_name": "user_id",
+          "confdeltype": "c",
+          "schema_name": "public",
+          "source_columns": 1,
+          "target_columns": 1
+        },
+        {
+          "matches": 10,
+          "expected": 10,
+          "table_name": "profiles",
+          "column_name": "id",
+          "confdeltype": "c",
+          "schema_name": "public",
+          "source_columns": 1,
+          "target_columns": 1
+        },
+        {
+          "matches": 10,
+          "expected": 10,
+          "table_name": "user_roles",
+          "column_name": "user_id",
+          "confdeltype": "c",
+          "schema_name": "public",
+          "source_columns": 1,
+          "target_columns": 1
+        }
+      ],
+      "fixtureManifestSha256": "8cba1cc2fb81a0966b24fb3ec10827ebfb39f8e402f7873d27b5e02f3fb03e22",
+      "requiredAbsenceCounts": {
+        "debate_audit": 0,
+        "debate_votes": 0,
+        "auth_sessions": 0,
+        "debate_events": 0,
+        "debate_outbox": 0,
+        "debate_ballots": 0,
+        "debate_uploads": 0,
+        "debate_receipts": 0,
+        "role_assignments": 0,
+        "debate_rate_limits": 0,
+        "auth_refresh_tokens": 0,
+        "auth_audit_preserved": 0,
+        "storage_object_paths": 0,
+        "debate_match_versions": 0,
+        "storage_multipart_part_paths": 0,
+        "storage_multipart_upload_paths": 0
+      },
+      "allRequiredAbsenceZero": true,
+      "transitiveCascadeCount": 0,
+      "nonFkAndRoomJsonCatalogCount": 481,
+      "storageApiBytesAbsenceVerified": false
+    },
+    "sqlPath": "staging-hosted-rehearsal-34376105917-auth-reconciliation.sql",
+    "sqlSha256": "7393749b1f663c27532aac96428871c8a137b8de34012aae8f7ff4bacccddba9",
+    "transactionCalls": 1,
+    "toolReportedError": false,
+    "transactionResult": [],
+    "expectedAuthDeletions": 10,
+    "expectedDefaultCascades": 40,
+    "expectedEmailIdentityCascades": 10,
+    "rootFrozenBindingCheck": "All10 exact identity/metadata/default-row hashes independently matched the captured readback before execution.",
+    "credentialsSelected": false
+  },
+  "independentFinalReadback": {
+    "query": "with f as(select unnest(array['052568a5-63e8-4d0a-bf1b-2aac4c561ec0','6f7991dc-0d48-4dab-9f5a-5a32c75025b0','0a0f678d-2bc6-4a62-8ef9-752868c211b3','2dd58d9e-8b72-4ac1-9725-6c43796f935e','4aa1ca52-6929-47e5-b95e-943353602d94','d69d69a0-5ac6-451e-8e2f-8ae12ff77b50','7988bcd4-44ec-4243-bd77-c826cc54e8bf','48201e93-dcbd-4f91-8924-c834bbe4a74a','f4dd58af-e436-4511-8347-7762ebf6af1f','5336877d-75eb-4e13-b04d-d3d15dac4b4a','0188a689-32c6-49cd-b6d9-476fccd58bf4']::uuid[]) id), counts as(\nselect 'auth_users' scope,count(*) n from auth.users where id in (select id from f)\nunion all select 'auth_sessions' scope,count(*) n from auth.sessions where user_id in (select id from f)\nunion all select 'refresh_tokens' scope,count(*) n from auth.refresh_tokens where user_id in (select id::text from f)\nunion all select 'identities' scope,count(*) n from auth.identities where user_id in (select id from f)\nunion all select 'student_roles' scope,count(*) n from public.user_roles where user_id in (select id from f)\nunion all select 'roles_assigned' scope,count(*) n from public.user_roles where assigned_by in (select id from f)\nunion all select 'registry' scope,count(*) n from private.internal_test_accounts where user_id in (select id from f)\nunion all select 'profiles' scope,count(*) n from public.profiles where id in (select id from f)\nunion all select 'forum_profiles' scope,count(*) n from public.forum_profile_settings where user_id in (select id from f)\nunion all select 'debate_events' scope,count(*) n from public.debate_v3_events where id='de-5af7a09268b36d28911ac2beb236aeec' or owner_id in (select id::text from f) or exists(select 1 from f where state->'members' ? f.id::text)\nunion all select 'debate_receipts' scope,count(*) n from public.debate_v3_receipts where event_id='de-5af7a09268b36d28911ac2beb236aeec' or actor_id in (select id::text from f)\nunion all select 'debate_audit' scope,count(*) n from public.debate_v3_audit where event_id='de-5af7a09268b36d28911ac2beb236aeec' or actor_id in (select id::text from f)\nunion all select 'debate_match_versions' scope,count(*) n from public.debate_v3_match_versions where event_id='de-5af7a09268b36d28911ac2beb236aeec'\nunion all select 'debate_ballots' scope,count(*) n from public.debate_v3_ballots where event_id='de-5af7a09268b36d28911ac2beb236aeec' or judge_id in (select id::text from f)\nunion all select 'debate_votes' scope,count(*) n from public.debate_v3_votes where event_id='de-5af7a09268b36d28911ac2beb236aeec' or actor_id in (select id::text from f)\nunion all select 'debate_outbox' scope,count(*) n from public.debate_v3_outbox where event_id='de-5af7a09268b36d28911ac2beb236aeec' or actor_id in (select id::text from f)\nunion all select 'debate_uploads' scope,count(*) n from public.debate_v3_uploads where event_id='de-5af7a09268b36d28911ac2beb236aeec' or actor_id in (select id::text from f)\nunion all select 'debate_rate_limits' scope,count(*) n from public.debate_v3_rate_limits where actor_id in (select id::text from f)\nunion all select 'storage_owned' scope,count(*) n from storage.objects where owner in (select id from f) or owner_id in (select id::text from f) or position('de-5af7a09268b36d28911ac2beb236aeec' in name)>0 or exists(select 1 from f where position(f.id::text in name)>0)\n) select clock_timestamp() checked_at,(select count(*) from f) fixture_count,jsonb_object_agg(scope,n) counts from counts;",
+    "result": {
+      "checked_at": "2026-09-09 16:51:44.167761+00",
+      "fixture_count": 11,
+      "counts": {
+        "profiles": 0,
+        "registry": 0,
+        "auth_users": 0,
+        "identities": 0,
+        "debate_audit": 0,
+        "debate_votes": 0,
+        "auth_sessions": 0,
+        "debate_events": 0,
+        "debate_outbox": 0,
+        "storage_owned": 0,
+        "student_roles": 0,
+        "debate_ballots": 0,
+        "debate_uploads": 0,
+        "forum_profiles": 0,
+        "refresh_tokens": 0,
+        "roles_assigned": 0,
+        "debate_receipts": 0,
+        "debate_rate_limits": 0,
+        "debate_match_versions": 0
+      }
+    },
+    "allScopesZero": true
+  },
+  "limitations": [
+    "The original hosted run remains failed after243.118 seconds with0 completed timed stages; this separate reconciliation does not change its fixture journal or browser result.",
+    "Original actual global logout denied all11 known sessions at Auth403 and Worker401 before cleanup. Root did not perform a fresh old-bearer request after manual Auth deletion because the completed runner's credentials were unavailable.",
+    "Exact Storage object/multipart metadata was absent and the native helper enforced object-metadata absence. No separate Storage API byte-absence probe or physical storage-blob inspection was performed.",
+    "No new DDL, live media, real mail, spending, Worker deployment or production change occurred during this reconciliation."
+  ],
+  "fullAcceptance": false,
+  "publicLaunch": false
+}

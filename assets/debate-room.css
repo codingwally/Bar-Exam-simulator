@@ -134,3 +134,15 @@
 #event .page-heading{margin:18px 0}#event-title{font-size:clamp(1.6rem,2.5vw,2.6rem)}#discover-heading{margin-top:38px}
 
 .tile .tile-pin{position:absolute;top:4px;right:4px;min-width:44px;min-height:44px;padding:4px 8px;font-size:.72rem;background:#051322e8;z-index:1}.tile.pinned{aspect-ratio:auto;min-height:300px;outline:2px solid var(--gold)}
+
+@media(max-width:650px){
+  /* Keep every media control visible without a horizontal scrolling gesture. */
+  .media-dock{flex-wrap:wrap;overflow:visible}
+  .media-dock button{max-width:100%}
+  /* Small rail tiles reserve separate rows for Pin, the image and its caption. */
+  .judge-tiles .tile,.observer-tiles .tile{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:52px minmax(48px,1fr) auto;aspect-ratio:auto}
+  .judge-tiles .tile:not(.pinned),.observer-tiles .tile:not(.pinned){min-height:140px}
+  .judge-tiles .tile .tile-pin,.observer-tiles .tile .tile-pin{position:relative;top:auto;right:auto;grid-row:1;justify-self:end;align-self:start;margin:4px}
+  .judge-tiles .tile .initials,.observer-tiles .tile .initials{position:relative;inset:auto;grid-row:2;min-height:48px}
+  .judge-tiles .tile .caption,.observer-tiles .tile .caption{position:relative;inset:auto;grid-row:3;z-index:1}
+}

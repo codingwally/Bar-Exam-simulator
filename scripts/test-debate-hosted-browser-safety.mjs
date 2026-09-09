@@ -1,11 +1,105 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
 import { assertCiExecution, hostedBrowserEnvironment, finalizeHostedBrowserShutdown, HOSTED_DEFAULT_TIMED_STAGES,
   assertHostedDefaultRunOfShow, assertHostedFinishedAttempt, assertHostedCorrectedAwards, assertHostedExportVersion,
-  assertHostedNextMatchState, assertHostedPriorMatchPreserved, summarizeHostedBootstrap, summarizeHostedNavigation } from './test-debate-browser-hosted-organizer.mjs';
+  assertHostedNextMatchState, assertHostedPriorMatchPreserved, summarizeHostedBootstrap, summarizeHostedNavigation,
+  summarizeHostedEvidenceUpload, submitHostedEvidenceWithUpload } from './test-debate-browser-hosted-organizer.mjs';
 import { createRunOfShow, calculateAwards } from '../worker/debate-domain.mjs';
 
 const seats = Object.fromEntries(['A1', 'A2', 'A3', 'N1', 'N2', 'N3'].map(seat => [seat, `inert-${seat}`]));
+
+const expectedUpload = { mimeType: 'application/pdf', size: 128, sha256: 'a'.repeat(64) };
+function uploadHarness() {
+  const page = new EventEmitter(), observations = [], origin = 'https://staging.invalid';
+  const eventId = 'de-' + 'a'.repeat(32), matchId = 'inert-match';
+  const uploadUrl = `${origin}/debate-room/evidence/upload?eventId=${eventId}&matchId=${matchId}`;
+  const request = (url, input, method = 'POST') => ({ url: () => url, method: () => method, postDataJSON: () => input });
+  const response = ({ url = uploadUrl, status = 200, body = { ok: true,
+    attachment: { mimeType: expectedUpload.mimeType, size: expectedUpload.size, uploadId: 'PRIVATE_SEALED_RECEIPT' } },
+    contentType = 'application/json', input, method } = {}) => ({ url: () => url,
+    request: () => request(url, input, method), status: () => status, json: async () => body,
+    headers: () => ({ 'content-type': contentType, 'set-cookie': 'PRIVATE_COOKIE' }) });
+  const command = (overrides = {}) => response({ url: `${origin}/debate-room/command`, input: {
+    command: 'share_evidence', eventId, payload: { matchId, private: 'PRIVATE_CONTENT' } }, ...overrides });
+  const run = click => submitHostedEvidenceWithUpload({ page, origin, eventId, matchId,
+    expected: expectedUpload, record: value => observations.push(value), click });
+  return { page, observations, origin, eventId, matchId, uploadUrl, request, response, command, run };
+}
+
+test('upload diagnostics retain exact known error classifications and bounded byte facts without private response data', () => {
+  const secret = 'PRIVATE_SENTINEL_DO_NOT_STORE';
+  for (const code of ['STORAGE_UNCONFIGURED', 'PRIVATE_STORAGE_UNCONFIRMED', 'STORAGE_WRITE_UNCONFIRMED',
+    'UPLOAD_INVALID', 'UPLOAD_CHANGED', 'UNSAFE_FILE', 'DEBATE_UNAVAILABLE']) {
+    const summary = summarizeHostedEvidenceUpload({ status: 503, contentType: `Application/JSON; secret=${secret}`,
+      expected: expectedUpload, body: { ok: false, error: { code, message: secret }, private: secret,
+        attachment: { mimeType: secret, size: secret, uploadId: secret, digest: secret, storageKey: secret } } });
+    assert.equal(summary.errorCode, code); assert.equal(summary.contentType, 'application/json');
+    assert.equal(summary.attachmentMimeType, 'OTHER'); assert.equal(summary.attachmentSize, null);
+    assert.equal(summary.uploadReceiptPresent, true); assert.ok(!JSON.stringify(summary).includes(secret));
+    assert.deepEqual(summary.expected, expectedUpload);
+  }
+  const unknown = summarizeHostedEvidenceUpload({ status: 502, contentType: secret,
+    expected: expectedUpload, body: { error: { code: secret } } });
+  assert.equal(unknown.errorCode, 'OTHER_ERROR'); assert.equal(unknown.contentType, 'OTHER');
+  assert.ok(!JSON.stringify(unknown).includes(secret));
+  assert.equal(summarizeHostedEvidenceUpload({ status: 502, expected: expectedUpload, body: null }).ok, null);
+});
+
+test('failed upload rejects immediately and removes listeners instead of waiting for a share command', { timeout: 1000 }, async () => {
+  const h = uploadHarness();
+  await assert.rejects(h.run(async () => h.page.emit('response', h.response({ status: 503,
+    body: { ok: false, error: { code: 'STORAGE_WRITE_UNCONFIRMED', message: 'PRIVATE_PROVIDER_DETAIL' } } }))),
+  error => error.code === 'HOSTED_EVIDENCE_UPLOAD_FAILED' && error.message === error.code);
+  assert.equal(h.observations.length, 1); assert.equal(h.observations[0].status, 503);
+  assert.equal(h.observations[0].errorCode, 'STORAGE_WRITE_UNCONFIRMED');
+  assert.equal(h.page.listenerCount('response'), 0); assert.equal(h.page.listenerCount('requestfailed'), 0);
+  assert.ok(!JSON.stringify(h.observations).includes('PRIVATE'));
+});
+
+test('upload success still requires the exact size, MIME, receipt and subsequent owned command', { timeout: 1000 }, async () => {
+  const h = uploadHarness(), intendedCommand = h.command(); let completed = false;
+  const pending = h.run(async () => {
+    h.page.emit('response', h.response({ url: 'https://foreign.invalid/debate-room/evidence/upload' }));
+    h.page.emit('response', h.response({ url: h.uploadUrl.replace(h.eventId, 'another-event') }));
+    h.page.emit('response', h.response({ method: 'GET' }));
+    h.page.emit('response', h.command({ input: { command: 'share_evidence', eventId: 'another-event', payload: { matchId: h.matchId } } }));
+  }).then(value => { completed = true; return value; });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(completed, false); assert.equal(h.observations.length, 0);
+  h.page.emit('response', intendedCommand);
+  await new Promise(resolve => setImmediate(resolve)); assert.equal(completed, false, 'A command cannot replace the real upload proof');
+  h.page.emit('response', h.response());
+  assert.equal(await pending, intendedCommand); assert.equal(h.observations.length, 1);
+  assert.equal(h.observations[0].attachmentSize, expectedUpload.size);
+  assert.ok(!JSON.stringify(h.observations).includes('PRIVATE'));
+  assert.equal(h.page.listenerCount('response'), 0); assert.equal(h.page.listenerCount('requestfailed'), 0);
+});
+
+test('malformed successful upload acknowledgement cannot bypass digest validation by returning a command', { timeout: 1000 }, async () => {
+  for (const change of [
+    result => { result.attachment.size++; }, result => { result.attachment.mimeType = 'image/png'; },
+    result => { result.attachment.uploadId = ''; }, result => { result.error = { code: 'PRIVATE_UNKNOWN_CODE' }; },
+  ]) {
+    const h = uploadHarness(), body = { ok: true, attachment: { mimeType: expectedUpload.mimeType,
+      size: expectedUpload.size, uploadId: 'PRIVATE_SEALED_RECEIPT' } }; change(body);
+    await assert.rejects(h.run(async () => { h.page.emit('response', h.command()); h.page.emit('response', h.response({ body })); }),
+      { code: 'HOSTED_EVIDENCE_UPLOAD_INVALID_RESPONSE' });
+    assert.equal(h.observations.length, 1); assert.equal(h.page.listenerCount('response'), 0);
+  }
+});
+
+test('upload transport failure and unreadable response fail safely without retaining exception or request details', { timeout: 1000 }, async () => {
+  const h = uploadHarness();
+  await assert.rejects(h.run(async () => h.page.emit('requestfailed', {
+    ...h.request(h.uploadUrl), failure: () => ({ errorText: 'PRIVATE_TRANSPORT_DETAIL' }) })),
+  { code: 'HOSTED_EVIDENCE_UPLOAD_TRANSPORT_FAILED' });
+  assert.deepEqual(h.observations, [{ path: '/debate-room/evidence/upload', status: null, outcome: 'TRANSPORT_FAILED' }]);
+  const other = uploadHarness(), response = other.response(); response.json = async () => { throw new Error('PRIVATE_RESPONSE_BODY'); };
+  await assert.rejects(other.run(async () => other.page.emit('response', response)), { code: 'HOSTED_EVIDENCE_UPLOAD_FAILED' });
+  assert.equal(other.observations[0].ok, null); assert.ok(!JSON.stringify(other.observations).includes('PRIVATE'));
+  assert.equal(other.page.listenerCount('requestfailed'), 0);
+});
 
 test('failed bootstrap diagnostics classify 403 without retaining credentials, private bodies or foreign URLs', () => {
   const origin = 'https://staging.invalid', secret = 'PRIVATE_SENTINEL_DO_NOT_STORE';

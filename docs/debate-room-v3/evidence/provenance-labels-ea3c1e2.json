@@ -1,0 +1,353 @@
+{
+  "schemaVersion": 1,
+  "kind": "BOUNDED_PRODUCT_AND_EXPORT_PROVENANCE_LABEL_SOURCE_AUDIT",
+  "recordedAt": "2026-09-09T16:03:17.583Z",
+  "observedLocalDate": "2026-09-10",
+  "timezone": "Asia/Manila",
+  "rowId": "V3-29-001",
+  "sourceSha": "ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34",
+  "sourceTree": "a8c7a0217a64208e3082ed6bb0eeef9297a963b2",
+  "status": "NO_UNIVERSAL_AUTHORITY_CLAIM_FOUND_IN_BOUNDED_SOURCE_REVIEW",
+  "method": "Read exact raw Git blobs at the named candidate rather than mutable working files. Searched17 production Debate entry/client/server files for authority, source/default, correction, overtime, awards, audience and certificate wording; manually reviewed the rulebook, rule/result exports and certificate templates. No browser, PDF rendering, tests or external provider calls were performed.",
+  "sourceFiles": {
+    "assets/debate-dates.js": {
+      "sourceSha": "ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34",
+      "sha256": "7549422128267aff3d7de4aafc535b5f40290df456a33fd5b85ddd4f7fcd0b12",
+      "bytes": 1515,
+      "lineCount": 22,
+      "sourceUrl": "https://github.com/codingwally/Bar-Exam-simulator/blob/ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34/assets/debate-dates.js"
+    },
+    "assets/debate-entry.js": {
+      "sourceSha": "ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34",
+      "sha256": "81fc674a29b4c4997b8bdd40fe5e49b56e37592cbd573b26675274a9d7894563",
+      "bytes": 1921,
+      "lineCount": 33,
+      "sourceUrl": "https://github.com/codingwally/Bar-Exam-simulator/blob/ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34/assets/debate-entry.js"
+    },
+    "assets/debate-media.js": {
+      "sourceSha": "ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34",
+      "sha256": "559ca7aefe39a52fbe3d424678a3609293171d197e5b450f557ac75578d37e8f",
+      "bytes": 28174,
+      "lineCount": 363,
+      "sourceUrl": "https://github.com/codingwally/Bar-Exam-simulator/blob/ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34/assets/debate-media.js"
+    },
+    "assets/debate-room.css": {
+      "sourceSha": "ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34",
+      "sha256": "bc752e89280753a0e80dd489229e2c2b9f3f4e1bc15a9b70d6a95291eab681bd",
+      "bytes": 15441,
+      "lineCount": 137,
+      "sourceUrl": "https://github.com/codingwally/Bar-Exam-simulator/blob/ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34/assets/debate-room.css"
+    },
+    "assets/debate-room.js": {
+      "sourceSha": "ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34",
+      "sha256": "8bd5e1ce18c8ef7daccaaadbc68de3f10688d80ee80485d7a0cf14d68e23d866",
+      "bytes": 107405,
+      "lineCount": 386,
+      "sourceUrl": "https://github.com/codingwally/Bar-Exam-simulator/blob/ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34/assets/debate-room.js"
+    },
+    "debate-room/index.html": {
+      "sourceSha": "ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34",
+      "sha256": "b7722b53d25db83d381aea95480031b481522ce46cb7e29f7fca431dd02d647e",
+      "bytes": 9972,
+      "lineCount": 58,
+      "sourceUrl": "https://github.com/codingwally/Bar-Exam-simulator/blob/ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34/debate-room/index.html"
+    },
+    "worker/debate-delivery.mjs": {
+      "sourceSha": "ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34",
+      "sha256": "4418034f5428aec421c6d20cca02e1a089e7d36e1802fa0bade52afea93fbf3b",
+      "bytes": 19798,
+      "lineCount": 173,
+      "sourceUrl": "https://github.com/codingwally/Bar-Exam-simulator/blob/ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34/worker/debate-delivery.mjs"
+    },
+    "worker/debate-documents.mjs": {
+      "sourceSha": "ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34",
+      "sha256": "3dd08cb71074921527dfe4536459af1a613dd087774eab032886278be0918d6f",
+      "bytes": 19310,
+      "lineCount": 198,
+      "sourceUrl": "https://github.com/codingwally/Bar-Exam-simulator/blob/ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34/worker/debate-documents.mjs"
+    },
+    "worker/debate-domain.mjs": {
+      "sourceSha": "ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34",
+      "sha256": "669430db23c9b62429722cf58d41c5a97aa483f25056f299c2c1819a6a14d63b",
+      "bytes": 56436,
+      "lineCount": 536,
+      "sourceUrl": "https://github.com/codingwally/Bar-Exam-simulator/blob/ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34/worker/debate-domain.mjs"
+    },
+    "worker/debate-fixtures.mjs": {
+      "sourceSha": "ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34",
+      "sha256": "d61f350b70f57a9d6e4fc2fad2593e6ca99e70cc70cbba4e14f5c4590a112c5c",
+      "bytes": 5638,
+      "lineCount": 67,
+      "sourceUrl": "https://github.com/codingwally/Bar-Exam-simulator/blob/ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34/worker/debate-fixtures.mjs"
+    },
+    "worker/debate-integration.mjs": {
+      "sourceSha": "ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34",
+      "sha256": "cda808c3b4f30b0e37df7e7b6ad7ae4e2ccd36803c4c80f48652e87855f907e5",
+      "bytes": 10558,
+      "lineCount": 109,
+      "sourceUrl": "https://github.com/codingwally/Bar-Exam-simulator/blob/ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34/worker/debate-integration.mjs"
+    },
+    "worker/debate-media.mjs": {
+      "sourceSha": "ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34",
+      "sha256": "d7bb489967a0512b89cbe0db78adc215dd48447f49dad96db99ed8978f8fb784",
+      "bytes": 7092,
+      "lineCount": 118,
+      "sourceUrl": "https://github.com/codingwally/Bar-Exam-simulator/blob/ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34/worker/debate-media.mjs"
+    },
+    "worker/debate-routes.mjs": {
+      "sourceSha": "ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34",
+      "sha256": "d566a262f7ffbbc3c0ea94e57444eac386b565bf5f9536925c485a2f45cf86b9",
+      "bytes": 4349,
+      "lineCount": 51,
+      "sourceUrl": "https://github.com/codingwally/Bar-Exam-simulator/blob/ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34/worker/debate-routes.mjs"
+    },
+    "worker/debate-sanctions.mjs": {
+      "sourceSha": "ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34",
+      "sha256": "f43af5803e097b26836b217086d3e6d93c6e769c0867a2aaaeb6ef05f642119b",
+      "bytes": 13098,
+      "lineCount": 143,
+      "sourceUrl": "https://github.com/codingwally/Bar-Exam-simulator/blob/ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34/worker/debate-sanctions.mjs"
+    },
+    "worker/debate-service.mjs": {
+      "sourceSha": "ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34",
+      "sha256": "0a9d665f58c47f0adb78901822dce625ab2df7ca5dd5bb2a7c4212b5868cdd58",
+      "bytes": 154413,
+      "lineCount": 1196,
+      "sourceUrl": "https://github.com/codingwally/Bar-Exam-simulator/blob/ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34/worker/debate-service.mjs"
+    },
+    "worker/debate-store.mjs": {
+      "sourceSha": "ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34",
+      "sha256": "08340dc8a0f5a1a9ccb19827a146dd5d788a8227d0393e90983574bd4431a31a",
+      "bytes": 13608,
+      "lineCount": 134,
+      "sourceUrl": "https://github.com/codingwally/Bar-Exam-simulator/blob/ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34/worker/debate-store.mjs"
+    },
+    "worker/debate-tournament.mjs": {
+      "sourceSha": "ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34",
+      "sha256": "f03907752aa76f2cd45b6747dcf0270eb6abdc004a260742a475fc0963258d2e",
+      "bytes": 14251,
+      "lineCount": 135,
+      "sourceUrl": "https://github.com/codingwally/Bar-Exam-simulator/blob/ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34/worker/debate-tournament.mjs"
+    }
+  },
+  "observations": [
+    {
+      "file": "debate-room/index.html",
+      "lines": [
+        19
+      ],
+      "topic": "Entry framing",
+      "observation": "Landing copy calls the offering the Due Diligence5/3/5 preset and describes the platform journey. No external official-rule authority is asserted.",
+      "sourceSha": "ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34",
+      "sourceSha256": "b7722b53d25db83d381aea95480031b481522ce46cb7e29f7fca431dd02d647e",
+      "sourceUrl": "https://github.com/codingwally/Bar-Exam-simulator/blob/ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34/debate-room/index.html#L19"
+    },
+    {
+      "file": "assets/debate-room.js",
+      "lines": [
+        130,
+        138
+      ],
+      "topic": "Rulebook and accepted version",
+      "observation": "The rules panel displays the saved preset, version and lock state. The rulebook explicitly identifies a Due Diligence preset rather than a universal national rulebook; three primary reference links are labeled, with an explicit statement that timing, order and weights vary by event.",
+      "sourceSha": "ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34",
+      "sourceSha256": "8bd5e1ce18c8ef7daccaaadbc68de3f10688d80ee80485d7a0cf14d68e23d866",
+      "sourceUrl": "https://github.com/codingwally/Bar-Exam-simulator/blob/ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34/assets/debate-room.js#L130"
+    },
+    {
+      "file": "assets/debate-room.js",
+      "lines": [
+        132,
+        138
+      ],
+      "topic": "Overtime and sanctions",
+      "observation": "Overtime is described as this interface's behavior: reaching zero does not mute, terminate, penalize or determine the winner. Declared sanctions require human reasons. This is not attributed to an external organizer's universal rule.",
+      "sourceSha": "ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34",
+      "sourceSha256": "8bd5e1ce18c8ef7daccaaadbc68de3f10688d80ee80485d7a0cf14d68e23d866",
+      "sourceUrl": "https://github.com/codingwally/Bar-Exam-simulator/blob/ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34/assets/debate-room.js#L132"
+    },
+    {
+      "file": "worker/debate-documents.mjs",
+      "lines": [
+        40,
+        41,
+        44,
+        47,
+        55,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63
+      ],
+      "topic": "Exported rules and correction",
+      "observation": "The rules export is headed as rules accepted for this match, includes the saved rule version and actual run of show, distinguishes default scoring weights, states the saved correction-window duration and human finalization, and identifies the Due Diligence preset with variable event practices and the same three source links.",
+      "sourceSha": "ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34",
+      "sourceSha256": "3dd08cb71074921527dfe4536459af1a613dd087774eab032886278be0918d6f",
+      "sourceUrl": "https://github.com/codingwally/Bar-Exam-simulator/blob/ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34/worker/debate-documents.mjs#L40"
+    },
+    {
+      "file": "assets/debate-room.js",
+      "lines": [
+        216,
+        219,
+        254
+      ],
+      "topic": "Audience and official match result",
+      "observation": "Audience Choice is explicitly separate from judging, awards and bracket progression. Official result labels refer to the panel's versioned event result; publishing starts the application correction window. No government/federation authority is claimed.",
+      "sourceSha": "ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34",
+      "sourceSha256": "8bd5e1ce18c8ef7daccaaadbc68de3f10688d80ee80485d7a0cf14d68e23d866",
+      "sourceUrl": "https://github.com/codingwally/Bar-Exam-simulator/blob/ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34/assets/debate-room.js#L216"
+    },
+    {
+      "file": "worker/debate-documents.mjs",
+      "lines": [
+        35,
+        36,
+        96,
+        97,
+        108,
+        112
+      ],
+      "topic": "Result export scope",
+      "observation": "Result exports name the event, match, rules version and result version. Provisional/final state and correction deadlines are explicit. Audience Choice does not change the official decision or award eligibility; official is used in the event-record sense.",
+      "sourceSha": "ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34",
+      "sourceSha256": "3dd08cb71074921527dfe4536459af1a613dd087774eab032886278be0918d6f",
+      "sourceUrl": "https://github.com/codingwally/Bar-Exam-simulator/blob/ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34/worker/debate-documents.mjs#L35"
+    },
+    {
+      "file": "worker/debate-domain.mjs",
+      "lines": [
+        31,
+        34,
+        43,
+        49,
+        51,
+        126,
+        127,
+        343,
+        344
+      ],
+      "topic": "Stored default provenance and award definitions",
+      "observation": "Default rules identify the Due Diligence preset. Rubric provenance distinguishes DENR weights from Due Diligence aggregation/award defaults; validation separately retains whether the rubric is customized. Award definitions describe normalized scores under the saved match rules.",
+      "sourceSha": "ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34",
+      "sourceSha256": "669430db23c9b62429722cf58d41c5a97aa483f25056f299c2c1819a6a14d63b",
+      "sourceUrl": "https://github.com/codingwally/Bar-Exam-simulator/blob/ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34/worker/debate-domain.mjs#L31"
+    },
+    {
+      "file": "assets/debate-room.js",
+      "lines": [
+        217,
+        291,
+        292
+      ],
+      "topic": "Awards and retention controls",
+      "observation": "The UI displays saved award reasons/definitions and eligibility. Retention copy describes event-specific policy, documented holds and owner approval for new public-launch policy, not a universal debating convention.",
+      "sourceSha": "ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34",
+      "sourceSha256": "8bd5e1ce18c8ef7daccaaadbc68de3f10688d80ee80485d7a0cf14d68e23d866",
+      "sourceUrl": "https://github.com/codingwally/Bar-Exam-simulator/blob/ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34/assets/debate-room.js#L217"
+    },
+    {
+      "file": "worker/debate-documents.mjs",
+      "lines": [
+        23,
+        31,
+        32,
+        81,
+        86,
+        88,
+        90,
+        92,
+        131
+      ],
+      "topic": "Award, certificate and tournament exports",
+      "observation": "Award explanations come from the finalized event record; the certificate identifies the issuer and limits participation to recorded participation without professional qualification. Tournament minimums and comparable-rubric exclusions are stated as the event's calculations.",
+      "sourceSha": "ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34",
+      "sourceSha256": "3dd08cb71074921527dfe4536459af1a613dd087774eab032886278be0918d6f",
+      "sourceUrl": "https://github.com/codingwally/Bar-Exam-simulator/blob/ea3c1e2d42ee7de7b9f2c7ebaef0e5fffe494e34/worker/debate-documents.mjs#L23"
+    }
+  ],
+  "concreteGaps": [],
+  "priorPrimarySourceEvidence": [
+    {
+      "path": "artifacts/debate-local-rehearsal/research-provenance-audit.json",
+      "sha256": "87d7719eacfa2961a1598caf71614068934c9164f8885c12ba4aa9ae044563da"
+    },
+    {
+      "path": "artifacts/debate-local-rehearsal/r3-visual-recheck.json",
+      "sha256": "1447e03d24d132577f57593d7aa765cc851e63c09da51488abe463acc88b37f5"
+    }
+  ],
+  "limits": [
+    "Source wording review only; actual rendered visibility, PDF pagination, current deployment and localized text were not retested.",
+    "The targeted sources identify product-specific defaults and accepted match rules; this is not comprehensive certification of all315 requirements or every possible organizer-entered text.",
+    "User-supplied event titles, motion text, custom rubric labels and issuer names are escaped/rendered data; this audit does not classify arbitrary future organizer content as endorsed by the platform.",
+    "The earlier public-reference audit and later root-attributed scanned-PDF review retain separate scopes and dates."
+  ],
+  "trackedFilesChanged": false,
+  "ledgerStatusChanged": false,
+  "fullAcceptance": false,
+  "publicLaunch": false,
+  "nonRequiredDisplayObservations": [
+    {
+      "file": "worker/debate-domain.mjs",
+      "lines": [
+        49,
+        126,
+        127
+      ],
+      "relatedRenderingFiles": [
+        {
+          "file": "assets/debate-room.js",
+          "lines": [
+            130,
+            138
+          ]
+        },
+        {
+          "file": "worker/debate-documents.mjs",
+          "lines": [
+            54,
+            59,
+            60,
+            61,
+            62,
+            63
+          ]
+        }
+      ],
+      "finding": "The model retains default rubric provenance and a separate customized flag, but the current rule panel/rulebook and rules PDF do not render those fields. The displayed source links are grouped, and the PDF prints the actual accepted weights without an explicit organizer-customization label.",
+      "classification": "NO_MANDATORY_IMPLEMENTATION_GAP_ESTABLISHED",
+      "governingClause": {
+        "rowId": "V3-16-013",
+        "attachmentLine": 296,
+        "exactText": "Preserve source/default provenance separately from organizer customizations."
+      },
+      "assessment": "The clause requires preserving the distinction and does not explicitly require rendering these saved fields as separate labels. The model preserves original provenance plus customized state. Existing UI/PDF source notes and event-specific preset framing satisfy the distinction examined here; this observation is not a release blocker or a request to change the passed candidate."
+    }
+  ],
+  "requirementMapping": [
+    {
+      "rowId": "V3-06-005",
+      "attachmentLine": 85,
+      "claim": "In-product rulebook/source notes and no fabricated official national certification; source notes and qualification limits are present in the reviewed templates."
+    },
+    {
+      "rowId": "V3-16-013",
+      "attachmentLine": 296,
+      "claim": "Separate default/source provenance and organizer customization are preserved in the rule model; explicit rendering of those two field names is not mandated."
+    },
+    {
+      "rowId": "V3-19-008",
+      "attachmentLine": 346,
+      "claim": "Award labels include actual saved measures and do not claim statutory/universal title status."
+    },
+    {
+      "rowId": "V3-29-001",
+      "attachmentLine": 548,
+      "claim": "Owner defaults are framed as the Due Diligence preset/accepted event rules, not universal debate rules."
+    }
+  ],
+  "classificationCorrection": "An initial recorder inference treated absent extra field labels as a display gap. Review against the exact source clause did not support a mandatory gap; the final audit separates the factual observation from requirements."
+}

@@ -14,6 +14,17 @@ const canonical = value => Array.isArray(value) ? value.map(canonical) : value &
   Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
 export const hostedHash = value => createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
 const same = (a, b) => hostedHash(a) === hostedHash(b);
+// Full primary keys from 20260909080139_debate_room_v3.sql. Do not use row
+// position as identity: unordered PostgREST reads may use different scan plans.
+const rowKeys = Object.freeze({
+  debate_v3_events: ['id'], debate_v3_uploads: ['id'], debate_v3_outbox: ['id'],
+  debate_v3_receipts: ['actor_id', 'command', 'event_id', 'idempotency_key'],
+  debate_v3_audit: ['event_id', 'revision'],
+  debate_v3_match_versions: ['event_id', 'match_id', 'event_revision'],
+  debate_v3_ballots: ['event_id', 'match_id', 'round', 'judge_id'],
+  debate_v3_votes: ['event_id', 'match_id', 'poll_id', 'actor_id'],
+  debate_v3_rate_limits: ['actor_id', 'action', 'bucket'],
+});
 
 // Callers supply only the fixed staging service transport; response bodies never
 // enter evidence. This module imports no CLI and makes no request on import.
@@ -21,12 +32,25 @@ export function createHostedDataSafety({ supabaseUrl, service, persist, clock = 
   pause = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds)) }) {
   need(supabaseUrl === FIXTURE_TARGET.supabaseUrl && typeof service === 'function' && typeof persist === 'function', 'HOSTED_SAFETY_SCOPE');
   async function rows(table, filters, limit = 1000) {
-    need(/^debate_v3_(?:events|receipts|audit|match_versions|ballots|votes|outbox|uploads|rate_limits)$/u.test(table), 'HOSTED_TABLE_SCOPE');
-    const query = new URLSearchParams({ ...filters, select: '*', limit: String(limit + 1) });
+    need(Object.hasOwn(rowKeys, table), 'HOSTED_TABLE_SCOPE');
+    const keys = rowKeys[table];
+    const query = new URLSearchParams({ ...filters, select: '*', limit: String(limit + 1), order: keys.map(key => `${key}.asc`).join(',') });
     const response = await service(`/rest/v1/${table}?${query}`, { headers: { Prefer: 'count=exact' } });
     const total = /^(?:\d+-\d+|\*)\/(\d+)$/u.exec(response.range || '');
     need(Array.isArray(response.body) && response.body.length <= limit && total && Number(total[1]) === response.body.length, 'HOSTED_INCOMPLETE_DISCOVERY');
-    return response.body;
+    const identities = new Set();
+    const ordered = response.body.map(row => {
+      need(row && typeof row === 'object' && !Array.isArray(row) && keys.every(key => Object.hasOwn(row, key) &&
+        (typeof row[key] === 'string' || Number.isSafeInteger(row[key]))), 'HOSTED_ROW_IDENTITY_CONTRACT');
+      const identity = JSON.stringify(keys.map(key => row[key]));
+      need(!identities.has(identity), 'HOSTED_DUPLICATE_DISCOVERY'); identities.add(identity);
+      return { row, serialized: JSON.stringify(canonical(row)) };
+    });
+    // Normalize only the table collection, never arrays inside state/receipts.
+    // Preserve every complete row and reject duplicates instead of collapsing
+    // them. The native helper independently hashes its own ordered full rows.
+    ordered.sort((a, b) => a.serialized < b.serialized ? -1 : a.serialized > b.serialized ? 1 : 0);
+    return ordered.map(({ row }) => row);
   }
   async function bucketPreflight() {
     const response = await service(`/storage/v1/bucket/${HOSTED_BUCKET.id}`, {}, [200, 400, 404]);

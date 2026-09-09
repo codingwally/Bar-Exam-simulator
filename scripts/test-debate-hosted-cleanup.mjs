@@ -13,7 +13,7 @@ const generatedEvent = await generatedService.execute({ actor: { id: ID(1), veri
   payload: { title: 'Hosted Debate dv3host-aaaaaaaaaaaaaaaa main', rehearsal: true, visibility: 'unlisted' },
   expectedRevision: 0, idempotencyKey: ID(41) });
 const generatedState = await generatedStore.read(generatedEvent.event.id);
-function harness({ intercept, pauseChange } = {}) {
+function harness({ intercept, pauseChange, readRows } = {}) {
   const fixtures = ['host', 'observer'].map((purpose, i) => ({ id: ID(i + 1), purpose, runId: `dv3study-${String(i).padStart(8, '0')}`,
     createdAt: new Date(NOW - 10000000).toISOString(), signOutState: 'confirmed', authDeniedBeforeCleanup: true, workerDeniedBeforeCleanup: true }));
   const runTag = 'dv3host-aaaaaaaaaaaaaaaa', title = `Hosted Debate ${runTag} main`, eventId = generatedState.id;
@@ -32,7 +32,7 @@ function harness({ intercept, pauseChange } = {}) {
     file_size_limit: HOSTED_BUCKET.fileSizeLimit, allowed_mime_types: [...HOSTED_BUCKET.allowedMimeTypes] };
   let bucket = copy(matchingBucket); const files = new Set([key]), calls = [], checkpoints = [], record = {};
   function matches(row, params) {
-    return [...params].filter(([k]) => !['select', 'limit'].includes(k)).every(([key, filter]) => {
+    return [...params].filter(([k]) => !['select', 'limit', 'order'].includes(k)).every(([key, filter]) => {
       if (key === 'state' && filter.startsWith('cs.')) return Object.keys(JSON.parse(filter.slice(3)).members).every(id => Object.hasOwn(row.state.members, id));
       return filter === 'is.null' ? row[key] === null : filter === `eq.${row[key]}`;
     });
@@ -58,7 +58,8 @@ function harness({ intercept, pauseChange } = {}) {
     const table = url.pathname.split('/').at(-1); assert.ok(tables[table], `Unexpected table ${table}`);
     const found = tables[table].filter(row => matches(row, url.searchParams));
     if (method === 'DELETE') tables[table] = tables[table].filter(row => !found.includes(row));
-    return { status: 200, body: copy(found), range: found.length ? `0-${found.length - 1}/${found.length}` : '*/0' };
+    const body = readRows ? readRows({ table, rows: copy(found), url }) : copy(found);
+    return { status: 200, body, range: found.length ? `0-${found.length - 1}/${found.length}` : '*/0' };
   };
   const ownership = { fixtures, runTag, eventIntents: [{ title, id: eventId }], sessionsFenced: true };
   const safety = createHostedDataSafety({ supabaseUrl: FIXTURE_TARGET.supabaseUrl, service,
@@ -125,7 +126,8 @@ test('event ID type and storage segments reject UUID events, malformed digests, 
     const h = harness(); h.event.id = id; h.event.state.id = id; h.ownership.eventIntents[0].id = id;
     assert.throws(() => h.safety.validateEvent(h.event, { fixtures: h.fixtures, runTag: h.ownership.runTag,
       title: h.ownership.eventIntents[0].title }), /HOSTED_EVENT_OWNERSHIP/);
-    await assert.rejects(h.safety.cleanupEvents(h.record, h.ownership), /HOSTED_(?:EVENT_OWNERSHIP|UNEXPECTED_OWNED_EVENT)/);
+    await assert.rejects(h.safety.cleanupEvents(h.record, h.ownership), typeof id !== 'string'
+      ? /HOSTED_ROW_IDENTITY_CONTRACT/ : /HOSTED_(?:EVENT_OWNERSHIP|UNEXPECTED_OWNED_EVENT)/);
     assert.ok(h.calls.every(call => call.method === 'GET'));
   }
   for (const key of [`evidence/de-${'f'.repeat(32)}/${ID(32)}/${ID(31)}.pdf`,
@@ -189,6 +191,109 @@ test('rate cleanup rejects unrelated actions and bucket windows even when no eve
 test('hash proof is deterministic while distinguishing changed state', () => {
   assert.equal(hostedHash({ a: 1, b: 2 }), hostedHash({ b: 2, a: 1 }));
   assert.notEqual(hostedHash({ a: 1 }), hostedHash({ a: 2 }));
+  assert.notEqual(hostedHash({ stages: ['first', 'second'] }), hostedHash({ stages: ['second', 'first'] }));
+});
+
+function addSecondRows(h) {
+  h.tables.debate_v3_receipts[0].receipt = { stages: ['first', 'second'], complete: true };
+  h.tables.debate_v3_receipts.push({ ...copy(h.tables.debate_v3_receipts[0]), idempotency_key: ID(42) });
+  h.tables.debate_v3_audit.push({ ...copy(h.tables.debate_v3_audit[0]), revision: 2 });
+  h.tables.debate_v3_rate_limits.push({ ...copy(h.tables.debate_v3_rate_limits[0]), action: 'claim_invite', count: 2 });
+}
+
+for (const table of ['debate_v3_receipts', 'debate_v3_audit', 'debate_v3_rate_limits']) {
+  test(`unchanged ${table} returned in reverse order after atomic capture completes exact cleanup`, async () => {
+    let captured = false, reordered = 0;
+    const h = harness({ intercept: ({ url, options }) => {
+      if (url.pathname.endsWith('/astra_staging_debate_cleanup_v1') && !JSON.parse(options.body).p_expected) captured = true;
+    }, readRows: ({ table: name, rows }) => {
+      if (captured && name === table && rows.length > 1) { reordered++; return rows.reverse(); }
+      return rows;
+    } });
+    addSecondRows(h);
+    await h.safety.cleanupEvents(h.record, h.ownership);
+    assert.equal(reordered, 1); assert.equal(h.record.complete, true); assert.equal(h.record.helperVerified, true);
+    assert.equal(h.record.atomic.state, 'DELETED_ABSENCE_VERIFIED');
+    assert.equal(h.record.atomic.snapshot.counts[table.slice('debate_v3_'.length)], 2);
+    assert.ok(Object.values(h.tables).every(rows => rows.length === 0));
+  });
+}
+
+test('unordered row collections across the drain remain stable without changing nested arrays or response objects', async () => {
+  let auditReads = 0, receiptReads = 0;
+  const h = harness({ readRows: ({ table, rows }) => {
+    const ordinal = table === 'debate_v3_audit' ? ++auditReads : table === 'debate_v3_receipts' ? ++receiptReads : 0;
+    return ordinal % 2 === 0 ? rows.reverse() : rows;
+  } });
+  addSecondRows(h);
+  const raw = copy(h.tables.debate_v3_receipts);
+  const one = await h.safety.rows('debate_v3_receipts', { event_id: `eq.${h.event.id}` });
+  const two = await h.safety.rows('debate_v3_receipts', { event_id: `eq.${h.event.id}` });
+  assert.deepEqual(one, two); assert.deepEqual(h.tables.debate_v3_receipts, raw);
+  assert.deepEqual(one[0].receipt.stages, ['first', 'second']);
+  await h.safety.cleanupEvents(h.record, h.ownership);
+  assert.equal(h.record.complete, true); assert.equal(h.record.helperVerified, true); assert.ok(auditReads >= 3);
+});
+
+for (const [label, table, mutate] of [
+  ['receipt field', 'debate_v3_receipts', row => { row.receipt.complete = false; }],
+  ['audit field', 'debate_v3_audit', row => { row.record.newField = 'changed'; }],
+  ['rate count', 'debate_v3_rate_limits', row => { row.count++; }],
+  ['nested array order', 'debate_v3_receipts', row => { row.receipt.stages.reverse(); }],
+]) {
+  test(`actual ${label} change across atomic capture holds before file deletion`, async () => {
+    const h = harness({ intercept: ({ url, options, tables }) => {
+      if (url.pathname.endsWith('/astra_staging_debate_cleanup_v1') && !JSON.parse(options.body).p_expected) mutate(tables[table][0]);
+    }, readRows: ({ rows }) => rows.reverse() });
+    addSecondRows(h);
+    await assert.rejects(h.safety.cleanupEvents(h.record, h.ownership), /HOSTED_CHANGED_DURING_ATOMIC_CAPTURE/);
+    assert.equal(h.record.complete, undefined); assert.equal(h.files.size, 1);
+    assert.equal(h.calls.filter(call => call.method === 'DELETE').length, 0);
+    assert.equal(h.calls.filter(call => call.route.endsWith('/astra_staging_debate_cleanup_v1')).length, 1);
+    assert.equal(h.tables.debate_v3_events.length, 1);
+  });
+}
+
+test('all nine table reads order by the complete schema key and reject duplicate or missing identities', async () => {
+  const h = harness(), eventId = h.event.id, actorId = h.fixtures[0].id;
+  const cases = {
+    debate_v3_events: [['id'], h.event],
+    debate_v3_uploads: [['id'], { id: ID(31) }],
+    debate_v3_outbox: [['id'], h.tables.debate_v3_outbox[0]],
+    debate_v3_receipts: [['actor_id', 'command', 'event_id', 'idempotency_key'], h.tables.debate_v3_receipts[0]],
+    debate_v3_audit: [['event_id', 'revision'], h.tables.debate_v3_audit[0]],
+    debate_v3_match_versions: [['event_id', 'match_id', 'event_revision'], { event_id: eventId, match_id: ID(32), event_revision: 3 }],
+    debate_v3_ballots: [['event_id', 'match_id', 'round', 'judge_id'], { event_id: eventId, match_id: ID(32), round: 1, judge_id: actorId }],
+    debate_v3_votes: [['event_id', 'match_id', 'poll_id', 'actor_id'], { event_id: eventId, match_id: ID(32), poll_id: ID(33), actor_id: actorId }],
+    debate_v3_rate_limits: [['actor_id', 'action', 'bucket'], h.tables.debate_v3_rate_limits[0]],
+  };
+  for (const [table, [keys, row]] of Object.entries(cases)) {
+    h.tables[table] = [copy(row)];
+    assert.deepEqual(await h.safety.rows(table, {}), [row]);
+    assert.equal(new URL(h.calls.at(-1).route, FIXTURE_TARGET.supabaseUrl).searchParams.get('order'), keys.map(key => `${key}.asc`).join(','));
+    for (const changed of [false, true]) {
+      h.tables[table] = [copy(row), { ...copy(row), ...(changed ? { unexpectedField: 'same identity, different full row' } : {}) }];
+      await assert.rejects(h.safety.rows(table, {}), /HOSTED_DUPLICATE_DISCOVERY/);
+    }
+    h.tables[table] = [copy(row)]; delete h.tables[table][0][keys.at(-1)];
+    await assert.rejects(h.safety.rows(table, {}), /HOSTED_ROW_IDENTITY_CONTRACT/);
+  }
+  assert.ok(h.calls.every(call => call.method === 'GET'));
+});
+
+test('duplicate and partial discovery after capture hold before any storage or database deletion', async () => {
+  for (const table of ['debate_v3_receipts', 'debate_v3_rate_limits']) for (const mode of ['duplicate', 'partial']) {
+    let captured = false;
+    const h = harness({ intercept: ({ url, options }) => {
+      if (url.pathname.endsWith('/astra_staging_debate_cleanup_v1') && !JSON.parse(options.body).p_expected) captured = true;
+    }, readRows: ({ table: name, rows }) => captured && name === table && rows.length > 1
+      ? mode === 'duplicate' ? [rows[0], copy(rows[0])] : rows.slice(0, 1) : rows });
+    addSecondRows(h);
+    await assert.rejects(h.safety.cleanupEvents(h.record, h.ownership), mode === 'duplicate' ? /HOSTED_DUPLICATE_DISCOVERY/ : /HOSTED_INCOMPLETE_DISCOVERY/);
+    assert.equal(h.files.size, 1); assert.equal(h.tables.debate_v3_events.length, 1);
+    assert.equal(h.calls.filter(call => call.method === 'DELETE').length, 0);
+    assert.equal(h.calls.filter(call => call.route.endsWith('/astra_staging_debate_cleanup_v1')).length, 1);
+  }
 });
 
 test('a changed full receipt after capture aborts atomic deletion without deleting the changed database row', async () => {

@@ -1,0 +1,367 @@
+{
+  "schemaVersion": 1,
+  "kind": "STUDY_ADMISSION_READ_ONLY_SOURCE_AUDIT",
+  "status": "NO_CONCRETE_DEFECT_FOUND_IN_REVIEWED_SCOPE",
+  "recordedAt": "2026-09-09T16:26:20.417Z",
+  "sourceCommit": "c7b3149f3f690f9ded2b4b44e80336f04b47cfda",
+  "sourceTree": "a8c7a0217a64208e3082ed6bb0eeef9297a963b2",
+  "sourceHashes": [
+    {
+      "path": "assets/study-room-live.js",
+      "gitBlob": "a674990407cbe67a9e39d729d98698fc49f1741f",
+      "committedSha256": "18233c7e451d4af50a4b71254ae93d68ceb0316b0b7a1cd4b4d880bd32542450",
+      "workingSha256": "7a0b1f6aa90d556b533113f47f5a22c288a0eaea793e74e913705ccfe3d5e39f",
+      "byteIdentical": false,
+      "equalAfterCrLfNormalization": true
+    },
+    {
+      "path": "assets/study-room-live.css",
+      "gitBlob": "07d2a5c65d5c9a8b4c767e5623d434b736594c81",
+      "committedSha256": "b03ee186567cf1f027b699cc12979dcad4f89279d7563e11d8fe91218f1520c2",
+      "workingSha256": "00f2f2580ea23db119be0301d88f9dd0f3b3d2fcbfbf4eb659413fa7ec31cbed",
+      "byteIdentical": false,
+      "equalAfterCrLfNormalization": true
+    },
+    {
+      "path": "study-room/index.html",
+      "gitBlob": "99f84aa72b14ca9a7dabb90ed252492a0d712ba6",
+      "committedSha256": "54c96a2eff695deacd935fad05cc0d44413c4e7144adcd4c44e40f84f3c31bc8",
+      "workingSha256": "2be30d20691faf3994b4266271ce15d58545f9df5dd4379a14c14536eece5f99",
+      "byteIdentical": false,
+      "equalAfterCrLfNormalization": true
+    },
+    {
+      "path": "worker/study-room-core.mjs",
+      "gitBlob": "390e4c6738043730cb86f6bbbfd26dc6633e0335",
+      "committedSha256": "7b8bdab0d8d545cc9acba564268dd4a8250c5e126fbc1238848682b1d0ddae04",
+      "workingSha256": "20c1cda1464dc1af0f4ed685d581e3173f6a1fac0a375c38eaa68f1109fbf86c",
+      "byteIdentical": false,
+      "equalAfterCrLfNormalization": true
+    },
+    {
+      "path": "worker/study-room-routes.mjs",
+      "gitBlob": "593627a628e91b034936ec00278766b3d94754c0",
+      "committedSha256": "12e502a8271e1af0f2d0e7a54fa4fabde9037e612dc4c12eec2f57edf9d850a7",
+      "workingSha256": "8fc0d8ea965610abfed7a7c0acf7dcb2c43aaf2feff8bfe9bffe50fbddc0042a",
+      "byteIdentical": false,
+      "equalAfterCrLfNormalization": true
+    },
+    {
+      "path": "worker/study-room-admission.mjs",
+      "gitBlob": "27d755395a34f976ca674fbc1aea75d842ebc4bb",
+      "committedSha256": "d82c8c031b5c013f2a953b6e0dc350f6a266116e691b08d8608a7c1933c5346d",
+      "workingSha256": "d82c8c031b5c013f2a953b6e0dc350f6a266116e691b08d8608a7c1933c5346d",
+      "byteIdentical": true,
+      "equalAfterCrLfNormalization": true
+    },
+    {
+      "path": "worker/index.mjs",
+      "gitBlob": "8871f1eb3600a9a58df2c60e15ade6cf4c523063",
+      "committedSha256": "e7e201629d320450b372a1d964c2237daccc7be6775af1fff02b3a174c279df6",
+      "workingSha256": "e7e201629d320450b372a1d964c2237daccc7be6775af1fff02b3a174c279df6",
+      "byteIdentical": true,
+      "equalAfterCrLfNormalization": true
+    },
+    {
+      "path": "worker/study-room-admission.test.mjs",
+      "gitBlob": "bb1f02d9d270f78dafac6b60591ac9cdf0623ba9",
+      "committedSha256": "7a45b10d869ba42567f5fa91a6ffb9b541d3b7e507569473b88b930cfa54706c",
+      "workingSha256": "7a45b10d869ba42567f5fa91a6ffb9b541d3b7e507569473b88b930cfa54706c",
+      "byteIdentical": true,
+      "equalAfterCrLfNormalization": true
+    },
+    {
+      "path": "worker/study-room-catalog.test.mjs",
+      "gitBlob": "71a3ad5e88fd7ff0052923fe32bbad237d8c3c74",
+      "committedSha256": "efbf8f5f31f0e20c97429cbdf80d75db88a3ff4d53b385f71d4ceee58afb5463",
+      "workingSha256": "4811c0477e401f4f473e94056e9711a2d801996226b10d255b8c8bcaee17c6ea",
+      "byteIdentical": false,
+      "equalAfterCrLfNormalization": true
+    },
+    {
+      "path": "scripts/test-study-room-admission-sql.mjs",
+      "gitBlob": "0cbbae3ff3b8b2e2f8bb5ef9e5ad081e1b372c62",
+      "committedSha256": "901ef21f715cc6151bba2d1eac6bc51a3f958c9d44db0fbdc1869ff73f9b259a",
+      "workingSha256": "901ef21f715cc6151bba2d1eac6bc51a3f958c9d44db0fbdc1869ff73f9b259a",
+      "byteIdentical": true,
+      "equalAfterCrLfNormalization": true
+    },
+    {
+      "path": "scripts/test-study-room-browser.mjs",
+      "gitBlob": "2a3f96d4fc75e1fccdda762148be8e1466571d24",
+      "committedSha256": "95f857102208180dd7a542061e798051b176b3d2f2b694b661d356debc90e941",
+      "workingSha256": "95f857102208180dd7a542061e798051b176b3d2f2b694b661d356debc90e941",
+      "byteIdentical": true,
+      "equalAfterCrLfNormalization": true
+    },
+    {
+      "path": "scripts/serve-study-room-rehearsal.mjs",
+      "gitBlob": "1145ac4523c1272ade97f3ee765b37646d526666",
+      "committedSha256": "207765224cdbdcbf25f7ad12af3ff9b2af7812c1a81c7eb62aaa4a5ceceb907e",
+      "workingSha256": "207765224cdbdcbf25f7ad12af3ff9b2af7812c1a81c7eb62aaa4a5ceceb907e",
+      "byteIdentical": true,
+      "equalAfterCrLfNormalization": true
+    },
+    {
+      "path": "scripts/test-study-room-hotfix-behavior.mjs",
+      "gitBlob": "57820519e1083b4055395eac36d3459d94c87eba",
+      "committedSha256": "1549aca242deb8b0dff504687830e240d771a092b9c23538f511f59c6d274896",
+      "workingSha256": "74568db2b4c34d4b37d605e39acf6fbf20368fca8d06ea3b39c05d505c5fc7e6",
+      "byteIdentical": false,
+      "equalAfterCrLfNormalization": true
+    },
+    {
+      "path": "scripts/debate-hosted-fixtures.mjs",
+      "gitBlob": "3d86cc004a139e2111fa9f1d7f90b9bf6c1a42c5",
+      "committedSha256": "08286a250403d5d558a078c95ce03d463a43b57e903c878fffb6e2bd99545f8f",
+      "workingSha256": "08286a250403d5d558a078c95ce03d463a43b57e903c878fffb6e2bd99545f8f",
+      "byteIdentical": true,
+      "equalAfterCrLfNormalization": true
+    },
+    {
+      "path": "supabase/migrations/20260908144814_astra_study_room_persisted_catalog.sql",
+      "gitBlob": "e4a5cf031d7cad12f771923770ad9c0edb1788df",
+      "committedSha256": "f5eb0739f36fca4d1cd574fdc7bd30a299351f8cc892a7896742f247fc496ebc",
+      "workingSha256": "82209af9130782db7f8348ee73a06bc0276ee1d3d6cce0d510a93af5afd22b4e",
+      "byteIdentical": false,
+      "equalAfterCrLfNormalization": true
+    },
+    {
+      "path": "supabase/migrations/20260909080143_study_room_admission_v3.sql",
+      "gitBlob": "1b56732658c4de7497aea47438230e79a1dccdea",
+      "committedSha256": "5ca7d139bb925b00c82d391aab4f566446d5d1bdd25e0b1b271fde614cb11637",
+      "workingSha256": "5ca7d139bb925b00c82d391aab4f566446d5d1bdd25e0b1b271fde614cb11637",
+      "byteIdentical": true,
+      "equalAfterCrLfNormalization": true
+    },
+    {
+      "path": "worker/study-room-admission-schema-draft.sql",
+      "gitBlob": "1b56732658c4de7497aea47438230e79a1dccdea",
+      "committedSha256": "5ca7d139bb925b00c82d391aab4f566446d5d1bdd25e0b1b271fde614cb11637",
+      "workingSha256": "5ca7d139bb925b00c82d391aab4f566446d5d1bdd25e0b1b271fde614cb11637",
+      "byteIdentical": true,
+      "equalAfterCrLfNormalization": true
+    }
+  ],
+  "ownerRequirement": "Study Room offers All users, Paid users, Admin, and Admin approval; All users is default. A platform administrator inside the exact room manually admits a waiting user. Preserve existing Inner Chamber restrictions.",
+  "findings": [
+    {
+      "claim": "Ordinary existing/new rooms default to all signed-in users; four exclusive entry options are rendered.",
+      "sources": [
+        "assets/study-room-live.js:1021",
+        "study-room/index.html:95",
+        "supabase/migrations/20260908144814_astra_study_room_persisted_catalog.sql:70",
+        "supabase/migrations/20260909080143_study_room_admission_v3.sql:10"
+      ]
+    },
+    {
+      "claim": "Current administrator and paid status are enforced before token issuance; paid/admission/catalog state is checked again after asynchronous work.",
+      "sources": [
+        "worker/study-room-routes.mjs:125",
+        "worker/study-room-core.mjs:598",
+        "worker/study-room-core.mjs:660"
+      ]
+    },
+    {
+      "claim": "Administrative decisions require an authoritative platform role and ACTIVE provider identity in this exact physical room/access revision; browser-supplied identity/presence is not trusted.",
+      "sources": [
+        "worker/study-room-admission.mjs:21",
+        "worker/study-room-admission.mjs:30",
+        "worker/study-room-core.mjs:699",
+        "supabase/migrations/20260909080143_study_room_admission_v3.sql:118"
+      ]
+    },
+    {
+      "claim": "Pending admission returns before join-token issuance or room creation. Approval alone does not connect; a fresh explicit Enter action is required.",
+      "sources": [
+        "assets/study-room-live.js:4003",
+        "assets/study-room-live.js:4030",
+        "assets/study-room-live.js:4040",
+        "scripts/test-study-room-browser.mjs:134",
+        "scripts/test-study-room-browser.mjs:143"
+      ]
+    },
+    {
+      "claim": "Inner Chamber remains admin-only at UI, Worker catalog validation and SQL; this is the preserved pre-existing exception.",
+      "sources": [
+        "study-room/index.html:104",
+        "worker/study-room-core.mjs:117",
+        "supabase/migrations/20260909080143_study_room_admission_v3.sql:105",
+        "supabase/migrations/20260909080143_study_room_admission_v3.sql:283"
+      ]
+    }
+  ],
+  "tests": {
+    "command": "node --test worker/study-room-admission.test.mjs worker/study-room-catalog.test.mjs",
+    "workingDirectory": "C:\\Users\\wally\\OneDrive\\Desktop\\DUEDILLEGENCE PROGRAM\\Bar-Exam-simulator-debate-room-v3-20260909",
+    "execution": "Executed locally during this audit; results transcribed from the actual Node test output.",
+    "exitCode": 0,
+    "passed": 30,
+    "failed": 0,
+    "skipped": 0,
+    "reportedDurationMs": 6344.2266,
+    "results": [
+      {
+        "name": "pending admission, absent dependency, or self-hosted revocation fails before media lookup/token signing",
+        "status": "PASS"
+      },
+      {
+        "name": "real signed token rechecks the exact admission version and preserves Library media source limits",
+        "status": "PASS"
+      },
+      {
+        "name": "provider presence is exact active room identity, never a browser assertion",
+        "status": "PASS"
+      },
+      {
+        "name": "revocation uses supported SDK bigint options and an immutable retry cutoff",
+        "status": "PASS"
+      },
+      {
+        "name": "admission service binds actors, normalizes names, requires platform admin presence, and hides internal confirmation",
+        "status": "PASS"
+      },
+      {
+        "name": "durable deny precedes provider; uncertainty retries original cutoff and confirmation follows success only",
+        "status": "PASS"
+      },
+      {
+        "name": "route authenticates before admission actor budget; anonymous never reaches it; actor is fourth argument",
+        "status": "PASS"
+      },
+      {
+        "name": "actual Worker keeps120 requests per actor and permits100 students behind one school IP",
+        "status": "PASS"
+      },
+      {
+        "name": "catalog is authoritative, bounded, immutable and never falls back to built-in public access",
+        "status": "PASS"
+      },
+      {
+        "name": "labels use exactly the SQL lexical contract and never carry policy or physical identity",
+        "status": "PASS"
+      },
+      {
+        "name": "access generation preserves all original physical names and label-only identity",
+        "status": "PASS"
+      },
+      {
+        "name": "paid source and exact start/expiry boundaries exclude complimentary and provisional access",
+        "status": "PASS"
+      },
+      {
+        "name": "all room allows exactly free's current server-verified entitlement",
+        "status": "PASS"
+      },
+      {
+        "name": "all room allows exactly paid's current server-verified entitlement",
+        "status": "PASS"
+      },
+      {
+        "name": "all room allows exactly admin's current server-verified entitlement",
+        "status": "PASS"
+      },
+      {
+        "name": "paid room allows exactly free's current server-verified entitlement",
+        "status": "PASS"
+      },
+      {
+        "name": "paid room allows exactly paid's current server-verified entitlement",
+        "status": "PASS"
+      },
+      {
+        "name": "paid room allows exactly admin's current server-verified entitlement",
+        "status": "PASS"
+      },
+      {
+        "name": "admin room allows exactly free's current server-verified entitlement",
+        "status": "PASS"
+      },
+      {
+        "name": "admin room allows exactly paid's current server-verified entitlement",
+        "status": "PASS"
+      },
+      {
+        "name": "admin room allows exactly admin's current server-verified entitlement",
+        "status": "PASS"
+      },
+      {
+        "name": "in-flight audience change denies token response; old issued token cannot address the new generation",
+        "status": "PASS"
+      },
+      {
+        "name": "catalog disappearance, label race and paid expiry are checked before issuing a credential",
+        "status": "PASS"
+      },
+      {
+        "name": "empty audience update rotates generation; active label-only update preserves it; identical update is idempotent",
+        "status": "PASS"
+      },
+      {
+        "name": "audience update refuses active, malformed or wrong-capacity rooms before any SQL mutation",
+        "status": "PASS"
+      },
+      {
+        "name": "add is explicit-key only, role-bound, revision-checked and never retries unknown mutation",
+        "status": "PASS"
+      },
+      {
+        "name": "configuration refuses an unaddressable generation before persisting the catalog",
+        "status": "PASS"
+      },
+      {
+        "name": "actual Worker uses current paid rows, not user claims, broad Beta flags or provisional proof",
+        "status": "PASS"
+      },
+      {
+        "name": "actual Worker fails closed on absent catalog and does not expose raw database errors",
+        "status": "PASS"
+      },
+      {
+        "name": "actual Worker add/update require normal verified administrator and exact administrator route",
+        "status": "PASS"
+      }
+    ],
+    "substitutions": "Actual Worker/core/route modules and signed JWT library; test-local Auth, SQL RPC responses, membership rows and provider service responses. No real provider or hosted session."
+  },
+  "verificationGaps": [
+    {
+      "gap": "Positive hosted Study admission journey with actual provider ACTIVE presence, manual admission, removal and stale JWT rejection is not proven.",
+      "sources": [
+        "scripts/test-study-room-browser.mjs:20",
+        "scripts/debate-hosted-fixtures.mjs:131"
+      ],
+      "detail": "Synthetic browser labels hostedAuth/providerPresence/physicalMedia false. Existing real hosted fixtures check /study-room/access only, without Study join/token."
+    },
+    {
+      "gap": "Simultaneous Study admission decisions from independent PostgreSQL connections are not proven.",
+      "sources": [
+        "scripts/test-study-room-admission-sql.mjs:85"
+      ],
+      "detail": "The existing decision test explicitly uses one PGlite connection. No native Study-admission concurrency test was found in the reviewed scripts."
+    },
+    {
+      "gap": "Approval browser journeys for Library and newly created ordinary room7 are absent at this exact source.",
+      "sources": [
+        "scripts/test-study-room-browser.mjs:117",
+        "scripts/test-study-room-browser.mjs:125",
+        "scripts/test-study-room-browser.mjs:143"
+      ],
+      "detail": "Current flow exercises approval in room2, Library silent controls and new room7 default All. Generic application paths support both other approval cases; this is a coverage gap, not an observed product defect."
+    }
+  ],
+  "claims": {
+    "readOnlyAudit": true,
+    "sourceModified": false,
+    "providerActivity": false,
+    "browserSessionCreated": false,
+    "sqlEngineExecuted": false,
+    "hostedAuthVerified": false,
+    "hostedAdmissionVerified": false,
+    "providerPresenceVerified": false,
+    "physicalMediaVerified": false,
+    "fullAcceptance": false,
+    "productionChanges": false
+  },
+  "note": "This ignored receipt records evidence at the exact audited source. Later synthetic test additions do not retroactively change this receipt or establish hosted/physical verification."
+}

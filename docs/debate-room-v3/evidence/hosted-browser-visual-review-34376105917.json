@@ -1,0 +1,232 @@
+{
+  "schemaVersion": 1,
+  "kind": "SAVED_HOSTED_BROWSER_SCREENSHOT_VISUAL_REVIEW",
+  "status": "REVIEWED_WITH_MOBILE_READABILITY_FINDING",
+  "reviewedAt": "2026-09-09T16:49:34.934Z",
+  "reviewer": "Codex visual_layout subagent",
+  "reviewActivity": {
+    "localSavedArtifactsOnly": true,
+    "newBrowserSession": false,
+    "providerCalls": false,
+    "trackedFilesEdited": false,
+    "applicationEdited": false,
+    "imagesAltered": false
+  },
+  "provenance": {
+    "runId": "34376105917",
+    "sourceSha": "c7b3149f3f690f9ded2b4b44e80336f04b47cfda",
+    "sourceTree": "a8c7a0217a64208e3082ed6bb0eeef9297a963b2",
+    "workerVersion": "d10a5718-7dcd-4a0e-a356-be8c31634381",
+    "workerUrl": "https://duediligence-examinations-staging.wallyesteban1993.workers.dev",
+    "sourcePath": "scripts/test-debate-browser-hosted-organizer.mjs",
+    "sourceSha256": "9144a1494dc6f1e1d65d559360e41f9ea36c3b8a71a141901727b2b549ffb280",
+    "browserReport": {
+      "path": "artifacts/debate-local-rehearsal/staging-34376105917/debate-v3-staging-release-c7b3149f3f690f9ded2b4b44e80336f04b47cfda/staging-release/hosted-c7b3149f3f69-50cfe73f-4dea-4dcd-9815-c0b468102c7f/browser/report.json",
+      "sha256": "df030a04f0cc34cf3693eabf815e505ede7994ab9bc83c45da2259125fedb13b"
+    },
+    "browser": {
+      "version": "152.0.7977.64",
+      "channel": "chrome",
+      "headless": true,
+      "node": "v22.23.2",
+      "platform": "linux"
+    }
+  },
+  "originalRun": {
+    "status": "FAIL",
+    "failureCode": "HOSTED_BROWSER_JOURNEY_FAILED",
+    "startedAt": "2026-09-09T16:23:31.037Z",
+    "finishedAt": "2026-09-09T16:27:34.155Z",
+    "elapsedMs": 243118,
+    "timedStagesCompleted": 0,
+    "componentChecksPassed": 47,
+    "lastRecordedRevision": 66,
+    "downloadsRecorded": 0,
+    "actualHostedAuthReported": true,
+    "mainWorkerBootstrapReported": true,
+    "physicalMediaVerified": false,
+    "providerMediaVerified": false,
+    "controlEndurance90MinutesVerified": false,
+    "requiredRehearsalCompleted": false,
+    "shutdownObservationsVerified": false
+  },
+  "geometryEvidence": [
+    {
+      "name": "Media controls stay above the arena without covering team or adjudicator headings at 1365px",
+      "status": "PASS",
+      "width": 1365,
+      "geometry": {
+        ".media-dock": {
+          "x": 28,
+          "y": 628.5,
+          "width": 1309,
+          "height": 74
+        },
+        "#arena": {
+          "x": 28,
+          "y": 726.5,
+          "width": 1309,
+          "height": 1144.28125
+        },
+        ".judges-rail": {
+          "x": 28,
+          "y": 726.5,
+          "width": 1309,
+          "height": 161.65625
+        },
+        "#affirmative-name": {
+          "x": 28,
+          "y": 908.15625,
+          "width": 362.5625,
+          "height": 22.65625
+        },
+        "#negative-name": {
+          "x": 974.421875,
+          "y": 908.15625,
+          "width": 362.578125,
+          "height": 22.65625
+        }
+      }
+    },
+    {
+      "name": "Media controls stay above the arena without covering team or adjudicator headings at 320px",
+      "status": "PASS",
+      "width": 320,
+      "geometry": {
+        ".media-dock": {
+          "x": 18,
+          "y": 1116.453125,
+          "width": 284,
+          "height": 74
+        },
+        "#arena": {
+          "x": 18,
+          "y": 1214.453125,
+          "width": 284,
+          "height": 1279.9375
+        },
+        ".judges-rail": {
+          "x": 18,
+          "y": 1214.453125,
+          "width": 284,
+          "height": 104.8125
+        },
+        "#affirmative-name": {
+          "x": 18,
+          "y": 1967.078125,
+          "width": 136,
+          "height": 45.3125
+        },
+        "#negative-name": {
+          "x": 166,
+          "y": 1967.078125,
+          "width": 136,
+          "height": 45.3125
+        }
+      }
+    }
+  ],
+  "images": [
+    {
+      "path": "artifacts/debate-local-rehearsal/staging-34376105917/debate-v3-staging-release-c7b3149f3f690f9ded2b4b44e80336f04b47cfda/staging-release/hosted-c7b3149f3f69-50cfe73f-4dea-4dcd-9815-c0b468102c7f/browser/screenshots/01-observer-waiting.png",
+      "sha256": "da7a7af158858bd97ac0664b3ec390d2d775f84f5ad7720c822b4dfbc7002d64",
+      "bytes": 86936,
+      "width": 1365,
+      "height": 900,
+      "visuallyInspected": true,
+      "inspectionMethod": "view_image original-resolution output; no image alteration",
+      "observations": [
+        "Waiting for the host and the saved entry-request explanation are readable below the event title; only Overview is visually active.",
+        "Header links, Check in and Refresh controls, tabs and waiting text do not visibly overlap in this desktop capture.",
+        "The image supports rendering of the waiting state; authorization enforcement is a separate report check, not established from pixels alone."
+      ]
+    },
+    {
+      "path": "artifacts/debate-local-rehearsal/staging-34376105917/debate-v3-staging-release-c7b3149f3f690f9ded2b4b44e80336f04b47cfda/staging-release/hosted-c7b3149f3f69-50cfe73f-4dea-4dcd-9815-c0b468102c7f/browser/screenshots/02-reviewed-fixture.png",
+      "sha256": "54a23541bbe64bc738af74b24020781cc9665aeee8e3e6b9eade52fb015fe45d",
+      "bytes": 129839,
+      "width": 1365,
+      "height": 1278,
+      "visuallyInspected": true,
+      "inspectionMethod": "view_image original-resolution output; no image alteration",
+      "observations": [
+        "Matches and standings screen shows a draft Round1 pairing with both team names, CI motion1 and a Publish reviewed fixtures control.",
+        "Draft review, Published fixtures, Standings and Tournament awards sections are readable and separated; this image explicitly shows no published fixtures and no final standings yet.",
+        "This capture is a pre-publication review state, not proof of completed match publication or awards."
+      ]
+    },
+    {
+      "path": "artifacts/debate-local-rehearsal/staging-34376105917/debate-v3-staging-release-c7b3149f3f690f9ded2b4b44e80336f04b47cfda/staging-release/hosted-c7b3149f3f69-50cfe73f-4dea-4dcd-9815-c0b468102c7f/browser/screenshots/03-ready-with-explicit-accommodations.png",
+      "sha256": "352f243c98b2556bd9005cb9c4cc3c861607c2685a902feb6b236a5aa101b58b",
+      "bytes": 167973,
+      "width": 1365,
+      "height": 1379,
+      "visuallyInspected": true,
+      "inspectionMethod": "view_image original-resolution output; no image alteration",
+      "observations": [
+        "Overview displays Ready to begin, readiness-confirmed text and a Start match control in a distinct right-hand column.",
+        "Event controls, match check-in copy and the organizer journey below are readable without visible collisions.",
+        "The visible synthetic-rehearsal description disclaims physical audio and live media. Readiness text does not establish successful real microphone or camera operation."
+      ]
+    },
+    {
+      "path": "artifacts/debate-local-rehearsal/staging-34376105917/debate-v3-staging-release-c7b3149f3f690f9ded2b4b44e80336f04b47cfda/staging-release/hosted-c7b3149f3f69-50cfe73f-4dea-4dcd-9815-c0b468102c7f/browser/screenshots/04-live-media-controls-1365px.png",
+      "sha256": "e8b8ccd468c019f6317f919da4eba49c5ae839addcc17145fc375025490a8006",
+      "bytes": 265367,
+      "width": 1365,
+      "height": 2858,
+      "visuallyInspected": true,
+      "inspectionMethod": "view_image original-resolution output; no image alteration",
+      "recordedGeometryWidth": 1365,
+      "observations": [
+        "Event status is LIVE; the released rehearsal motion is readable. The banner explicitly says the actor is outside live media.",
+        "The media control row is above the adjudicator tile and both team headings. It does not cover those headings or the central timer.",
+        "Both three-speaker team columns flank a separate preparation panel showing15:00, READY and timer controls. The screenshot does not show a running clock.",
+        "Adjudicator and observer names are ellipsized, while section headings, speaker-role labels and Camera off indicators remain visually separated at this width.",
+        "Conversation and Shared evidence sections appear below the arena. No completed exports or results are shown."
+      ]
+    },
+    {
+      "path": "artifacts/debate-local-rehearsal/staging-34376105917/debate-v3-staging-release-c7b3149f3f690f9ded2b4b44e80336f04b47cfda/staging-release/hosted-c7b3149f3f69-50cfe73f-4dea-4dcd-9815-c0b468102c7f/browser/screenshots/05-live-media-controls-320px.png",
+      "sha256": "0ead51401d5620a700f2e8140e7a07469c05209438d1d4a609e207afef94e67b",
+      "bytes": 210406,
+      "width": 320,
+      "height": 4221,
+      "visuallyInspected": true,
+      "inspectionMethod": "view_image original-resolution output; no image alteration",
+      "recordedGeometryWidth": 320,
+      "observations": [
+        "The long event title, navigation tabs and motion wrap within the image width. Preparation and15:00 READY sit above the two narrow team columns.",
+        "The media dock stays above the adjudicator heading and arena; no dock-to-heading or dock-to-timer collision is visible.",
+        "The media dock is horizontally clipped after Camera off in the saved view. Later controls are not visible; this still image does not verify scrolling, keyboard reachability or interaction with them.",
+        "The small adjudicator and observer tiles have Pin buttons laid over initials/name/status areas, reducing name and Camera off readability. This prevents a blanket no-overlap/readability pass at320px.",
+        "Team names wrap and speaker-role labels remain recognizable; long participant names are ellipsized. The conversation and evidence forms stack vertically below."
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "id": "MOBILE_TILE_PIN_TEXT_OVERLAP",
+      "severity": "readability",
+      "image": "05-live-media-controls-320px.png",
+      "observation": "Pin overlays collide with text areas in the small adjudicator and observer tiles at320px.",
+      "limit": "Source of the saved image is verified; this review does not test click targets, alternative layouts or a physical mobile device."
+    },
+    {
+      "id": "MOBILE_MEDIA_CONTROLS_OFFSCREEN",
+      "severity": "verification_limit",
+      "image": "05-live-media-controls-320px.png",
+      "observation": "The narrow media row clips later controls horizontally.",
+      "limit": "No scroll or keyboard interaction was performed; this is not a finding that the controls are unreachable."
+    }
+  ],
+  "conclusion": "The five saved hosted captures support readable desktop setup and an initial LIVE match with preparation READY. The media dock stays above the arena at both recorded widths. Mobile tile text overlap and untested toolbar scrolling remain explicit limitations. The failed243.118-second run completed no timed stages, so these images do not establish the required organizer rehearsal.",
+  "excludedClaims": [
+    "No completed93-minute default flow or15-minute correction-window endurance.",
+    "No completed adjudication, result publication, next-match flow or export visual proof in these five captures.",
+    "No physical camera, microphone, screen/audio, LiveKit provider media, real email, capacity or Google OAuth proof.",
+    "No positive hosted Study Room admission or Study media journey proof.",
+    "No cleanup reconciliation or launch approval is established by this visual review.",
+    "Generic planned-gap prose in the browser report is not treated as evidence that later actions occurred."
+  ]
+}

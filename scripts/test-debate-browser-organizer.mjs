@@ -74,12 +74,45 @@ export async function runBrowserOrganizer() {
   };
   const checkLiveMediaLayout = async width => {
     await host.setViewportSize({ width, height: 900 });
+    await host.locator('.site-header').scrollIntoViewIfNeeded();
     const selectors = ['.media-dock', '#arena', '.judges-rail', '#affirmative-name', '#negative-name'];
     const boxes = await Promise.all(selectors.map(selector => host.locator(selector).boundingBox()));
     check(`Live room layout exposes the media controls, arena and headings at ${width}px`, boxes.every(box => box && box.width > 0 && box.height > 0));
     const [dock, arena, ...headings] = boxes;
     check(`Media controls stay above the arena without covering team or adjudicator headings at ${width}px`, dock.y + dock.height <= arena.y + 1
       && headings.every(box => dock.y + dock.height <= box.y + 1), { width, geometry: Object.fromEntries(selectors.map((selector, index) => [selector, boxes[index]])) });
+    const ids = ['join-media', 'mic', 'camera', 'share', 'devices', 'audio', 'leave-media'];
+    const controls = await Promise.all(ids.map(async id => ({ id, box: await host.locator(`.media-dock #${id}`).boundingBox(),
+      disabled: await host.locator(`.media-dock #${id}`).isDisabled() })));
+    const contained = (inner, outer) => inner && outer && inner.x >= outer.x - 1 && inner.y >= outer.y - 1
+      && inner.x + inner.width <= outer.x + outer.width + 1 && inner.y + inner.height <= outer.y + outer.height + 1;
+    const disjoint = (a, b) => a && b && (a.x + a.width <= b.x + 1 || b.x + b.width <= a.x + 1
+      || a.y + a.height <= b.y + 1 || b.y + b.height <= a.y + 1);
+    check(`All seven media controls fit inside the dock without horizontal viewport overflow at ${width}px`, await host.locator('.media-dock button').count() === ids.length
+      && controls.every(({ box }) => contained(box, dock) && box.x >= 0 && box.x + box.width <= width + 1
+        && box.width >= 44 && box.height >= 44), { width, controls });
+    check(`Media controls have separate hit areas at ${width}px`, controls.every(({ box }, index) => controls.slice(index + 1).every(other => disjoint(box, other.box))));
+    // Trial checks only: scroll and test visibility/stability/hit targeting,
+    // including disabled controls, without entering media or dispatching clicks.
+    for (const id of ids) await host.locator(`.media-dock #${id}`).hover({ trial: true });
+    check(`Every media control passes browser hit-target checks at ${width}px`, true, { width, controlIds: ids, action: 'hover trial only' });
+    await host.locator('.site-header').scrollIntoViewIfNeeded();
+    if (width === 320) {
+      const tiles = [];
+      for (const selector of ['.judge-tiles .tile', '.observer-tiles .tile']) {
+        const count = await host.locator(selector).count(); assert.ok(count > 0, selector + ' must contain an actual participant tile');
+        for (let index = 0; index < count; index++) {
+          const tile = host.locator(selector).nth(index);
+          const [box, pin, initials, caption] = await Promise.all([tile.boundingBox(), tile.locator('.tile-pin').boundingBox(),
+            tile.locator('.initials').boundingBox(), tile.locator('.caption').boundingBox()]);
+          assert.ok(contained(pin, box) && contained(initials, box) && contained(caption, box)
+            && pin.width >= 44 && pin.height >= 44 && initials.height >= 48 && caption.height > 0
+            && disjoint(pin, initials) && disjoint(pin, caption) && disjoint(initials, caption), selector + ' keeps Pin, initials and caption separate');
+          tiles.push({ selector, index, box, pin, initials, caption });
+        }
+      }
+      check('Narrow adjudicator and observer tiles reserve separate Pin, initials and caption areas', true, { width, tiles });
+    }
     await screenshot(host, `live-media-controls-${width}px`);
   };
   const observe = page => {

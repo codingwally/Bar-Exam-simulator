@@ -120,7 +120,19 @@ export function createStudyRoomHandlers(dependencies) {
   }
 
   async function authorizedContext(request, env, scope) {
-    if (scope !== 'admission') await rateLimit(request, env, scope);
+    let roomListNetworkLimitExceeded = false;
+    if (scope !== 'admission') {
+      try {
+        await rateLimit(request, env, scope);
+      } catch (error) {
+        // The lobby refreshes its catalog every 15 seconds. The legacy shared-IP
+        // rooms budget is lower than that cadence (30 requests / 10 minutes), so
+        // an open lobby can rate-limit itself. Only defer that specific rooms
+        // RATE_LIMITED result until after authentication; all other failures stay closed.
+        if (scope !== 'rooms' || error?.code !== 'RATE_LIMITED') throw error;
+        roomListNetworkLimitExceeded = true;
+      }
+    }
     const user = await authenticate(request, env);
     if (!user) {
       throw new StudyRoomError(
@@ -133,6 +145,11 @@ export function createStudyRoomHandlers(dependencies) {
     // Waiting-list polling is actor-scoped; a school's shared IP must not turn
     // one user's request budget into a denial for everyone in the room.
     if (scope === 'admission') await rateLimit(request, env, scope, user);
+    // Once the legacy shared-IP room-list budget is exhausted, fall back to the
+    // existing actor-scoped 120/10-minute guard rather than exposing an unlimited
+    // authenticated read path. This keeps the current 15-second lobby refresh usable
+    // while preserving a bounded abuse control until the shared policy is raised.
+    if (roomListNetworkLimitExceeded) await rateLimit(request, env, 'admission', user);
     const authorization = authorizedAdministrator(await authorizeAdmin(env, user));
     if (authorization) {
       return {

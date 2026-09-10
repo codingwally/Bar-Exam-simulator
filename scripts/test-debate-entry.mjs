@@ -28,12 +28,13 @@ function entryHarness(fetcher, actor) {
   let initialRefresh;
   const window = {
     location: { origin: 'https://duediligence.ph', search: '', replace: () => assert.fail('No authentication redirect expected') },
+    document: { querySelectorAll: selector => { assert.equal(selector, '[data-debate-room-entry]'); return links; } },
     DueDiligencePhase2Config: { workerUrl: 'https://worker.test' },
     DueDiligencePhase4: { getSession: () => actor ? { access_token: 'inert-session', user: actor } : null },
     addEventListener: (name, callback) => callbacks.set(name, callback),
     setTimeout: callback => { initialRefresh = callback; },
   };
-  vm.runInNewContext(source, { window, document: { querySelectorAll: selector => { assert.equal(selector, '[data-debate-room-entry]'); return links; } },
+  vm.runInNewContext(source, { window, document: window.document,
     fetch: fetcher, AbortController, URL, setTimeout, clearTimeout, Date, JSON, Number });
   return { links, refresh: () => initialRefresh(), callbacks };
 }
@@ -53,6 +54,7 @@ test('desktop and mobile Debate links follow Study Room and use the separate rou
 for (const actor of [paid, unpaid]) test(`public Debate access shows both links and permits event listing for ${actor.displayName.toLowerCase()} without admin role`, async () => {
   const remote = transport({ DEBATE_ROOM_ENABLED: 'true' }, actor);
   const ui = entryHarness(remote.fetch, actor);
+  assert.ok(ui.links.every(link => !link.hidden), 'Public Debate navigation is visible while the availability preflight is pending');
   await ui.refresh();
   assert.ok(ui.links.every(link => !link.hidden));
   const response = await remote.integration.handle(new Request('https://worker.test/debate-room/events', { headers: { Authorization: 'Bearer inert-session' } }));
@@ -80,10 +82,11 @@ test('disabled public release keeps both links restricted to the exact preview a
   }
 });
 
-test('navigation does not expose either link when access cannot be confirmed', async () => {
+test('transient access failure does not remove the already-public Debate navigation', async () => {
   const ui = entryHarness(async () => { throw new Error('Inert transport unavailable'); }, unpaid);
+  assert.ok(ui.links.every(link => !link.hidden), 'The navigation is visible before the preflight finishes');
   await ui.refresh();
-  assert.ok(ui.links.every(link => link.hidden));
+  assert.ok(ui.links.every(link => !link.hidden), 'A transport failure is availability, not authorization');
 });
 
 test('public copy uses practice debates and pairings while preserving form and action contracts', () => {

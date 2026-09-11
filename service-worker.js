@@ -1,13 +1,6 @@
-const CACHE_VERSION = 'duediligence-shell-astra-analytics-count-copy-20260908-r1-asset-recovery-20260909-r1-home-readable-20260910-1-study-room-media-recovery-20260911-1';
+const CACHE_VERSION = 'duediligence-shell-astra-analytics-count-copy-20260908-r1-asset-recovery-20260909-r1-home-readable-20260910-1';
 const EXAMINATION_STUDENT_SHELL = '/examination-room/student.html';
 const EXAMINATION_OFFLINE_GRADER = '/examination-room/offline-grading.html';
-const STUDY_ROOM_NETWORK_ONLY = Object.freeze([
-  '/assets/study-room-live.js',
-  '/assets/study-room-live.css',
-  '/assets/study-room-backgrounds.js',
-  '/assets/vendor/livekit-client.umd.js',
-  '/assets/vendor/livekit-track-processors.iife.js',
-]);
 const SHELL = Object.freeze([
   '/offline.html',
   '/assets/brand/icon-192.png',
@@ -67,21 +60,6 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET' || request.headers.has('authorization')) return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
-
-  // Study Room media stability is release-critical. Returning browsers have
-  // previously retained an older participant-layout/media bundle even after a
-  // verified Pages release. Always revalidate the Study document and its
-  // LiveKit/media assets so Codex's stable-tile and background-processor fixes
-  // cannot be displaced by stale browser HTTP cache entries.
-  if (request.mode === 'navigate' && (url.pathname === '/study-room/' || url.pathname === '/study-room/index.html')) {
-    event.respondWith(fetch(request, { cache: 'reload' }).catch(() => caches.match('/offline.html')));
-    return;
-  }
-  if (STUDY_ROOM_NETWORK_ONLY.includes(url.pathname)) {
-    event.respondWith(fetch(request, { cache: 'reload' }));
-    return;
-  }
-
   if (request.mode === 'navigate') {
     if ([EXAMINATION_STUDENT_SHELL, EXAMINATION_OFFLINE_GRADER].includes(url.pathname)) {
       event.respondWith(

@@ -1,0 +1,104 @@
+name: Emergency Study Room Pages release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/emergency-study-room-pages.yml
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+  deployments: read
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+env:
+  REVIEWED_PARENT_SHA: e7b64983346dbb21f93b1c9dc096c41856dc17b4
+  REVIEWED_STUDY_LIVE_BLOB: 0822278a88cfb264fa3a5332adae25bd66473bf4
+  REVIEWED_STUDY_BACKGROUNDS_BLOB: 099ac7d7a43214af845db85903ec0a7efbe7913b
+
+jobs:
+  deploy:
+    name: Verify and deploy Study Room frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout exact emergency release commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Prove this push changed only the one-shot release workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "codingwally/Bar-Exam-simulator"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$(git rev-parse HEAD^)" = "$REVIEWED_PARENT_SHA"
+          changed="$(git diff --name-only HEAD^ HEAD)"
+          test "$changed" = ".github/workflows/emergency-study-room-pages.yml"
+          test "$(git rev-parse HEAD:assets/study-room-live.js)" = "$REVIEWED_STUDY_LIVE_BLOB"
+          test "$(git rev-parse HEAD:assets/study-room-backgrounds.js)" = "$REVIEWED_STUDY_BACKGROUNDS_BLOB"
+          grep -Fq 'Talking is a visual indicator, never a layout, tile-order, or media event.' assets/study-room-live.js
+          grep -Fq "tile.classList.toggle('is-speaking'" assets/study-room-live.js
+          echo "Exact Codex-reviewed Study Room media sources confirmed."
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install reviewed Pages build dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Verify Study Room frontend contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check assets/study-room-live.js
+          node --check assets/study-room-backgrounds.js
+          node --check assets/study-room-preview.js
+          node scripts/test-study-room-live.mjs
+          node scripts/test-study-room-backgrounds.mjs
+          node scripts/test-study-room-always-open.mjs
+          node scripts/test-study-room-background-picker.mjs
+          node scripts/test-study-room-hotfix-behavior.mjs
+          node scripts/test-study-room-preview.mjs
+          node scripts/test-pages-artifact.mjs
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload exact sanitized Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .pages-dist
+
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Verify live Study Room client after deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in {1..12}; do
+            room="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "https://duediligence.ph/study-room/?release=$GITHUB_SHA" || true)"
+            live="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "https://duediligence.ph/assets/study-room-live.js?release=$GITHUB_SHA" || true)"
+            if grep -Fq 'layout=stable-pins-20260908-1' <<<"$room" \
+              && grep -Fq 'Talking is a visual indicator, never a layout, tile-order, or media event.' <<<"$live"; then
+              echo "Study Room Codex-reviewed stable-tile client is live."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Pages deployment completed but the public Study Room verification did not converge in time." >&2
+          exit 1

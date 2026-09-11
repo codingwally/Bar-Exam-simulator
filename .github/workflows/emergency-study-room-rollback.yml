@@ -1,0 +1,119 @@
+name: Emergency restore known-good Study Room Pages
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/emergency-study-room-rollback.yml
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+env:
+  KNOWN_GOOD_SHA: 895380afa2b6dbb8892e29a8c250d1923235fd00
+  KNOWN_GOOD_STUDY_LIVE_BLOB: 0822278a88cfb264fa3a5332adae25bd66473bf4
+
+jobs:
+  restore:
+    name: Restore and verify known-good Study Room frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout trigger commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Prove this push only added the rollback workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "codingwally/Bar-Exam-simulator"
+          changed="$(git diff --name-only HEAD^ HEAD)"
+          test "$changed" = ".github/workflows/emergency-study-room-rollback.yml"
+
+      - name: Checkout exact known-good production source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.KNOWN_GOOD_SHA }}
+          path: release-src
+          fetch-depth: 1
+
+      - name: Verify exact known-good Study Room media source
+        working-directory: release-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$KNOWN_GOOD_SHA"
+          test "$(git rev-parse HEAD:assets/study-room-live.js)" = "$KNOWN_GOOD_STUDY_LIVE_BLOB"
+          grep -Fq 'Talking is a visual indicator, never a layout, tile-order, or media event.' assets/study-room-live.js
+          grep -Fq 'Background off is genuinely processor-free.' assets/study-room-live.js
+          echo "Exact pre-issue Study Room source confirmed."
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install reviewed Pages build dependencies
+        working-directory: release-src
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Verify known-good Study Room contracts and build artifact
+        working-directory: release-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check assets/study-room-live.js
+          node --check assets/study-room-backgrounds.js
+          node --check assets/study-room-preview.js
+          node scripts/test-study-room-live.mjs
+          node scripts/test-study-room-backgrounds.mjs
+          node scripts/test-study-room-always-open.mjs
+          node scripts/test-study-room-background-picker.mjs
+          node scripts/test-study-room-hotfix-behavior.mjs
+          node scripts/test-study-room-preview.mjs
+          node scripts/test-pages-artifact.mjs
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload exact known-good Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: release-src/.pages-dist
+
+      - name: Deploy known-good Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Verify production serves the known-good Study Room client
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_live_sha="$(cd release-src && git hash-object assets/study-room-live.js)"
+          test "$expected_live_sha" = "$KNOWN_GOOD_STUDY_LIVE_BLOB"
+          for attempt in {1..12}; do
+            live="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "https://duediligence.ph/assets/study-room-live.js?restore=$KNOWN_GOOD_SHA" || true)"
+            if grep -Fq 'Background off is genuinely processor-free.' <<<"$live" \
+              && grep -Fq 'Talking is a visual indicator, never a layout, tile-order, or media event.' <<<"$live"; then
+              printf '%s' "$live" > /tmp/live-study-room.js
+              actual_sha="$(git hash-object /tmp/live-study-room.js)"
+              test "$actual_sha" = "$KNOWN_GOOD_STUDY_LIVE_BLOB"
+              echo "Known-good Study Room client restored live."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Known-good Pages deployment completed but live Study Room asset verification did not converge." >&2
+          exit 1

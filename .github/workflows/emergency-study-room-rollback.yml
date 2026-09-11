@@ -34,7 +34,7 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: Prove this push only added the rollback workflow
+      - name: Prove this push changed only the rollback workflow
         shell: bash
         run: |
           set -euo pipefail
@@ -97,23 +97,26 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-      - name: Verify production serves the known-good Study Room client
+      - name: Verify production serves byte-identical known-good Study Room client
         shell: bash
         run: |
           set -euo pipefail
           expected_live_sha="$(cd release-src && git hash-object assets/study-room-live.js)"
           test "$expected_live_sha" = "$KNOWN_GOOD_STUDY_LIVE_BLOB"
           for attempt in {1..12}; do
-            live="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "https://duediligence.ph/assets/study-room-live.js?restore=$KNOWN_GOOD_SHA" || true)"
-            if grep -Fq 'Background off is genuinely processor-free.' <<<"$live" \
-              && grep -Fq 'Talking is a visual indicator, never a layout, tile-order, or media event.' <<<"$live"; then
-              printf '%s' "$live" > /tmp/live-study-room.js
-              actual_sha="$(git hash-object /tmp/live-study-room.js)"
-              test "$actual_sha" = "$KNOWN_GOOD_STUDY_LIVE_BLOB"
-              echo "Known-good Study Room client restored live."
-              exit 0
+            if curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' \
+              "https://duediligence.ph/assets/study-room-live.js?restore=$KNOWN_GOOD_SHA&attempt=$attempt" \
+              --output /tmp/live-study-room.js; then
+              if grep -Fq 'Background off is genuinely processor-free.' /tmp/live-study-room.js \
+                && grep -Fq 'Talking is a visual indicator, never a layout, tile-order, or media event.' /tmp/live-study-room.js; then
+                actual_sha="$(git hash-object /tmp/live-study-room.js)"
+                if [[ "$actual_sha" == "$KNOWN_GOOD_STUDY_LIVE_BLOB" ]]; then
+                  echo "Known-good Study Room client restored byte-for-byte live."
+                  exit 0
+                fi
+              fi
             fi
             sleep 10
           done
-          echo "Known-good Pages deployment completed but live Study Room asset verification did not converge." >&2
+          echo "Known-good Pages deployment completed but byte-identical live verification did not converge." >&2
           exit 1

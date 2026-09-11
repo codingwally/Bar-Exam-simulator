@@ -1,4 +1,4 @@
-name: Emergency Study Room green-frame zero-flash release
+name: Emergency Study Room zero-flash low-latency release
 
 on:
   push:
@@ -19,11 +19,11 @@ concurrency:
 env:
   KNOWN_GOOD_SHA: 895380afa2b6dbb8892e29a8c250d1923235fd00
   KNOWN_GOOD_STUDY_LIVE_BLOB: 0822278a88cfb264fa3a5332adae25bd66473bf4
-  GREEN_FRAME_MARKER: chrome152-greenframe-zero-flash-20260911-3
+  GREEN_FRAME_MARKER: chrome152-greenframe-lowlatency-20260911-4
 
 jobs:
   restore:
-    name: Patch and deploy zero-flash Study Room camera rendering
+    name: Deploy low-latency zero-flash Study Room camera rendering
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment:
@@ -59,6 +59,7 @@ jobs:
           test "$(git rev-parse HEAD:assets/study-room-live.js)" = "$KNOWN_GOOD_STUDY_LIVE_BLOB"
           grep -Fq 'Background off is genuinely processor-free.' assets/study-room-live.js
           grep -Fq 'Talking is a visual indicator, never a layout, tile-order, or media event.' assets/study-room-live.js
+          grep -Fq 'simulcast: true' assets/study-room-live.js
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -85,86 +86,72 @@ jobs:
           node scripts/test-study-room-preview.mjs
           node scripts/test-pages-artifact.mjs
 
-      - name: Apply zero-flash canvas guard to Pages artifact only
+      - name: Apply low-latency zero-flash guard to Pages artifact only
         working-directory: release-src
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
           from pathlib import Path
-          import re
 
-          marker = 'chrome152-greenframe-zero-flash-20260911-3'
+          marker = 'chrome152-greenframe-lowlatency-20260911-4'
           dist = Path('.pages-dist')
-          js_path = dist / 'assets/study-room-live.js'
           css_path = dist / 'assets/study-room-live.css'
           html_path = dist / 'study-room/index.html'
           guard_path = dist / 'assets/study-room-green-frame-guard.js'
 
-          js = js_path.read_text()
-          js, camera_count = re.subn(
-              r"(function cameraPublishOptions\(\) \{\s*return \{\s*source: LiveKit\?\.Track\?\.Source\?\.Camera \|\| 'camera',\s*)simulcast: true,",
-              r"\1simulcast: false,",
-              js,
-              count=1,
-              flags=re.M,
-          )
-          if camera_count != 1:
-              raise SystemExit(f'Expected one camera simulcast replacement, got {camera_count}')
-          js, defaults_count = re.subn(
-              r"(publishDefaults: \{\s*\.\.\.microphonePublishOptions\(\),\s*)simulcast: true,",
-              r"\1simulcast: false,",
-              js,
-              count=1,
-              flags=re.M,
-          )
-          if defaults_count != 1:
-              raise SystemExit(f'Expected one publish-default simulcast replacement, got {defaults_count}')
-          js += f"\n// {marker}: single-layer camera publication with zero-flash local canvas gate.\n"
-          js_path.write_text(js)
-
           css = css_path.read_text()
-          css += f'''\n\n/* {marker}: the raw local video remains active for decoding but is never visually composited. */\n.sr-preview-frame video,\n.sr-participant-tile.is-self > video,\n.sr-participant-tile.is-self.is-camera > video {{\n  opacity: 0 !important;\n  transform: none !important;\n  filter: none !important;\n  will-change: auto !important;\n  backface-visibility: visible !important;\n}}\n.sr-greenframe-safe-canvas {{\n  position: absolute !important;\n  inset: 0 !important;\n  z-index: 4 !important;\n  display: block !important;\n  width: 100% !important;\n  height: 100% !important;\n  pointer-events: none !important;\n  object-fit: cover !important;\n  background: #071b30 !important;\n  opacity: 1 !important;\n}}\n'''
+          css += f'''\n\n/* {marker}: keep decoded local video offscreen; render only guarded canvas frames. */\n.sr-preview-frame video,\n.sr-participant-tile.is-self > video,\n.sr-participant-tile.is-self.is-camera > video {{\n  opacity: 0 !important;\n  transform: none !important;\n  filter: none !important;\n  will-change: auto !important;\n  pointer-events: none !important;\n}}\n.sr-greenframe-safe-canvas {{\n  position: absolute !important;\n  inset: 0 !important;\n  z-index: 4 !important;\n  display: block !important;\n  width: 100% !important;\n  height: 100% !important;\n  pointer-events: none !important;\n  background: #071b30 !important;\n}}\n'''
           css_path.write_text(css)
 
           guard = r'''(function studyRoomGreenFrameGuard(global) {
             'use strict';
-            const MARKER = 'chrome152-greenframe-zero-flash-20260911-3';
+            const MARKER = 'chrome152-greenframe-lowlatency-20260911-4';
             const installed = new WeakMap();
             const sample = document.createElement('canvas');
-            sample.width = 32;
-            sample.height = 18;
+            sample.width = 12;
+            sample.height = 7;
             const sampleCtx = sample.getContext('2d', { willReadFrequently: true });
-            const CLEAN_FRAMES_TO_OPEN = 6;
-            const CLEAN_FRAMES_AFTER_BAD = 4;
+            const CLEAN_FRAMES_TO_OPEN = 2;
+            const CLEAN_FRAMES_AFTER_BAD = 1;
+            const MAX_CANVAS_WIDTH = 640;
+            const MAX_CANVAS_HEIGHT = 360;
 
-            function frameStats(video) {
-              if (!sampleCtx || video.readyState < 2 || !video.videoWidth || !video.videoHeight) return { bad: true, valid: false };
+            function isCorruptGreen(video) {
+              if (!sampleCtx || video.readyState < 2 || !video.videoWidth || !video.videoHeight) return true;
               try {
                 sampleCtx.drawImage(video, 0, 0, sample.width, sample.height);
                 const data = sampleCtx.getImageData(0, 0, sample.width, sample.height).data;
-                let green = 0;
-                let vividGreen = 0;
-                let visible = 0;
+                let visible = 0, strong = 0, vivid = 0;
                 let sumR = 0, sumG = 0, sumB = 0;
                 for (let i = 0; i < data.length; i += 4) {
                   const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3];
                   if (a < 24) continue;
                   visible += 1;
                   sumR += r; sumG += g; sumB += b;
-                  if (g > 72 && g > r * 1.22 && g > b * 1.18) green += 1;
-                  if (g > 105 && g > r * 1.42 && g > b * 1.34) vividGreen += 1;
+                  if (g > 105 && g - r > 52 && g - b > 52) strong += 1;
+                  if (g > 135 && g - r > 78 && g - b > 72) vivid += 1;
                 }
-                if (!visible) return { bad: true, valid: false };
-                const ratio = green / visible;
-                const vividRatio = vividGreen / visible;
+                if (!visible) return true;
+                const strongRatio = strong / visible;
+                const vividRatio = vivid / visible;
                 const meanR = sumR / visible, meanG = sumG / visible, meanB = sumB / visible;
-                const greenLead = meanG - Math.max(meanR, meanB);
-                const bad = vividRatio > 0.11 || ratio > 0.22 || (ratio > 0.10 && greenLead > 22) || greenLead > 46;
-                return { bad, valid: true };
+                const lead = meanG - Math.max(meanR, meanB);
+                return vividRatio > 0.42 || (strongRatio > 0.58 && lead > 44) || (meanG > 150 && lead > 76);
               } catch {
-                return { bad: true, valid: false };
+                return true;
               }
+            }
+
+            function fitCanvas(rect) {
+              const ratio = rect.width > 0 && rect.height > 0 ? rect.width / rect.height : 16 / 9;
+              let width = Math.max(2, Math.min(MAX_CANVAS_WIDTH, Math.round(rect.width || MAX_CANVAS_WIDTH)));
+              let height = Math.max(2, Math.round(width / ratio));
+              if (height > MAX_CANVAS_HEIGHT) {
+                height = MAX_CANVAS_HEIGHT;
+                width = Math.max(2, Math.round(height * ratio));
+              }
+              return { width, height };
             }
 
             function drawCover(ctx, video, width, height, mirror) {
@@ -182,7 +169,6 @@ jobs:
                 sy = (vh - sh) / 2;
               }
               ctx.save();
-              ctx.clearRect(0, 0, width, height);
               if (mirror) {
                 ctx.translate(width, 0);
                 ctx.scale(-1, 1);
@@ -201,101 +187,81 @@ jobs:
               canvas.setAttribute('aria-hidden', 'true');
               const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
               if (!ctx) return;
-
-              const previousOpacity = video.style.opacity;
-              const previousPointerEvents = video.style.pointerEvents;
               video.style.setProperty('opacity', '0', 'important');
               video.style.setProperty('pointer-events', 'none', 'important');
               video.style.setProperty('transform', 'none', 'important');
-
               parent.appendChild(canvas);
+
               let stopped = false;
               let opened = false;
               let cleanStreak = 0;
-              let recoveryStreak = 0;
-              let sawBad = false;
+              let recovering = false;
 
-              function paintSafeBackground() {
+              function fillSafe() {
                 if (!canvas.width || !canvas.height) return;
                 ctx.fillStyle = '#071b30';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
               }
 
+              function schedule() {
+                if (typeof video.requestVideoFrameCallback === 'function') video.requestVideoFrameCallback(frame);
+                else global.setTimeout(frame, 66);
+              }
+
               function frame() {
                 if (stopped || !video.isConnected || !canvas.isConnected) return;
                 const rect = parent.getBoundingClientRect();
-                const dpr = Math.min(global.devicePixelRatio || 1, 1.5);
-                const width = Math.max(2, Math.round(rect.width * dpr));
-                const height = Math.max(2, Math.round(rect.height * dpr));
-                if (canvas.width !== width || canvas.height !== height) {
-                  canvas.width = width;
-                  canvas.height = height;
-                  paintSafeBackground();
+                if (rect.width < 2 || rect.height < 2 || parent.getClientRects().length === 0) {
+                  schedule();
+                  return;
                 }
-
+                const fitted = fitCanvas(rect);
+                if (canvas.width !== fitted.width || canvas.height !== fitted.height) {
+                  canvas.width = fitted.width;
+                  canvas.height = fitted.height;
+                  fillSafe();
+                }
                 if (video.readyState >= 2 && video.videoWidth && video.videoHeight) {
-                  const stats = frameStats(video);
-                  if (!stats.valid || stats.bad) {
-                    sawBad = true;
+                  const bad = isCorruptGreen(video);
+                  if (bad) {
                     cleanStreak = 0;
-                    recoveryStreak = 0;
-                    if (!opened) paintSafeBackground();
-                  } else if (!opened) {
-                    cleanStreak += 1;
-                    if (cleanStreak >= CLEAN_FRAMES_TO_OPEN) {
-                      drawCover(ctx, video, width, height, mirror);
-                      opened = true;
-                      sawBad = false;
-                      recoveryStreak = 0;
-                    }
-                  } else if (sawBad) {
-                    recoveryStreak += 1;
-                    if (recoveryStreak >= CLEAN_FRAMES_AFTER_BAD) {
-                      drawCover(ctx, video, width, height, mirror);
-                      sawBad = false;
-                      recoveryStreak = 0;
-                    }
+                    recovering = opened;
+                    if (!opened) fillSafe();
                   } else {
-                    drawCover(ctx, video, width, height, mirror);
+                    cleanStreak += 1;
+                    const needed = opened && recovering ? CLEAN_FRAMES_AFTER_BAD : CLEAN_FRAMES_TO_OPEN;
+                    if (opened && !recovering) {
+                      drawCover(ctx, video, canvas.width, canvas.height, mirror);
+                    } else if (cleanStreak >= needed) {
+                      drawCover(ctx, video, canvas.width, canvas.height, mirror);
+                      opened = true;
+                      recovering = false;
+                      cleanStreak = 0;
+                    }
                   }
                 }
-
-                if (typeof video.requestVideoFrameCallback === 'function') {
-                  video.requestVideoFrameCallback(frame);
-                } else {
-                  global.setTimeout(frame, 66);
-                }
+                schedule();
               }
 
-              installed.set(video, {
-                canvas,
-                stop() {
-                  stopped = true;
-                  video.style.opacity = previousOpacity;
-                  video.style.pointerEvents = previousPointerEvents;
-                  canvas.remove();
-                },
-              });
-              paintSafeBackground();
-              if (typeof video.requestVideoFrameCallback === 'function') {
-                video.requestVideoFrameCallback(frame);
-              } else {
-                global.setTimeout(frame, 66);
-              }
+              installed.set(video, { canvas, stop() { stopped = true; canvas.remove(); } });
+              fillSafe();
+              schedule();
             }
 
             function scan() {
+              const selfTile = document.querySelector('.sr-participant-tile.is-self.is-camera video, .sr-participant-tile.is-self video');
+              if (selfTile) install(selfTile, true);
               const preview = document.getElementById('sr-local-preview');
-              if (preview) install(preview, true);
-              document.querySelectorAll('.sr-participant-tile.is-self.is-camera video, .sr-participant-tile.is-self video').forEach((video) => install(video, true));
+              const dialog = document.getElementById('sr-entry-dialog');
+              if (!selfTile && preview && dialog?.open) install(preview, true);
             }
 
             const observer = new MutationObserver(scan);
-            observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+            observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'open'] });
             document.addEventListener('play', scan, true);
             global.addEventListener('pagehide', () => observer.disconnect(), { once: true });
             scan();
-            console.info('[Study Room] zero-flash green-frame guard active:', MARKER);
+            console.info('[Study Room] low-latency zero-flash guard active:', MARKER);
           })(window);'''
           guard_path.write_text(guard)
 
@@ -312,19 +278,18 @@ jobs:
           if script_tag not in html:
               html = html.replace('</body>', f'  {script_tag}\n</body>')
           if marker not in html or 'study-room-green-frame-guard.js' not in html:
-              raise SystemExit('Failed to install zero-flash guard in Study Room HTML')
+              raise SystemExit('Failed to install low-latency guard in Study Room HTML')
           html_path.write_text(html)
           PY
 
           node --check .pages-dist/assets/study-room-live.js
           node --check .pages-dist/assets/study-room-green-frame-guard.js
-          grep -Fq "$GREEN_FRAME_MARKER" .pages-dist/assets/study-room-live.js
           grep -Fq "$GREEN_FRAME_MARKER" .pages-dist/assets/study-room-live.css
           grep -Fq "$GREEN_FRAME_MARKER" .pages-dist/assets/study-room-green-frame-guard.js
-          grep -Fq 'CLEAN_FRAMES_TO_OPEN = 6' .pages-dist/assets/study-room-green-frame-guard.js
-          grep -Fq "setProperty('opacity', '0', 'important')" .pages-dist/assets/study-room-green-frame-guard.js
+          grep -Fq 'MAX_CANVAS_WIDTH = 640' .pages-dist/assets/study-room-green-frame-guard.js
+          grep -Fq 'CLEAN_FRAMES_TO_OPEN = 2' .pages-dist/assets/study-room-green-frame-guard.js
           grep -Fq 'study-room-green-frame-guard.js' .pages-dist/study-room/index.html
-          grep -Fq 'simulcast: false' .pages-dist/assets/study-room-live.js
+          grep -Fq 'simulcast: true' .pages-dist/assets/study-room-live.js
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
@@ -338,14 +303,13 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-      - name: Verify zero-flash guard is live
+      - name: Verify low-latency zero-flash guard is live
         shell: bash
         run: |
           set -euo pipefail
           for attempt in {1..12}; do
             html_ok=0
             guard_ok=0
-            css_ok=0
             if curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' \
               "https://duediligence.ph/study-room/?greenframe=$GREEN_FRAME_MARKER&attempt=$attempt" \
               --output /tmp/study-room.html; then
@@ -356,20 +320,14 @@ jobs:
               "https://duediligence.ph/assets/study-room-green-frame-guard.js?greenframe=$GREEN_FRAME_MARKER&attempt=$attempt" \
               --output /tmp/green-frame-guard.js; then
               grep -Fq "$GREEN_FRAME_MARKER" /tmp/green-frame-guard.js \
-                && grep -Fq 'CLEAN_FRAMES_TO_OPEN = 6' /tmp/green-frame-guard.js \
-                && grep -Fq "setProperty('opacity', '0', 'important')" /tmp/green-frame-guard.js && guard_ok=1 || true
+                && grep -Fq 'MAX_CANVAS_WIDTH = 640' /tmp/green-frame-guard.js \
+                && grep -Fq 'CLEAN_FRAMES_TO_OPEN = 2' /tmp/green-frame-guard.js && guard_ok=1 || true
             fi
-            if curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' \
-              "https://duediligence.ph/assets/study-room-live.css?greenframe=$GREEN_FRAME_MARKER&attempt=$attempt" \
-              --output /tmp/study-room-live.css; then
-              grep -Fq "$GREEN_FRAME_MARKER" /tmp/study-room-live.css \
-                && grep -Fq 'opacity: 0 !important' /tmp/study-room-live.css && css_ok=1 || true
-            fi
-            if [[ "$html_ok" == 1 && "$guard_ok" == 1 && "$css_ok" == 1 ]]; then
-              echo "Zero-flash Study Room guard is live on production Pages."
+            if [[ "$html_ok" == 1 && "$guard_ok" == 1 ]]; then
+              echo "Low-latency zero-flash guard is live on production Pages."
               exit 0
             fi
             sleep 10
           done
-          echo "Pages deployed but zero-flash guard verification did not converge." >&2
+          echo "Pages deployed but low-latency guard verification did not converge." >&2
           exit 1

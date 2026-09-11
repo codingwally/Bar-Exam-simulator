@@ -1,4 +1,4 @@
-name: Emergency restore known-good Study Room Pages
+name: Emergency Study Room green-frame compatibility release
 
 on:
   push:
@@ -19,10 +19,11 @@ concurrency:
 env:
   KNOWN_GOOD_SHA: 895380afa2b6dbb8892e29a8c250d1923235fd00
   KNOWN_GOOD_STUDY_LIVE_BLOB: 0822278a88cfb264fa3a5332adae25bd66473bf4
+  GREEN_FRAME_MARKER: chrome152-greenframe-20260911-1
 
 jobs:
   restore:
-    name: Restore and verify known-good Study Room frontend
+    name: Patch and deploy Study Room green-frame compatibility build
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment:
@@ -34,7 +35,7 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: Prove this push changed only the rollback workflow
+      - name: Prove this push changed only the emergency release workflow
         shell: bash
         run: |
           set -euo pipefail
@@ -42,23 +43,24 @@ jobs:
           changed="$(git diff --name-only HEAD^ HEAD)"
           test "$changed" = ".github/workflows/emergency-study-room-rollback.yml"
 
-      - name: Checkout exact known-good production source
+      - name: Checkout exact pre-issue production source
         uses: actions/checkout@v4
         with:
           ref: ${{ env.KNOWN_GOOD_SHA }}
           path: release-src
           fetch-depth: 1
 
-      - name: Verify exact known-good Study Room media source
+      - name: Verify exact pre-issue Study Room source
         working-directory: release-src
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$KNOWN_GOOD_SHA"
           test "$(git rev-parse HEAD:assets/study-room-live.js)" = "$KNOWN_GOOD_STUDY_LIVE_BLOB"
-          grep -Fq 'Talking is a visual indicator, never a layout, tile-order, or media event.' assets/study-room-live.js
           grep -Fq 'Background off is genuinely processor-free.' assets/study-room-live.js
-          echo "Exact pre-issue Study Room source confirmed."
+          grep -Fq 'Talking is a visual indicator, never a layout, tile-order, or media event.' assets/study-room-live.js
+          grep -Fq 'simulcast: true' assets/study-room-live.js
+          grep -Fq 'transform: scaleX(-1);' assets/study-room-live.css
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -69,7 +71,7 @@ jobs:
         working-directory: release-src
         run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
 
-      - name: Verify known-good Study Room contracts and build artifact
+      - name: Verify unchanged source contracts and build artifact
         working-directory: release-src
         shell: bash
         run: |
@@ -85,38 +87,113 @@ jobs:
           node scripts/test-study-room-preview.mjs
           node scripts/test-pages-artifact.mjs
 
+      - name: Apply bounded green-frame compatibility patch to Pages artifact only
+        working-directory: release-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          marker = 'chrome152-greenframe-20260911-1'
+          dist = Path('.pages-dist')
+          js_path = dist / 'assets/study-room-live.js'
+          css_path = dist / 'assets/study-room-live.css'
+          html_path = dist / 'study-room/index.html'
+
+          js = js_path.read_text()
+          original_js = js
+
+          camera_pattern = re.compile(
+              r"(function cameraPublishOptions\(\) \{\s*return \{\s*source: LiveKit\?\.Track\?\.Source\?\.Camera \|\| 'camera',\s*)simulcast: true,",
+              re.M,
+          )
+          js, camera_count = camera_pattern.subn(r"\1simulcast: false,", js, count=1)
+          if camera_count != 1:
+              raise SystemExit(f'Expected exactly one cameraPublishOptions simulcast replacement, got {camera_count}')
+
+          defaults_pattern = re.compile(
+              r"(publishDefaults: \{\s*\.\.\.microphonePublishOptions\(\),\s*)simulcast: true,",
+              re.M,
+          )
+          js, defaults_count = defaults_pattern.subn(r"\1simulcast: false,", js, count=1)
+          if defaults_count != 1:
+              raise SystemExit(f'Expected exactly one publishDefaults simulcast replacement, got {defaults_count}')
+
+          if js == original_js:
+              raise SystemExit('Study Room JS artifact was not patched')
+          js += f"\n// {marker}: fixed single-layer camera publication avoids Chromium/WebRTC layer-transition corruption.\n"
+          js_path.write_text(js)
+
+          css = css_path.read_text()
+          css += f'''\n\n/* {marker}: avoid transformed GPU video surfaces on local camera/preview. */\n.sr-preview-frame video,\n.sr-participant-tile.is-self > video,\n.sr-participant-tile.is-self.is-camera > video {{\n  transform: none !important;\n  filter: none !important;\n  will-change: auto !important;\n  backface-visibility: visible !important;\n}}\n'''
+          css_path.write_text(css)
+
+          html = html_path.read_text()
+          if marker not in html:
+              html = html.replace(
+                  '../assets/study-room-live.css?v=study-room-admin-manager-20260908-1&amp;share=screen-recovery-20260909-1&amp;entry=v3-20260909-1',
+                  f'../assets/study-room-live.css?v=study-room-admin-manager-20260908-1&amp;share=screen-recovery-20260909-1&amp;entry=v3-20260909-1&amp;greenframe={marker}',
+              )
+              html = html.replace(
+                  '&responsiveness=catalog-read-20260910-1',
+                  f'&responsiveness=catalog-read-20260910-1&greenframe={marker}',
+              )
+          if marker not in html:
+              raise SystemExit('Failed to add green-frame cache marker to Study Room HTML')
+          html_path.write_text(html)
+          PY
+
+          node --check .pages-dist/assets/study-room-live.js
+          grep -Fq "$GREEN_FRAME_MARKER" .pages-dist/assets/study-room-live.js
+          grep -Fq "$GREEN_FRAME_MARKER" .pages-dist/assets/study-room-live.css
+          grep -Fq "$GREEN_FRAME_MARKER" .pages-dist/study-room/index.html
+          grep -Fq 'simulcast: false' .pages-dist/assets/study-room-live.js
+          grep -Fq 'transform: none !important' .pages-dist/assets/study-room-live.css
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
-      - name: Upload exact known-good Pages artifact
+      - name: Upload patched Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: release-src/.pages-dist
 
-      - name: Deploy known-good Pages
+      - name: Deploy patched Pages
         id: deployment
         uses: actions/deploy-pages@v4
 
-      - name: Verify production serves byte-identical known-good Study Room client
+      - name: Verify green-frame compatibility patch is live
         shell: bash
         run: |
           set -euo pipefail
-          expected_live_sha="$(cd release-src && git hash-object assets/study-room-live.js)"
-          test "$expected_live_sha" = "$KNOWN_GOOD_STUDY_LIVE_BLOB"
           for attempt in {1..12}; do
+            html_ok=0
+            js_ok=0
+            css_ok=0
             if curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' \
-              "https://duediligence.ph/assets/study-room-live.js?restore=$KNOWN_GOOD_SHA&attempt=$attempt" \
-              --output /tmp/live-study-room.js; then
-              if grep -Fq 'Background off is genuinely processor-free.' /tmp/live-study-room.js \
-                && grep -Fq 'Talking is a visual indicator, never a layout, tile-order, or media event.' /tmp/live-study-room.js; then
-                actual_sha="$(git hash-object /tmp/live-study-room.js)"
-                if [[ "$actual_sha" == "$KNOWN_GOOD_STUDY_LIVE_BLOB" ]]; then
-                  echo "Known-good Study Room client restored byte-for-byte live."
-                  exit 0
-                fi
-              fi
+              "https://duediligence.ph/study-room/?greenframe=$GREEN_FRAME_MARKER&attempt=$attempt" \
+              --output /tmp/study-room.html; then
+              grep -Fq "$GREEN_FRAME_MARKER" /tmp/study-room.html && html_ok=1 || true
+            fi
+            if curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' \
+              "https://duediligence.ph/assets/study-room-live.js?greenframe=$GREEN_FRAME_MARKER&attempt=$attempt" \
+              --output /tmp/study-room-live.js; then
+              grep -Fq "$GREEN_FRAME_MARKER" /tmp/study-room-live.js \
+                && grep -Fq 'simulcast: false' /tmp/study-room-live.js && js_ok=1 || true
+            fi
+            if curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' \
+              "https://duediligence.ph/assets/study-room-live.css?greenframe=$GREEN_FRAME_MARKER&attempt=$attempt" \
+              --output /tmp/study-room-live.css; then
+              grep -Fq "$GREEN_FRAME_MARKER" /tmp/study-room-live.css \
+                && grep -Fq 'transform: none !important' /tmp/study-room-live.css && css_ok=1 || true
+            fi
+            if [[ "$html_ok" == 1 && "$js_ok" == 1 && "$css_ok" == 1 ]]; then
+              echo "Green-frame compatibility patch is live on production Pages."
+              exit 0
             fi
             sleep 10
           done
-          echo "Known-good Pages deployment completed but byte-identical live verification did not converge." >&2
+          echo "Pages deployed but green-frame compatibility verification did not converge." >&2
           exit 1

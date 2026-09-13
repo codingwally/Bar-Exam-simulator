@@ -112,7 +112,7 @@ function harness() {
     history: { replaced: [], replaceState(...args) { this.replaced.push(args); } },
     setTimeout(callback, milliseconds) { const timer = ++timerSequence; timers.set(timer, { callback, milliseconds }); return timer; },
     clearTimeout(timer) { clearedTimers.add(timer); timers.delete(timer); },
-    fetch(url, options) { return new Promise((resolve, reject) => { const call = { url, options, respond(body, status = 200) { resolve({ ok: status >= 200 && status < 300, status, json: async () => body }); } }; fetches.push(call); options.signal?.addEventListener('abort', () => { call.aborted = true; const error = new Error('Upload aborted'); error.name = 'AbortError'; reject(error); }, { once: true }); }); },
+    fetch(url, options) { return new Promise((resolve, reject) => { const call = { url, options, respondResponse(response) { resolve(response); }, respond(body, status = 200) { resolve({ ok: status >= 200 && status < 300, status, json: async () => body }); } }; fetches.push(call); options.signal?.addEventListener('abort', () => { call.aborted = true; const error = new Error('Upload aborted'); error.name = 'AbortError'; reject(error); }, { once: true }); }); },
   });
   vm.runInContext(`${declarations}\n${evidenceDeclaration}\n
     const actualRenderLive = renderLive;
@@ -308,7 +308,7 @@ test('two evidence submits upload and attach only once; the guard lasts until th
   const operation = h.submitEvidence(form); await h.submitEvidence(form);
   assert.equal(h.fetches.length, 1); assert.equal(submit.disabled, true); assert.equal(h.state.evidenceUploading, true);
   assert.equal(h.fetches[0].options.body, fields.file.files[0]); assert.match(h.fetches[0].url, /channel=public/);
-  h.fetches[0].respond({ ok: true, attachment: { uploadId: 'durable-upload-one', storageKey: 'private-key' } });
+  h.fetches[0].respondResponse(new Response(JSON.stringify({ ok: true, attachment: { uploadId: 'durable-upload-one', storageKey: 'private-key' } })));
   await untilFetch(h, 2); await h.submitEvidence(form); assert.equal(h.fetches.length, 2, 'The attachment command is also protected');
   const envelope = JSON.parse(h.fetches[1].options.body); assert.equal(envelope.command, 'share_evidence'); assert.equal(envelope.payload.attachment.uploadId, 'durable-upload-one');
   h.fetches[1].respond({ ok: true, event: { ...event, revision: 11 }, receipt: { result: { saved: true } } }); await operation;
@@ -336,6 +336,30 @@ test('the evidence deadline aborts a stalled upload and restores a usable form w
   const [timerId, timer] = [...h.timers.entries()].find(([, entry]) => entry.milliseconds === 18000); timer.callback(); await rejection;
   assert.equal(h.fetches[0].aborted, true); assert.equal(h.fetches.length, 1); assert.equal(h.state.evidenceUploading, false); assert.equal(submit.disabled, false);
   assert.equal(h.timers.has(timerId), false); assert.equal(fields.title.value, 'PRIVATE_title', 'A same-context network failure preserves a retryable draft');
+});
+
+for (const [name, body] of [['empty', ''], ['truncated', '{"ok":true,"attachment":']]) {
+  test(`${name === 'empty' ? 'an empty' : 'a truncated'} upload response gives cautious guidance without retrying, attaching or losing the selected file`, async () => {
+    const h = harness(), event = openFixture(h), { form, fields, submit } = privateDrafts(h); fields.channel.value = 'public';
+    const file = fields.file.files[0], operation = h.guarded(() => h.submitEvidence(form));
+    h.fetches[0].respondResponse(new Response(body)); await operation;
+    assert.equal(h.element('status').textContent, 'The file upload could not be confirmed. Check Shared evidence or contact the organizer before trying again.');
+    assert.equal(h.element('status').dataset.error, 'true');
+    assert.equal(h.fetches.length, 1, 'No automatic upload retry or share_evidence command is issued');
+    assert.equal(h.state.pending, null); assert.equal(h.state.event.revision, event.revision);
+    assert.equal(fields.file.files[0], file); assert.equal(fields.title.value, 'PRIVATE_title');
+    assert.equal(submit.disabled, false); assert.equal(h.state.evidenceUploading, false); assert.equal(h.timers.size, 0);
+  });
+}
+
+test('a non-parsing upload body-read failure retains its original error and never attaches', async () => {
+  const h = harness(); openFixture(h); const { form, fields, submit } = privateDrafts(h); fields.channel.value = 'public';
+  const bodyError = new DOMException('The response body was interrupted', 'AbortError');
+  const operation = h.submitEvidence(form), rejection = assert.rejects(operation, error => error === bodyError);
+  h.fetches[0].respondResponse(new Response(new ReadableStream({ start(controller) { controller.error(bodyError); } })));
+  await rejection;
+  assert.equal(h.fetches.length, 1); assert.equal(fields.file.files.length, 1); assert.equal(fields.title.value, 'PRIVATE_title');
+  assert.equal(submit.disabled, false); assert.equal(h.state.evidenceUploading, false); assert.equal(h.timers.size, 0);
 });
 
 test('history accepts the current view and rejects delayed history after leaving it', async () => {
@@ -546,7 +570,7 @@ test('an unconfirmed evidence upload gives cautious file guidance without retryi
   ]) {
     const h = harness(); openFixture(h); const { form, fields, submit } = privateDrafts(h); fields.channel.value = 'public';
     const file = fields.file.files[0]; const operation = h.guarded(() => h.submitEvidence(form));
-    h.fetches[0].respond({ ok: false, error: { code, message } }, 503); await operation;
+    h.fetches[0].respondResponse(new Response(JSON.stringify({ ok: false, error: { code, message } }), { status: 503 })); await operation;
     assert.match(h.element('status').textContent, expected);
     assert.doesNotMatch(h.element('status').textContent, /bucket|export job|success|has been saved/i);
     assert.equal(h.publicErrorMessage(code), h.element('status').textContent, 'Delivery status codes use the same cautious guidance');

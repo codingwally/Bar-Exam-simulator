@@ -4,7 +4,7 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="referrer" content="same-origin"><meta name="robots" content="noindex,nofollow,noarchive">
   <meta name="theme-color" content="#06182b"><title>Debate Room — Due Diligence</title>
-  <link rel="icon" href="../assets/brand/favicon.ico"><link rel="stylesheet" href="../assets/debate-room.css?v=debate-v3-20260910-2">
+  <link rel="icon" href="../assets/brand/favicon.ico"><link rel="stylesheet" href="../assets/debate-room.css?v=debate-v3-20260910-3">
 </head>
 <body>
   <a class="skip" href="#main">Skip to Debate Room</a>
@@ -15,9 +15,9 @@
     <p id="status" class="status" role="status" aria-live="polite">Opening Debate Room. Your microphone and camera are off.</p></div>
     <section id="lobby" aria-labelledby="lobby-title">
       <div class="page-heading"><div><p class="eyebrow">The Commons</p><h1 id="lobby-title">Debate Room</h1><p>Prepare your case. Test the argument. Hear the decision.</p></div><button id="create-event" class="primary" type="button">Create debate</button></div>
-      <div class="lobby-columns"><section><h2>My events</h2><div id="events" class="event-list"><p>Sign in to open your events.</p></div></section>
+      <div class="lobby-columns"><section><h2 id="my-events-heading">My events</h2><div id="events" class="event-list" role="region" aria-labelledby="my-events-heading" tabindex="0"><p>Sign in to open your events.</p></div></section>
         <aside><h2>Join a debate</h2><form id="join-form"><label>Invitation link or event reference<input name="eventId" required maxlength="512" autocomplete="off"></label><label>Invitation code (only needed with an event reference)<input name="secret" minlength="12" maxlength="180" autocomplete="off"></label><button type="submit">Join with link or code</button></form><hr><p>Two teams. Three speakers per team. One shared floor.</p><p class="muted">The Due Diligence 5/3/5 format includes private preparation, all 14 speaking stages, judging, optional Audience Choice, results and downloads.</p><button id="open-rulebook" class="quiet" type="button">Read the rules and role guide</button></aside></div>
-    <section aria-labelledby="discover-heading"><h2 id="discover-heading">Open events</h2><p class="muted">Signed-in members may request entry. The host admits waiting observers.</p><div id="discover-events" class="event-list"></div><button id="discover-more" type="button" hidden>More open events</button></section>
+    <section aria-labelledby="discover-heading"><h2 id="discover-heading">Open events</h2><p class="muted">Signed-in members may request entry. The host admits waiting observers.</p><div id="discover-events" class="event-list" role="region" aria-labelledby="discover-heading" tabindex="0"></div><button id="discover-more" type="button" hidden>More open events</button></section>
     </section>
     <section id="event" hidden aria-labelledby="event-title">
       <div class="page-heading"><div><button id="back-lobby" type="button" class="quiet">← My events</button><p id="event-meta" class="eyebrow"></p><h1 id="event-title"></h1></div><div class="actions"><button id="check-in" type="button">Check in</button><button id="refresh" type="button">Refresh</button></div></div>
@@ -54,5 +54,5 @@
   <script src="../assets/phase2-config.js?v=provider-neutral-release2-20260827-1"></script><script src="../assets/auth-session-storage.js?v=auth-persistence-20260812-1"></script>
   <script>if(!Object.hasOwn)Object.defineProperty(Object,'hasOwn',{value:function(o,p){return Object.prototype.hasOwnProperty.call(o,p)}});</script>
   <script src="../assets/vendor/livekit-client.umd.js?v=2.22.1"></script><script src="../assets/vendor/livekit-track-processors.iife.js?v=0.7.2-study-room-background-images-20260908-1"></script><script src="../assets/study-room-backgrounds.js?v=study-room-background-images-20260908-1"></script>
-  <script type="module" src="../assets/debate-room.js?v=debate-v3-20260910-2"></script>
+  <script type="module" src="../assets/debate-room.js?v=debate-v3-20260910-3"></script>
 </body></html>

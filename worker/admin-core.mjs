@@ -115,7 +115,8 @@ export function normalizeUserDirectoryRequest(payload, accessPurpose = 'dashboar
       dataScope: normalizeAdminDataScope(payload?.dataScope),
     };
   }
-  const limit = Math.min(100, Math.max(1, Number(payload?.limit) || 100));
+  const bulk = payload?.bulk === true;
+  const limit = Math.min(bulk ? 500 : 100, Math.max(1, Number(payload?.limit) || 100));
   const offset = Math.max(0, Number(payload?.offset) || 0);
   return {
     search: search || null,

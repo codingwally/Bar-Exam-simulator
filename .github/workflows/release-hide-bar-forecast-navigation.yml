@@ -1,0 +1,191 @@
+name: Hide completed Bar Forecast navigation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/release-hide-bar-forecast-navigation.yml
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+env:
+  LIVE_SOURCE_SHA: 895380afa2b6dbb8892e29a8c250d1923235fd00
+  APPROVED_PARENT_SHA: 14e73b9153e2267e2c6b170394dd1f46858d7461
+  LIVE_STUDY_ROOM_BLOB: 0822278a88cfb264fa3a5332adae25bd66473bf4
+  GREEN_FRAME_MARKER: chrome152-outbound-sanitizer-20260911-5
+  FORECAST_HIDE_MARKER: forecast-navigation-hidden-20260914-r1
+
+jobs:
+  deploy:
+    name: Deploy only the hidden Forecast launchers
+    if: github.repository == 'codingwally/Bar-Exam-simulator'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout the approved release trigger
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Prove the trigger changes no product file
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$(git rev-parse HEAD^)" = "$APPROVED_PARENT_SHA"
+          changed="$(git diff --name-only HEAD^ HEAD)"
+          test "$changed" = ".github/workflows/release-hide-bar-forecast-navigation.yml"
+
+      - name: Checkout the exact current Pages source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.LIVE_SOURCE_SHA }}
+          path: release-src
+          fetch-depth: 1
+
+      - name: Verify the current production source contract
+        working-directory: release-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$LIVE_SOURCE_SHA"
+          test "$(git rev-parse HEAD:assets/study-room-live.js)" = "$LIVE_STUDY_ROOM_BLOB"
+          test "$(grep -Foc 'data-public-feature="bar-forecast"' index.html)" -eq 2
+          test "$(grep -Foc 'data-public-feature="bar-forecast" hidden' index.html)" -eq 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install reviewed Pages build dependencies
+        working-directory: release-src
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Rebuild the current Pages artifact
+        working-directory: release-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check assets/study-room-live.js
+          node scripts/test-study-room-live.mjs
+          node scripts/test-study-room-backgrounds.mjs
+          node scripts/test-study-room-always-open.mjs
+          node scripts/test-study-room-background-picker.mjs
+          node scripts/test-study-room-hotfix-behavior.mjs
+          node scripts/test-study-room-preview.mjs
+          node scripts/test-pages-artifact.mjs
+
+      - name: Recover the exact live Study Room artifact patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path('.github/workflows/emergency-study-room-rollback.yml').read_text(encoding='utf-8')
+          step_name = '      - name: Apply sender-side green-frame sanitizer to Pages artifact only\n'
+          step = source.index(step_name)
+          marker = '        run: |\n'
+          start = source.index(marker, step) + len(marker)
+          end = source.index('\n      - name: Setup Pages', start)
+          block = source[start:end]
+          script = '\n'.join(
+              line[10:] if line.startswith('          ') else line
+              for line in block.splitlines()
+          ) + '\n'
+          Path('/tmp/rebuild-live-study-room.sh').write_text(script, encoding='utf-8')
+          PY
+          bash -n /tmp/rebuild-live-study-room.sh
+          (cd release-src && bash /tmp/rebuild-live-study-room.sh)
+
+      - name: Hide only the two Bar Forecast launchers
+        working-directory: release-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from hashlib import sha256
+          import json
+          from pathlib import Path
+
+          artifact = Path('.pages-dist')
+
+          def manifest():
+              return {
+                  str(path.relative_to(artifact)): sha256(path.read_bytes()).hexdigest()
+                  for path in sorted(artifact.rglob('*'))
+                  if path.is_file()
+              }
+
+          before = manifest()
+          index_path = artifact / 'index.html'
+          html = index_path.read_text(encoding='utf-8')
+          replacements = (
+              (
+                  '<button type="button" data-public-feature="bar-forecast">2026 Bar Forecast</button>',
+                  '<button type="button" data-public-feature="bar-forecast" hidden>2026 Bar Forecast</button>',
+              ),
+              (
+                  '<button id="spa-bar-forecast" type="button" data-public-feature="bar-forecast">2026 Bar Forecast</button>',
+                  '<button id="spa-bar-forecast" type="button" data-public-feature="bar-forecast" hidden>2026 Bar Forecast</button>',
+              ),
+          )
+          for old, new in replacements:
+              if html.count(old) != 1 or new in html:
+                  raise SystemExit('The Forecast launcher contract does not match the reviewed live source.')
+              html = html.replace(old, new, 1)
+          index_path.write_text(html, encoding='utf-8')
+
+          after = manifest()
+          changed = sorted(path for path in set(before) | set(after) if before.get(path) != after.get(path))
+          if changed != ['index.html']:
+              raise SystemExit(f'Artifact isolation failed; changed files: {json.dumps(changed)}')
+          if html.count('data-public-feature="bar-forecast" hidden') != 2:
+              raise SystemExit('Both Forecast launchers must be hidden.')
+          print('Artifact isolation proved: index.html only; two Forecast launchers hidden.')
+          PY
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload isolated Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          name: github-pages
+          path: release-src/.pages-dist
+          retention-days: 7
+
+      - name: Deploy isolated Pages artifact
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Verify only the requested navigation state is live
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in {1..12}; do
+            root="$(curl -fsS --retry 2 "https://duediligence.ph/?verify=$FORECAST_HIDE_MARKER-$attempt" || true)"
+            study="$(curl -fsS --retry 2 "https://duediligence.ph/study-room/?verify=$FORECAST_HIDE_MARKER-$attempt" || true)"
+            if grep -Fq '<button type="button" data-public-feature="bar-forecast" hidden>2026 Bar Forecast</button>' <<<"$root" \
+              && grep -Fq '<button id="spa-bar-forecast" type="button" data-public-feature="bar-forecast" hidden>2026 Bar Forecast</button>' <<<"$root" \
+              && test "$(grep -Foc 'data-public-feature="bar-forecast" hidden' <<<"$root")" -eq 2 \
+              && grep -Fq "$GREEN_FRAME_MARKER" <<<"$study"; then
+              echo "Only the two Forecast launchers are hidden; the live Study Room patch remains present."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Pages deployed, but exact live verification did not converge." >&2
+          exit 1

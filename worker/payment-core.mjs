@@ -252,10 +252,11 @@ export function normalizePhase4AdminRequest(payload) {
       'Choose Regular users or Internal testing data.',
     );
   }
+  const bulk = payload?.bulk === true && ['payments', 'refunds'].includes(section);
   return {
     section,
     search: String(payload?.search || '').trim().slice(0, 200),
-    limit: Math.max(1, Math.min(100, Number(payload?.limit) || 50)),
+    limit: Math.max(1, Math.min(bulk ? 500 : 100, Number(payload?.limit) || 50)),
     offset: Math.max(0, Number(payload?.offset) || 0),
     premiumStatus,
     dataScope,

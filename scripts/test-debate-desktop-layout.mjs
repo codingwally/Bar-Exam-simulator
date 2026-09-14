@@ -9,6 +9,16 @@ const start = source.indexOf('function closeLiveTools()');
 const end = source.indexOf('function openDialog(', start);
 assert.ok(start > 0 && end > start);
 
+test('the growing lobby catalogs have independent named keyboard-scroll regions and retain invitation fields', () => {
+  for (const [id, label] of [['events', 'my-events-heading'], ['discover-events', 'discover-heading']]) {
+    assert.match(html, new RegExp(`<div id="${id}"[^>]*role="region"[^>]*aria-labelledby="${label}"[^>]*tabindex="0"`));
+    assert.equal((html.match(new RegExp(`\\bid="${label}"`, 'g')) || []).length, 1);
+  }
+  assert.match(html, /name="eventId" required maxlength="512"/);
+  assert.match(html, /name="secret" minlength="12" maxlength="180"/);
+  assert.match(html, /id="open-rulebook"/);
+});
+
 function toolsHarness(event = { awaitingAdmission: false }) {
   const panels = ['conversation', 'evidence', 'stages', 'rooms'].map(name => ({ dataset: { toolPanel: name }, hidden: true }));
   const buttons = panels.map(panel => ({ dataset: { liveTool: panel.dataset.toolPanel }, attributes: {}, setAttribute(key, value) { this.attributes[key] = value; } }));

@@ -116,14 +116,14 @@ function rowsFor(document) {
     if (!poll) para('No published Audience Choice result is available.');
     else {
       line('Audience result', poll.status === 'NO_VOTES' ? 'No valid votes' : poll.status === 'TIE' ? 'Tie' : side(poll.winner));
-      for (const team of ['affirmative', 'negative']) line(side(team), `${poll.counts[team]} votes${poll.choicePercentages[team] == null ? '' : ` (${poll.choicePercentages[team]}% of valid votes)`}`);
+      for (const team of ['affirmative', 'negative']) line(side(team), `${poll.counts[team]} ${poll.counts[team] === 1 ? 'vote' : 'votes'}${poll.choicePercentages[team] == null ? '' : ` (${poll.choicePercentages[team]}% of valid votes)`}`);
       line('Turnout', `${poll.validVotes} / ${poll.eligibleCount} eligible observers${poll.turnoutPercent == null ? '' : ` (${poll.turnoutPercent}%)`}`);
       line('Invalidated votes', poll.invalidatedCount);
     }
     if (document.kind === 'event_report') {
       heading('Standings');
       if (!document.standings?.rows?.length) para('No finalized standings.');
-      for (const row of document.standings?.rows || []) line(`${row.rank}${row.tied ? ' (tied)' : ''}. ${name(row.teamId)}`, `${row.wins} wins / ${row.played} played; ${row.scoredMatches} scored matches; comparable mean ${score(row.meanScore)}`);
+      for (const row of document.standings?.rows || []) line(`${row.rank}${row.tied ? ' (tied)' : ''}. ${name(row.teamId)}`, `${row.wins} ${row.wins === 1 ? 'win' : 'wins'} / ${row.played} played; ${row.scoredMatches} scored ${row.scoredMatches === 1 ? 'match' : 'matches'}; comparable mean ${score(row.meanScore)}`);
       if (document.standings?.unresolvedQualification) para('Qualification remains tied. Schedule the required tie resolution.');
       heading('Published pairings');
       if (!document.fixtures?.length) para('No published pairings.');

@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-09T23:01:02.973Z",
+  "candidate": "895380afa2b6dbb8892e29a8c250d1923235fd00",
+  "status": "PASS_PUBLIC_RELOADED_LOBBY_SETUP_AND_RULES_WITH_DESKTOP_LOBBY_SCROLL_GAP",
+  "url": "https://duediligence.ph/debate-room/",
+  "source": "Existing signed-in Chrome tab, ordinary reload, accessibility tree, read-only DOM and public asset response observations",
+  "productionDataCreated": false,
+  "observations": [
+    "Signed-in owner reaches the empty lobby without the prior timer error.",
+    "Create debate opens a readable setup form with Asia/Manila, English and practice debate labels; Cancel closes it without saving.",
+    "The 5/3/5 rules guide opens and Done returns to the lobby.",
+    "Home ordinary reload shows the separate Debate Room link beside Study Room.",
+    "Home school and year labels are readable display names instead of raw identifiers."
+  ],
+  "browserNetwork": [
+    {
+      "url": "https://duediligence.ph/assets/debate-room.css?v=debate-v3-20260910-2",
+      "status": 200,
+      "fromDiskCache": false,
+      "fromServiceWorker": false
+    },
+    {
+      "url": "https://duediligence.ph/assets/debate-room.js?v=debate-v3-20260910-2",
+      "status": 200,
+      "fromDiskCache": false,
+      "fromServiceWorker": false
+    },
+    {
+      "url": "https://duediligence.ph/assets/debate-media.js?v=debate-v3-20260910-2",
+      "status": 200,
+      "fromDiskCache": false,
+      "fromServiceWorker": false
+    }
+  ],
+  "networkCapture": {
+    "truncated": true,
+    "hasMore": false,
+    "scope": "Only listed observed public assets; not a complete network capture"
+  },
+  "layout": {
+    "lobbyViewport": {
+      "width": 1920,
+      "height": 855
+    },
+    "lobbyDocument": {
+      "width": 1905,
+      "height": 1064
+    },
+    "lobbyOuterScrollGap": true,
+    "activeMatchProductionGeometry": "NOT_RUN"
+  },
+  "limits": [
+    "No production match, upload, participant, email or media connection created.",
+    "Separate paid/unpaid production sessions remain unverified.",
+    "Desktop lobby outer scrolling identified for follow-up; prior active-match layout evidence is controlled-browser only."
+  ]
+}

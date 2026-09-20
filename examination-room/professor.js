@@ -2297,14 +2297,23 @@
     });
   }
 
+  async function persistGrade(questionId, points, feedback) {
+    const result = await api.professorCommand(
+      'save_grade',
+      { examId: state.exam.id, sessionId: state.selectedGradingSessionId, questionId, points, feedback },
+      api.requestId(),
+    );
+    state.grading.gradeRevisions.push(result.revision);
+    return result.revision;
+  }
+
   async function saveGrade(questionId, button) {
-    const container = $(`[data-grade-question="${CSS.escape(questionId)}"]`);
+    const container = $`[data-grade-question="${CSS.escape(questionId)}"]`;
     const points = Number($('[data-grade-points]', container).value);
     const feedback = $('[data-grade-feedback]', container).value;
     setButtonBusy(button, true, 'Saving…');
     try {
-      const result = await api.professorCommand('save_grade', { examId: state.exam.id, sessionId: state.selectedGradingSessionId, questionId, points, feedback }, api.requestId());
-      state.grading.gradeRevisions.push(result.revision);
+      await persistGrade(questionId, points, feedback);
       toast('Grade saved as a new revision.');
       renderGrading();
     } catch (error) {
@@ -2314,25 +2323,91 @@
     }
   }
 
+  async function saveCompletedUnsavedGradesForCurrentStudent() {
+    const sessionId = state.selectedGradingSessionId;
+    if (!sessionId || !state.selectedReleaseIds.has(sessionId)) return 0;
+
+    const persisted = latestBy(
+      (state.grading?.gradeRevisions || []).filter((revision) => revision.sessionId === sessionId),
+      (revision) => revision.questionId,
+    );
+    const pending = [];
+
+    $$('[data-grade-question]').forEach((container) => {
+      const questionId = container.dataset.gradeQuestion;
+      const question = state.questions.find((entry) => entry.id === questionId);
+      const pointsInput = $('[data-grade-points]', container);
+      const feedbackInput = $('[data-grade-feedback]', container);
+      const rawPoints = String(pointsInput?.value ?? '').trim();
+
+      // Blank is intentionally not treated as zero.
+      if (!rawPoints) return;
+
+      const points = Number(rawPoints);
+      if (!question || !Number.isFinite(points) || points < 0 || points > Number(question.points)) {
+        const number = Math.max(1, state.questions.findIndex((entry) => entry.id === questionId) + 1);
+        throw {
+          message: `Question ${number} has an invalid point value.`,
+          recovery: `Enter a score from 0 to ${question?.points ?? 'the question maximum'}, then release again.`,
+        };
+      }
+
+      const feedback = String(feedbackInput?.value || '');
+      const previous = persisted.get(questionId) || {};
+      const previousPoints = previous.points == null ? '' : String(previous.points);
+      const previousFeedback = String(previous.feedback || '');
+      if (rawPoints === previousPoints && feedback === previousFeedback) return;
+      pending.push({ questionId, points, feedback });
+    });
+
+    for (const grade of pending) {
+      await persistGrade(grade.questionId, grade.points, grade.feedback);
+    }
+    return pending.length;
+  }
+
   async function releaseResults() {
     const sessionIds = [...state.selectedReleaseIds];
     if (!sessionIds.length) {
       showError({ message: 'No students are selected for result release.', recovery: 'Select the check box beside each intended student, then choose Release selected results again.' }, null, 'Results not released');
       return;
     }
-    const latestGrades = latestBy(state.grading?.gradeRevisions || [], (grade) => `${grade.sessionId}:${grade.questionId}`);
-    const incompleteSession = sessionIds.find((sessionId) => state.questions.some((question) => !latestGrades.has(`${sessionId}:${question.id}`)));
-    if (incompleteSession) {
-      const session = (state.grading?.sessions || []).find((entry) => entry.id === incompleteSession);
-      const studentIndex = (state.grading?.sessions || []).findIndex((entry) => entry.id === incompleteSession);
-      const identity = gradingDisplayIdentity(session, studentIndex);
-      const displayName = state.anonymousGrading ? identity.alias : identity.realName;
-      showError({
-        message: `Complete every question grade for ${displayName} before releasing the result.`,
-        recovery: 'Open the selected answer file, enter points and feedback for each question, save every grade, then release again.',
-      }, null, 'Results not released');
+
+    const button = $('#release-results');
+    setButtonBusy(button, true, 'Checking grades…');
+    try {
+      const autoSaved = await saveCompletedUnsavedGradesForCurrentStudent();
+      if (autoSaved > 0) {
+        state.grading = await api.professorQuery('grading', { examId: state.exam.id });
+        renderGrading();
+        toast(`${autoSaved} unsaved grade${autoSaved === 1 ? '' : 's'} saved before release.`);
+      }
+
+      const latestGrades = latestBy(state.grading?.gradeRevisions || [], (grade) => `${grade.sessionId}:${grade.questionId}`);
+      const incompleteSession = sessionIds.find((sessionId) => state.questions.some((question) => !latestGrades.has(`${sessionId}:${question.id}`)));
+      if (incompleteSession) {
+        const session = (state.grading?.sessions || []).find((entry) => entry.id === incompleteSession);
+        const studentIndex = (state.grading?.sessions || []).findIndex((entry) => entry.id === incompleteSession);
+        const identity = gradingDisplayIdentity(session, studentIndex);
+        const displayName = state.anonymousGrading ? identity.alias : identity.realName;
+        const missingNumbers = state.questions
+          .map((question, index) => ({ question, number: index + 1 }))
+          .filter(({ question }) => !latestGrades.has(`${incompleteSession}:${question.id}`))
+          .map(({ number }) => number);
+        const label = missingNumbers.length === 1 ? `Question ${missingNumbers[0]}` : `Questions ${missingNumbers.join(', ')}`;
+        showError({
+          message: `${label} still ${missingNumbers.length === 1 ? 'needs' : 'need'} a saved score for ${displayName}.`,
+          recovery: 'Enter a point value for each listed question. You can then choose Release again; completed unsaved grades on the open answer sheet will be saved automatically.',
+        }, null, 'Results not released');
+        return;
+      }
+    } catch (error) {
+      showError(error, releaseResults, 'Results not released');
       return;
+    } finally {
+      setButtonBusy(button, false);
     }
+
     const confirmed = await requestConfirmation({
       eyebrow: 'Result release',
       title: `Release results to ${sessionIds.length} selected student${sessionIds.length === 1 ? '' : 's'}?`,

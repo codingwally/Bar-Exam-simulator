@@ -2448,7 +2448,6 @@
       cancelLabel: 'Continue grading',
     });
     if (!confirmed) return;
-    const button = $('#release-results');
     setButtonBusy(button, true, 'Releasing…');
     try {
       const result = await api.professorCommand('release_results', { examId: state.exam.id, sessionIds }, api.requestId());

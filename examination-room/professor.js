@@ -2260,7 +2260,7 @@
     const displayName = state.anonymousGrading ? identity.alias : identity.realName;
     const answers = latestBy((data.answerRevisions || []).filter((revision) => revision.sessionId === session.id), (revision) => revision.questionId);
     const grades = latestBy((data.gradeRevisions || []).filter((revision) => revision.sessionId === session.id), (revision) => revision.questionId);
-    $('#grading-sheet').innerHTML = `<header class="grading-student-head"><div><p class="section-kicker">Individual response</p><h2>${escapeHtml(displayName)}</h2><p>${escapeHtml(state.anonymousGrading ? 'The professor may reveal the real roster at any time.' : `${identity.realStudentNumber} · ${session.yearLevel}`)}</p></div><span class="grade-save-state"><i class="ph ph-check-circle" aria-hidden="true"></i> Grade changes create durable revisions</span></header>
+    $('#grading-sheet').innerHTML = `<header class="grading-student-head"><div><p class="section-kicker">Individual response</p><h2>${escapeHtml(displayName)}</h2><p>${escapeHtml(state.anonymousGrading ? 'The professor may reveal the real roster at any time.' : `${identity.realStudentNumber} · ${session.yearLevel}`)}</p></div><span class="grade-save-state"><i class="ph ph-check-circle" aria-hidden="true"></i> Enter all scores, then save this student once</span></header>
       ${state.questions.map((question, index) => {
         const answer = answers.get(question.id)?.answer;
         const grade = grades.get(question.id) || {};
@@ -2273,8 +2273,9 @@
               : Array.isArray(answer)
                 ? answer.join(', ')
                 : JSON.stringify(answer);
-        return `<article class="grade-question" data-grade-question="${escapeHtml(question.id)}"><header><h3>Question ${index + 1}</h3><strong>${question.points} points</strong></header><div class="student-answer">${escapeHtml(answerText)}</div><div class="grade-controls"><label><span>Points awarded</span><input type="number" min="0" max="${question.points}" step=".5" value="${grade.points ?? ''}" data-grade-points></label><label><span>Professor feedback</span><textarea maxlength="5000" data-grade-feedback>${escapeHtml(grade.feedback || '')}</textarea></label><button class="button primary compact" type="button" data-save-grade="${escapeHtml(question.id)}">Save grade</button></div></article>`;
-      }).join('')}`;
+        return `<article class="grade-question" data-grade-question="${escapeHtml(question.id)}"><header><h3>Question ${index + 1}</h3><strong>${question.points} points</strong></header><div class="student-answer">${escapeHtml(answerText)}</div><div class="grade-controls"><label><span>Points awarded</span><input type="number" min="0" max="${question.points}" step=".5" value="${grade.points ?? ''}" data-grade-points></label><label><span>Professor feedback</span><textarea maxlength="5000" data-grade-feedback>${escapeHtml(grade.feedback || '')}</textarea></label></div></article>`;
+      }).join('')}
+      <div class="grading-save-all"><button class="button primary" type="button" data-save-all-grades>Save all grades</button><p>One save for this student's complete grading sheet. A score of 0 is valid; blank means not yet graded.</p></div>`;
   }
 
   function gradingEditorHasUnsavedChanges() {
@@ -2307,63 +2308,93 @@
     return result.revision;
   }
 
-  async function saveGrade(questionId, button) {
-    const container = $`[data-grade-question="${CSS.escape(questionId)}"]`;
-    const points = Number($('[data-grade-points]', container).value);
-    const feedback = $('[data-grade-feedback]', container).value;
-    setButtonBusy(button, true, 'Saving…');
+  function collectCurrentStudentGrades({ requireComplete = true } = {}) {
+    const persisted = latestBy(
+      (state.grading?.gradeRevisions || []).filter((revision) => revision.sessionId === state.selectedGradingSessionId),
+      (revision) => revision.questionId,
+    );
+    const grades = [];
+    const missing = [];
+
+    $$('[data-grade-question]').forEach((container, index) => {
+      const questionId = container.dataset.gradeQuestion;
+      const question = state.questions.find((entry) => entry.id === questionId);
+      const rawPoints = String($('[data-grade-points]', container)?.value ?? '').trim();
+      const feedback = String($('[data-grade-feedback]', container)?.value || '');
+
+      if (!rawPoints) {
+        missing.push(index + 1);
+        return;
+      }
+
+      const points = Number(rawPoints);
+      if (!question || !Number.isFinite(points) || points < 0 || points > Number(question.points)) {
+        throw {
+          message: `Question ${index + 1} has an invalid point value.`,
+          recovery: `Enter a score from 0 to ${question?.points ?? 'the question maximum'}.`,
+        };
+      }
+
+      const previous = persisted.get(questionId) || {};
+      grades.push({
+        questionId,
+        points,
+        feedback,
+        changed: previous.points == null
+          || Number(previous.points) !== points
+          || String(previous.feedback || '') !== feedback,
+      });
+    });
+
+    if (requireComplete && missing.length) {
+      const label = missing.length === 1 ? `Question ${missing[0]}` : `Questions ${missing.join(', ')}`;
+      throw {
+        message: `${label} ${missing.length === 1 ? 'does' : 'do'} not have a score yet.`,
+        recovery: 'Enter every score first. Use 0 when the correct grade is zero, then choose Save all grades once.',
+      };
+    }
+
+    return { grades, missing };
+  }
+
+  async function saveAllGrades(button, { silent = false, requireComplete = true } = {}) {
+    const { grades } = collectCurrentStudentGrades({ requireComplete });
+    const changed = grades.filter((grade) => grade.changed);
+    if (!changed.length) {
+      if (!silent) toast('All entered grades are already saved.');
+      return 0;
+    }
+
+    if (button) setButtonBusy(button, true, 'Saving all…');
     try {
-      await persistGrade(questionId, points, feedback);
-      toast('Grade saved as a new revision.');
+      for (const grade of changed) {
+        await persistGrade(grade.questionId, grade.points, grade.feedback);
+      }
+      state.grading = await api.professorQuery('grading', { examId: state.exam.id });
       renderGrading();
+      if (!silent) toast(`All grades saved for this student (${changed.length} update${changed.length === 1 ? '' : 's'}).`);
+      return changed.length;
     } catch (error) {
-      showError(error, () => saveGrade(questionId, button), 'Grade not saved');
+      try {
+        state.grading = await api.professorQuery('grading', { examId: state.exam.id });
+        renderGrading();
+      } catch {}
+      if (!silent) showError(error, () => saveAllGrades(button), 'Grades not saved');
+      throw error;
     } finally {
-      setButtonBusy(button, false);
+      if (button) setButtonBusy(button, false);
     }
   }
 
   async function saveCompletedUnsavedGradesForCurrentStudent() {
     const sessionId = state.selectedGradingSessionId;
     if (!sessionId || !state.selectedReleaseIds.has(sessionId)) return 0;
-
-    const persisted = latestBy(
-      (state.grading?.gradeRevisions || []).filter((revision) => revision.sessionId === sessionId),
-      (revision) => revision.questionId,
-    );
-    const pending = [];
-
-    $$('[data-grade-question]').forEach((container) => {
-      const questionId = container.dataset.gradeQuestion;
-      const question = state.questions.find((entry) => entry.id === questionId);
-      const pointsInput = $('[data-grade-points]', container);
-      const feedbackInput = $('[data-grade-feedback]', container);
-      const rawPoints = String(pointsInput?.value ?? '').trim();
-
-      // Blank is intentionally not treated as zero.
-      if (!rawPoints) return;
-
-      const points = Number(rawPoints);
-      if (!question || !Number.isFinite(points) || points < 0 || points > Number(question.points)) {
-        const number = Math.max(1, state.questions.findIndex((entry) => entry.id === questionId) + 1);
-        throw {
-          message: `Question ${number} has an invalid point value.`,
-          recovery: `Enter a score from 0 to ${question?.points ?? 'the question maximum'}, then release again.`,
-        };
-      }
-
-      const feedback = String(feedbackInput?.value || '');
-      const previous = persisted.get(questionId) || {};
-      const previousPoints = previous.points == null ? '' : String(previous.points);
-      const previousFeedback = String(previous.feedback || '');
-      if (rawPoints === previousPoints && feedback === previousFeedback) return;
-      pending.push({ questionId, points, feedback });
-    });
-
-    for (const grade of pending) {
+    const { grades } = collectCurrentStudentGrades({ requireComplete: false });
+    const changed = grades.filter((grade) => grade.changed);
+    for (const grade of changed) {
       await persistGrade(grade.questionId, grade.points, grade.feedback);
     }
-    return pending.length;
+    return changed.length;
   }
 
   async function releaseResults() {
@@ -3130,8 +3161,8 @@
       renderGrading();
     });
     $('#grading-sheet').addEventListener('click', (event) => {
-      const button = event.target.closest('[data-save-grade]');
-      if (button) saveGrade(button.dataset.saveGrade, button);
+      const button = event.target.closest('[data-save-all-grades]');
+      if (button) saveAllGrades(button).catch(() => {});
     });
     $('#anonymous-grading-toggle').addEventListener('change', (event) => { state.anonymousGrading = event.target.checked; renderGrading(); });
     $('#release-results').addEventListener('click', releaseResults);

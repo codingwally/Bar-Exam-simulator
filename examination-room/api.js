@@ -1838,11 +1838,18 @@
       ));
       if (!question || revision?.answer === undefined || revision?.answer === null) return;
       if (question.type === 'multiple_choice' && Number.isSafeInteger(Number(revision.answer))) {
-        const option = question.options[Number(revision.answer)];
-        if (option) answers[question.id] = option.id;
+        const options = Array.isArray(question.options)
+          ? question.options
+          : Array.isArray(question.choices)
+            ? question.choices.map((label, index) => ({ id: `option-${index + 1}`, label: String(label) }))
+            : [];
+        const option = options[Number(revision.answer)];
+        const questionId = question.id || question.key || question.questionKey || `q-${question.number}`;
+        if (option) answers[questionId] = option.id;
         return;
       }
-      answers[question.id] = revision.answer;
+      const questionId = question.id || question.key || question.questionKey || `q-${question.number}`;
+      answers[questionId] = revision.answer;
     });
     return {
       questions,

@@ -1,4 +1,8 @@
-const ALLOWED_ORIGIN = 'https://duediligence.ph';
+const CANONICAL_ORIGIN = 'https://duediligence.ph';
+const APPROVED_BROWSER_ORIGINS = new Set([
+  CANONICAL_ORIGIN,
+  'https://www.duediligence.ph',
+]);
 
 const UNAVAILABLE_BODY = Object.freeze({
   ok: false,
@@ -9,8 +13,17 @@ const UNAVAILABLE_BODY = Object.freeze({
   }),
 });
 
+function browserOrigin(request) {
+  return String(request?.headers?.get('Origin') || '').trim();
+}
+
+function approvedBrowserOrigin(request) {
+  const origin = browserOrigin(request);
+  return APPROVED_BROWSER_ORIGINS.has(origin) ? origin : '';
+}
+
 function unavailableResponse(request) {
-  const requestOrigin = String(request?.headers?.get('Origin') || '').trim();
+  const requestOrigin = approvedBrowserOrigin(request);
   const headers = new Headers({
     'Cache-Control': 'no-store, max-age=0',
     'Content-Type': 'application/json; charset=utf-8',
@@ -20,12 +33,45 @@ function unavailableResponse(request) {
     'X-Robots-Tag': 'noindex, nofollow, noarchive',
   });
 
-  if (requestOrigin === ALLOWED_ORIGIN) {
-    headers.set('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
+  if (requestOrigin) {
+    headers.set('Access-Control-Allow-Origin', requestOrigin);
   }
 
   return new Response(JSON.stringify(UNAVAILABLE_BODY), {
     status: 503,
+    headers,
+  });
+}
+
+function normalizeRequestForApplication(request) {
+  const origin = approvedBrowserOrigin(request);
+  if (!origin || origin === CANONICAL_ORIGIN) {
+    return { browserOrigin: origin, request };
+  }
+
+  const headers = new Headers(request.headers);
+  headers.set('Origin', CANONICAL_ORIGIN);
+  return {
+    browserOrigin: origin,
+    request: new Request(request, { headers }),
+  };
+}
+
+function restoreBrowserCors(response, origin) {
+  if (!origin || origin === CANONICAL_ORIGIN) return response;
+
+  const headers = new Headers(response.headers);
+  const upstreamAllowedOrigin = headers.get('Access-Control-Allow-Origin');
+  if (upstreamAllowedOrigin === CANONICAL_ORIGIN) {
+    headers.set('Access-Control-Allow-Origin', origin);
+  }
+  headers.set('Vary', headers.get('Vary')?.includes('Origin')
+    ? headers.get('Vary')
+    : [headers.get('Vary'), 'Origin'].filter(Boolean).join(', '));
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
     headers,
   });
 }
@@ -38,11 +84,12 @@ export default {
     }
 
     try {
-      const response = await application.fetch(request);
+      const normalized = normalizeRequestForApplication(request);
+      const response = await application.fetch(normalized.request);
       if (!(response instanceof Response)) {
         return unavailableResponse(request);
       }
-      return response;
+      return restoreBrowserCors(response, normalized.browserOrigin);
     } catch {
       console.error('Public application forwarding failed.');
       return unavailableResponse(request);

@@ -148,6 +148,104 @@ test('does not normalize an unapproved browser origin before forwarding', async 
   assert.strictEqual(response, upstreamResponse);
 });
 
+test('legacy Examination Room submit backfills local answers before forwarding submit and patches old receipt timestamp', async () => {
+  const calls = [];
+  const request = new Request('https://duediligence-api.example.test/examination-room/v1/student/command', {
+    method: 'POST',
+    headers: {
+      Origin: PRODUCTION_ORIGIN,
+      'Content-Type': 'application/json',
+      'X-Request-ID': 'submission:12345678-1234-4234-8234-1234567890ab',
+    },
+    body: JSON.stringify({
+      operation: 'submit',
+      payload: {
+        attemptId: '55555555-5555-4555-8555-555555555555',
+        sessionToken: 'ers1_' + 'ab'.repeat(32),
+        answers: [
+          { questionId: 'q001', answer: 'Recovered essay answer', flagged: false },
+          { questionId: 'q002', answer: 'option-2', flagged: true },
+        ],
+      },
+      idempotencyKey: 'submission:12345678-1234-4234-8234-1234567890ab',
+    }),
+  });
+
+  const response = await publicApiAlias.fetch(request, {
+    DUE_DILIGENCE_APPLICATION: {
+      async fetch(candidate) {
+        const body = JSON.parse(await candidate.text());
+        calls.push({ body, requestId: candidate.headers.get('X-Request-ID') });
+        if (body.operation === 'save_answer') {
+          return new Response(JSON.stringify({ ok: true, revision: { revision: calls.length } }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        return new Response(JSON.stringify({
+          ok: true,
+          submission: {
+            id: '66666666-6666-4666-8666-666666666666',
+            receiptId: '77777777-7777-4777-8777-777777777777',
+            receivedAt: '2026-09-21T18:40:00.000Z',
+          },
+        }), {
+          status: 201,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      },
+    },
+  });
+
+  assert.equal(response.status, 201);
+  assert.deepEqual(calls.map((entry) => entry.body.operation), ['save_answer', 'save_answer', 'submit']);
+  assert.equal(calls[0].body.payload.questionId, 'q001');
+  assert.equal(calls[0].body.payload.answer, 'Recovered essay answer');
+  assert.equal(calls[1].body.payload.questionId, 'q002');
+  assert.equal(calls[1].body.payload.answer, 1);
+  assert.equal(calls[0].body.payload.source, 'submission');
+  assert.match(calls[0].requestId, /:answer:1$/u);
+  const body = await response.json();
+  assert.equal(body.submission.receivedAt, '2026-09-21T18:40:00.000Z');
+  assert.equal(body.submission.submittedAt, '2026-09-21T18:40:00.000Z');
+});
+
+test('legacy submit stops before final submission if answer backfill is rejected', async () => {
+  const calls = [];
+  const request = new Request('https://duediligence-api.example.test/examination-room/v1/student/command', {
+    method: 'POST',
+    headers: { Origin: PRODUCTION_ORIGIN, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      operation: 'submit',
+      payload: {
+        attemptId: '55555555-5555-4555-8555-555555555555',
+        sessionToken: 'ers1_' + 'ab'.repeat(32),
+        answers: [{ questionId: 'q001', answer: 'Unsaved answer', flagged: false }],
+      },
+      idempotencyKey: 'submission:12345678-1234-4234-8234-1234567890ab',
+    }),
+  });
+
+  const response = await publicApiAlias.fetch(request, {
+    DUE_DILIGENCE_APPLICATION: {
+      async fetch(candidate) {
+        const body = JSON.parse(await candidate.text());
+        calls.push(body.operation);
+        return new Response(JSON.stringify({
+          ok: false,
+          error: { code: 'ANSWER_REVISION_CONFLICT', message: 'Save failed.' },
+        }), {
+          status: 409,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      },
+    },
+  });
+
+  assert.equal(response.status, 409);
+  assert.deepEqual(calls, ['save_answer']);
+});
+
 test('returns a controlled provider-neutral 503 when the binding is missing', async () => {
   const request = new Request('https://duediligence-api.example.test/pedro/turn', {
     headers: { Origin: PRODUCTION_ORIGIN },

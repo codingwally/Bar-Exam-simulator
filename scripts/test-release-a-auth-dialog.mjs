@@ -58,7 +58,7 @@ assert.match(
   'Safe form drafts must survive a required sign-in redirect.',
 );
 assert.equal(
-  (phase2.match(/dd2-native-close'\)\?\.addEventListener\('click', closeNativeView\)/g) || []).length,
+  (phase2.match(/dd2-native-close'\)\?\.addEventListener\('click', \(\) => closeNativeView\('close-button'\)\)/g) || []).length,
   1,
   'The native-view close control must have one stable listener instead of stacking per render.',
 );
@@ -67,11 +67,9 @@ assert.doesNotMatch(
   /dd2-native-close'[\s\S]{0,120}\{\s*once:\s*true\s*\}/,
   'The persistent native-view close control must not consume its listener after one use.',
 );
-assert.match(
-  phase2,
-  /function closeNativeView\(\)\s*\{[\s\S]{0,720}hideNativeView\(\);[\s\S]{0,260}history\.back\(\)/,
-  'Closing a native view must hide it immediately before asynchronous history navigation.',
-);
+// Actual delayed-history and focus behavior replaces the old hide-before-Back
+// pattern oracle, which permitted a newer navigation to be discarded.
+await import('./test-native-view-navigation.mjs');
 assert.match(
   phase2,
   /history\.state\?\.dd2View\s*\?\s*'replaceState'\s*:\s*'pushState'/,

@@ -72,6 +72,84 @@ export async function runBrowserOrganizer() {
     const relative = `screenshots/${String(report.screenshots.length + 1).padStart(2, '0')}-${name}.png`;
     await page.screenshot({ path: path.join(OUTPUT, relative), fullPage: true }); report.screenshots.push(relative);
   };
+  const checkLobbyLayout = async (width, height, populated = false) => {
+    const harnessToolbar = host.locator('#local-rehearsal-tools');
+    assert.equal(await harnessToolbar.count(), 1);
+    await harnessToolbar.evaluate(element => { element.hidden = true; });
+    await host.setViewportSize({ width, height });
+    await host.locator('.site-header').scrollIntoViewIfNeeded();
+    const metrics = await host.locator('html').evaluate(element => ({
+      width: element.clientWidth, height: element.clientHeight,
+      scrollWidth: element.scrollWidth, scrollHeight: element.scrollHeight,
+    }));
+    (report.layoutMeasurements ||= []).push({ kind: populated ? 'populated-lobby' : 'empty-lobby', viewport: { width, height }, metrics,
+      dataSource: populated ? 'Inert catalog responses rendered by the unchanged client; no fixture events are created.' : 'Actual empty local SQL catalog.' });
+    check(`Lobby has no horizontal page overflow at ${width}x${height}`, metrics.scrollWidth <= metrics.width + 1);
+    const contained = box => box && box.width > 0 && box.height > 0 && box.x >= -1 && box.y >= -1
+      && box.x + box.width <= width + 1 && box.y + box.height <= height + 1;
+    if (width >= 1100) {
+      check(`Complete ${populated ? 'populated' : 'empty'} desktop lobby fits without page scrolling at ${width}x${height}`,
+        metrics.scrollHeight <= height + 1);
+      const selectors = ['#lobby-title', '#create-event', '#my-events-heading', '#events', '#discover-heading', '#discover-events',
+        '#join-form [name=eventId]', '#join-form [name=secret]', '#join-form button', '#open-rulebook'];
+      if (populated) selectors.push('#discover-more');
+      for (const selector of selectors) {
+        const box = await host.locator(selector).boundingBox();
+        check(`${selector} is visible inside the desktop lobby window`, contained(box), { width, height, populated, box });
+      }
+      const aside = await host.locator('.lobby-columns aside').evaluate(element => ({ scrollHeight: element.scrollHeight, clientHeight: element.clientHeight }));
+      check('The complete invitation form and format guidance fit without an inner scrollbar', aside.scrollHeight <= aside.clientHeight + 1, { width, height, aside });
+      const mine = await host.locator('.lobby-columns>section').boundingBox(), discovery = await host.locator('#discover-heading').boundingBox(), join = await host.locator('.lobby-columns aside').boundingBox();
+      check('Desktop discovery uses the left column beside the invitation form', discovery.x < join.x && mine.y + mine.height <= discovery.y + 1);
+      if (populated) for (const selector of ['#events', '#discover-events']) {
+        const region = host.locator(selector);
+        check(`${selector} is a named keyboard-scrollable event list`, await region.getAttribute('role') === 'region'
+          && await region.getAttribute('tabindex') === '0' && !!await region.getAttribute('aria-labelledby'));
+        await region.press('End');
+        await pollLocator(`${selector} keyboard scrolling`, () => region.evaluate(element => element.scrollTop), top => top > 0);
+        await pollLocator(`${selector} final action reachability`, async () => {
+          const list = await region.boundingBox(), button = await region.locator('button').last().boundingBox();
+          return !!list && !!button && button.y >= list.y - 1 && button.y + button.height <= list.y + list.height + 1;
+        }, Boolean);
+        check(`${selector} exposes its last event action through actual keyboard scrolling`, true, { width, height });
+        await region.locator('button').last().hover({ trial: true });
+      }
+      for (const selector of ['#create-event', '#join-form [name=eventId]', '#join-form [name=secret]', '#join-form button', '#open-rulebook']) await host.locator(selector).hover({ trial: true });
+    } else {
+      const mine = await host.locator('.lobby-columns>section').boundingBox(), join = await host.locator('.lobby-columns aside').boundingBox(), discovery = await host.locator('#discover-heading').boundingBox();
+      check('Mobile retains My events, invitation, then Open events in readable vertical order', mine.y + mine.height <= join.y + 1 && join.y + join.height <= discovery.y + 1);
+      for (const selector of ['#create-event', '#join-form [name=eventId]', '#join-form [name=secret]', '#join-form button', '#open-rulebook', '#discover-heading']) {
+        await host.locator(selector).scrollIntoViewIfNeeded();
+        check(`${selector} remains reachable in the mobile lobby`, contained(await host.locator(selector).boundingBox()));
+      }
+    }
+    // Return the document viewport to its origin after reachability checks so
+    // offscreen fixed controls are not drawn into a full-page composite.
+    await host.locator('.site-header').scrollIntoViewIfNeeded();
+    await screenshot(host, `lobby-${populated ? 'populated' : 'empty'}-${width}x${height}`);
+  };
+  const checkLobbyCatalogs = async () => {
+    await textIncludes(host, '#discover-events', 'No open events are listed right now.');
+    await checkLobbyLayout(1365, 768); await checkLobbyLayout(1920, 855); await checkLobbyLayout(320, 900);
+    const events = Array.from({ length: 20 }, (_, index) => ({ id: 'de-' + (index + 1).toString(16).padStart(32, '0'),
+      title: `Practice debate ${index + 1}`, description: 'A public speaking practice session for law students.',
+      status: 'scheduled', language: 'English', timezone: 'Asia/Manila', rehearsal: true }));
+    const myRoute = '**/debate-room/events', openRoute = '**/debate-room/discover';
+    const myResponse = route => route.fulfill({ json: { ok: true, events } });
+    const openResponse = route => route.fulfill({ json: { ok: true, events, nextCursor: 'catalog-page-2' } });
+    await host.route(myRoute, myResponse); await host.route(openRoute, openResponse);
+    try {
+      await host.reload(); await waitApp(host); await textIncludes(host, '#discover-events', 'Practice debate 20');
+      check('The actual catalog renderer displays all twenty events in both lists', await host.locator('#events article').count() === 20 && await host.locator('#discover-events article').count() === 20);
+      await checkLobbyLayout(1365, 768, true); await checkLobbyLayout(1920, 855, true);
+    } finally {
+      await host.unroute(myRoute, myResponse); await host.unroute(openRoute, openResponse);
+      await host.setViewportSize({ width: 1365, height: 900 }); await host.reload(); await waitApp(host);
+    }
+    await textIncludes(host, '#events', 'You have no events yet.');
+    await textIncludes(host, '#discover-events', 'No open events are listed right now.');
+    check('Catalog layout fixtures leave the actual SQL event lists empty before the organizer journey', await host.locator('#events article').count() === 0 && await host.locator('#discover-events article').count() === 0);
+  };
   const checkLiveToolPanels = async () => {
     const originalTile = await host.locator('#affirmative-tiles .tile').first().elementHandle();
     await host.locator('[data-live-tool=conversation]').click();
@@ -384,7 +462,7 @@ export async function runBrowserOrganizer() {
       const page = await context.newPage(); page.setDefaultTimeout(20000); page.setDefaultNavigationTimeout(30000);
       actorIds.set(page, ACTOR(0)); observe(page); if (index === 0) host = page; else guest = page;
     }
-    await host.goto(server.url); await waitApp(host);
+    await host.goto(server.url); await waitApp(host); await checkLobbyCatalogs();
     report.eventTitle = 'CI full browser Debate ' + new Date().toISOString();
     await host.locator('#create-event').click(); await field(host, 'title').fill(report.eventTitle); await field(host, 'rehearsal').check();
     await field(host, 'description').fill('Clearly synthetic Linux browser rehearsal using actual local SQL; no media or outbound email.');

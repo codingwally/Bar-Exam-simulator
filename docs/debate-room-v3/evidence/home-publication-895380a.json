@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-09T22:58:51.667Z",
+  "candidate": "895380afa2b6dbb8892e29a8c250d1923235fd00",
+  "status": "PASS_PUBLIC_HOME_SOURCE_LINKED_ASSETS",
+  "observations": [
+    {
+      "file": "assets/lex-forum.css",
+      "referenceSource": "assets/feature-loader.js",
+      "url": "https://duediligence.ph/assets/lex-forum.css?v=profile-photo-release2-20260827-1&baseline=public-reliability-20260827-1&profile=chambers-20260827-1&collapse=home-read-more-20260828-1&display=home-readable-20260910-1",
+      "httpStatus": 200,
+      "expectedSha256": "8dff485e17e2ff7e2f58e5382d4a11945feef61104b85d9842f18b6672b60fba",
+      "actualSha256": "8dff485e17e2ff7e2f58e5382d4a11945feef61104b85d9842f18b6672b60fba",
+      "bytes": 64256,
+      "elapsedMs": 906,
+      "passed": true
+    },
+    {
+      "file": "assets/lex-forum.js",
+      "referenceSource": "assets/feature-loader.js",
+      "url": "https://duediligence.ph/assets/lex-forum.js?v=profile-photo-release2-20260827-1&baseline=public-reliability-20260827-1&profile=chambers-20260827-1&cta=home-subscription-20260828-2&collapse=home-read-more-20260828-1&entry=astra-forecast-cancel-20260907-r1&display=home-readable-20260910-1",
+      "httpStatus": 200,
+      "expectedSha256": "60f4c7f3de39c8d34bb5486706ad6c4035e740c7fd17dc1e1573439b1d5c7a88",
+      "actualSha256": "60f4c7f3de39c8d34bb5486706ad6c4035e740c7fd17dc1e1573439b1d5c7a88",
+      "bytes": 137714,
+      "elapsedMs": 688,
+      "passed": true
+    },
+    {
+      "file": "assets/quorum-first-shell.css",
+      "referenceSource": "index.html",
+      "url": "https://duediligence.ph/assets/quorum-first-shell.css?v=profile-photo-release2-20260827-1&baseline=public-reliability-20260827-3&display=home-readable-20260910-1",
+      "httpStatus": 200,
+      "expectedSha256": "62bc5e58f55978fa38c0f565581c6263d64eb245efd90e0119d79a677c6b0b23",
+      "actualSha256": "62bc5e58f55978fa38c0f565581c6263d64eb245efd90e0119d79a677c6b0b23",
+      "bytes": 24624,
+      "elapsedMs": 362,
+      "passed": true
+    }
+  ],
+  "requests": 3,
+  "retries": 0,
+  "credentialsUsed": false,
+  "browserBehaviorVerified": false,
+  "fullAcceptance": false
+}

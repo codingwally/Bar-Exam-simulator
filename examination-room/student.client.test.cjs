@@ -128,8 +128,8 @@ test('the final-question action remains enabled and opens review instead of trap
   assert.match(studentSource, /state\.currentIndex === state\.questions\.length - 1 \? 'Review and submit'/);
   assert.match(studentSource, /navigateToQuestion\(state\.currentIndex \+ 1\)/);
   assert.match(studentSource, /if \(index >= state\.questions\.length\) \{[\s\S]*openSubmitDialog\(\)/);
-  assert.match(studentHtml, /api\.js\?v=answer-upload-20260922-3/);
-  assert.match(studentHtml, /student\.js\?v=answer-upload-20260922-3/);
+  assert.match(studentHtml, /api\.js\?v=guaranteed-answer-upload-20260922-4/);
+  assert.match(studentHtml, /student\.js\?v=guaranteed-answer-upload-20260922-4/);
 });
 
 test('refresh recovery restores the newest local attempt and merges server-backed answers before rendering', () => {
@@ -146,9 +146,15 @@ test('answer changes are queued for immediate server upload and non-answer lefto
   assert.match(studentSource, /return pendingAnswers\.length === 0/);
 });
 
+test('answer uploads retry automatically and final submission no longer depends on a clean background queue', () => {
+  assert.match(studentSource, /if \(state\.syncing\) \{\s*state\.syncRequested = true;/);
+  assert.match(studentSource, /scheduleQueueSync\(Math\.min\(5000, 250 \* Math\.pow\(2, state\.syncRetryCount\)\)\)/);
+  assert.match(studentSource, /await flushOperationQueue\(\);\s*var payload = \{/);
+  assert.doesNotMatch(studentSource, /var fullySynced = await flushOperationQueue\(\);\s*if \(!fullySynced\)/);
+});
+
 test('submission waits for queued answers to sync and multiple-choice answers use server indexes', () => {
-  assert.match(studentSource, /var fullySynced = await flushOperationQueue\(\);/);
-  assert.match(studentSource, /if \(!fullySynced\) \{\s*throw createAppError\('SYNC_REQUIRED'\);/);
+  assert.match(studentSource, /await flushOperationQueue\(\);/);
   assert.match(studentSource, /question\.options\.findIndex/);
   assert.match(studentSource, /serverAnswer: serverAnswer|answer: serverAnswer/);
 });

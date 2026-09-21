@@ -1,4 +1,4 @@
-name: Emergency Examination Room submission receipt release
+name: Emergency Examination Room answer recovery release
 
 on:
   push:
@@ -17,15 +17,15 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PRODUCTION_BASE_SHA: 3a220e0d000f0320916f68a8b93b44828d896aad
-  RELEASE_SOURCE_SHA: 8a308bb879cdbce53a544c7b78c5672e32c5f195
+  PRODUCTION_BASE_SHA: 8a308bb879cdbce53a544c7b78c5672e32c5f195
+  RELEASE_SOURCE_SHA: 3c1fa3e9d5182da67bc3b4c196374935acf667b4
   SITE_URL: https://duediligence.ph
-  APPROVAL_REFERENCE: owner-chat-hotfix-2026-09-22-examination-submit-receipt
+  APPROVAL_REFERENCE: owner-chat-hotfix-2026-09-22-examination-answer-recovery
 
 jobs:
   deploy:
-    name: Verify and deploy Examination Room receipt hotfix
-    if: "${{ github.event.head_commit.message == 'release: deploy Examination Room submission receipt hotfix' }}"
+    name: Verify and deploy Examination Room answer recovery hotfix
+    if: "${{ github.event.head_commit.message == 'release: deploy Examination Room answer recovery hotfix' }}"
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment:
@@ -69,7 +69,7 @@ jobs:
               raise SystemExit(
                   f'Unexpected production hotfix scope. expected={sorted(expected)} actual={sorted(changed)}'
               )
-          print('Exact six-file Examination Room hotfix scope verified.')
+          print('Exact six-file Examination Room recovery hotfix scope verified.')
           PY
 
       - name: Setup Node
@@ -80,7 +80,7 @@ jobs:
       - name: Install reviewed Pages build dependencies
         run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
 
-      - name: Validate submission recovery and browser contracts
+      - name: Validate answer recovery and submission contracts
         shell: bash
         run: |
           set -euo pipefail
@@ -97,9 +97,12 @@ jobs:
           set -euo pipefail
           GITHUB_SHA="$RELEASE_SOURCE_SHA" node scripts/test-pages-artifact.mjs
           grep -Fq "submission.submittedAt || submission.receivedAt || result.submittedAt || result.receivedAt || payload.clientCompletedAt" .pages-dist/examination-room/api.js
-          grep -Fq 'api.js?v=submit-receipt-20260922-1' .pages-dist/examination-room/student.html
-          grep -Fq 'student.js?v=submit-receipt-20260922-1' .pages-dist/examination-room/student.html
-          grep -Fq 'duediligence-shell-examination-submit-receipt-20260922-1' .pages-dist/service-worker.js
+          grep -Fq "answerRevisions" .pages-dist/examination-room/api.js
+          grep -Fq "restoreMostRecentAttemptOnStartup" .pages-dist/examination-room/student.js
+          grep -Fq "SYNC_REQUIRED" .pages-dist/examination-room/student.js
+          grep -Fq 'api.js?v=answer-recovery-20260922-2' .pages-dist/examination-room/student.html
+          grep -Fq 'student.js?v=answer-recovery-20260922-2' .pages-dist/examination-room/student.html
+          grep -Fq 'duediligence-shell-examination-answer-recovery-20260922-2' .pages-dist/service-worker.js
           test "$(cat .pages-dist/.well-known/duediligence-release.txt)" = "$RELEASE_SOURCE_SHA"
 
       - name: Setup Pages
@@ -114,24 +117,24 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-      - name: Verify live Examination Room recovery client
+      - name: Verify live Examination Room answer recovery client
         shell: bash
         run: |
           set -euo pipefail
           for attempt in {1..18}; do
             marker="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/.well-known/duediligence-release.txt?release=$RELEASE_SOURCE_SHA" || true)"
-            api="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/api.js?v=submit-receipt-20260922-1&release=$RELEASE_SOURCE_SHA" || true)"
+            api="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/api.js?v=answer-recovery-20260922-2&release=$RELEASE_SOURCE_SHA" || true)"
             page="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/student.html?release=$RELEASE_SOURCE_SHA" || true)"
-            sw="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/service-worker.js?v=examination-room-submit-receipt-20260922-1&release=$RELEASE_SOURCE_SHA" || true)"
+            sw="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/service-worker.js?v=examination-room-answer-recovery-20260922-2&release=$RELEASE_SOURCE_SHA" || true)"
 
             if [[ "$marker" == "$RELEASE_SOURCE_SHA" ]] \
               && grep -Fq "submission.submittedAt || submission.receivedAt || result.submittedAt || result.receivedAt || payload.clientCompletedAt" <<<"$api" \
-              && grep -Fq 'api.js?v=submit-receipt-20260922-1' <<<"$page" \
+              && grep -Fq 'api.js?v=answer-recovery-20260922-2' <<<"$page" \
               && grep -Fq 'duediligence-shell-examination-submit-receipt-20260922-1' <<<"$sw"; then
-              echo "Examination Room submission receipt hotfix is live."
+              echo "Examination Room answer recovery hotfix is live."
               exit 0
             fi
             sleep 10
           done
-          echo "Pages deployed but the public hotfix verification did not converge in time." >&2
+          echo "Pages deployed but the public recovery hotfix verification did not converge in time." >&2
           exit 1

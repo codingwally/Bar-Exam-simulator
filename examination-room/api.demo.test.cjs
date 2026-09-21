@@ -123,6 +123,60 @@ function liveApi(fetchImplementation, options = {}) {
   return window.ExaminationRoomV1Api;
 }
 
+test('live resume hydrates server-backed answers and repairs queued multiple-choice option ids', async () => {
+  const calls = [];
+  const api = liveApi(async (_url, options) => {
+    const body = JSON.parse(options.body);
+    calls.push(body);
+    if (body.operation === 'resume') {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          ok: true,
+          session: { id: '66666666-6666-4666-8666-666666666666', status: 'active' },
+          exam: {
+            questions: [
+              { number: 1, key: 'q001', type: 'essay', prompt: 'Essay' },
+              { number: 2, key: 'q002', type: 'multiple_choice', prompt: 'MCQ', choices: ['A', 'B', 'C'] },
+            ],
+          },
+          answerRevisions: [
+            { questionNumber: 1, questionKey: 'q001', answer: 'Recovered essay' },
+            { questionNumber: 2, questionKey: 'q002', answer: 1 },
+          ],
+        }),
+      };
+    }
+    if (body.operation === 'save_answer') {
+      return { ok: true, status: 200, json: async () => ({ ok: true, revision: { revision: 1 } }) };
+    }
+    throw new Error('Unexpected request');
+  });
+
+  const resumed = await api.loadExam({
+    attemptId: '66666666-6666-4666-8666-666666666666',
+    sessionToken: 'ers1_' + 'a'.repeat(64),
+  });
+  assert.equal(resumed.answers.q001, 'Recovered essay');
+  assert.equal(resumed.answers.q002, 'option-2');
+  assert.equal(resumed.sessionStatus, 'active');
+
+  await api.syncOperations({
+    attemptId: '66666666-6666-4666-8666-666666666666',
+    sessionToken: 'ers1_' + 'a'.repeat(64),
+    operations: [{
+      id: 'operation-recovery-000001',
+      sequence: 1,
+      kind: 'answer.changed',
+      occurredAt: '2026-09-22T02:00:00.000Z',
+      payload: { questionId: 'q002', answer: 'option-2', flagged: false },
+    }],
+  });
+  const saved = calls.find((call) => call.operation === 'save_answer');
+  assert.equal(saved.payload.answer, 1);
+});
+
 test('live submitAttempt accepts the production receipt shape returned by the examination RPC', async () => {
   const receivedAt = '2026-09-22T01:20:00.000Z';
   let requestBody = null;

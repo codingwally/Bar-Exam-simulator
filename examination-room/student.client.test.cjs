@@ -1,10 +1,3 @@
-test('successful submission clearly says answers are uploaded and grading is pending', () => {
-  assert.match(studentSource, /receiptEyebrow\.textContent = receipt\.isDemo \? 'Demo upload confirmed' : 'Uploaded'/);
-  assert.match(studentSource, /Your answers were uploaded successfully\./);
-  assert.match(studentSource, /Please wait for your professor to finish grading and release your result\./);
-  assert.match(studentHtml, /student\.js\?v=uploaded-awaiting-grade-20260922-5/);
-});
-
 'use strict';
 
 const test = require('node:test');
@@ -18,6 +11,14 @@ const studentHtml = fs.readFileSync(path.join(__dirname, 'student.html'), 'utf8'
 const apiSource = fs.readFileSync(path.join(__dirname, 'api.js'), 'utf8');
 const mediaSource = fs.readFileSync(path.join(__dirname, 'media-capture.js'), 'utf8');
 const offlineGradingSource = fs.readFileSync(path.join(__dirname, 'offline-grading.js'), 'utf8');
+
+test('successful submission clearly says answers are uploaded and grading is pending', () => {
+  assert.match(studentSource, /receiptEyebrow\.textContent = receipt\.isDemo \? 'Demo upload confirmed' : 'Uploaded'/);
+  assert.match(studentSource, /Your answers were uploaded successfully\./);
+  assert.match(studentSource, /Please wait for your professor to finish grading and release your result\./);
+  assert.match(studentHtml, /student\.js\?v=uploaded-awaiting-grade-20260922-5/);
+});
+
 const studentApiRuntime = [
   apiSource.slice(apiSource.indexOf('function demoStudentPreview'), apiSource.indexOf('function demoStudentQuery')),
   apiSource.slice(apiSource.indexOf('async function studentPreview'), apiSource.indexOf('async function studentQuery')),

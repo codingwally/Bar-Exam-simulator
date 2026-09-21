@@ -25,7 +25,7 @@ env:
 jobs:
   deploy:
     name: Verify and deploy Examination Room receipt hotfix
-    if: github.event.head_commit.message == 'release: deploy Examination Room submission receipt hotfix'
+    if: "${{ github.event.head_commit.message == 'release: deploy Examination Room submission receipt hotfix' }}"
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment:

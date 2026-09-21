@@ -15,8 +15,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  BASE_SHA: 8aeba097b644e14b0f2711861c566f2895185187
-  RELEASE_SOURCE_SHA: 8fbe833f033aa982fe0f4020b15ba2ff5d045739
+  BASE_SHA: 25f83c21ed6c5d326fe2d6e74e573cebb9d10e35
+  RELEASE_SOURCE_SHA: 5e38250c30b98095ad8418d8a91e1151ce70c388
 
 jobs:
   deploy:
@@ -44,10 +44,7 @@ jobs:
           import os, subprocess
           base=os.environ['BASE_SHA']
           source=os.environ['RELEASE_SOURCE_SHA']
-          expected={
-            'worker/examination-room-v1-routes.mjs',
-            'worker/examination-room-v1-routes.test.mjs',
-          }
+          expected={'worker/examination-room-v1-routes.mjs'}
           changed=set(subprocess.check_output(
             ['git','diff','--name-only',f'{base}..{source}'],
             text=True,

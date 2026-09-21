@@ -1382,6 +1382,76 @@ test('answer saves are core-validated, append-only commands with hashed credenti
   assert.doesNotMatch(JSON.stringify(saveCall), new RegExp(REQUEST_KEY, 'u'));
 });
 
+test('legacy open student tabs can upload their local answer snapshot during submit', async () => {
+  const publication = publicationFixture();
+  let storedRevision = null;
+  const { handlers, calls } = dependencyFixture({
+    rpc: async (_env, parameters) => {
+      if (parameters.operation === 'session_context') {
+        return {
+          ok: true,
+          publicationManifest: publication,
+          publicationHash: 'a'.repeat(64),
+          studentIdentity: identityFixture(),
+          privacyConsent: {
+            noticeVersion: 'exam-room-v1',
+            accepted: true,
+            acceptedAt: '2026-08-26T01:55:00.000Z',
+            recordingAccepted: false,
+          },
+          answerRevisions: storedRevision ? [storedRevision] : [],
+          nextRevisionByQuestion: { q001: storedRevision ? 2 : 1 },
+        };
+      }
+      if (parameters.operation === 'save_answer') {
+        storedRevision = {
+          ...parameters.payload.answerRevision,
+          idempotencyKey: parameters.payload.requestHash,
+        };
+        return { ok: true, revision: { revision: storedRevision.revision } };
+      }
+      if (parameters.operation === 'submit') {
+        return {
+          ok: true,
+          submission: { id: IDS.submission, receiptId: IDS.submission, receivedAt: '2026-08-26T04:00:00.000Z' },
+          duplicate: false,
+        };
+      }
+      return { ok: true };
+    },
+  });
+
+  const response = await handlers.studentCommand(
+    makeRequest('/examination-room/v1/student/command', {
+      operation: 'submit',
+      payload: {
+        sessionId: IDS.session,
+        sessionToken: SESSION_TOKEN,
+        answers: [{
+          questionId: 'q001',
+          answer: 'Checks and balances restrain each branch.',
+          flagged: false,
+        }],
+      },
+      idempotencyKey: REQUEST_KEY,
+    }, null),
+    ENV,
+    ORIGIN,
+    ORIGIN,
+  );
+
+  assert.equal(response.status, 201);
+  const saveCall = calls.find((entry) => entry.operation === 'save_answer');
+  const submitCall = calls.find((entry) => entry.operation === 'submit');
+  assert.ok(saveCall, 'legacy submit snapshot must be server-backed before final submit');
+  assert.equal(saveCall.payload.answerRevision.questionKey, 'q001');
+  assert.equal(saveCall.payload.answerRevision.answer, 'Checks and balances restrain each branch.');
+  assert.equal(saveCall.payload.source, 'submission');
+  assert.ok(submitCall, 'submission should continue after answer backfill');
+  assert.equal(submitCall.payload.submissionManifest.questionCount, 1);
+  assert.equal(submitCall.payload.submissionManifest.questions[0].answer, 'Checks and balances restrain each branch.');
+});
+
 test('submission freezes latest revisions into a manifest and keeps retries idempotent by hash', async () => {
   const publication = publicationFixture();
   const { handlers, calls } = dependencyFixture({

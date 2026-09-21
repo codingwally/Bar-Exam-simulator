@@ -1,4 +1,4 @@
-name: Emergency public API legacy submit backfill
+name: Emergency public API answer repair
 
 on:
   push:
@@ -15,14 +15,14 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  BASE_SHA: fc1258e1045a2aef0e2ab284d51ddd64e34652b4
-  RELEASE_SOURCE_SHA: 477993f0eff826ca9e8232b4d56e0a3e80119100
+  BASE_SHA: c6691e1d48e3785cdf6139804def2ba769e79d0b
+  RELEASE_SOURCE_SHA: 0ae914d3af7382b86f591d144a7223bd5ba99b0e
   PUBLIC_API_URL: https://duediligence-api.wallyesteban1993.workers.dev
 
 jobs:
   deploy:
-    name: Verify and deploy public API legacy submit backfill
-    if: "${{ github.event.head_commit.message == 'release: deploy public API legacy submit backfill' }}"
+    name: Verify and deploy public API answer repair
+    if: "${{ github.event.head_commit.message == 'release: deploy public API answer repair' }}"
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment:
@@ -60,7 +60,7 @@ jobs:
         with:
           node-version: 22
 
-      - name: Validate legacy submit compatibility
+      - name: Validate answer repair compatibility
         shell: bash
         run: |
           set -euo pipefail
@@ -70,6 +70,9 @@ jobs:
           grep -Fq "command?.operation === 'submit'" worker/public-api-alias.mjs
           grep -Fq "source: 'submission'" worker/public-api-alias.mjs
           grep -Fq "submittedAt: submission.receivedAt" worker/public-api-alias.mjs
+          grep -Fq "forwardStudentSaveWithRepair" worker/public-api-alias.mjs
+          grep -Fq "canonicalQuestionId" worker/public-api-alias.mjs
+          grep -Fq "sanitizeAnswerText" worker/public-api-alias.mjs
 
       - name: Deploy provider-neutral public API alias
         uses: cloudflare/wrangler-action@v3

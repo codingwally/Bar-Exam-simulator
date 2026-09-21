@@ -1,3 +1,10 @@
+test('successful submission clearly says answers are uploaded and grading is pending', () => {
+  assert.match(studentSource, /receiptEyebrow\.textContent = receipt\.isDemo \? 'Demo upload confirmed' : 'Uploaded'/);
+  assert.match(studentSource, /Your answers were uploaded successfully\./);
+  assert.match(studentSource, /Please wait for your professor to finish grading and release your result\./);
+  assert.match(studentHtml, /student\.js\?v=uploaded-awaiting-grade-20260922-5/);
+});
+
 'use strict';
 
 const test = require('node:test');

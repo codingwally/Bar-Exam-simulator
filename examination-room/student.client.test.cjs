@@ -128,8 +128,23 @@ test('the final-question action remains enabled and opens review instead of trap
   assert.match(studentSource, /state\.currentIndex === state\.questions\.length - 1 \? 'Review and submit'/);
   assert.match(studentSource, /navigateToQuestion\(state\.currentIndex \+ 1\)/);
   assert.match(studentSource, /if \(index >= state\.questions\.length\) \{[\s\S]*openSubmitDialog\(\)/);
-  assert.match(studentHtml, /api\.js\?v=submit-receipt-20260922-1/);
-  assert.match(studentHtml, /student\.js\?v=submit-receipt-20260922-1/);
+  assert.match(studentHtml, /api\.js\?v=answer-recovery-20260922-2/);
+  assert.match(studentHtml, /student\.js\?v=answer-recovery-20260922-2/);
+});
+
+test('refresh recovery restores the newest local attempt and merges server-backed answers before rendering', () => {
+  assert.match(studentSource, /await restoreMostRecentAttemptOnStartup\(\)/);
+  assert.match(studentSource, /databaseGetAll\('attempts'\)/);
+  assert.match(studentSource, /Object\.assign\(\s*\{\},\s*serverState && serverState\.answers \|\| \{\},\s*state\.answers\s*\)/);
+  assert.match(studentSource, /Saved answers were recovered from this device and the examination server/);
+  assert.match(studentSource, /renderServerRecoveredSubmission\(\)/);
+});
+
+test('submission waits for queued answers to sync and multiple-choice answers use server indexes', () => {
+  assert.match(studentSource, /var fullySynced = await flushOperationQueue\(\);/);
+  assert.match(studentSource, /if \(!fullySynced\) \{\s*throw createAppError\('SYNC_REQUIRED'\);/);
+  assert.match(studentSource, /question\.options\.findIndex/);
+  assert.match(studentSource, /serverAnswer: serverAnswer|answer: serverAnswer/);
 });
 
 test('student storage open fails safely when IndexedDB is blocked or never settles', async () => {

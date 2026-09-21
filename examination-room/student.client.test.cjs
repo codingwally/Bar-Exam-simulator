@@ -128,7 +128,8 @@ test('the final-question action remains enabled and opens review instead of trap
   assert.match(studentSource, /state\.currentIndex === state\.questions\.length - 1 \? 'Review and submit'/);
   assert.match(studentSource, /navigateToQuestion\(state\.currentIndex \+ 1\)/);
   assert.match(studentSource, /if \(index >= state\.questions\.length\) \{[\s\S]*openSubmitDialog\(\)/);
-  assert.match(studentHtml, /student\.js\?v=reliability-20260828-1/);
+  assert.match(studentHtml, /api\.js\?v=submit-receipt-20260922-1/);
+  assert.match(studentHtml, /student\.js\?v=submit-receipt-20260922-1/);
 });
 
 test('student storage open fails safely when IndexedDB is blocked or never settles', async () => {

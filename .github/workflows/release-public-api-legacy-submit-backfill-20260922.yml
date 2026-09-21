@@ -15,8 +15,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  BASE_SHA: 222250687da6bd37d48a8e93bc56e740bd919e01
-  RELEASE_SOURCE_SHA: f2090d54804672b62bc5f318af616c3ab9480802
+  BASE_SHA: 42e44acc33c3f607d61724df83d590c4df91909f
+  RELEASE_SOURCE_SHA: af66698261e0491edbf9a089f17f980f5986b33b
   PUBLIC_API_URL: https://duediligence-api.wallyesteban1993.workers.dev
 
 jobs:

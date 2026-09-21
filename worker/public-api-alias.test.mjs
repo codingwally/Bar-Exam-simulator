@@ -148,7 +148,57 @@ test('does not normalize an unapproved browser origin before forwarding', async 
   assert.strictEqual(response, upstreamResponse);
 });
 
-test('public API repairs a 400 student save caused by legacy question ids, hidden controls, or stale request keys', async () => {
+test('student save_answer uses authenticated recovery before the legacy application save path', async (context) => {
+  let applicationCalls = 0;
+  let recoveryCalls = 0;
+  context.mock.method(globalThis, 'fetch', async (_url, options) => {
+    recoveryCalls += 1;
+    const body = JSON.parse(options.body);
+    assert.equal(body.sessionId, '55555555-5555-4555-8555-555555555555');
+    assert.equal(body.questionId, 'q001');
+    assert.equal(body.answer, 'Direct recovery answer');
+    return new Response(JSON.stringify({
+      ok: true,
+      revision: { questionKey: 'q001', revision: 1, savedAt: '2026-09-21T19:20:00.000Z', flagged: false },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  });
+
+  const request = new Request('https://duediligence-api.example.test/examination-room/v1/student/command', {
+    method: 'POST',
+    headers: { Origin: PRODUCTION_ORIGIN, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      operation: 'save_answer',
+      payload: {
+        sessionId: '55555555-5555-4555-8555-555555555555',
+        sessionToken: 'ers1_' + 'ab'.repeat(32),
+        questionId: 'q001',
+        answer: 'Direct recovery answer',
+        flagged: false,
+      },
+      idempotencyKey: 'operation:12345678-1234-4234-8234-1234567890ab',
+    }),
+  });
+
+  const response = await publicApiAlias.fetch(request, {
+    DUE_DILIGENCE_APPLICATION: {
+      async fetch() {
+        applicationCalls += 1;
+        return new Response(JSON.stringify({ ok: false }), { status: 400 });
+      },
+    },
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('X-Examination-Answer-Recovery'), 'supabase-v1');
+  assert.equal(recoveryCalls, 1);
+  assert.equal(applicationCalls, 0);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.recovered, true);
+});
+
+test('public API repairs a 400 student save caused by legacy question ids, hidden controls, or stale request keys', async (context) => {
+  context.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify({ ok: false }), { status: 503, headers: { 'Content-Type': 'application/json' } }));
   const calls = [];
   const request = new Request('https://duediligence-api.example.test/examination-room/v1/student/command', {
     method: 'POST',
@@ -210,11 +260,17 @@ test('public API repairs a 400 student save caused by legacy question ids, hidde
   assert.equal(calls[1].body.idempotencyKey, calls[1].requestId);
 });
 
-test('public API falls back to the authenticated recovery writer when both normal answer-save attempts are rejected', async (context) => {
+test('public API falls back to authenticated recovery after the legacy route also rejects the answer', async (context) => {
   const applicationCalls = [];
   const recoveryCalls = [];
   context.mock.method(globalThis, 'fetch', async (url, options) => {
     recoveryCalls.push({ url: String(url), body: JSON.parse(options.body) });
+    if (recoveryCalls.length === 1) {
+      return new Response(JSON.stringify({ ok: false, error: { code: 'RECOVERY_TEMPORARY' } }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
     return new Response(JSON.stringify({
       ok: true,
       revision: { questionKey: 'q001', revision: 1, savedAt: '2026-09-21T19:10:00.000Z', flagged: false },
@@ -265,7 +321,7 @@ test('public API falls back to the authenticated recovery writer when both norma
 
   assert.equal(response.status, 200);
   assert.equal(applicationCalls.length, 2);
-  assert.equal(recoveryCalls.length, 1);
+  assert.equal(recoveryCalls.length, 2);
   assert.match(recoveryCalls[0].url, /examination-room-answer-recovery$/u);
   assert.equal(recoveryCalls[0].body.questionId, 'q001');
   assert.equal(recoveryCalls[0].body.answer, 'Recovered answer');

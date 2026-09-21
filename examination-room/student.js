@@ -51,6 +51,8 @@
     flags: {},
     currentIndex: 0,
     syncing: false,
+    syncRequested: false,
+    syncRetryCount: 0,
     submitting: false,
     timerId: null,
     timerThresholdsAnnounced: {},
@@ -117,7 +119,7 @@
   function registerExaminationRoomServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
 
-    navigator.serviceWorker.register('/service-worker.js?v=examination-room-answer-upload-20260922-3')
+    navigator.serviceWorker.register('/service-worker.js?v=examination-room-guaranteed-answer-upload-20260922-4')
       .catch(function () {
         // Registration failure must never block a student who still has a
         // working network connection. The exam UI already reports offline
@@ -1049,7 +1051,11 @@
   }
 
   async function flushOperationQueue() {
-    if (state.syncing || !state.attempt || !state.api || !navigator.onLine || state.attempt.status === 'submitted') {
+    if (state.syncing) {
+      state.syncRequested = true;
+      return false;
+    }
+    if (!state.attempt || !state.api || !navigator.onLine || state.attempt.status === 'submitted') {
       if (state.attempt && !navigator.onLine) {
         updateSaveStatus('local');
       }
@@ -1082,15 +1088,25 @@
         return operation.kind === 'answer.changed' || operation.kind === 'question.flag_changed';
       });
       updateSaveStatus(pendingAnswers.length ? 'local' : 'saved');
-      if (remaining.length && !pendingAnswers.length) {
-        scheduleQueueSync(1000);
+      if (pendingAnswers.length) {
+        state.syncRetryCount = Math.min(Number(state.syncRetryCount || 0) + 1, 6);
+        scheduleQueueSync(Math.min(5000, 250 * Math.pow(2, state.syncRetryCount)));
+      } else {
+        state.syncRetryCount = 0;
+        if (remaining.length) scheduleQueueSync(1000);
       }
       return pendingAnswers.length === 0;
     } catch (error) {
       updateSaveStatus('local');
+      state.syncRetryCount = Math.min(Number(state.syncRetryCount || 0) + 1, 6);
+      scheduleQueueSync(Math.min(5000, 250 * Math.pow(2, state.syncRetryCount)));
       return false;
     } finally {
       state.syncing = false;
+      if (state.syncRequested) {
+        state.syncRequested = false;
+        scheduleQueueSync(0);
+      }
     }
   }
 
@@ -1303,10 +1319,9 @@
     clearError(elements.receiptError);
 
     try {
-      var fullySynced = await flushOperationQueue();
-      if (!fullySynced) {
-        throw createAppError('SYNC_REQUIRED');
-      }
+      // Best-effort drain of autosaves first. submitAttempt() then uploads the
+      // complete visible answer snapshot itself before asking for a receipt.
+      await flushOperationQueue();
       var payload = {
         attemptId: state.attempt.attemptId,
         sessionToken: state.attempt.sessionToken,

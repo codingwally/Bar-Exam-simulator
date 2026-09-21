@@ -1,4 +1,4 @@
-name: Emergency Examination Room answer upload release
+name: Emergency Examination Room guaranteed answer upload release
 
 on:
   push:
@@ -17,15 +17,15 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PRODUCTION_BASE_SHA: e3476025b186d3ecd8e3faf0f781b95ac8d995d9
-  RELEASE_SOURCE_SHA: 3d568cca4b67badd610dd93d402d5dc7978f77f9
+  PRODUCTION_BASE_SHA: 3d568cca4b67badd610dd93d402d5dc7978f77f9
+  RELEASE_SOURCE_SHA: 0ff2c457eddd2547738112600954df0286cac4fc
   SITE_URL: https://duediligence.ph
-  APPROVAL_REFERENCE: owner-chat-hotfix-2026-09-22-examination-answer-upload
+  APPROVAL_REFERENCE: owner-chat-hotfix-2026-09-22-examination-guaranteed-answer-upload
 
 jobs:
   deploy:
-    name: Verify and deploy Examination Room answer upload hotfix
-    if: "${{ github.event.head_commit.message == 'release: deploy Examination Room answer upload hotfix' }}"
+    name: Verify and deploy Examination Room guaranteed answer upload hotfix
+    if: "${{ github.event.head_commit.message == 'release: deploy Examination Room guaranteed answer upload hotfix' }}"
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment:
@@ -69,7 +69,7 @@ jobs:
               raise SystemExit(
                   f'Unexpected production hotfix scope. expected={sorted(expected)} actual={sorted(changed)}'
               )
-          print('Exact six-file Examination Room answer-upload hotfix scope verified.')
+          print('Exact six-file Examination Room guaranteed answer-upload hotfix scope verified.')
           PY
 
       - name: Setup Node
@@ -80,7 +80,7 @@ jobs:
       - name: Install reviewed Pages build dependencies
         run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
 
-      - name: Validate answer upload and submission contracts
+      - name: Validate guaranteed answer upload and submission contracts
         shell: bash
         run: |
           set -euo pipefail
@@ -103,9 +103,13 @@ jobs:
           grep -Fq "failedAnswerOperationIds" .pages-dist/examination-room/api.js
           grep -Fq "scheduleQueueSync(kind === 'answer.changed' || kind === 'question.flag_changed' ? 0 : 180)" .pages-dist/examination-room/student.js
           grep -Fq "var pendingAnswers = remaining.filter" .pages-dist/examination-room/student.js
-          grep -Fq 'api.js?v=answer-upload-20260922-3' .pages-dist/examination-room/student.html
-          grep -Fq 'student.js?v=answer-upload-20260922-3' .pages-dist/examination-room/student.html
-          grep -Fq 'duediligence-shell-examination-answer-upload-20260922-3' .pages-dist/service-worker.js
+          grep -Fq "const finalAnswers = Array.isArray(payload.answers) ? payload.answers : [];" .pages-dist/examination-room/api.js
+          grep -Fq "source: 'submission'" .pages-dist/examination-room/api.js
+          grep -Fq "state.syncRequested = true" .pages-dist/examination-room/student.js
+          grep -Fq "scheduleQueueSync(Math.min(5000, 250 * Math.pow(2, state.syncRetryCount)))" .pages-dist/examination-room/student.js
+          grep -Fq 'api.js?v=guaranteed-answer-upload-20260922-4' .pages-dist/examination-room/student.html
+          grep -Fq 'student.js?v=guaranteed-answer-upload-20260922-4' .pages-dist/examination-room/student.html
+          grep -Fq 'duediligence-shell-examination-guaranteed-answer-upload-20260922-4' .pages-dist/service-worker.js
           test "$(cat .pages-dist/.well-known/duediligence-release.txt)" = "$RELEASE_SOURCE_SHA"
 
       - name: Setup Pages
@@ -120,25 +124,26 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-      - name: Verify live Examination Room answer upload client
+      - name: Verify live Examination Room guaranteed answer upload client
         shell: bash
         run: |
           set -euo pipefail
           for attempt in {1..18}; do
             marker="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/.well-known/duediligence-release.txt?release=$RELEASE_SOURCE_SHA" || true)"
-            api="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/api.js?v=answer-upload-20260922-3&release=$RELEASE_SOURCE_SHA" || true)"
+            api="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/api.js?v=guaranteed-answer-upload-20260922-4&release=$RELEASE_SOURCE_SHA" || true)"
             page="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/student.html?release=$RELEASE_SOURCE_SHA" || true)"
-            sw="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/service-worker.js?v=examination-room-answer-upload-20260922-3&release=$RELEASE_SOURCE_SHA" || true)"
+            sw="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/service-worker.js?v=examination-room-guaranteed-answer-upload-20260922-4&release=$RELEASE_SOURCE_SHA" || true)"
 
             if [[ "$marker" == "$RELEASE_SOURCE_SHA" ]] \
               && grep -Fq "submission.submittedAt || submission.receivedAt || result.submittedAt || result.receivedAt || payload.clientCompletedAt" <<<"$api" \
               && grep -Fq "failedAnswerOperationIds" <<<"$api" \
-              && grep -Fq 'api.js?v=answer-upload-20260922-3' <<<"$page" \
-              && grep -Fq 'duediligence-shell-examination-answer-upload-20260922-3' <<<"$sw"; then
-              echo "Examination Room answer upload hotfix is live."
+              && grep -Fq "const finalAnswers = Array.isArray(payload.answers) ? payload.answers : [];" <<<"$api" \
+              && grep -Fq 'api.js?v=guaranteed-answer-upload-20260922-4' <<<"$page" \
+              && grep -Fq 'duediligence-shell-examination-guaranteed-answer-upload-20260922-4' <<<"$sw"; then
+              echo "Examination Room guaranteed answer upload hotfix is live."
               exit 0
             fi
             sleep 10
           done
-          echo "Pages deployed but the public answer-upload hotfix verification did not converge in time." >&2
+          echo "Pages deployed but the public guaranteed answer-upload hotfix verification did not converge in time." >&2
           exit 1

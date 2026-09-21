@@ -137,7 +137,7 @@ test('the final-question action remains enabled and opens review instead of trap
   assert.match(studentSource, /navigateToQuestion\(state\.currentIndex \+ 1\)/);
   assert.match(studentSource, /if \(index >= state\.questions\.length\) \{[\s\S]*openSubmitDialog\(\)/);
   assert.match(studentHtml, /api\.js\?v=guaranteed-answer-upload-20260922-4/);
-  assert.match(studentHtml, /student\.js\?v=guaranteed-answer-upload-20260922-4/);
+  assert.match(studentHtml, /student\.js\?v=uploaded-awaiting-grade-20260922-5/);
 });
 
 test('refresh recovery restores the newest local attempt and merges server-backed answers before rendering', () => {

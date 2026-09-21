@@ -177,6 +177,52 @@ test('live resume hydrates server-backed answers and repairs queued multiple-cho
   assert.equal(saved.payload.answer, 1);
 });
 
+test('answer upload continues even when an unrelated integrity event fails', async () => {
+  const calls = [];
+  const api = liveApi(async (_url, options) => {
+    const body = JSON.parse(options.body);
+    calls.push(body);
+    if (body.operation === 'record_event') {
+      return {
+        ok: false,
+        status: 500,
+        json: async () => ({ ok: false, error: { code: 'EVENT_WRITE_FAILED', message: 'event failed' } }),
+      };
+    }
+    if (body.operation === 'save_answer') {
+      return { ok: true, status: 200, json: async () => ({ ok: true, revision: { revision: 4 } }) };
+    }
+    throw new Error('Unexpected request');
+  });
+
+  const result = await api.syncOperations({
+    attemptId: '66666666-6666-4666-8666-666666666666',
+    sessionToken: 'ers1_' + 'a'.repeat(64),
+    operations: [
+      {
+        id: 'integrity-operation-0001',
+        sequence: 1,
+        kind: 'integrity.event',
+        occurredAt: '2026-09-22T02:10:00.000Z',
+        payload: { eventType: 'fullscreen_exited' },
+      },
+      {
+        id: 'answer-operation-0002',
+        sequence: 2,
+        kind: 'answer.changed',
+        occurredAt: '2026-09-22T02:10:01.000Z',
+        payload: { questionId: 'q001', answer: 'Uploaded answer', flagged: false },
+      },
+    ],
+  });
+
+  assert.deepEqual(result.acknowledgedOperationIds, ['answer-operation-0002']);
+  assert.deepEqual(result.failedOperationIds, ['integrity-operation-0001']);
+  assert.deepEqual(result.failedAnswerOperationIds, []);
+  assert.equal(calls[0].operation, 'save_answer');
+  assert.equal(calls[0].payload.answer, 'Uploaded answer');
+});
+
 test('live submitAttempt accepts the production receipt shape returned by the examination RPC', async () => {
   const receivedAt = '2026-09-22T01:20:00.000Z';
   let requestBody = null;

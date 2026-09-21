@@ -18,7 +18,7 @@ concurrency:
 
 env:
   PRODUCTION_BASE_SHA: e3476025b186d3ecd8e3faf0f781b95ac8d995d9
-  RELEASE_SOURCE_SHA: fdda68716ef1a72e7b1d39cecdcb522565037151
+  RELEASE_SOURCE_SHA: 3d568cca4b67badd610dd93d402d5dc7978f77f9
   SITE_URL: https://duediligence.ph
   APPROVAL_REFERENCE: owner-chat-hotfix-2026-09-22-examination-answer-upload
 

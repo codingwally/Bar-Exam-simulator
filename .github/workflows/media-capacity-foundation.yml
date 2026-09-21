@@ -1,0 +1,75 @@
+name: Media Capacity Foundation Validation
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/media-capacity-foundation.yml'
+      - 'worker/media-capacity.mjs'
+      - 'worker/media-capacity.test.mjs'
+      - 'scripts/test-media-capacity-sql.mjs'
+      - 'scripts/media-capacity-logical-sql-cases.mjs'
+      - 'supabase/migrations/20260909193705_shared_media_capacity_foundation.sql'
+      - 'supabase/migrations/20260909231948_shared_media_capacity_logical_sessions.sql'
+      - 'docs/debate-room-v3/media-capacity-foundation.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: media-capacity-foundation-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  inert-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify server adapter using inert responses
+        run: node --test worker/media-capacity.test.mjs
+
+  native-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    services:
+      postgres:
+        image: postgres:17.6
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: media_capacity_ci
+          # Public inert credential for this disposable CI container only.
+          POSTGRES_PASSWORD: media-capacity-disposable-ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d media_capacity_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      MEDIA_CAPACITY_SQL_CI: '1'
+      PGHOST: '127.0.0.1'
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGDATABASE: media_capacity_ci
+      PGPASSWORD: media-capacity-disposable-ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify native PostgreSQL tool availability
+        run: psql --version
+      - name: Exercise exact migration and real concurrent admissions
+        run: node --test scripts/test-media-capacity-sql.mjs
+      - name: Preserve sanitized foundation-only evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: media-capacity-foundation-native-evidence
+          path: artifacts/debate-local-rehearsal/media-capacity-native-ci/report.json
+          if-no-files-found: warn
+          retention-days: 14

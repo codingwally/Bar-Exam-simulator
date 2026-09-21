@@ -18,7 +18,7 @@ concurrency:
 
 env:
   PRODUCTION_BASE_SHA: 0ff2c457eddd2547738112600954df0286cac4fc
-  RELEASE_SOURCE_SHA: a500d630843564d084ab64a7086338514026f628
+  RELEASE_SOURCE_SHA: b9014cff585cfab2f8bcd317fbd7968b81c80427
   SITE_URL: https://duediligence.ph
   APPROVAL_REFERENCE: owner-chat-ui-2026-09-22-uploaded-awaiting-grade
 

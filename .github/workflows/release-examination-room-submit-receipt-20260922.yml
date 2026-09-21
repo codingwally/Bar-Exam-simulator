@@ -18,7 +18,7 @@ concurrency:
 
 env:
   PRODUCTION_BASE_SHA: 8a308bb879cdbce53a544c7b78c5672e32c5f195
-  RELEASE_SOURCE_SHA: 3c1fa3e9d5182da67bc3b4c196374935acf667b4
+  RELEASE_SOURCE_SHA: e3476025b186d3ecd8e3faf0f781b95ac8d995d9
   SITE_URL: https://duediligence.ph
   APPROVAL_REFERENCE: owner-chat-hotfix-2026-09-22-examination-answer-recovery
 

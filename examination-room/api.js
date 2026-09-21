@@ -1882,8 +1882,8 @@
     const submission = result.submission || result.receipt || result;
     return {
       receiptId: submission.receiptCode || submission.receiptId || submission.id,
-      submittedAt: submission.submittedAt,
-      signature: submission.signature || submission.manifestHash || submission.id,
+      submittedAt: submission.submittedAt || submission.receivedAt || result.submittedAt || result.receivedAt || payload.clientCompletedAt,
+      signature: submission.signature || submission.manifestHash || result.manifestHash || submission.receiptId || submission.id,
       answerCount: submission.answerCount ?? (payload.answers || []).filter((entry) => entry.answer !== null && entry.answer !== '').length,
       examVersion: submission.examVersion || submission.examVersionId || payload.examVersion,
       isDemo: demoEnabled(),

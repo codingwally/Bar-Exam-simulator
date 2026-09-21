@@ -1380,11 +1380,11 @@
     state.receipt = receipt;
     elements.receiptIcon.classList.remove('is-pending');
     elements.receiptIcon.innerHTML = '<i class="ph ph-seal-check"></i>';
-    elements.receiptEyebrow.textContent = receipt.isDemo ? 'Demo submission confirmed' : 'Submission confirmed';
-    elements.receiptTitle.textContent = 'Your examination was submitted.';
+    elements.receiptEyebrow.textContent = receipt.isDemo ? 'Demo upload confirmed' : 'Uploaded';
+    elements.receiptTitle.textContent = receipt.isDemo ? 'Your demo examination was uploaded.' : 'Your answers were uploaded successfully.';
     elements.receiptMessage.textContent = receipt.isDemo
       ? 'This is a local demonstration receipt. No school record was created.'
-      : 'Keep this receipt until your professor releases the results.';
+      : 'Your submission is complete. Please wait for your professor to finish grading and release your result.';
     elements.pendingSubmissionNote.hidden = true;
     elements.receiptDetails.hidden = false;
     elements.resultPanel.hidden = false;
@@ -1396,8 +1396,8 @@
     setText(elements.receiptAnswerCount, String(receipt.answerCount) + ' of ' + state.questions.length);
     setText(elements.receiptSignature, (receipt.signatureAlgorithm ? receipt.signatureAlgorithm + ': ' : '') + receipt.signature);
     clearError(elements.receiptError);
-    document.title = 'Submission receipt | Examination Room';
-    announce('Submission confirmed. Receipt ' + receipt.receiptId + '.');
+    document.title = 'Answers uploaded | Examination Room';
+    announce('Answers uploaded successfully. Please wait for your professor to finish grading. Receipt ' + receipt.receiptId + '.');
     window.scrollTo({ top: 0, behavior: 'auto' });
     startResultWatch(receipt);
   }
@@ -2294,17 +2294,17 @@
     stopTimer();
     elements.receiptIcon.classList.remove('is-pending');
     elements.receiptIcon.innerHTML = '<i class="ph ph-seal-check"></i>';
-    elements.receiptEyebrow.textContent = 'Submission recorded';
-    elements.receiptTitle.textContent = 'Your examination is already recorded on the server.';
-    elements.receiptMessage.textContent = 'This browser lost its local receipt display, but the server reports this attempt as submitted.';
+    elements.receiptEyebrow.textContent = 'Uploaded';
+    elements.receiptTitle.textContent = 'Your answers were uploaded successfully.';
+    elements.receiptMessage.textContent = 'The server has your submission. Please wait for your professor to finish grading and release your result.';
     elements.pendingSubmissionNote.hidden = true;
     elements.receiptDetails.hidden = true;
     elements.resultPanel.hidden = false;
     elements.retrySubmissionButton.hidden = true;
     elements.printReceiptButton.hidden = true;
     clearError(elements.receiptError);
-    document.title = 'Submission recorded | Examination Room';
-    announce('Submission recorded on the server.');
+    document.title = 'Answers uploaded | Examination Room';
+    announce('Answers uploaded successfully. Please wait for your professor to finish grading.');
     startResultWatch({ result: null });
   }
 

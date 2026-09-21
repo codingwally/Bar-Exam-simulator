@@ -116,7 +116,7 @@
   function registerExaminationRoomServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
 
-    navigator.serviceWorker.register('/service-worker.js?v=examination-room-reliability-20260828-1')
+    navigator.serviceWorker.register('/service-worker.js?v=examination-room-submit-receipt-20260922-1')
       .catch(function () {
         // Registration failure must never block a student who still has a
         // working network connection. The exam UI already reports offline

@@ -1,4 +1,4 @@
-name: Emergency public API authenticated answer recovery
+name: Emergency public API forced answer recovery
 
 on:
   push:
@@ -15,14 +15,14 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  BASE_SHA: 93e8e40b8cc5e67656188026f55fd287a9dc0833
-  RELEASE_SOURCE_SHA: 8bce7f9c392046ae670e2442bb13478bee07a473
+  BASE_SHA: 9ad6cfb00a38395b7c81589280723dc7d1a3b56f
+  RELEASE_SOURCE_SHA: 42e44acc33c3f607d61724df83d590c4df91909f
   PUBLIC_API_URL: https://duediligence-api.wallyesteban1993.workers.dev
 
 jobs:
   deploy:
-    name: Verify and deploy authenticated answer recovery
-    if: "${{ github.event.head_commit.message == 'release: deploy authenticated answer recovery fallback' }}"
+    name: Verify and deploy forced answer recovery
+    if: "${{ github.event.head_commit.message == 'release: deploy forced answer recovery' }}"
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment:
@@ -60,7 +60,7 @@ jobs:
         with:
           node-version: 22
 
-      - name: Validate authenticated answer recovery compatibility
+      - name: Validate forced answer recovery compatibility
         shell: bash
         run: |
           set -euo pipefail
@@ -75,6 +75,7 @@ jobs:
           grep -Fq "sanitizeAnswerText" worker/public-api-alias.mjs
           grep -Fq "ANSWER_RECOVERY_URL" worker/public-api-alias.mjs
           grep -Fq "recoverStudentAnswer" worker/public-api-alias.mjs
+          grep -Fq "X-Examination-Answer-Recovery" worker/public-api-alias.mjs
 
       - name: Deploy provider-neutral public API alias
         uses: cloudflare/wrangler-action@v3

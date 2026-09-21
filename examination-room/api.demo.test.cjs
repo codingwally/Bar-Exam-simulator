@@ -123,6 +123,44 @@ function liveApi(fetchImplementation, options = {}) {
   return window.ExaminationRoomV1Api;
 }
 
+test('live submitAttempt accepts the production receipt shape returned by the examination RPC', async () => {
+  const receivedAt = '2026-09-22T01:20:00.000Z';
+  let requestBody = null;
+  const api = liveApi(async (_url, options) => {
+    requestBody = JSON.parse(options.body);
+    return {
+      ok: true,
+      status: 201,
+      json: async () => ({
+        ok: true,
+        submission: {
+          id: '77777777-7777-4777-8777-777777777777',
+          receiptId: '88888888-8888-4888-8888-888888888888',
+          status: 'accepted',
+          receivedAt,
+        },
+        duplicate: false,
+      }),
+    };
+  });
+
+  const receipt = await api.submitAttempt({
+    attemptId: '66666666-6666-4666-8666-666666666666',
+    sessionToken: 'ers1_' + 'a'.repeat(64),
+    idempotencyKey: 'submission-request-20260922-0001',
+    examVersion: 7,
+    clientCompletedAt: '2026-09-22T01:19:58.000Z',
+    answers: [{ questionId: 'q-1', answer: 'Saved answer', flagged: false }],
+  });
+
+  assert.equal(requestBody.operation, 'submit');
+  assert.equal(receipt.receiptId, '88888888-8888-4888-8888-888888888888');
+  assert.equal(receipt.submittedAt, receivedAt);
+  assert.equal(receipt.signature, '88888888-8888-4888-8888-888888888888');
+  assert.equal(receipt.answerCount, 1);
+  assert.equal(receipt.examVersion, 7);
+});
+
 test('live API reuses an injected Admin auth client without constructing a duplicate', async () => {
   let createClientCalls = 0;
   let sharedSessionReads = 0;

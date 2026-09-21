@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'duediligence-shell-astra-analytics-count-copy-20260908-r1-asset-recovery-20260909-r1-home-readable-20260910-1';
+const CACHE_VERSION = 'duediligence-shell-examination-submit-receipt-20260922-1';
 const EXAMINATION_STUDENT_SHELL = '/examination-room/student.html';
 const EXAMINATION_OFFLINE_GRADER = '/examination-room/offline-grading.html';
 const SHELL = Object.freeze([
@@ -28,9 +28,9 @@ const SHELL = Object.freeze([
   EXAMINATION_OFFLINE_GRADER,
   '/examination-room/student.css?v=renovation-20260828-4',
   '/examination-room/view-models.js?v=greenfield-v1-20260826-1',
-  '/examination-room/api.js?v=reliability-20260828-1',
+  '/examination-room/api.js?v=submit-receipt-20260922-1',
   '/examination-room/media-capture.js?v=reliability-20260828-1',
-  '/examination-room/student.js?v=reliability-20260828-1',
+  '/examination-room/student.js?v=submit-receipt-20260922-1',
   '/examination-room/offline-grading.css?v=greenfield-v1-20260826-1',
   '/examination-room/offline-grading-core.js?v=greenfield-v1-20260826-3',
   '/examination-room/offline-grading.js?v=reliability-20260828-1',

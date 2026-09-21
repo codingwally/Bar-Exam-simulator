@@ -1,0 +1,100 @@
+name: Emergency Examination Room legacy submit backfill
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/release-examination-room-legacy-submit-backfill-20260922.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: examination-room-worker-hotfix
+  cancel-in-progress: false
+
+env:
+  BASE_SHA: 8aeba097b644e14b0f2711861c566f2895185187
+  RELEASE_SOURCE_SHA: 8fbe833f033aa982fe0f4020b15ba2ff5d045739
+
+jobs:
+  deploy:
+    name: Verify and deploy legacy submit answer backfill
+    if: "${{ github.event.head_commit.message == 'release: deploy legacy submit answer backfill' }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production-worker
+
+    steps:
+      - name: Checkout exact Worker hotfix source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_SOURCE_SHA }}
+          fetch-depth: 0
+
+      - name: Prove isolated Worker scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$RELEASE_SOURCE_SHA"
+          git cat-file -e "$BASE_SHA^{commit}"
+          python - <<'PY'
+          import os, subprocess
+          base=os.environ['BASE_SHA']
+          source=os.environ['RELEASE_SOURCE_SHA']
+          expected={
+            'worker/examination-room-v1-routes.mjs',
+            'worker/examination-room-v1-routes.test.mjs',
+          }
+          changed=set(subprocess.check_output(
+            ['git','diff','--name-only',f'{base}..{source}'],
+            text=True,
+          ).splitlines())
+          if changed != expected:
+              raise SystemExit(f'unexpected hotfix scope: {sorted(changed)}')
+          print('Exact Examination Room Worker hotfix scope verified.')
+          PY
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Worker dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Validate legacy submit backfill
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check worker/examination-room-v1-routes.mjs
+          node --test worker/examination-room-v1-routes.test.mjs
+          git diff --check "$BASE_SHA..$RELEASE_SOURCE_SHA"
+          grep -Fq "Backward compatibility for examination tabs opened before the" worker/examination-room-v1-routes.mjs
+          grep -Fq "source: 'submission'" worker/examination-room-v1-routes.mjs
+          grep -Fq "sessionContext = ensureStoreResult(await deps.rpc" worker/examination-room-v1-routes.mjs
+
+      - name: Deploy application Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          wranglerVersion: "4.114.0"
+          command: deploy
+
+      - name: Verify public API still accepts canonical origin
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$RUNNER_TEMP/exam-room-origin-probe.json"
+          headers="$RUNNER_TEMP/exam-room-origin-probe.headers"
+          status="$(curl --silent --show-error             --output "$body"             --dump-header "$headers"             --write-out '%{http_code}'             --request POST             --header 'Origin: https://duediligence.ph'             --header 'Content-Type: application/json'             --data '{}'             'https://duediligence-api.wallyesteban1993.workers.dev/examination-room/v1/student/preview')"
+          if [[ "$status" = "403" ]] && grep -Fq '"code":"ORIGIN_NOT_ALLOWED"' "$body"; then
+            cat "$body" >&2
+            exit 1
+          fi
+          grep -qi '^access-control-allow-origin: https://duediligence.ph' "$headers"
+          echo "Production Worker accepts the canonical Examination Room origin."

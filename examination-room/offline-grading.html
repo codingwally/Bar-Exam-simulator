@@ -9,6 +9,15 @@
   <link rel="stylesheet" href="offline-grading.css?v=greenfield-v1-20260826-1">
 </head>
 <body>
+  <script>
+    // The offline workspace is an advanced recovery tool, not the normal
+    // professor grading entry point. If a professor reaches this URL through
+    // an old bookmark/link while online, return them to the normal Examination
+    // Room. Deliberate offline access remains available with ?offline=1.
+    if (navigator.onLine && new URLSearchParams(location.search).get('offline') !== '1') {
+      location.replace('./');
+    }
+  </script>
   <a class="skip-link" href="#main-content">Skip to offline grading</a>
 
   <header class="offline-header">

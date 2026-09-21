@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'duediligence-shell-examination-submit-receipt-20260922-1';
+const CACHE_VERSION = 'duediligence-shell-examination-answer-recovery-20260922-2';
 const EXAMINATION_STUDENT_SHELL = '/examination-room/student.html';
 const EXAMINATION_OFFLINE_GRADER = '/examination-room/offline-grading.html';
 const SHELL = Object.freeze([
@@ -28,9 +28,9 @@ const SHELL = Object.freeze([
   EXAMINATION_OFFLINE_GRADER,
   '/examination-room/student.css?v=renovation-20260828-4',
   '/examination-room/view-models.js?v=greenfield-v1-20260826-1',
-  '/examination-room/api.js?v=submit-receipt-20260922-1',
+  '/examination-room/api.js?v=answer-recovery-20260922-2',
   '/examination-room/media-capture.js?v=reliability-20260828-1',
-  '/examination-room/student.js?v=submit-receipt-20260922-1',
+  '/examination-room/student.js?v=answer-recovery-20260922-2',
   '/examination-room/offline-grading.css?v=greenfield-v1-20260826-1',
   '/examination-room/offline-grading-core.js?v=greenfield-v1-20260826-3',
   '/examination-room/offline-grading.js?v=reliability-20260828-1',

@@ -128,8 +128,8 @@ test('the final-question action remains enabled and opens review instead of trap
   assert.match(studentSource, /state\.currentIndex === state\.questions\.length - 1 \? 'Review and submit'/);
   assert.match(studentSource, /navigateToQuestion\(state\.currentIndex \+ 1\)/);
   assert.match(studentSource, /if \(index >= state\.questions\.length\) \{[\s\S]*openSubmitDialog\(\)/);
-  assert.match(studentHtml, /api\.js\?v=answer-recovery-20260922-2/);
-  assert.match(studentHtml, /student\.js\?v=answer-recovery-20260922-2/);
+  assert.match(studentHtml, /api\.js\?v=answer-upload-20260922-3/);
+  assert.match(studentHtml, /student\.js\?v=answer-upload-20260922-3/);
 });
 
 test('refresh recovery restores the newest local attempt and merges server-backed answers before rendering', () => {
@@ -138,6 +138,12 @@ test('refresh recovery restores the newest local attempt and merges server-backe
   assert.match(studentSource, /Object\.assign\(\s*\{\},\s*serverState && serverState\.answers \|\| \{\},\s*state\.answers\s*\)/);
   assert.match(studentSource, /Saved answers were recovered from this device and the examination server/);
   assert.match(studentSource, /renderServerRecoveredSubmission\(\)/);
+});
+
+test('answer changes are queued for immediate server upload and non-answer leftovers do not block submission', () => {
+  assert.match(studentSource, /scheduleQueueSync\(kind === 'answer\.changed' \|\| kind === 'question\.flag_changed' \? 0 : 180\)/);
+  assert.match(studentSource, /var pendingAnswers = remaining\.filter/);
+  assert.match(studentSource, /return pendingAnswers\.length === 0/);
 });
 
 test('submission waits for queued answers to sync and multiple-choice answers use server indexes', () => {

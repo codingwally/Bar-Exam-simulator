@@ -1,4 +1,5 @@
 const CANONICAL_ORIGIN = 'https://duediligence.ph';
+const ANSWER_RECOVERY_URL = 'https://hbllomlijfznnuudpdvr.supabase.co/functions/v1/examination-room-answer-recovery';
 const APPROVED_BROWSER_ORIGINS = new Set([
   CANONICAL_ORIGIN,
   'https://www.duediligence.ph',
@@ -142,6 +143,44 @@ async function responseJson(response) {
   }
 }
 
+async function recoverStudentAnswer(command, requestKey, failedResponse) {
+  const payload = normalizeStudentAnswerPayload(command?.payload || {});
+  if (!payload.sessionId || !payload.sessionToken || !payload.questionId) return failedResponse;
+
+  try {
+    const recovery = await fetch(ANSWER_RECOVERY_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        sessionId: payload.sessionId,
+        sessionToken: payload.sessionToken,
+        questionId: payload.questionId,
+        answer: payload.answer,
+        flagged: payload.flagged === true,
+        requestKey: requestKey || command?.idempotencyKey || crypto.randomUUID(),
+      }),
+    });
+    const body = await responseJson(recovery);
+    if (!recovery.ok || body?.ok !== true) return failedResponse;
+
+    const headers = new Headers(failedResponse.headers);
+    headers.set('Content-Type', 'application/json; charset=utf-8');
+    headers.delete('Content-Length');
+    return new Response(JSON.stringify({
+      ok: true,
+      revision: body.revision || null,
+      recovered: true,
+    }), {
+      status: 200,
+      headers,
+    });
+  } catch {
+    return failedResponse;
+  }
+}
+
 async function forwardStudentSaveWithRepair(request, application, command) {
   const first = await application.fetch(request);
   if (first.ok) return first;
@@ -182,7 +221,13 @@ async function forwardStudentSaveWithRepair(request, application, command) {
       idempotencyKey: repairedKey,
     }),
   });
-  return application.fetch(repairedRequest);
+  const repaired = await application.fetch(repairedRequest);
+  if (repaired.ok) return repaired;
+  return recoverStudentAnswer(
+    { operation: 'save_answer', payload: repairedPayload, idempotencyKey: repairedKey },
+    repairedKey,
+    repaired,
+  );
 }
 
 async function forwardApplicationRequest(request, application) {
@@ -232,7 +277,22 @@ async function forwardApplicationRequest(request, application) {
         }),
       });
 
-      const saved = await application.fetch(saveRequest);
+      const saved = await forwardStudentSaveWithRepair(
+        saveRequest,
+        application,
+        {
+          operation: 'save_answer',
+          payload: {
+            sessionId,
+            sessionToken,
+            questionId: canonicalQuestionId(answer.questionId),
+            answer: sanitizeAnswerText(legacyAnswerValue(answer.answer)),
+            flagged: answer.flagged === true,
+            source: 'submission',
+          },
+          idempotencyKey: requestKey,
+        },
+      );
       if (!saved.ok) return saved;
     }
   }

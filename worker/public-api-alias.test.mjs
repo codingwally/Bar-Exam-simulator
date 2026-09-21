@@ -210,6 +210,71 @@ test('public API repairs a 400 student save caused by legacy question ids, hidde
   assert.equal(calls[1].body.idempotencyKey, calls[1].requestId);
 });
 
+test('public API falls back to the authenticated recovery writer when both normal answer-save attempts are rejected', async (context) => {
+  const applicationCalls = [];
+  const recoveryCalls = [];
+  context.mock.method(globalThis, 'fetch', async (url, options) => {
+    recoveryCalls.push({ url: String(url), body: JSON.parse(options.body) });
+    return new Response(JSON.stringify({
+      ok: true,
+      revision: { questionKey: 'q001', revision: 1, savedAt: '2026-09-21T19:10:00.000Z', flagged: false },
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  });
+
+  const request = new Request('https://duediligence-api.example.test/examination-room/v1/student/command', {
+    method: 'POST',
+    headers: {
+      Origin: PRODUCTION_ORIGIN,
+      'Content-Type': 'application/json',
+      'X-Request-ID': 'operation:12345678-1234-4234-8234-1234567890ab',
+    },
+    body: JSON.stringify({
+      operation: 'save_answer',
+      payload: {
+        sessionId: '55555555-5555-4555-8555-555555555555',
+        sessionToken: 'ers1_' + 'ab'.repeat(32),
+        questionId: 'q001',
+        answer: 'Recovered answer',
+        flagged: false,
+      },
+      idempotencyKey: 'operation:12345678-1234-4234-8234-1234567890ab',
+    }),
+  });
+
+  const response = await publicApiAlias.fetch(request, {
+    DUE_DILIGENCE_APPLICATION: {
+      async fetch(candidate) {
+        const body = JSON.parse(await candidate.text());
+        applicationCalls.push(body);
+        return new Response(JSON.stringify({
+          ok: false,
+          error: { code: 'EXAM_ROOM_V1_TEXT_INVALID', message: 'Save rejected.' },
+        }), {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': PRODUCTION_ORIGIN,
+          },
+        });
+      },
+    },
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(applicationCalls.length, 2);
+  assert.equal(recoveryCalls.length, 1);
+  assert.match(recoveryCalls[0].url, /examination-room-answer-recovery$/u);
+  assert.equal(recoveryCalls[0].body.questionId, 'q001');
+  assert.equal(recoveryCalls[0].body.answer, 'Recovered answer');
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.recovered, true);
+  assert.equal(body.revision.revision, 1);
+});
+
 test('legacy Examination Room submit backfills local answers before forwarding submit and patches old receipt timestamp', async () => {
   const calls = [];
   const request = new Request('https://duediligence-api.example.test/examination-room/v1/student/command', {
@@ -272,7 +337,8 @@ test('legacy Examination Room submit backfills local answers before forwarding s
   assert.equal(body.submission.submittedAt, '2026-09-21T18:40:00.000Z');
 });
 
-test('legacy submit stops before final submission if answer backfill is rejected', async () => {
+test('legacy submit stops before final submission if answer backfill and recovery are rejected', async (context) => {
+  context.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify({ ok: false, error: { code: 'RECOVERY_REJECTED' } }), { status: 409, headers: { 'Content-Type': 'application/json' } }));
   const calls = [];
   const request = new Request('https://duediligence-api.example.test/examination-room/v1/student/command', {
     method: 'POST',

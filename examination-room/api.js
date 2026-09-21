@@ -1829,7 +1829,35 @@
 
   async function loadExam({ attemptId, sessionToken }) {
     const result = await studentQuery('resume', { sessionId: attemptId, sessionToken });
-    return { questions: studentSafeQuestions(result.exam?.questions || result.questions || []) };
+    const questions = studentSafeQuestions(result.exam?.questions || result.questions || []);
+    const answers = {};
+    (Array.isArray(result.answerRevisions) ? result.answerRevisions : []).forEach((revision) => {
+      const question = questions.find((entry) => (
+        entry.id === revision?.questionKey
+        || entry.number === Number(revision?.questionNumber)
+      ));
+      if (!question || revision?.answer === undefined || revision?.answer === null) return;
+      if (question.type === 'multiple_choice' && Number.isSafeInteger(Number(revision.answer))) {
+        const options = Array.isArray(question.options)
+          ? question.options
+          : Array.isArray(question.choices)
+            ? question.choices.map((label, index) => ({ id: `option-${index + 1}`, label: String(label) }))
+            : [];
+        const option = options[Number(revision.answer)];
+        const questionId = question.id || question.key || question.questionKey || `q-${question.number}`;
+        if (option) answers[questionId] = option.id;
+        return;
+      }
+      const questionId = question.id || question.key || question.questionKey || `q-${question.number}`;
+      answers[questionId] = revision.answer;
+    });
+    return {
+      questions,
+      answers,
+      answerRevisions: Array.isArray(result.answerRevisions) ? clone(result.answerRevisions) : [],
+      sessionStatus: result.session?.status || null,
+      submittedAt: result.session?.submittedAt || null,
+    };
   }
 
   async function syncOperations({ attemptId, sessionToken, operations = [] }) {
@@ -1850,11 +1878,16 @@
           clientSequence: operation.sequence,
         }, operation.id);
       } else if (operation.kind === 'answer.changed' || operation.kind === 'question.flag_changed') {
+        let serverAnswer = payload.answer === undefined ? null : payload.answer;
+        const legacyChoice = typeof serverAnswer === 'string'
+          ? /^option-(\d+)$/i.exec(serverAnswer.trim())
+          : null;
+        if (legacyChoice) serverAnswer = Math.max(0, Number(legacyChoice[1]) - 1);
         await studentCommand('save_answer', {
           sessionId: attemptId,
           sessionToken,
           questionId: payload.questionId,
-          answer: payload.answer === undefined ? null : payload.answer,
+          answer: serverAnswer,
           flagged: Boolean(payload.flagged),
           clientSequence: operation.sequence,
           occurredAt: operation.occurredAt,

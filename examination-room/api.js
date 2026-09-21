@@ -1928,6 +1928,29 @@
   }
 
   async function submitAttempt(payload) {
+    const finalAnswers = Array.isArray(payload.answers) ? payload.answers : [];
+
+    // Final submission is also the last-resort answer upload path. This makes
+    // submission independent of a missed/deferred autosave queue flush.
+    for (let index = 0; index < finalAnswers.length; index += 1) {
+      const entry = finalAnswers[index] || {};
+      if (entry.answer === undefined || entry.answer === null || entry.answer === '') continue;
+      let serverAnswer = entry.answer;
+      const choice = typeof serverAnswer === 'string'
+        ? /^option-(\d+)$/i.exec(serverAnswer.trim())
+        : null;
+      if (choice) serverAnswer = Math.max(0, Number(choice[1]) - 1);
+
+      await studentCommand('save_answer', {
+        sessionId: payload.attemptId,
+        sessionToken: payload.sessionToken,
+        questionId: entry.questionId,
+        answer: serverAnswer,
+        flagged: Boolean(entry.flagged),
+        source: 'submission',
+      }, `${payload.idempotencyKey}:answer:${index + 1}`);
+    }
+
     const result = await studentCommand('submit', {
       ...payload,
       sessionId: payload.attemptId,
@@ -1938,7 +1961,7 @@
       receiptId: submission.receiptCode || submission.receiptId || submission.id,
       submittedAt: submission.submittedAt || submission.receivedAt || result.submittedAt || result.receivedAt || payload.clientCompletedAt,
       signature: submission.signature || submission.manifestHash || result.manifestHash || submission.receiptId || submission.id,
-      answerCount: submission.answerCount ?? (payload.answers || []).filter((entry) => entry.answer !== null && entry.answer !== '').length,
+      answerCount: submission.answerCount ?? finalAnswers.filter((entry) => entry.answer !== null && entry.answer !== '').length,
       examVersion: submission.examVersion || submission.examVersionId || payload.examVersion,
       isDemo: demoEnabled(),
     };

@@ -103,6 +103,7 @@
     try {
       state.db = await openDatabase();
       state.storageReady = true;
+      await restoreMostRecentAttemptOnStartup();
     } catch (error) {
       state.storageReady = false;
       showError(elements.entryError, {
@@ -116,7 +117,7 @@
   function registerExaminationRoomServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
 
-    navigator.serviceWorker.register('/service-worker.js?v=examination-room-submit-receipt-20260922-1')
+    navigator.serviceWorker.register('/service-worker.js?v=examination-room-answer-recovery-20260922-2')
       .catch(function () {
         // Registration failure must never block a student who still has a
         // working network connection. The exam UI already reports offline
@@ -447,6 +448,13 @@
         sessionToken: beginResult.sessionToken
       });
       var questions = validateQuestions(examResult && examResult.questions, state.metadata.questionCount);
+      var priorAttempt = await databaseGet('attempts', beginResult.attemptId);
+      var recoveredAnswers = Object.assign(
+        {},
+        examResult && examResult.answers || {},
+        priorAttempt && priorAttempt.answers || {}
+      );
+      var recoveredFlags = copyObject(priorAttempt && priorAttempt.flags || {});
 
       var serverNow = Date.parse(beginResult.serverNow);
       var clientNow = Date.now();
@@ -466,25 +474,29 @@
         },
         metadata: state.metadata,
         questions: questions,
-        answers: {},
-        flags: {},
-        currentIndex: 0,
-        clientSequence: 0,
-        serverRevision: null,
+        answers: copyObject(recoveredAnswers),
+        flags: copyObject(recoveredFlags),
+        currentIndex: priorAttempt ? clamp(Number(priorAttempt.currentIndex) || 0, 0, Math.max(0, questions.length - 1)) : 0,
+        clientSequence: Number(priorAttempt && priorAttempt.clientSequence || 0),
+        serverRevision: priorAttempt && priorAttempt.serverRevision || null,
         startedAt: beginResult.startedAt,
         expiresAt: beginResult.expiresAt,
         clockOffsetMs: Number.isFinite(serverNow) ? serverNow - clientNow : 0,
-        status: 'in_progress',
-        idempotencyKey: null,
-        clientCompletedAt: null,
-        automaticSubmission: false,
-        timeExpired: false,
+        status: examResult && examResult.sessionStatus === 'submitted'
+          ? 'submitted'
+          : priorAttempt && priorAttempt.status === 'pending_submit'
+            ? 'pending_submit'
+            : 'in_progress',
+        idempotencyKey: priorAttempt && priorAttempt.idempotencyKey || null,
+        clientCompletedAt: priorAttempt && priorAttempt.clientCompletedAt || null,
+        automaticSubmission: Boolean(priorAttempt && priorAttempt.automaticSubmission),
+        timeExpired: Boolean(priorAttempt && priorAttempt.timeExpired),
         updatedAt: new Date().toISOString()
       };
       state.questions = questions;
-      state.answers = {};
-      state.flags = {};
-      state.currentIndex = 0;
+      state.answers = copyObject(recoveredAnswers);
+      state.flags = copyObject(recoveredFlags);
+      state.currentIndex = state.attempt.currentIndex;
 
       await persistAttempt();
       await databasePut('cache', {
@@ -497,8 +509,18 @@
         updatedAt: state.attempt.updatedAt
       });
 
-      enterExamWorkspace();
-      await logIntegrityEvent('attempt_started', { appVersion: APP_VERSION });
+      if (state.attempt.status === 'submitted') {
+        renderServerRecoveredSubmission();
+      } else if (state.attempt.status === 'pending_submit') {
+        renderPendingSubmission();
+        await retryPendingSubmission();
+      } else {
+        enterExamWorkspace();
+        if (Object.keys(recoveredAnswers).length) {
+          showToast('Saved answers were recovered from this device and the examination server.', 'ph-arrow-counter-clockwise');
+        }
+        await logIntegrityEvent('attempt_started', { appVersion: APP_VERSION });
+      }
     } catch (error) {
       showError(elements.entryError, error, handleBeginExam);
     } finally {
@@ -973,9 +995,16 @@
       state.attempt.answers = copyObject(state.answers);
       state.attempt.flags = copyObject(state.flags);
       await persistAttempt();
+      var question = state.questions.find(function (item) { return item.id === questionId; });
+      var localAnswer = state.answers[questionId] === undefined ? null : state.answers[questionId];
+      var serverAnswer = localAnswer;
+      if (question && question.type === 'multiple_choice' && localAnswer !== null) {
+        serverAnswer = question.options.findIndex(function (option) { return option.id === localAnswer; });
+        if (serverAnswer < 0) serverAnswer = localAnswer;
+      }
       await enqueueOperation('answer.changed', {
         questionId: questionId,
-        answer: state.answers[questionId] === undefined ? null : state.answers[questionId],
+        answer: serverAnswer,
         flagged: Boolean(state.flags[questionId])
       });
       updateSaveStatus(navigator.onLine ? 'saving' : 'local');
@@ -1268,7 +1297,10 @@
     clearError(elements.receiptError);
 
     try {
-      await flushOperationQueue();
+      var fullySynced = await flushOperationQueue();
+      if (!fullySynced) {
+        throw createAppError('SYNC_REQUIRED');
+      }
       var payload = {
         attemptId: state.attempt.attemptId,
         sessionToken: state.attempt.sessionToken,
@@ -1833,6 +1865,11 @@
         message: 'Keep this page open and try typing a small change again.',
         effect: 'Earlier saved work remains on this device. Do not close the page until the saved status returns.'
       },
+      SYNC_REQUIRED: {
+        title: 'Your latest answers are still syncing',
+        message: 'The server has not confirmed every queued answer yet, so submission has not been finalized.',
+        effect: 'Your answers remain saved on this device. Keep this page open and choose Retry submission now; the queued answers will be sent first.'
+      },
       SUBMISSION_OFFLINE: {
         title: 'Submission is waiting for a connection',
         message: 'Your locked answers are saved on this device and will retry automatically.',
@@ -2123,6 +2160,13 @@
     return result;
   }
 
+  async function databaseGetAll(storeName) {
+    var transaction = state.db.transaction(storeName, 'readonly');
+    var result = await requestPromise(transaction.objectStore(storeName).getAll());
+    await transactionPromise(transaction);
+    return result || [];
+  }
+
   async function databasePut(storeName, value) {
     var transaction = state.db.transaction(storeName, 'readwrite');
     transaction.objectStore(storeName).put(copyObject(value));
@@ -2150,6 +2194,97 @@
   async function deleteAllOperationsForAttempt(attemptId) {
     var operations = await getOperationsForAttempt(attemptId);
     await deleteOperations(operations.map(function (operation) { return operation.id; }));
+  }
+
+  async function restoreMostRecentAttemptOnStartup() {
+    var attempts = await databaseGetAll('attempts');
+    var candidates = attempts.filter(function (attempt) {
+      return attempt && ['in_progress', 'pending_submit', 'submitted'].indexOf(attempt.status) !== -1;
+    }).sort(function (left, right) {
+      return Date.parse(right.updatedAt || right.startedAt || 0) - Date.parse(left.updatedAt || left.startedAt || 0);
+    });
+    if (!candidates.length) return false;
+
+    var attempt = candidates[0];
+    state.attempt = attempt;
+    state.questions = Array.isArray(attempt.questions) ? attempt.questions : [];
+    state.answers = copyObject(attempt.answers || {});
+    state.flags = copyObject(attempt.flags || {});
+    state.currentIndex = clamp(Number(attempt.currentIndex) || 0, 0, Math.max(0, state.questions.length - 1));
+    state.metadata = attempt.metadata || {};
+    state.entry = attempt.student ? {
+      roomKey: '',
+      fullName: attempt.student.fullName || '',
+      email: attempt.student.email || '',
+      studentNumber: attempt.student.studentNumber || '',
+      subject: attempt.student.subject || '',
+      yearLevel: attempt.student.yearLevel || ''
+    } : null;
+
+    if (navigator.onLine && state.api && attempt.attemptId && attempt.sessionToken) {
+      try {
+        var serverState = await state.api.loadExam({
+          attemptId: attempt.attemptId,
+          sessionToken: attempt.sessionToken
+        });
+        if (Array.isArray(serverState && serverState.questions) && serverState.questions.length) {
+          state.questions = validateQuestions(serverState.questions, state.metadata.questionCount || serverState.questions.length);
+        }
+        state.answers = Object.assign({}, serverState && serverState.answers || {}, state.answers);
+        state.attempt.questions = state.questions;
+        state.attempt.answers = copyObject(state.answers);
+        if (serverState && serverState.sessionStatus === 'submitted') {
+          state.attempt.status = 'submitted';
+          state.attempt.submittedAt = serverState.submittedAt || state.attempt.submittedAt || null;
+        }
+        await persistAttempt();
+      } catch (error) {
+        // Local IndexedDB remains authoritative when the network recovery probe
+        // is unavailable. Never replace saved answers with an empty server view.
+      }
+    }
+
+    if (!state.questions.length) return false;
+
+    if (state.attempt.status === 'submitted') {
+      resumeMediaUploads();
+      var receipt = await databaseGet('receipts', state.attempt.attemptId);
+      if (receipt) {
+        renderReceipt(receipt);
+      } else {
+        renderServerRecoveredSubmission();
+      }
+      return true;
+    }
+    if (state.attempt.status === 'pending_submit') {
+      resumeMediaUploads();
+      renderPendingSubmission();
+      if (navigator.onLine) window.setTimeout(retryPendingSubmission, 250);
+      return true;
+    }
+
+    enterExamWorkspace();
+    showToast('Your saved examination was restored automatically after refresh.', 'ph-arrow-counter-clockwise');
+    return true;
+  }
+
+  function renderServerRecoveredSubmission() {
+    setView('receipt');
+    stopTimer();
+    elements.receiptIcon.classList.remove('is-pending');
+    elements.receiptIcon.innerHTML = '<i class="ph ph-seal-check"></i>';
+    elements.receiptEyebrow.textContent = 'Submission recorded';
+    elements.receiptTitle.textContent = 'Your examination is already recorded on the server.';
+    elements.receiptMessage.textContent = 'This browser lost its local receipt display, but the server reports this attempt as submitted.';
+    elements.pendingSubmissionNote.hidden = true;
+    elements.receiptDetails.hidden = true;
+    elements.resultPanel.hidden = false;
+    elements.retrySubmissionButton.hidden = true;
+    elements.printReceiptButton.hidden = true;
+    clearError(elements.receiptError);
+    document.title = 'Submission recorded | Examination Room';
+    announce('Submission recorded on the server.');
+    startResultWatch({ result: null });
   }
 
   function prefillDemoEntry() {

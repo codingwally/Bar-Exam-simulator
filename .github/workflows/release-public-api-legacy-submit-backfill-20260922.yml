@@ -1,4 +1,4 @@
-name: Emergency public API forced answer recovery
+name: Emergency public API direct answer recovery
 
 on:
   push:
@@ -15,14 +15,14 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  BASE_SHA: 9ad6cfb00a38395b7c81589280723dc7d1a3b56f
-  RELEASE_SOURCE_SHA: 42e44acc33c3f607d61724df83d590c4df91909f
+  BASE_SHA: 222250687da6bd37d48a8e93bc56e740bd919e01
+  RELEASE_SOURCE_SHA: f2090d54804672b62bc5f318af616c3ab9480802
   PUBLIC_API_URL: https://duediligence-api.wallyesteban1993.workers.dev
 
 jobs:
   deploy:
-    name: Verify and deploy forced answer recovery
-    if: "${{ github.event.head_commit.message == 'release: deploy forced answer recovery' }}"
+    name: Verify and deploy direct answer recovery
+    if: "${{ github.event.head_commit.message == 'release: deploy direct answer recovery' }}"
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment:
@@ -60,7 +60,7 @@ jobs:
         with:
           node-version: 22
 
-      - name: Validate forced answer recovery compatibility
+      - name: Validate direct answer recovery compatibility
         shell: bash
         run: |
           set -euo pipefail
@@ -76,6 +76,8 @@ jobs:
           grep -Fq "ANSWER_RECOVERY_URL" worker/public-api-alias.mjs
           grep -Fq "recoverStudentAnswer" worker/public-api-alias.mjs
           grep -Fq "X-Examination-Answer-Recovery" worker/public-api-alias.mjs
+          grep -Fq "attemptStudentAnswerRecovery" worker/public-api-alias.mjs
+          grep -Fq "Production recovery route" worker/public-api-alias.mjs
 
       - name: Deploy provider-neutral public API alias
         uses: cloudflare/wrangler-action@v3

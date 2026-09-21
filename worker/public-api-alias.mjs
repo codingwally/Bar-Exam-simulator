@@ -168,6 +168,7 @@ async function recoverStudentAnswer(command, requestKey, failedResponse) {
     const headers = new Headers(failedResponse.headers);
     headers.set('Content-Type', 'application/json; charset=utf-8');
     headers.delete('Content-Length');
+    headers.set('X-Examination-Answer-Recovery', 'supabase-v1');
     return new Response(JSON.stringify({
       ok: true,
       revision: body.revision || null,
@@ -194,20 +195,11 @@ async function forwardStudentSaveWithRepair(request, application, command) {
   const changed = repairedPayload.questionId !== originalPayload.questionId
     || repairedPayload.answer !== originalPayload.answer;
 
-  const repairableCodes = new Set([
-    'EXAM_ROOM_V1_ANSWER_VALUE_INVALID',
-    'EXAM_ROOM_V1_TEXT_INVALID',
-    'EXAM_ROOM_V1_REQUEST_KEY_INVALID',
-    'EXAM_ROOM_V1_IDEMPOTENCY_KEY_INVALID',
-    'EXAM_ROOM_V1_IDENTIFIER_INVALID',
-    'EXAM_ROOM_V1_NUMBER_INVALID',
-    'EXAM_ROOM_V1_ANSWER_REVISION_INVALID',
-    'EXAMINATION_ROOM_UNAVAILABLE',
-  ]);
-
-  // A fresh, valid key also repairs malformed or stale client request IDs.
-  if (!changed && firstCode && !repairableCodes.has(firstCode)) return first;
-
+  // Any 400 on a student answer save is recoverable at this boundary.
+  // We still try one canonicalized application request first, but we no longer
+  // allow an unfamiliar backend validation code to bypass the authenticated
+  // recovery writer. The recovery service independently re-validates the
+  // session, question binding, consent, room state, and answer type.
   const repairedKey = `answer-repair:${crypto.randomUUID()}`;
   const headers = new Headers(request.headers);
   headers.set('Content-Type', 'application/json');

@@ -1527,7 +1527,7 @@ export function createExaminationRoomV1Handlers(dependencies) {
           details: safeEventDetails(payload.details ?? {}),
         };
       } else {
-        const sessionContext = ensureStoreResult(await deps.rpc(env, {
+        let sessionContext = ensureStoreResult(await deps.rpc(env, {
           scope: 'student', operation: 'session_context', actorUserId: null, institutionId: null,
           payload: { sessionId: credential.sessionId, sessionTokenHash: credential.sessionTokenHash },
         }));

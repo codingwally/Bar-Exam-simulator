@@ -143,9 +143,9 @@ async function responseJson(response) {
   }
 }
 
-async function recoverStudentAnswer(command, requestKey, failedResponse) {
+async function attemptStudentAnswerRecovery(command, requestKey, responseHeaders = null) {
   const payload = normalizeStudentAnswerPayload(command?.payload || {});
-  if (!payload.sessionId || !payload.sessionToken || !payload.questionId) return failedResponse;
+  if (!payload.sessionId || !payload.sessionToken || !payload.questionId) return null;
 
   try {
     const recovery = await fetch(ANSWER_RECOVERY_URL, {
@@ -163,12 +163,13 @@ async function recoverStudentAnswer(command, requestKey, failedResponse) {
       }),
     });
     const body = await responseJson(recovery);
-    if (!recovery.ok || body?.ok !== true) return failedResponse;
+    if (!recovery.ok || body?.ok !== true) return null;
 
-    const headers = new Headers(failedResponse.headers);
+    const headers = new Headers(responseHeaders || {});
     headers.set('Content-Type', 'application/json; charset=utf-8');
     headers.delete('Content-Length');
     headers.set('X-Examination-Answer-Recovery', 'supabase-v1');
+    headers.set('Cache-Control', 'no-store, max-age=0');
     return new Response(JSON.stringify({
       ok: true,
       revision: body.revision || null,
@@ -178,8 +179,13 @@ async function recoverStudentAnswer(command, requestKey, failedResponse) {
       headers,
     });
   } catch {
-    return failedResponse;
+    return null;
   }
+}
+
+async function recoverStudentAnswer(command, requestKey, failedResponse) {
+  const recovered = await attemptStudentAnswerRecovery(command, requestKey, failedResponse?.headers);
+  return recovered || failedResponse;
 }
 
 async function forwardStudentSaveWithRepair(request, application, command) {
@@ -236,6 +242,17 @@ async function forwardApplicationRequest(request, application) {
     }
   }
 
+  if (command?.operation === 'save_answer') {
+    // Production recovery route: persist answers through the independently
+    // authenticated recovery writer first. The legacy application save path is
+    // retained only as a fallback if recovery itself is unavailable.
+    const requestKey = String(
+      command.idempotencyKey || request.headers.get('X-Request-ID') || crypto.randomUUID(),
+    ).trim();
+    const recovered = await attemptStudentAnswerRecovery(command, requestKey);
+    if (recovered) return recovered;
+  }
+
   if (command?.operation === 'submit' && Array.isArray(command?.payload?.answers)) {
     const sessionId = command.payload.sessionId || command.payload.attemptId;
     const sessionToken = command.payload.sessionToken;
@@ -269,21 +286,23 @@ async function forwardApplicationRequest(request, application) {
         }),
       });
 
-      const saved = await forwardStudentSaveWithRepair(
+      const answerCommand = {
+        operation: 'save_answer',
+        payload: {
+          sessionId,
+          sessionToken,
+          questionId: canonicalQuestionId(answer.questionId),
+          answer: sanitizeAnswerText(legacyAnswerValue(answer.answer)),
+          flagged: answer.flagged === true,
+          source: 'submission',
+        },
+        idempotencyKey: requestKey,
+      };
+      const recovered = await attemptStudentAnswerRecovery(answerCommand, requestKey);
+      const saved = recovered || await forwardStudentSaveWithRepair(
         saveRequest,
         application,
-        {
-          operation: 'save_answer',
-          payload: {
-            sessionId,
-            sessionToken,
-            questionId: canonicalQuestionId(answer.questionId),
-            answer: sanitizeAnswerText(legacyAnswerValue(answer.answer)),
-            flagged: answer.flagged === true,
-            source: 'submission',
-          },
-          idempotencyKey: requestKey,
-        },
+        answerCommand,
       );
       if (!saved.ok) return saved;
     }

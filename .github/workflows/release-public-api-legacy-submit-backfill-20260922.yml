@@ -1,0 +1,95 @@
+name: Emergency public API legacy submit backfill
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/release-public-api-legacy-submit-backfill-20260922.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-api-legacy-submit-backfill
+  cancel-in-progress: false
+
+env:
+  BASE_SHA: fc1258e1045a2aef0e2ab284d51ddd64e34652b4
+  RELEASE_SOURCE_SHA: 477993f0eff826ca9e8232b4d56e0a3e80119100
+  PUBLIC_API_URL: https://duediligence-api.wallyesteban1993.workers.dev
+
+jobs:
+  deploy:
+    name: Verify and deploy public API legacy submit backfill
+    if: "${{ github.event.head_commit.message == 'release: deploy public API legacy submit backfill' }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: production-worker
+
+    steps:
+      - name: Checkout exact alias hotfix source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_SOURCE_SHA }}
+          fetch-depth: 0
+
+      - name: Prove isolated alias scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$RELEASE_SOURCE_SHA"
+          git cat-file -e "$BASE_SHA^{commit}"
+          python - <<'PY'
+          import os, subprocess
+          base=os.environ['BASE_SHA']
+          source=os.environ['RELEASE_SOURCE_SHA']
+          expected={'worker/public-api-alias.mjs','worker/public-api-alias.test.mjs'}
+          changed=set(subprocess.check_output(
+            ['git','diff','--name-only',f'{base}..{source}'],
+            text=True,
+          ).splitlines())
+          if changed != expected:
+              raise SystemExit(f'unexpected public API hotfix scope: {sorted(changed)}')
+          print('Exact public API alias hotfix scope verified.')
+          PY
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validate legacy submit compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check worker/public-api-alias.mjs
+          node --test worker/public-api-alias.test.mjs
+          git diff --check "$BASE_SHA..$RELEASE_SOURCE_SHA"
+          grep -Fq "command?.operation === 'submit'" worker/public-api-alias.mjs
+          grep -Fq "source: 'submission'" worker/public-api-alias.mjs
+          grep -Fq "submittedAt: submission.receivedAt" worker/public-api-alias.mjs
+
+      - name: Deploy provider-neutral public API alias
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          wranglerVersion: "4.114.0"
+          command: deploy --config wrangler.public-api.toml
+
+      - name: Verify canonical Examination Room origin
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$RUNNER_TEMP/origin-probe.json"
+          headers="$RUNNER_TEMP/origin-probe.headers"
+          status="$(curl --silent --show-error             --output "$body"             --dump-header "$headers"             --write-out '%{http_code}'             --request POST             --header 'Origin: https://duediligence.ph'             --header 'Content-Type: application/json'             --data '{}'             "$PUBLIC_API_URL/examination-room/v1/student/preview")"
+          if [[ "$status" = "403" ]] && grep -Fq '"code":"ORIGIN_NOT_ALLOWED"' "$body"; then
+            cat "$body" >&2
+            exit 1
+          fi
+          grep -qi '^access-control-allow-origin: https://duediligence.ph' "$headers"
+          echo "Public API alias is live and the canonical Examination Room origin is accepted."

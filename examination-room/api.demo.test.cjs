@@ -223,6 +223,56 @@ test('answer upload continues even when an unrelated integrity event fails', asy
   assert.equal(calls[0].payload.answer, 'Uploaded answer');
 });
 
+test('live submitAttempt uploads the complete final answer snapshot before submitting', async () => {
+  const calls = [];
+  const api = liveApi(async (_url, options) => {
+    const body = JSON.parse(options.body);
+    calls.push(body);
+    if (body.operation === 'save_answer') {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true, revision: { revision: calls.length } }),
+      };
+    }
+    if (body.operation === 'submit') {
+      return {
+        ok: true,
+        status: 201,
+        json: async () => ({
+          ok: true,
+          submission: {
+            id: '77777777-7777-4777-8777-777777777777',
+            receiptId: '88888888-8888-4888-8888-888888888888',
+            receivedAt: '2026-09-22T02:30:00.000Z',
+          },
+        }),
+      };
+    }
+    throw new Error('Unexpected operation');
+  });
+
+  await api.submitAttempt({
+    attemptId: '66666666-6666-4666-8666-666666666666',
+    sessionToken: 'ers1_' + 'a'.repeat(64),
+    idempotencyKey: 'submission:99999999-9999-4999-8999-999999999999',
+    examVersion: 1,
+    clientCompletedAt: '2026-09-22T02:29:59.000Z',
+    answers: [
+      { questionId: 'q001', answer: 'Final essay answer', flagged: false },
+      { questionId: 'q002', answer: 'option-2', flagged: true },
+    ],
+  });
+
+  assert.deepEqual(calls.map((call) => call.operation), ['save_answer', 'save_answer', 'submit']);
+  assert.equal(calls[0].payload.questionId, 'q001');
+  assert.equal(calls[0].payload.answer, 'Final essay answer');
+  assert.equal(calls[0].payload.source, 'submission');
+  assert.equal(calls[1].payload.questionId, 'q002');
+  assert.equal(calls[1].payload.answer, 1);
+  assert.equal(calls[1].payload.flagged, true);
+});
+
 test('live submitAttempt accepts the production receipt shape returned by the examination RPC', async () => {
   const receivedAt = '2026-09-22T01:20:00.000Z';
   let requestBody = null;

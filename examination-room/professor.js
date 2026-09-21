@@ -3164,9 +3164,13 @@
       if (button) saveAllGrades(button).catch(() => {});
     });
     $('#anonymous-grading-toggle').addEventListener('change', (event) => { state.anonymousGrading = event.target.checked; renderGrading(); });
-    $('#release-results').addEventListener('click', releaseResults);
-    $('#export-grading-package').addEventListener('click', exportGradingPackage);
-    $('#import-grading-package').addEventListener('change', async (event) => {
+    $('#release-results')?.addEventListener('click', releaseResults);
+    // Offline grading tools remain available in the dedicated advanced offline
+    // workspace, but they are intentionally not part of the normal professor
+    // grading screen. Keep these bindings optional so the online workspace
+    // does not depend on technical offline controls being present.
+    $('#export-grading-package')?.addEventListener('click', exportGradingPackage);
+    $('#import-grading-package')?.addEventListener('change', async (event) => {
       const files = [...(event.target.files || [])];
       await importGradingPackages(files);
       event.target.value = '';

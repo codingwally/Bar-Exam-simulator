@@ -5,6 +5,7 @@ import test from 'node:test';
 import publicApiAlias from './public-api-alias.mjs';
 
 const PRODUCTION_ORIGIN = 'https://duediligence.ph';
+const WWW_PRODUCTION_ORIGIN = 'https://www.duediligence.ph';
 
 async function readJson(response) {
   return JSON.parse(await response.text());
@@ -82,6 +83,69 @@ test('preserves an upstream non-success Response without rewriting it', async ()
   assert.equal(response.headers.get('Retry-After'), '17');
   assert.equal(response.headers.get('X-Application-Code'), 'BUSY');
   assert.equal(await response.text(), 'temporarily busy');
+});
+
+test('normalizes the approved www browser origin for the application Worker and restores CORS to the browser origin', async () => {
+  const request = new Request('https://duediligence-api.example.test/examination-room/v1/student/command', {
+    method: 'POST',
+    headers: {
+      Origin: WWW_PRODUCTION_ORIGIN,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ operation: 'submit', payload: {} }),
+  });
+
+  let receivedRequest;
+  const response = await publicApiAlias.fetch(request, {
+    DUE_DILIGENCE_APPLICATION: {
+      async fetch(candidate) {
+        receivedRequest = candidate;
+        return new Response(JSON.stringify({ ok: false, error: { code: 'TEST_UPSTREAM' } }), {
+          status: 409,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': PRODUCTION_ORIGIN,
+            Vary: 'Origin',
+          },
+        });
+      },
+    },
+  });
+
+  assert.notStrictEqual(receivedRequest, request);
+  assert.equal(receivedRequest.headers.get('Origin'), PRODUCTION_ORIGIN);
+  assert.deepEqual(await readJson(receivedRequest), { operation: 'submit', payload: {} });
+  assert.equal(response.status, 409);
+  assert.equal(response.headers.get('Access-Control-Allow-Origin'), WWW_PRODUCTION_ORIGIN);
+  assert.match(response.headers.get('Vary'), /Origin/);
+  assert.deepEqual(await readJson(response), { ok: false, error: { code: 'TEST_UPSTREAM' } });
+});
+
+test('does not normalize an unapproved browser origin before forwarding', async () => {
+  const attackerOrigin = 'https://attacker.example';
+  const request = new Request('https://duediligence-api.example.test/examination-room/v1/student/preview', {
+    method: 'POST',
+    headers: { Origin: attackerOrigin, 'Content-Type': 'application/json' },
+    body: '{}',
+  });
+  let receivedRequest;
+  const upstreamResponse = new Response(JSON.stringify({
+    ok: false,
+    error: { code: 'ORIGIN_NOT_ALLOWED', message: 'This grading origin is not allowed.' },
+  }), { status: 403 });
+
+  const response = await publicApiAlias.fetch(request, {
+    DUE_DILIGENCE_APPLICATION: {
+      async fetch(candidate) {
+        receivedRequest = candidate;
+        return upstreamResponse;
+      },
+    },
+  });
+
+  assert.strictEqual(receivedRequest, request);
+  assert.equal(receivedRequest.headers.get('Origin'), attackerOrigin);
+  assert.strictEqual(response, upstreamResponse);
 });
 
 test('returns a controlled provider-neutral 503 when the binding is missing', async () => {

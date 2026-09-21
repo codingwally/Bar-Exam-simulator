@@ -275,6 +275,56 @@ test('public API falls back to the authenticated recovery writer when both norma
   assert.equal(body.revision.revision, 1);
 });
 
+test('unknown 400 validation codes cannot bypass the authenticated answer recovery fallback', async (context) => {
+  let recoveryCalls = 0;
+  context.mock.method(globalThis, 'fetch', async (_url, options) => {
+    recoveryCalls += 1;
+    const body = JSON.parse(options.body);
+    assert.equal(body.questionId, 'q001');
+    return new Response(JSON.stringify({
+      ok: true,
+      revision: { questionKey: 'q001', revision: 1, savedAt: '2026-09-21T19:15:00.000Z', flagged: false },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  });
+
+  const request = new Request('https://duediligence-api.example.test/examination-room/v1/student/command', {
+    method: 'POST',
+    headers: { Origin: PRODUCTION_ORIGIN, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      operation: 'save_answer',
+      payload: {
+        sessionId: '55555555-5555-4555-8555-555555555555',
+        sessionToken: 'ers1_' + 'ab'.repeat(32),
+        questionId: 'q001',
+        answer: 'Recovered regardless of backend code',
+        flagged: false,
+      },
+      idempotencyKey: 'operation:12345678-1234-4234-8234-1234567890ab',
+    }),
+  });
+
+  const response = await publicApiAlias.fetch(request, {
+    DUE_DILIGENCE_APPLICATION: {
+      async fetch() {
+        return new Response(JSON.stringify({
+          ok: false,
+          error: { code: 'SOME_NEW_VALIDATION_CODE', message: 'Rejected.' },
+        }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': PRODUCTION_ORIGIN },
+        });
+      },
+    },
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(recoveryCalls, 1);
+  assert.equal(response.headers.get('X-Examination-Answer-Recovery'), 'supabase-v1');
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.recovered, true);
+});
+
 test('legacy Examination Room submit backfills local answers before forwarding submit and patches old receipt timestamp', async () => {
   const calls = [];
   const request = new Request('https://duediligence-api.example.test/examination-room/v1/student/command', {

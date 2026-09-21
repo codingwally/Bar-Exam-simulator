@@ -93,6 +93,98 @@ function responseWithJson(response, body) {
   });
 }
 
+function canonicalQuestionId(value) {
+  const raw = String(value ?? '').trim();
+  const match = /^q[-_ ]?0*(\d{1,3})$/iu.exec(raw) || /^0*(\d{1,3})$/u.exec(raw);
+  if (!match) return raw;
+  const number = Number(match[1]);
+  return Number.isInteger(number) && number > 0
+    ? `q${String(number).padStart(3, '0')}`
+    : raw;
+}
+
+function sanitizeAnswerText(value) {
+  if (typeof value !== 'string') return value;
+  let safe = value
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u202A-\u202E\u2066-\u2069]/gu, '');
+  let rebuilt = '';
+  for (const character of safe) {
+    if (character.length === 1) {
+      const code = character.charCodeAt(0);
+      if (code >= 0xD800 && code <= 0xDFFF) {
+        rebuilt += '\uFFFD';
+        continue;
+      }
+    }
+    rebuilt += character;
+  }
+  return rebuilt.normalize('NFC');
+}
+
+function normalizeStudentAnswerPayload(payload = {}) {
+  let answer = payload.answer;
+  if (typeof answer === 'string') {
+    const option = /^option-(\d+)$/iu.exec(answer.trim());
+    answer = option ? Math.max(0, Number(option[1]) - 1) : sanitizeAnswerText(answer);
+  }
+  return {
+    ...payload,
+    questionId: canonicalQuestionId(payload.questionId ?? payload.questionKey ?? payload.questionNumber),
+    answer,
+  };
+}
+
+async function responseJson(response) {
+  try {
+    return await response.clone().json();
+  } catch {
+    return null;
+  }
+}
+
+async function forwardStudentSaveWithRepair(request, application, command) {
+  const first = await application.fetch(request);
+  if (first.ok) return first;
+
+  const firstBody = await responseJson(first);
+  const firstCode = String(firstBody?.error?.code || '');
+  if (first.status !== 400) return first;
+
+  const repairedPayload = normalizeStudentAnswerPayload(command?.payload || {});
+  const originalPayload = command?.payload || {};
+  const changed = repairedPayload.questionId !== originalPayload.questionId
+    || repairedPayload.answer !== originalPayload.answer;
+
+  const repairableCodes = new Set([
+    'EXAM_ROOM_V1_ANSWER_VALUE_INVALID',
+    'EXAM_ROOM_V1_TEXT_INVALID',
+    'EXAM_ROOM_V1_REQUEST_KEY_INVALID',
+    'EXAM_ROOM_V1_IDEMPOTENCY_KEY_INVALID',
+    'EXAM_ROOM_V1_IDENTIFIER_INVALID',
+    'EXAM_ROOM_V1_NUMBER_INVALID',
+    'EXAM_ROOM_V1_ANSWER_REVISION_INVALID',
+    'EXAMINATION_ROOM_UNAVAILABLE',
+  ]);
+
+  // A fresh, valid key also repairs malformed or stale client request IDs.
+  if (!changed && firstCode && !repairableCodes.has(firstCode)) return first;
+
+  const repairedKey = `answer-repair:${crypto.randomUUID()}`;
+  const headers = new Headers(request.headers);
+  headers.set('Content-Type', 'application/json');
+  headers.set('X-Request-ID', repairedKey);
+  const repairedRequest = new Request(request.url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      operation: 'save_answer',
+      payload: repairedPayload,
+      idempotencyKey: repairedKey,
+    }),
+  });
+  return application.fetch(repairedRequest);
+}
+
 async function forwardApplicationRequest(request, application) {
   const url = new URL(request.url);
   const isStudentCommand = request.method === 'POST'
@@ -131,8 +223,8 @@ async function forwardApplicationRequest(request, application) {
           payload: {
             sessionId,
             sessionToken,
-            questionId: answer.questionId,
-            answer: legacyAnswerValue(answer.answer),
+            questionId: canonicalQuestionId(answer.questionId),
+            answer: sanitizeAnswerText(legacyAnswerValue(answer.answer)),
             flagged: answer.flagged === true,
             source: 'submission',
           },
@@ -145,7 +237,9 @@ async function forwardApplicationRequest(request, application) {
     }
   }
 
-  const response = await application.fetch(request);
+  const response = command?.operation === 'save_answer'
+    ? await forwardStudentSaveWithRepair(request, application, command)
+    : await application.fetch(request);
 
   // Older already-open clients only recognize submittedAt, while the current
   // server receipt uses receivedAt. Add the compatible alias at the boundary

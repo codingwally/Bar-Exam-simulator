@@ -148,6 +148,68 @@ test('does not normalize an unapproved browser origin before forwarding', async 
   assert.strictEqual(response, upstreamResponse);
 });
 
+test('public API repairs a 400 student save caused by legacy question ids, hidden controls, or stale request keys', async () => {
+  const calls = [];
+  const request = new Request('https://duediligence-api.example.test/examination-room/v1/student/command', {
+    method: 'POST',
+    headers: {
+      Origin: PRODUCTION_ORIGIN,
+      'Content-Type': 'application/json',
+      'X-Request-ID': 'operation:12345678-1234-4234-8234-1234567890ab',
+    },
+    body: JSON.stringify({
+      operation: 'save_answer',
+      payload: {
+        sessionId: '55555555-5555-4555-8555-555555555555',
+        sessionToken: 'ers1_' + 'ab'.repeat(32),
+        questionId: 'q-1',
+        answer: 'Answer\u202E text',
+        flagged: false,
+      },
+      idempotencyKey: 'operation:12345678-1234-4234-8234-1234567890ab',
+    }),
+  });
+
+  const response = await publicApiAlias.fetch(request, {
+    DUE_DILIGENCE_APPLICATION: {
+      async fetch(candidate) {
+        const body = JSON.parse(await candidate.text());
+        calls.push({
+          body,
+          requestId: candidate.headers.get('X-Request-ID'),
+        });
+        if (calls.length === 1) {
+          return new Response(JSON.stringify({
+            ok: false,
+            error: {
+              code: 'EXAM_ROOM_V1_TEXT_INVALID',
+              message: 'Remove hidden characters and try again.',
+            },
+          }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        return new Response(JSON.stringify({
+          ok: true,
+          revision: { revision: 1 },
+        }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      },
+    },
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1].body.operation, 'save_answer');
+  assert.equal(calls[1].body.payload.questionId, 'q001');
+  assert.equal(calls[1].body.payload.answer, 'Answer text');
+  assert.match(calls[1].requestId, /^answer-repair:/u);
+  assert.equal(calls[1].body.idempotencyKey, calls[1].requestId);
+});
+
 test('legacy Examination Room submit backfills local answers before forwarding submit and patches old receipt timestamp', async () => {
   const calls = [];
   const request = new Request('https://duediligence-api.example.test/examination-room/v1/student/command', {

@@ -216,9 +216,9 @@ test('answer upload continues even when an unrelated integrity event fails', asy
     ],
   });
 
-  assert.deepEqual(result.acknowledgedOperationIds, ['answer-operation-0002']);
-  assert.deepEqual(result.failedOperationIds, ['integrity-operation-0001']);
-  assert.deepEqual(result.failedAnswerOperationIds, []);
+  assert.deepEqual(Array.from(result.acknowledgedOperationIds), ['answer-operation-0002']);
+  assert.deepEqual(Array.from(result.failedOperationIds), ['integrity-operation-0001']);
+  assert.deepEqual(Array.from(result.failedAnswerOperationIds), []);
   assert.equal(calls[0].operation, 'save_answer');
   assert.equal(calls[0].payload.answer, 'Uploaded answer');
 });

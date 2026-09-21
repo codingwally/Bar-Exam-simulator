@@ -1862,48 +1862,69 @@
 
   async function syncOperations({ attemptId, sessionToken, operations = [] }) {
     const acknowledgedOperationIds = [];
+    const failedOperationIds = [];
+    const failedAnswerOperationIds = [];
     let serverRevision = 0;
-    for (const operation of operations) {
+
+    const orderedOperations = operations.slice().sort((left, right) => {
+      const leftAnswer = left?.kind === 'answer.changed' || left?.kind === 'question.flag_changed';
+      const rightAnswer = right?.kind === 'answer.changed' || right?.kind === 'question.flag_changed';
+      if (leftAnswer !== rightAnswer) return leftAnswer ? -1 : 1;
+      return Number(left?.sequence || 0) - Number(right?.sequence || 0);
+    });
+
+    for (const operation of orderedOperations) {
       const payload = operation.payload || {};
-      if (operation.kind === 'integrity.event') {
-        await studentCommand('record_event', {
-          sessionId: attemptId,
-          sessionToken,
-          type: payload.eventType || 'client_event',
-          severity: 'info',
-          occurredAt: operation.occurredAt,
-          details: payload.details || {},
-          visibilityState: payload.visibilityState,
-          fullscreen: payload.fullscreen,
-          clientSequence: operation.sequence,
-        }, operation.id);
-      } else if (operation.kind === 'answer.changed' || operation.kind === 'question.flag_changed') {
-        let serverAnswer = payload.answer === undefined ? null : payload.answer;
-        const legacyChoice = typeof serverAnswer === 'string'
-          ? /^option-(\d+)$/i.exec(serverAnswer.trim())
-          : null;
-        if (legacyChoice) serverAnswer = Math.max(0, Number(legacyChoice[1]) - 1);
-        await studentCommand('save_answer', {
-          sessionId: attemptId,
-          sessionToken,
-          questionId: payload.questionId,
-          answer: serverAnswer,
-          flagged: Boolean(payload.flagged),
-          clientSequence: operation.sequence,
-          occurredAt: operation.occurredAt,
-        }, operation.id);
-      } else {
-        throw new ExaminationRoomApiError(
-          'OPERATION_UNSUPPORTED',
-          'A saved browser action could not be synchronized.',
-          400,
-          'Refresh this page. Your answers remain saved on this device.',
-        );
+      const isAnswerOperation = operation.kind === 'answer.changed' || operation.kind === 'question.flag_changed';
+      try {
+        if (operation.kind === 'integrity.event') {
+          await studentCommand('record_event', {
+            sessionId: attemptId,
+            sessionToken,
+            type: payload.eventType || 'client_event',
+            severity: 'info',
+            occurredAt: operation.occurredAt,
+            details: payload.details || {},
+            visibilityState: payload.visibilityState,
+            fullscreen: payload.fullscreen,
+            clientSequence: operation.sequence,
+          }, operation.id);
+        } else if (isAnswerOperation) {
+          let serverAnswer = payload.answer === undefined ? null : payload.answer;
+          const legacyChoice = typeof serverAnswer === 'string'
+            ? /^option-(\d+)$/i.exec(serverAnswer.trim())
+            : null;
+          if (legacyChoice) serverAnswer = Math.max(0, Number(legacyChoice[1]) - 1);
+          await studentCommand('save_answer', {
+            sessionId: attemptId,
+            sessionToken,
+            questionId: payload.questionId,
+            answer: serverAnswer,
+            flagged: Boolean(payload.flagged),
+            clientSequence: operation.sequence,
+            occurredAt: operation.occurredAt,
+          }, operation.id);
+        } else {
+          throw new ExaminationRoomApiError(
+            'OPERATION_UNSUPPORTED',
+            'A saved browser action could not be synchronized.',
+            400,
+            'Your answers remain saved and can continue uploading.',
+          );
+        }
+        acknowledgedOperationIds.push(operation.id);
+        serverRevision = Math.max(serverRevision, Number(operation.sequence || 0));
+      } catch {
+        failedOperationIds.push(operation.id);
+        if (isAnswerOperation) failedAnswerOperationIds.push(operation.id);
       }
-      acknowledgedOperationIds.push(operation.id);
-      serverRevision = Math.max(serverRevision, Number(operation.sequence || 0));
     }
-    return { acknowledgedOperationIds, serverRevision };
+    return {
+      acknowledgedOperationIds,
+      failedOperationIds,
+      failedAnswerOperationIds,
+      serverRevision,
+    };
   }
 
   async function submitAttempt(payload) {

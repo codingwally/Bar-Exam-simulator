@@ -117,7 +117,7 @@
   function registerExaminationRoomServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
 
-    navigator.serviceWorker.register('/service-worker.js?v=examination-room-answer-recovery-20260922-2')
+    navigator.serviceWorker.register('/service-worker.js?v=examination-room-answer-upload-20260922-3')
       .catch(function () {
         // Registration failure must never block a student who still has a
         // working network connection. The exam UI already reports offline
@@ -1035,7 +1035,7 @@
     };
     await databasePut('operations', operation);
     await persistAttempt();
-    scheduleQueueSync(180);
+    scheduleQueueSync(kind === 'answer.changed' || kind === 'question.flag_changed' ? 0 : 180);
   }
 
   function scheduleQueueSync(delay) {
@@ -1078,8 +1078,14 @@
       state.attempt.serverRevision = result.serverRevision || state.attempt.serverRevision;
       await persistAttempt();
       var remaining = await getOperationsForAttempt(state.attempt.attemptId);
-      updateSaveStatus(remaining.length ? 'local' : 'saved');
-      return remaining.length === 0;
+      var pendingAnswers = remaining.filter(function (operation) {
+        return operation.kind === 'answer.changed' || operation.kind === 'question.flag_changed';
+      });
+      updateSaveStatus(pendingAnswers.length ? 'local' : 'saved');
+      if (remaining.length && !pendingAnswers.length) {
+        scheduleQueueSync(1000);
+      }
+      return pendingAnswers.length === 0;
     } catch (error) {
       updateSaveStatus('local');
       return false;

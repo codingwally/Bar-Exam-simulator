@@ -260,11 +260,17 @@ test('public API repairs a 400 student save caused by legacy question ids, hidde
   assert.equal(calls[1].body.idempotencyKey, calls[1].requestId);
 });
 
-test('public API falls back to the authenticated recovery writer when both normal answer-save attempts are rejected', async (context) => {
+test('public API falls back to authenticated recovery after the legacy route also rejects the answer', async (context) => {
   const applicationCalls = [];
   const recoveryCalls = [];
   context.mock.method(globalThis, 'fetch', async (url, options) => {
     recoveryCalls.push({ url: String(url), body: JSON.parse(options.body) });
+    if (recoveryCalls.length === 1) {
+      return new Response(JSON.stringify({ ok: false, error: { code: 'RECOVERY_TEMPORARY' } }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
     return new Response(JSON.stringify({
       ok: true,
       revision: { questionKey: 'q001', revision: 1, savedAt: '2026-09-21T19:10:00.000Z', flagged: false },
@@ -315,7 +321,7 @@ test('public API falls back to the authenticated recovery writer when both norma
 
   assert.equal(response.status, 200);
   assert.equal(applicationCalls.length, 2);
-  assert.equal(recoveryCalls.length, 1);
+  assert.equal(recoveryCalls.length, 2);
   assert.match(recoveryCalls[0].url, /examination-room-answer-recovery$/u);
   assert.equal(recoveryCalls[0].body.questionId, 'q001');
   assert.equal(recoveryCalls[0].body.answer, 'Recovered answer');

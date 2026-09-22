@@ -84,6 +84,23 @@ jobs:
           grep -Fq "A blank response is still a final response." worker/examination-room-v1-routes.mjs
           grep -Fq "student submit persists blank answers and still produces a receipt" worker/examination-room-v1-routes.test.mjs
 
+      - name: Prepare behavior-equivalent free-plan deployment config
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "String(env.GEMINI_GROUNDING_ENABLED).toLowerCase() === 'true'" worker/index.mjs
+          grep -Fq "String(env.ALLOW_LEGACY_GUESTS).toLowerCase() === 'true'" worker/index.mjs
+          grep -Fq 'AI_PREPARED_BETA_BADGE: false' worker/duediligence-2026-core.mjs
+          grep -Fq 'CONTENT_HUMAN_REVIEW_REQUIRED: false' worker/duediligence-2026-core.mjs
+          cp worker/wrangler.toml worker/wrangler.examination-room-release.toml
+          sed -i \
+            -e '/^GEMINI_GROUNDING_ENABLED =/d' \
+            -e '/^ALLOW_LEGACY_GUESTS =/d' \
+            -e '/^AI_PREPARED_BETA_BADGE =/d' \
+            -e '/^CONTENT_HUMAN_REVIEW_REQUIRED =/d' \
+            worker/wrangler.examination-room-release.toml
+          test "$(grep -Ec '^[A-Z0-9_]+ = ' worker/wrangler.examination-room-release.toml)" -eq 41
+
       - name: Deploy application Worker
         uses: cloudflare/wrangler-action@v3
         with:
@@ -91,7 +108,7 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: worker
           wranglerVersion: "4.114.0"
-          command: deploy
+          command: deploy --config wrangler.examination-room-release.toml
 
       - name: Verify both live Examination Room origins
         shell: bash

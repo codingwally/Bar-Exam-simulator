@@ -126,7 +126,7 @@ jobs:
             --header 'Origin: https://duediligence.ph' \
             --header 'Content-Type: application/json' \
             --header 'X-Request-ID: submission:single-submit-release-probe' \
-            --data '{"operation":"submit","payload":{"attemptId":"00000000-0000-0000-0000-000000000000","sessionToken":"ers1_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","answers":[{"questionId":"q001","answer":"probe"}]},"idempotencyKey":"submission:single-submit-release-probe"}' \
+            --data '{"operation":"submit","payload":{"sessionId":"00000000-0000-0000-0000-000000000000","sessionToken":"ers1_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","answers":[{"questionId":"q001","answer":"probe"}]},"idempotencyKey":"submission:single-submit-release-probe"}' \
             "$PUBLIC_API_URL/examination-room/v1/student/command")"
           printf '%s\n' "$status" > "$metrics"
           code="${status%% *}"

@@ -1427,6 +1427,7 @@ test('legacy open student tabs can upload their local answer snapshot during sub
       payload: {
         sessionId: IDS.session,
         sessionToken: SESSION_TOKEN,
+        clientCompletedAt: '2026-08-26T03:59:30.000Z',
         answers: [{
           questionId: 'q001',
           answer: 'Checks and balances restrain each branch.',
@@ -1441,13 +1442,21 @@ test('legacy open student tabs can upload their local answer snapshot during sub
   );
 
   assert.equal(response.status, 201);
+  const intentCall = calls.find((entry) => entry.operation === 'submission_intent');
   const saveCall = calls.find((entry) => entry.operation === 'save_answer');
   const submitCall = calls.find((entry) => entry.operation === 'submit');
+  assert.ok(intentCall, 'submission intent must be recorded before final answer reconciliation');
+  assert.equal(intentCall.payload.clientCompletedAt, '2026-08-26T03:59:30.000Z');
+  assert.ok(calls.indexOf(intentCall) < calls.indexOf(saveCall), 'submission intent must precede answer backfill');
   assert.ok(saveCall, 'legacy submit snapshot must be server-backed before final submit');
   assert.equal(saveCall.payload.answerRevision.questionKey, 'q001');
   assert.equal(saveCall.payload.answerRevision.answer, 'Checks and balances restrain each branch.');
   assert.equal(saveCall.payload.source, 'submission');
+  assert.equal(saveCall.payload.submissionRequestHash, intentCall.payload.requestHash);
+  assert.equal(saveCall.payload.savedAt, '2026-08-26T03:59:30.000Z');
   assert.ok(submitCall, 'submission should continue after answer backfill');
+  assert.equal(submitCall.payload.submissionRequestHash, intentCall.payload.requestHash);
+  assert.equal(submitCall.payload.submissionManifest.submittedAt, '2026-08-26T03:59:30.000Z');
   assert.equal(submitCall.payload.submissionManifest.questionCount, 1);
   assert.equal(submitCall.payload.submissionManifest.questions[0].answer, 'Checks and balances restrain each branch.');
 });

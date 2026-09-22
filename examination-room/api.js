@@ -1829,110 +1829,51 @@
 
   async function loadExam({ attemptId, sessionToken }) {
     const result = await studentQuery('resume', { sessionId: attemptId, sessionToken });
-    const questions = studentSafeQuestions(result.exam?.questions || result.questions || []);
-    const answers = {};
-    (Array.isArray(result.answerRevisions) ? result.answerRevisions : []).forEach((revision) => {
-      const question = questions.find((entry) => (
-        entry.id === revision?.questionKey
-        || entry.number === Number(revision?.questionNumber)
-      ));
-      if (!question || revision?.answer === undefined || revision?.answer === null) return;
-      if (question.type === 'multiple_choice' && Number.isSafeInteger(Number(revision.answer))) {
-        const options = Array.isArray(question.options)
-          ? question.options
-          : Array.isArray(question.choices)
-            ? question.choices.map((label, index) => ({ id: `option-${index + 1}`, label: String(label) }))
-            : [];
-        const option = options[Number(revision.answer)];
-        const questionId = question.id || question.key || question.questionKey || `q-${question.number}`;
-        if (option) answers[questionId] = option.id;
-        return;
-      }
-      const questionId = question.id || question.key || question.questionKey || `q-${question.number}`;
-      answers[questionId] = revision.answer;
-    });
-    return {
-      questions,
-      answers,
-      answerRevisions: Array.isArray(result.answerRevisions) ? clone(result.answerRevisions) : [],
-      sessionStatus: result.session?.status || null,
-      submittedAt: result.session?.submittedAt || null,
-    };
+    return { questions: studentSafeQuestions(result.exam?.questions || result.questions || []) };
   }
 
   async function syncOperations({ attemptId, sessionToken, operations = [] }) {
     const acknowledgedOperationIds = [];
-    const failedOperationIds = [];
-    const failedAnswerOperationIds = [];
     let serverRevision = 0;
-
-    const orderedOperations = operations.slice().sort((left, right) => {
-      const leftAnswer = left?.kind === 'answer.changed' || left?.kind === 'question.flag_changed';
-      const rightAnswer = right?.kind === 'answer.changed' || right?.kind === 'question.flag_changed';
-      if (leftAnswer !== rightAnswer) return leftAnswer ? -1 : 1;
-      return Number(left?.sequence || 0) - Number(right?.sequence || 0);
-    });
-
-    for (const operation of orderedOperations) {
+    for (const operation of operations) {
       const payload = operation.payload || {};
-      const isAnswerOperation = operation.kind === 'answer.changed' || operation.kind === 'question.flag_changed';
-      try {
-        if (operation.kind === 'integrity.event') {
-          await studentCommand('record_event', {
-            sessionId: attemptId,
-            sessionToken,
-            type: payload.eventType || 'client_event',
-            severity: 'info',
-            occurredAt: operation.occurredAt,
-            details: payload.details || {},
-            visibilityState: payload.visibilityState,
-            fullscreen: payload.fullscreen,
-            clientSequence: operation.sequence,
-          }, operation.id);
-        } else if (isAnswerOperation) {
-          let serverAnswer = payload.answer === undefined ? null : payload.answer;
-          const legacyChoice = typeof serverAnswer === 'string'
-            ? /^option-(\d+)$/i.exec(serverAnswer.trim())
-            : null;
-          if (legacyChoice) serverAnswer = Math.max(0, Number(legacyChoice[1]) - 1);
-          await studentCommand('save_answer', {
-            sessionId: attemptId,
-            sessionToken,
-            questionId: payload.questionId,
-            answer: serverAnswer,
-            flagged: Boolean(payload.flagged),
-            clientSequence: operation.sequence,
-            occurredAt: operation.occurredAt,
-          }, operation.id);
-        } else {
-          throw new ExaminationRoomApiError(
-            'OPERATION_UNSUPPORTED',
-            'A saved browser action could not be synchronized.',
-            400,
-            'Your answers remain saved and can continue uploading.',
-          );
-        }
-        acknowledgedOperationIds.push(operation.id);
-        serverRevision = Math.max(serverRevision, Number(operation.sequence || 0));
-      } catch {
-        failedOperationIds.push(operation.id);
-        if (isAnswerOperation) failedAnswerOperationIds.push(operation.id);
+      if (operation.kind === 'integrity.event') {
+        await studentCommand('record_event', {
+          sessionId: attemptId,
+          sessionToken,
+          type: payload.eventType || 'client_event',
+          severity: 'info',
+          occurredAt: operation.occurredAt,
+          details: payload.details || {},
+          visibilityState: payload.visibilityState,
+          fullscreen: payload.fullscreen,
+          clientSequence: operation.sequence,
+        }, operation.id);
+      } else if (operation.kind === 'answer.changed' || operation.kind === 'question.flag_changed') {
+        await studentCommand('save_answer', {
+          sessionId: attemptId,
+          sessionToken,
+          questionId: payload.questionId,
+          answer: payload.answer === undefined ? null : payload.answer,
+          flagged: Boolean(payload.flagged),
+          clientSequence: operation.sequence,
+          occurredAt: operation.occurredAt,
+        }, operation.id);
+      } else {
+        throw new ExaminationRoomApiError(
+          'OPERATION_UNSUPPORTED',
+          'A saved browser action could not be synchronized.',
+          400,
+          'Refresh this page. Your answers remain saved on this device.',
+        );
       }
+      acknowledgedOperationIds.push(operation.id);
+      serverRevision = Math.max(serverRevision, Number(operation.sequence || 0));
     }
-    return {
-      acknowledgedOperationIds,
-      failedOperationIds,
-      failedAnswerOperationIds,
-      serverRevision,
-    };
+    return { acknowledgedOperationIds, serverRevision };
   }
 
   async function submitAttempt(payload) {
-    const finalAnswers = Array.isArray(payload.answers) ? payload.answers : [];
-    // Send one idempotent request containing the complete local snapshot. The
-    // Worker persists these answers before it creates the signed submission
-    // manifest, so a missed autosave cannot lose work and the browser does not
-    // wait on one network round trip per question.
     const result = await studentCommand('submit', {
       ...payload,
       sessionId: payload.attemptId,
@@ -1941,9 +1882,9 @@
     const submission = result.submission || result.receipt || result;
     return {
       receiptId: submission.receiptCode || submission.receiptId || submission.id,
-      submittedAt: submission.submittedAt || submission.receivedAt || result.submittedAt || result.receivedAt || payload.clientCompletedAt,
-      signature: submission.signature || submission.manifestHash || result.manifestHash || submission.receiptId || submission.id,
-      answerCount: submission.answerCount ?? finalAnswers.filter((entry) => entry.answer !== null && entry.answer !== '').length,
+      submittedAt: submission.submittedAt,
+      signature: submission.signature || submission.manifestHash || submission.id,
+      answerCount: submission.answerCount ?? (payload.answers || []).filter((entry) => entry.answer !== null && entry.answer !== '').length,
       examVersion: submission.examVersion || submission.examVersionId || payload.examVersion,
       isDemo: demoEnabled(),
     };

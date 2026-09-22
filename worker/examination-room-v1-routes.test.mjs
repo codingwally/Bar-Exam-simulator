@@ -2058,3 +2058,52 @@ test('student submission retry reuses an identical saved revision instead of cre
   assert.equal(calls.filter((entry) => entry.operation === 'save_answer').length, 0);
   assert.equal(calls.filter((entry) => entry.operation === 'submit').length, 1);
 });
+
+
+test('accepted submit hands the roster-bound email and answers to the post-submit hook', async () => {
+  const publication = publicationFixture();
+  const handoffs = [];
+  const { handlers } = dependencyFixture({
+    afterStudentCommand: (details) => handoffs.push(details),
+    rpc: async (_env, parameters) => {
+      if (parameters.operation === 'session_context') {
+        return {
+          ok: true,
+          publicationManifest: publication,
+          publicationHash: 'a'.repeat(64),
+          studentEmail: 'student@example.edu.ph',
+          studentIdentity: identityFixture(),
+          privacyConsent: {
+            noticeVersion: 'exam-room-v1', accepted: true,
+            acceptedAt: '2026-08-26T01:55:00.000Z', recordingAccepted: false,
+          },
+          answerRevisions: [answerRevisionFixture(publication)],
+        };
+      }
+      if (parameters.operation === 'submit') {
+        return { ok: true, submission: { id: IDS.submission }, duplicate: false };
+      }
+      return { ok: true };
+    },
+  });
+
+  const response = await handlers.studentCommand(
+    makeRequest('/examination-room/v1/student/command', {
+      operation: 'submit',
+      payload: { sessionId: IDS.session, sessionToken: SESSION_TOKEN },
+      idempotencyKey: REQUEST_KEY,
+    }, null),
+    ENV,
+    ORIGIN,
+    ORIGIN,
+    { waitUntil() {} },
+  );
+
+  assert.equal(response.status, 201);
+  assert.equal(handoffs.length, 1);
+  assert.equal(handoffs[0].submissionEmailDetails.recipient, 'student@example.edu.ph');
+  assert.match(handoffs[0].submissionEmailDetails.idempotencyHash, /^[0-9a-f]{64}$/u);
+  assert.equal(handoffs[0].submissionEmailDetails.answers.length, publication.questions.length);
+  assert.equal(handoffs[0].submissionEmailDetails.answers[0].questionNumber, 1);
+  assert.equal(handoffs[0].submissionEmailDetails.answers[0].answer, 'Answer text');
+});

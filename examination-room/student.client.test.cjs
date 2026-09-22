@@ -174,3 +174,20 @@ test('student result checking uses bounded backoff, hidden-tab throttling, and m
   assert.match(studentSource, /Automatic result checking paused after two hours\. Choose Check for result to restart it\./);
   assert.match(studentSource, /if \(manual && state\.resultPollingExpired\) \{[\s\S]*resetResultPollingWindow\(\)[\s\S]*subscribeForResultUpdates\(\)/);
 });
+
+
+test('final submission locks the local snapshot and retries automatically for fifteen minutes', () => {
+  assert.match(studentSource, /SUBMISSION_RETRY_WINDOW_MS = 15 \* 60 \* 1000/);
+  assert.match(studentSource, /Please wait — your answers are being uploaded\./);
+  assert.match(studentSource, /Do not close this window/);
+  assert.match(studentSource, /while \([\s\S]*Date\.now\(\) - retryStartedAt < SUBMISSION_RETRY_WINDOW_MS/);
+  assert.match(studentSource, /submissionRetryCount/);
+  assert.match(studentSource, /state\.attempt\.answers = copyObject\(state\.answers\)/);
+  assert.doesNotMatch(studentSource, /async function retryPendingSubmission\(\)[\s\S]{0,2000}await flushOperationQueue\(\)/);
+});
+
+test('final submit sends the frozen complete answer snapshot and original completion time', () => {
+  assert.match(studentSource, /var frozenAnswers = state\.attempt\.answers \|\| \{\}/);
+  assert.match(studentSource, /submittedAt: state\.attempt\.clientCompletedAt/);
+  assert.match(studentSource, /answers: state\.questions\.map/);
+});

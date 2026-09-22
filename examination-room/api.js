@@ -1929,28 +1929,10 @@
 
   async function submitAttempt(payload) {
     const finalAnswers = Array.isArray(payload.answers) ? payload.answers : [];
-
-    // Final submission is also the last-resort answer upload path. This makes
-    // submission independent of a missed/deferred autosave queue flush.
-    for (let index = 0; index < finalAnswers.length; index += 1) {
-      const entry = finalAnswers[index] || {};
-      if (entry.answer === undefined || entry.answer === null || entry.answer === '') continue;
-      let serverAnswer = entry.answer;
-      const choice = typeof serverAnswer === 'string'
-        ? /^option-(\d+)$/i.exec(serverAnswer.trim())
-        : null;
-      if (choice) serverAnswer = Math.max(0, Number(choice[1]) - 1);
-
-      await studentCommand('save_answer', {
-        sessionId: payload.attemptId,
-        sessionToken: payload.sessionToken,
-        questionId: entry.questionId,
-        answer: serverAnswer,
-        flagged: Boolean(entry.flagged),
-        source: 'submission',
-      }, `${payload.idempotencyKey}:answer:${index + 1}`);
-    }
-
+    // Send one idempotent request containing the complete local snapshot. The
+    // Worker persists these answers before it creates the signed submission
+    // manifest, so a missed autosave cannot lose work and the browser does not
+    // wait on one network round trip per question.
     const result = await studentCommand('submit', {
       ...payload,
       sessionId: payload.attemptId,

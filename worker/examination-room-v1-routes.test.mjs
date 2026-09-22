@@ -2002,9 +2002,10 @@ test('student submit persists blank answers and still produces a receipt', async
   );
 
   assert.equal(response.status, 201);
-  const saveCalls = calls.filter((entry) => entry.operation === 'save_answer');
+  const saveCall = calls.find((entry) => entry.operation === 'save_answer');
   const submitCall = calls.find((entry) => entry.operation === 'submit');
-  assert.equal(saveCalls.length, 0);
+  assert.ok(saveCall, 'unanswered question must still receive a final server revision');
+  assert.equal(saveCall.payload.answerRevision.answer, null);
   assert.equal(submitCall.payload.submissionManifest.questions[0].answer, null);
 });
 

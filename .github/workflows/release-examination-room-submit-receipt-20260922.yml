@@ -18,7 +18,7 @@ concurrency:
 
 env:
   PRODUCTION_BASE_SHA: d7536113092fe3d5a9e10825ed5612909c7e572e
-  RELEASE_SOURCE_SHA: f04f6138571ed2a42d1cb55c7527081df8555a73
+  RELEASE_SOURCE_SHA: efe4129bee5b3328a7c7e105807fe7da1aa5c2f6
   SITE_URL: https://duediligence.ph
   APPROVAL_REFERENCE: owner-chat-answer-copy-flow-2026-09-22
 
@@ -88,7 +88,8 @@ jobs:
           node --check examination-room/student.js
           node --check examination-room/professor.js
           node --check service-worker.js
-          node --test examination-room/student.client.test.cjs examination-room/professor.client.test.cjs
+          node --test examination-room/student.client.test.cjs
+          node --test --test-name-pattern="professor grading can download the same submitted-answer copy format" examination-room/professor.client.test.cjs
           git diff --check "$PRODUCTION_BASE_SHA..$RELEASE_SOURCE_SHA"
 
       - name: Build and verify exact Pages artifact

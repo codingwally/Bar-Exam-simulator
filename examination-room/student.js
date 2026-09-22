@@ -119,7 +119,7 @@
   function registerExaminationRoomServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
 
-    navigator.serviceWorker.register('/service-worker.js?v=submission-retry-20260922-9')
+    navigator.serviceWorker.register('/service-worker.js?v=submission-email-20260922-10')
       .catch(function () {
         // Registration failure must never block a student who still has a
         // working network connection. The exam UI already reports offline
@@ -1398,10 +1398,17 @@
     elements.receiptIcon.classList.remove('is-pending');
     elements.receiptIcon.innerHTML = '<i class="ph ph-seal-check"></i>';
     elements.receiptEyebrow.textContent = receipt.isDemo ? 'Demo submission confirmed' : 'Submission confirmed';
-    elements.receiptTitle.textContent = 'Your examination was submitted.';
+    elements.receiptTitle.textContent = receipt.isDemo
+      ? 'Your demonstration examination was submitted.'
+      : 'Your answers were successfully uploaded for professor grading.';
+    var submissionEmail = state.attempt && state.attempt.student
+      ? normaliseEmail(state.attempt.student.email)
+      : '';
     elements.receiptMessage.textContent = receipt.isDemo
       ? 'This is a local demonstration receipt. No school record was created.'
-      : 'Keep this receipt until your professor releases the results.';
+      : submissionEmail
+        ? 'A copy containing only your submitted answers will be emailed to ' + submissionEmail + '. Keep this receipt until your professor releases the result.'
+        : 'Your answers are stored for professor grading. Keep this receipt until your professor releases the result.';
     elements.pendingSubmissionNote.hidden = true;
     elements.receiptDetails.hidden = false;
     elements.resultPanel.hidden = false;
@@ -1414,7 +1421,7 @@
     setText(elements.receiptSignature, (receipt.signatureAlgorithm ? receipt.signatureAlgorithm + ': ' : '') + receipt.signature);
     clearError(elements.receiptError);
     document.title = 'Submission receipt | Examination Room';
-    announce('Submission confirmed. Receipt ' + receipt.receiptId + '.');
+    announce('Answers successfully uploaded for professor grading. Receipt ' + receipt.receiptId + '.');
     window.scrollTo({ top: 0, behavior: 'auto' });
     startResultWatch(receipt);
   }

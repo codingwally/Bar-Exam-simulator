@@ -1406,6 +1406,13 @@ export function normalizeAnswerRevision(input, context) {
   return deepFreeze({ ...payload, idempotencyInput });
 }
 
+function hasCompleteAnswer(answerRevision) {
+  if (answerRevision.questionType === QUESTION_TYPES.MULTIPLE_CHOICE) {
+    return Number.isSafeInteger(answerRevision.answer);
+  }
+  return typeof answerRevision.answer === 'string' && answerRevision.answer.trim().length > 0;
+}
+
 export function buildSubmissionManifest(input) {
   const allowed = new Set([
     'submissionId',
@@ -1509,10 +1516,10 @@ export function buildSubmissionManifest(input) {
         if (!selected || candidate.revision > selected.revision) selected = candidate;
       }
     }
-    if (!selected) {
+    if (!selected || !hasCompleteAnswer(selected)) {
       fail(
         ERROR_CODES.SUBMISSION_ANSWER_MISSING,
-        `Save question ${question.number} before submitting the examination.`,
+        `Answer question ${question.number} before submitting the examination.`,
         { field: 'submission.answerRevisions', questionNumber: question.number },
       );
     }
@@ -1613,6 +1620,13 @@ function normalizeSubmissionQuestion(input, index) {
   }
   const questionShape = { number, type, choices };
   const answer = normalizeAnswerValue(input.answer, questionShape, `${field}.answer`);
+  if (!hasCompleteAnswer({ questionType: type, answer })) {
+    fail(
+      ERROR_CODES.SUBMISSION_MANIFEST_INVALID,
+      `Reload the submission because question ${number} has no final answer.`,
+      { field: `${field}.answer`, questionNumber: number },
+    );
+  }
   return deepFreeze({
     questionNumber: number,
     questionKey: `q${String(number).padStart(3, '0')}`,

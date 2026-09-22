@@ -240,6 +240,7 @@ import {
   buildExaminationRoomKeyEmail,
   deliverExaminationRoomPublicationRequestEmail,
   deliverExaminationRoomResultReleaseEmails,
+  deliverExaminationRoomSubmissionAnswersEmail,
 } from './examination-room-email.mjs';
 import { googleAccessToken } from './google-oauth.mjs';
 import {
@@ -10457,9 +10458,33 @@ const examinationRoomV1Handlers = createExaminationRoomV1Handlers({
     }
     return null;
   },
-  afterStudentCommand: ({ operation, env, executionContext }) => {
+  afterStudentCommand: ({
+    operation,
+    env,
+    executionContext,
+    submissionEmailDetails,
+  }) => {
     if (operation === 'submit') {
       scheduleExaminationRoomRecoveryDrain(env, executionContext);
+      if (submissionEmailDetails?.recipient) {
+        const emailWork = deliverExaminationRoomSubmissionAnswersEmail(
+          env,
+          submissionEmailDetails,
+        ).then((delivery) => {
+          if (!['sent', 'suppressed'].includes(String(delivery?.status || ''))) {
+            console.error('Examination Room submitted-answer email was not delivered', {
+              status: String(delivery?.status || 'failed').slice(0, 40),
+              safeErrorCode: String(delivery?.safeErrorCode || 'unknown').slice(0, 80),
+            });
+          }
+          return delivery;
+        }).catch((error) => {
+          console.error('Examination Room submitted-answer email failed', {
+            message: String(error?.message || 'unknown').slice(0, 160),
+          });
+        });
+        if (executionContext?.waitUntil) executionContext.waitUntil(emailWork);
+      }
     }
   },
   hmacHex,

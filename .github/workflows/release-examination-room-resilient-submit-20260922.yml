@@ -148,7 +148,11 @@ jobs:
             student="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/student.js?v=submission-email-20260922-10&release=$RELEASE_SOURCE_SHA" || true)"
             api="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/api.js?v=submission-retry-20260922-9&release=$RELEASE_SOURCE_SHA" || true)"
             page="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/student.html?release=$RELEASE_SOURCE_SHA" || true)"
-            if grep -Fq "SUBMISSION_RETRY_WINDOW_MS = 15 * 60 * 1000" <<<"$student"               && grep -Fq "Please wait — your answers are being uploaded." <<<"$student"               && grep -Fq "STUDENT_SUBMISSION_REQUEST_TIMEOUT_MS = 60_000" <<<"$api"               && grep -Fq "submission.submittedAt || submission.receivedAt" <<<"$api"               && grep -Fq 'student.js?v=submission-email-20260922-10' <<<"$page"
+            if grep -Fq "SUBMISSION_RETRY_WINDOW_MS = 15 * 60 * 1000" <<<"$student" \
+              && grep -Fq "Please wait — your answers are being uploaded." <<<"$student" \
+              && grep -Fq "STUDENT_SUBMISSION_REQUEST_TIMEOUT_MS = 60_000" <<<"$api" \
+              && grep -Fq "submission.submittedAt || submission.receivedAt" <<<"$api" \
+              && grep -Fq 'student.js?v=submission-email-20260922-10' <<<"$page" \
               && grep -Fq "Your answers were successfully uploaded for professor grading." <<<"$student"; then
               echo "Resilient Examination Room submission client is live."
               exit 0

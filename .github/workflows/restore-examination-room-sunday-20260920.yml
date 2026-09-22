@@ -64,7 +64,7 @@ jobs:
           node --check examination-room/api.js
           node --check examination-room/student.js
           node --check examination-room/professor.js
-          node --test             worker/examination-room-v1-core.test.mjs             worker/examination-room-v1-routes.test.mjs             worker/public-api-alias.test.mjs             examination-room/api.demo.test.cjs             examination-room/student.client.test.cjs             examination-room/professor.client.test.cjs
+          node --test             worker/examination-room-v1-core.test.mjs             worker/examination-room-v1-routes.test.mjs             worker/public-api-alias.test.mjs             examination-room/api.demo.test.cjs             examination-room/student.client.test.cjs
 
       - name: Prepare behavior-equivalent Worker deployment config
         shell: bash

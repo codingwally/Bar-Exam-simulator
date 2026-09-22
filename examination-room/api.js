@@ -1883,7 +1883,7 @@
     const submission = result.submission || result.receipt || result;
     return {
       receiptId: submission.receiptCode || submission.receiptId || submission.id,
-      submittedAt: submission.submittedAt,
+      submittedAt: submission.submittedAt || submission.receivedAt || result.submittedAt || result.receivedAt,
       signature: submission.signature || submission.manifestHash || submission.id,
       answerCount: submission.answerCount ?? (payload.answers || []).filter((entry) => entry.answer !== null && entry.answer !== '').length,
       examVersion: submission.examVersion || submission.examVersionId || payload.examVersion,

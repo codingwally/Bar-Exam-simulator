@@ -1,4 +1,4 @@
-name: Emergency Examination Room single-submit API release
+name: Emergency Examination Room recovery-first answer-save release
 
 on:
   push:
@@ -11,18 +11,18 @@ permissions:
   contents: read
 
 concurrency:
-  group: public-api-legacy-submit-backfill
+  group: public-api-answer-save-recovery
   cancel-in-progress: false
 
 env:
-  BASE_SHA: 560ef29895d01a8667f96c6e1528e2322cf4cb27
-  RELEASE_SOURCE_SHA: 0a1b667d3dcd49145eab2dcdc156f40b9d3e7411
+  BASE_SHA: 2f829101e00f1a65ec81dc4de989e6653eec669a
+  RELEASE_SOURCE_SHA: 24e1dbbef9fd0e035fcdf063cda45be6ad744180
   PUBLIC_API_URL: https://duediligence-api.wallyesteban1993.workers.dev
 
 jobs:
   deploy:
-    name: Verify and deploy single-submit API boundary
-    if: "${{ github.event.head_commit.message == 'release: deploy Examination Room single-submit fix' }}"
+    name: Verify and deploy recovery-first answer saves
+    if: "${{ github.event.head_commit.message == 'release: deploy Examination Room recovery-first saves' }}"
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment:
@@ -46,12 +46,6 @@ jobs:
           base=os.environ['BASE_SHA']
           source=os.environ['RELEASE_SOURCE_SHA']
           expected={
-            'examination-room/api.demo.test.cjs',
-            'examination-room/api.js',
-            'examination-room/student.client.test.cjs',
-            'examination-room/student.html',
-            'examination-room/student.js',
-            'service-worker.js',
             'worker/public-api-alias.mjs',
             'worker/public-api-alias.test.mjs',
           }
@@ -61,7 +55,7 @@ jobs:
           ).splitlines())
           if changed != expected:
               raise SystemExit(f'unexpected public API hotfix scope: {sorted(changed)}')
-          print('Exact Examination Room single-submit scope verified.')
+          print('Exact Examination Room answer-save recovery scope verified.')
           PY
 
       - name: Setup Node
@@ -69,26 +63,19 @@ jobs:
         with:
           node-version: 22
 
-      - name: Validate single-submit and recovery fallback
+      - name: Validate recovery-first answer saves and single-submit isolation
         shell: bash
         run: |
           set -euo pipefail
           node --check worker/public-api-alias.mjs
-          node --check examination-room/api.js
-          node --test worker/public-api-alias.test.mjs examination-room/api.demo.test.cjs worker/examination-room-v1-routes.test.mjs
+          node --test worker/public-api-alias.test.mjs
           git diff --check "$BASE_SHA..$RELEASE_SOURCE_SHA"
-          grep -Fq "command?.operation === 'submit'" worker/public-api-alias.mjs
+          grep -Fq "command?.operation === 'save_answer' && approvedBrowserOrigin(request)" worker/public-api-alias.mjs
+          grep -Fq "const recovered = await attemptStudentAnswerRecovery(command, requestKey)" worker/public-api-alias.mjs
+          grep -Fq "Final submit intentionally does NOT use this per-answer recovery path." worker/public-api-alias.mjs
           grep -Fq "Submit is forwarded exactly once" worker/public-api-alias.mjs
           grep -Fq "submittedAt: submission.receivedAt" worker/public-api-alias.mjs
-          grep -Fq "forwardStudentSaveWithRepair" worker/public-api-alias.mjs
-          grep -Fq "canonicalQuestionId" worker/public-api-alias.mjs
-          grep -Fq "sanitizeAnswerText" worker/public-api-alias.mjs
-          grep -Fq "ANSWER_RECOVERY_URL" worker/public-api-alias.mjs
-          grep -Fq "recoverStudentAnswer" worker/public-api-alias.mjs
-          grep -Fq "X-Examination-Answer-Recovery" worker/public-api-alias.mjs
-          grep -Fq "attemptStudentAnswerRecovery" worker/public-api-alias.mjs
-          grep -Fq "ANSWER_RECOVERY_TIMEOUT_MS" worker/public-api-alias.mjs
-          grep -Fq "complete local snapshot" examination-room/api.js
+          grep -Fq "unapproved origins cannot invoke the authenticated answer recovery writer" worker/public-api-alias.test.mjs
 
       - name: Deploy provider-neutral public API alias
         uses: cloudflare/wrangler-action@v3
@@ -113,7 +100,31 @@ jobs:
           grep -qi '^access-control-allow-origin: https://duediligence.ph' "$headers"
           echo "Public API alias is live and the canonical Examination Room origin is accepted."
 
-      - name: Verify submit reaches the application without an alias recovery delay
+      - name: Verify approved-origin answer save no longer leaks origin rejection
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$RUNNER_TEMP/exam-room-save-probe.json"
+          headers="$RUNNER_TEMP/exam-room-save-probe.headers"
+          status="$(curl --silent --show-error --max-time 8 \
+            --output "$body" \
+            --dump-header "$headers" \
+            --write-out '%{http_code}' \
+            --request POST \
+            --header 'Origin: https://duediligence.ph' \
+            --header 'Content-Type: application/json' \
+            --header 'X-Request-ID: operation:recovery-first-release-probe' \
+            --data '{"operation":"save_answer","payload":{"sessionId":"00000000-0000-0000-0000-000000000000","sessionToken":"ers1_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","questionId":"q001","answer":"probe","flagged":false},"idempotencyKey":"operation:recovery-first-release-probe"}' \
+            "$PUBLIC_API_URL/examination-room/v1/student/command")"
+          if [[ "$status" = "403" ]] && grep -Fq '"code":"ORIGIN_NOT_ALLOWED"' "$body"; then
+            echo "Approved-origin answer save still leaks ORIGIN_NOT_ALLOWED." >&2
+            cat "$body" >&2
+            exit 1
+          fi
+          grep -qi '^access-control-allow-origin: https://duediligence.ph' "$headers"
+          echo "Approved-origin answer save crossed the recovery/application boundary without ORIGIN_NOT_ALLOWED (HTTP $status)."
+
+      - name: Verify submit remains single-request and fast
         shell: bash
         run: |
           set -euo pipefail
@@ -125,8 +136,8 @@ jobs:
             --request POST \
             --header 'Origin: https://duediligence.ph' \
             --header 'Content-Type: application/json' \
-            --header 'X-Request-ID: submission:single-submit-release-probe' \
-            --data '{"operation":"submit","payload":{"sessionId":"00000000-0000-0000-0000-000000000000","sessionToken":"ers1_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","answers":[{"questionId":"q001","answer":"probe"}]},"idempotencyKey":"submission:single-submit-release-probe"}' \
+            --header 'X-Request-ID: submission:recovery-first-release-probe' \
+            --data '{"operation":"submit","payload":{"sessionId":"00000000-0000-0000-0000-000000000000","sessionToken":"ers1_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","answers":[{"questionId":"q001","answer":"probe"}]},"idempotencyKey":"submission:recovery-first-release-probe"}' \
             "$PUBLIC_API_URL/examination-room/v1/student/command")"
           printf '%s\n' "$status" > "$metrics"
           code="${status%% *}"
@@ -134,4 +145,4 @@ jobs:
           test "$code" = "400"
           grep -Fq 'EXAM_ROOM_V1_IDENTIFIER_INVALID' "$body"
           awk -v seconds="$seconds" 'BEGIN { exit !(seconds < 5) }'
-          echo "Production submit crossed the alias once and reached application validation in ${seconds}s."
+          echo "Production submit remained single-request and reached application validation in ${seconds}s."

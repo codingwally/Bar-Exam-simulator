@@ -15,8 +15,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  BASE_SHA: 5946be54cd1703765818e663ebc4094c3cad5a52
-  RELEASE_SOURCE_SHA: 269451184ad03736d538d8a367becdf4f0e5debf
+  BASE_SHA: 067acd9f3fd3aced5166bb6636fbe34dbeba5315
+  RELEASE_SOURCE_SHA: b1dbf10ead74bab852ce036d2f4ca74266498e1c
   PUBLIC_API_URL: https://duediligence-api.wallyesteban1993.workers.dev
   APPLICATION_URL: https://duediligence-gemini-examiner.wallyesteban1993.workers.dev
 
@@ -47,12 +47,8 @@ jobs:
           base=os.environ['BASE_SHA']
           source=os.environ['RELEASE_SOURCE_SHA']
           expected={
-            'worker/examination-room-origin.test.mjs',
-            'worker/examination-room-v1-core.mjs',
-            'worker/examination-room-v1-core.test.mjs',
             'worker/examination-room-v1-routes.mjs',
             'worker/examination-room-v1-routes.test.mjs',
-            'worker/index.mjs',
           }
           changed=set(subprocess.check_output(
             ['git','diff','--name-only',f'{base}..{source}'],

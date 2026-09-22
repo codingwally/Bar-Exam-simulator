@@ -13,7 +13,7 @@ permissions:
   id-token: write
 
 env:
-  RELEASE_SOURCE_SHA: 1ff3645365bbc3d1aa9624a069649072c3a69d7e
+  RELEASE_SOURCE_SHA: 84a683e28e42148ffb33bc24d726b6bf64ee66ca
   PUBLIC_API_URL: https://duediligence-api.wallyesteban1993.workers.dev
   APPLICATION_URL: https://duediligence-gemini-examiner.wallyesteban1993.workers.dev
   SITE_URL: https://duediligence.ph
@@ -48,7 +48,7 @@ jobs:
           node --check examination-room/api.js
           node --check worker/examination-room-v1-routes.mjs
           node --test examination-room/student.client.test.cjs
-          node --test --test-name-pattern="legacy open student tabs can upload their local answer snapshot during submit" worker/examination-room-v1-routes.test.mjs
+          node --test --test-name-pattern="legacy open student tabs can upload their local answer snapshot during submit|student submit persists blank answers and still produces a receipt" worker/examination-room-v1-routes.test.mjs
           grep -Fq "SUBMISSION_RETRY_WINDOW_MS = 15 * 60 * 1000" examination-room/student.js
           grep -Fq "Please wait — your answers are being uploaded." examination-room/student.js
           grep -Fq "Do not close this window" examination-room/student.js

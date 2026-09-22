@@ -1,4 +1,4 @@
-name: Examination Room answer-copy workflow release
+name: Examination Room direct-submit recovery release
 
 on:
   push:
@@ -17,15 +17,15 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PRODUCTION_BASE_SHA: d7536113092fe3d5a9e10825ed5612909c7e572e
-  RELEASE_SOURCE_SHA: efe4129bee5b3328a7c7e105807fe7da1aa5c2f6
+  PRODUCTION_BASE_SHA: 85983df71d2d03875bee1ce0f0e4e4547bf5700e
+  RELEASE_SOURCE_SHA: 2068b8cbe2f5f9b8924dabad8173d0ff9deaac1f
   SITE_URL: https://duediligence.ph
-  APPROVAL_REFERENCE: owner-chat-answer-copy-flow-2026-09-22
+  APPROVAL_REFERENCE: owner-chat-direct-submit-recovery-2026-09-22
 
 jobs:
   deploy:
-    name: Verify and deploy Examination Room answer-copy flow
-    if: "${{ github.event.head_commit.message == 'release: deploy Examination Room answer-copy flow' }}"
+    name: Verify and deploy Examination Room direct-submit recovery
+    if: "${{ github.event.head_commit.message == 'release: deploy Examination Room direct-submit recovery' }}"
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment:
@@ -54,13 +54,12 @@ jobs:
           base = os.environ['PRODUCTION_BASE_SHA']
           source = os.environ['RELEASE_SOURCE_SHA']
           expected = {
-              '.github/workflows/release-examination-room-submit-receipt-20260922.yml',
-              'examination-room/index.html',
-              'examination-room/professor.client.test.cjs',
-              'examination-room/professor.js',
               'examination-room/student.client.test.cjs',
               'examination-room/student.html',
               'examination-room/student.js',
+              'examination-room/submission-recovery.client.test.cjs',
+              'examination-room/submission-recovery.html',
+              'examination-room/submission-recovery.js',
               'service-worker.js',
           }
           changed = set(subprocess.check_output(
@@ -71,7 +70,7 @@ jobs:
               raise SystemExit(
                   f'Unexpected production hotfix scope. expected={sorted(expected)} actual={sorted(changed)}'
               )
-          print('Exact Examination Room answer-copy flow scope verified.')
+          print('Exact Examination Room direct-submit recovery scope verified.')
           PY
 
       - name: Setup Node
@@ -82,30 +81,28 @@ jobs:
       - name: Install reviewed Pages build dependencies
         run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
 
-      - name: Validate student download and professor download flow
+      - name: Validate direct-submit and recovery flow
         shell: bash
         run: |
           set -euo pipefail
           node --check examination-room/student.js
-          node --check examination-room/professor.js
+          node --check examination-room/submission-recovery.js
           node --check service-worker.js
-          node --test examination-room/student.client.test.cjs
-          node --test --test-name-pattern="professor grading can download the same submitted-answer copy format" examination-room/professor.client.test.cjs
+          node --test examination-room/student.client.test.cjs examination-room/submission-recovery.client.test.cjs
           git diff --check "$PRODUCTION_BASE_SHA..$RELEASE_SOURCE_SHA"
+          grep -Fq "Final submission must never wait behind the ordinary autosave/integrity" examination-room/student.js
+          ! grep -A12 -F "async function retryPendingSubmission()" examination-room/student.js | grep -Fq "await flushOperationQueue();"
 
       - name: Build and verify exact Pages artifact
         shell: bash
         run: |
           set -euo pipefail
           GITHUB_SHA="$RELEASE_SOURCE_SHA" node scripts/test-pages-artifact.mjs
-          grep -Fq "downloadStudentAnswerCopy" .pages-dist/examination-room/student.js
-          grep -Fq "Your answer copy is downloaded. Upload is pending." .pages-dist/examination-room/student.js
-          grep -Fq "downloadSubmittedAnswerCopy" .pages-dist/examination-room/professor.js
-          grep -Fq "Download submitted answers" .pages-dist/examination-room/professor.js
-          grep -Fq 'api.js?v=answer-copy-flow-20260922-7' .pages-dist/examination-room/student.html
-          grep -Fq 'student.js?v=answer-copy-flow-20260922-7' .pages-dist/examination-room/student.html
-          grep -Fq 'professor.js?v=answer-copy-download-20260922-3' .pages-dist/examination-room/index.html
-          grep -Fq 'duediligence-shell-examination-answer-copy-20260922-7' .pages-dist/service-worker.js
+          grep -Fq "Final submission must never wait behind the ordinary autosave/integrity" .pages-dist/examination-room/student.js
+          grep -Fq "state.api.submitAttempt" .pages-dist/examination-room/submission-recovery.js
+          grep -Fq "Download copy and submit now" .pages-dist/examination-room/submission-recovery.html
+          grep -Fq 'student.js?v=submission-recovery-20260922-8' .pages-dist/examination-room/student.html
+          grep -Fq 'duediligence-shell-examination-submission-recovery-20260922-8' .pages-dist/service-worker.js
           test "$(cat .pages-dist/.well-known/duediligence-release.txt)" = "$RELEASE_SOURCE_SHA"
 
       - name: Setup Pages
@@ -120,30 +117,28 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-      - name: Verify live Examination Room answer-copy flow
+      - name: Verify live Examination Room direct-submit recovery
         shell: bash
         run: |
           set -euo pipefail
           for attempt in {1..18}; do
             marker="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/.well-known/duediligence-release.txt?release=$RELEASE_SOURCE_SHA" || true)"
-            student="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/student.js?v=answer-copy-flow-20260922-7&release=$RELEASE_SOURCE_SHA" || true)"
-            professor="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/professor.js?v=answer-copy-download-20260922-3&release=$RELEASE_SOURCE_SHA" || true)"
+            student="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/student.js?v=submission-recovery-20260922-8&release=$RELEASE_SOURCE_SHA" || true)"
+            recovery="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/submission-recovery.js?v=submission-recovery-20260922-8&release=$RELEASE_SOURCE_SHA" || true)"
+            recovery_page="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/submission-recovery.html?release=$RELEASE_SOURCE_SHA" || true)"
             student_page="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/student.html?release=$RELEASE_SOURCE_SHA" || true)"
-            professor_page="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/?release=$RELEASE_SOURCE_SHA" || true)"
-            sw="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/service-worker.js?v=answer-copy-flow-20260922-7&release=$RELEASE_SOURCE_SHA" || true)"
+            sw="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/service-worker.js?v=submission-recovery-20260922-8&release=$RELEASE_SOURCE_SHA" || true)"
 
             if [[ "$marker" == "$RELEASE_SOURCE_SHA" ]] \
-              && grep -Fq "downloadStudentAnswerCopy" <<<"$student" \
-              && grep -Fq "Your answer copy is downloaded. Upload is pending." <<<"$student" \
-              && grep -Fq "downloadSubmittedAnswerCopy" <<<"$professor" \
-              && grep -Fq "Download submitted answers" <<<"$professor" \
-              && grep -Fq 'student.js?v=answer-copy-flow-20260922-7' <<<"$student_page" \
-              && grep -Fq 'professor.js?v=answer-copy-download-20260922-3' <<<"$professor_page" \
-              && grep -Fq 'duediligence-shell-examination-answer-copy-20260922-7' <<<"$sw"; then
-              echo "Examination Room answer-copy flow is live."
+              && grep -Fq "Final submission must never wait behind the ordinary autosave/integrity" <<<"$student" \
+              && grep -Fq "state.api.submitAttempt" <<<"$recovery" \
+              && grep -Fq "Download copy and submit now" <<<"$recovery_page" \
+              && grep -Fq 'student.js?v=submission-recovery-20260922-8' <<<"$student_page" \
+              && grep -Fq 'duediligence-shell-examination-submission-recovery-20260922-8' <<<"$sw"; then
+              echo "Examination Room direct-submit recovery is live."
               exit 0
             fi
             sleep 10
           done
-          echo "Pages deployed but the answer-copy flow did not converge in time." >&2
+          echo "Pages deployed but direct-submit recovery did not converge in time." >&2
           exit 1

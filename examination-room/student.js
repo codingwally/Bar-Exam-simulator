@@ -1404,9 +1404,16 @@
     clearError(elements.receiptError);
 
     try {
-      // Best-effort drain of autosaves first. submitAttempt() then uploads the
-      // complete visible answer snapshot itself before asking for a receipt.
-      await flushOperationQueue();
+      // Final submission must never wait behind the ordinary autosave/integrity
+      // queue. submitAttempt() already carries the complete local answer snapshot
+      // and the Worker persists that snapshot before issuing a receipt. Waiting
+      // for queued operations here can keep state.submitting=true for minutes and
+      // make every later Retry click silently return.
+      if (state.syncTimer) {
+        window.clearTimeout(state.syncTimer);
+        state.syncTimer = null;
+      }
+      state.syncRequested = false;
       var payload = {
         attemptId: state.attempt.attemptId,
         sessionToken: state.attempt.sessionToken,

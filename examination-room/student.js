@@ -1249,14 +1249,95 @@
     }
   }
 
+  function answerCopySafeFilenamePart(value, fallback) {
+    var cleaned = String(value || '').trim().replace(/[^a-z0-9._-]+/gi, '-').replace(/^-+|-+$/g, '');
+    return cleaned || fallback;
+  }
+
+  function answerCopyDisplayValue(question, value) {
+    if (value === undefined || value === null || value === '') return 'No answer';
+    if (question && question.type === 'multiple_choice') {
+      var options = Array.isArray(question.options) ? question.options : [];
+      if (typeof value === 'string') {
+        var byId = options.find(function (option) { return option && option.id === value; });
+        if (byId) return String(byId.label || byId.id || value);
+        var legacy = /^option-(\d+)$/i.exec(value.trim());
+        if (legacy) {
+          var indexed = options[Math.max(0, Number(legacy[1]) - 1)];
+          if (indexed) return String(indexed.label || indexed.id || value);
+        }
+      }
+      if (Number.isInteger(Number(value))) {
+        var numeric = options[Number(value)];
+        if (numeric) return String(numeric.label || numeric.id || value);
+      }
+    }
+    if (Array.isArray(value)) return value.map(String).join(', ');
+    return typeof value === 'string' ? value : JSON.stringify(value);
+  }
+
+  function buildStudentAnswerCopy() {
+    var student = state.attempt && state.attempt.student ? state.attempt.student : (state.entry || {});
+    var examTitle = String(state.metadata && (state.metadata.title || state.metadata.examTitle) || document.title || 'Examination').trim();
+    var subject = String(state.metadata && state.metadata.subject || student.subject || '').trim();
+    var yearLevel = String(state.metadata && state.metadata.yearLevel || student.yearLevel || '').trim();
+    return {
+      schemaVersion: 'examination-room/student-answer-copy/v1',
+      examination: {
+        title: examTitle,
+        subject: subject,
+        yearLevel: yearLevel
+      },
+      student: {
+        fullName: String(student.fullName || '').trim(),
+        studentNumber: String(student.studentNumber || '').trim(),
+        email: String(student.email || '').trim()
+      },
+      answers: state.questions.map(function (question, index) {
+        return {
+          questionNumber: Number(question.number || index + 1),
+          prompt: String(question.prompt || '').trim(),
+          answer: answerCopyDisplayValue(question, state.answers[question.id])
+        };
+      })
+    };
+  }
+
+  function downloadStudentAnswerCopy() {
+    var copy = buildStudentAnswerCopy();
+    var filename = [
+      'Due-Diligence-Answers',
+      answerCopySafeFilenamePart(copy.student.studentNumber, 'student'),
+      answerCopySafeFilenamePart(copy.examination.title, 'examination')
+    ].join('-') + '.json';
+    var blob = new Blob([JSON.stringify(copy, null, 2) + '\n'], { type: 'application/json;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.hidden = true;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(function () { URL.revokeObjectURL(url); }, 0);
+    return filename;
+  }
+
   async function startSubmission(automatic) {
     if (!state.attempt || state.attempt.status === 'submitted' || state.submitting) {
       return;
     }
     state.submitting = true;
-    setButtonBusy(elements.confirmSubmitButton, true, 'Securing answers');
+    setButtonBusy(elements.confirmSubmitButton, true, 'Preparing answer copy');
 
     try {
+      if (!state.attempt.answerCopyDownloadedAt) {
+        var downloadedAnswerCopy = downloadStudentAnswerCopy();
+        state.attempt.answerCopyDownloadedAt = new Date().toISOString();
+        state.attempt.answerCopyFilename = downloadedAnswerCopy;
+        await persistAttempt();
+      }
+      setButtonBusy(elements.confirmSubmitButton, true, 'Uploading answers');
       await flushPendingAnswerSaves();
       state.attempt.status = 'pending_submit';
       state.attempt.idempotencyKey = state.attempt.idempotencyKey || randomId('submission');
@@ -1290,8 +1371,12 @@
     elements.receiptIcon.classList.add('is-pending');
     elements.receiptIcon.innerHTML = '<i class="ph ph-cloud-arrow-up"></i>';
     elements.receiptEyebrow.textContent = 'Submission pending';
-    elements.receiptTitle.textContent = 'Your answers are safe on this device.';
-    elements.receiptMessage.textContent = 'The examination is locked while confirmation is pending.';
+    elements.receiptTitle.textContent = state.attempt && state.attempt.answerCopyDownloadedAt
+      ? 'Your answer copy is downloaded. Upload is pending.'
+      : 'Your answers are safe on this device.';
+    elements.receiptMessage.textContent = state.attempt && state.attempt.answerCopyDownloadedAt
+      ? 'Due Diligence is uploading the same submitted answers to your professor.'
+      : 'The examination is locked while confirmation is pending.';
     elements.pendingSubmissionNote.hidden = false;
     elements.receiptDetails.hidden = true;
     elements.resultPanel.hidden = true;

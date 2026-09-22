@@ -18,7 +18,7 @@ concurrency:
 
 env:
   PRODUCTION_BASE_SHA: 85983df71d2d03875bee1ce0f0e4e4547bf5700e
-  RELEASE_SOURCE_SHA: 2068b8cbe2f5f9b8924dabad8173d0ff9deaac1f
+  RELEASE_SOURCE_SHA: 472a0e55a2c16b9c44d0ef371fe099172037a637
   SITE_URL: https://duediligence.ph
   APPROVAL_REFERENCE: owner-chat-direct-submit-recovery-2026-09-22
 
@@ -61,6 +61,7 @@ jobs:
               'examination-room/submission-recovery.html',
               'examination-room/submission-recovery.js',
               'service-worker.js',
+              'scripts/test-pages-artifact.mjs',
           }
           changed = set(subprocess.check_output(
               ['git', 'diff', '--name-only', f'{base}..{source}'],

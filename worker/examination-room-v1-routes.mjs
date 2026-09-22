@@ -1583,12 +1583,6 @@ export function createExaminationRoomV1Handlers(dependencies) {
           if (submittedAnswers.length) {
             for (let answerIndex = 0; answerIndex < submittedAnswers.length; answerIndex += 1) {
               const submittedAnswer = plainRecord(submittedAnswers[answerIndex], `submitted answer ${answerIndex + 1}`);
-              if (
-                submittedAnswer.answer === undefined
-                || submittedAnswer.answer === null
-                || submittedAnswer.answer === ''
-              ) continue;
-
               const questionReference = cleanText(
                 submittedAnswer.questionId ?? submittedAnswer.questionKey ?? submittedAnswer.questionNumber,
                 128,
@@ -1612,7 +1606,10 @@ export function createExaminationRoomV1Handlers(dependencies) {
                 );
               }
 
-              let submittedValue = submittedAnswer.answer;
+              // A blank response is still a final response. Persist a null
+              // revision so students may intentionally leave a question
+              // unanswered and the signed receipt can cover every question.
+              let submittedValue = submittedAnswer.answer ?? null;
               if (question.type === 'multiple-choice' && typeof submittedValue === 'string') {
                 const legacyChoice = /^option-(\d+)$/iu.exec(submittedValue.trim());
                 if (legacyChoice) submittedValue = Number(legacyChoice[1]) - 1;

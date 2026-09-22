@@ -554,6 +554,18 @@ test('submission selects the latest revision for every question and emits a froz
   assert.deepEqual(normalizeSubmissionManifest(cloneJson(submission.manifest)), submission.manifest);
 });
 
+test('submission permits intentionally unanswered questions when a blank revision was saved', () => {
+  const publication = makePublication();
+  const revisions = makeAnswerRevisions(publication);
+  revisions[1] = { ...revisions[1], answer: null };
+  const submission = makeSubmission({
+    publication,
+    input: { answerRevisions: revisions },
+  });
+  assert.equal(submission.manifest.questions[1].answer, null);
+  assert.deepEqual(normalizeSubmissionManifest(cloneJson(submission.manifest)), submission.manifest);
+});
+
 test('submission rejects missing answers, mismatched identity fields, and answer revision conflicts', () => {
   const publication = makePublication();
   expectCode(

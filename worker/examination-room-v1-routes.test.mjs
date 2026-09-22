@@ -1452,6 +1452,58 @@ test('legacy open student tabs can upload their local answer snapshot during sub
   assert.equal(submitCall.payload.submissionManifest.questions[0].answer, 'Checks and balances restrain each branch.');
 });
 
+test('student submit persists blank answers and still produces a receipt', async () => {
+  const publication = publicationFixture();
+  let storedRevision = null;
+  const { handlers, calls } = dependencyFixture({
+    rpc: async (_env, parameters) => {
+      if (parameters.operation === 'session_context') {
+        return {
+          ok: true,
+          publicationManifest: publication,
+          publicationHash: 'a'.repeat(64),
+          studentIdentity: identityFixture(),
+          privacyConsent: {
+            noticeVersion: 'exam-room-v1', accepted: true,
+            acceptedAt: '2026-08-26T01:55:00.000Z', recordingAccepted: false,
+          },
+          answerRevisions: storedRevision ? [storedRevision] : [],
+          nextRevisionByQuestion: { q001: 1 },
+        };
+      }
+      if (parameters.operation === 'save_answer') {
+        storedRevision = {
+          ...parameters.payload.answerRevision,
+          idempotencyKey: parameters.payload.requestHash,
+        };
+        return { ok: true, revision: { revision: 1 } };
+      }
+      if (parameters.operation === 'submit') {
+        return { ok: true, submission: { id: IDS.submission }, duplicate: false };
+      }
+      return { ok: true };
+    },
+  });
+
+  const response = await handlers.studentCommand(
+    makeRequest('/examination-room/v1/student/command', {
+      operation: 'submit',
+      payload: {
+        sessionId: IDS.session,
+        sessionToken: SESSION_TOKEN,
+        answers: [{ questionId: 'q001', answer: null, flagged: false }],
+      },
+      idempotencyKey: REQUEST_KEY,
+    }, null), ENV, ORIGIN, ORIGIN,
+  );
+
+  assert.equal(response.status, 201);
+  const saveCall = calls.find((entry) => entry.operation === 'save_answer');
+  const submitCall = calls.find((entry) => entry.operation === 'submit');
+  assert.equal(saveCall.payload.answerRevision.answer, null);
+  assert.equal(submitCall.payload.submissionManifest.questions[0].answer, null);
+});
+
 test('submission freezes latest revisions into a manifest and keeps retries idempotent by hash', async () => {
   const publication = publicationFixture();
   const { handlers, calls } = dependencyFixture({

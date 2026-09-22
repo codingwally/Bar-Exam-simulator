@@ -277,7 +277,7 @@
     <section class="app-view grade-view" id="grade-view" data-app-view="grade" hidden aria-labelledby="grade-title">
       <header class="operations-header">
         <div><p class="section-kicker">Grade submissions</p><h1 id="grade-title">Constitutional Law — Midterm Examination</h1><p>One student at a time, with durable grade revisions and professor-controlled identity.</p></div>
-        <div class="operations-actions"><button class="button secondary" id="export-grading-package" type="button"><i class="ph ph-download-simple" aria-hidden="true"></i>Download offline copy</button><a class="button secondary" href="offline-grading.html" target="_blank" rel="noopener"><i class="ph ph-arrow-square-out" aria-hidden="true"></i>Open offline grading</a><label class="button secondary file-button" for="import-grading-package"><i class="ph ph-upload-simple" aria-hidden="true"></i>Import graded copy</label><input id="import-grading-package" type="file" accept="application/json,.json,.ddgrade.json" multiple hidden><button class="button primary" id="release-results" type="button">Release selected results</button></div>
+        <div class="operations-actions"><button class="button secondary" id="download-all-submitted-answers" type="button"><i class="ph ph-file-html" aria-hidden="true"></i>Download all submitted answers</button><button class="button secondary" id="export-grading-package" type="button"><i class="ph ph-download-simple" aria-hidden="true"></i>Download offline copy</button><a class="button secondary" href="offline-grading.html" target="_blank" rel="noopener"><i class="ph ph-arrow-square-out" aria-hidden="true"></i>Open offline grading</a><label class="button secondary file-button" for="import-grading-package"><i class="ph ph-upload-simple" aria-hidden="true"></i>Import graded copy</label><input id="import-grading-package" type="file" accept="application/json,.json,.ddgrade.json" multiple hidden><button class="button primary" id="release-results" type="button">Release selected results</button></div>
       </header>
       <section class="offline-grading-guide" aria-labelledby="offline-grading-guide-title">
         <div><p class="section-kicker">Grade without a connection</p><h2 id="offline-grading-guide-title">Three-step offline grading</h2></div>
@@ -362,6 +362,6 @@
   <script src="view-models.js?v=greenfield-v1-20260826-1"></script>
   <script src="api.js?v=reliability-20260828-1"></script>
   <script src="offline-grading-core.js?v=greenfield-v1-20260826-3"></script>
-  <script src="professor.js?v=save-all-grades-20260920-2"></script>
+  <script src="professor.js?v=professor-answer-downloads-20260922-1"></script>
 </body>
 </html>

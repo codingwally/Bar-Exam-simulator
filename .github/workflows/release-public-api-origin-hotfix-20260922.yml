@@ -1,4 +1,4 @@
-name: Emergency public API origin hotfix
+name: Emergency public API browser preflight hotfix
 
 on:
   push:
@@ -15,14 +15,14 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  RELEASE_SOURCE_SHA: e054625b5e049bd42112662ccde3c71d62916092
-  BASE_SHA: b23668c86fdcbc205ad85399ed891d037804b8e0
+  RELEASE_SOURCE_SHA: 198b079041e7e6c0a521529e929f4d8f8d8182c7
+  BASE_SHA: 5560c756ca8df3190cc6f64494b09bfbd10efafb
   PUBLIC_API_URL: https://duediligence-api.wallyesteban1993.workers.dev
 
 jobs:
   deploy:
-    name: Verify and deploy public API origin hotfix
-    if: "${{ github.event.head_commit.message == 'release: deploy public API origin hotfix' }}"
+    name: Verify and deploy public API browser preflight
+    if: "${{ github.event.head_commit.message == 'release: deploy public API browser preflight' }}"
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment:
@@ -57,13 +57,16 @@ jobs:
         with:
           node-version: 22
 
-      - name: Validate alias origin behavior
+      - name: Validate alias browser preflight behavior
         shell: bash
         run: |
           set -euo pipefail
           node --check worker/public-api-alias.mjs
           node --test worker/public-api-alias.test.mjs
           git diff --check "$BASE_SHA..$RELEASE_SOURCE_SHA"
+          grep -Fq "function preflightResponse(request)" worker/public-api-alias.mjs
+          grep -Fq "request.method === 'OPTIONS'" worker/public-api-alias.mjs
+          grep -Fq "Access-Control-Allow-Headers" worker/public-api-alias.mjs
 
       - name: Deploy provider-neutral public API alias only
         uses: cloudflare/wrangler-action@v3
@@ -99,6 +102,22 @@ jobs:
 
           verify_origin 'https://duediligence.ph' 'https://duediligence.ph'
           verify_origin 'https://www.duediligence.ph' 'https://www.duediligence.ph'
+
+          preflight_headers="$RUNNER_TEMP/exam-room-preflight.headers"
+          preflight_status="$(curl --silent --show-error --max-time 20 \
+            --output /dev/null \
+            --dump-header "$preflight_headers" \
+            --write-out '%{http_code}' \
+            --request OPTIONS \
+            --header 'Origin: https://duediligence.ph' \
+            --header 'Access-Control-Request-Method: POST' \
+            --header 'Access-Control-Request-Headers: content-type,x-request-id' \
+            "$PUBLIC_API_URL/examination-room/v1/student/command")"
+          test "$preflight_status" = "204"
+          grep -qi '^access-control-allow-origin: https://duediligence.ph' "$preflight_headers"
+          grep -qi '^access-control-allow-methods: .*POST.*OPTIONS' "$preflight_headers"
+          grep -qi '^access-control-allow-headers: .*Content-Type.*X-Request-ID' "$preflight_headers"
+          echo "Canonical browser preflight is accepted by the public API boundary."
 
           attacker_body="$RUNNER_TEMP/attacker-origin.json"
           attacker_status="$(curl --silent --show-error             --output "$attacker_body"             --write-out '%{http_code}'             --request POST             --header 'Origin: https://attacker.example'             --header 'Content-Type: application/json'             --data '{}'             "$PUBLIC_API_URL/examination-room/v1/student/preview")"

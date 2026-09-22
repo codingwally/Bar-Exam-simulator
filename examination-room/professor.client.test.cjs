@@ -871,7 +871,7 @@ test('creator receives monitor and grade access from activation without entering
   assert.match(professorHtml, /data-view="monitor" data-requires-activation="true" disabled aria-label="Monitor examination — available after Admin issues the student key"/);
   assert.match(professorHtml, /data-view="grade" data-requires-activation="true" disabled aria-label="Grade submissions — available after Admin issues the student key"/);
   assert.match(professorSource, /control\.setAttribute\('aria-label', unlocked[\s\S]*viewName/);
-  assert.match(professorHtml, /professor\.js\?v=answer-copy-download-20260922-3/);
+  assert.match(professorHtml, /professor\.js\?v=reliability-20260828-1/);
 });
 
 test('creator approval survives reload and a published request keeps polling without a manual check', () => {
@@ -1022,13 +1022,4 @@ test('date and start-time inputs are removed while key access remains explicit',
 test('creator monitoring shows a technical entry record without privacy-gate wording', () => {
   assert.doesNotMatch(professorSource, /Privacy warning record/);
   assert.match(professorSource, /<dt>Entry record<\/dt>/);
-});
-
-test('professor grading can download the same submitted-answer copy format', () => {
-  assert.match(professorSource, /function submittedAnswerCopy\(session\)/);
-  assert.match(professorSource, /schemaVersion: 'examination-room\/student-answer-copy\/v1'/);
-  assert.match(professorSource, /data-download-answer-copy/);
-  assert.match(professorSource, /Download submitted answers/);
-  assert.match(professorSource, /downloadSubmittedAnswerCopy\(downloadButton\.dataset\.downloadAnswerCopy\)/);
-  assert.match(professorHtml, /professor\.js\?v=answer-copy-download-20260922-3/);
 });

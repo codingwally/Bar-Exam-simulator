@@ -260,6 +260,119 @@ export function buildExaminationRoomResultEmail(env, message = {}) {
   });
 }
 
+
+function submissionAnswerDisplay(entry) {
+  if (!entry || entry.answer === null || entry.answer === undefined || entry.answer === '') return 'Unanswered';
+  if (entry.type === 'multiple-choice' && Number.isSafeInteger(Number(entry.answer))) {
+    const choice = Array.isArray(entry.choices) ? entry.choices[Number(entry.answer)] : null;
+    if (choice !== null && choice !== undefined) return String(choice);
+  }
+  if (Array.isArray(entry.answer)) return entry.answer.map(String).join(', ');
+  return String(entry.answer);
+}
+
+export function buildExaminationRoomSubmissionAnswersEmail(env, message = {}) {
+  const examTitle = cleanSingleLine(message.examTitle, 300, 'Examination');
+  const answers = (Array.isArray(message.answers) ? message.answers : [])
+    .slice(0, 200)
+    .map((entry, index) => ({
+      questionNumber: Number.isSafeInteger(Number(entry?.questionNumber))
+        ? Number(entry.questionNumber)
+        : index + 1,
+      answer: submissionAnswerDisplay(entry),
+    }))
+    .sort((left, right) => left.questionNumber - right.questionNumber);
+  const subject = `Your submitted answers — ${examTitle.slice(0, 150)}`.slice(0, 200);
+
+  const text = answers.map((entry) => (
+    `Answer ${entry.questionNumber}\n${entry.answer}`
+  )).join('\n\n');
+
+  const htmlAnswers = answers.map((entry) => {
+    const answer = escapeExaminationRoomEmailHtml(entry.answer).replace(/\n/gu, '<br>');
+    return `<div style="margin:0 0 22px;"><p style="margin:0 0 6px;color:#6d531d;font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;">Answer ${entry.questionNumber}</p><div style="color:#172033;font-size:15px;line-height:1.65;white-space:normal;">${answer}</div></div>`;
+  }).join('');
+
+  const html = `<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Submitted answers</title></head>
+<body style="margin:0;padding:0;background:#eef1f4;color:#172033;font-family:Inter,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background:#eef1f4;">
+    <tr><td align="center" style="padding:28px 12px;">
+      <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="width:600px;max-width:600px;background:#fff;border:1px solid #d8dfe7;border-top:5px solid #b8934f;">
+        <tr><td style="padding:24px 34px;background:#07182f;"><p style="margin:0;color:#dfc681;font-size:12px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;">Submitted answers</p></td></tr>
+        <tr><td style="padding:30px 34px;">${htmlAnswers || '<p style="margin:0;color:#596579;">No answers were submitted.</p>'}</td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  return Object.freeze({ subject, text, html, answers });
+}
+
+export async function deliverExaminationRoomSubmissionAnswersEmail(
+  env,
+  message = {},
+  transport = globalThis.fetch,
+) {
+  const mode = String(env?.EXAMINATION_ROOM_EMAIL_MODE || '').trim().toLowerCase();
+  const from = String(env?.EXAMINATION_ROOM_EMAIL_FROM || env?.SUPPORT_NOTIFICATION_EMAIL_FROM || '').trim();
+  const recipient = String(message.recipient || '').trim().toLowerCase();
+  const idempotencyHash = String(message.idempotencyHash || '').trim().toLowerCase();
+
+  if (!EMAIL_PATTERN.test(recipient) || recipient.length > 320) {
+    return { status: 'skipped', providerId: null, safeErrorCode: 'recipient_missing' };
+  }
+  if (mode === 'suppressed') {
+    return { status: 'suppressed', providerId: null, safeErrorCode: 'email_suppressed' };
+  }
+  if (mode !== 'enabled' || !env?.RESEND_API_KEY || !from || !SHA256_PATTERN.test(idempotencyHash)) {
+    return {
+      status: 'not_configured',
+      providerId: null,
+      safeErrorCode: !env?.RESEND_API_KEY ? 'provider_key_missing'
+        : !from ? 'sender_missing'
+          : !SHA256_PATTERN.test(idempotencyHash) ? 'idempotency_hash_invalid'
+            : 'email_mode_invalid',
+    };
+  }
+
+  try {
+    const email = buildExaminationRoomSubmissionAnswersEmail(env, message);
+    const response = await transport('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+        'Idempotency-Key': `exam-room-submitted-answers-${idempotencyHash}`,
+      },
+      body: JSON.stringify({
+        from,
+        to: [recipient],
+        subject: email.subject,
+        text: email.text,
+        html: email.html,
+        tags: [
+          { name: 'product', value: 'examination-room' },
+          { name: 'message_type', value: 'submitted-answers' },
+        ],
+      }),
+    });
+    const result = await response.json().catch(() => null);
+    if (!response.ok) {
+      return { status: 'failed', providerId: null, safeErrorCode: `provider_${response.status}`.slice(0, 80) };
+    }
+    return {
+      status: 'sent',
+      providerId: result?.id ? String(result.id).slice(0, 240) : null,
+      safeErrorCode: null,
+    };
+  } catch {
+    return { status: 'failed', providerId: null, safeErrorCode: 'network_error' };
+  }
+}
+
 function resultRecipient(entry, index) {
   const sessionId = cleanSingleLine(entry?.sessionId, 120, `recipient-${index + 1}`);
   const releaseId = cleanSingleLine(entry?.releaseId, 120, '');

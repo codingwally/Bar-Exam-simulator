@@ -145,6 +145,8 @@ for (const required of [
   'examination-room/student.css',
   'examination-room/media-capture.js',
   'examination-room/student.js',
+  'examination-room/submission-recovery.html',
+  'examination-room/submission-recovery.js',
   'examination-room/offline-grading.html',
   'examination-room/offline-grading.css',
   'examination-room/offline-grading.js',

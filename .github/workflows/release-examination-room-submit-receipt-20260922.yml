@@ -18,7 +18,7 @@ concurrency:
 
 env:
   PRODUCTION_BASE_SHA: 85983df71d2d03875bee1ce0f0e4e4547bf5700e
-  RELEASE_SOURCE_SHA: 472a0e55a2c16b9c44d0ef371fe099172037a637
+  RELEASE_SOURCE_SHA: ce3f7f185226447cb28f2f2fa5eba22062da52db
   SITE_URL: https://duediligence.ph
   APPROVAL_REFERENCE: owner-chat-direct-submit-recovery-2026-09-22
 
@@ -62,6 +62,7 @@ jobs:
               'examination-room/submission-recovery.html',
               'examination-room/submission-recovery.js',
               'service-worker.js',
+              'scripts/build-pages-artifact.mjs',
               'scripts/test-pages-artifact.mjs',
           }
           changed = set(subprocess.check_output(

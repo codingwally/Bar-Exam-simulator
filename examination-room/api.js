@@ -7,6 +7,7 @@
   const DEMO_STATE_KEY = 'duediligence.examination-room.v1.demo-state';
   const DEMO_EVENT_KEY = 'duediligence.examination-room.v1.demo-event';
   const DEFAULT_REQUEST_TIMEOUT_MS = 20_000;
+  const STUDENT_SUBMISSION_REQUEST_TIMEOUT_MS = 60_000;
   const ASSISTANT_REQUEST_TIMEOUT_MS = 60_000;
   const ADMIN_RECOVERY_REQUEST_TIMEOUT_MS = 120_000;
   const ADMIN_RECOVERY_OPERATIONS = new Set(['create_snapshot', 'retry_snapshot', 'restore_snapshot', 'recovery_detail']);
@@ -1878,7 +1879,7 @@
       ...payload,
       sessionId: payload.attemptId,
       manifestHash: payload.manifestHash,
-    }, payload.idempotencyKey);
+    }, payload.idempotencyKey, { timeoutMs: STUDENT_SUBMISSION_REQUEST_TIMEOUT_MS });
     const submission = result.submission || result.receipt || result;
     return {
       receiptId: submission.receiptCode || submission.receiptId || submission.id,

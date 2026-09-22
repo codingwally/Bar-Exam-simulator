@@ -1573,6 +1573,116 @@ export function createExaminationRoomV1Handlers(dependencies) {
             savedAt: deps.now(),
           };
         } else if (operation === 'submit') {
+          const submittedAnswers = Array.isArray(payload.answers) ? payload.answers : [];
+
+          // Backward compatibility for examination tabs opened before the
+          // answer-upload client hotfix. Those tabs include the complete local
+          // answer snapshot in the submit payload even when autosave never
+          // reached the server. Persist that snapshot first so the existing
+          // open tab can finish without a refresh or loss of local answers.
+          if (submittedAnswers.length) {
+            for (let answerIndex = 0; answerIndex < submittedAnswers.length; answerIndex += 1) {
+              const submittedAnswer = plainRecord(submittedAnswers[answerIndex], `submitted answer ${answerIndex + 1}`);
+              const questionReference = cleanText(
+                submittedAnswer.questionId ?? submittedAnswer.questionKey ?? submittedAnswer.questionNumber,
+                128,
+                'question',
+                { required: true },
+              );
+              const clientQuestionNumber = /^q-(\d{1,3})$/u.test(questionReference)
+                ? Number(questionReference.slice(2))
+                : Number.NaN;
+              const question = publicationManifest.questions.find((entry) => (
+                entry.key === questionReference
+                || String(entry.number) === questionReference
+                || entry.number === clientQuestionNumber
+              ));
+              if (!question) {
+                fail(
+                  'EXAM_ROOM_V1_QUESTION_NOT_FOUND',
+                  'That submitted answer is not part of this examination version.',
+                  409,
+                  'Keep this page open and retry submission. Your local answers remain available.',
+                );
+              }
+
+              // A blank response is still a final response. Persist a null
+              // revision so students may intentionally leave a question
+              // unanswered and the signed receipt can cover every question.
+              let submittedValue = submittedAnswer.answer ?? null;
+              if (question.type === 'multiple-choice' && typeof submittedValue === 'string') {
+                const legacyChoice = /^option-(\d+)$/iu.exec(submittedValue.trim());
+                if (legacyChoice) submittedValue = Number(legacyChoice[1]) - 1;
+              }
+
+              // A retry can arrive after autosave or an earlier submit attempt
+              // already persisted this exact value. Do not manufacture a new
+              // revision (or reuse the submit-derived request key with a new
+              // revision number); the existing immutable revision is already
+              // the correct server-backed snapshot for the final receipt.
+              const existingRevision = Array.isArray(sessionContext.answerRevisions)
+                ? sessionContext.answerRevisions.find((revision) => (
+                  Number(revision?.questionNumber) === question.number
+                  && revision?.questionKey === question.key
+                ))
+                : null;
+              if (existingRevision && existingRevision.answer === submittedValue) {
+                continue;
+              }
+
+              const answerRequest = await requestContext(
+                env,
+                `${info.rawRequestKey}:answer:${question.number}`,
+              );
+              const answerRevision = normalizeAnswerRevision({
+                attemptId: credential.sessionId,
+                questionNumber: question.number,
+                revision: positiveInteger(
+                  sessionContext.nextRevisionByQuestion?.[question.key],
+                  'the answer revision',
+                  1,
+                  1_000_000_000,
+                  1,
+                ),
+                idempotencyKey: answerRequest.rawRequestKey,
+                answer: submittedValue,
+              }, { versionManifest: publicationManifest, publicationHash });
+              const answerPayload = { ...answerRevision };
+              delete answerPayload.idempotencyKey;
+              delete answerPayload.idempotencyInput;
+
+              await callRpc(env, {
+                scope: 'student',
+                operation: 'save_answer',
+                actorUserId: null,
+                institutionId: null,
+                payload: {
+                  sessionId: credential.sessionId,
+                  sessionTokenHash: credential.sessionTokenHash,
+                  requestHash: answerRequest.requestHash,
+                  clientEventId: answerRequest.clientEventId,
+                  answerRevision: answerPayload,
+                  answerHash: await deps.sha256Hex?.(answerRevision.idempotencyInput)
+                    || await pepperedHmac(env, 'answer-revision', answerRevision.idempotencyInput),
+                  flagged: submittedAnswer.flagged === true,
+                  source: 'submission',
+                  savedAt: deps.now(),
+                },
+              }, [credential.rawSessionToken, answerRequest.rawRequestKey]);
+            }
+
+            sessionContext = ensureStoreResult(await deps.rpc(env, {
+              scope: 'student',
+              operation: 'session_context',
+              actorUserId: null,
+              institutionId: null,
+              payload: {
+                sessionId: credential.sessionId,
+                sessionTokenHash: credential.sessionTokenHash,
+              },
+            }));
+          }
+
           const submission = buildSubmissionManifest({
             submissionId: deps.randomUUID(),
             attemptId: credential.sessionId,

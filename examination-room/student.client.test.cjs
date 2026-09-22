@@ -210,3 +210,13 @@ test('student result checking uses bounded backoff, hidden-tab throttling, and m
   assert.match(studentSource, /Automatic result checking paused after two hours\. Choose Check for result to restart it\./);
   assert.match(studentSource, /if \(manual && state\.resultPollingExpired\) \{[\s\S]*resetResultPollingWindow\(\)[\s\S]*subscribeForResultUpdates\(\)/);
 });
+
+test('final submission downloads a student answer copy before upload and preserves it across retries', () => {
+  assert.match(studentSource, /function buildStudentAnswerCopy\(\)/);
+  assert.match(studentSource, /function downloadStudentAnswerCopy\(\)/);
+  assert.match(studentSource, /schemaVersion: 'examination-room\/student-answer-copy\/v1'/);
+  assert.match(studentSource, /if \(!state\.attempt\.answerCopyDownloadedAt\) \{[\s\S]*downloadStudentAnswerCopy\(\)[\s\S]*await persistAttempt\(\)[\s\S]*await flushPendingAnswerSaves\(\)/);
+  assert.match(studentSource, /Preparing answer copy/);
+  assert.match(studentSource, /Uploading answers/);
+  assert.match(studentSource, /Your answer copy is downloaded\. Upload is pending\./);
+});

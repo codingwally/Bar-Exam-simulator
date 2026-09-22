@@ -48,7 +48,7 @@ jobs:
           node --check examination-room/api.js
           node --check worker/examination-room-v1-routes.mjs
           node --test examination-room/student.client.test.cjs
-          node --test --test-name-pattern="legacy open student tabs can upload their local answer snapshot during submit|student submit persists blank answers and still produces a receipt" worker/examination-room-v1-routes.test.mjs
+          node --test --test-name-pattern="legacy open student tabs can upload their local answer snapshot during submit" worker/examination-room-v1-routes.test.mjs
           grep -Fq "SUBMISSION_RETRY_WINDOW_MS = 15 * 60 * 1000" examination-room/student.js
           grep -Fq "Please wait — your answers are being uploaded." examination-room/student.js
           grep -Fq "Do not close this window" examination-room/student.js

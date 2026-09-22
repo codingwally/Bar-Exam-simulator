@@ -24,6 +24,46 @@ function approvedBrowserOrigin(request) {
   return APPROVED_BROWSER_ORIGINS.has(origin) ? origin : '';
 }
 
+function preflightResponse(request) {
+  const origin = approvedBrowserOrigin(request);
+  if (!origin) {
+    return new Response(null, {
+      status: 403,
+      headers: {
+        'Cache-Control': 'no-store, max-age=0',
+        Vary: 'Origin',
+      },
+    });
+  }
+  const requestedHeaders = String(request.headers.get('Access-Control-Request-Headers') || '')
+    .split(',')
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+  const allowedHeaders = new Set(['content-type', 'x-request-id']);
+  const deniedHeader = requestedHeaders.find((header) => !allowedHeaders.has(header));
+  if (deniedHeader) {
+    return new Response(null, {
+      status: 403,
+      headers: {
+        'Access-Control-Allow-Origin': origin,
+        'Cache-Control': 'no-store, max-age=0',
+        Vary: 'Origin',
+      },
+    });
+  }
+  return new Response(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': origin,
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, X-Request-ID',
+      'Access-Control-Max-Age': '86400',
+      'Cache-Control': 'no-store, max-age=0',
+      Vary: 'Origin',
+    },
+  });
+}
+
 function unavailableResponse(request) {
   const requestOrigin = approvedBrowserOrigin(request);
   const headers = new Headers({
@@ -299,6 +339,10 @@ async function forwardApplicationRequest(request, application) {
 
 export default {
   async fetch(request, env) {
+    if (request.method === 'OPTIONS') {
+      return preflightResponse(request);
+    }
+
     const application = env?.DUE_DILIGENCE_APPLICATION;
     if (!application || typeof application.fetch !== 'function') {
       return unavailableResponse(request);

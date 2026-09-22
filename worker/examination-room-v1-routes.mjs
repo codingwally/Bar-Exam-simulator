@@ -1500,6 +1500,7 @@ export function createExaminationRoomV1Handlers(dependencies) {
         requestHash: info.requestHash,
         clientEventId: info.clientEventId,
       };
+      let submissionEmailDetails = null;
 
       if (operation === 'heartbeat') {
         safePayload = {
@@ -1712,6 +1713,17 @@ export function createExaminationRoomV1Handlers(dependencies) {
               revision: question.revision,
             })),
           };
+          submissionEmailDetails = {
+            recipient: String(sessionContext.studentEmail || '').trim().toLowerCase(),
+            idempotencyHash: info.requestHash,
+            examTitle: submission.manifest.title,
+            answers: submission.manifest.questions.map((question) => ({
+              questionNumber: question.questionNumber,
+              type: question.type,
+              choices: [...question.choices],
+              answer: question.answer,
+            })),
+          };
         }
       }
 
@@ -1719,7 +1731,14 @@ export function createExaminationRoomV1Handlers(dependencies) {
         scope: 'student', operation, actorUserId: null, institutionId: null, payload: safePayload,
       }, [credential.rawSessionToken, info.rawRequestKey]);
       if (operation === 'submit' && typeof deps.afterStudentCommand === 'function') {
-        deps.afterStudentCommand({ operation, result, env, executionContext });
+        deps.afterStudentCommand({
+          operation,
+          result,
+          env,
+          executionContext,
+          requestHash: info.requestHash,
+          submissionEmailDetails,
+        });
       }
       return deps.respond({ ok: true, ...result }, operation === 'submit' ? 201 : 200, origin, allowedOrigin);
     }, origin, allowedOrigin);

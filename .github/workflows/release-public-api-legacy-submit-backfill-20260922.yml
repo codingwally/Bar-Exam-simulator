@@ -1,4 +1,4 @@
-name: Emergency public API direct answer recovery
+name: Emergency Examination Room single-submit API release
 
 on:
   push:
@@ -15,14 +15,14 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  BASE_SHA: 42e44acc33c3f607d61724df83d590c4df91909f
-  RELEASE_SOURCE_SHA: af66698261e0491edbf9a089f17f980f5986b33b
+  BASE_SHA: 560ef29895d01a8667f96c6e1528e2322cf4cb27
+  RELEASE_SOURCE_SHA: 0a1b667d3dcd49145eab2dcdc156f40b9d3e7411
   PUBLIC_API_URL: https://duediligence-api.wallyesteban1993.workers.dev
 
 jobs:
   deploy:
-    name: Verify and deploy direct answer recovery
-    if: "${{ github.event.head_commit.message == 'release: deploy direct answer recovery' }}"
+    name: Verify and deploy single-submit API boundary
+    if: "${{ github.event.head_commit.message == 'release: deploy Examination Room single-submit fix' }}"
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment:
@@ -35,7 +35,7 @@ jobs:
           ref: ${{ env.RELEASE_SOURCE_SHA }}
           fetch-depth: 0
 
-      - name: Prove isolated alias scope
+      - name: Prove reviewed Examination Room hotfix scope
         shell: bash
         run: |
           set -euo pipefail
@@ -45,14 +45,23 @@ jobs:
           import os, subprocess
           base=os.environ['BASE_SHA']
           source=os.environ['RELEASE_SOURCE_SHA']
-          expected={'worker/public-api-alias.mjs','worker/public-api-alias.test.mjs'}
+          expected={
+            'examination-room/api.demo.test.cjs',
+            'examination-room/api.js',
+            'examination-room/student.client.test.cjs',
+            'examination-room/student.html',
+            'examination-room/student.js',
+            'service-worker.js',
+            'worker/public-api-alias.mjs',
+            'worker/public-api-alias.test.mjs',
+          }
           changed=set(subprocess.check_output(
             ['git','diff','--name-only',f'{base}..{source}'],
             text=True,
           ).splitlines())
           if changed != expected:
               raise SystemExit(f'unexpected public API hotfix scope: {sorted(changed)}')
-          print('Exact public API alias hotfix scope verified.')
+          print('Exact Examination Room single-submit scope verified.')
           PY
 
       - name: Setup Node
@@ -60,15 +69,16 @@ jobs:
         with:
           node-version: 22
 
-      - name: Validate direct answer recovery compatibility
+      - name: Validate single-submit and recovery fallback
         shell: bash
         run: |
           set -euo pipefail
           node --check worker/public-api-alias.mjs
-          node --test worker/public-api-alias.test.mjs
+          node --check examination-room/api.js
+          node --test worker/public-api-alias.test.mjs examination-room/api.demo.test.cjs worker/examination-room-v1-routes.test.mjs
           git diff --check "$BASE_SHA..$RELEASE_SOURCE_SHA"
           grep -Fq "command?.operation === 'submit'" worker/public-api-alias.mjs
-          grep -Fq "source: 'submission'" worker/public-api-alias.mjs
+          grep -Fq "Submit is forwarded exactly once" worker/public-api-alias.mjs
           grep -Fq "submittedAt: submission.receivedAt" worker/public-api-alias.mjs
           grep -Fq "forwardStudentSaveWithRepair" worker/public-api-alias.mjs
           grep -Fq "canonicalQuestionId" worker/public-api-alias.mjs
@@ -77,7 +87,8 @@ jobs:
           grep -Fq "recoverStudentAnswer" worker/public-api-alias.mjs
           grep -Fq "X-Examination-Answer-Recovery" worker/public-api-alias.mjs
           grep -Fq "attemptStudentAnswerRecovery" worker/public-api-alias.mjs
-          grep -Fq "Production recovery route" worker/public-api-alias.mjs
+          grep -Fq "ANSWER_RECOVERY_TIMEOUT_MS" worker/public-api-alias.mjs
+          grep -Fq "complete local snapshot" examination-room/api.js
 
       - name: Deploy provider-neutral public API alias
         uses: cloudflare/wrangler-action@v3
@@ -101,3 +112,26 @@ jobs:
           fi
           grep -qi '^access-control-allow-origin: https://duediligence.ph' "$headers"
           echo "Public API alias is live and the canonical Examination Room origin is accepted."
+
+      - name: Verify submit reaches the application without an alias recovery delay
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$RUNNER_TEMP/exam-room-submit-probe.json"
+          metrics="$RUNNER_TEMP/exam-room-submit-probe.metrics"
+          status="$(curl --silent --show-error --max-time 8 \
+            --output "$body" \
+            --write-out '%{http_code} %{time_total}' \
+            --request POST \
+            --header 'Origin: https://duediligence.ph' \
+            --header 'Content-Type: application/json' \
+            --header 'X-Request-ID: submission:single-submit-release-probe' \
+            --data '{"operation":"submit","payload":{"attemptId":"00000000-0000-0000-0000-000000000000","sessionToken":"ers1_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","answers":[{"questionId":"q001","answer":"probe"}]},"idempotencyKey":"submission:single-submit-release-probe"}' \
+            "$PUBLIC_API_URL/examination-room/v1/student/command")"
+          printf '%s\n' "$status" > "$metrics"
+          code="${status%% *}"
+          seconds="${status##* }"
+          test "$code" = "400"
+          grep -Fq 'EXAM_ROOM_V1_IDENTIFIER_INVALID' "$body"
+          awk -v seconds="$seconds" 'BEGIN { exit !(seconds < 5) }'
+          echo "Production submit crossed the alias once and reached application validation in ${seconds}s."

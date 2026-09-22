@@ -1,4 +1,4 @@
-name: Emergency Examination Room uploaded-awaiting-grade release
+name: Emergency Examination Room single-submit Pages release
 
 on:
   push:
@@ -17,15 +17,15 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PRODUCTION_BASE_SHA: 0ff2c457eddd2547738112600954df0286cac4fc
-  RELEASE_SOURCE_SHA: bded3a20a385499bfab2d92a814dbe6bb8fafd3b
+  PRODUCTION_BASE_SHA: 560ef29895d01a8667f96c6e1528e2322cf4cb27
+  RELEASE_SOURCE_SHA: 0a1b667d3dcd49145eab2dcdc156f40b9d3e7411
   SITE_URL: https://duediligence.ph
-  APPROVAL_REFERENCE: owner-chat-ui-2026-09-22-uploaded-awaiting-grade
+  APPROVAL_REFERENCE: owner-chat-fix-first-time-submit-2026-09-22
 
 jobs:
   deploy:
-    name: Verify and deploy Examination Room uploaded-awaiting-grade confirmation
-    if: "${{ github.event.head_commit.message == 'release: deploy Examination Room uploaded awaiting grade' }}"
+    name: Verify and deploy Examination Room single-submit client
+    if: "${{ github.event.head_commit.message == 'release: deploy Examination Room single-submit fix' }}"
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment:
@@ -54,10 +54,14 @@ jobs:
           base = os.environ['PRODUCTION_BASE_SHA']
           source = os.environ['RELEASE_SOURCE_SHA']
           expected = {
+              'examination-room/api.demo.test.cjs',
+              'examination-room/api.js',
+              'examination-room/student.client.test.cjs',
               'examination-room/student.html',
               'examination-room/student.js',
-              'examination-room/student.client.test.cjs',
               'service-worker.js',
+              'worker/public-api-alias.mjs',
+              'worker/public-api-alias.test.mjs',
           }
           changed = set(subprocess.check_output(
               ['git', 'diff', '--name-only', f'{base}..{source}'],
@@ -67,7 +71,7 @@ jobs:
               raise SystemExit(
                   f'Unexpected production hotfix scope. expected={sorted(expected)} actual={sorted(changed)}'
               )
-          print('Exact four-file Examination Room uploaded-awaiting-grade scope verified.')
+          print('Exact Examination Room single-submit scope verified.')
           PY
 
       - name: Setup Node
@@ -78,13 +82,13 @@ jobs:
       - name: Install reviewed Pages build dependencies
         run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
 
-      - name: Validate uploaded-awaiting-grade confirmation
+      - name: Validate single-submit client
         shell: bash
         run: |
           set -euo pipefail
           node --check examination-room/student.js
           node --check service-worker.js
-          node --test examination-room/student.client.test.cjs
+          node --test examination-room/api.demo.test.cjs examination-room/student.client.test.cjs
           git diff --check "$PRODUCTION_BASE_SHA..$RELEASE_SOURCE_SHA"
 
       - name: Build and verify exact Pages artifact
@@ -94,8 +98,10 @@ jobs:
           GITHUB_SHA="$RELEASE_SOURCE_SHA" node scripts/test-pages-artifact.mjs
           grep -Fq "Your answers were uploaded successfully." .pages-dist/examination-room/student.js
           grep -Fq "Please wait for your professor to finish grading and release your result." .pages-dist/examination-room/student.js
-          grep -Fq 'student.js?v=uploaded-awaiting-grade-20260922-5' .pages-dist/examination-room/student.html
-          grep -Fq 'duediligence-shell-examination-uploaded-awaiting-grade-20260922-5' .pages-dist/service-worker.js
+          grep -Fq 'api.js?v=single-submit-20260922-6' .pages-dist/examination-room/student.html
+          grep -Fq 'student.js?v=single-submit-20260922-6' .pages-dist/examination-room/student.html
+          grep -Fq 'duediligence-shell-examination-single-submit-20260922-6' .pages-dist/service-worker.js
+          grep -Fq 'Send one idempotent request containing the complete local snapshot' .pages-dist/examination-room/api.js
           test "$(cat .pages-dist/.well-known/duediligence-release.txt)" = "$RELEASE_SOURCE_SHA"
 
       - name: Setup Pages
@@ -110,25 +116,28 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-      - name: Verify live Examination Room uploaded-awaiting-grade confirmation
+      - name: Verify live Examination Room single-submit client
         shell: bash
         run: |
           set -euo pipefail
           for attempt in {1..18}; do
             marker="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/.well-known/duediligence-release.txt?release=$RELEASE_SOURCE_SHA" || true)"
-            student="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/student.js?v=uploaded-awaiting-grade-20260922-5&release=$RELEASE_SOURCE_SHA" || true)"
+            student="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/student.js?v=single-submit-20260922-6&release=$RELEASE_SOURCE_SHA" || true)"
+            api="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/api.js?v=single-submit-20260922-6&release=$RELEASE_SOURCE_SHA" || true)"
             page="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/student.html?release=$RELEASE_SOURCE_SHA" || true)"
-            sw="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/service-worker.js?v=examination-room-uploaded-awaiting-grade-20260922-5&release=$RELEASE_SOURCE_SHA" || true)"
+            sw="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/service-worker.js?v=examination-room-single-submit-20260922-6&release=$RELEASE_SOURCE_SHA" || true)"
 
             if [[ "$marker" == "$RELEASE_SOURCE_SHA" ]] \
               && grep -Fq "Your answers were uploaded successfully." <<<"$student" \
               && grep -Fq "Please wait for your professor to finish grading and release your result." <<<"$student" \
-              && grep -Fq 'student.js?v=uploaded-awaiting-grade-20260922-5' <<<"$page" \
-              && grep -Fq 'duediligence-shell-examination-uploaded-awaiting-grade-20260922-5' <<<"$sw"; then
-              echo "Examination Room uploaded-awaiting-grade confirmation is live."
+              && grep -Fq 'Send one idempotent request containing the complete local snapshot' <<<"$api" \
+              && grep -Fq 'api.js?v=single-submit-20260922-6' <<<"$page" \
+              && grep -Fq 'student.js?v=single-submit-20260922-6' <<<"$page" \
+              && grep -Fq 'duediligence-shell-examination-single-submit-20260922-6' <<<"$sw"; then
+              echo "Examination Room single-submit client is live."
               exit 0
             fi
             sleep 10
           done
-          echo "Pages deployed but the public uploaded-awaiting-grade confirmation did not converge in time." >&2
+          echo "Pages deployed but the public single-submit client did not converge in time." >&2
           exit 1

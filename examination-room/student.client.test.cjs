@@ -128,7 +128,7 @@ test('the final-question action remains enabled and opens review instead of trap
   assert.match(studentSource, /state\.currentIndex === state\.questions\.length - 1 \? 'Review and submit'/);
   assert.match(studentSource, /navigateToQuestion\(state\.currentIndex \+ 1\)/);
   assert.match(studentSource, /if \(index >= state\.questions\.length\) \{[\s\S]*openSubmitDialog\(\)/);
-  assert.match(studentHtml, /student\.js\?v=submission-retry-20260922-9/);
+  assert.match(studentHtml, /student\.js\?v=submission-email-20260922-10/);
 });
 
 test('student storage open fails safely when IndexedDB is blocked or never settles', async () => {
@@ -190,4 +190,12 @@ test('final submit sends the frozen complete answer snapshot and original comple
   assert.match(studentSource, /var frozenAnswers = state\.attempt\.answers \|\| \{\}/);
   assert.match(studentSource, /submittedAt: state\.attempt\.clientCompletedAt/);
   assert.match(studentSource, /answers: state\.questions\.map/);
+});
+
+
+test('successful receipt tells the student that answers reached professor grading and an answer-only email will follow', () => {
+  assert.match(studentSource, /Your answers were successfully uploaded for professor grading\./);
+  assert.match(studentSource, /A copy containing only your submitted answers will be emailed to/);
+  assert.match(studentSource, /Answers successfully uploaded for professor grading/);
+  assert.match(studentHtml, /student\.js\?v=submission-email-20260922-10/);
 });

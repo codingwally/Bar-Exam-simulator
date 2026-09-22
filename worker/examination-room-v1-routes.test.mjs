@@ -2000,3 +2000,60 @@ test('student submit persists blank answers and still produces a receipt', async
       idempotencyKey: REQUEST_KEY,
     }, null), ENV, ORIGIN, ORIGIN,
   );
+
+  assert.equal(response.status, 201);
+  const saveCall = calls.find((entry) => entry.operation === 'save_answer');
+  const submitCall = calls.find((entry) => entry.operation === 'submit');
+  assert.equal(saveCall.payload.answerRevision.answer, null);
+  assert.equal(submitCall.payload.submissionManifest.questions[0].answer, null);
+});
+
+test('student submission retry reuses an identical saved revision instead of creating a conflict', async () => {
+  const publication = publicationFixture();
+  const savedRevision = answerRevisionFixture(publication);
+  const { handlers, calls } = dependencyFixture({
+    rpc: async (_env, parameters) => {
+      if (parameters.operation === 'session_context') {
+        return {
+          ok: true,
+          publicationManifest: publication,
+          publicationHash: 'a'.repeat(64),
+          studentIdentity: identityFixture(),
+          privacyConsent: {
+            noticeVersion: 'exam-room-v1', accepted: true,
+            acceptedAt: '2026-08-26T01:55:00.000Z', recordingAccepted: false,
+          },
+          answerRevisions: [savedRevision],
+          nextRevisionByQuestion: { q001: 2 },
+        };
+      }
+      if (parameters.operation === 'save_answer') {
+        throw new Error('an identical server-backed answer must not be saved again');
+      }
+      if (parameters.operation === 'submit') {
+        return { ok: true, submission: { id: IDS.submission }, duplicate: false };
+      }
+      return { ok: true };
+    },
+  });
+
+  const response = await handlers.studentCommand(
+    makeRequest('/examination-room/v1/student/command', {
+      operation: 'submit',
+      payload: {
+        sessionId: IDS.session,
+        sessionToken: SESSION_TOKEN,
+        answers: [{
+          questionId: 'q001',
+          answer: savedRevision.answer,
+          flagged: false,
+        }],
+      },
+      idempotencyKey: REQUEST_KEY,
+    }, null), ENV, ORIGIN, ORIGIN,
+  );
+
+  assert.equal(response.status, 201);
+  assert.equal(calls.filter((entry) => entry.operation === 'save_answer').length, 0);
+  assert.equal(calls.filter((entry) => entry.operation === 'submit').length, 1);
+});

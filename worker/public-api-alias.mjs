@@ -248,6 +248,23 @@ async function forwardApplicationRequest(request, application) {
     }
   }
 
+  // Student answer saves use the independently authenticated recovery writer
+  // first, but only after the browser origin has passed this alias's approved
+  // origin allowlist. This keeps autosave available even when the application
+  // Worker's global origin gate rejects the service-binding request. The legacy
+  // application path remains a bounded fallback if recovery is unavailable.
+  //
+  // Final submit intentionally does NOT use this per-answer recovery path.
+  // Submit stays a single application request containing the complete local
+  // snapshot so first-time students do not hit the client deadline.
+  if (command?.operation === 'save_answer' && approvedBrowserOrigin(request)) {
+    const requestKey = request.headers.get('X-Request-ID')
+      || command.idempotencyKey
+      || crypto.randomUUID();
+    const recovered = await attemptStudentAnswerRecovery(command, requestKey);
+    if (recovered) return recovered;
+  }
+
   // Submit is forwarded exactly once. The application Worker owns the atomic
   // submit-time answer backfill from payload.answers. Re-uploading every answer
   // here made one browser request wait on N sequential recovery calls and caused

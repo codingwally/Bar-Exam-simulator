@@ -54,6 +54,7 @@ jobs:
           base = os.environ['PRODUCTION_BASE_SHA']
           source = os.environ['RELEASE_SOURCE_SHA']
           expected = {
+              '.github/workflows/release-examination-room-submit-receipt-20260922.yml',
               'examination-room/student.client.test.cjs',
               'examination-room/student.html',
               'examination-room/student.js',

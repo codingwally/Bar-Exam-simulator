@@ -2105,5 +2105,8 @@ test('accepted submit hands the roster-bound email and answers to the post-submi
   assert.match(handoffs[0].submissionEmailDetails.idempotencyHash, /^[0-9a-f]{64}$/u);
   assert.equal(handoffs[0].submissionEmailDetails.answers.length, publication.questions.length);
   assert.equal(handoffs[0].submissionEmailDetails.answers[0].questionNumber, 1);
-  assert.equal(handoffs[0].submissionEmailDetails.answers[0].answer, 'Answer text');
+  assert.equal(
+    handoffs[0].submissionEmailDetails.answers[0].answer,
+    answerRevisionFixture(publication).answer,
+  );
 });

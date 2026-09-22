@@ -1615,13 +1615,10 @@ export function createExaminationRoomV1Handlers(dependencies) {
                 if (legacyChoice) submittedValue = Number(legacyChoice[1]) - 1;
               }
 
-              // Unanswered questions need no immutable answer revision. The
-              // final submission manifest already represents a missing revision
-              // as an unanswered question, so blanks must never block receipt
-              // creation.
-              if (submittedValue === null || submittedValue === '') {
-                continue;
-              }
+              // Freeze unanswered questions too. A null revision is a valid
+              // final answer state and lets the receipt cover every published
+              // question without pretending the student supplied an answer.
+              if (submittedValue === '') submittedValue = null;
 
               // A retry can arrive after autosave or an earlier submit attempt
               // already persisted this exact value. Do not manufacture a new

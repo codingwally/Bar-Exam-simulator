@@ -16,7 +16,7 @@ test('successful submission clearly says answers are uploaded and grading is pen
   assert.match(studentSource, /receiptEyebrow\.textContent = receipt\.isDemo \? 'Demo upload confirmed' : 'Uploaded'/);
   assert.match(studentSource, /Your answers were uploaded successfully\./);
   assert.match(studentSource, /Please wait for your professor to finish grading and release your result\./);
-  assert.match(studentHtml, /student\.js\?v=answer-copy-flow-20260922-7/);
+  assert.match(studentHtml, /student\.js\?v=submission-recovery-20260922-8/);
 });
 
 const studentApiRuntime = [
@@ -137,7 +137,7 @@ test('the final-question action remains enabled and opens review instead of trap
   assert.match(studentSource, /navigateToQuestion\(state\.currentIndex \+ 1\)/);
   assert.match(studentSource, /if \(index >= state\.questions\.length\) \{[\s\S]*openSubmitDialog\(\)/);
   assert.match(studentHtml, /api\.js\?v=answer-copy-flow-20260922-7/);
-  assert.match(studentHtml, /student\.js\?v=answer-copy-flow-20260922-7/);
+  assert.match(studentHtml, /student\.js\?v=submission-recovery-20260922-8/);
 });
 
 test('refresh recovery restores the newest local attempt and merges server-backed answers before rendering', () => {
@@ -154,15 +154,15 @@ test('answer changes are queued for immediate server upload and non-answer lefto
   assert.match(studentSource, /return pendingAnswers\.length === 0/);
 });
 
-test('answer uploads retry automatically and final submission no longer depends on a clean background queue', () => {
+test('answer uploads retry automatically but final submission bypasses the background queue', () => {
   assert.match(studentSource, /if \(state\.syncing\) \{\s*state\.syncRequested = true;/);
   assert.match(studentSource, /scheduleQueueSync\(Math\.min\(5000, 250 \* Math\.pow\(2, state\.syncRetryCount\)\)\)/);
-  assert.match(studentSource, /await flushOperationQueue\(\);\s*var payload = \{/);
-  assert.doesNotMatch(studentSource, /var fullySynced = await flushOperationQueue\(\);\s*if \(!fullySynced\)/);
+  assert.match(studentSource, /Final submission must never wait behind the ordinary autosave\/integrity/);
+  assert.match(studentSource, /state\.syncRequested = false;\s*var payload = \{/);
+  assert.doesNotMatch(studentSource, /await flushOperationQueue\(\);\s*var payload = \{/);
 });
 
-test('submission waits for queued answers to sync and multiple-choice answers use server indexes', () => {
-  assert.match(studentSource, /await flushOperationQueue\(\);/);
+test('ordinary answer sync still converts multiple-choice answers to server indexes', () => {
   assert.match(studentSource, /question\.options\.findIndex/);
   assert.match(studentSource, /serverAnswer: serverAnswer|answer: serverAnswer/);
 });

@@ -13,7 +13,7 @@ permissions:
   id-token: write
 
 env:
-  RELEASE_SOURCE_SHA: 03b2a517a5e685602a76441a3d38825b11f50c07
+  RELEASE_SOURCE_SHA: 1ff3645365bbc3d1aa9624a069649072c3a69d7e
   PUBLIC_API_URL: https://duediligence-api.wallyesteban1993.workers.dev
   APPLICATION_URL: https://duediligence-gemini-examiner.wallyesteban1993.workers.dev
   SITE_URL: https://duediligence.ph

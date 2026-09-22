@@ -1023,3 +1023,12 @@ test('creator monitoring shows a technical entry record without privacy-gate wor
   assert.doesNotMatch(professorSource, /Privacy warning record/);
   assert.match(professorSource, /<dt>Entry record<\/dt>/);
 });
+
+test('professor grading can download the same submitted-answer copy format', () => {
+  assert.match(professorSource, /function submittedAnswerCopy\(session\)/);
+  assert.match(professorSource, /schemaVersion: 'examination-room\/student-answer-copy\/v1'/);
+  assert.match(professorSource, /data-download-answer-copy/);
+  assert.match(professorSource, /Download submitted answers/);
+  assert.match(professorSource, /downloadSubmittedAnswerCopy\(downloadButton\.dataset\.downloadAnswerCopy\)/);
+  assert.match(professorHtml, /professor\.js\?v=answer-copy-download-20260922-3/);
+});

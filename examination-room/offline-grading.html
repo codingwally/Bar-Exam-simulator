@@ -6,18 +6,9 @@
   <meta name="robots" content="noindex,nofollow">
   <meta name="theme-color" content="#06182e">
   <title>Offline Grading — Due Diligence Examination Room</title>
-  <link rel="stylesheet" href="offline-grading.css?v=professor-workflow-20260921-1">
+  <link rel="stylesheet" href="offline-grading.css?v=greenfield-v1-20260826-1">
 </head>
 <body>
-  <script>
-    // The offline workspace is an advanced recovery tool, not the normal
-    // professor grading entry point. If a professor reaches this URL through
-    // an old bookmark/link while online, return them to the normal Examination
-    // Room. Deliberate offline access remains available with ?offline=1.
-    if (navigator.onLine && new URLSearchParams(location.search).get('offline') !== '1') {
-      location.replace('./');
-    }
-  </script>
   <a class="skip-link" href="#main-content">Skip to offline grading</a>
 
   <header class="offline-header">
@@ -138,7 +129,7 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   <noscript>This offline grading workspace requires JavaScript to decrypt and edit the grading package.</noscript>
-  <script src="offline-grading-core.js?v=professor-workflow-20260921-1"></script>
-  <script src="offline-grading.js?v=professor-workflow-20260921-1"></script>
+  <script src="offline-grading-core.js?v=greenfield-v1-20260826-3"></script>
+  <script src="offline-grading.js?v=reliability-20260828-1"></script>
 </body>
 </html>

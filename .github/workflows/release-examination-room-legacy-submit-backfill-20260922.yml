@@ -114,16 +114,38 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for endpoint in "$PUBLIC_API_URL" "$APPLICATION_URL"; do
-            for origin in 'https://duediligence.ph' 'https://www.duediligence.ph'; do
-              body="$RUNNER_TEMP/exam-room-$(echo "$endpoint-$origin" | tr -cd '[:alnum:]').json"
-              headers="$body.headers"
-              status="$(curl --silent --show-error --max-time 20                 --output "$body"                 --dump-header "$headers"                 --write-out '%{http_code}'                 --request POST                 --header "Origin: $origin"                 --header 'Content-Type: application/json'                 --header 'X-Request-ID: submission:origin-release-probe'                 --data '{"operation":"submit","payload":{"sessionId":"not-a-session"},"idempotencyKey":"submission:origin-release-probe"}'                 "$endpoint/examination-room/v1/student/command")"
-              test "$status" = '400'
-              grep -Fq 'EXAM_ROOM_V1_IDENTIFIER_INVALID' "$body"
-              grep -qi "^access-control-allow-origin: $origin" "$headers"
+          verify_approved_origins() {
+            for endpoint in "$PUBLIC_API_URL" "$APPLICATION_URL"; do
+              for origin in 'https://duediligence.ph' 'https://www.duediligence.ph'; do
+                body="$RUNNER_TEMP/exam-room-$(echo "$endpoint-$origin" | tr -cd '[:alnum:]').json"
+                headers="$body.headers"
+                status="$(curl --silent --show-error --max-time 20 \
+                  --output "$body" \
+                  --dump-header "$headers" \
+                  --write-out '%{http_code}' \
+                  --request POST \
+                  --header "Origin: $origin" \
+                  --header 'Content-Type: application/json' \
+                  --header 'X-Request-ID: submission:origin-release-probe' \
+                  --data '{"operation":"submit","payload":{"sessionId":"not-a-session"},"idempotencyKey":"submission:origin-release-probe"}' \
+                  "$endpoint/examination-room/v1/student/command" || true)"
+                test "$status" = '400' || return 1
+                grep -Fq 'EXAM_ROOM_V1_IDENTIFIER_INVALID' "$body" || return 1
+                grep -qi "^access-control-allow-origin: $origin" "$headers" || return 1
+              done
             done
+          }
+
+          verified=false
+          for attempt in {1..12}; do
+            if verify_approved_origins; then
+              verified=true
+              break
+            fi
+            echo "Production propagation check $attempt did not pass yet; retrying."
+            sleep 5
           done
+          test "$verified" = 'true'
 
           hostile_body="$RUNNER_TEMP/exam-room-hostile-origin.json"
           hostile_status="$(curl --silent --show-error --max-time 20             --output "$hostile_body"             --write-out '%{http_code}'             --request POST             --header 'Origin: https://attacker.example'             --header 'Content-Type: application/json'             --data '{}'             "$APPLICATION_URL/examination-room/v1/student/command")"

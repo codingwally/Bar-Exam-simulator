@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PRODUCTION_BASE_SHA: 5946be54cd1703765818e663ebc4094c3cad5a52
+  PRODUCTION_BASE_SHA: d7536113092fe3d5a9e10825ed5612909c7e572e
   RELEASE_SOURCE_SHA: f04f6138571ed2a42d1cb55c7527081df8555a73
   SITE_URL: https://duediligence.ph
   APPROVAL_REFERENCE: owner-chat-answer-copy-flow-2026-09-22

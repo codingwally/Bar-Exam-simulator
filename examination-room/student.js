@@ -28,6 +28,9 @@
   var RESULT_POLL_MAX_DELAY_MS = 5 * 60 * 1000;
   var RESULT_POLL_HIDDEN_MIN_DELAY_MS = 2 * 60 * 1000;
   var RESULT_POLL_LIFETIME_MS = 2 * 60 * 60 * 1000;
+  var SUBMISSION_RETRY_WINDOW_MS = 15 * 60 * 1000;
+  var SUBMISSION_RETRY_INITIAL_DELAY_MS = 3000;
+  var SUBMISSION_RETRY_MAX_DELAY_MS = 15000;
   var DEMO_MODE = new URLSearchParams(window.location.search).get('demo') === '1';
   var REQUIRED_API_METHODS = [
     'previewRoom',
@@ -188,6 +191,12 @@
     });
 
     window.addEventListener('online', handleConnectionChange);
+    window.addEventListener('beforeunload', function (event) {
+      if (state.attempt && state.attempt.status === 'pending_submit') {
+        event.preventDefault();
+        event.returnValue = '';
+      }
+    });
     window.addEventListener('offline', handleConnectionChange);
     window.addEventListener('blur', function () {
       logIntegrityEvent('window_blurred');
@@ -1203,16 +1212,20 @@
       return;
     }
     state.submitting = true;
-    setButtonBusy(elements.confirmSubmitButton, true, 'Securing answers');
+    setButtonBusy(elements.confirmSubmitButton, true, 'Locking answers');
 
     try {
-      await flushPendingAnswerSaves();
+      // Freeze the complete answer snapshot locally before any network call.
+      // Final submission carries this snapshot, so it must not depend on the
+      // background autosave queue being healthy.
       state.attempt.status = 'pending_submit';
       state.attempt.idempotencyKey = state.attempt.idempotencyKey || randomId('submission');
       state.attempt.clientCompletedAt = state.attempt.clientCompletedAt || new Date().toISOString();
       state.attempt.automaticSubmission = Boolean(automatic || state.attempt.automaticSubmission);
       state.attempt.answers = copyObject(state.answers);
       state.attempt.flags = copyObject(state.flags);
+      state.attempt.submissionRetryStartedAt = state.attempt.submissionRetryStartedAt || new Date().toISOString();
+      state.attempt.submissionRetryCount = Number(state.attempt.submissionRetryCount || 0);
       await persistAttempt();
       if (elements.submitDialog.open) {
         elements.submitDialog.close();
@@ -1238,76 +1251,133 @@
     stopTimer();
     elements.receiptIcon.classList.add('is-pending');
     elements.receiptIcon.innerHTML = '<i class="ph ph-cloud-arrow-up"></i>';
-    elements.receiptEyebrow.textContent = 'Submission pending';
-    elements.receiptTitle.textContent = 'Your answers are safe on this device.';
-    elements.receiptMessage.textContent = 'The examination is locked while confirmation is pending.';
+    elements.receiptEyebrow.textContent = 'Uploading submission';
+    elements.receiptTitle.textContent = 'Please wait — your answers are being uploaded.';
+    elements.receiptMessage.textContent = 'Do not close this window. Due Diligence will keep retrying automatically for up to 15 minutes until the server returns a receipt.';
     elements.pendingSubmissionNote.hidden = false;
+    var pendingStrong = elements.pendingSubmissionNote.querySelector('strong');
+    var pendingCopy = elements.pendingSubmissionNote.querySelector('p');
+    if (pendingStrong) pendingStrong.textContent = 'Your complete answer snapshot is locked safely on this device.';
+    if (pendingCopy) pendingCopy.textContent = 'Keep this browser open. Multiple upload attempts will be made automatically; you do not need to keep clicking Retry.';
     elements.receiptDetails.hidden = true;
     elements.resultPanel.hidden = true;
-    elements.retrySubmissionButton.hidden = false;
+    elements.retrySubmissionButton.hidden = true;
     elements.printReceiptButton.hidden = true;
     clearError(elements.receiptError);
     window.scrollTo({ top: 0, behavior: 'auto' });
+  }
+
+  function submissionRetryDelay(attemptNumber) {
+    return Math.min(
+      SUBMISSION_RETRY_MAX_DELAY_MS,
+      SUBMISSION_RETRY_INITIAL_DELAY_MS * Math.pow(1.6, Math.max(0, attemptNumber - 1))
+    );
+  }
+
+  function waitForSubmissionRetry(delayMs) {
+    return new Promise(function (resolve) {
+      window.setTimeout(resolve, Math.max(0, delayMs));
+    });
+  }
+
+  function renderSubmissionRetryProgress(attemptNumber, startedAt) {
+    var elapsed = Math.max(0, Date.now() - startedAt);
+    var remaining = Math.max(0, SUBMISSION_RETRY_WINDOW_MS - elapsed);
+    var minutes = Math.max(1, Math.ceil(remaining / 60000));
+    elements.receiptEyebrow.textContent = 'Uploading submission · attempt ' + attemptNumber;
+    elements.receiptTitle.textContent = 'Please wait — your answers are being uploaded.';
+    elements.receiptMessage.textContent = 'Do not close this window. We will keep trying automatically for up to ' + minutes + ' more minute' + (minutes === 1 ? '' : 's') + ' until the server returns a receipt.';
+    setButtonBusy(elements.retrySubmissionButton, true, 'Uploading attempt ' + attemptNumber);
   }
 
   async function retryPendingSubmission() {
     if (!state.attempt || state.attempt.status !== 'pending_submit' || state.submitting) {
       return;
     }
-    if (!navigator.onLine) {
-      showError(elements.receiptError, { code: 'SUBMISSION_OFFLINE' });
-      return;
-    }
     if (!state.api) {
       showError(elements.receiptError, { code: 'API_UNAVAILABLE' });
+      elements.retrySubmissionButton.hidden = false;
       return;
     }
 
     state.submitting = true;
-    setButtonBusy(elements.retrySubmissionButton, true, 'Requesting confirmation');
     clearError(elements.receiptError);
+    elements.retrySubmissionButton.hidden = true;
+
+    var retryStartedAt = Date.parse(state.attempt.submissionRetryStartedAt || '') || Date.now();
+    state.attempt.submissionRetryStartedAt = new Date(retryStartedAt).toISOString();
+    var lastError = null;
 
     try {
-      await flushOperationQueue();
-      var payload = {
-        attemptId: state.attempt.attemptId,
-        sessionToken: state.attempt.sessionToken,
-        idempotencyKey: state.attempt.idempotencyKey,
-        examId: state.attempt.examId,
-        examVersion: state.attempt.examVersion,
-        clientCompletedAt: state.attempt.clientCompletedAt,
-        automaticSubmission: Boolean(state.attempt.automaticSubmission),
-        answers: state.questions.map(function (question) {
-          return {
-            questionId: question.id,
-            answer: state.answers[question.id] === undefined ? null : state.answers[question.id],
-            flagged: Boolean(state.flags[question.id])
-          };
-        }),
-        client: {
-          appVersion: APP_VERSION,
-          lastClientSequence: state.attempt.clientSequence,
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown'
+      while (
+        state.attempt
+        && state.attempt.status === 'pending_submit'
+        && Date.now() - retryStartedAt < SUBMISSION_RETRY_WINDOW_MS
+      ) {
+        state.attempt.submissionRetryCount = Number(state.attempt.submissionRetryCount || 0) + 1;
+        await persistAttempt().catch(function () {});
+        var attemptNumber = state.attempt.submissionRetryCount;
+        renderSubmissionRetryProgress(attemptNumber, retryStartedAt);
+
+        if (!navigator.onLine) {
+          lastError = createAppError('SUBMISSION_OFFLINE');
+        } else {
+          try {
+            var frozenAnswers = state.attempt.answers || {};
+            var frozenFlags = state.attempt.flags || {};
+            var payload = {
+              attemptId: state.attempt.attemptId,
+              sessionToken: state.attempt.sessionToken,
+              idempotencyKey: state.attempt.idempotencyKey,
+              examId: state.attempt.examId,
+              examVersion: state.attempt.examVersion,
+              clientCompletedAt: state.attempt.clientCompletedAt,
+              submittedAt: state.attempt.clientCompletedAt,
+              automaticSubmission: Boolean(state.attempt.automaticSubmission),
+              answers: state.questions.map(function (question) {
+                return {
+                  questionId: question.id,
+                  answer: frozenAnswers[question.id] === undefined ? null : frozenAnswers[question.id],
+                  flagged: Boolean(frozenFlags[question.id])
+                };
+              }),
+              client: {
+                appVersion: APP_VERSION,
+                lastClientSequence: state.attempt.clientSequence,
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown',
+                submissionRetryAttempt: attemptNumber
+              }
+            };
+
+            var receipt = await state.api.submitAttempt(payload);
+            validateReceipt(receipt);
+            receipt.attemptId = state.attempt.attemptId;
+            receipt.isDemo = Boolean(receipt.isDemo || DEMO_MODE);
+            await databasePut('receipts', receipt);
+            state.attempt.status = 'submitted';
+            state.attempt.receiptId = receipt.receiptId;
+            state.attempt.submittedAt = receipt.submittedAt;
+            await persistAttempt();
+            await deleteAllOperationsForAttempt(state.attempt.attemptId);
+            renderReceipt(receipt);
+            return;
+          } catch (error) {
+            lastError = error;
+          }
         }
-      };
-      var receipt = await state.api.submitAttempt(payload);
-      validateReceipt(receipt);
-      receipt.attemptId = state.attempt.attemptId;
-      receipt.isDemo = Boolean(receipt.isDemo || DEMO_MODE);
-      await databasePut('receipts', receipt);
-      state.attempt.status = 'submitted';
-      state.attempt.receiptId = receipt.receiptId;
-      state.attempt.submittedAt = receipt.submittedAt;
-      await persistAttempt();
-      await deleteAllOperationsForAttempt(state.attempt.attemptId);
-      renderReceipt(receipt);
-    } catch (error) {
+
+        var remaining = SUBMISSION_RETRY_WINDOW_MS - (Date.now() - retryStartedAt);
+        if (remaining <= 0) break;
+        await waitForSubmissionRetry(Math.min(remaining, submissionRetryDelay(attemptNumber)));
+      }
+
       renderPendingSubmission();
+      elements.retrySubmissionButton.hidden = false;
       showError(elements.receiptError, {
-        code: error && error.code ? error.code : 'SUBMISSION_UNCONFIRMED',
-        userMessage: error && error.userMessage,
-        workEffect: error && error.workEffect,
-        cause: error
+        code: lastError && lastError.code ? lastError.code : 'SUBMISSION_UNCONFIRMED',
+        userMessage: 'The server has not confirmed your submission after repeated attempts.',
+        workEffect: 'Your complete answer snapshot remains locked on this device and has not been deleted.',
+        cause: lastError
       }, retryPendingSubmission);
     } finally {
       state.submitting = false;

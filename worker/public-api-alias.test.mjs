@@ -616,3 +616,37 @@ test('public alias source contains no provider brand reference', async () => {
   const source = await readFile(new URL('./public-api-alias.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /gemini/iu);
 });
+
+
+test('public API alias answers approved Examination Room browser preflight directly', async () => {
+  const request = new Request('https://duediligence-api.example.test/examination-room/v1/student/command', {
+    method: 'OPTIONS',
+    headers: {
+      Origin: PRODUCTION_ORIGIN,
+      'Access-Control-Request-Method': 'POST',
+      'Access-Control-Request-Headers': 'content-type,x-request-id',
+    },
+  });
+
+  const response = await publicApiAlias.fetch(request, {});
+  assert.equal(response.status, 204);
+  assert.equal(response.headers.get('Access-Control-Allow-Origin'), PRODUCTION_ORIGIN);
+  assert.equal(response.headers.get('Access-Control-Allow-Methods'), 'POST, OPTIONS');
+  assert.match(response.headers.get('Access-Control-Allow-Headers') || '', /Content-Type/i);
+  assert.match(response.headers.get('Access-Control-Allow-Headers') || '', /X-Request-ID/i);
+});
+
+test('public API alias rejects hostile Examination Room browser preflight', async () => {
+  const request = new Request('https://duediligence-api.example.test/examination-room/v1/student/command', {
+    method: 'OPTIONS',
+    headers: {
+      Origin: 'https://attacker.example',
+      'Access-Control-Request-Method': 'POST',
+      'Access-Control-Request-Headers': 'content-type,x-request-id',
+    },
+  });
+
+  const response = await publicApiAlias.fetch(request, {});
+  assert.equal(response.status, 403);
+  assert.equal(response.headers.get('Access-Control-Allow-Origin'), null);
+});

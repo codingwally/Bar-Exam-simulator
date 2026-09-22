@@ -198,6 +198,18 @@ test('offline grading copies remain passphrase-encrypted and examination-version
   assert.doesNotMatch(professorSource, /offlineGrades\.length\s*\?\s*offlineGrades\s*:\s*allGrades/);
 });
 
+test('Professor downloads are browser-safe and all submitted answers export as a readable document', () => {
+  assert.match(professorHtml, /id="download-all-submitted-answers"/);
+  assert.match(professorHtml, /Download all submitted answers/);
+  assert.match(professorSource, /function downloadAllSubmittedAnswers\s*\(/);
+  assert.match(professorSource, /function buildSubmittedAnswersDocument\s*\(/);
+  assert.match(professorSource, /type:\s*'text\/html;charset=utf-8'/);
+  assert.match(professorSource, /no coding or file conversion is required/i);
+  assert.match(professorSource, /URL\.revokeObjectURL\(url\),\s*60_000/);
+  assert.doesNotMatch(professorSource, /URL\.revokeObjectURL\(url\),\s*0/);
+  assert.match(professorSource, /download-all-submitted-answers[^\n]+downloadAllSubmittedAnswers/);
+});
+
 test('recorded proctoring is optional, selectable, and never makes answer submission depend on storage', () => {
   assert.doesNotMatch(professorSource, /RECORDED_PROCTORING_AVAILABLE/);
   assert.doesNotMatch(professorSource, /Recorded proctoring is unavailable/);
@@ -871,7 +883,7 @@ test('creator receives monitor and grade access from activation without entering
   assert.match(professorHtml, /data-view="monitor" data-requires-activation="true" disabled aria-label="Monitor examination — available after Admin issues the student key"/);
   assert.match(professorHtml, /data-view="grade" data-requires-activation="true" disabled aria-label="Grade submissions — available after Admin issues the student key"/);
   assert.match(professorSource, /control\.setAttribute\('aria-label', unlocked[\s\S]*viewName/);
-  assert.match(professorHtml, /professor\.js\?v=reliability-20260828-1/);
+  assert.match(professorHtml, /professor\.js\?v=professor-answer-downloads-20260922-1/);
 });
 
 test('creator approval survives reload and a published request keeps polling without a manual check', () => {

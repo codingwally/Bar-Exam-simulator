@@ -2174,16 +2174,97 @@
     openDialog('student-detail-dialog');
   }
 
-  function downloadJson(filename, value) {
-    const blob = new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' });
+  function downloadBlob(filename, blob) {
+    if (global.navigator?.msSaveOrOpenBlob) {
+      global.navigator.msSaveOrOpenBlob(blob, filename);
+      return;
+    }
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     link.download = filename;
+    link.hidden = true;
     document.body.appendChild(link);
     link.click();
     link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 0);
+    // Revoking on the next tick can cancel downloads before the browser has
+    // opened the Blob, especially in Firefox and on slower devices.
+    global.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }
+
+  function downloadJson(filename, value) {
+    downloadBlob(filename, new Blob([JSON.stringify(value, null, 2)], {
+      type: 'application/json;charset=utf-8',
+    }));
+  }
+
+  function safeDownloadName(value, fallback = 'examination') {
+    const normalized = safeText(value, 120)
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .toLowerCase();
+    return normalized || fallback;
+  }
+
+  function gradingAnswerText(question, answer) {
+    if (viewModels?.professorAnswerLabel) return viewModels.professorAnswerLabel(question, answer);
+    if (answer == null || answer === '') return 'No submitted answer.';
+    if (typeof answer === 'string') return answer;
+    if (Array.isArray(answer)) return answer.join(', ');
+    return JSON.stringify(answer, null, 2);
+  }
+
+  function buildSubmittedAnswersDocument() {
+    const data = state.grading || { sessions: [], submissions: [], answerRevisions: [] };
+    const submissionsBySession = new Map((data.submissions || []).map((submission) => [submission.sessionId, submission]));
+    const sessions = (data.sessions || []).filter((session) => submissionsBySession.has(session.id));
+    const exportedAt = new Date();
+    const studentSections = sessions.map((session, studentIndex) => {
+      const identity = gradingDisplayIdentity(session, studentIndex);
+      const submission = submissionsBySession.get(session.id) || {};
+      const answers = latestBy(
+        (data.answerRevisions || []).filter((revision) => revision.sessionId === session.id),
+        (revision) => revision.questionId,
+      );
+      const questionSections = state.questions.map((question, questionIndex) => {
+        const answerText = gradingAnswerText(question, answers.get(question.id)?.answer);
+        return `<article class="question"><h3>Question ${questionIndex + 1} <span>${escapeHtml(String(question.points))} point${Number(question.points) === 1 ? '' : 's'}</span></h3><div class="prompt">${escapeHtml(question.prompt || question.text || '')}</div><div class="answer">${escapeHtml(answerText)}</div></article>`;
+      }).join('');
+      return `<section class="student"><header><p class="student-count">Submission ${studentIndex + 1} of ${sessions.length}</p><h2>${escapeHtml(identity.realName)}</h2><dl><div><dt>Student number</dt><dd>${escapeHtml(identity.realStudentNumber || 'Not provided')}</dd></div><div><dt>Year level</dt><dd>${escapeHtml(session.yearLevel || 'Not provided')}</dd></div><div><dt>Submitted</dt><dd>${escapeHtml(formatDateTime(submission.submittedAt))}</dd></div><div><dt>Receipt</dt><dd>${escapeHtml(submission.receiptCode || 'Not available')}</dd></div></dl></header>${questionSections}</section>`;
+    }).join('');
+
+    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(state.exam?.title || 'Examination')} — Submitted answers</title><style>
+      :root{color-scheme:light;font-family:Arial,sans-serif;color:#172033;background:#f4f0e8}*{box-sizing:border-box}body{margin:0}.cover,.student{width:min(900px,calc(100% - 32px));margin:32px auto;background:#fff;padding:48px;border:1px solid #d9d0bd}.brand{color:#80662b;font-weight:700;letter-spacing:.12em;text-transform:uppercase}.cover h1,.student h2{font-family:Georgia,serif;color:#10213d}.cover h1{font-size:36px;margin:12px 0}.meta{color:#596273}.notice{margin-top:32px;padding:16px;border-left:4px solid #9b7a2e;background:#faf6ec}.student{page-break-before:always}.student-count{color:#80662b;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}.student h2{font-size:28px;margin:6px 0 18px}dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 24px;margin:0 0 32px}dl div{border-top:1px solid #ded7c9;padding-top:8px}dt{color:#6a7280;font-size:12px;text-transform:uppercase}dd{margin:4px 0 0;font-weight:700}.question{margin:28px 0;break-inside:avoid}.question h3{display:flex;justify-content:space-between;border-bottom:2px solid #10213d;padding-bottom:8px}.question h3 span{font:600 13px Arial,sans-serif;color:#596273}.prompt{font-family:Georgia,serif;font-size:17px;line-height:1.55;margin:14px 0}.answer{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.65;padding:18px;background:#f7f5ef;border:1px solid #ddd5c5}@media(max-width:600px){.cover,.student{width:100%;margin:0;padding:24px;border:0}.cover h1{font-size:29px}dl{grid-template-columns:1fr}}@media print{body{background:#fff}.cover,.student{width:auto;margin:0;border:0;box-shadow:none}.cover{page-break-after:always}.student{page-break-before:always}}
+    </style></head><body><main><section class="cover"><p class="brand">Due Diligence · Examination Room</p><h1>${escapeHtml(state.exam?.title || 'Examination')}</h1><p class="meta">All submitted answers · ${sessions.length} student${sessions.length === 1 ? '' : 's'} · Downloaded ${escapeHtml(formatDateTime(exportedAt.toISOString()))}</p><p class="notice"><strong>Private education record.</strong> Store this offline copy securely. It is ready to read, print, or save as PDF; no coding or file conversion is required.</p></section>${studentSections}</main></body></html>`;
+  }
+
+  async function downloadAllSubmittedAnswers(button = $('#download-all-submitted-answers')) {
+    if (!state.grading) await refreshGrading();
+    const submittedIds = new Set((state.grading?.submissions || []).map((submission) => submission.sessionId));
+    const submittedCount = (state.grading?.sessions || []).filter((session) => submittedIds.has(session.id)).length;
+    if (!submittedCount) {
+      showError({
+        message: 'There are no submitted answers to download yet.',
+        recovery: 'Wait for at least one student submission, choose Refresh, then download again.',
+      }, null, 'Nothing downloaded');
+      return;
+    }
+    setButtonBusy(button, true, 'Preparing answers…');
+    try {
+      const html = buildSubmittedAnswersDocument();
+      const filename = `${safeDownloadName(state.exam?.title)}-all-submitted-answers.html`;
+      downloadBlob(filename, new Blob([html], { type: 'text/html;charset=utf-8' }));
+      toast(`${submittedCount} submitted answer${submittedCount === 1 ? '' : 's'} downloaded in one readable file.`);
+    } catch (error) {
+      showError({
+        message: error?.message || 'This browser could not create the submitted-answer file.',
+        recovery: 'Keep this page open, refresh the Grade view, then choose Download all submitted answers again.',
+      }, () => downloadAllSubmittedAnswers(button), 'Answers not downloaded');
+    } finally {
+      setButtonBusy(button, false);
+    }
   }
 
   function jsonDownloadSize(value) {
@@ -3165,6 +3246,7 @@
     });
     $('#anonymous-grading-toggle').addEventListener('change', (event) => { state.anonymousGrading = event.target.checked; renderGrading(); });
     $('#release-results').addEventListener('click', releaseResults);
+    $('#download-all-submitted-answers').addEventListener('click', (event) => downloadAllSubmittedAnswers(event.currentTarget));
     $('#export-grading-package').addEventListener('click', exportGradingPackage);
     $('#import-grading-package').addEventListener('change', async (event) => {
       const files = [...(event.target.files || [])];

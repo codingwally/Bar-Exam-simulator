@@ -10473,11 +10473,21 @@ const examinationRoomV1Handlers = createExaminationRoomV1Handlers({
 export default {
   async fetch(request, env, ctx) {
     env = normalizedRuntimeSecrets(env);
-    const allowedOrigin = env.ALLOWED_ORIGIN || 'https://duediligence.ph';
+    let allowedOrigin = env.ALLOWED_ORIGIN || 'https://duediligence.ph';
     const requestOrigin = request.headers.get('Origin') || '';
     let pathname = '';
     try {
       pathname = new URL(request.url).pathname.replace(/\/+$/, '') || '/';
+      // Examination Room is served from both production hostnames. Older open
+      // tabs and redirects can call this application Worker directly, so accept
+      // the approved www hostname here as well as at the public API alias.
+      if (
+        pathname.startsWith('/examination-room/')
+        && allowedOrigin === 'https://duediligence.ph'
+        && requestOrigin === 'https://www.duediligence.ph'
+      ) {
+        allowedOrigin = requestOrigin;
+      }
       const publicPricingAssetMatch = pathname.match(
         /^\/pricing\/assets\/([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/iu,
       );

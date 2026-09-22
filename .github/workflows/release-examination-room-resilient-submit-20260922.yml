@@ -13,7 +13,7 @@ permissions:
   id-token: write
 
 env:
-  RELEASE_SOURCE_SHA: 54aba524bb0771a0b56935ebb6dc96bfff086962
+  RELEASE_SOURCE_SHA: 91a36292a05d62c4491331a77d43c640b42f851b
   PUBLIC_API_URL: https://duediligence-api.wallyesteban1993.workers.dev
   APPLICATION_URL: https://duediligence-gemini-examiner.wallyesteban1993.workers.dev
   SITE_URL: https://duediligence.ph
@@ -48,7 +48,8 @@ jobs:
           node --check examination-room/api.js
           node --check worker/examination-room-v1-routes.mjs
           node --test examination-room/student.client.test.cjs
-          node --test --test-name-pattern="legacy open student tabs can upload their local answer snapshot during submit|student submit persists blank answers and still produces a receipt" worker/examination-room-v1-routes.test.mjs
+          node --test worker/examination-room-email.test.mjs
+          node --test --test-name-pattern="legacy open student tabs can upload their local answer snapshot during submit|student submit persists blank answers and still produces a receipt|accepted submit hands the roster-bound email and answers to the post-submit hook" worker/examination-room-v1-routes.test.mjs
           grep -Fq "SUBMISSION_RETRY_WINDOW_MS = 15 * 60 * 1000" examination-room/student.js
           grep -Fq "Please wait — your answers are being uploaded." examination-room/student.js
           grep -Fq "Do not close this window" examination-room/student.js
@@ -56,6 +57,9 @@ jobs:
           grep -Fq "submission.submittedAt || submission.receivedAt" examination-room/api.js
           grep -Fq "const submittedAnswers = Array.isArray(payload.answers) ? payload.answers : [];" worker/examination-room-v1-routes.mjs
           grep -Fq "source: 'submission'" worker/examination-room-v1-routes.mjs
+          grep -Fq "deliverExaminationRoomSubmissionAnswersEmail" worker/index.mjs
+          grep -Fq "buildExaminationRoomSubmissionAnswersEmail" worker/examination-room-email.mjs
+          grep -Fq "studentEmail" supabase/migrations/20260922133500_examination_room_submission_answer_email_context.sql
 
       - name: Prepare behavior-equivalent Worker deployment config
         shell: bash
@@ -124,9 +128,10 @@ jobs:
           grep -Fq "Please wait — your answers are being uploaded." .pages-dist/examination-room/student.js
           grep -Fq "STUDENT_SUBMISSION_REQUEST_TIMEOUT_MS = 60_000" .pages-dist/examination-room/api.js
           grep -Fq "submission.submittedAt || submission.receivedAt" .pages-dist/examination-room/api.js
-          grep -Fq 'student.js?v=submission-retry-20260922-9' .pages-dist/examination-room/student.html
+          grep -Fq 'student.js?v=submission-email-20260922-10' .pages-dist/examination-room/student.html
           grep -Fq 'api.js?v=submission-retry-20260922-9' .pages-dist/examination-room/student.html
-          grep -Fq 'duediligence-shell-examination-submission-retry-20260922-9' .pages-dist/service-worker.js
+          grep -Fq 'duediligence-shell-examination-submission-email-20260922-10' .pages-dist/service-worker.js
+          grep -Fq "Your answers were successfully uploaded for professor grading." .pages-dist/examination-room/student.js
 
       - uses: actions/configure-pages@v4
       - uses: actions/upload-pages-artifact@v3
@@ -140,10 +145,11 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in {1..24}; do
-            student="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/student.js?v=submission-retry-20260922-9&release=$RELEASE_SOURCE_SHA" || true)"
+            student="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/student.js?v=submission-email-20260922-10&release=$RELEASE_SOURCE_SHA" || true)"
             api="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/api.js?v=submission-retry-20260922-9&release=$RELEASE_SOURCE_SHA" || true)"
             page="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/student.html?release=$RELEASE_SOURCE_SHA" || true)"
-            if grep -Fq "SUBMISSION_RETRY_WINDOW_MS = 15 * 60 * 1000" <<<"$student"               && grep -Fq "Please wait — your answers are being uploaded." <<<"$student"               && grep -Fq "STUDENT_SUBMISSION_REQUEST_TIMEOUT_MS = 60_000" <<<"$api"               && grep -Fq "submission.submittedAt || submission.receivedAt" <<<"$api"               && grep -Fq 'student.js?v=submission-retry-20260922-9' <<<"$page"; then
+            if grep -Fq "SUBMISSION_RETRY_WINDOW_MS = 15 * 60 * 1000" <<<"$student"               && grep -Fq "Please wait — your answers are being uploaded." <<<"$student"               && grep -Fq "STUDENT_SUBMISSION_REQUEST_TIMEOUT_MS = 60_000" <<<"$api"               && grep -Fq "submission.submittedAt || submission.receivedAt" <<<"$api"               && grep -Fq 'student.js?v=submission-email-20260922-10' <<<"$page"
+              && grep -Fq "Your answers were successfully uploaded for professor grading." <<<"$student"; then
               echo "Resilient Examination Room submission client is live."
               exit 0
             fi

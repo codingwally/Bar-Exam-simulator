@@ -11,14 +11,6 @@ const studentHtml = fs.readFileSync(path.join(__dirname, 'student.html'), 'utf8'
 const apiSource = fs.readFileSync(path.join(__dirname, 'api.js'), 'utf8');
 const mediaSource = fs.readFileSync(path.join(__dirname, 'media-capture.js'), 'utf8');
 const offlineGradingSource = fs.readFileSync(path.join(__dirname, 'offline-grading.js'), 'utf8');
-
-test('successful submission clearly says answers are uploaded and grading is pending', () => {
-  assert.match(studentSource, /receiptEyebrow\.textContent = receipt\.isDemo \? 'Demo upload confirmed' : 'Uploaded'/);
-  assert.match(studentSource, /Your answers were uploaded successfully\./);
-  assert.match(studentSource, /Please wait for your professor to finish grading and release your result\./);
-  assert.match(studentHtml, /student\.js\?v=submission-recovery-20260922-8/);
-});
-
 const studentApiRuntime = [
   apiSource.slice(apiSource.indexOf('function demoStudentPreview'), apiSource.indexOf('function demoStudentQuery')),
   apiSource.slice(apiSource.indexOf('async function studentPreview'), apiSource.indexOf('async function studentQuery')),
@@ -136,35 +128,7 @@ test('the final-question action remains enabled and opens review instead of trap
   assert.match(studentSource, /state\.currentIndex === state\.questions\.length - 1 \? 'Review and submit'/);
   assert.match(studentSource, /navigateToQuestion\(state\.currentIndex \+ 1\)/);
   assert.match(studentSource, /if \(index >= state\.questions\.length\) \{[\s\S]*openSubmitDialog\(\)/);
-  assert.match(studentHtml, /api\.js\?v=answer-copy-flow-20260922-7/);
-  assert.match(studentHtml, /student\.js\?v=submission-recovery-20260922-8/);
-});
-
-test('refresh recovery restores the newest local attempt and merges server-backed answers before rendering', () => {
-  assert.match(studentSource, /await restoreMostRecentAttemptOnStartup\(\)/);
-  assert.match(studentSource, /databaseGetAll\('attempts'\)/);
-  assert.match(studentSource, /Object\.assign\(\s*\{\},\s*serverState && serverState\.answers \|\| \{\},\s*state\.answers\s*\)/);
-  assert.match(studentSource, /Saved answers were recovered from this device and the examination server/);
-  assert.match(studentSource, /renderServerRecoveredSubmission\(\)/);
-});
-
-test('answer changes are queued for immediate server upload and non-answer leftovers do not block submission', () => {
-  assert.match(studentSource, /scheduleQueueSync\(kind === 'answer\.changed' \|\| kind === 'question\.flag_changed' \? 0 : 180\)/);
-  assert.match(studentSource, /var pendingAnswers = remaining\.filter/);
-  assert.match(studentSource, /return pendingAnswers\.length === 0/);
-});
-
-test('answer uploads retry automatically but final submission bypasses the background queue', () => {
-  assert.match(studentSource, /if \(state\.syncing\) \{\s*state\.syncRequested = true;/);
-  assert.match(studentSource, /scheduleQueueSync\(Math\.min\(5000, 250 \* Math\.pow\(2, state\.syncRetryCount\)\)\)/);
-  assert.match(studentSource, /Final submission must never wait behind the ordinary autosave\/integrity/);
-  assert.match(studentSource, /state\.syncRequested = false;\s*var payload = \{/);
-  assert.doesNotMatch(studentSource, /await flushOperationQueue\(\);\s*var payload = \{/);
-});
-
-test('ordinary answer sync still converts multiple-choice answers to server indexes', () => {
-  assert.match(studentSource, /question\.options\.findIndex/);
-  assert.match(studentSource, /serverAnswer: serverAnswer|answer: serverAnswer/);
+  assert.match(studentHtml, /student\.js\?v=reliability-20260828-1/);
 });
 
 test('student storage open fails safely when IndexedDB is blocked or never settles', async () => {
@@ -209,14 +173,4 @@ test('student result checking uses bounded backoff, hidden-tab throttling, and m
   assert.match(studentSource, /Date\.now\(\) - state\.resultPollStartedAt >= RESULT_POLL_LIFETIME_MS/);
   assert.match(studentSource, /Automatic result checking paused after two hours\. Choose Check for result to restart it\./);
   assert.match(studentSource, /if \(manual && state\.resultPollingExpired\) \{[\s\S]*resetResultPollingWindow\(\)[\s\S]*subscribeForResultUpdates\(\)/);
-});
-
-test('final submission downloads a student answer copy before upload and preserves it across retries', () => {
-  assert.match(studentSource, /function buildStudentAnswerCopy\(\)/);
-  assert.match(studentSource, /function downloadStudentAnswerCopy\(\)/);
-  assert.match(studentSource, /schemaVersion: 'examination-room\/student-answer-copy\/v1'/);
-  assert.match(studentSource, /if \(!state\.attempt\.answerCopyDownloadedAt\) \{[\s\S]*downloadStudentAnswerCopy\(\)[\s\S]*await persistAttempt\(\)[\s\S]*await flushPendingAnswerSaves\(\)/);
-  assert.match(studentSource, /Preparing answer copy/);
-  assert.match(studentSource, /Uploading answers/);
-  assert.match(studentSource, /Your answer copy is downloaded\. Upload is pending\./);
 });

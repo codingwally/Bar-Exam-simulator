@@ -1,4 +1,4 @@
-name: Emergency Examination Room submission fix
+name: Emergency Examination Room submission-intent retry
 
 on:
   push:
@@ -15,15 +15,15 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  BASE_SHA: 067acd9f3fd3aced5166bb6636fbe34dbeba5315
-  RELEASE_SOURCE_SHA: b1dbf10ead74bab852ce036d2f4ca74266498e1c
+  BASE_SHA: 167a70a6def25443b2564c8a522b17001e4ea09f
+  RELEASE_SOURCE_SHA: ee2fe70abae7a88c59d893767a65318bfb576288
   PUBLIC_API_URL: https://duediligence-api.wallyesteban1993.workers.dev
   APPLICATION_URL: https://duediligence-gemini-examiner.wallyesteban1993.workers.dev
 
 jobs:
   deploy:
-    name: Verify and deploy Examination Room submission fix
-    if: "${{ github.event.head_commit.message == 'release: deploy Examination Room submission fix' }}"
+    name: Verify and deploy Examination Room submission-intent retry
+    if: "${{ github.event.head_commit.message == 'release: deploy Examination Room submission-intent retry' }}"
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment:
@@ -47,6 +47,7 @@ jobs:
           base=os.environ['BASE_SHA']
           source=os.environ['RELEASE_SOURCE_SHA']
           expected={
+            'supabase/migrations/20260922113200_examination_room_submission_intent_retry.sql',
             'worker/examination-room-v1-routes.mjs',
             'worker/examination-room-v1-routes.test.mjs',
           }
@@ -56,7 +57,7 @@ jobs:
           ).splitlines())
           if changed != expected:
               raise SystemExit(f'unexpected Examination Room hotfix scope: {sorted(changed)}')
-          print('Exact Examination Room submission hotfix scope verified.')
+          print('Exact Examination Room submission-intent retry scope verified.')
           PY
 
       - name: Setup Node
@@ -67,7 +68,7 @@ jobs:
       - name: Install Worker dependencies
         run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
 
-      - name: Validate origin and submission contracts
+      - name: Validate submission-intent retry contracts
         shell: bash
         run: |
           set -euo pipefail
@@ -77,8 +78,12 @@ jobs:
           node --test             worker/examination-room-origin.test.mjs             worker/examination-room-v1-core.test.mjs             worker/examination-room-v1-routes.test.mjs             worker/public-api-alias.test.mjs             examination-room/api.demo.test.cjs             examination-room/student.client.test.cjs
           git diff --check "$BASE_SHA..$RELEASE_SOURCE_SHA"
           grep -Fq "requestOrigin === 'https://www.duediligence.ph'" worker/index.mjs
-          grep -Fq "A blank response is still a final response." worker/examination-room-v1-routes.mjs
-          grep -Fq "student submit persists blank answers and still produces a receipt" worker/examination-room-v1-routes.test.mjs
+          grep -Fq "operation: 'submission_intent'" worker/examination-room-v1-routes.mjs
+          grep -Fq "submissionRequestHash: info.requestHash" worker/examination-room-v1-routes.mjs
+          grep -Fq "payload.clientCompletedAt ?? payload.submittedAt ?? deps.now()" worker/examination-room-v1-routes.mjs
+          grep -Fq "student.submission_intent" supabase/migrations/20260922113200_examination_room_submission_intent_retry.sql
+          grep -Fq "submissionRequestHash" supabase/migrations/20260922113200_examination_room_submission_intent_retry.sql
+          grep -Fq "submission intent must be recorded before final answer reconciliation" worker/examination-room-v1-routes.test.mjs
 
       - name: Prepare behavior-equivalent free-plan deployment config
         shell: bash

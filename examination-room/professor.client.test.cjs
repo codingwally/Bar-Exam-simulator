@@ -871,7 +871,7 @@ test('creator receives monitor and grade access from activation without entering
   assert.match(professorHtml, /data-view="monitor" data-requires-activation="true" disabled aria-label="Monitor examination — available after Admin issues the student key"/);
   assert.match(professorHtml, /data-view="grade" data-requires-activation="true" disabled aria-label="Grade submissions — available after Admin issues the student key"/);
   assert.match(professorSource, /control\.setAttribute\('aria-label', unlocked[\s\S]*viewName/);
-  assert.match(professorHtml, /professor\.js\?v=reliability-20260828-1/);
+  assert.match(professorHtml, /professor\.js\?v=answer-copy-download-20260922-3/);
 });
 
 test('creator approval survives reload and a published request keeps polling without a manual check', () => {

@@ -2248,6 +2248,70 @@
     $('#grading-summary').innerHTML = `<div class="grading-summary-content"><div class="summary-row"><span>Submitted</span><strong>${sessions.length}</strong></div><div class="summary-row"><span>Fully graded</span><strong>${gradedStudents}</strong></div><div class="summary-row"><span>Selected for release</span><strong>${state.selectedReleaseIds.size}</strong></div><div class="summary-row"><span>Identity view</span><strong>${state.anonymousGrading ? 'Anonymous' : 'Real names'}</strong></div></div>`;
   }
 
+  function submittedAnswerCopyValue(question, value) {
+    if (value === undefined || value === null || value === '') return 'No answer';
+    if (question && (question.type === 'multiple_choice' || question.type === 'multiple-choice')) {
+      const choices = Array.isArray(question.choices)
+        ? question.choices
+        : Array.isArray(question.options)
+          ? question.options.map((option) => option?.label ?? option?.id ?? option)
+          : [];
+      if (typeof value === 'string') {
+        const legacy = /^option-(\d+)$/i.exec(value.trim());
+        if (legacy && choices[Math.max(0, Number(legacy[1]) - 1)] != null) {
+          return String(choices[Math.max(0, Number(legacy[1]) - 1)]);
+        }
+      }
+      if (Number.isInteger(Number(value)) && choices[Number(value)] != null) {
+        return String(choices[Number(value)]);
+      }
+    }
+    if (Array.isArray(value)) return value.map(String).join(', ');
+    return typeof value === 'string' ? value : JSON.stringify(value);
+  }
+
+  function submittedAnswerCopy(session) {
+    const answers = latestBy(
+      (state.grading?.answerRevisions || []).filter((revision) => revision.sessionId === session.id),
+      (revision) => revision.questionId,
+    );
+    const realName = safeText(session?.realFullName || session?.fullName, 160);
+    const studentNumber = safeText(session?.realStudentNumber || session?.studentNumber, 64);
+    return {
+      schemaVersion: 'examination-room/student-answer-copy/v1',
+      examination: {
+        title: safeText(state.exam?.title, 240),
+        subject: safeText(state.exam?.subject, 160),
+        yearLevel: safeText(state.exam?.yearLevel, 80)
+      },
+      student: {
+        fullName: realName,
+        studentNumber,
+        email: safeText(session?.email, 320)
+      },
+      answers: state.questions.map((question, index) => ({
+        questionNumber: Number(question.number || index + 1),
+        prompt: String(question.prompt || '').trim(),
+        answer: submittedAnswerCopyValue(question, answers.get(question.id)?.answer)
+      }))
+    };
+  }
+
+  function downloadSubmittedAnswerCopy(sessionId) {
+    const session = (state.grading?.sessions || []).find((entry) => entry.id === sessionId);
+    if (!session) {
+      showError({ message: 'That submitted student is no longer available.', recovery: 'Refresh grading and select the student again.' }, refreshGrading, 'Answer copy not downloaded');
+      return;
+    }
+    const copy = submittedAnswerCopy(session);
+    const safePart = (value, fallback) => safeText(value, 180).replace(/[^a-z0-9._-]+/gi, '-').replace(/^-+|-+$/g, '') || fallback;
+    downloadJson(
+      ['Due-Diligence-Answers', safePart(copy.student.studentNumber, 'student'), safePart(copy.examination.title, 'examination')].join('-') + '.json',
+      copy,
+    );
+    toast('Submitted answer copy downloaded.');
+  }
+
   function renderGradingSheet() {
     const data = state.grading || {};
     const session = (data.sessions || []).find((entry) => entry.id === state.selectedGradingSessionId);
@@ -2260,7 +2324,7 @@
     const displayName = state.anonymousGrading ? identity.alias : identity.realName;
     const answers = latestBy((data.answerRevisions || []).filter((revision) => revision.sessionId === session.id), (revision) => revision.questionId);
     const grades = latestBy((data.gradeRevisions || []).filter((revision) => revision.sessionId === session.id), (revision) => revision.questionId);
-    $('#grading-sheet').innerHTML = `<header class="grading-student-head"><div><p class="section-kicker">Individual response</p><h2>${escapeHtml(displayName)}</h2><p>${escapeHtml(state.anonymousGrading ? 'The professor may reveal the real roster at any time.' : `${identity.realStudentNumber} · ${session.yearLevel}`)}</p></div><span class="grade-save-state"><i class="ph ph-check-circle" aria-hidden="true"></i> Enter all scores, then save this student once</span></header>
+    $('#grading-sheet').innerHTML = `<header class="grading-student-head"><div><p class="section-kicker">Individual response</p><h2>${escapeHtml(displayName)}</h2><p>${escapeHtml(state.anonymousGrading ? 'The professor may reveal the real roster at any time.' : `${identity.realStudentNumber} · ${session.yearLevel}`)}</p></div><div class="grading-head-actions"><button class="button secondary" type="button" data-download-answer-copy="${escapeHtml(session.id)}"><i class="ph ph-download-simple" aria-hidden="true"></i> Download submitted answers</button><span class="grade-save-state"><i class="ph ph-check-circle" aria-hidden="true"></i> Enter all scores, then save this student once</span></div></header>
       ${state.questions.map((question, index) => {
         const answer = answers.get(question.id)?.answer;
         const grade = grades.get(question.id) || {};
@@ -3160,6 +3224,11 @@
       renderGrading();
     });
     $('#grading-sheet').addEventListener('click', (event) => {
+      const downloadButton = event.target.closest('[data-download-answer-copy]');
+      if (downloadButton) {
+        downloadSubmittedAnswerCopy(downloadButton.dataset.downloadAnswerCopy);
+        return;
+      }
       const button = event.target.closest('[data-save-all-grades]');
       if (button) saveAllGrades(button).catch(() => {});
     });

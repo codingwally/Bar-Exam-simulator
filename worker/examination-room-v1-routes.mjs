@@ -1615,6 +1615,21 @@ export function createExaminationRoomV1Handlers(dependencies) {
                 if (legacyChoice) submittedValue = Number(legacyChoice[1]) - 1;
               }
 
+              // A retry can arrive after autosave or an earlier submit attempt
+              // already persisted this exact value. Do not manufacture a new
+              // revision (or reuse the submit-derived request key with a new
+              // revision number); the existing immutable revision is already
+              // the correct server-backed snapshot for the final receipt.
+              const existingRevision = Array.isArray(sessionContext.answerRevisions)
+                ? sessionContext.answerRevisions.find((revision) => (
+                  Number(revision?.questionNumber) === question.number
+                  && revision?.questionKey === question.key
+                ))
+                : null;
+              if (existingRevision && existingRevision.answer === submittedValue) {
+                continue;
+              }
+
               const answerRequest = await requestContext(
                 env,
                 `${info.rawRequestKey}:answer:${question.number}`,

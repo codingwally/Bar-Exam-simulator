@@ -1,0 +1,176 @@
+name: Restore Examination Room Sunday baseline
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/restore-examination-room-sunday-20260920.yml
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+env:
+  BASELINE_SHA: 04e3985e44be53e2f102935a2410ff1195405e64
+  RELEASE_SOURCE_SHA: 58f3543dbe4bed1ee2e884e65f002f4483340d68
+  PUBLIC_API_URL: https://duediligence-api.wallyesteban1993.workers.dev
+  APPLICATION_URL: https://duediligence-gemini-examiner.wallyesteban1993.workers.dev
+  SITE_URL: https://duediligence.ph
+
+jobs:
+  deploy_worker:
+    name: Deploy Sunday Examination Room backend
+    if: "${{ github.event.head_commit.message == 'release: restore Examination Room Sunday baseline' }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production-worker
+
+    steps:
+      - name: Checkout restored source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_SOURCE_SHA }}
+          fetch-depth: 0
+
+      - name: Verify Examination Room matches Sunday baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$RELEASE_SOURCE_SHA"
+          for file in             examination-room/api.js             examination-room/index.html             examination-room/offline-grading.html             examination-room/professor.js             examination-room/student.html             examination-room/student.js             service-worker.js             worker/examination-room-v1-core.mjs             worker/examination-room-v1-routes.mjs             worker/index.mjs             worker/public-api-alias.mjs; do
+            test "$(git show "$BASELINE_SHA:$file" | sha256sum | awk '{print $1}')" = "$(sha256sum "$file" | awk '{print $1}')"
+          done
+          echo "Production Examination Room runtime files match the 2026-09-20 baseline."
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Worker dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Validate restored Examination Room
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check worker/index.mjs
+          node --check worker/examination-room-v1-core.mjs
+          node --check worker/examination-room-v1-routes.mjs
+          node --check worker/public-api-alias.mjs
+          node --check examination-room/api.js
+          node --check examination-room/student.js
+          node --check examination-room/professor.js
+          node --test             worker/examination-room-v1-core.test.mjs             worker/examination-room-v1-routes.test.mjs             worker/public-api-alias.test.mjs             examination-room/api.demo.test.cjs             examination-room/student.client.test.cjs             examination-room/professor.client.test.cjs
+
+      - name: Prepare behavior-equivalent Worker deployment config
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp worker/wrangler.toml worker/wrangler.examination-room-restore.toml
+          sed -i             -e '/^GEMINI_GROUNDING_ENABLED =/d'             -e '/^ALLOW_LEGACY_GUESTS =/d'             -e '/^AI_PREPARED_BETA_BADGE =/d'             -e '/^CONTENT_HUMAN_REVIEW_REQUIRED =/d'             worker/wrangler.examination-room-restore.toml
+
+      - name: Deploy application Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          wranglerVersion: "4.114.0"
+          command: deploy --config wrangler.examination-room-restore.toml
+
+      - name: Deploy public API alias
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          wranglerVersion: "4.114.0"
+          command: deploy --config wrangler.public-api.toml
+
+      - name: Verify live Examination Room endpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          for endpoint in "$PUBLIC_API_URL" "$APPLICATION_URL"; do
+            body="$RUNNER_TEMP/exam-room-probe.json"
+            headers="$RUNNER_TEMP/exam-room-probe.headers"
+            status="$(curl --silent --show-error --max-time 20               --output "$body"               --dump-header "$headers"               --write-out '%{http_code}'               --request POST               --header 'Origin: https://duediligence.ph'               --header 'Content-Type: application/json'               --data '{"operation":"submit","payload":{"sessionId":"not-a-session"},"idempotencyKey":"submission:sunday-restore-probe"}'               "$endpoint/examination-room/v1/student/command" || true)"
+            test "$status" = "400"
+            grep -Eq 'IDENTIFIER_INVALID|EXAM_ROOM_V1_IDENTIFIER_INVALID' "$body"
+            grep -qi '^access-control-allow-origin: https://duediligence.ph' "$headers"
+          done
+          echo "Both live Examination Room endpoints are responding with the restored baseline."
+
+  deploy_pages:
+    name: Deploy Sunday Examination Room frontend
+    needs: deploy_worker
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout restored source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_SOURCE_SHA }}
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install reviewed Pages build dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Build and verify Pages artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          GITHUB_SHA="$RELEASE_SOURCE_SHA" node scripts/test-pages-artifact.mjs
+          test "$(git show "$BASELINE_SHA:examination-room/student.js" | sha256sum | awk '{print $1}')" = "$(sha256sum .pages-dist/examination-room/student.js | awk '{print $1}')"
+          test "$(git show "$BASELINE_SHA:examination-room/api.js" | sha256sum | awk '{print $1}')" = "$(sha256sum .pages-dist/examination-room/api.js | awk '{print $1}')"
+          test "$(git show "$BASELINE_SHA:examination-room/professor.js" | sha256sum | awk '{print $1}')" = "$(sha256sum .pages-dist/examination-room/professor.js | awk '{print $1}')"
+          test "$(cat .pages-dist/.well-known/duediligence-release.txt)" = "$RELEASE_SOURCE_SHA"
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .pages-dist
+
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Verify live restored Examination Room assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_student="$(sha256sum examination-room/student.js | awk '{print $1}')"
+          expected_api="$(sha256sum examination-room/api.js | awk '{print $1}')"
+          expected_professor="$(sha256sum examination-room/professor.js | awk '{print $1}')"
+          for attempt in {1..24}; do
+            live_student="$RUNNER_TEMP/live-student.js"
+            live_api="$RUNNER_TEMP/live-api.js"
+            live_professor="$RUNNER_TEMP/live-professor.js"
+            marker="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/.well-known/duediligence-release.txt?release=$RELEASE_SOURCE_SHA" || true)"
+            curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' -o "$live_student" "$SITE_URL/examination-room/student.js?release=$RELEASE_SOURCE_SHA" || true
+            curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' -o "$live_api" "$SITE_URL/examination-room/api.js?release=$RELEASE_SOURCE_SHA" || true
+            curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' -o "$live_professor" "$SITE_URL/examination-room/professor.js?release=$RELEASE_SOURCE_SHA" || true
+            if [[ "$marker" == "$RELEASE_SOURCE_SHA" ]]               && [[ "$(sha256sum "$live_student" | awk '{print $1}')" == "$expected_student" ]]               && [[ "$(sha256sum "$live_api" | awk '{print $1}')" == "$expected_api" ]]               && [[ "$(sha256sum "$live_professor" | awk '{print $1}')" == "$expected_professor" ]]; then
+              echo "Restored Sunday Examination Room assets are live."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Restored Examination Room assets did not converge in time." >&2
+          exit 1

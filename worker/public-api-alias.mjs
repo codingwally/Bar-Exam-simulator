@@ -1,5 +1,6 @@
 const CANONICAL_ORIGIN = 'https://duediligence.ph';
 const ANSWER_RECOVERY_URL = 'https://hbllomlijfznnuudpdvr.supabase.co/functions/v1/examination-room-answer-recovery';
+const ANSWER_RECOVERY_TIMEOUT_MS = 3_500;
 const APPROVED_BROWSER_ORIGINS = new Set([
   CANONICAL_ORIGIN,
   'https://www.duediligence.ph',
@@ -147,6 +148,8 @@ async function attemptStudentAnswerRecovery(command, requestKey, responseHeaders
   const payload = normalizeStudentAnswerPayload(command?.payload || {});
   if (!payload.sessionId || !payload.sessionToken || !payload.questionId) return null;
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), ANSWER_RECOVERY_TIMEOUT_MS);
   try {
     const recovery = await fetch(ANSWER_RECOVERY_URL, {
       method: 'POST',
@@ -161,6 +164,7 @@ async function attemptStudentAnswerRecovery(command, requestKey, responseHeaders
         flagged: payload.flagged === true,
         requestKey: requestKey || command?.idempotencyKey || crypto.randomUUID(),
       }),
+      signal: controller.signal,
     });
     const body = await responseJson(recovery);
     if (!recovery.ok || body?.ok !== true) return null;
@@ -180,6 +184,8 @@ async function attemptStudentAnswerRecovery(command, requestKey, responseHeaders
     });
   } catch {
     return null;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -242,72 +248,10 @@ async function forwardApplicationRequest(request, application) {
     }
   }
 
-  if (command?.operation === 'save_answer') {
-    // Production recovery route: persist answers through the independently
-    // authenticated recovery writer first. The legacy application save path is
-    // retained only as a fallback if recovery itself is unavailable.
-    const requestKey = String(
-      command.idempotencyKey || request.headers.get('X-Request-ID') || crypto.randomUUID(),
-    ).trim();
-    const recovered = await attemptStudentAnswerRecovery(command, requestKey);
-    if (recovered) return recovered;
-  }
-
-  if (command?.operation === 'submit' && Array.isArray(command?.payload?.answers)) {
-    const sessionId = command.payload.sessionId || command.payload.attemptId;
-    const sessionToken = command.payload.sessionToken;
-    const baseRequestKey = String(
-      command.idempotencyKey || request.headers.get('X-Request-ID') || '',
-    ).trim();
-
-    for (let index = 0; index < command.payload.answers.length; index += 1) {
-      const answer = command.payload.answers[index];
-      if (!answer || answer.answer === undefined || answer.answer === null || answer.answer === '') continue;
-
-      const requestKey = `${baseRequestKey}:answer:${index + 1}`;
-      const headers = new Headers(request.headers);
-      headers.set('Content-Type', 'application/json');
-      headers.set('X-Request-ID', requestKey);
-
-      const saveRequest = new Request(request.url, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          operation: 'save_answer',
-          payload: {
-            sessionId,
-            sessionToken,
-            questionId: canonicalQuestionId(answer.questionId),
-            answer: sanitizeAnswerText(legacyAnswerValue(answer.answer)),
-            flagged: answer.flagged === true,
-            source: 'submission',
-          },
-          idempotencyKey: requestKey,
-        }),
-      });
-
-      const answerCommand = {
-        operation: 'save_answer',
-        payload: {
-          sessionId,
-          sessionToken,
-          questionId: canonicalQuestionId(answer.questionId),
-          answer: sanitizeAnswerText(legacyAnswerValue(answer.answer)),
-          flagged: answer.flagged === true,
-          source: 'submission',
-        },
-        idempotencyKey: requestKey,
-      };
-      const recovered = await attemptStudentAnswerRecovery(answerCommand, requestKey);
-      const saved = recovered || await forwardStudentSaveWithRepair(
-        saveRequest,
-        application,
-        answerCommand,
-      );
-      if (!saved.ok) return saved;
-    }
-  }
-
+  // Submit is forwarded exactly once. The application Worker owns the atomic
+  // submit-time answer backfill from payload.answers. Re-uploading every answer
+  // here made one browser request wait on N sequential recovery calls and caused
+  // first-time students to hit the client deadline before a receipt was returned.
   const response = command?.operation === 'save_answer'
     ? await forwardStudentSaveWithRepair(request, application, command)
     : await application.fetch(request);

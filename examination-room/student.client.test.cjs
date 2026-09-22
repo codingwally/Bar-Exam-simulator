@@ -16,7 +16,7 @@ test('successful submission clearly says answers are uploaded and grading is pen
   assert.match(studentSource, /receiptEyebrow\.textContent = receipt\.isDemo \? 'Demo upload confirmed' : 'Uploaded'/);
   assert.match(studentSource, /Your answers were uploaded successfully\./);
   assert.match(studentSource, /Please wait for your professor to finish grading and release your result\./);
-  assert.match(studentHtml, /student\.js\?v=uploaded-awaiting-grade-20260922-5/);
+  assert.match(studentHtml, /student\.js\?v=single-submit-20260922-6/);
 });
 
 const studentApiRuntime = [
@@ -136,8 +136,8 @@ test('the final-question action remains enabled and opens review instead of trap
   assert.match(studentSource, /state\.currentIndex === state\.questions\.length - 1 \? 'Review and submit'/);
   assert.match(studentSource, /navigateToQuestion\(state\.currentIndex \+ 1\)/);
   assert.match(studentSource, /if \(index >= state\.questions\.length\) \{[\s\S]*openSubmitDialog\(\)/);
-  assert.match(studentHtml, /api\.js\?v=guaranteed-answer-upload-20260922-4/);
-  assert.match(studentHtml, /student\.js\?v=uploaded-awaiting-grade-20260922-5/);
+  assert.match(studentHtml, /api\.js\?v=single-submit-20260922-6/);
+  assert.match(studentHtml, /student\.js\?v=single-submit-20260922-6/);
 });
 
 test('refresh recovery restores the newest local attempt and merges server-backed answers before rendering', () => {

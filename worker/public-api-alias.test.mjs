@@ -148,19 +148,12 @@ test('does not normalize an unapproved browser origin before forwarding', async 
   assert.strictEqual(response, upstreamResponse);
 });
 
-test('student save_answer uses authenticated recovery before the legacy application save path', async (context) => {
+test('student save_answer uses the application path without waiting on recovery when it succeeds', async (context) => {
   let applicationCalls = 0;
   let recoveryCalls = 0;
-  context.mock.method(globalThis, 'fetch', async (_url, options) => {
+  context.mock.method(globalThis, 'fetch', async () => {
     recoveryCalls += 1;
-    const body = JSON.parse(options.body);
-    assert.equal(body.sessionId, '55555555-5555-4555-8555-555555555555');
-    assert.equal(body.questionId, 'q001');
-    assert.equal(body.answer, 'Direct recovery answer');
-    return new Response(JSON.stringify({
-      ok: true,
-      revision: { questionKey: 'q001', revision: 1, savedAt: '2026-09-21T19:20:00.000Z', flagged: false },
-    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    throw new Error('Recovery must not run for a successful application save.');
   });
 
   const request = new Request('https://duediligence-api.example.test/examination-room/v1/student/command', {
@@ -183,18 +176,21 @@ test('student save_answer uses authenticated recovery before the legacy applicat
     DUE_DILIGENCE_APPLICATION: {
       async fetch() {
         applicationCalls += 1;
-        return new Response(JSON.stringify({ ok: false }), { status: 400 });
+        return new Response(JSON.stringify({ ok: true, revision: { revision: 1 } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
       },
     },
   });
 
   assert.equal(response.status, 200);
-  assert.equal(response.headers.get('X-Examination-Answer-Recovery'), 'supabase-v1');
-  assert.equal(recoveryCalls, 1);
-  assert.equal(applicationCalls, 0);
+  assert.equal(response.headers.get('X-Examination-Answer-Recovery'), null);
+  assert.equal(recoveryCalls, 0);
+  assert.equal(applicationCalls, 1);
   const body = await response.json();
   assert.equal(body.ok, true);
-  assert.equal(body.recovered, true);
+  assert.equal(body.revision.revision, 1);
 });
 
 test('public API repairs a 400 student save caused by legacy question ids, hidden controls, or stale request keys', async (context) => {
@@ -265,12 +261,6 @@ test('public API falls back to authenticated recovery after the legacy route als
   const recoveryCalls = [];
   context.mock.method(globalThis, 'fetch', async (url, options) => {
     recoveryCalls.push({ url: String(url), body: JSON.parse(options.body) });
-    if (recoveryCalls.length === 1) {
-      return new Response(JSON.stringify({ ok: false, error: { code: 'RECOVERY_TEMPORARY' } }), {
-        status: 503,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
     return new Response(JSON.stringify({
       ok: true,
       revision: { questionKey: 'q001', revision: 1, savedAt: '2026-09-21T19:10:00.000Z', flagged: false },
@@ -321,7 +311,7 @@ test('public API falls back to authenticated recovery after the legacy route als
 
   assert.equal(response.status, 200);
   assert.equal(applicationCalls.length, 2);
-  assert.equal(recoveryCalls.length, 2);
+  assert.equal(recoveryCalls.length, 1);
   assert.match(recoveryCalls[0].url, /examination-room-answer-recovery$/u);
   assert.equal(recoveryCalls[0].body.questionId, 'q001');
   assert.equal(recoveryCalls[0].body.answer, 'Recovered answer');
@@ -381,8 +371,13 @@ test('unknown 400 validation codes cannot bypass the authenticated answer recove
   assert.equal(body.recovered, true);
 });
 
-test('legacy Examination Room submit backfills local answers before forwarding submit and patches old receipt timestamp', async () => {
+test('Examination Room submit is forwarded once with its complete snapshot and patches old receipt timestamp', async (context) => {
   const calls = [];
+  let recoveryCalls = 0;
+  context.mock.method(globalThis, 'fetch', async () => {
+    recoveryCalls += 1;
+    throw new Error('Submit must not call per-answer recovery at the alias boundary.');
+  });
   const request = new Request('https://duediligence-api.example.test/examination-room/v1/student/command', {
     method: 'POST',
     headers: {
@@ -409,12 +404,6 @@ test('legacy Examination Room submit backfills local answers before forwarding s
       async fetch(candidate) {
         const body = JSON.parse(await candidate.text());
         calls.push({ body, requestId: candidate.headers.get('X-Request-ID') });
-        if (body.operation === 'save_answer') {
-          return new Response(JSON.stringify({ ok: true, revision: { revision: calls.length } }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          });
-        }
         return new Response(JSON.stringify({
           ok: true,
           submission: {
@@ -431,20 +420,22 @@ test('legacy Examination Room submit backfills local answers before forwarding s
   });
 
   assert.equal(response.status, 201);
-  assert.deepEqual(calls.map((entry) => entry.body.operation), ['save_answer', 'save_answer', 'submit']);
-  assert.equal(calls[0].body.payload.questionId, 'q001');
-  assert.equal(calls[0].body.payload.answer, 'Recovered essay answer');
-  assert.equal(calls[1].body.payload.questionId, 'q002');
-  assert.equal(calls[1].body.payload.answer, 1);
-  assert.equal(calls[0].body.payload.source, 'submission');
-  assert.match(calls[0].requestId, /:answer:1$/u);
+  assert.equal(recoveryCalls, 0);
+  assert.deepEqual(calls.map((entry) => entry.body.operation), ['submit']);
+  assert.equal(calls[0].body.payload.answers.length, 2);
+  assert.equal(calls[0].body.payload.answers[0].answer, 'Recovered essay answer');
+  assert.equal(calls[0].body.payload.answers[1].answer, 'option-2');
   const body = await response.json();
   assert.equal(body.submission.receivedAt, '2026-09-21T18:40:00.000Z');
   assert.equal(body.submission.submittedAt, '2026-09-21T18:40:00.000Z');
 });
 
-test('legacy submit stops before final submission if answer backfill and recovery are rejected', async (context) => {
-  context.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify({ ok: false, error: { code: 'RECOVERY_REJECTED' } }), { status: 409, headers: { 'Content-Type': 'application/json' } }));
+test('submit returns the application rejection without starting alias-owned answer uploads', async (context) => {
+  let recoveryCalls = 0;
+  context.mock.method(globalThis, 'fetch', async () => {
+    recoveryCalls += 1;
+    throw new Error('Submit must not call recovery at the alias boundary.');
+  });
   const calls = [];
   const request = new Request('https://duediligence-api.example.test/examination-room/v1/student/command', {
     method: 'POST',
@@ -477,7 +468,8 @@ test('legacy submit stops before final submission if answer backfill and recover
   });
 
   assert.equal(response.status, 409);
-  assert.deepEqual(calls, ['save_answer']);
+  assert.equal(recoveryCalls, 0);
+  assert.deepEqual(calls, ['submit']);
 });
 
 test('returns a controlled provider-neutral 503 when the binding is missing', async () => {

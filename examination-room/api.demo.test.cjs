@@ -223,18 +223,11 @@ test('answer upload continues even when an unrelated integrity event fails', asy
   assert.equal(calls[0].payload.answer, 'Uploaded answer');
 });
 
-test('live submitAttempt uploads the complete final answer snapshot before submitting', async () => {
+test('live submitAttempt sends the complete final answer snapshot in one request', async () => {
   const calls = [];
   const api = liveApi(async (_url, options) => {
     const body = JSON.parse(options.body);
     calls.push(body);
-    if (body.operation === 'save_answer') {
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({ ok: true, revision: { revision: calls.length } }),
-      };
-    }
     if (body.operation === 'submit') {
       return {
         ok: true,
@@ -264,13 +257,13 @@ test('live submitAttempt uploads the complete final answer snapshot before submi
     ],
   });
 
-  assert.deepEqual(calls.map((call) => call.operation), ['save_answer', 'save_answer', 'submit']);
-  assert.equal(calls[0].payload.questionId, 'q001');
-  assert.equal(calls[0].payload.answer, 'Final essay answer');
-  assert.equal(calls[0].payload.source, 'submission');
-  assert.equal(calls[1].payload.questionId, 'q002');
-  assert.equal(calls[1].payload.answer, 1);
-  assert.equal(calls[1].payload.flagged, true);
+  assert.deepEqual(calls.map((call) => call.operation), ['submit']);
+  assert.equal(calls[0].payload.answers.length, 2);
+  assert.equal(calls[0].payload.answers[0].questionId, 'q001');
+  assert.equal(calls[0].payload.answers[0].answer, 'Final essay answer');
+  assert.equal(calls[0].payload.answers[1].questionId, 'q002');
+  assert.equal(calls[0].payload.answers[1].answer, 'option-2');
+  assert.equal(calls[0].payload.answers[1].flagged, true);
 });
 
 test('live submitAttempt accepts the production receipt shape returned by the examination RPC', async () => {

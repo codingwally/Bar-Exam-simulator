@@ -1,4 +1,5 @@
-name: Examination Room professor PDF downloads release
+name: Examination Room one-upload PDF import release
+# One-time release trigger for the reviewed PDF import source.
 
 on:
   push:
@@ -17,14 +18,13 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  LIVE_BASE_SHA: aad73bf011435a38a228cefe99c8c19548fb0397
-  REVIEW_BASE_SHA: ec6bb6d77b3e15af943097c7eba8c41b0a093e9d
-  RELEASE_SOURCE_SHA: af412bd7f11ac060ec32cfdc4abf05d93ea6b6d2
+  LIVE_BASE_SHA: 7568c9ef5323e9d4b53b6fd81792d610a0e4f784
+  RELEASE_SOURCE_SHA: 0c4a57039bedb62dd8f20c2400fd60200357a3e0
   SITE_URL: https://duediligence.ph
 
 jobs:
   deploy:
-    name: Verify and deploy professor PDF downloads
+    name: Verify and deploy one-upload PDF import
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment:
@@ -44,19 +44,16 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$RELEASE_SOURCE_SHA"
           git cat-file -e "$LIVE_BASE_SHA^{commit}"
-          git cat-file -e "$REVIEW_BASE_SHA^{commit}"
           git merge-base --is-ancestor "$LIVE_BASE_SHA" "$RELEASE_SOURCE_SHA"
-          git merge-base --is-ancestor "$REVIEW_BASE_SHA" "$RELEASE_SOURCE_SHA"
           python - <<'PY'
           import os
           import subprocess
 
-          base = os.environ['REVIEW_BASE_SHA']
+          base = os.environ['LIVE_BASE_SHA']
           source = os.environ['RELEASE_SOURCE_SHA']
           expected = {
               'examination-room/index.html',
               'examination-room/professor.client.test.cjs',
-              'examination-room/professor.css',
               'examination-room/professor.js',
           }
           changed = set(subprocess.check_output(
@@ -65,9 +62,9 @@ jobs:
           ).splitlines())
           if changed != expected:
               raise SystemExit(
-                  f'Unexpected professor PDF release scope. expected={sorted(expected)} actual={sorted(changed)}'
+                  f'Unexpected PDF import release scope. expected={sorted(expected)} actual={sorted(changed)}'
               )
-          print('Exact professor PDF release scope verified.')
+          print('Exact one-upload PDF import scope verified.')
           PY
 
       - name: Setup Node
@@ -90,27 +87,36 @@ jobs:
             examination-room/professor.client.test.cjs \
             examination-room/student.client.test.cjs \
             examination-room/view-models.test.cjs
-          git diff --check "$REVIEW_BASE_SHA..$RELEASE_SOURCE_SHA"
-          grep -Fq 'id="download-all-submitted-answers"' examination-room/index.html
-          grep -Fq 'id="download-all-graded-answers"' examination-room/index.html
-          grep -Fq 'Download all answers (PDF)' examination-room/index.html
-          grep -Fq 'Download all with grades (PDF)' examination-room/index.html
-          ! grep -Fq 'Download offline copy' examination-room/index.html
-          grep -Fq "type: 'application/pdf'" examination-room/professor.js
-          grep -Fq 'CLASS GRADE SUMMARY' examination-room/professor.js
-          grep -Fq 'data-download-student-grades' examination-room/professor.js
-          grep -Fq 'URL.revokeObjectURL(url), 60_000' examination-room/professor.js
+          git diff --check "$LIVE_BASE_SHA..$RELEASE_SOURCE_SHA"
+          grep -Fq 'accept=".pdf,.docx,.rtf"' examination-room/index.html
+          grep -Fq 'professor.js?v=professor-pdf-import-20260923-1' examination-room/index.html
+          grep -Fq 'async function extractPdfText(file)' examination-room/professor.js
+          grep -Fq 'function parseExamDocumentText(text)' examination-room/professor.js
+          grep -Fq 'Exam populated from PDF:' examination-room/professor.js
+          ! grep -Eiq 'upload a TXT|TXT file|text file' examination-room/professor.js
+
+      - name: Verify PDF reader distribution
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --max-time 30 \
+            'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.6.205/build/pdf.min.mjs' \
+            --output /tmp/pdf.min.mjs
+          curl --fail --silent --show-error --location --max-time 30 \
+            'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.6.205/build/pdf.worker.min.mjs' \
+            --output /tmp/pdf.worker.min.mjs
+          grep -Fq 'pdfjsVersion' /tmp/pdf.min.mjs
+          grep -Fq 'pdfjsVersion' /tmp/pdf.worker.min.mjs
 
       - name: Build and verify exact Pages artifact
         shell: bash
         run: |
           set -euo pipefail
           GITHUB_SHA="$RELEASE_SOURCE_SHA" node scripts/test-pages-artifact.mjs
-          grep -Fq 'id="download-all-submitted-answers"' .pages-dist/examination-room/index.html
-          grep -Fq 'id="download-all-graded-answers"' .pages-dist/examination-room/index.html
-          grep -Fq 'professor.js?v=professor-pdf-downloads-20260923-1' .pages-dist/examination-room/index.html
-          grep -Fq "type: 'application/pdf'" .pages-dist/examination-room/professor.js
-          grep -Fq 'TOTAL GRADE:' .pages-dist/examination-room/professor.js
+          grep -Fq 'accept=".pdf,.docx,.rtf"' .pages-dist/examination-room/index.html
+          grep -Fq 'professor.js?v=professor-pdf-import-20260923-1' .pages-dist/examination-room/index.html
+          grep -Fq 'async function extractPdfText(file)' .pages-dist/examination-room/professor.js
+          grep -Fq 'function parseExamDocumentText(text)' .pages-dist/examination-room/professor.js
           test "$(cat .pages-dist/.well-known/duediligence-release.txt)" = "$RELEASE_SOURCE_SHA"
 
       - name: Setup Pages
@@ -125,26 +131,25 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-      - name: Verify live professor PDF downloads
+      - name: Verify live one-upload PDF import
         shell: bash
         run: |
           set -euo pipefail
           for attempt in {1..24}; do
             marker="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/.well-known/duediligence-release.txt?release=$RELEASE_SOURCE_SHA" || true)"
             page="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/?release=$RELEASE_SOURCE_SHA" || true)"
-            professor="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/professor.js?v=professor-pdf-downloads-20260923-1&release=$RELEASE_SOURCE_SHA" || true)"
+            professor="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/professor.js?v=professor-pdf-import-20260923-1&release=$RELEASE_SOURCE_SHA" || true)"
             if [[ "$marker" == "$RELEASE_SOURCE_SHA" ]] \
-              && grep -Fq 'id="download-all-submitted-answers"' <<<"$page" \
-              && grep -Fq 'id="download-all-graded-answers"' <<<"$page" \
-              && grep -Fq 'professor.js?v=professor-pdf-downloads-20260923-1' <<<"$page" \
-              && ! grep -Fq 'Download offline copy' <<<"$page" \
-              && grep -Fq "type: 'application/pdf'" <<<"$professor" \
-              && grep -Fq 'CLASS GRADE SUMMARY' <<<"$professor" \
-              && grep -Fq 'data-download-student-grades' <<<"$professor"; then
-              echo "Professor PDF downloads are live."
+              && grep -Fq 'accept=".pdf,.docx,.rtf"' <<<"$page" \
+              && grep -Fq 'professor.js?v=professor-pdf-import-20260923-1' <<<"$page" \
+              && grep -Fq 'async function extractPdfText(file)' <<<"$professor" \
+              && grep -Fq 'function parseExamDocumentText(text)' <<<"$professor" \
+              && grep -Fq 'Exam populated from PDF:' <<<"$professor" \
+              && ! grep -Eiq 'upload a TXT|TXT file|text file' <<<"$professor"; then
+              echo "One-upload PDF import is live."
               exit 0
             fi
             sleep 5
           done
-          echo "Pages deployed but professor PDF downloads did not converge in time." >&2
+          echo "Pages deployed but one-upload PDF import did not converge in time." >&2
           exit 1

@@ -1,0 +1,154 @@
+name: Examination Room one-upload PDF import release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/release-examination-room-pdf-import-20260923.yml
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+env:
+  LIVE_BASE_SHA: 7568c9ef5323e9d4b53b6fd81792d610a0e4f784
+  RELEASE_SOURCE_SHA: 0c4a57039bedb62dd8f20c2400fd60200357a3e0
+  SITE_URL: https://duediligence.ph
+
+jobs:
+  deploy:
+    name: Verify and deploy one-upload PDF import
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout exact reviewed release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_SOURCE_SHA }}
+          fetch-depth: 0
+
+      - name: Prove isolated reviewed scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$RELEASE_SOURCE_SHA"
+          git cat-file -e "$LIVE_BASE_SHA^{commit}"
+          git merge-base --is-ancestor "$LIVE_BASE_SHA" "$RELEASE_SOURCE_SHA"
+          python - <<'PY'
+          import os
+          import subprocess
+
+          base = os.environ['LIVE_BASE_SHA']
+          source = os.environ['RELEASE_SOURCE_SHA']
+          expected = {
+              'examination-room/index.html',
+              'examination-room/professor.client.test.cjs',
+              'examination-room/professor.js',
+          }
+          changed = set(subprocess.check_output(
+              ['git', 'diff', '--name-only', f'{base}..{source}'],
+              text=True,
+          ).splitlines())
+          if changed != expected:
+              raise SystemExit(
+                  f'Unexpected PDF import release scope. expected={sorted(expected)} actual={sorted(changed)}'
+              )
+          print('Exact one-upload PDF import scope verified.')
+          PY
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install reviewed Pages build dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Validate complete Examination Room workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check examination-room/professor.js
+          node --test \
+            examination-room/api.demo.test.cjs \
+            examination-room/media-capture.contract.test.cjs \
+            examination-room/offline-grading.test.cjs \
+            examination-room/professor.client.test.cjs \
+            examination-room/student.client.test.cjs \
+            examination-room/view-models.test.cjs
+          git diff --check "$LIVE_BASE_SHA..$RELEASE_SOURCE_SHA"
+          grep -Fq 'accept=".pdf,.docx,.rtf"' examination-room/index.html
+          grep -Fq 'professor.js?v=professor-pdf-import-20260923-1' examination-room/index.html
+          grep -Fq 'async function extractPdfText(file)' examination-room/professor.js
+          grep -Fq 'function parseExamDocumentText(text)' examination-room/professor.js
+          grep -Fq 'Exam populated from PDF:' examination-room/professor.js
+          ! grep -Eiq 'upload a TXT|TXT file|text file' examination-room/professor.js
+
+      - name: Verify PDF reader distribution
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --max-time 30 \
+            'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.6.205/build/pdf.min.mjs' \
+            --output /tmp/pdf.min.mjs
+          curl --fail --silent --show-error --location --max-time 30 \
+            'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.6.205/build/pdf.worker.min.mjs' \
+            --output /tmp/pdf.worker.min.mjs
+          grep -Fq 'pdfjsVersion' /tmp/pdf.min.mjs
+          grep -Fq 'pdfjsVersion' /tmp/pdf.worker.min.mjs
+
+      - name: Build and verify exact Pages artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          GITHUB_SHA="$RELEASE_SOURCE_SHA" node scripts/test-pages-artifact.mjs
+          grep -Fq 'accept=".pdf,.docx,.rtf"' .pages-dist/examination-room/index.html
+          grep -Fq 'professor.js?v=professor-pdf-import-20260923-1' .pages-dist/examination-room/index.html
+          grep -Fq 'async function extractPdfText(file)' .pages-dist/examination-room/professor.js
+          grep -Fq 'function parseExamDocumentText(text)' .pages-dist/examination-room/professor.js
+          test "$(cat .pages-dist/.well-known/duediligence-release.txt)" = "$RELEASE_SOURCE_SHA"
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload exact sanitized Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .pages-dist
+
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Verify live one-upload PDF import
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in {1..24}; do
+            marker="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/.well-known/duediligence-release.txt?release=$RELEASE_SOURCE_SHA" || true)"
+            page="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/?release=$RELEASE_SOURCE_SHA" || true)"
+            professor="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/professor.js?v=professor-pdf-import-20260923-1&release=$RELEASE_SOURCE_SHA" || true)"
+            if [[ "$marker" == "$RELEASE_SOURCE_SHA" ]] \
+              && grep -Fq 'accept=".pdf,.docx,.rtf"' <<<"$page" \
+              && grep -Fq 'professor.js?v=professor-pdf-import-20260923-1' <<<"$page" \
+              && grep -Fq 'async function extractPdfText(file)' <<<"$professor" \
+              && grep -Fq 'function parseExamDocumentText(text)' <<<"$professor" \
+              && grep -Fq 'Exam populated from PDF:' <<<"$professor" \
+              && ! grep -Eiq 'upload a TXT|TXT file|text file' <<<"$professor"; then
+              echo "One-upload PDF import is live."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Pages deployed but one-upload PDF import did not converge in time." >&2
+          exit 1

@@ -2216,54 +2216,212 @@
     return JSON.stringify(answer, null, 2);
   }
 
-  function buildSubmittedAnswersDocument() {
-    const data = state.grading || { sessions: [], submissions: [], answerRevisions: [] };
-    const submissionsBySession = new Map((data.submissions || []).map((submission) => [submission.sessionId, submission]));
-    const sessions = (data.sessions || []).filter((session) => submissionsBySession.has(session.id));
-    const exportedAt = new Date();
-    const studentSections = sessions.map((session, studentIndex) => {
-      const identity = gradingDisplayIdentity(session, studentIndex);
-      const submission = submissionsBySession.get(session.id) || {};
-      const answers = latestBy(
-        (data.answerRevisions || []).filter((revision) => revision.sessionId === session.id),
-        (revision) => revision.questionId,
-      );
-      const questionSections = state.questions.map((question, questionIndex) => {
-        const answerText = gradingAnswerText(question, answers.get(question.id)?.answer);
-        return `<article class="question"><h3>Question ${questionIndex + 1} <span>${escapeHtml(String(question.points))} point${Number(question.points) === 1 ? '' : 's'}</span></h3><div class="prompt">${escapeHtml(question.prompt || question.text || '')}</div><div class="answer">${escapeHtml(answerText)}</div></article>`;
-      }).join('');
-      return `<section class="student"><header><p class="student-count">Submission ${studentIndex + 1} of ${sessions.length}</p><h2>${escapeHtml(identity.realName)}</h2><dl><div><dt>Student number</dt><dd>${escapeHtml(identity.realStudentNumber || 'Not provided')}</dd></div><div><dt>Year level</dt><dd>${escapeHtml(session.yearLevel || 'Not provided')}</dd></div><div><dt>Submitted</dt><dd>${escapeHtml(formatDateTime(submission.submittedAt))}</dd></div><div><dt>Receipt</dt><dd>${escapeHtml(submission.receiptCode || 'Not available')}</dd></div></dl></header>${questionSections}</section>`;
-    }).join('');
-
-    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(state.exam?.title || 'Examination')} — Submitted answers</title><style>
-      :root{color-scheme:light;font-family:Arial,sans-serif;color:#172033;background:#f4f0e8}*{box-sizing:border-box}body{margin:0}.cover,.student{width:min(900px,calc(100% - 32px));margin:32px auto;background:#fff;padding:48px;border:1px solid #d9d0bd}.brand{color:#80662b;font-weight:700;letter-spacing:.12em;text-transform:uppercase}.cover h1,.student h2{font-family:Georgia,serif;color:#10213d}.cover h1{font-size:36px;margin:12px 0}.meta{color:#596273}.notice{margin-top:32px;padding:16px;border-left:4px solid #9b7a2e;background:#faf6ec}.student{page-break-before:always}.student-count{color:#80662b;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}.student h2{font-size:28px;margin:6px 0 18px}dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 24px;margin:0 0 32px}dl div{border-top:1px solid #ded7c9;padding-top:8px}dt{color:#6a7280;font-size:12px;text-transform:uppercase}dd{margin:4px 0 0;font-weight:700}.question{margin:28px 0;break-inside:avoid}.question h3{display:flex;justify-content:space-between;border-bottom:2px solid #10213d;padding-bottom:8px}.question h3 span{font:600 13px Arial,sans-serif;color:#596273}.prompt{font-family:Georgia,serif;font-size:17px;line-height:1.55;margin:14px 0}.answer{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.65;padding:18px;background:#f7f5ef;border:1px solid #ddd5c5}@media(max-width:600px){.cover,.student{width:100%;margin:0;padding:24px;border:0}.cover h1{font-size:29px}dl{grid-template-columns:1fr}}@media print{body{background:#fff}.cover,.student{width:auto;margin:0;border:0;box-shadow:none}.cover{page-break-after:always}.student{page-break-before:always}}
-    </style></head><body><main><section class="cover"><p class="brand">Due Diligence · Examination Room</p><h1>${escapeHtml(state.exam?.title || 'Examination')}</h1><p class="meta">All submitted answers · ${sessions.length} student${sessions.length === 1 ? '' : 's'} · Downloaded ${escapeHtml(formatDateTime(exportedAt.toISOString()))}</p><p class="notice"><strong>Private education record.</strong> Store this offline copy securely. It is ready to read, print, or save as PDF; no coding or file conversion is required.</p></section>${studentSections}</main></body></html>`;
+  function pdfSafeText(value) {
+    return String(value ?? '')
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/[\u201c\u201d]/g, '"')
+      .replace(/[\u2013\u2014]/g, '-')
+      .replace(/\u2026/g, '...')
+      .replace(/\u2022/g, '-')
+      .replace(/[^\x20-\x7e\n\r\t]/g, '?')
+      .replace(/\r\n?/g, '\n');
   }
 
-  async function downloadAllSubmittedAnswers(button = $('#download-all-submitted-answers')) {
+  function pdfEscape(value) {
+    return pdfSafeText(value).replace(/([\\()])/g, '\\$1');
+  }
+
+  function wrapPdfText(value, maxCharacters) {
+    const output = [];
+    pdfSafeText(value).split('\n').forEach((paragraph) => {
+      const words = paragraph.trim().split(/\s+/).filter(Boolean);
+      if (!words.length) {
+        output.push('');
+        return;
+      }
+      let line = '';
+      words.forEach((word) => {
+        if (word.length > maxCharacters) {
+          if (line) output.push(line);
+          for (let start = 0; start < word.length; start += maxCharacters) output.push(word.slice(start, start + maxCharacters));
+          line = '';
+          return;
+        }
+        const candidate = line ? `${line} ${word}` : word;
+        if (candidate.length <= maxCharacters) line = candidate;
+        else {
+          output.push(line);
+          line = word;
+        }
+      });
+      if (line) output.push(line);
+    });
+    return output;
+  }
+
+  function createPdfComposer(documentTitle) {
+    const pages = [[]];
+    let y = 786;
+    const currentPage = () => pages[pages.length - 1];
+    const newPage = () => {
+      if (!currentPage().length) return;
+      pages.push([]);
+      y = 786;
+    };
+    const addText = (value, options = {}) => {
+      const size = Number(options.size || 10);
+      const leading = Number(options.leading || Math.max(13, size * 1.35));
+      const x = Number(options.x || 54);
+      const width = Number(options.width || (541 - x));
+      const maxCharacters = Math.max(12, Math.floor(width / (size * .52)));
+      if (options.pageBreakBefore) newPage();
+      y -= Number(options.spaceBefore || 0);
+      wrapPdfText(value, maxCharacters).forEach((line) => {
+        if (y < 62 + leading) {
+          pages.push([]);
+          y = 786;
+        }
+        currentPage().push({ type: 'text', text: line, x, y, size, bold: Boolean(options.bold) });
+        y -= leading;
+      });
+      y -= Number(options.spaceAfter || 0);
+    };
+    const addRule = () => {
+      if (y < 72) newPage();
+      currentPage().push({ type: 'rule', y });
+      y -= 12;
+    };
+    return { pages, addText, addRule, newPage, documentTitle };
+  }
+
+  function serializePdfDocument(pages, documentTitle) {
+    const pageObjectIds = pages.map((_, index) => 5 + (index * 2));
+    const contentObjectIds = pages.map((_, index) => 6 + (index * 2));
+    const objects = [];
+    objects[1] = '<< /Type /Catalog /Pages 2 0 R >>';
+    objects[2] = `<< /Type /Pages /Kids [${pageObjectIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pages.length} >>`;
+    objects[3] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>';
+    objects[4] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>';
+    pages.forEach((page, index) => {
+      const pageNumber = index + 1;
+      const commands = page.map((entry) => {
+        if (entry.type === 'rule') return `0.78 G 54 ${entry.y.toFixed(2)} m 541 ${entry.y.toFixed(2)} l S 0 G`;
+        return `BT /${entry.bold ? 'F2' : 'F1'} ${entry.size.toFixed(2)} Tf 1 0 0 1 ${entry.x.toFixed(2)} ${entry.y.toFixed(2)} Tm (${pdfEscape(entry.text)}) Tj ET`;
+      });
+      commands.push(`BT /F1 8 Tf 1 0 0 1 54 34 Tm (${pdfEscape(pdfSafeText(documentTitle).slice(0, 72))}) Tj ET`);
+      commands.push(`BT /F1 8 Tf 1 0 0 1 500 34 Tm (Page ${pageNumber} of ${pages.length}) Tj ET`);
+      const content = commands.join('\n');
+      objects[pageObjectIds[index]] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentObjectIds[index]} 0 R >>`;
+      objects[contentObjectIds[index]] = `<< /Length ${content.length} >>\nstream\n${content}\nendstream`;
+    });
+    let pdf = '%PDF-1.4\n%DDER\n';
+    const offsets = [0];
+    for (let id = 1; id < objects.length; id += 1) {
+      offsets[id] = pdf.length;
+      pdf += `${id} 0 obj\n${objects[id]}\nendobj\n`;
+    }
+    const xrefOffset = pdf.length;
+    pdf += `xref\n0 ${objects.length}\n0000000000 65535 f \n`;
+    for (let id = 1; id < objects.length; id += 1) pdf += `${String(offsets[id]).padStart(10, '0')} 00000 n \n`;
+    pdf += `trailer\n<< /Size ${objects.length} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+    return pdf;
+  }
+
+  function submittedSessions(sessionId = null) {
+    const data = state.grading || { sessions: [], submissions: [] };
+    const submittedIds = new Set((data.submissions || []).map((submission) => submission.sessionId));
+    return (data.sessions || []).filter((session) => submittedIds.has(session.id) && (!sessionId || session.id === sessionId));
+  }
+
+  function savedGradePoints(grade) {
+    if (grade?.points == null || grade.points === '') return null;
+    const points = Number(grade.points);
+    return Number.isFinite(points) ? points : null;
+  }
+
+  function buildSubmittedAnswersPdf({ includeGrades = false, sessionId = null } = {}) {
+    const data = state.grading || { sessions: [], submissions: [], answerRevisions: [], gradeRevisions: [] };
+    const submissionsBySession = new Map((data.submissions || []).map((submission) => [submission.sessionId, submission]));
+    const sessions = submittedSessions(sessionId);
+    if (!sessions.length) throw new Error(sessionId ? 'This student has no submitted answers.' : 'There are no submitted answers to download yet.');
+    const reportLabel = includeGrades ? 'Submitted answers with grades' : 'Submitted answers';
+    const composer = createPdfComposer(`${state.exam?.title || 'Examination'} - ${reportLabel}`);
+    composer.addText('DUE DILIGENCE - EXAMINATION ROOM', { size: 10, bold: true, spaceAfter: 12 });
+    composer.addText(state.exam?.title || 'Examination', { size: 22, bold: true, leading: 28, spaceAfter: 8 });
+    composer.addText(reportLabel, { size: 15, bold: true, spaceAfter: 8 });
+    composer.addText(`${sessionId ? 'Individual student report' : `${sessions.length} student${sessions.length === 1 ? '' : 's'}`} | Downloaded ${formatDateTime(new Date().toISOString())}`, { size: 10, spaceAfter: 12 });
+    composer.addText('Private education record. Store this PDF securely.', { size: 9, spaceAfter: 12 });
+    composer.addRule();
+
+    if (includeGrades && !sessionId) {
+      composer.addText('CLASS GRADE SUMMARY', { size: 14, bold: true, spaceBefore: 4, spaceAfter: 8 });
+      sessions.forEach((session, index) => {
+        const identity = gradingDisplayIdentity(session, index);
+        const grades = latestBy((data.gradeRevisions || []).filter((grade) => grade.sessionId === session.id), (grade) => grade.questionId);
+        const earned = state.questions.reduce((total, question) => total + (savedGradePoints(grades.get(question.id)) ?? 0), 0);
+        const possible = state.questions.reduce((total, question) => total + Number(question.points || 0), 0);
+        const complete = state.questions.every((question) => savedGradePoints(grades.get(question.id)) !== null);
+        composer.addText(`${index + 1}. ${identity.realName} (${identity.realStudentNumber || 'No student number'}) - ${earned} / ${possible} points - ${complete ? 'Fully graded' : 'Grading incomplete'}`, { size: 10, spaceAfter: 4 });
+      });
+    }
+
+    sessions.forEach((session, studentIndex) => {
+      composer.newPage();
+      const identity = gradingDisplayIdentity(session, studentIndex);
+      const submission = submissionsBySession.get(session.id) || {};
+      const answers = latestBy((data.answerRevisions || []).filter((revision) => revision.sessionId === session.id), (revision) => revision.questionId);
+      const grades = latestBy((data.gradeRevisions || []).filter((revision) => revision.sessionId === session.id), (revision) => revision.questionId);
+      const earned = state.questions.reduce((total, question) => total + (savedGradePoints(grades.get(question.id)) ?? 0), 0);
+      const possible = state.questions.reduce((total, question) => total + Number(question.points || 0), 0);
+      const complete = state.questions.every((question) => savedGradePoints(grades.get(question.id)) !== null);
+      composer.addText(`STUDENT ${studentIndex + 1} OF ${sessions.length}`, { size: 9, bold: true, spaceAfter: 5 });
+      composer.addText(identity.realName, { size: 18, bold: true, leading: 23, spaceAfter: 5 });
+      composer.addText(`Student number: ${identity.realStudentNumber || 'Not provided'} | Year level: ${session.yearLevel || 'Not provided'}`, { size: 10, spaceAfter: 3 });
+      composer.addText(`Submitted: ${formatDateTime(submission.submittedAt)} | Receipt: ${submission.receiptCode || 'Not available'}`, { size: 10, spaceAfter: 8 });
+      if (includeGrades) composer.addText(`TOTAL GRADE: ${earned} / ${possible} POINTS | ${complete ? 'FULLY GRADED' : 'GRADING INCOMPLETE'}`, { size: 12, bold: true, spaceAfter: 8 });
+      composer.addRule();
+      state.questions.forEach((question, questionIndex) => {
+        const answerText = gradingAnswerText(question, answers.get(question.id)?.answer);
+        composer.addText(`QUESTION ${questionIndex + 1} - ${Number(question.points || 0)} POINT${Number(question.points) === 1 ? '' : 'S'}`, { size: 11, bold: true, spaceBefore: 7, spaceAfter: 4 });
+        composer.addText(question.prompt || question.text || 'Question prompt not available.', { size: 10, spaceAfter: 5 });
+        composer.addText('SUBMITTED ANSWER', { size: 9, bold: true, spaceAfter: 3 });
+        composer.addText(answerText, { size: 10, leading: 14, x: 66, width: 475, spaceAfter: 5 });
+        if (includeGrades) {
+          const grade = grades.get(question.id);
+          const savedPoints = savedGradePoints(grade);
+          const hasGrade = savedPoints !== null;
+          composer.addText(`GRADE: ${hasGrade ? `${savedPoints} / ${Number(question.points || 0)} points` : `Not graded / ${Number(question.points || 0)} points`}`, { size: 10, bold: true, spaceAfter: 3 });
+          composer.addText(`PROFESSOR FEEDBACK: ${hasGrade ? (safeText(grade.feedback, 5_000) || 'No feedback provided.') : 'Not graded.'}`, { size: 9, x: 66, width: 475, spaceAfter: 5 });
+        }
+        composer.addRule();
+      });
+    });
+    return new Blob([serializePdfDocument(composer.pages, composer.documentTitle)], { type: 'application/pdf' });
+  }
+
+  async function downloadSubmittedAnswersPdf({ includeGrades = false, sessionId = null, button = null } = {}) {
     if (!state.grading) await refreshGrading();
-    const submittedIds = new Set((state.grading?.submissions || []).map((submission) => submission.sessionId));
-    const submittedCount = (state.grading?.sessions || []).filter((session) => submittedIds.has(session.id)).length;
+    const submittedCount = submittedSessions(sessionId).length;
     if (!submittedCount) {
-      showError({
-        message: 'There are no submitted answers to download yet.',
-        recovery: 'Wait for at least one student submission, choose Refresh, then download again.',
-      }, null, 'Nothing downloaded');
+      showError({ message: sessionId ? 'This student has no submitted answers to download.' : 'There are no submitted answers to download yet.', recovery: 'Wait for at least one student submission, choose Refresh, then download again.' }, null, 'Nothing downloaded');
       return;
     }
-    setButtonBusy(button, true, 'Preparing answers…');
+    if (button) setButtonBusy(button, true, 'Preparing PDF…');
     try {
-      const html = buildSubmittedAnswersDocument();
-      const filename = `${safeDownloadName(state.exam?.title)}-all-submitted-answers.html`;
-      downloadBlob(filename, new Blob([html], { type: 'text/html;charset=utf-8' }));
-      toast(`${submittedCount} submitted answer${submittedCount === 1 ? '' : 's'} downloaded in one readable file.`);
+      if (includeGrades && state.selectedGradingSessionId) await saveAllGrades(null, { silent: true, requireComplete: false });
+      const selectedSession = sessionId ? (state.grading?.sessions || []).find((session) => session.id === sessionId) : null;
+      const studentIndex = selectedSession ? submittedSessions().findIndex((session) => session.id === sessionId) : -1;
+      const identity = selectedSession ? gradingDisplayIdentity(selectedSession, studentIndex) : null;
+      const scope = sessionId ? safeDownloadName(identity?.realName, 'student') : 'all-students';
+      const suffix = includeGrades ? 'answers-with-grades' : 'submitted-answers';
+      downloadBlob(`${safeDownloadName(state.exam?.title)}-${scope}-${suffix}.pdf`, buildSubmittedAnswersPdf({ includeGrades, sessionId }));
+      toast(`${sessionId ? identity?.realName || 'Student' : `${submittedCount} student${submittedCount === 1 ? '' : 's'}`} downloaded as a PDF${includeGrades ? ' with grade breakdowns' : ''}.`);
     } catch (error) {
-      showError({
-        message: error?.message || 'This browser could not create the submitted-answer file.',
-        recovery: 'Keep this page open, refresh the Grade view, then choose Download all submitted answers again.',
-      }, () => downloadAllSubmittedAnswers(button), 'Answers not downloaded');
+      showError({ message: error?.message || 'This browser could not create the PDF.', recovery: 'Keep this page open, refresh the Grade view, then choose the PDF download again.' }, () => downloadSubmittedAnswersPdf({ includeGrades, sessionId, button }), 'PDF not downloaded');
     } finally {
-      setButtonBusy(button, false);
+      if (button) setButtonBusy(button, false);
     }
   }
 
@@ -2341,7 +2499,7 @@
     const displayName = state.anonymousGrading ? identity.alias : identity.realName;
     const answers = latestBy((data.answerRevisions || []).filter((revision) => revision.sessionId === session.id), (revision) => revision.questionId);
     const grades = latestBy((data.gradeRevisions || []).filter((revision) => revision.sessionId === session.id), (revision) => revision.questionId);
-    $('#grading-sheet').innerHTML = `<header class="grading-student-head"><div><p class="section-kicker">Individual response</p><h2>${escapeHtml(displayName)}</h2><p>${escapeHtml(state.anonymousGrading ? 'The professor may reveal the real roster at any time.' : `${identity.realStudentNumber} · ${session.yearLevel}`)}</p></div><span class="grade-save-state"><i class="ph ph-check-circle" aria-hidden="true"></i> Enter all scores, then save this student once</span></header>
+    $('#grading-sheet').innerHTML = `<header class="grading-student-head"><div><p class="section-kicker">Individual response</p><h2>${escapeHtml(displayName)}</h2><p>${escapeHtml(state.anonymousGrading ? 'The professor may reveal the real roster at any time.' : `${identity.realStudentNumber} · ${session.yearLevel}`)}</p></div><div class="grading-student-actions"><button class="button secondary compact" type="button" data-download-student-answers><i class="ph ph-file-pdf" aria-hidden="true"></i>Answers PDF</button><button class="button secondary compact" type="button" data-download-student-grades><i class="ph ph-file-pdf" aria-hidden="true"></i>Answers + grades PDF</button><span class="grade-save-state"><i class="ph ph-check-circle" aria-hidden="true"></i> Enter all scores, then save this student once</span></div></header>
       ${state.questions.map((question, index) => {
         const answer = answers.get(question.id)?.answer;
         const grade = grades.get(question.id) || {};
@@ -2978,7 +3136,7 @@
     } else if (action === 'open_monitor') switchView('monitor');
     else if (action === 'open_grading' || action === 'open_results' || action === 'open_downloads') {
       switchView('grade');
-      if (action === 'open_downloads') global.setTimeout(() => $('#export-grading-package')?.focus(), 350);
+      if (action === 'open_downloads') global.setTimeout(() => $('#download-all-submitted-answers')?.focus(), 350);
     }
   }
 
@@ -3243,16 +3401,15 @@
     $('#grading-sheet').addEventListener('click', (event) => {
       const button = event.target.closest('[data-save-all-grades]');
       if (button) saveAllGrades(button).catch(() => {});
+      const downloadAnswers = event.target.closest('[data-download-student-answers]');
+      if (downloadAnswers) downloadSubmittedAnswersPdf({ sessionId: state.selectedGradingSessionId, button: downloadAnswers });
+      const downloadGrades = event.target.closest('[data-download-student-grades]');
+      if (downloadGrades) downloadSubmittedAnswersPdf({ includeGrades: true, sessionId: state.selectedGradingSessionId, button: downloadGrades });
     });
     $('#anonymous-grading-toggle').addEventListener('change', (event) => { state.anonymousGrading = event.target.checked; renderGrading(); });
     $('#release-results').addEventListener('click', releaseResults);
-    $('#download-all-submitted-answers').addEventListener('click', (event) => downloadAllSubmittedAnswers(event.currentTarget));
-    $('#export-grading-package').addEventListener('click', exportGradingPackage);
-    $('#import-grading-package').addEventListener('change', async (event) => {
-      const files = [...(event.target.files || [])];
-      await importGradingPackages(files);
-      event.target.value = '';
-    });
+    $('#download-all-submitted-answers').addEventListener('click', (event) => downloadSubmittedAnswersPdf({ button: event.currentTarget }));
+    $('#download-all-graded-answers').addEventListener('click', (event) => downloadSubmittedAnswersPdf({ includeGrades: true, button: event.currentTarget }));
     $('#text-entry-form').addEventListener('submit', (event) => {
       event.preventDefault();
       const input = $('#text-entry-input');

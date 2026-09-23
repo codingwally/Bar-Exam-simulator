@@ -277,12 +277,8 @@
     <section class="app-view grade-view" id="grade-view" data-app-view="grade" hidden aria-labelledby="grade-title">
       <header class="operations-header">
         <div><p class="section-kicker">Grade submissions</p><h1 id="grade-title">Constitutional Law — Midterm Examination</h1><p>One student at a time, with durable grade revisions and professor-controlled identity.</p></div>
-        <div class="operations-actions"><button class="button secondary" id="download-all-submitted-answers" type="button"><i class="ph ph-file-html" aria-hidden="true"></i>Download all submitted answers</button><button class="button secondary" id="export-grading-package" type="button"><i class="ph ph-download-simple" aria-hidden="true"></i>Download offline copy</button><a class="button secondary" href="offline-grading.html" target="_blank" rel="noopener"><i class="ph ph-arrow-square-out" aria-hidden="true"></i>Open offline grading</a><label class="button secondary file-button" for="import-grading-package"><i class="ph ph-upload-simple" aria-hidden="true"></i>Import graded copy</label><input id="import-grading-package" type="file" accept="application/json,.json,.ddgrade.json" multiple hidden><button class="button primary" id="release-results" type="button">Release selected results</button></div>
+        <div class="operations-actions"><button class="button secondary" id="download-all-submitted-answers" type="button"><i class="ph ph-file-pdf" aria-hidden="true"></i>Download all answers (PDF)</button><button class="button secondary" id="download-all-graded-answers" type="button"><i class="ph ph-file-pdf" aria-hidden="true"></i>Download all with grades (PDF)</button><button class="button primary" id="release-results" type="button">Release selected results</button></div>
       </header>
-      <section class="offline-grading-guide" aria-labelledby="offline-grading-guide-title">
-        <div><p class="section-kicker">Grade without a connection</p><h2 id="offline-grading-guide-title">Three-step offline grading</h2></div>
-        <ol><li><strong>1. Download</strong><span>Create an encrypted grading copy and remember its passphrase. Large classes download as numbered files automatically.</span></li><li><strong>2. Grade offline</strong><span>Open and grade every numbered file, then export each graded copy.</span></li><li><strong>3. Import here</strong><span>Choose Import graded copy and select all numbered graded files together. Review before releasing results.</span></li></ol>
-      </section>
       <div class="grading-layout">
         <aside class="student-submission-list"><header><h2>Students</h2><label><input id="anonymous-grading-toggle" type="checkbox"><span>Anonymous grading</span></label></header><div id="grading-student-list"></div></aside>
         <main class="grading-sheet" id="grading-sheet"><div class="empty-state"><i class="ph ph-seal-check" aria-hidden="true"></i><h2>Submissions will appear here</h2><p>Select a submitted student to review answers, award points, and leave feedback.</p></div></main>
@@ -362,6 +358,6 @@
   <script src="view-models.js?v=greenfield-v1-20260826-1"></script>
   <script src="api.js?v=reliability-20260828-1"></script>
   <script src="offline-grading-core.js?v=greenfield-v1-20260826-3"></script>
-  <script src="professor.js?v=professor-answer-downloads-20260922-1"></script>
+  <script src="professor.js?v=professor-pdf-downloads-20260923-1"></script>
 </body>
 </html>

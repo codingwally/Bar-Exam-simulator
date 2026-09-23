@@ -1,4 +1,5 @@
 name: Examination Room one-upload PDF import release
+# One-time release trigger for the reviewed PDF import source.
 
 on:
   push:

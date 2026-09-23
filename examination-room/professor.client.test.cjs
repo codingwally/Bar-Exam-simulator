@@ -97,7 +97,7 @@ function loadProfessorStartupHooks({ storageBlocked = false, indexedDbAvailable 
   };
   const exposedSource = professorSource.replace(
     /\n\s*initialize\(\);\s*\n\}\)\(window\);\s*$/,
-    '\n  global.__professorStartupTestHooks = { clientOnlyBlankDraft, editorExamFromStored, examContentFingerprint, normalizeAllowedEmails, invalidAllowedEmails, creatorAccessUnlocked, scheduleActivationPoll, stopActivationPolling, resetActivationPollingWindow, activationPollDelay, stopMonitorPolling, scheduleMonitorPoll, refreshMonitor, draftDb, saveLocalDraft, readLocalDraft, readActiveLocalDraft, readLocalDraftIndex, localDraftBelongsToCurrentProfessor, prepareDecryptedGradePayload, validateCompleteGradedPackageSets, serverDraftBackupBlockers, serverBackupWaitingLabel, examSummariesFromSession, examSummariesWithCurrentExam, overviewExamItems, overviewStatusPresentation, lifecycleOperationForExam, summariesAfterRemoval, duplicateDraft, isPristineDraft, normalizeQuestion, questionAfterTypeChange, questionSuggestion, marginSuggestion, pdfSafeText, wrapPdfText, serializePdfDocument, savedGradePoints, buildSubmittedAnswersPdf, state };\n})(window);',
+    '\n  global.__professorStartupTestHooks = { clientOnlyBlankDraft, editorExamFromStored, examContentFingerprint, normalizeAllowedEmails, invalidAllowedEmails, creatorAccessUnlocked, scheduleActivationPoll, stopActivationPolling, resetActivationPollingWindow, activationPollDelay, stopMonitorPolling, scheduleMonitorPoll, refreshMonitor, draftDb, saveLocalDraft, readLocalDraft, readActiveLocalDraft, readLocalDraftIndex, localDraftBelongsToCurrentProfessor, prepareDecryptedGradePayload, validateCompleteGradedPackageSets, serverDraftBackupBlockers, serverBackupWaitingLabel, examSummariesFromSession, examSummariesWithCurrentExam, overviewExamItems, overviewStatusPresentation, lifecycleOperationForExam, summariesAfterRemoval, duplicateDraft, isPristineDraft, normalizeQuestion, questionAfterTypeChange, questionSuggestion, marginSuggestion, parseExamDocumentText, documentPointValue, pdfPageText, pdfSafeText, wrapPdfText, serializePdfDocument, savedGradePoints, buildSubmittedAnswersPdf, state };\n})(window);',
   );
   vm.runInNewContext(exposedSource, { window, indexedDB: window.indexedDB }, { filename: 'professor.js' });
   return { ...window.__professorStartupTestHooks, __testWindow: window };
@@ -163,6 +163,45 @@ test('professor text and passphrase entry never depend on blocking browser promp
   assert.match(professorHtml, /id="text-entry-input"/);
   assert.match(professorHtml, /id="confirmation-dialog"/);
   assert.match(professorHtml, /id="confirmation-confirm"/);
+});
+
+test('one PDF text extraction populates exam title, coverage, instructions, questions, and exact points', () => {
+  const { parseExamDocumentText } = loadProfessorStartupHooks();
+  const questions = Array.from({ length: 13 }, (_, index) => `QUESTION ${index + 1} - 5 POINTS\nFacts for item ${index + 1}. Explain.`).join('\n');
+  const imported = parseExamDocumentText(`
+PERSONS AND FAMILY RELATIONS
+TEST EXAMINATION
+Coverage: Civil Code of the Philippines, Articles 2 to 14
+
+GENERAL INSTRUCTIONS
+1. Answer all thirteen (13) questions.
+2. Each question is worth five (5) points. Total raw score: 65 points.
+3. Use the ALAC format: Answer, Legal Basis, Application, and Conclusion.
+IMPORTANT: There are no subquestions.
+
+${questions}
+PFR Test Examination - Civil Code Articles 2 to 14 Page 2
+`);
+
+  assert.equal(imported.title, 'Persons and Family Relations — Test Examination');
+  assert.equal(imported.subject, 'Civil Code of the Philippines, Articles 2 to 14');
+  assert.equal(imported.jurisdiction, 'Philippines');
+  assert.match(imported.instructions, /Answer all thirteen/);
+  assert.match(imported.instructions, /Use the ALAC format/);
+  assert.match(imported.instructions, /There are no subquestions/);
+  assert.equal(imported.questions.length, 13);
+  assert.equal(imported.questions[0].prompt, 'Facts for item 1. Explain.');
+  assert.equal(imported.questions[12].prompt, 'Facts for item 13. Explain.');
+  assert.ok(imported.questions.every((question) => question.points === 5));
+  assert.equal(imported.questions.reduce((sum, question) => sum + question.points, 0), 65);
+});
+
+test('PDF upload is read in-browser and never tells a professor to prepare a TXT file', () => {
+  assert.match(professorSource, /async function extractPdfText\(file\)/);
+  assert.match(professorSource, /if \(extension === 'pdf'\)[\s\S]*extractPdfText\(file\)/);
+  assert.doesNotMatch(professorSource, /upload a TXT|TXT file|text file/i);
+  assert.doesNotMatch(professorHtml, /accept="[^"]*\.txt/);
+  assert.match(professorHtml, /professor\.js\?v=professor-pdf-import-20260923-1/);
 });
 
 test('legacy offline grading packages remain encrypted but are not exposed as professor download actions', () => {
@@ -910,7 +949,7 @@ test('creator receives monitor and grade access from activation without entering
   assert.match(professorHtml, /data-view="monitor" data-requires-activation="true" disabled aria-label="Monitor examination — available after Admin issues the student key"/);
   assert.match(professorHtml, /data-view="grade" data-requires-activation="true" disabled aria-label="Grade submissions — available after Admin issues the student key"/);
   assert.match(professorSource, /control\.setAttribute\('aria-label', unlocked[\s\S]*viewName/);
-  assert.match(professorHtml, /professor\.js\?v=professor-pdf-downloads-20260923-1/);
+  assert.match(professorHtml, /professor\.js\?v=professor-pdf-import-20260923-1/);
 });
 
 test('creator approval survives reload and a published request keeps polling without a manual check', () => {

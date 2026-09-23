@@ -66,6 +66,10 @@
     short_answer: 'Short answer',
     multiple_choice: 'Multiple choice',
   });
+  const PDF_JS_VERSION = '5.6.205';
+  const PDF_JS_MODULE_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDF_JS_VERSION}/build/pdf.min.mjs`;
+  const PDF_JS_WORKER_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDF_JS_VERSION}/build/pdf.worker.min.mjs`;
+  let pdfJsModulePromise = null;
 
   function registerExaminationRoomServiceWorker() {
     const serviceWorker = global.navigator?.serviceWorker;
@@ -1864,40 +1868,239 @@
     toast(`${imported.length} students imported. Review the roster before publishing.`);
   }
 
+  function titleCaseDocumentHeading(value) {
+    const text = safeText(value, 180);
+    if (!text || text !== text.toUpperCase()) return text;
+    return text.toLocaleLowerCase('en-PH')
+      .replace(/(^|[\s/&-])([a-z])/g, (_, prefix, letter) => `${prefix}${letter.toLocaleUpperCase('en-PH')}`)
+      .replace(/\b(And|Of|The|To|In|For)\b/g, (word, offset) => (offset === 0 ? word : word.toLocaleLowerCase('en-PH')));
+  }
+
+  function documentPointValue(value) {
+    const text = String(value || '');
+    const numeric = text.match(/(?:worth\s+)?(?:[a-z-]+\s*)?\((\d{1,4})\)\s*points?/i)
+      || text.match(/(?:^|[-–—:]|worth\s+)(\d{1,4})\s*points?/i);
+    return numeric ? Math.max(0, Math.min(1000, Number(numeric[1]) || 0)) : 0;
+  }
+
+  function joinedDocumentParagraphs(lines) {
+    const paragraphs = [];
+    let current = '';
+    const flush = () => {
+      if (current.trim()) paragraphs.push(current.replace(/\s+/g, ' ').trim());
+      current = '';
+    };
+    lines.forEach((line) => {
+      const value = String(line || '').trim();
+      if (!value) {
+        flush();
+        return;
+      }
+      if (/^(?:\d+[.)]|IMPORTANT\s*:)/i.test(value)) flush();
+      current = `${current} ${value}`.trim();
+    });
+    flush();
+    return paragraphs.join('\n');
+  }
+
+  function parseExamDocumentText(text) {
+    const lines = String(text || '')
+      .replace(/\r/g, '')
+      .replace(/\u00a0/g, ' ')
+      .split('\n')
+      .map((line) => line.replace(/[ \t]+/g, ' ').trim())
+      .filter((line) => !/^.+\s+Page\s+\d+\s*$/i.test(line));
+    const instructionIndex = lines.findIndex((line) => /^(?:GENERAL\s+)?INSTRUCTIONS?\s*:?$/i.test(line));
+    const questionHeading = /^\s*(?:QUESTION|ITEM)\s+(\d+)\s*(?:[-–—:]\s*)?(.*)$/i;
+    const firstQuestionIndex = lines.findIndex((line) => questionHeading.test(line));
+    const preludeEnd = instructionIndex >= 0 ? instructionIndex : firstQuestionIndex;
+    const prelude = lines.slice(0, preludeEnd >= 0 ? preludeEnd : 0).filter(Boolean);
+    const coverageLine = prelude.find((line) => /^coverage\s*:/i.test(line));
+    const headingLines = prelude.filter((line) => !/^coverage\s*:/i.test(line)).slice(0, 3);
+    const title = headingLines.length
+      ? headingLines.map(titleCaseDocumentHeading).join(' — ')
+      : '';
+    const subject = coverageLine
+      ? safeText(coverageLine.replace(/^coverage\s*:\s*/i, ''), 120)
+      : safeText(titleCaseDocumentHeading(headingLines[0] || ''), 120);
+    const instructionLines = instructionIndex >= 0
+      ? lines.slice(instructionIndex + 1, firstQuestionIndex >= 0 ? firstQuestionIndex : lines.length)
+      : [];
+    const instructions = safeText(joinedDocumentParagraphs(instructionLines), 10_000);
+    const defaultPoints = documentPointValue(instructions);
+    const questions = [];
+    let active = null;
+    const finishQuestion = () => {
+      if (!active) return;
+      const prompt = joinedDocumentParagraphs(active.lines).replace(/\n+/g, ' ').trim();
+      if (prompt) questions.push(normalizeQuestion({
+        id: global.crypto.randomUUID(),
+        type: 'essay',
+        points: active.points || defaultPoints,
+        prompt,
+        wordGuideline: '',
+        required: true,
+      }, questions.length));
+      active = null;
+    };
+    lines.slice(Math.max(0, firstQuestionIndex)).forEach((line) => {
+      const match = line.match(questionHeading);
+      if (match) {
+        finishQuestion();
+        active = { number: Number(match[1]), points: documentPointValue(match[2]), lines: [] };
+        const headingRemainder = match[2].replace(/[-–—:]?\s*(?:[a-z-]+\s*)?\(?\d{1,4}\)?\s*points?\s*$/i, '').trim();
+        if (headingRemainder) active.lines.push(headingRemainder);
+      } else if (active) {
+        active.lines.push(line);
+      }
+    });
+    finishQuestion();
+    if (!questions.length) {
+      const normalized = lines.join('\n').trim();
+      const parts = normalized.split(/\n(?=(?:Question\s+)?\d+[.)]\s+)/i)
+        .map((part) => part.replace(/^(?:Question\s+)?\d+[.)]\s*/i, '').trim())
+        .filter(Boolean);
+      parts.forEach((prompt, index) => questions.push(normalizeQuestion({
+        id: global.crypto.randomUUID(), type: 'essay', points: documentPointValue(prompt),
+        prompt: prompt.replace(/^(?:[-–—:]\s*)?(?:[a-z-]+\s*)?\(?\d{1,4}\)?\s*points?\s*/i, '').trim(),
+        wordGuideline: '', required: true,
+      }, index)));
+    }
+    const durationMatch = instructions.match(/(?:duration|time\s+limit)\s*:?\s*(\d+)\s*(hours?|minutes?)/i);
+    const durationMinutes = durationMatch
+      ? Number(durationMatch[1]) * (/hour/i.test(durationMatch[2]) ? 60 : 1)
+      : null;
+    return {
+      title,
+      subject,
+      jurisdiction: /philippin/i.test(`${subject}\n${instructions}\n${text}`) ? 'Philippines' : '',
+      instructions,
+      durationMinutes,
+      questions,
+    };
+  }
+
   function questionsFromText(text) {
-    const normalized = String(text || '').replace(/\r/g, '').trim();
-    const parts = normalized.split(/\n(?=(?:Question\s+)?\d+[.)]\s+)/i).map((part) => part.replace(/^(?:Question\s+)?\d+[.)]\s*/i, '').trim()).filter(Boolean);
-    return parts.map((prompt, index) => normalizeQuestion({
-      id: global.crypto.randomUUID(), type: 'essay', points: Math.max(1, Math.floor(100 / parts.length)),
-      prompt, wordGuideline: index === 0 ? '600–800 words' : '500–700 words', required: true,
-    }, index));
+    return parseExamDocumentText(text).questions;
+  }
+
+  async function pdfJsModule() {
+    if (!pdfJsModulePromise) {
+      pdfJsModulePromise = import(PDF_JS_MODULE_URL).then((module) => {
+        module.GlobalWorkerOptions.workerSrc = PDF_JS_WORKER_URL;
+        return module;
+      }).catch((error) => {
+        pdfJsModulePromise = null;
+        throw error;
+      });
+    }
+    return pdfJsModulePromise;
+  }
+
+  function pdfPageText(items) {
+    const lines = [];
+    items.filter((item) => typeof item?.str === 'string' && item.str.trim()).forEach((item) => {
+      const x = Number(item.transform?.[4] || 0);
+      const y = Number(item.transform?.[5] || 0);
+      let line = lines.find((candidate) => Math.abs(candidate.y - y) <= 2);
+      if (!line) {
+        line = { y, items: [] };
+        lines.push(line);
+      }
+      line.items.push({ x, text: item.str.trim() });
+    });
+    return lines
+      .sort((left, right) => right.y - left.y)
+      .map((line) => line.items.sort((left, right) => left.x - right.x).map((item) => item.text).join(' '))
+      .join('\n');
+  }
+
+  async function extractPdfText(file) {
+    const pdfjs = await pdfJsModule();
+    const loadingTask = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
+    const document = await loadingTask.promise;
+    try {
+      const pages = [];
+      for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
+        const page = await document.getPage(pageNumber);
+        pages.push(pdfPageText((await page.getTextContent()).items));
+      }
+      return pages.join('\n\n');
+    } finally {
+      await document.destroy();
+    }
+  }
+
+  function applyImportedExam(imported) {
+    if (!imported?.questions?.length) throw new api.ExaminationRoomApiError(
+      'PDF_QUESTIONS_NOT_FOUND',
+      'The PDF opened, but no numbered examination questions were found.',
+      422,
+      'Upload the original text-searchable PDF with numbered question headings. The file can include its title, instructions, and points.',
+    );
+    const updates = {
+      title: safeText(imported.title, 180),
+      subject: safeText(imported.subject, 120),
+      jurisdiction: safeText(imported.jurisdiction, 80),
+      instructions: safeText(imported.instructions, 10_000),
+      durationMinutes: Number(imported.durationMinutes) || null,
+    };
+    if (updates.title) {
+      state.exam.title = updates.title;
+      $('#exam-title').value = updates.title;
+      $('#command-title').value = updates.title;
+    }
+    if (updates.subject) {
+      state.exam.subject = updates.subject;
+      $('#subject').value = updates.subject;
+    }
+    if (updates.jurisdiction) {
+      state.exam.jurisdiction = updates.jurisdiction;
+      $('#jurisdiction').value = updates.jurisdiction;
+    }
+    if (updates.instructions) {
+      state.exam.instructions = updates.instructions;
+      $('#instructions').value = updates.instructions;
+    }
+    if (updates.durationMinutes && [...$('#duration-control').options].some((option) => Number(option.value) === updates.durationMinutes)) {
+      state.exam.durationMinutes = updates.durationMinutes;
+      $('#duration-control').value = String(updates.durationMinutes);
+    }
+    state.questions = imported.questions.map(normalizeQuestion);
+    state.exam.questions = state.questions;
+    renderQuestions();
+    autoResizeTitle();
+    updateReviewCount();
   }
 
   async function importSource(file) {
     if (!file) return;
     if (file.size > 8 * 1024 * 1024) {
-      showError({ message: 'That exam file is larger than 8 MB.', recovery: 'Remove unnecessary images or export the document as a smaller DOCX, text PDF, or TXT file, then try again.' }, null, 'Exam not uploaded');
+      showError({ message: 'That exam file is larger than 8 MB.', recovery: 'Remove unnecessary images or export the document as a smaller text-searchable PDF, then try again.' }, null, 'Exam not uploaded', 'source-import');
       return;
     }
     const extension = file.name.split('.').pop()?.toLowerCase();
-    if (!['docx', 'pdf', 'txt', 'rtf'].includes(extension)) {
-      showError({ message: 'That file type is not supported.', recovery: 'Upload a DOCX, text-based PDF, RTF, or TXT file.' }, null, 'Exam not uploaded');
+    if (!['docx', 'pdf', 'rtf'].includes(extension)) {
+      showError({ message: 'That file type is not supported.', recovery: 'Upload a PDF, DOCX, or RTF examination file.' }, null, 'Exam not uploaded', 'source-import');
       return;
     }
+    dismissErrorScope('source-import');
     $('#source-name').textContent = file.name;
     $('#source-size').textContent = formatBytes(file.size);
     $('#source-file').hidden = false;
-    $('#import-notice').hidden = false;
+    $('#import-notice').hidden = true;
     $('#exam-details').classList.add('has-source');
-    state.exam.sourceFileName = file.name;
-    state.exam.sourceFileSize = file.size;
     try {
-      if (extension === 'txt') {
-        const parsed = questionsFromText(await file.text());
-        if (parsed.length) {
-          state.questions = parsed;
-          renderQuestions();
-        }
+      let imported;
+      if (extension === 'pdf') {
+        const extractedText = await extractPdfText(file);
+        if (!extractedText.trim()) throw new api.ExaminationRoomApiError(
+          'PDF_TEXT_NOT_FOUND',
+          'This PDF does not contain readable examination text.',
+          422,
+          'Upload the original text-searchable PDF or re-export the source document as a PDF, then upload it again.',
+        );
+        imported = parseExamDocumentText(extractedText);
       } else if (!api.demoEnabled()) {
         const bytes = new Uint8Array(await file.arrayBuffer());
         let binary = '';
@@ -1906,15 +2109,24 @@
         const result = await api.professorCommand('import_document', {
           examId: state.exam.id, fileName: file.name, mimeType: file.type || 'application/octet-stream', base64: btoa(binary),
         }, api.requestId());
-        if (result.questions?.length) {
-          state.questions = result.questions.map(normalizeQuestion);
-          renderQuestions();
-        }
+        imported = result.exam || result;
+      } else {
+        throw new api.ExaminationRoomApiError('DOCUMENT_IMPORT_UNAVAILABLE', 'This file cannot be read in the demonstration workspace.', 503, 'Upload a PDF examination instead. PDF title, instructions, questions, and points are read directly in your browser.');
       }
+      applyImportedExam(imported);
+      state.exam.sourceFileName = file.name;
+      state.exam.sourceFileSize = file.size;
+      const totalPoints = state.questions.reduce((sum, question) => sum + Number(question.points || 0), 0);
+      const notice = $('#import-notice span');
+      if (notice) notice.textContent = `Exam populated from PDF: ${state.questions.length} questions, instructions, and ${totalPoints} total points.`;
+      $('#import-notice').hidden = false;
       scheduleAutosave();
-      toast('Source uploaded. AI numbering is a draft for your review; nothing was published.');
+      toast(`PDF read successfully. ${state.questions.length} questions and ${totalPoints} points were populated.`);
     } catch (error) {
-      showError(error, () => importSource(file), 'Source import delayed');
+      $('#import-notice').hidden = true;
+      showError(error, () => importSource(file), 'PDF not imported', 'source-import');
+    } finally {
+      $('#source-upload').value = '';
     }
   }
 

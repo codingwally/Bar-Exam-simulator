@@ -1,0 +1,152 @@
+name: Publish AdSense site code
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/release-adsense-code-20260923.yml
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+env:
+  LIVE_BASE_SHA: 99a835fae8720613d16bcfea4b2161001e12119a
+  RELEASE_SOURCE_SHA: bc20545ca0ae71a2408028a5cebf82107f3705b0
+  SITE_URL: https://duediligence.ph
+  ADSENSE_ID: ca-pub-4565325992372168
+
+jobs:
+  deploy:
+    name: Verify and deploy AdSense code
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout exact reviewed release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_SOURCE_SHA }}
+          fetch-depth: 0
+
+      - name: Prove isolated reviewed scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$RELEASE_SOURCE_SHA"
+          git cat-file -e "$LIVE_BASE_SHA^{commit}"
+          git merge-base --is-ancestor "$LIVE_BASE_SHA" "$RELEASE_SOURCE_SHA"
+          python - <<'PY'
+          import os
+          import subprocess
+          expected = {
+              'admin-pulse/index.html',
+              'admin/index.html',
+              'debate-room/index.html',
+              'examination-room/index.html',
+              'examination-room/offline-grading.html',
+              'examination-room/student.html',
+              'offline.html',
+              'study-room/index.html',
+          }
+          changed = set(subprocess.check_output(
+              ['git', 'diff', '--name-only', f"{os.environ['LIVE_BASE_SHA']}..{os.environ['RELEASE_SOURCE_SHA']}"],
+              text=True,
+          ).splitlines())
+          if changed != expected:
+              raise SystemExit(f'Unexpected AdSense release scope: {sorted(changed)}')
+          print('Exact AdSense scope verified.')
+          PY
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Pages build dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Verify AdSense placement and Pages artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs = require('fs');
+          const pages = [
+            'index.html',
+            'offline.html',
+            'admin/index.html',
+            'admin-pulse/index.html',
+            'study-room/index.html',
+            'debate-room/index.html',
+            'examination-room/index.html',
+            'examination-room/student.html',
+            'examination-room/offline-grading.html',
+          ];
+          const needle = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4565325992372168';
+          for (const page of pages) {
+            const html = fs.readFileSync(page, 'utf8');
+            const count = html.split(needle).length - 1;
+            const head = html.match(/<head\b[^>]*>([\s\S]*?)<\/head>/i)?.[1] || '';
+            if (count !== 1 || !head.includes(needle)) {
+              throw new Error(`${page}: expected one AdSense loader inside <head>, found ${count}`);
+            }
+          }
+          console.log('AdSense loader verified on all deployed HTML pages.');
+          NODE
+          git diff --check "$LIVE_BASE_SHA..$RELEASE_SOURCE_SHA"
+          GITHUB_SHA="$RELEASE_SOURCE_SHA" node scripts/test-pages-artifact.mjs
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload exact sanitized Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .pages-dist
+
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Verify live AdSense code
+        shell: bash
+        run: |
+          set -euo pipefail
+          pages=(
+            /
+            /offline.html
+            /admin/
+            /admin-pulse/
+            /study-room/
+            /debate-room/
+            /examination-room/
+            /examination-room/student.html
+            /examination-room/offline-grading.html
+          )
+          for attempt in {1..24}; do
+            marker="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/.well-known/duediligence-release.txt?release=$RELEASE_SOURCE_SHA" || true)"
+            ready=true
+            if [[ "$marker" != "$RELEASE_SOURCE_SHA" ]]; then ready=false; fi
+            for path in "${pages[@]}"; do
+              html="$(curl --fail --silent --show-error --location --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL$path?release=$RELEASE_SOURCE_SHA" || true)"
+              count="$(grep -oF "pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=$ADSENSE_ID" <<<"$html" | wc -l | tr -d ' ')"
+              if [[ "$count" != "1" ]]; then ready=false; fi
+            done
+            if [[ "$ready" == "true" ]]; then
+              echo "AdSense code is live on all deployed HTML pages."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Pages deployed but the AdSense code did not converge on every page in time." >&2
+          exit 1

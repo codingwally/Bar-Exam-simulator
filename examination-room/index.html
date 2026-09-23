@@ -150,14 +150,14 @@
               <div class="source-header">
                 <div><p class="section-kicker">Source material</p><p>Start from a file or continue editing directly below.</p></div>
                 <label class="button secondary compact" for="source-upload"><i class="ph ph-upload-simple" aria-hidden="true"></i><span>Upload exam</span></label>
-                <input id="source-upload" type="file" accept=".docx,.pdf,.txt,.rtf" hidden>
+                <input id="source-upload" type="file" accept=".pdf,.docx,.rtf" hidden>
               </div>
               <div class="source-file" id="source-file">
                 <i class="ph ph-microsoft-word-logo source-word-icon" aria-hidden="true"></i>
                 <span><strong id="source-name">Constitutional_Law_Midterm.docx</strong><small id="source-size">187 KB</small></span>
                 <button class="icon-action" type="button" id="remove-source" aria-label="Remove source file"><i class="ph ph-x" aria-hidden="true"></i></button>
               </div>
-              <div class="success-notice" id="import-notice"><i class="ph ph-check-circle" aria-hidden="true"></i><span>AI organized the content into questions and numbering for your review.</span><button type="button" id="view-mapping">View mapping</button></div>
+              <div class="success-notice" id="import-notice"><i class="ph ph-check-circle" aria-hidden="true"></i><span>The uploaded exam was populated into the fields below.</span><button type="button" id="view-mapping">View mapping</button></div>
             </section>
 
             <section class="editor-section questions-section" id="questions" aria-labelledby="questions-title">
@@ -358,6 +358,6 @@
   <script src="view-models.js?v=greenfield-v1-20260826-1"></script>
   <script src="api.js?v=reliability-20260828-1"></script>
   <script src="offline-grading-core.js?v=greenfield-v1-20260826-3"></script>
-  <script src="professor.js?v=professor-pdf-downloads-20260923-1"></script>
+  <script src="professor.js?v=professor-pdf-import-20260923-1"></script>
 </body>
 </html>

@@ -43,12 +43,12 @@ jobs:
         run: |
           set -euo pipefail
           git cat-file -e "$PATCH_SOURCE_SHA^{commit}"
-          for file in             examination-room/api.js             examination-room/student.js             examination-room/student.html             service-worker.js; do
+          for file in             examination-room/api.js             examination-room/student.js             examination-room/student.html             examination-room/student.client.test.cjs             service-worker.js; do
             git show "$PATCH_SOURCE_SHA:$file" > "$file"
           done
 
           changed="$(git diff --name-only)"
-          expected="$(printf '%s\n'             examination-room/api.js             examination-room/student.html             examination-room/student.js             service-worker.js | sort)"
+          expected="$(printf '%s\n'             examination-room/api.js             examination-room/student.html             examination-room/student.client.test.cjs             examination-room/student.js             service-worker.js | sort)"
           test "$(printf '%s\n' "$changed" | sort)" = "$expected"
 
           test "$(git show "$PATCH_SOURCE_SHA:examination-room/api.js" | sha256sum | awk '{print $1}')" = "$(sha256sum examination-room/api.js | awk '{print $1}')"

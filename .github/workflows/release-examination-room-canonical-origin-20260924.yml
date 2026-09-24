@@ -1,0 +1,91 @@
+name: Examination Room canonical-origin hotfix
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/release-examination-room-canonical-origin-20260924.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: examination-room-canonical-origin-hotfix
+  cancel-in-progress: false
+
+env:
+  RELEASE_SOURCE_SHA: 1e8161f34627e066560c162c55a9bbd095f7be24
+  PUBLIC_API_URL: https://duediligence-api.wallyesteban1993.workers.dev
+  APPLICATION_URL: https://duediligence-gemini-examiner.wallyesteban1993.workers.dev
+
+jobs:
+  deploy:
+    name: Verify and deploy canonical Examination Room origin hotfix
+    if: "${{ github.event.head_commit.message == 'release: fix Examination Room canonical origin' }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production-worker
+
+    steps:
+      - name: Checkout exact reviewed source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_SOURCE_SHA }}
+          fetch-depth: 0
+
+      - name: Prove hotfix markers
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$RELEASE_SOURCE_SHA"
+          grep -Fq "const CANONICAL_BROWSER_ORIGINS = new Set([" worker/index.mjs
+          grep -Fq "'https://duediligence.ph'" worker/index.mjs
+          grep -Fq "'https://www.duediligence.ph'" worker/index.mjs
+          grep -Fq "if (!isAllowedBrowserOrigin(origin, allowedOrigin))" worker/index.mjs
+          grep -Fq "const responseOrigin = isAllowedBrowserOrigin(origin, allowedOrigin)" worker/index.mjs
+          node --check worker/index.mjs
+          node --check worker/maintenance-entry.mjs
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Worker dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Deploy application Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          wranglerVersion: "4.114.0"
+          command: deploy --config wrangler.toml
+
+      - name: Verify canonical Examination Room origin through both endpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          for endpoint in "$APPLICATION_URL" "$PUBLIC_API_URL"; do
+            for attempt in {1..24}; do
+              body="$RUNNER_TEMP/exam-origin-$(echo "$endpoint" | tr -cd '[:alnum:]').json"
+              headers="$body.headers"
+              status="$(curl --silent --show-error --max-time 20                 --output "$body"                 --dump-header "$headers"                 --write-out '%{http_code}'                 --request POST                 --header 'Origin: https://duediligence.ph'                 --header 'Content-Type: application/json'                 --data '{"roomKey":"INVALID-ORIGIN-PROBE","identity":{"fullName":"Origin Probe","studentNumber":"ORIGIN-PROBE","subject":"Probe","yearLevel":"First year"}}'                 "$endpoint/examination-room/v1/student/preview" || true)"
+
+              if [[ "$status" != "403" ]] || ! grep -Fq '"code":"ORIGIN_NOT_ALLOWED"' "$body"; then
+                grep -qi '^access-control-allow-origin: https://duediligence.ph' "$headers"
+                echo "Canonical origin accepted by $endpoint (HTTP $status)."
+                break
+              fi
+
+              if [[ "$attempt" = "24" ]]; then
+                echo "Canonical origin is still rejected by $endpoint." >&2
+                cat "$body" >&2
+                exit 1
+              fi
+              sleep 5
+            done
+          done

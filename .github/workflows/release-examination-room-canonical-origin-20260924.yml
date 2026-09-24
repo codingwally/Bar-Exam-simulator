@@ -56,6 +56,18 @@ jobs:
       - name: Install Worker dependencies
         run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
 
+      - name: Prepare behavior-equivalent Worker deployment config
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp worker/wrangler.toml worker/wrangler.examination-room-origin.toml
+          sed -i \
+            -e '/^GEMINI_GROUNDING_ENABLED =/d' \
+            -e '/^ALLOW_LEGACY_GUESTS =/d' \
+            -e '/^AI_PREPARED_BETA_BADGE =/d' \
+            -e '/^CONTENT_HUMAN_REVIEW_REQUIRED =/d' \
+            worker/wrangler.examination-room-origin.toml
+
       - name: Deploy application Worker
         uses: cloudflare/wrangler-action@v3
         with:
@@ -63,7 +75,7 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: worker
           wranglerVersion: "4.114.0"
-          command: deploy --config wrangler.toml
+          command: deploy --config wrangler.examination-room-origin.toml
 
       - name: Verify canonical Examination Room origin through both endpoints
         shell: bash

@@ -318,9 +318,24 @@ const authenticatedUserTokenCache = new Map();
 let laborBankCache = null;
 let websiteBankCache = null;
 
+const CANONICAL_BROWSER_ORIGINS = new Set([
+  'https://duediligence.ph',
+  'https://www.duediligence.ph',
+]);
+
+function isAllowedBrowserOrigin(origin, allowedOrigin) {
+  return Boolean(origin) && (
+    origin === allowedOrigin
+    || CANONICAL_BROWSER_ORIGINS.has(origin)
+  );
+}
+
 function corsHeaders(origin, allowedOrigin) {
+  const responseOrigin = isAllowedBrowserOrigin(origin, allowedOrigin)
+    ? origin
+    : (allowedOrigin || 'https://duediligence.ph');
   return {
-    'Access-Control-Allow-Origin': origin === allowedOrigin ? origin : allowedOrigin,
+    'Access-Control-Allow-Origin': responseOrigin,
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': [
       'Content-Type',
@@ -355,7 +370,7 @@ function jsonResponse(body, status, origin, allowedOrigin) {
 
 function assertOrigin(request, allowedOrigin) {
   const origin = request.headers.get('Origin') || '';
-  if (!allowedOrigin || origin !== allowedOrigin) {
+  if (!isAllowedBrowserOrigin(origin, allowedOrigin)) {
     throw new ExaminerError('ORIGIN_NOT_ALLOWED', 'This grading origin is not allowed.', 403);
   }
   return origin;

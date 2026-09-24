@@ -18,7 +18,7 @@ concurrency:
 
 env:
   LIVE_BASE_SHA: 669a8d0ad11b8e79c4e8eee88b6e001b1dbb3147
-  PATCH_SOURCE_SHA: f9a45b82b380eac4b6a631fa83c44ef9688d9904
+  PATCH_SOURCE_SHA: 7ea2327e88985c18e04ec0d066762b0b780d8041
   SITE_URL: https://duediligence.ph
 
 jobs:
@@ -54,6 +54,7 @@ jobs:
           test "$(git show "$PATCH_SOURCE_SHA:examination-room/api.js" | sha256sum | awk '{print $1}')" = "$(sha256sum examination-room/api.js | awk '{print $1}')"
           test "$(git show "$PATCH_SOURCE_SHA:examination-room/student.js" | sha256sum | awk '{print $1}')" = "$(sha256sum examination-room/student.js | awk '{print $1}')"
           test "$(git show "$PATCH_SOURCE_SHA:examination-room/student.html" | sha256sum | awk '{print $1}')" = "$(sha256sum examination-room/student.html | awk '{print $1}')"
+          test "$(git show "$PATCH_SOURCE_SHA:examination-room/student.client.test.cjs" | sha256sum | awk '{print $1}')" = "$(sha256sum examination-room/student.client.test.cjs | awk '{print $1}')"
           test "$(git show "$PATCH_SOURCE_SHA:service-worker.js" | sha256sum | awk '{print $1}')" = "$(sha256sum service-worker.js | awk '{print $1}')"
 
       - name: Setup Node

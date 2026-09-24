@@ -1575,6 +1575,28 @@ export function createExaminationRoomV1Handlers(dependencies) {
           };
         } else if (operation === 'submit') {
           const submittedAnswers = Array.isArray(payload.answers) ? payload.answers : [];
+          const submissionCompletedAt = isoInstant(
+            payload.clientCompletedAt ?? payload.submittedAt ?? deps.now(),
+            'submission time',
+          );
+
+          // Preserve a server-side intent before answer reconciliation. This
+          // proves the student submitted while the session was still active,
+          // so the same idempotent upload may finish after a transient outage
+          // or session expiry without creating a general late-submit bypass.
+          await callRpc(env, {
+            scope: 'student',
+            operation: 'submission_intent',
+            actorUserId: null,
+            institutionId: null,
+            payload: {
+              sessionId: credential.sessionId,
+              sessionTokenHash: credential.sessionTokenHash,
+              requestHash: info.requestHash,
+              clientEventId: info.clientEventId,
+              clientCompletedAt: submissionCompletedAt,
+            },
+          }, [credential.rawSessionToken, info.rawRequestKey]);
 
           // Backward compatibility for examination tabs opened before the
           // answer-upload client hotfix. Those tabs include the complete local
@@ -1672,7 +1694,8 @@ export function createExaminationRoomV1Handlers(dependencies) {
                     || await pepperedHmac(env, 'answer-revision', answerRevision.idempotencyInput),
                   flagged: submittedAnswer.flagged === true,
                   source: 'submission',
-                  savedAt: deps.now(),
+                  submissionRequestHash: info.requestHash,
+                  savedAt: submissionCompletedAt,
                 },
               }, [credential.rawSessionToken, answerRequest.rawRequestKey]);
             }
@@ -1693,7 +1716,7 @@ export function createExaminationRoomV1Handlers(dependencies) {
             submissionId: deps.randomUUID(),
             attemptId: credential.sessionId,
             idempotencyKey: info.rawRequestKey,
-            submittedAt: isoInstant(payload.submittedAt ?? deps.now(), 'submission time'),
+            submittedAt: submissionCompletedAt,
             versionManifest: publicationManifest,
             publicationHash,
             studentIdentity: sessionContext.studentIdentity,
@@ -1707,6 +1730,7 @@ export function createExaminationRoomV1Handlers(dependencies) {
             ...safePayload,
             submissionManifest: manifest,
             manifestHash: await deps.sha256Hex?.(submission.hashInput) || await pepperedHmac(env, 'submission-manifest', submission.hashInput),
+            submissionRequestHash: info.requestHash,
             answerSelections: submission.manifest.questions.map((question) => ({
               questionNumber: question.questionNumber,
               questionKey: question.questionKey,

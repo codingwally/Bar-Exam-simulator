@@ -1,0 +1,129 @@
+name: Examination Room existing-session recovery release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/release-examination-room-session-recovery-20260924.yml
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+env:
+  LIVE_BASE_SHA: 669a8d0ad11b8e79c4e8eee88b6e001b1dbb3147
+  PATCH_SOURCE_SHA: f9a45b82b380eac4b6a631fa83c44ef9688d9904
+  SITE_URL: https://duediligence.ph
+
+jobs:
+  deploy:
+    name: Verify and deploy Examination Room session recovery
+    if: "${{ github.event.head_commit.message == 'release: deploy Examination Room session recovery' }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout exact live Pages baseline
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.LIVE_BASE_SHA }}
+          fetch-depth: 0
+
+      - name: Overlay only the reviewed recovery assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "$PATCH_SOURCE_SHA^{commit}"
+          for file in             examination-room/api.js             examination-room/student.js             examination-room/student.html             service-worker.js; do
+            git show "$PATCH_SOURCE_SHA:$file" > "$file"
+          done
+
+          changed="$(git diff --name-only)"
+          expected="$(printf '%s\n'             examination-room/api.js             examination-room/student.html             examination-room/student.js             service-worker.js | sort)"
+          test "$(printf '%s\n' "$changed" | sort)" = "$expected"
+
+          test "$(git show "$PATCH_SOURCE_SHA:examination-room/api.js" | sha256sum | awk '{print $1}')" = "$(sha256sum examination-room/api.js | awk '{print $1}')"
+          test "$(git show "$PATCH_SOURCE_SHA:examination-room/student.js" | sha256sum | awk '{print $1}')" = "$(sha256sum examination-room/student.js | awk '{print $1}')"
+          test "$(git show "$PATCH_SOURCE_SHA:examination-room/student.html" | sha256sum | awk '{print $1}')" = "$(sha256sum examination-room/student.html | awk '{print $1}')"
+          test "$(git show "$PATCH_SOURCE_SHA:service-worker.js" | sha256sum | awk '{print $1}')" = "$(sha256sum service-worker.js | awk '{print $1}')"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Pages build dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Validate recovery client
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check examination-room/api.js
+          node --check examination-room/student.js
+          node --check service-worker.js
+          node --test             examination-room/api.demo.test.cjs             examination-room/student.client.test.cjs             examination-room/view-models.test.cjs
+          git diff --check
+
+          grep -Fq "session.leaseExpiresAt" examination-room/api.js
+          grep -Fq "const answers = {}" examination-room/api.js
+          grep -Fq "resumed: result.resumed === true" examination-room/api.js
+          grep -Fq "server-saved answers were restored" examination-room/student.js
+          grep -Fq "service-worker.js?v=session-resume-20260924-1" examination-room/student.js
+          grep -Fq "api.js?v=session-resume-20260924-1" examination-room/student.html
+          grep -Fq "student.js?v=session-resume-20260924-1" examination-room/student.html
+          grep -Fq "duediligence-shell-examination-session-resume-20260924-1" service-worker.js
+
+      - name: Build and verify patched Pages artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          GITHUB_SHA="$PATCH_SOURCE_SHA" node scripts/test-pages-artifact.mjs
+          test "$(cat .pages-dist/.well-known/duediligence-release.txt)" = "$PATCH_SOURCE_SHA"
+          grep -Fq "session.leaseExpiresAt" .pages-dist/examination-room/api.js
+          grep -Fq "server-saved answers were restored" .pages-dist/examination-room/student.js
+          grep -Fq "api.js?v=session-resume-20260924-1" .pages-dist/examination-room/student.html
+          grep -Fq "student.js?v=session-resume-20260924-1" .pages-dist/examination-room/student.html
+          grep -Fq "duediligence-shell-examination-session-resume-20260924-1" .pages-dist/service-worker.js
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload exact patched Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .pages-dist
+
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Verify live session recovery assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in {1..30}; do
+            marker="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/.well-known/duediligence-release.txt?release=$PATCH_SOURCE_SHA" || true)"
+            api="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/api.js?v=session-resume-20260924-1&release=$PATCH_SOURCE_SHA" || true)"
+            student="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/student.js?v=session-resume-20260924-1&release=$PATCH_SOURCE_SHA" || true)"
+            page="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/student.html?release=$PATCH_SOURCE_SHA" || true)"
+            sw="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/service-worker.js?v=session-resume-20260924-1&release=$PATCH_SOURCE_SHA" || true)"
+
+            if [[ "$marker" == "$PATCH_SOURCE_SHA" ]]               && grep -Fq "session.leaseExpiresAt" <<<"$api"               && grep -Fq "const answers = {}" <<<"$api"               && grep -Fq "resumed: result.resumed === true" <<<"$api"               && grep -Fq "server-saved answers were restored" <<<"$student"               && grep -Fq "api.js?v=session-resume-20260924-1" <<<"$page"               && grep -Fq "student.js?v=session-resume-20260924-1" <<<"$page"               && grep -Fq "duediligence-shell-examination-session-resume-20260924-1" <<<"$sw"; then
+              echo "Examination Room existing-session recovery is live."
+              exit 0
+            fi
+            sleep 5
+          done
+
+          echo "Session recovery assets did not converge in time." >&2
+          exit 1

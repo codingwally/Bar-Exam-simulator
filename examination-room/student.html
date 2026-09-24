@@ -14,7 +14,7 @@
   <script defer src="view-models.js?v=greenfield-v1-20260826-1"></script>
   <script defer src="api.js?v=session-resume-20260924-1"></script>
   <script defer src="media-capture.js?v=reliability-20260828-1"></script>
-  <script defer src="student.js?v=session-resume-20260924-1"></script>
+  <script defer src="student.js?v=email-identity-20260924-2"></script>
 </head>
 <body>
   <a class="skip-link" href="#main-content">Skip to examination content</a>
@@ -95,9 +95,9 @@
             </div>
 
             <div class="field field-wide">
-              <label for="email">Email <span class="optional-label">only for email-limited rooms</span></label>
-              <input id="email" name="email" type="email" autocomplete="email" maxlength="254" aria-describedby="emailHelp" placeholder="student@gmail.com">
-              <small id="emailHelp">Leave this blank for the default key-only room. Enter it only when the creator limited the key to listed emails.</small>
+              <label for="email">Email</label>
+              <input id="email" name="email" type="email" autocomplete="email" maxlength="254" required aria-describedby="emailHelp" placeholder="student@gmail.com">
+              <small id="emailHelp">This email identifies your examination attempt and is used to recover your saved answers. Use the same email every time you return.</small>
             </div>
 
             <div class="field">

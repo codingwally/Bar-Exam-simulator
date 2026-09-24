@@ -1824,13 +1824,44 @@
       sessionToken: result.sessionToken || session.sessionToken || session.id,
       serverNow: result.serverTime || iso(),
       startedAt,
-      expiresAt: session.expiresAt || iso((duration + Number(session.extraMinutes || 0)) * 60 * 1000),
+      expiresAt: session.expiresAt || session.leaseExpiresAt || iso((duration + Number(session.extraMinutes || 0)) * 60 * 1000),
+      resumed: result.resumed === true,
     };
   }
 
   async function loadExam({ attemptId, sessionToken }) {
     const result = await studentQuery('resume', { sessionId: attemptId, sessionToken });
-    return { questions: studentSafeQuestions(result.exam?.questions || result.questions || []) };
+    const questions = studentSafeQuestions(result.exam?.questions || result.questions || []);
+    const answers = {};
+    const flags = {};
+    const revisions = Array.isArray(result.answerRevisions)
+      ? result.answerRevisions
+      : Array.isArray(result.revisions)
+        ? result.revisions
+        : [];
+
+    for (const revision of revisions) {
+      const question = questions.find((entry) => (
+        String(entry.id) === String(revision?.questionId ?? revision?.questionKey ?? '')
+        || Number(entry.number) === Number(revision?.questionNumber)
+      ));
+      if (!question) continue;
+
+      let answer = revision?.answer ?? revision?.value ?? null;
+      if (question.type === 'multiple_choice' && Number.isSafeInteger(answer)) {
+        answer = question.options?.[answer]?.id ?? null;
+      }
+      answers[question.id] = answer;
+      flags[question.id] = revision?.flagged === true || revision?.isFlagged === true;
+    }
+
+    return {
+      questions,
+      answers,
+      flags,
+      resumed: result.resumed === true || revisions.length > 0,
+      session: result.session ? clone(result.session) : null,
+    };
   }
 
   async function syncOperations({ attemptId, sessionToken, operations = [] }) {

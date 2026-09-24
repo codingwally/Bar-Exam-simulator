@@ -13,7 +13,7 @@ permissions:
   id-token: write
 
 env:
-  RELEASE_SOURCE_SHA: 43b4730825f68abb324fe3826a7bbfdca47c5a92
+  RELEASE_SOURCE_SHA: 669a8d0ad11b8e79c4e8eee88b6e001b1dbb3147
   PUBLIC_API_URL: https://duediligence-api.wallyesteban1993.workers.dev
   APPLICATION_URL: https://duediligence-gemini-examiner.wallyesteban1993.workers.dev
   SITE_URL: https://duediligence.ph
@@ -57,6 +57,9 @@ jobs:
           grep -Fq "submission.submittedAt || submission.receivedAt" examination-room/api.js
           grep -Fq "const submittedAnswers = Array.isArray(payload.answers) ? payload.answers : [];" worker/examination-room-v1-routes.mjs
           grep -Fq "source: 'submission'" worker/examination-room-v1-routes.mjs
+          grep -Fq "operation: 'submission_intent'" worker/examination-room-v1-routes.mjs
+          grep -Fq "submissionRequestHash: info.requestHash" worker/examination-room-v1-routes.mjs
+          grep -Fq "submission intent must be recorded before final answer reconciliation" worker/examination-room-v1-routes.test.mjs
           grep -Fq "deliverExaminationRoomSubmissionAnswersEmail" worker/index.mjs
           grep -Fq "buildExaminationRoomSubmissionAnswersEmail" worker/examination-room-email.mjs
           grep -Fq "studentEmail" supabase/migrations/20260922133500_examination_room_submission_answer_email_context.sql

@@ -456,6 +456,17 @@
         sessionToken: beginResult.sessionToken
       });
       var questions = validateQuestions(examResult && examResult.questions, state.metadata.questionCount);
+      var restoredAnswers = examResult && examResult.answers && typeof examResult.answers === 'object'
+        ? copyObject(examResult.answers)
+        : {};
+      var restoredFlags = examResult && examResult.flags && typeof examResult.flags === 'object'
+        ? copyObject(examResult.flags)
+        : {};
+      var resumedFromServer = beginResult.resumed === true
+        || (examResult && examResult.resumed === true)
+        || Object.keys(restoredAnswers).some(function (questionId) {
+          return restoredAnswers[questionId] !== undefined && restoredAnswers[questionId] !== null;
+        });
 
       var serverNow = Date.parse(beginResult.serverNow);
       var clientNow = Date.now();
@@ -475,8 +486,8 @@
         },
         metadata: state.metadata,
         questions: questions,
-        answers: {},
-        flags: {},
+        answers: restoredAnswers,
+        flags: restoredFlags,
         currentIndex: 0,
         clientSequence: 0,
         serverRevision: null,
@@ -491,8 +502,8 @@
         updatedAt: new Date().toISOString()
       };
       state.questions = questions;
-      state.answers = {};
-      state.flags = {};
+      state.answers = restoredAnswers;
+      state.flags = restoredFlags;
       state.currentIndex = 0;
 
       await persistAttempt();
@@ -507,7 +518,10 @@
       });
 
       enterExamWorkspace();
-      await logIntegrityEvent('attempt_started', { appVersion: APP_VERSION });
+      if (resumedFromServer) {
+        showToast('Your existing examination session and server-saved answers were restored.', 'ph-arrow-counter-clockwise');
+      }
+      await logIntegrityEvent(resumedFromServer ? 'attempt_resumed' : 'attempt_started', { appVersion: APP_VERSION });
     } catch (error) {
       showError(elements.entryError, error, handleBeginExam);
     } finally {

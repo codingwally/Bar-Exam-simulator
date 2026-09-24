@@ -20,7 +20,7 @@
    * The local demo adapter is installed only when the URL contains ?demo=1.
    */
 
-  var APP_VERSION = '1.0.0';
+  var APP_VERSION = '1.0.1';
   var DB_NAME = 'duediligence-examination-room-v1';
   var DB_VERSION = 1;
   var DB_OPEN_TIMEOUT_MS = 5000;
@@ -119,7 +119,7 @@
   function registerExaminationRoomServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
 
-    navigator.serviceWorker.register('/service-worker.js?v=session-resume-20260924-1')
+    navigator.serviceWorker.register('/service-worker.js?v=email-identity-20260924-2')
       .catch(function () {
         // Registration failure must never block a student who still has a
         // working network connection. The exam UI already reports offline
@@ -333,17 +333,11 @@
 
   async function buildEntryContext(entry) {
     var roomKeyHash = await digestText(entry.roomKey);
-    var studentHash = await digestText([
-      entry.studentNumber.toLocaleLowerCase(),
-      entry.email
-    ].join('|'));
+    var emailIdentity = entry.email.toLocaleLowerCase();
+    var studentHash = await digestText(emailIdentity);
     var identityMaterial = [
       roomKeyHash,
-      entry.fullName.toLocaleLowerCase(),
-      entry.email,
-      entry.studentNumber.toLocaleLowerCase(),
-      entry.subject.toLocaleLowerCase(),
-      entry.yearLevel
+      emailIdentity
     ].join('|');
 
     return {

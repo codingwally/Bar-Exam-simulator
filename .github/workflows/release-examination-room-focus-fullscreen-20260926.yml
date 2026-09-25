@@ -1,0 +1,122 @@
+name: Examination Room focus-fullscreen hotfix release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/release-examination-room-focus-fullscreen-20260926.yml
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+env:
+  LIVE_BASE_SHA: f3a8629ccea76c6e29c419ddfc63a9547707c062
+  PATCH_SOURCE_SHA: a4936791ad02d1a5d0e2cf66f901286e57854f0e
+  SITE_URL: https://duediligence.ph
+
+jobs:
+  deploy:
+    name: Verify and deploy focus-fullscreen student hotfix
+    if: "${{ github.event.head_commit.message == 'release: deploy Examination Room focus fullscreen hotfix' }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout exact live Pages baseline
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.LIVE_BASE_SHA }}
+          fetch-depth: 0
+
+      - name: Overlay only reviewed fullscreen hotfix assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "$PATCH_SOURCE_SHA^{commit}"
+          for file in             examination-room/student.js             examination-room/student.html             examination-room/index.html             examination-room/student.client.test.cjs             service-worker.js; do
+            git show "$PATCH_SOURCE_SHA:$file" > "$file"
+          done
+
+          changed="$(git diff --name-only)"
+          expected="$(printf '%s\n'             examination-room/index.html             examination-room/student.client.test.cjs             examination-room/student.html             examination-room/student.js             service-worker.js | sort)"
+          test "$(printf '%s\n' "$changed" | sort)" = "$expected"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install reviewed Pages build dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Validate focus-fullscreen behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check examination-room/student.js
+          node --check service-worker.js
+          node --test examination-room/student.client.test.cjs
+          git diff --check
+
+          grep -Fq "APP_VERSION = '1.0.2'" examination-room/student.js
+          grep -Fq "await requestFullscreenForFocusMonitoring();" examination-room/student.js
+          grep -Fq "metadata.integrityTier === 'focus_monitoring'" examination-room/student.js
+          grep -Fq "document.documentElement.requestFullscreen()" examination-room/student.js
+          grep -Fq "Fullscreen exited. Focus monitoring recorded this event." examination-room/student.js
+          grep -Fq "student.js?v=focus-fullscreen-20260926-1" examination-room/student.html
+          grep -Fq "service-worker.js?v=focus-fullscreen-20260926-1" examination-room/student.js
+          grep -Fq "duediligence-shell-focus-fullscreen-20260926-1" service-worker.js
+          grep -Fq "student.js?v=focus-fullscreen-20260926-1" service-worker.js
+          grep -Fq "Requests fullscreen when the student begins" examination-room/index.html
+
+      - name: Build and verify patched Pages artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          GITHUB_SHA="$PATCH_SOURCE_SHA" node scripts/test-pages-artifact.mjs
+          test "$(cat .pages-dist/.well-known/duediligence-release.txt)" = "$PATCH_SOURCE_SHA"
+          grep -Fq "await requestFullscreenForFocusMonitoring();" .pages-dist/examination-room/student.js
+          grep -Fq "student.js?v=focus-fullscreen-20260926-1" .pages-dist/examination-room/student.html
+          grep -Fq "duediligence-shell-focus-fullscreen-20260926-1" .pages-dist/service-worker.js
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload exact patched Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .pages-dist
+
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Verify live focus-fullscreen assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in {1..30}; do
+            marker="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/.well-known/duediligence-release.txt?release=$PATCH_SOURCE_SHA" || true)"
+            student="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/student.js?v=focus-fullscreen-20260926-1&release=$PATCH_SOURCE_SHA" || true)"
+            page="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/student.html?release=$PATCH_SOURCE_SHA" || true)"
+            sw="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/service-worker.js?release=$PATCH_SOURCE_SHA" || true)"
+
+            if [[ "$marker" == "$PATCH_SOURCE_SHA" ]]               && grep -Fq "APP_VERSION = '1.0.2'" <<<"$student"               && grep -Fq "await requestFullscreenForFocusMonitoring();" <<<"$student"               && grep -Fq "student.js?v=focus-fullscreen-20260926-1" <<<"$page"               && grep -Fq "duediligence-shell-focus-fullscreen-20260926-1" <<<"$sw"; then
+              echo "Focus-fullscreen Examination Room hotfix is live."
+              exit 0
+            fi
+            sleep 5
+          done
+
+          echo "Focus-fullscreen assets did not converge in time." >&2
+          exit 1

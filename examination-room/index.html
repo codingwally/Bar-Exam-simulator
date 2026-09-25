@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&amp;family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/regular/style.css">
-  <link rel="stylesheet" href="professor.css?v=event-logs-20260925-1">
+  <link rel="stylesheet" href="professor.css?v=classroom-preflight-20260925-1">
 </head>
 <body>
   <a class="skip-link" href="#exam-editor">Skip to examination editor</a>
@@ -266,7 +266,7 @@
       <div class="monitor-layout">
         <main>
           <div class="operations-metrics" id="monitor-metrics"></div>
-          <section class="operations-panel"><header><div><h2>Student status</h2><p>Latest server-backed state for every student.</p></div><label class="search-control"><i class="ph ph-magnifying-glass" aria-hidden="true"></i><input id="monitor-search" type="search" placeholder="Search name or student number"></label></header><div class="monitor-table-wrap"><table><thead><tr><th>Student</th><th>Student no.</th><th>Status</th><th>Question</th><th>Last backup</th><th>Integrity</th><th>Action</th></tr></thead><tbody id="monitor-table-body"></tbody></table></div></section>
+          <section class="operations-panel"><header><div><h2>Student status</h2><p>Latest server-backed state for every student.</p></div><label class="search-control"><i class="ph ph-magnifying-glass" aria-hidden="true"></i><input id="monitor-search" type="search" placeholder="Search name, email, or student number"></label></header><div class="monitor-table-wrap"><table><thead><tr><th>Student</th><th>Student no.</th><th>Status</th><th>Question</th><th>Last seen</th><th>Integrity</th><th>Action</th></tr></thead><tbody id="monitor-table-body"></tbody></table></div></section>
         </main>
         <aside>
           <section class="operations-panel incident-feed"><header><div><h2>Review queue</h2><p>Focus and device events requiring human context.</p></div></header><div id="incident-feed"></div></section>
@@ -359,6 +359,6 @@
   <script src="view-models.js?v=greenfield-v1-20260826-1"></script>
   <script src="api.js?v=reliability-20260828-1"></script>
   <script src="offline-grading-core.js?v=greenfield-v1-20260826-3"></script>
-  <script src="professor.js?v=event-logs-20260925-1"></script>
+  <script src="professor.js?v=classroom-preflight-20260925-1"></script>
 </body>
 </html>

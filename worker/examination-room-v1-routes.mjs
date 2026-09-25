@@ -50,7 +50,7 @@ const LEGACY_SESSION_GATE_CODES = new Set([
   'CONSENT_REPLAY_INVALID',
 ]);
 
-const PROFESSOR_QUERY_OPERATIONS = new Set(['role_status', 'session', 'exam', 'monitor', 'grading']);
+const PROFESSOR_QUERY_OPERATIONS = new Set(['role_status', 'session', 'exam', 'monitor', 'grading', 'submission_pdf']);
 const PROFESSOR_COMMAND_OPERATIONS = new Set([
   'request_access',
   'save_draft',
@@ -880,6 +880,21 @@ export function createExaminationRoomV1Handlers(dependencies) {
         return deps.respond({ ok: true, ...result }, 200, origin, allowedOrigin);
       }
       const context = await professorContext(request, env, payload.institutionId);
+      if (operation === 'submission_pdf') {
+        if (typeof deps.submissionArtifactContext !== 'function' || typeof deps.submissionPdf !== 'function') {
+          fail('EXAM_ROOM_V1_SUBMISSION_PDF_UNAVAILABLE', 'The server submission PDF is temporarily unavailable.', 503, 'Use the local Answers PDF download for now and retry the server copy later.');
+        }
+        const examId = uuid(payload.examId, 'the examination identifier');
+        const sessionId = uuid(payload.sessionId, 'the student session identifier');
+        const artifactContext = ensureStoreResult(await deps.submissionArtifactContext(env, {
+          actorUserId: context.user.id,
+          institutionId: context.institutionId,
+          examId,
+          sessionId,
+        }));
+        const artifact = await deps.submissionPdf(env, artifactContext);
+        return deps.respond({ ok: true, ...artifact }, 200, origin, allowedOrigin);
+      }
       const safePayload = operation === 'session'
         ? {}
         : { examId: uuid(payload.examId, 'the examination identifier') };
@@ -1756,6 +1771,7 @@ export function createExaminationRoomV1Handlers(dependencies) {
             })),
           };
           submissionEmailDetails = {
+            sessionId: credential.sessionId,
             recipient: String(sessionContext.studentEmail || '').trim().toLowerCase(),
             idempotencyHash: info.requestHash,
             examTitle: submission.manifest.title,

@@ -566,8 +566,12 @@ async function enforceExaminationRoomV1RateLimit(request, env, scope, boundedPay
       : boundedPayload;
     subject = scope === 'student_preview' || scope === 'student_consent'
       ? `${String(payload?.roomKey || '').slice(0, 100)}\0${String(
-        payload?.identity?.studentNumber || payload?.studentNumber || '',
-      ).slice(0, 128)}`
+        payload?.identity?.email
+          || payload?.email
+          || payload?.identity?.studentNumber
+          || payload?.studentNumber
+          || '',
+      ).trim().toLowerCase().slice(0, 320)}`
       : String(payload?.sessionId || '').slice(0, 128);
   }
   const limiterSecret = env.EXAMINATION_ROOM_KEY_PEPPER || env.GUEST_USAGE_HMAC_KEY;

@@ -683,6 +683,8 @@ body[data-workspace-view="overview"] .workspace-tabs { margin-left: auto; }
 .grade-question { margin-bottom: 16px; border: 1px solid var(--line); background: white; }
 .grade-question > header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 12px 14px; border-bottom: 1px solid var(--line); }
 .grade-question h3 { margin: 0; font-family: var(--serif); font-size: 14px; }
+.grading-question-prompt { padding: 16px; border-bottom: 1px solid var(--line); color: #172033; font-family: var(--serif); font-size: 13px; line-height: 1.65; white-space: pre-wrap; }
+.grading-content-label { display: block; margin: 0 0 7px; color: var(--muted); font-family: var(--sans); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .grade-question .student-answer { padding: 16px; color: #27303c; font-family: var(--serif); font-size: 12px; line-height: 1.7; white-space: pre-wrap; }
 .grade-controls { display: grid; grid-template-columns: 140px 1fr auto; gap: .8rem; align-items: end; padding: 12px 14px; border-top: 1px solid var(--line); background: #fbfaf6; }
 .grade-controls label { display: grid; gap: .35rem; color: var(--muted); font-size: 9px; }

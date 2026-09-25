@@ -199,15 +199,18 @@
     });
     window.addEventListener('offline', handleConnectionChange);
     window.addEventListener('blur', function () {
-      logIntegrityEvent('window_blurred');
+      logIntegrityEvent('window_blurred', currentIntegrityContext());
     });
     window.addEventListener('focus', function () {
-      logIntegrityEvent('window_focused');
+      logIntegrityEvent('window_focused', currentIntegrityContext());
     });
     document.addEventListener('visibilitychange', function () {
-      logIntegrityEvent(document.hidden ? 'page_hidden' : 'page_visible');
+      logIntegrityEvent(document.hidden ? 'page_hidden' : 'page_visible', currentIntegrityContext());
       if (!document.hidden && state.view === 'receipt' && !state.resultPollingExpired) checkForReleasedResult(false);
     });
+    document.addEventListener('copy', handleClipboardIntegrityEvent, true);
+    document.addEventListener('cut', handleClipboardIntegrityEvent, true);
+    document.addEventListener('paste', handleClipboardIntegrityEvent, true);
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     window.addEventListener('beforeunload', handleBeforeUnload);
 
@@ -1076,6 +1079,43 @@
     }
   }
 
+  function currentIntegrityContext(extra) {
+    var question = state.questions && state.questions[state.currentIndex];
+    return Object.assign({
+      questionId: question ? question.id : null,
+      questionNumber: question ? question.number : null
+    }, extra || {});
+  }
+
+  function selectedCharacterCount(target) {
+    if (target && typeof target.selectionStart === 'number' && typeof target.selectionEnd === 'number') {
+      return Math.max(0, target.selectionEnd - target.selectionStart);
+    }
+    var selection = window.getSelection && window.getSelection();
+    return selection ? String(selection).length : 0;
+  }
+
+  function handleClipboardIntegrityEvent(event) {
+    if (!state.attempt || state.attempt.status !== 'in_progress') {
+      return;
+    }
+    var action = String(event && event.type || '').toLowerCase();
+    if (['copy', 'cut', 'paste'].indexOf(action) === -1) {
+      return;
+    }
+
+    var characterCount = action === 'paste'
+      ? String(event.clipboardData && event.clipboardData.getData('text') || '').length
+      : selectedCharacterCount(event.target);
+
+    logIntegrityEvent('clipboard_' + action, currentIntegrityContext({
+      characterCount: characterCount,
+      inputKind: event.target && event.target.tagName
+        ? String(event.target.tagName).toLowerCase()
+        : 'unknown'
+    }));
+  }
+
   async function logIntegrityEvent(eventType, details) {
     if (!state.attempt || state.attempt.status !== 'in_progress') {
       return;
@@ -1103,7 +1143,7 @@
       return;
     }
 
-    logIntegrityEvent(navigator.onLine ? 'connection_restored' : 'connection_lost');
+    logIntegrityEvent(navigator.onLine ? 'connection_restored' : 'connection_lost', currentIntegrityContext());
     if (navigator.onLine) {
       showToast(state.attempt.status === 'submitted'
         ? 'Connection restored. Checking for your released result now.'
@@ -1148,7 +1188,7 @@
     var active = Boolean(document.fullscreenElement);
     elements.fullscreenButton.querySelector('i').className = active ? 'ph ph-corners-in' : 'ph ph-corners-out';
     elements.fullscreenButton.querySelector('span').textContent = active ? 'Exit fullscreen' : 'Enter fullscreen';
-    logIntegrityEvent(active ? 'fullscreen_entered' : 'fullscreen_exited');
+    logIntegrityEvent(active ? 'fullscreen_entered' : 'fullscreen_exited', currentIntegrityContext());
   }
 
   function startTimer() {

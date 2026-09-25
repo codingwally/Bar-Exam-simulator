@@ -1,0 +1,182 @@
+name: Examination Room server submission PDF release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/release-examination-room-submission-pdf-20260926.yml
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: examination-room-submission-pdf-release
+  cancel-in-progress: false
+
+env:
+  WORKER_BASE_SHA: f3a8629ccea76c6e29c419ddfc63a9547707c062
+  PAGES_BASE_SHA: a4936791ad02d1a5d0e2cf66f901286e57854f0e
+  RELEASE_SOURCE_SHA: a29d095145e38b41bb4d7a0c08dc8467a0969367
+  SITE_URL: https://duediligence.ph
+  API_URL: https://duediligence-api.wallyesteban1993.workers.dev
+
+jobs:
+  worker:
+    name: Verify and deploy submission PDF Worker
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment:
+      name: production-worker
+
+    steps:
+      - name: Checkout exact live Worker baseline
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.WORKER_BASE_SHA }}
+          fetch-depth: 0
+
+      - name: Overlay only reviewed Worker submission-PDF files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "$RELEASE_SOURCE_SHA^{commit}"
+          for file in             worker/index.mjs             worker/examination-room-email.mjs             worker/examination-room-v1-routes.mjs             worker/examination-room-submission-artifacts.mjs             worker/examination-room-submission-artifacts.test.mjs; do
+            git show "$RELEASE_SOURCE_SHA:$file" > "$file"
+          done
+
+          changed="$(git diff --name-only)"
+          expected="$(printf '%s\n'             worker/examination-room-email.mjs             worker/examination-room-submission-artifacts.mjs             worker/examination-room-submission-artifacts.test.mjs             worker/examination-room-v1-routes.mjs             worker/index.mjs | sort)"
+          test "$(printf '%s\n' "$changed" | sort)" = "$expected"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install reviewed Worker dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Validate submission PDF Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check worker/index.mjs
+          node --check worker/examination-room-email.mjs
+          node --check worker/examination-room-v1-routes.mjs
+          node --check worker/examination-room-submission-artifacts.mjs
+          node --test             worker/examination-room-submission-artifacts.test.mjs             worker/examination-room-email.test.mjs             worker/examination-room-v1-routes.test.mjs             worker/examination-room-v1-index.test.mjs
+          grep -Fq "'submission_pdf'" worker/examination-room-v1-routes.mjs
+          grep -Fq "deliverExaminationRoomProfessorSubmissionPackage" worker/index.mjs
+          grep -Fq "examination-room-submissions" worker/examination-room-submission-artifacts.mjs
+          git diff --check
+
+      - name: Deploy production Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          wranglerVersion: "4.114.0"
+          command: deploy
+
+      - name: Deploy provider-neutral public API alias
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          wranglerVersion: "4.114.0"
+          command: deploy --config wrangler.public-api.toml
+
+      - name: Verify live Worker recognizes server PDF operation
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$RUNNER_TEMP/submission-pdf-probe.json"
+          status="$(curl --silent --show-error --output "$body" --write-out '%{http_code}'             --request POST             --header 'Origin: https://duediligence.ph'             --header 'Content-Type: application/json'             --data '{"operation":"submission_pdf","payload":{"examId":"11111111-1111-4111-8111-111111111111","sessionId":"22222222-2222-4222-8222-222222222222"}}'             "$API_URL/examination-room/v1/professor/query")"
+          test "$status" = "401"
+          grep -Fq "EXAM_ROOM_V1_PROFESSOR_SIGN_IN_REQUIRED" "$body"
+
+  pages:
+    name: Deploy grading server-PDF frontend
+    needs: worker
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout exact live Pages baseline
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PAGES_BASE_SHA }}
+          fetch-depth: 0
+
+      - name: Overlay only reviewed grading frontend files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "$RELEASE_SOURCE_SHA^{commit}"
+          for file in             examination-room/index.html             examination-room/professor.js             examination-room/professor.client.test.cjs; do
+            git show "$RELEASE_SOURCE_SHA:$file" > "$file"
+          done
+          changed="$(git diff --name-only)"
+          expected="$(printf '%s\n'             examination-room/index.html             examination-room/professor.client.test.cjs             examination-room/professor.js | sort)"
+          test "$(printf '%s\n' "$changed" | sort)" = "$expected"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validate grading frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check examination-room/professor.js
+          node --test examination-room/professor.client.test.cjs
+          grep -Fq "professorQuery('submission_pdf'" examination-room/professor.js
+          grep -Fq 'professor.js?v=server-submission-pdf-20260926-1' examination-room/index.html
+          git diff --check
+
+      - name: Build exact Pages artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          GITHUB_SHA="$RELEASE_SOURCE_SHA" node scripts/test-pages-artifact.mjs
+          test "$(cat .pages-dist/.well-known/duediligence-release.txt)" = "$RELEASE_SOURCE_SHA"
+          grep -Fq "professorQuery('submission_pdf'" .pages-dist/examination-room/professor.js
+          grep -Fq 'professor.js?v=server-submission-pdf-20260926-1' .pages-dist/examination-room/index.html
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .pages-dist
+
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Verify live grading frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in {1..30}; do
+            marker="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/.well-known/duediligence-release.txt?release=$RELEASE_SOURCE_SHA" || true)"
+            page="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/?release=$RELEASE_SOURCE_SHA" || true)"
+            professor="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/professor.js?v=server-submission-pdf-20260926-1&release=$RELEASE_SOURCE_SHA" || true)"
+            if [[ "$marker" == "$RELEASE_SOURCE_SHA" ]]               && grep -Fq 'professor.js?v=server-submission-pdf-20260926-1' <<<"$page"               && grep -Fq "professorQuery('submission_pdf'" <<<"$professor"; then
+              echo "Server submission PDF frontend is live."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Server submission PDF frontend did not converge in time." >&2
+          exit 1

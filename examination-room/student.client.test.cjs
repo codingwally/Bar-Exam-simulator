@@ -96,13 +96,13 @@ test('camera and microphone permission starts only after entry and cannot block 
   assert.doesNotMatch(studentSource, /await state\.media\.start/);
 });
 
-test('student email is optional for the default key-only room and sent only when entered', () => {
-  assert.match(studentHtml, /id="email"[^>]*type="email"/);
-  assert.doesNotMatch(studentHtml, /id="email"[^>]*required/);
-  assert.match(studentHtml, /Leave this blank for the default key-only room/);
+test('student email is required and is the stable examination identity', () => {
+  assert.match(studentHtml, /id="email"[^>]*type="email"[^>]*required/);
+  assert.match(studentHtml, /This email identifies your examination attempt/);
   assert.match(studentSource, /email: normaliseEmail\(elements\.email\.value\)/);
+  assert.match(studentSource, /var emailIdentity = entry\.email\.toLocaleLowerCase\(\)/);
+  assert.match(studentSource, /studentHash = await digestText\(emailIdentity\)/);
   assert.match(studentSource, /student: \{[\s\S]*fullName: state\.entry\.fullName,[\s\S]*email: state\.entry\.email,[\s\S]*studentNumber:/);
-  assert.match(studentSource, /metadata\.admissionMode === 'email_allowlist'/);
 });
 
 test('email-limited rooms give a self-resolving missing or unlisted email message', () => {
@@ -128,7 +128,7 @@ test('the final-question action remains enabled and opens review instead of trap
   assert.match(studentSource, /state\.currentIndex === state\.questions\.length - 1 \? 'Review and submit'/);
   assert.match(studentSource, /navigateToQuestion\(state\.currentIndex \+ 1\)/);
   assert.match(studentSource, /if \(index >= state\.questions\.length\) \{[\s\S]*openSubmitDialog\(\)/);
-  assert.match(studentHtml, /student\.js\?v=session-resume-20260924-1/);
+  assert.match(studentHtml, /student\.js\?v=classroom-preflight-20260925-1/);
 });
 
 test('student storage open fails safely when IndexedDB is blocked or never settles', async () => {
@@ -176,6 +176,16 @@ test('student result checking uses bounded backoff, hidden-tab throttling, and m
 });
 
 
+test('live monitoring sends bounded student heartbeats and captures clipboard events without contents', () => {
+  assert.match(studentSource, /var HEARTBEAT_INTERVAL_MS = 15000/);
+  assert.match(studentSource, /state\.api\.studentCommand\('heartbeat'/);
+  assert.match(studentSource, /window\.setInterval\(sendHeartbeat, HEARTBEAT_INTERVAL_MS\)/);
+  assert.match(studentSource, /document\.addEventListener\('paste', handleClipboardIntegrityEvent, true\)/);
+  assert.match(studentSource, /document\.addEventListener\('copy', handleClipboardIntegrityEvent, true\)/);
+  assert.match(studentSource, /characterCount: characterCount/);
+  assert.doesNotMatch(studentSource, /clipboardText|clipboardContents|pastedText/);
+});
+
 test('final submission locks the local snapshot and retries automatically for fifteen minutes', () => {
   assert.match(studentSource, /SUBMISSION_RETRY_WINDOW_MS = 15 \* 60 \* 1000/);
   assert.match(studentSource, /Please wait — your answers are being uploaded\./);
@@ -197,5 +207,5 @@ test('successful receipt tells the student that answers reached professor gradin
   assert.match(studentSource, /Your answers were successfully uploaded for professor grading\./);
   assert.match(studentSource, /A copy containing only your submitted answers will be emailed to/);
   assert.match(studentSource, /Answers successfully uploaded for professor grading/);
-  assert.match(studentHtml, /student\.js\?v=session-resume-20260924-1/);
+  assert.match(studentHtml, /student\.js\?v=classroom-preflight-20260925-1/);
 });

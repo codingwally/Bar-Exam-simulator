@@ -19,7 +19,7 @@ concurrency:
 env:
   WORKER_BASE_SHA: f3a8629ccea76c6e29c419ddfc63a9547707c062
   PAGES_BASE_SHA: a4936791ad02d1a5d0e2cf66f901286e57854f0e
-  RELEASE_SOURCE_SHA: a29d095145e38b41bb4d7a0c08dc8467a0969367
+  RELEASE_SOURCE_SHA: d608e80193549c7a14724f60fdbfdd6942c936c9
   SITE_URL: https://duediligence.ph
   API_URL: https://duediligence-api.wallyesteban1993.workers.dev
 
@@ -43,13 +43,13 @@ jobs:
         run: |
           set -euo pipefail
           git cat-file -e "$RELEASE_SOURCE_SHA^{commit}"
-          for file in             worker/index.mjs             worker/examination-room-email.mjs             worker/examination-room-v1-routes.mjs             worker/examination-room-submission-artifacts.mjs             worker/examination-room-submission-artifacts.test.mjs; do
+          for file in             worker/index.mjs             worker/examination-room-email.mjs             worker/examination-room-v1-routes.mjs             worker/examination-room-submission-artifacts.mjs             worker/examination-room-submission-artifacts.test.mjs             worker/wrangler.toml; do
             git show "$RELEASE_SOURCE_SHA:$file" > "$file"
           done
 
           git add -N worker/examination-room-submission-artifacts.mjs worker/examination-room-submission-artifacts.test.mjs
           changed="$(git diff --name-only)"
-          expected="$(printf '%s\n'             worker/examination-room-email.mjs             worker/examination-room-submission-artifacts.mjs             worker/examination-room-submission-artifacts.test.mjs             worker/examination-room-v1-routes.mjs             worker/index.mjs | sort)"
+          expected="$(printf '%s\n'             worker/examination-room-email.mjs             worker/examination-room-submission-artifacts.mjs             worker/examination-room-submission-artifacts.test.mjs             worker/examination-room-v1-routes.mjs             worker/index.mjs             worker/wrangler.toml | sort)"
           test "$(printf '%s\n' "$changed" | sort)" = "$expected"
 
       - name: Setup Node
@@ -72,6 +72,9 @@ jobs:
           grep -Fq "'submission_pdf'" worker/examination-room-v1-routes.mjs
           grep -Fq "deliverExaminationRoomProfessorSubmissionPackage" worker/index.mjs
           grep -Fq "examination-room-submissions" worker/examination-room-submission-artifacts.mjs
+          ! grep -Fq 'GEMINI_GROUNDING_ENABLED = "false"' worker/wrangler.toml
+          ! grep -Fq 'ALLOW_LEGACY_GUESTS = "false"' worker/wrangler.toml
+          ! grep -Fq 'PRIVATE_BETA_GATE_ENABLED = "false"' worker/wrangler.toml
           git diff --check
 
       - name: Deploy production Worker

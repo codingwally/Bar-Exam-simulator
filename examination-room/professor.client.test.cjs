@@ -201,7 +201,7 @@ test('PDF upload is read in-browser and never tells a professor to prepare a TXT
   assert.match(professorSource, /if \(extension === 'pdf'\)[\s\S]*extractPdfText\(file\)/);
   assert.doesNotMatch(professorSource, /upload a TXT|TXT file|text file/i);
   assert.doesNotMatch(professorHtml, /accept="[^"]*\.txt/);
-  assert.match(professorHtml, /professor\.js\?v=server-submission-pdf-20260926-1/);
+  assert.match(professorHtml, /professor\.js\?v=grading-prompts-key-status-20260926-1/);
 });
 
 test('legacy offline grading packages remain encrypted but are not exposed as professor download actions', () => {
@@ -218,7 +218,7 @@ test('legacy offline grading packages remain encrypted but are not exposed as pr
   assert.match(professorSource, /professorCommand\('import_grades'/);
   assert.match(professorSource, /importResult\.atomic !== true/);
   assert.doesNotMatch(professorSource, /for \(const grade of importedGrades\)[\s\S]{0,240}professorCommand\('save_grade'/);
-  assert.match(professorSource, /serviceWorker\.register\('\/service-worker\.js\?v=classroom-preflight-20260925-1'/);
+  assert.match(professorSource, /serviceWorker\.register\('\/service-worker\.js\?v=grading-prompts-key-status-20260926-1'/);
   assert.match(professorSource, /await state\.offlineWorkspaceReady/);
   assert.match(professorSource, /MAX_OFFLINE_PACKAGE_BYTES\s*=\s*20\s*\*\s*1024\s*\*\s*1024/);
   assert.match(professorSource, /jsonDownloadSize\(wrapper\)\s*>\s*MAX_OFFLINE_PACKAGE_BYTES/);
@@ -908,7 +908,7 @@ test('Professor Create page contains its question cards at a 319px viewport', ()
     /@media \(max-width: 390px\) \{[\s\S]*?\.questions-list[\s\S]*?\.question-layout[\s\S]*?\.choice-row/,
   );
   assert.match(professorHtml, /class="questions-list"/);
-  assert.match(professorHtml, /professor\.css\?v=classroom-preflight-20260925-1/);
+  assert.match(professorHtml, /professor\.css\?v=grading-prompts-key-status-20260926-1/);
   assert.match(professorHtml, /api\.js\?v=reliability-20260828-1/);
 });
 
@@ -965,7 +965,7 @@ test('creator receives monitor and grade access from activation without entering
   assert.match(professorHtml, /data-view="monitor" data-requires-activation="true" disabled aria-label="Monitor examination — available after Admin issues the student key"/);
   assert.match(professorHtml, /data-view="grade" data-requires-activation="true" disabled aria-label="Grade submissions — available after Admin issues the student key"/);
   assert.match(professorSource, /control\.setAttribute\('aria-label', unlocked[\s\S]*viewName/);
-  assert.match(professorHtml, /professor\.js\?v=server-submission-pdf-20260926-1/);
+  assert.match(professorHtml, /professor\.js\?v=grading-prompts-key-status-20260926-1/);
 });
 
 test('creator approval survives reload and a published request keeps polling without a manual check', () => {

@@ -2714,6 +2714,28 @@
     return new Blob([serializePdfDocument(composer.pages, composer.documentTitle)], { type: 'application/pdf' });
   }
 
+  function base64PdfBlob(value, contentType = 'application/pdf') {
+    const binary = atob(String(value || ''));
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    return new Blob([bytes], { type: contentType });
+  }
+
+  async function downloadServerSubmittedAnswersPdf(sessionId) {
+    const result = await api.professorQuery('submission_pdf', {
+      examId: state.exam.id,
+      sessionId,
+    });
+    if (!result?.contentBase64 || !result?.filename) {
+      throw new Error('The server PDF is not ready.');
+    }
+    downloadBlob(
+      safeText(result.filename, 180) || 'questions-and-answers.pdf',
+      base64PdfBlob(result.contentBase64, result.contentType || 'application/pdf'),
+    );
+    return result;
+  }
+
   async function downloadSubmittedAnswersPdf({ includeGrades = false, sessionId = null, button = null } = {}) {
     if (!state.grading) await refreshGrading();
     const submittedCount = submittedSessions(sessionId).length;
@@ -2723,16 +2745,27 @@
     }
     if (button) setButtonBusy(button, true, 'Preparing PDF…');
     try {
-      if (includeGrades && state.selectedGradingSessionId) await saveAllGrades(null, { silent: true, requireComplete: false });
       const selectedSession = sessionId ? (state.grading?.sessions || []).find((session) => session.id === sessionId) : null;
       const studentIndex = selectedSession ? submittedSessions().findIndex((session) => session.id === sessionId) : -1;
       const identity = selectedSession ? gradingDisplayIdentity(selectedSession, studentIndex) : null;
+
+      if (sessionId && !includeGrades) {
+        try {
+          const serverPdf = await downloadServerSubmittedAnswersPdf(sessionId);
+          toast(`${identity?.realName || 'Student'} downloaded from the server PDF copy (${Math.max(1, Math.round(Number(serverPdf.size || 0) / 1024))} KB).`);
+          return;
+        } catch (serverError) {
+          console.warn('Server submission PDF unavailable; using browser fallback.', serverError);
+        }
+      }
+
+      if (includeGrades && state.selectedGradingSessionId) await saveAllGrades(null, { silent: true, requireComplete: false });
       const scope = sessionId ? safeDownloadName(identity?.realName, 'student') : 'all-students';
       const suffix = includeGrades ? 'answers-with-grades' : 'submitted-answers';
       downloadBlob(`${safeDownloadName(state.exam?.title)}-${scope}-${suffix}.pdf`, buildSubmittedAnswersPdf({ includeGrades, sessionId }));
       toast(`${sessionId ? identity?.realName || 'Student' : `${submittedCount} student${submittedCount === 1 ? '' : 's'}`} downloaded as a PDF${includeGrades ? ' with grade breakdowns' : ''}.`);
     } catch (error) {
-      showError({ message: error?.message || 'This browser could not create the PDF.', recovery: 'Keep this page open, refresh the Grade view, then choose the PDF download again.' }, () => downloadSubmittedAnswersPdf({ includeGrades, sessionId, button }), 'PDF not downloaded');
+      showError({ message: error?.message || 'The PDF could not be created.', recovery: 'Refresh the Grade view, then choose the PDF download again. The stored submission and answers are unchanged.' }, () => downloadSubmittedAnswersPdf({ includeGrades, sessionId, button }), 'PDF not downloaded');
     } finally {
       if (button) setButtonBusy(button, false);
     }

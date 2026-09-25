@@ -31,13 +31,15 @@
   var SUBMISSION_RETRY_WINDOW_MS = 15 * 60 * 1000;
   var SUBMISSION_RETRY_INITIAL_DELAY_MS = 3000;
   var SUBMISSION_RETRY_MAX_DELAY_MS = 15000;
+  var HEARTBEAT_INTERVAL_MS = 15000;
   var DEMO_MODE = new URLSearchParams(window.location.search).get('demo') === '1';
   var REQUIRED_API_METHODS = [
     'previewRoom',
     'beginAttempt',
     'loadExam',
     'syncOperations',
-    'submitAttempt'
+    'submitAttempt',
+    'studentCommand'
   ];
 
   var state = {
@@ -59,6 +61,8 @@
     timerThresholdsAnnounced: {},
     timeExpiryHandled: false,
     syncTimer: null,
+    heartbeatTimer: null,
+    heartbeatInFlight: false,
     answerTimers: new Map(),
     lastIntegrityEvent: {},
     receipt: null,
@@ -119,7 +123,7 @@
   function registerExaminationRoomServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
 
-    navigator.serviceWorker.register('/service-worker.js?v=email-identity-20260924-2')
+    navigator.serviceWorker.register('/service-worker.js?v=classroom-preflight-20260925-1')
       .catch(function () {
         // Registration failure must never block a student who still has a
         // working network connection. The exam UI already reports offline
@@ -203,9 +207,11 @@
     });
     window.addEventListener('focus', function () {
       logIntegrityEvent('window_focused', currentIntegrityContext());
+      sendHeartbeat();
     });
     document.addEventListener('visibilitychange', function () {
       logIntegrityEvent(document.hidden ? 'page_hidden' : 'page_visible', currentIntegrityContext());
+      if (!document.hidden) sendHeartbeat();
       if (!document.hidden && state.view === 'receipt' && !state.resultPollingExpired) checkForReleasedResult(false);
     });
     document.addEventListener('copy', handleClipboardIntegrityEvent, true);
@@ -515,6 +521,7 @@
       });
 
       enterExamWorkspace();
+      startHeartbeat();
       if (resumedFromServer) {
         showToast('Your existing examination session and server-saved answers were restored.', 'ph-arrow-counter-clockwise');
       }
@@ -1079,6 +1086,47 @@
     }
   }
 
+  function stopHeartbeat() {
+    if (state.heartbeatTimer) {
+      window.clearInterval(state.heartbeatTimer);
+      state.heartbeatTimer = null;
+    }
+  }
+
+  async function sendHeartbeat() {
+    if (
+      state.heartbeatInFlight
+      || !state.attempt
+      || state.attempt.status !== 'in_progress'
+      || !state.api
+      || typeof state.api.studentCommand !== 'function'
+      || !navigator.onLine
+    ) {
+      return false;
+    }
+
+    state.heartbeatInFlight = true;
+    try {
+      await state.api.studentCommand('heartbeat', {
+        sessionId: state.attempt.attemptId,
+        sessionToken: state.attempt.sessionToken,
+        connected: true,
+        currentQuestion: Math.max(1, Number(state.currentIndex || 0) + 1)
+      }, randomId('heartbeat'));
+      return true;
+    } catch (error) {
+      return false;
+    } finally {
+      state.heartbeatInFlight = false;
+    }
+  }
+
+  function startHeartbeat() {
+    stopHeartbeat();
+    sendHeartbeat();
+    state.heartbeatTimer = window.setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
+  }
+
   function currentIntegrityContext(extra) {
     var question = state.questions && state.questions[state.currentIndex];
     return Object.assign({
@@ -1279,6 +1327,7 @@
         elements.submitDialog.close();
       }
       stopTimer();
+      stopHeartbeat();
       if (state.media) state.media.stop().catch(function () {});
       renderPendingSubmission();
     } catch (error) {

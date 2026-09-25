@@ -356,14 +356,36 @@
 
   function overviewStatusPresentation(summary) {
     const status = safeText(summary?.lifecycleState || summary?.status, 40).toLowerCase();
+    const activation = summary?.activation && typeof summary.activation === 'object'
+      ? summary.activation
+      : null;
+    const activationStatus = safeText(
+      activation?.status || summary?.activationStatus,
+      40,
+    ).toLowerCase();
+    const closesAt = Date.parse(String(activation?.closesAt || activation?.expiresAt || ''));
+    const activationExpired = Number.isFinite(closesAt) && closesAt <= Date.now();
+
+    if (status === 'blocked') return { tone: 'waiting', label: 'Blocked by Admin', help: 'Open the examination for recovery details' };
+    if (status === 'archived') return { tone: 'draft', label: 'Archived', help: 'This examination is no longer active' };
+    if (status === 'results_released') return { tone: 'active', label: 'Results released', help: 'Results were sent to selected students' };
+    if (status === 'grading') return { tone: 'active', label: 'Grading', help: 'Submissions are ready to review' };
+
+    if (activationStatus === 'closed' || activationExpired) {
+      return { tone: 'active', label: 'Room closed', help: 'The student key was issued; grading remains available' };
+    }
+    if (['active', 'open', 'scheduled'].includes(activationStatus)) {
+      return { tone: 'active', label: 'Student key issued', help: 'Monitor and Grade are available' };
+    }
+    if (activationStatus === 'revoked') {
+      return { tone: 'waiting', label: 'Key revoked', help: 'Request or issue a new student key before the next sitting' };
+    }
+
     if (status === 'draft') return { tone: 'draft', label: 'Draft', help: 'Ready to continue editing' };
+    if (['active', 'open', 'scheduled'].includes(status)) return { tone: 'active', label: 'Student key issued', help: 'Monitor and Grade are available' };
     if (['published', 'key_requested', 'awaiting_approval', 'awaiting_activation', 'requested', 'pending'].includes(status)) {
       return { tone: 'waiting', label: 'Waiting for Admin', help: 'Student key requested' };
     }
-    if (['active', 'open', 'scheduled'].includes(status)) return { tone: 'active', label: 'Student key issued', help: 'Monitor and Grade are available' };
-    if (status === 'grading') return { tone: 'active', label: 'Grading', help: 'Submissions are ready to review' };
-    if (status === 'results_released') return { tone: 'active', label: 'Results released', help: 'Results were sent to selected students' };
-    if (status === 'blocked') return { tone: 'waiting', label: 'Blocked by Admin', help: 'Open the examination for recovery details' };
     return { tone: 'draft', label: 'Saved examination', help: 'Open to review its current state' };
   }
 
@@ -2858,7 +2880,8 @@
               : Array.isArray(answer)
                 ? answer.join(', ')
                 : JSON.stringify(answer);
-        return `<article class="grade-question" data-grade-question="${escapeHtml(question.id)}"><header><h3>Question ${index + 1}</h3><strong>${question.points} points</strong></header><div class="student-answer">${escapeHtml(answerText)}</div><div class="grade-controls"><label><span>Points awarded</span><input type="number" min="0" max="${question.points}" step=".5" value="${grade.points ?? ''}" data-grade-points></label><label><span>Professor feedback</span><textarea maxlength="5000" data-grade-feedback>${escapeHtml(grade.feedback || '')}</textarea></label></div></article>`;
+        const questionPrompt = safeText(question.prompt || question.text, 20_000) || 'Question prompt not available.';
+        return `<article class="grade-question" data-grade-question="${escapeHtml(question.id)}"><header><h3>Question ${index + 1}</h3><strong>${question.points} points</strong></header><div class="grading-question-prompt"><span class="grading-content-label">Question</span><div>${escapeHtml(questionPrompt)}</div></div><div class="student-answer"><span class="grading-content-label">Student answer</span><div>${escapeHtml(answerText)}</div></div><div class="grade-controls"><label><span>Points awarded</span><input type="number" min="0" max="${question.points}" step=".5" value="${grade.points ?? ''}" data-grade-points></label><label><span>Professor feedback</span><textarea maxlength="5000" data-grade-feedback>${escapeHtml(grade.feedback || '')}</textarea></label></div></article>`;
       }).join('')}
       <div class="grading-save-all"><button class="button primary" type="button" data-save-all-grades>Save all grades</button><p>One save for this student's complete grading sheet. A score of 0 is valid; blank means not yet graded.</p></div>`;
   }

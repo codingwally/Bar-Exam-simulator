@@ -20,7 +20,7 @@
    * The local demo adapter is installed only when the URL contains ?demo=1.
    */
 
-  var APP_VERSION = '1.0.1';
+  var APP_VERSION = '1.0.2';
   var DB_NAME = 'duediligence-examination-room-v1';
   var DB_VERSION = 1;
   var DB_OPEN_TIMEOUT_MS = 5000;
@@ -421,6 +421,8 @@
       showError(elements.entryError, { code: 'PREVIEW_REQUIRED' });
       return;
     }
+
+    await requestFullscreenForFocusMonitoring();
 
     setButtonBusy(elements.beginButton, true, 'Opening examination');
 
@@ -1218,6 +1220,28 @@
     elements.offlineNotice.hidden = online || state.view !== 'exam';
   }
 
+  function focusMonitoringEnabled() {
+    var metadata = state.metadata || (state.attempt && state.attempt.metadata) || {};
+    return metadata.integrityTier === 'focus_monitoring';
+  }
+
+  async function requestFullscreenForFocusMonitoring() {
+    if (!focusMonitoringEnabled() || document.fullscreenElement) {
+      return Boolean(document.fullscreenElement);
+    }
+    if (!document.documentElement || typeof document.documentElement.requestFullscreen !== 'function') {
+      showToast('Focus monitoring requested fullscreen, but this browser does not support it. Continue in this window; focus and visibility changes are still recorded.', 'ph-info');
+      return false;
+    }
+    try {
+      await document.documentElement.requestFullscreen();
+      return true;
+    } catch (error) {
+      showToast('Your browser blocked automatic fullscreen. Choose Enter fullscreen before answering; your examination remains open.', 'ph-info');
+      return false;
+    }
+  }
+
   async function toggleFullscreen() {
     try {
       if (document.fullscreenElement) {
@@ -1237,6 +1261,10 @@
     elements.fullscreenButton.querySelector('i').className = active ? 'ph ph-corners-in' : 'ph ph-corners-out';
     elements.fullscreenButton.querySelector('span').textContent = active ? 'Exit fullscreen' : 'Enter fullscreen';
     logIntegrityEvent(active ? 'fullscreen_entered' : 'fullscreen_exited', currentIntegrityContext());
+    if (!active && focusMonitoringEnabled() && state.view === 'exam'
+        && state.attempt && state.attempt.status === 'in_progress') {
+      showToast('Fullscreen exited. Focus monitoring recorded this event. Choose Enter fullscreen to return.', 'ph-warning');
+    }
   }
 
   function startTimer() {

@@ -466,6 +466,22 @@ test('My examinations overview classifies, duplicates, and removes the clicked e
   assert.deepEqual(Array.from(summaries, (summary) => summary.id), [firstId, secondId]);
   assert.equal(overviewStatusPresentation(summaries[0]).label, 'Draft');
   assert.equal(overviewStatusPresentation(summaries[1]).label, 'Waiting for Admin');
+  assert.equal(
+    overviewStatusPresentation({
+      id: secondId,
+      status: 'published',
+      activation: { status: 'open', closesAt: '2099-12-31T23:59:59.000Z' },
+    }).label,
+    'Student key issued',
+  );
+  assert.equal(
+    overviewStatusPresentation({
+      id: secondId,
+      status: 'published',
+      activation: { status: 'open', closesAt: '2020-01-01T00:00:00.000Z' },
+    }).label,
+    'Room closed',
+  );
   assert.equal(lifecycleOperationForExam(summaries[0]), 'delete_draft');
   assert.equal(lifecycleOperationForExam({ status: 'draft', currentPublishedVersionId: secondId }), 'archive_exam');
   assert.equal(lifecycleOperationForExam(summaries[1]), 'archive_exam');
@@ -1107,4 +1123,11 @@ test('individual Answers PDF prefers the server-stored submission artifact', () 
   assert.match(professorSource, /professorQuery\('submission_pdf'/);
   assert.match(professorSource, /downloadServerSubmittedAnswersPdf\(sessionId\)/);
   assert.match(professorSource, /Server submission PDF unavailable; using browser fallback/);
+});
+
+
+test('grading sheet renders the full question prompt above the student answer', () => {
+  assert.match(professorSource, /const questionPrompt = safeText\(question\.prompt \|\| question\.text, 20_000\)/);
+  assert.match(professorSource, /class="grading-question-prompt"[\s\S]*\$\{escapeHtml\(questionPrompt\)\}/);
+  assert.match(professorSource, /class="grading-content-label">Student answer<\/span>/);
 });

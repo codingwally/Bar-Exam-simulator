@@ -128,7 +128,7 @@ test('the final-question action remains enabled and opens review instead of trap
   assert.match(studentSource, /state\.currentIndex === state\.questions\.length - 1 \? 'Review and submit'/);
   assert.match(studentSource, /navigateToQuestion\(state\.currentIndex \+ 1\)/);
   assert.match(studentSource, /if \(index >= state\.questions\.length\) \{[\s\S]*openSubmitDialog\(\)/);
-  assert.match(studentHtml, /student\.js\?v=classroom-preflight-20260925-1/);
+  assert.match(studentHtml, /student\.js\?v=focus-fullscreen-20260926-1/);
 });
 
 test('student storage open fails safely when IndexedDB is blocked or never settles', async () => {
@@ -207,5 +207,13 @@ test('successful receipt tells the student that answers reached professor gradin
   assert.match(studentSource, /Your answers were successfully uploaded for professor grading\./);
   assert.match(studentSource, /A copy containing only your submitted answers will be emailed to/);
   assert.match(studentSource, /Answers successfully uploaded for professor grading/);
-  assert.match(studentHtml, /student\.js\?v=classroom-preflight-20260925-1/);
+  assert.match(studentHtml, /student\.js\?v=focus-fullscreen-20260926-1/);
+});
+
+
+test('focus monitoring requests fullscreen from the Begin examination user gesture', () => {
+  assert.match(studentSource, /async function handleBeginExam\(\)[\s\S]*await requestFullscreenForFocusMonitoring\(\)[\s\S]*await restoreMatchingAttempt\(\)/);
+  assert.match(studentSource, /function focusMonitoringEnabled\(\)[\s\S]*metadata\.integrityTier === 'focus_monitoring'/);
+  assert.match(studentSource, /async function requestFullscreenForFocusMonitoring\(\)[\s\S]*document\.documentElement\.requestFullscreen\(\)/);
+  assert.match(studentSource, /Fullscreen exited\. Focus monitoring recorded this event/);
 });

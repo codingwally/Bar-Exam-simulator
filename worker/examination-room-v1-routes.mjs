@@ -1510,13 +1510,23 @@ export function createExaminationRoomV1Handlers(dependencies) {
           occurredAt: deps.now(),
         };
       } else if (operation === 'record_event') {
+        const clientEventType = cleanText(payload.type || 'client_event', 80, 'event type', { required: true });
         const kindMap = {
-          focus_lost: 'focus_lost', fullscreen_exit: 'fullscreen_exit',
-          camera_interrupted: 'camera_interrupted', microphone_interrupted: 'microphone_interrupted',
-          network_disconnected: 'network_disconnected', device_changed: 'device_changed',
-          clock_anomaly: 'clock_anomaly', other: 'other',
+          focus_lost: 'focus_lost',
+          window_blurred: 'focus_lost',
+          page_hidden: 'focus_lost',
+          fullscreen_exit: 'fullscreen_exit',
+          fullscreen_exited: 'fullscreen_exit',
+          camera_interrupted: 'camera_interrupted',
+          microphone_interrupted: 'microphone_interrupted',
+          network_disconnected: 'network_disconnected',
+          connection_lost: 'network_disconnected',
+          device_changed: 'device_changed',
+          clock_anomaly: 'clock_anomaly',
+          other: 'other',
         };
-        const incidentKind = kindMap[String(payload.type || '').trim()] || 'other';
+        const incidentKind = kindMap[clientEventType] || 'other';
+        const clientDetails = isPlainRecord(payload.details) ? payload.details : {};
         safePayload = {
           ...safePayload,
           incidentKind,
@@ -1525,7 +1535,15 @@ export function createExaminationRoomV1Handlers(dependencies) {
             : payload.severity === 'review' ? 'warning' : 'info',
           occurredAt: isoInstant(payload.occurredAt ?? deps.now(), 'the event time'),
           durationMs: payload.durationMs == null ? null : positiveInteger(payload.durationMs, 'event duration', 0, 86_400_000),
-          details: safeEventDetails(payload.details ?? {}),
+          details: safeEventDetails({
+            ...clientDetails,
+            clientEventType,
+            visibilityState: cleanText(payload.visibilityState || '', 32, 'visibility state'),
+            fullscreen: payload.fullscreen === true,
+            clientSequence: Number.isSafeInteger(Number(payload.clientSequence))
+              ? Number(payload.clientSequence)
+              : null,
+          }),
         };
       } else {
         let sessionContext = ensureStoreResult(await deps.rpc(env, {

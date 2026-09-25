@@ -19,7 +19,7 @@ concurrency:
 env:
   WORKER_BASE_SHA: f3a8629ccea76c6e29c419ddfc63a9547707c062
   PAGES_BASE_SHA: a4936791ad02d1a5d0e2cf66f901286e57854f0e
-  RELEASE_SOURCE_SHA: d608e80193549c7a14724f60fdbfdd6942c936c9
+  RELEASE_SOURCE_SHA: 988c9d746072f54185f520f9a297138ea05e7ae7
   SITE_URL: https://duediligence.ph
   API_URL: https://duediligence-api.wallyesteban1993.workers.dev
 

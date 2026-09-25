@@ -137,6 +137,9 @@ jobs:
         with:
           node-version: 22
 
+      - name: Install Pages build dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
       - name: Validate grading frontend
         shell: bash
         run: |

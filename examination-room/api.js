@@ -1870,11 +1870,15 @@
     for (const operation of operations) {
       const payload = operation.payload || {};
       if (operation.kind === 'integrity.event') {
+        const eventType = payload.eventType || 'client_event';
+        const severity = ['clipboard_paste', 'page_hidden', 'fullscreen_exited'].includes(eventType)
+          ? 'warning'
+          : 'info';
         await studentCommand('record_event', {
           sessionId: attemptId,
           sessionToken,
-          type: payload.eventType || 'client_event',
-          severity: 'info',
+          type: eventType,
+          severity,
           occurredAt: operation.occurredAt,
           details: payload.details || {},
           visibilityState: payload.visibilityState,

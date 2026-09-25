@@ -373,6 +373,144 @@ export async function deliverExaminationRoomSubmissionAnswersEmail(
   }
 }
 
+
+export function buildExaminationRoomProfessorSubmissionEmail(env, message = {}) {
+  const brand = examinationRoomEmailBrand(env);
+  const examTitle = cleanSingleLine(message.examTitle, 300, 'Examination');
+  const subjectName = cleanSingleLine(message.subject, 200, 'Subject not specified');
+  const studentName = cleanSingleLine(message.studentName, 200, 'Student');
+  const studentNumber = cleanSingleLine(message.studentNumber, 80, 'Not provided');
+  const submittedAt = cleanSingleLine(message.submittedAt, 120, 'Just now');
+  const receiptCode = cleanSingleLine(message.receiptCode, 120, 'Not available');
+  const questions = (Array.isArray(message.questions) ? message.questions : [])
+    .slice(0, 200)
+    .map((entry, index) => ({
+      questionNumber: Number.isSafeInteger(Number(entry?.questionNumber))
+        ? Number(entry.questionNumber)
+        : index + 1,
+      prompt: String(entry?.prompt || 'Question prompt unavailable.').trim().slice(0, 60_000),
+      answer: submissionAnswerDisplay(entry),
+    }))
+    .sort((left, right) => left.questionNumber - right.questionNumber);
+  const subject = `New examination submission — ${examTitle.slice(0, 120)} — ${studentName.slice(0, 60)}`.slice(0, 200);
+
+  const text = [
+    'A student examination has been received by the Due Diligence Examination Room.',
+    '',
+    `Student: ${studentName}`,
+    `Student number: ${studentNumber}`,
+    `Subject: ${subjectName}`,
+    `Submitted: ${submittedAt}`,
+    `Receipt: ${receiptCode}`,
+    '',
+    ...questions.flatMap((entry) => [
+      `QUESTION ${entry.questionNumber}`,
+      entry.prompt,
+      '',
+      'SUBMITTED ANSWER',
+      entry.answer,
+      '',
+    ]),
+    'A PDF containing the same questions and answers is attached.',
+    `Open Examination Room grading: ${brand.workspaceUrl}`,
+    '',
+    'Due Diligence · Examination Room',
+  ].join('\n');
+
+  const htmlQuestions = questions.map((entry) => {
+    const prompt = escapeExaminationRoomEmailHtml(entry.prompt).replace(/\n/gu, '<br>');
+    const answer = escapeExaminationRoomEmailHtml(entry.answer).replace(/\n/gu, '<br>');
+    return `<div style="margin:0 0 28px;padding:0 0 22px;border-bottom:1px solid #e4e0d6;"><p style="margin:0 0 7px;color:#6d531d;font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;">Question ${entry.questionNumber}</p><div style="color:#172033;font-size:14px;line-height:1.6;">${prompt}</div><p style="margin:16px 0 6px;color:#6d531d;font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;">Submitted answer</p><div style="color:#172033;font-size:15px;line-height:1.65;">${answer}</div></div>`;
+  }).join('');
+
+  const html = `<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>New examination submission</title></head>
+<body style="margin:0;padding:0;background:#eef1f4;color:#172033;font-family:Inter,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background:#eef1f4;">
+    <tr><td align="center" style="padding:28px 12px;">
+      <table role="presentation" width="640" cellspacing="0" cellpadding="0" border="0" style="width:640px;max-width:640px;background:#fff;border:1px solid #d8dfe7;border-top:5px solid #b8934f;">
+        <tr><td style="padding:24px 34px;background:#07182f;"><img src="${brand.logoUrl}" width="80" alt="Due Diligence" style="display:block;width:80px;height:auto;border:0;"><p style="margin:14px 0 0;color:#dfc681;font-size:12px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;">Examination Room · New submission</p></td></tr>
+        <tr><td style="padding:30px 34px 18px;"><h1 style="margin:0;color:#07182f;font-family:Cambria,Georgia,serif;font-size:27px;">${escapeExaminationRoomEmailHtml(examTitle)}</h1><p style="margin:14px 0 0;color:#364152;font-size:15px;line-height:1.65;"><strong>${escapeExaminationRoomEmailHtml(studentName)}</strong> submitted an examination for ${escapeExaminationRoomEmailHtml(subjectName)}.</p></td></tr>
+        <tr><td style="padding:4px 34px 24px;"><div style="padding:17px 20px;background:#fffaf0;border:1px solid #dfd3ae;"><div style="font-size:13px;line-height:1.65;color:#596579;">Student number: ${escapeExaminationRoomEmailHtml(studentNumber)}<br>Submitted: ${escapeExaminationRoomEmailHtml(submittedAt)}<br>Receipt: ${escapeExaminationRoomEmailHtml(receiptCode)}</div></div></td></tr>
+        <tr><td style="padding:4px 34px 18px;">${htmlQuestions || '<p style="margin:0;color:#596579;">No submitted answers were found.</p>'}</td></tr>
+        <tr><td style="padding:0 34px 34px;"><a href="${brand.workspaceUrl}" style="display:inline-block;padding:13px 21px;background:#c7a24f;border:1px solid #a98237;color:#07182f;font-size:14px;font-weight:700;text-decoration:none;">Open grading workspace</a><p style="margin:18px 0 0;color:#6a7280;font-size:12px;line-height:1.55;">The attached PDF is a server-generated copy of the questions and submitted answers. The database submission remains the authoritative record.</p></td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  return Object.freeze({ subject, text, html, questions });
+}
+
+export async function deliverExaminationRoomProfessorSubmissionEmail(
+  env,
+  message = {},
+  transport = globalThis.fetch,
+) {
+  const mode = String(env?.EXAMINATION_ROOM_EMAIL_MODE || '').trim().toLowerCase();
+  const from = String(env?.EXAMINATION_ROOM_EMAIL_FROM || env?.SUPPORT_NOTIFICATION_EMAIL_FROM || '').trim();
+  const recipient = String(message.professorRecipient || message.recipient || '').trim().toLowerCase();
+  const idempotencyHash = String(message.idempotencyHash || '').trim().toLowerCase();
+  const pdfBase64 = String(message.pdfBase64 || '').trim();
+  const pdfFilename = cleanSingleLine(message.pdfFilename, 180, 'questions-and-answers.pdf');
+
+  if (!EMAIL_PATTERN.test(recipient) || recipient.length > 320) {
+    return { status: 'skipped', providerId: null, safeErrorCode: 'professor_recipient_missing' };
+  }
+  if (mode === 'suppressed') {
+    return { status: 'suppressed', providerId: null, safeErrorCode: 'email_suppressed' };
+  }
+  if (mode !== 'enabled' || !env?.RESEND_API_KEY || !from || !SHA256_PATTERN.test(idempotencyHash)) {
+    return {
+      status: 'not_configured',
+      providerId: null,
+      safeErrorCode: !env?.RESEND_API_KEY ? 'provider_key_missing'
+        : !from ? 'sender_missing'
+          : !SHA256_PATTERN.test(idempotencyHash) ? 'idempotency_hash_invalid'
+            : 'email_mode_invalid',
+    };
+  }
+
+  try {
+    const email = buildExaminationRoomProfessorSubmissionEmail(env, message);
+    const response = await transport('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+        'Idempotency-Key': `exam-room-professor-submission-${idempotencyHash}`,
+      },
+      body: JSON.stringify({
+        from,
+        to: [recipient],
+        subject: email.subject,
+        text: email.text,
+        html: email.html,
+        ...(pdfBase64 ? {
+          attachments: [{ filename: pdfFilename, content: pdfBase64 }],
+        } : {}),
+        tags: [
+          { name: 'product', value: 'examination-room' },
+          { name: 'message_type', value: 'professor-submission' },
+        ],
+      }),
+    });
+    const result = await response.json().catch(() => null);
+    if (!response.ok) {
+      return { status: 'failed', providerId: null, safeErrorCode: `provider_${response.status}`.slice(0, 80) };
+    }
+    return {
+      status: 'sent',
+      providerId: result?.id ? String(result.id).slice(0, 240) : null,
+      safeErrorCode: null,
+    };
+  } catch {
+    return { status: 'failed', providerId: null, safeErrorCode: 'network_error' };
+  }
+}
+
 function resultRecipient(entry, index) {
   const sessionId = cleanSingleLine(entry?.sessionId, 120, `recipient-${index + 1}`);
   const releaseId = cleanSingleLine(entry?.releaseId, 120, '');

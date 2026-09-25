@@ -47,6 +47,7 @@ jobs:
             git show "$RELEASE_SOURCE_SHA:$file" > "$file"
           done
 
+          git add -N worker/examination-room-submission-artifacts.mjs worker/examination-room-submission-artifacts.test.mjs
           changed="$(git diff --name-only)"
           expected="$(printf '%s\n'             worker/examination-room-email.mjs             worker/examination-room-submission-artifacts.mjs             worker/examination-room-submission-artifacts.test.mjs             worker/examination-room-v1-routes.mjs             worker/index.mjs | sort)"
           test "$(printf '%s\n' "$changed" | sort)" = "$expected"

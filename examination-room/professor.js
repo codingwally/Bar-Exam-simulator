@@ -74,7 +74,7 @@
   function registerExaminationRoomServiceWorker() {
     const serviceWorker = global.navigator?.serviceWorker;
     if (!serviceWorker?.register) return Promise.resolve(false);
-    return serviceWorker.register('/service-worker.js?v=examination-room-reliability-20260828-1')
+    return serviceWorker.register('/service-worker.js?v=classroom-preflight-20260925-1')
       .then(() => Promise.race([
         serviceWorker.ready.then(() => true),
         new Promise((resolve) => global.setTimeout(() => resolve(false), 5000)),
@@ -2477,7 +2477,7 @@
       <div><dt>Student number</dt><dd>${escapeHtml(session.studentNumber)}</dd></div>
       <div><dt>Status</dt><dd>${escapeHtml(submission ? 'Submitted' : session.connected ? 'In progress' : 'Disconnected')}</dd></div>
       <div><dt>Current question</dt><dd>${escapeHtml(String(session.currentQuestion || 'Not available'))}</dd></div>
-      <div><dt>Last server backup</dt><dd>${escapeHtml(formatDateTime(session.lastSeenAt))}</dd></div>
+      <div><dt>Last seen</dt><dd>${escapeHtml(formatDateTime(session.lastSeenAt))}</dd></div>
       <div><dt>Entry record</dt><dd>${session.attemptBindingId || session.consentVersion ? 'Recorded' : 'Not available'}</dd></div>
       <div><dt>Event log entries</dt><dd>${incidents.length}</dd></div>
       ${submission ? `<div><dt>Receipt</dt><dd>${escapeHtml(submission.receiptCode)}</dd></div><div><dt>Submitted</dt><dd>${escapeHtml(formatDateTime(submission.submittedAt))}</dd></div>` : ''}

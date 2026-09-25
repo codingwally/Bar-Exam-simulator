@@ -13,13 +13,14 @@ fallthrough = true
 region = "gcp:us-east4"
 
 [vars]
+# Explicit-false feature bindings are intentionally omitted when the code's
+# default is already false, keeping production within the Workers Free
+# 64-variable limit without changing runtime behavior.
 GEMINI_MODEL = "gemini-3.5-flash-lite"
-GEMINI_GROUNDING_ENABLED = "false"
 ALLOWED_ORIGIN = "https://duediligence.ph"
 MAINTENANCE_MODE = "false"
 MAINTENANCE_PASSWORD_HASH = "47774b9663224515a9e6a10a81c45e30655bcfa3a1073175e0e46798de2aa672"
 MAINTENANCE_TOKEN_TTL_SECONDS = "604800"
-ALLOW_LEGACY_GUESTS = "false"
 PHASE4_ACCESS_ENFORCEMENT = "true"
 PHASE4_MODEL_QUALITY_ENFORCEMENT = "true"
 REQUIRE_AUTHENTICATED_SUBMISSIONS = "true"
@@ -42,7 +43,6 @@ ADMIN_PULSE_VAPID_SUBJECT = "mailto:support@duediligence.ph"
 PAYMENT_NOTIFICATION_EMAIL_MODE = "enabled"
 SUBSCRIPTION_RECEIPT_EMAIL_MODE = "enabled"
 PAYMENT_NOTIFICATION_EMAIL_FROM = "Due Diligence Payments <support@duediligence.ph>"
-PRIVATE_BETA_GATE_ENABLED = "false"
 PRIVATE_BETA_DISCLOSURE_VERSION = "beta-disclosure-v1-2026-07-31"
 VERDICT_PDF_ENABLED = "true"
 VERDICT_PDF_PREMIUM_REQUIRED = "false"

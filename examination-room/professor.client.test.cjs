@@ -218,7 +218,7 @@ test('legacy offline grading packages remain encrypted but are not exposed as pr
   assert.match(professorSource, /professorCommand\('import_grades'/);
   assert.match(professorSource, /importResult\.atomic !== true/);
   assert.doesNotMatch(professorSource, /for \(const grade of importedGrades\)[\s\S]{0,240}professorCommand\('save_grade'/);
-  assert.match(professorSource, /serviceWorker\.register\('\/service-worker\.js\?v=grading-prompts-key-status-20260926-1'/);
+  assert.match(professorSource, /serviceWorker\.register\('\/service-worker\.js\?v=classroom-preflight-20260925-1'/);
   assert.match(professorSource, /await state\.offlineWorkspaceReady/);
   assert.match(professorSource, /MAX_OFFLINE_PACKAGE_BYTES\s*=\s*20\s*\*\s*1024\s*\*\s*1024/);
   assert.match(professorSource, /jsonDownloadSize\(wrapper\)\s*>\s*MAX_OFFLINE_PACKAGE_BYTES/);

@@ -18,7 +18,7 @@ concurrency:
 
 env:
   LIVE_BASE_SHA: 988c9d746072f54185f520f9a297138ea05e7ae7
-  PATCH_SOURCE_SHA: 1fbafc8bcc9bda969eb4cbc57a110ef77f347109
+  PATCH_SOURCE_SHA: 14ca7391aa1f655f86cb61ea714c651007542d90
   SITE_URL: https://duediligence.ph
 
 jobs:

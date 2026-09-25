@@ -1,0 +1,112 @@
+name: Examination Room grading prompt and key-status UI hotfix
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/release-examination-room-grading-key-status-20260926.yml
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+env:
+  LIVE_BASE_SHA: 988c9d746072f54185f520f9a297138ea05e7ae7
+  PATCH_SOURCE_SHA: 1fbafc8bcc9bda969eb4cbc57a110ef77f347109
+  SITE_URL: https://duediligence.ph
+
+jobs:
+  deploy:
+    name: Deploy grading prompts and live key status
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout exact live Pages baseline
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.LIVE_BASE_SHA }}
+          fetch-depth: 0
+
+      - name: Overlay only reviewed Examination Room UI files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "$PATCH_SOURCE_SHA^{commit}"
+          for file in             examination-room/index.html             examination-room/professor.js             examination-room/professor.css             examination-room/professor.client.test.cjs; do
+            git show "$PATCH_SOURCE_SHA:$file" > "$file"
+          done
+
+          changed="$(git diff --name-only)"
+          expected="$(printf '%s\n'             examination-room/index.html             examination-room/professor.client.test.cjs             examination-room/professor.css             examination-room/professor.js | sort)"
+          test "$(printf '%s\n' "$changed" | sort)" = "$expected"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Pages build dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Validate Examination Room UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check examination-room/professor.js
+          node --test examination-room/professor.client.test.cjs
+          grep -Fq "grading-question-prompt" examination-room/professor.js
+          grep -Fq "activation?.status || summary?.activationStatus" examination-room/professor.js
+          grep -Fq "professor.js?v=grading-prompts-key-status-20260926-1" examination-room/index.html
+          grep -Fq "professor.css?v=grading-prompts-key-status-20260926-1" examination-room/index.html
+          git diff --check
+
+      - name: Build and verify exact Pages artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          GITHUB_SHA="$PATCH_SOURCE_SHA" node scripts/test-pages-artifact.mjs
+          test "$(cat .pages-dist/.well-known/duediligence-release.txt)" = "$PATCH_SOURCE_SHA"
+          grep -Fq "grading-question-prompt" .pages-dist/examination-room/professor.js
+          grep -Fq "activation?.status || summary?.activationStatus" .pages-dist/examination-room/professor.js
+          grep -Fq "professor.js?v=grading-prompts-key-status-20260926-1" .pages-dist/examination-room/index.html
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .pages-dist
+
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Verify live UI fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in {1..30}; do
+            marker="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/.well-known/duediligence-release.txt?release=$PATCH_SOURCE_SHA" || true)"
+            page="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/?release=$PATCH_SOURCE_SHA" || true)"
+            professor="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/professor.js?v=grading-prompts-key-status-20260926-1&release=$PATCH_SOURCE_SHA" || true)"
+            css="$(curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/professor.css?v=grading-prompts-key-status-20260926-1&release=$PATCH_SOURCE_SHA" || true)"
+
+            if [[ "$marker" == "$PATCH_SOURCE_SHA" ]]               && grep -Fq "professor.js?v=grading-prompts-key-status-20260926-1" <<<"$page"               && grep -Fq "grading-question-prompt" <<<"$professor"               && grep -Fq "activation?.status || summary?.activationStatus" <<<"$professor"               && grep -Fq ".grading-question-prompt" <<<"$css"; then
+              echo "Grading prompt and key-status UI fixes are live."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Examination Room UI fixes did not converge in time." >&2
+          exit 1

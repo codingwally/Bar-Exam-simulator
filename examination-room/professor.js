@@ -2224,6 +2224,100 @@
     return request;
   }
 
+  function integrityEventType(incident) {
+    return safeText(incident?.details?.clientEventType || incident?.type || 'event', 80).toLowerCase();
+  }
+
+  function integrityEventLabel(incident) {
+    const labels = {
+      attempt_started: 'Examination started',
+      attempt_resumed: 'Examination resumed',
+      window_blurred: 'Browser window lost focus',
+      window_focused: 'Browser window focused',
+      page_hidden: 'Examination tab/page hidden',
+      page_visible: 'Examination tab/page visible',
+      fullscreen_entered: 'Fullscreen entered',
+      fullscreen_exited: 'Fullscreen exited',
+      connection_lost: 'Connection lost',
+      connection_restored: 'Connection restored',
+      clipboard_copy: 'Copied text',
+      clipboard_cut: 'Cut text',
+      clipboard_paste: 'Pasted text',
+      focus_lost: 'Focus lost',
+      fullscreen_exit: 'Fullscreen exited',
+      network_disconnected: 'Connection lost',
+      camera_interrupted: 'Camera interrupted',
+      microphone_interrupted: 'Microphone interrupted',
+      device_changed: 'Device changed',
+      clock_anomaly: 'Clock anomaly',
+      other: 'Browser event',
+    };
+    const type = integrityEventType(incident);
+    return labels[type] || type.replace(/_/g, ' ');
+  }
+
+  function eventDurationText(milliseconds) {
+    const value = Math.max(0, Number(milliseconds) || 0);
+    if (!value) return '';
+    const totalSeconds = Math.round(value / 1000);
+    if (totalSeconds < 60) return `${totalSeconds}s`;
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}m ${seconds}s`;
+  }
+
+  function pairedEventDuration(incident, incidents, returnType) {
+    const currentTime = Date.parse(incident?.occurredAt || '');
+    if (!Number.isFinite(currentTime)) return null;
+    const later = (incidents || [])
+      .filter((entry) => entry.sessionId === incident.sessionId)
+      .filter((entry) => Date.parse(entry.occurredAt || '') > currentTime)
+      .sort((left, right) => Date.parse(left.occurredAt || '') - Date.parse(right.occurredAt || ''))
+      .find((entry) => integrityEventType(entry) === returnType);
+    if (!later) return null;
+    const laterTime = Date.parse(later.occurredAt || '');
+    return Number.isFinite(laterTime) ? laterTime - currentTime : null;
+  }
+
+  function integrityEventDescription(incident, incidents) {
+    const details = incident?.details || {};
+    const type = integrityEventType(incident);
+    const question = Number(details.questionNumber) > 0 ? `Question ${details.questionNumber}` : 'current question';
+    const characters = Math.max(0, Number(details.characterCount) || 0);
+
+    if (type === 'clipboard_paste') {
+      return `${characters.toLocaleString()} character${characters === 1 ? '' : 's'} pasted into ${question}. Clipboard contents were not stored.`;
+    }
+    if (type === 'clipboard_copy') {
+      return `${characters.toLocaleString()} selected character${characters === 1 ? '' : 's'} copied from ${question}. Clipboard contents were not stored.`;
+    }
+    if (type === 'clipboard_cut') {
+      return `${characters.toLocaleString()} selected character${characters === 1 ? '' : 's'} cut from ${question}. Clipboard contents were not stored.`;
+    }
+    if (type === 'page_hidden') {
+      const duration = pairedEventDuration(incident, incidents, 'page_visible');
+      return duration == null
+        ? `The examination page became hidden while the student was on ${question}.`
+        : `The examination page was hidden for approximately ${eventDurationText(duration)} while the student was on ${question}.`;
+    }
+    if (type === 'window_blurred') {
+      const duration = pairedEventDuration(incident, incidents, 'window_focused');
+      return duration == null
+        ? `The browser window lost focus while the student was on ${question}.`
+        : `The browser window was out of focus for approximately ${eventDurationText(duration)} while the student was on ${question}.`;
+    }
+    if (type === 'page_visible') return `The examination page became visible again on ${question}.`;
+    if (type === 'window_focused') return `The browser window regained focus on ${question}.`;
+    if (type === 'fullscreen_exited' || type === 'fullscreen_exit') return `The student exited fullscreen while on ${question}.`;
+    if (type === 'fullscreen_entered') return `The student entered fullscreen while on ${question}.`;
+    if (type === 'connection_lost' || type === 'network_disconnected') return `The browser reported a network disconnection on ${question}.`;
+    if (type === 'connection_restored') return `The browser reported that the network connection was restored on ${question}.`;
+    if (type === 'attempt_started') return 'The student opened this examination attempt.';
+    if (type === 'attempt_resumed') return 'The student resumed an existing server-backed examination attempt.';
+    if (incident?.durationMs) return `${integrityEventLabel(incident)} · duration ${eventDurationText(incident.durationMs)}.`;
+    return `${integrityEventLabel(incident)} recorded by the examination browser.`;
+  }
+
   function renderMonitor() {
     const data = state.monitor || { sessions: [], submissions: [], incidents: [] };
     const sessions = data.sessions || [];
@@ -2256,7 +2350,7 @@
       openButton.disabled = !creatorAccessUnlocked();
     }
     const query = $('#monitor-search').value.trim().toLowerCase();
-    const filtered = sessions.filter((session) => !query || `${session.fullName} ${session.studentNumber}`.toLowerCase().includes(query));
+    const filtered = sessions.filter((session) => !query || `${session.fullName} ${session.studentNumber} ${session.email || ''}`.toLowerCase().includes(query));
     $('#monitor-table-body').innerHTML = filtered.length ? filtered.map((session) => {
       const isSubmitted = submittedIds.has(session.id);
       const sessionStatus = ['revoked', 'blocked'].includes(session.status)
@@ -2264,12 +2358,12 @@
         : isSubmitted ? 'submitted' : session.connected ? 'in_progress' : 'disconnected';
       const latestIncident = [...(data.incidents || [])].reverse().find((incident) => incident.sessionId === session.id);
       const canRevoke = !isSubmitted && !['revoked', 'blocked'].includes(sessionStatus);
-      return `<tr data-monitor-session="${escapeHtml(session.id)}"><td><strong>${escapeHtml(session.fullName)}</strong>${session.email ? `<small>${escapeHtml(session.email)}</small>` : ''}</td><td>${escapeHtml(session.studentNumber)}</td><td><span class="status-label ${sessionStatus}"><i aria-hidden="true"></i>${escapeHtml(sessionStatus.replace('_', ' '))}</span></td><td>${escapeHtml(String(session.currentQuestion || '—'))}</td><td>${escapeHtml(timeAgo(session.lastSeenAt))}</td><td>${latestIncident ? escapeHtml(latestIncident.type.replace(/_/g, ' ')) : 'Clear'}</td><td><div class="session-actions"><button class="table-action" type="button" data-view-student="${escapeHtml(session.id)}">View</button>${canRevoke ? `<button class="table-action warning" type="button" data-revoke-session="${escapeHtml(session.id)}" data-revoke-mode="kick">Kick</button><button class="table-action danger" type="button" data-revoke-session="${escapeHtml(session.id)}" data-revoke-mode="block">Block</button>` : ''}</div></td></tr>`;
+      return `<tr data-monitor-session="${escapeHtml(session.id)}"><td><strong>${escapeHtml(session.fullName)}</strong>${session.email ? `<small>${escapeHtml(session.email)}</small>` : ''}</td><td>${escapeHtml(session.studentNumber)}</td><td><span class="status-label ${sessionStatus}"><i aria-hidden="true"></i>${escapeHtml(sessionStatus.replace('_', ' '))}</span></td><td>${escapeHtml(String(session.currentQuestion || '—'))}</td><td>${escapeHtml(timeAgo(session.lastSeenAt))}</td><td>${latestIncident ? escapeHtml(integrityEventLabel(latestIncident)) : 'Clear'}</td><td><div class="session-actions"><button class="table-action" type="button" data-view-student="${escapeHtml(session.id)}">Event logs</button>${canRevoke ? `<button class="table-action warning" type="button" data-revoke-session="${escapeHtml(session.id)}" data-revoke-mode="kick">Kick</button><button class="table-action danger" type="button" data-revoke-session="${escapeHtml(session.id)}" data-revoke-mode="block">Block</button>` : ''}</div></td></tr>`;
     }).join('') : '<tr><td colspan="7"><div class="empty-feed">No students have entered yet. Share the active student key; this page updates automatically.</div></td></tr>';
     const incidents = [...(data.incidents || [])].reverse();
     $('#incident-feed').innerHTML = incidents.length ? incidents.map((incident) => {
       const session = sessions.find((entry) => entry.id === incident.sessionId);
-      return `<article class="incident-entry"><i class="ph ph-warning-circle" aria-hidden="true"></i><div><strong>${escapeHtml(session?.fullName || 'Student session')}</strong><p>${escapeHtml(incident.type.replace(/_/g, ' '))}. Review the timing and context before deciding whether any follow-up is needed.</p><small>${escapeHtml(formatDateTime(incident.occurredAt))}</small></div></article>`;
+      return `<article class="incident-entry"><i class="ph ph-warning-circle" aria-hidden="true"></i><div><strong>${escapeHtml(session?.fullName || 'Student session')} · ${escapeHtml(integrityEventLabel(incident))}</strong><p>${escapeHtml(integrityEventDescription(incident, data.incidents || []))}</p><small>${escapeHtml(formatDateTime(incident.occurredAt))}</small></div></article>`;
     }).join('') : '<div class="empty-feed">No integrity events require review. A focus change, device interruption, or disconnection will appear here without automatically penalizing the student.</div>';
   }
 
@@ -2373,16 +2467,23 @@
     if (!session) return;
     const submission = (data.submissions || []).find((entry) => entry.sessionId === sessionId);
     const incidents = (data.incidents || []).filter((entry) => entry.sessionId === sessionId);
-    $('#student-detail-title').textContent = session.fullName;
+    const orderedIncidents = [...incidents].sort((left, right) => Date.parse(right.occurredAt || '') - Date.parse(left.occurredAt || ''));
+    const eventLog = orderedIncidents.length
+      ? orderedIncidents.map((incident) => `<article class="incident-entry"><i class="ph ph-activity" aria-hidden="true"></i><div><strong>${escapeHtml(integrityEventLabel(incident))}</strong><p>${escapeHtml(integrityEventDescription(incident, incidents))}</p><small>${escapeHtml(formatDateTime(incident.occurredAt))}${incident.severity && incident.severity !== 'info' ? ` · ${escapeHtml(incident.severity)}` : ''}</small></div></article>`).join('')
+      : '<div class="empty-feed">No examination events have been recorded for this session yet.</div>';
+    $('#student-detail-title').textContent = session.fullName + ' · Event logs';
     $('#student-detail-content').innerHTML = `<dl class="student-detail-grid">
+      ${session.email ? `<div><dt>Email</dt><dd>${escapeHtml(session.email)}</dd></div>` : ''}
       <div><dt>Student number</dt><dd>${escapeHtml(session.studentNumber)}</dd></div>
       <div><dt>Status</dt><dd>${escapeHtml(submission ? 'Submitted' : session.connected ? 'In progress' : 'Disconnected')}</dd></div>
       <div><dt>Current question</dt><dd>${escapeHtml(String(session.currentQuestion || 'Not available'))}</dd></div>
       <div><dt>Last server backup</dt><dd>${escapeHtml(formatDateTime(session.lastSeenAt))}</dd></div>
       <div><dt>Entry record</dt><dd>${session.attemptBindingId || session.consentVersion ? 'Recorded' : 'Not available'}</dd></div>
-      <div><dt>Integrity events</dt><dd>${incidents.length}</dd></div>
+      <div><dt>Event log entries</dt><dd>${incidents.length}</dd></div>
       ${submission ? `<div><dt>Receipt</dt><dd>${escapeHtml(submission.receiptCode)}</dd></div><div><dt>Submitted</dt><dd>${escapeHtml(formatDateTime(submission.submittedAt))}</dd></div>` : ''}
-    </dl><p class="legal-note">Events are context for human review. They do not establish misconduct and do not alter the student’s grade automatically.</p>`;
+    </dl>
+    <section class="student-event-log"><h3>Examination event log</h3><p class="legal-note">This records browser signals such as tab/window focus changes, fullscreen changes, connectivity, and copy/paste actions. Clipboard contents are never stored.</p><div class="incident-feed">${eventLog}</div></section>
+    <p class="legal-note">Events are context for human review. They do not establish misconduct and do not alter the student’s grade automatically.</p>`;
     openDialog('student-detail-dialog');
   }
 

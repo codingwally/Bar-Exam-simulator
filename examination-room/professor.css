@@ -756,6 +756,10 @@ body[data-workspace-view="overview"] .workspace-tabs { margin-left: auto; }
 .student-detail-grid div { border: 1px solid var(--line); padding: .7rem; }
 .student-detail-grid dt { color: var(--muted); font-size: 9px; text-transform: uppercase; }
 .student-detail-grid dd { margin: .25rem 0 0; color: var(--navy-900); }
+.student-event-log { margin-top: 16px; border: 1px solid var(--line); background: #fff; }
+.student-event-log > h3 { margin: 0; padding: 12px 14px; border-bottom: 1px solid var(--line); color: var(--navy-900); font-family: var(--serif); font-size: 16px; }
+.student-event-log > .legal-note { margin: 12px 14px; }
+.student-event-log .incident-feed { max-height: 360px; overflow: auto; border-top: 1px solid #eee8dc; }
 
 .toast {
   position: fixed;

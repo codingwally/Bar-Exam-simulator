@@ -1101,3 +1101,10 @@ test('creator monitoring shows a technical entry record without privacy-gate wor
   assert.doesNotMatch(professorSource, /Privacy warning record/);
   assert.match(professorSource, /<dt>Entry record<\/dt>/);
 });
+
+
+test('individual Answers PDF prefers the server-stored submission artifact', () => {
+  assert.match(professorSource, /professorQuery\('submission_pdf'/);
+  assert.match(professorSource, /downloadServerSubmittedAnswersPdf\(sessionId\)/);
+  assert.match(professorSource, /Server submission PDF unavailable; using browser fallback/);
+});

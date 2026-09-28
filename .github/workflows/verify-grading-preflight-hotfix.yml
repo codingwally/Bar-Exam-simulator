@@ -1,0 +1,27 @@
+name: Verify grading preflight hotfix
+
+on:
+  push:
+    branches:
+      - hotfix/grading-preflight-20260928
+    paths:
+      - worker/public-api-alias.mjs
+      - worker/public-api-alias.test.mjs
+      - .github/workflows/verify-grading-preflight-hotfix.yml
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify public API alias syntax and regression tests
+        run: |
+          set -euo pipefail
+          node --check worker/public-api-alias.mjs
+          node --test worker/public-api-alias.test.mjs

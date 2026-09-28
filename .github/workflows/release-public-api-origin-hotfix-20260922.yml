@@ -15,8 +15,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  RELEASE_SOURCE_SHA: 198b079041e7e6c0a521529e929f4d8f8d8182c7
-  BASE_SHA: 5560c756ca8df3190cc6f64494b09bfbd10efafb
+  RELEASE_SOURCE_SHA: e52a45757cde3b0e3f47463db65e82ecbadbbb2b
+  BASE_SHA: 0a8a83502af785f39a5ed58852dbee932fc53db2
   PUBLIC_API_URL: https://duediligence-api.wallyesteban1993.workers.dev
 
 jobs:
@@ -67,6 +67,8 @@ jobs:
           grep -Fq "function preflightResponse(request)" worker/public-api-alias.mjs
           grep -Fq "request.method === 'OPTIONS'" worker/public-api-alias.mjs
           grep -Fq "Access-Control-Allow-Headers" worker/public-api-alias.mjs
+          grep -Fq "'Authorization'" worker/public-api-alias.mjs
+          grep -Fq "'X-DD-Beta-Access'" worker/public-api-alias.mjs
 
       - name: Deploy provider-neutral public API alias only
         uses: cloudflare/wrangler-action@v3
@@ -111,13 +113,15 @@ jobs:
             --request OPTIONS \
             --header 'Origin: https://duediligence.ph' \
             --header 'Access-Control-Request-Method: POST' \
-            --header 'Access-Control-Request-Headers: content-type,x-request-id' \
-            "$PUBLIC_API_URL/examination-room/v1/student/command")"
+            --header 'Access-Control-Request-Headers: authorization,content-type,x-dd-beta-access' \
+            "$PUBLIC_API_URL/")"
           test "$preflight_status" = "204"
           grep -qi '^access-control-allow-origin: https://duediligence.ph' "$preflight_headers"
           grep -qi '^access-control-allow-methods: .*POST.*OPTIONS' "$preflight_headers"
-          grep -qi '^access-control-allow-headers: .*Content-Type.*X-Request-ID' "$preflight_headers"
-          echo "Canonical browser preflight is accepted by the public API boundary."
+          grep -qi '^access-control-allow-headers: .*Content-Type' "$preflight_headers"
+          grep -qi '^access-control-allow-headers: .*Authorization' "$preflight_headers"
+          grep -qi '^access-control-allow-headers: .*X-DD-Beta-Access' "$preflight_headers"
+          echo "Authenticated grading preflight is accepted by the public API boundary."
 
           attacker_body="$RUNNER_TEMP/attacker-origin.json"
           attacker_status="$(curl --silent --show-error             --output "$attacker_body"             --write-out '%{http_code}'             --request POST             --header 'Origin: https://attacker.example'             --header 'Content-Type: application/json'             --data '{}'             "$PUBLIC_API_URL/examination-room/v1/student/preview")"

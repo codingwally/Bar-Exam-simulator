@@ -5,6 +5,7 @@ import test from 'node:test';
 import publicApiAlias from './public-api-alias.mjs';
 
 const PRODUCTION_ORIGIN = 'https://duediligence.ph';
+const WWW_PRODUCTION_ORIGIN = 'https://www.duediligence.ph';
 
 async function readJson(response) {
   return JSON.parse(await response.text());
@@ -150,6 +151,91 @@ test('does not grant CORS access to an unapproved or absent origin on alias-owne
 
     assertControlledUnavailableResponse(response);
     assert.equal(response.headers.get('Access-Control-Allow-Origin'), null);
+  }
+});
+
+
+test('answers authenticated grading preflight directly at the public API alias', async () => {
+  const request = new Request('https://duediligence-api.example.test/', {
+    method: 'OPTIONS',
+    headers: {
+      Origin: PRODUCTION_ORIGIN,
+      'Access-Control-Request-Method': 'POST',
+      'Access-Control-Request-Headers': 'authorization,content-type,x-dd-beta-access',
+    },
+  });
+
+  const response = await publicApiAlias.fetch(request, {});
+  assert.equal(response.status, 204);
+  assert.equal(response.headers.get('Access-Control-Allow-Origin'), PRODUCTION_ORIGIN);
+  assert.match(response.headers.get('Access-Control-Allow-Methods') || '', /POST/);
+  assert.match(response.headers.get('Access-Control-Allow-Methods') || '', /OPTIONS/);
+  assert.match(response.headers.get('Access-Control-Allow-Headers') || '', /Authorization/i);
+  assert.match(response.headers.get('Access-Control-Allow-Headers') || '', /Content-Type/i);
+  assert.match(response.headers.get('Access-Control-Allow-Headers') || '', /X-DD-Beta-Access/i);
+});
+
+test('answers approved www grading preflight without forwarding to the application binding', async () => {
+  let applicationCalls = 0;
+  const request = new Request('https://duediligence-api.example.test/', {
+    method: 'OPTIONS',
+    headers: {
+      Origin: WWW_PRODUCTION_ORIGIN,
+      'Access-Control-Request-Method': 'POST',
+      'Access-Control-Request-Headers': 'authorization,content-type',
+    },
+  });
+
+  const response = await publicApiAlias.fetch(request, {
+    DUE_DILIGENCE_APPLICATION: {
+      async fetch() {
+        applicationCalls += 1;
+        throw new Error('Preflight must be answered at the alias boundary.');
+      },
+    },
+  });
+
+  assert.equal(response.status, 204);
+  assert.equal(response.headers.get('Access-Control-Allow-Origin'), WWW_PRODUCTION_ORIGIN);
+  assert.equal(applicationCalls, 0);
+});
+
+test('rejects hostile origins and unapproved grading request headers during preflight', async () => {
+  const hostileOrigin = await publicApiAlias.fetch(new Request('https://duediligence-api.example.test/', {
+    method: 'OPTIONS',
+    headers: {
+      Origin: 'https://attacker.example',
+      'Access-Control-Request-Method': 'POST',
+      'Access-Control-Request-Headers': 'authorization,content-type',
+    },
+  }), {});
+  assert.equal(hostileOrigin.status, 403);
+  assert.equal(hostileOrigin.headers.get('Access-Control-Allow-Origin'), null);
+
+  const hostileHeader = await publicApiAlias.fetch(new Request('https://duediligence-api.example.test/', {
+    method: 'OPTIONS',
+    headers: {
+      Origin: PRODUCTION_ORIGIN,
+      'Access-Control-Request-Method': 'POST',
+      'Access-Control-Request-Headers': 'authorization,x-not-approved',
+    },
+  }), {});
+  assert.equal(hostileHeader.status, 403);
+  assert.equal(hostileHeader.headers.get('Access-Control-Allow-Origin'), PRODUCTION_ORIGIN);
+});
+
+test('keeps alias-owned temporary failures readable from both approved browser origins', async () => {
+  for (const origin of [PRODUCTION_ORIGIN, WWW_PRODUCTION_ORIGIN]) {
+    const request = new Request('https://duediligence-api.example.test/', {
+      method: 'POST',
+      headers: { Origin: origin, 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    const response = await publicApiAlias.fetch(request, {});
+    assertControlledUnavailableResponse(response);
+    assert.equal(response.headers.get('Access-Control-Allow-Origin'), origin);
+    const payload = await readJson(response);
+    assert.equal(payload.error.code, 'APPLICATION_TEMPORARILY_UNAVAILABLE');
   }
 });
 

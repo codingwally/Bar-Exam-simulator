@@ -183,6 +183,90 @@ test('private export download binds owner and current membership, headers, and p
   assert.equal(revoked, true);
 });
 
+test('fresh authenticated snapshots recover an abandoned final-result export once after its lease expires without sweeping', async () => {
+  const originalNow = Date.now, background = []; let time = 1800000000000;
+  Date.now = () => time;
+  try {
+    const f = await fixture({ now: () => time });
+    const matchCommand = (name, payload = {}, actor = host) => f.command(name, { matchId: f.matchId, ...payload }, actor);
+    for (const actor of [person(1), person(4)]) await matchCommand('acknowledge_rules', { ruleVersion: 1 }, actor);
+    for (let n = 1; n <= 6; n++) await matchCommand('record_device_check', { microphone: true }, person(n));
+    await matchCommand('start_match');
+    for (;;) {
+      let match = (await f.store.read(f.eventId)).matches[f.matchId];
+      if (match.phase === 'deliberation') break;
+      await matchCommand('claim_clock', { timerVersion: match.timer.version });
+      match = (await f.store.read(f.eventId)).matches[f.matchId];
+      await matchCommand('timer', { type: 'START', timerVersion: match.timer.version });
+      time += match.timer.durationMs + 1000;
+      match = (await f.store.read(f.eventId)).matches[f.matchId];
+      await matchCommand('claim_clock', { timerVersion: match.timer.version });
+      match = (await f.store.read(f.eventId)).matches[f.matchId];
+      await matchCommand('finish_stage', { timerVersion: match.timer.version });
+      await matchCommand('next_stage');
+    }
+    const scorecard = { speakers: Object.fromEntries(['A1','A2','A3','N1','N2','N3'].map(seat =>
+      [seat, { evidence: seat[0] === 'A' ? 25 : 20, delivery: 30, questioning: 15, responding: 15 }])),
+      closing: { affirmative: 15, negative: 12 } };
+    await matchCommand('open_ballots'); await matchCommand('submit_ballot', { scorecard, confirmed: true });
+    await matchCommand('close_ballots'); await matchCommand('nominate_award', { nomineeId: 'A2', reason: 'Clear and responsive presentation.' });
+    await matchCommand('publish_result'); time += 900000; await matchCommand('finalize_result');
+    const final = (await f.store.read(f.eventId)).matches[f.matchId].resultVersions.at(-1);
+    assert.equal(final.state, 'FINAL');
+    const jobId = (await matchCommand('create_export', { kind: 'result' })).receipt.result.jobId;
+
+    // Simulate a Worker disappearing after the durable claim, before delivery.
+    // Recovery below uses only normal snapshot requests to fresh integrations.
+    const [abandoned] = await f.store.claimJobs(f.eventId, 1, time);
+    assert.equal(abandoned.id, jobId);
+    const leased = await f.store.readJob(jobId), calls = [];
+    assert.equal(leased.status, 'running'); assert.equal(leased.attempts, 1);
+    assert.equal(leased.payload.document.resultVersion, final.id);
+    const fresh = () => createDebateIntegration({
+      env: { ...baseEnv, DEBATE_ROOM_ENABLED: 'true', DEBATE_SWEEPER_ENABLED: 'false' },
+      authenticate: async req => req.headers.get('Authorization') === 'Bearer local-session' ? host
+        : req.headers.get('Authorization') === 'Bearer stranger-session' ? person(99) : null,
+      rpc: rpcBridge(f.store, calls), fetcher: f.storage.fetcher,
+      context: { waitUntil: operation => { background.push(operation); } },
+    });
+    const snapshotPath = `snapshot?eventId=${f.eventId}`;
+    const writes = () => f.storage.calls.filter(call => call.method === 'POST');
+    const drain = async () => { await Promise.all(background.splice(0)); };
+    time = leased.leaseUntil - 1;
+    const before = await bodyOf(await fresh().handle(request(snapshotPath))); await drain();
+    assert.equal(before.event.outbox.find(job => job.id === jobId).downloadId, undefined);
+    assert.equal(writes().length, 0); assert.equal((await f.store.readJob(jobId)).attempts, 1);
+    assert.equal((await f.store.readJob(jobId)).claimId, abandoned.claimId);
+
+    time = leased.leaseUntil + 1;
+    const claimCalls = calls.filter(call => call.name === 'debate_v3_claim_jobs').length;
+    await bodyOf(await fresh().handle(new Request(`https://worker.test/debate-room/${snapshotPath}`)), 401);
+    await bodyOf(await fresh().handle(request(snapshotPath, { headers: { Authorization: 'Bearer stranger-session' } })), 403);
+    assert.equal(background.length, 0); assert.equal(writes().length, 0);
+    assert.equal(calls.filter(call => call.name === 'debate_v3_claim_jobs').length, claimCalls);
+    assert.equal((await f.store.readJob(jobId)).attempts, 1);
+
+    await Promise.all([fresh(), fresh(), fresh()].map(async integration =>
+      bodyOf(await integration.handle(request(snapshotPath)))));
+    await drain();
+    const recovered = await f.store.readJob(jobId);
+    assert.equal(recovered.status, 'completed'); assert.equal(recovered.attempts, 2);
+    assert.notEqual(recovered.claimId, abandoned.claimId);
+    assert.equal(writes().length, 1, 'Concurrent snapshots must deliver the abandoned job only once');
+    assert.equal(writes()[0].path, `/storage/v1/object/debate-private-v3/exports/${f.eventId}/${jobId}.pdf`);
+    assert.equal(f.storage.objects.size, 1);
+    const visible = await bodyOf(await fresh().handle(request(snapshotPath))); await drain();
+    const download = visible.event.outbox.find(job => job.id === jobId);
+    assert.equal(download.status, 'completed'); assert.equal(download.downloadId, jobId);
+    assert.equal(download.resultVersion, final.id);
+    assert.equal(visible.event.outbox.filter(job => job.type === 'export').length, 1);
+    const response = await fresh().handle(request(`download?eventId=${f.eventId}&downloadId=${download.downloadId}`));
+    assert.equal(response.status, 200); assert.equal(response.headers.get('Content-Type'), 'application/pdf');
+    assert.equal(new TextDecoder().decode((await response.bytes()).slice(0, 5)), '%PDF-');
+    assert.equal(writes().length, 1);
+  } finally { await Promise.allSettled(background); Date.now = originalNow; }
+});
+
 test('evidence upload cannot cross private team channel, binds actor rate budget, and verifies hosted bytes', async () => {
   const f = await fixture(); f.setActor(person(1));
   const path = channel => `evidence/upload?eventId=${f.eventId}&matchId=${f.matchId}&channel=${encodeURIComponent(channel)}`;

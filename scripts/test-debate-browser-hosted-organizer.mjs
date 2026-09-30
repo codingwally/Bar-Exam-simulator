@@ -82,6 +82,29 @@ export function assertHostedExportVersion(kind, job, final) {
   else { assert.ok(['rules', 'scorecard'].includes(kind)); assert.ok(job.resultVersion == null); }
 }
 
+// A claimed export can survive a Worker interruption. Keep the real visible
+// page polling through the 60-second claim lease and one recovery attempt;
+// only start the separate file-download timeout once its exact control exists.
+export async function waitForHostedExportReady({ control, kind, jobId, snapshot, record, now = Date.now }) {
+  assert.ok(['rules', 'scorecard', 'result', 'event_report', 'csv', 'certificate'].includes(kind));
+  assert.match(jobId, /^[a-zA-Z0-9:_-]{8,160}$/);
+  const timeoutMs = 90000, startedAt = now(); let ready = false;
+  try {
+    await control.waitFor({ state: 'visible', timeout: timeoutMs });
+    ready = true;
+  } catch {
+    // Browser errors can include page text, links and private input. Emit only
+    // the fixed classification and the matching job's bounded public state.
+    throw Object.assign(new Error('HOSTED_EXPORT_READINESS_UNCONFIRMED'), { code: 'HOSTED_EXPORT_READINESS_UNCONFIRMED' });
+  } finally {
+    const job = snapshot()?.outbox?.find(value => value.id === jobId);
+    record({ kind, jobId, timeoutMs, elapsedMs: Math.max(0, now() - startedAt),
+      outcome: ready ? 'DOWNLOAD_CONTROL_VISIBLE' : 'READINESS_UNCONFIRMED',
+      jobStatus: ['queued', 'running', 'completed', 'failed', 'cancelled'].includes(job?.status) ? job.status : null,
+      downloadIdMatches: job?.downloadId === jobId });
+  }
+}
+
 export function assertHostedNextMatchState(next, prior, motionId, { started = false } = {}) {
   assert.ok(next?.id && next.id !== prior.id); assert.equal(next.motionId, motionId); assert.notEqual(motionId, prior.motionId);
   for (const key of ['drafts', 'ballots', 'polls', 'nominations']) assert.deepEqual(next[key], {});
@@ -253,14 +276,14 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
     defaultFlowDurationMs: 4680000, correctionWindowMs: 900000, credentialsStored: false, rawDomStored: false, tracesStored: false,
     testSha256: sha(await readFile(fileURLToPath(import.meta.url))), checks: [], actions: [], stages: [], downloads: [], screenshots: [],
     unexpectedNetwork: [], pageErrors: [], consoleErrors: [], expectedRejections: [], commandRejections: [],
-    clockClaims: [], bootstrap: [], navigation: [], evidenceUploads: [], sessionRefreshes: 0,
+    clockClaims: [], bootstrap: [], navigation: [], evidenceUploads: [], exportReadiness: [], sessionRefreshes: 0,
     claims: { actualBrowserDom: true, actualHostedSql: true, syntheticIdentity: true, actualHostedAuth: true,
       mainWorkerBootstrap: true, studyRoomUi: false, physicalMedia: false, providerMedia: false,
       realEmail: false, nativePostgresConcurrency: false, controlEndurance90Minutes: false, hostedDeployment: true, googleOAuth: false },
     gaps: ['Real temporary password sessions bootstrap the normal SDK; Google OAuth callback is not exercised.',
       'Study Room UI has a separate test; Debate waiting state does not prove Study admission.',
       'Physical microphones/cameras/screen audio, provider media, live capacity and real email remain unverified. Timers use real default durations; media endurance is not claimed.',
-      'The next three-judge match is started, not played to another final decision; tournament awards remain rehearsal-excluded.',
+      'The next three-judge match is checked only if the flow reaches it; a second final decision and tournament awards remain rehearsal-excluded.',
       'PDF signatures, page counts and exact downloaded bytes are checked; PDF page layout requires the separate visual export review.'],
   };
   const check = (name, condition, detail = {}) => { assert.ok(condition, name); report.checks.push({ name, status: 'PASS', ...detail }); };
@@ -784,7 +807,10 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
         await open(host, 'export', 'Issue certificate', '[data-kind="certificate"]'); await field(host, 'participantId').selectOption(matchFor(host).seats.A2); await field(host, 'awardKey').selectOption('bestDebater'); exported = await submit(host, 'create_export');
       } else exported = await command(host, 'create_export', () => action(host, 'export', `[data-kind="${kind}"]`).click());
       const jobId = exported.receipt.result.jobId; await tab(host, 'results');
-      const [file] = await Promise.all([host.waitForEvent('download'), action(host, 'download', `[data-download="${jobId}"]`).click()]);
+      const downloadControl = action(host, 'download', `[data-download="${jobId}"]`);
+      await waitForHostedExportReady({ control: downloadControl, kind, jobId, snapshot: () => snapshotFor(host),
+        record: summary => report.exportReadiness.push(summary) });
+      const [file] = await Promise.all([host.waitForEvent('download'), downloadControl.click()]);
       assert.equal(await file.failure(), null); const suggested = file.suggestedFilename(); assert.match(suggested, /^[^/\\\r\n]+$/);
       const relative = `downloads/${kind}-${suggested}`; await file.saveAs(path.join(OUTPUT, relative)); const bytes = await readFile(path.join(OUTPUT, relative));
       const extension = kind === 'csv' ? 'csv' : 'pdf'; const stored = await lifecycle.readStoredExport({ eventId, jobId, format: extension });

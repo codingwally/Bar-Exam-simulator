@@ -4,10 +4,51 @@ import { EventEmitter } from 'node:events';
 import { assertCiExecution, hostedBrowserEnvironment, finalizeHostedBrowserShutdown, HOSTED_DEFAULT_TIMED_STAGES,
   assertHostedDefaultRunOfShow, assertHostedFinishedAttempt, assertHostedCorrectedAwards, assertHostedExportVersion,
   assertHostedNextMatchState, assertHostedPriorMatchPreserved, summarizeHostedBootstrap, summarizeHostedNavigation,
-  summarizeHostedEvidenceUpload, submitHostedEvidenceWithUpload } from './test-debate-browser-hosted-organizer.mjs';
+  summarizeHostedEvidenceUpload, submitHostedEvidenceWithUpload, waitForHostedExportReady } from './test-debate-browser-hosted-organizer.mjs';
 import { createRunOfShow, calculateAwards } from '../worker/debate-domain.mjs';
 
 const seats = Object.fromEntries(['A1', 'A2', 'A3', 'N1', 'N2', 'N3'].map(seat => [seat, `inert-${seat}`]));
+
+test('export readiness allows an expired claim to recover before the independent download wait', async () => {
+  const jobId = 'inert-export-result', observations = [];
+  let clock = 1000, job = { id: jobId, status: 'queued' }, waits = 0;
+  await waitForHostedExportReady({ kind: 'result', jobId, now: () => clock,
+    snapshot: () => ({ outbox: [job] }), record: value => observations.push(value),
+    control: { async waitFor(options) {
+      waits++; assert.deepEqual(options, { state: 'visible', timeout: 90000 });
+      // The first claim expires at 60s. A normal refresh recovers the same job
+      // after that point, later than the old 30s download-event deadline.
+      clock += 65000; job = { ...job, status: 'completed', downloadId: jobId };
+    } } });
+  assert.equal(waits, 1);
+  assert.deepEqual(observations, [{ kind: 'result', jobId, timeoutMs: 90000, elapsedMs: 65000,
+    outcome: 'DOWNLOAD_CONTROL_VISIBLE', jobStatus: 'completed', downloadIdMatches: true }]);
+});
+
+test('unconfirmed export readiness fails with bounded diagnostics and never stores raw browser or job data', async () => {
+  const jobId = 'inert-export-result', observations = [], secret = 'PRIVATE_LINK_OR_DOCUMENT';
+  let clock = 1000;
+  await assert.rejects(waitForHostedExportReady({ kind: 'result', jobId, now: () => clock,
+    snapshot: () => ({ outbox: [{ id: 'other-export-job', status: 'completed', downloadId: jobId },
+      { id: jobId, status: 'queued', error: secret, payload: { document: secret } }] }),
+    record: value => observations.push(value), control: { async waitFor({ timeout }) {
+      clock += timeout; throw new Error(secret);
+    } } }), error => error.code === 'HOSTED_EXPORT_READINESS_UNCONFIRMED' && !error.message.includes(secret));
+  assert.deepEqual(observations, [{ kind: 'result', jobId, timeoutMs: 90000, elapsedMs: 90000,
+    outcome: 'READINESS_UNCONFIRMED', jobStatus: 'queued', downloadIdMatches: false }]);
+  assert.ok(!JSON.stringify(observations).includes(secret));
+});
+
+test('missing and unrecognized export states remain unknown in readiness diagnostics', async () => {
+  for (const status of [undefined, 'PRIVATE_UNEXPECTED_STATE']) {
+    const observations = [];
+    await assert.rejects(waitForHostedExportReady({ kind: 'csv', jobId: 'inert-export-csv', now: () => 0,
+      snapshot: () => status ? { outbox: [{ id: 'inert-export-csv', status }] } : undefined,
+      record: value => observations.push(value), control: { async waitFor() { throw new Error('timeout'); } } }),
+    { code: 'HOSTED_EXPORT_READINESS_UNCONFIRMED' });
+    assert.equal(observations[0].jobStatus, null); assert.equal(observations[0].downloadIdMatches, false);
+  }
+});
 
 const expectedUpload = { mimeType: 'application/pdf', size: 128, sha256: 'a'.repeat(64) };
 function uploadHarness() {

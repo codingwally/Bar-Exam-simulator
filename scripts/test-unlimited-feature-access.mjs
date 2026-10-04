@@ -97,6 +97,12 @@ function featureLoaderHarness(access, unlimitedResult) {
     body: {
       append(element) {
         appended.push(element.href || element.src || element.tagName);
+        if (String(element.src || '').includes('assets/examinations.js')) {
+          window.DueDiligenceExaminations = Object.freeze({
+            openPerSubject: async () => true,
+            openBarFeels: async () => true,
+          });
+        }
         element.dispatch('load');
       },
     },

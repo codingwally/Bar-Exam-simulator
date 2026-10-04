@@ -146,6 +146,20 @@ function featureLoaderHarness(access, unlimitedResult) {
 }
 
 {
+  const admin = featureLoaderHarness({
+    allowed: true,
+    unlimited: true,
+    role: 'founder_admin',
+    basis: 'founder_admin',
+    profileCompleted: true,
+  }, true);
+  assert.equal(typeof admin.window.DueDiligenceExaminations.openBarFeels, 'function');
+  assert.equal(await admin.window.DueDiligenceExaminations.openBarFeels(), true);
+  assert.equal(admin.unlimitedChecks.length, 0);
+  assert.ok(admin.appended.some((asset) => String(asset).includes('examinations.js')));
+}
+
+{
   const unpaid = featureLoaderHarness({
     allowed: true,
     unlimited: false,

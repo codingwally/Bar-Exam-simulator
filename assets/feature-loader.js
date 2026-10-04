@@ -373,6 +373,12 @@
       if (global.DueDiligenceExaminations === placeholder) throw new Error('Syllabus-Based Review could not be opened.');
       return global.DueDiligenceExaminations.openPerSubject(...args);
     },
+    openBarFeels: async (...args) => {
+      const placeholder = global.DueDiligenceExaminations;
+      if (!await loadForFeature('bar-feels')) return null;
+      if (global.DueDiligenceExaminations === placeholder) throw new Error('Bar Exam Simulation could not be opened.');
+      return global.DueDiligenceExaminations.openBarFeels(...args);
+    },
   });
 
   installPageRouterGuard();

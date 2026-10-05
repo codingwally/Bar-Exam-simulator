@@ -936,7 +936,9 @@
   }
 
   function curatedBarCards() {
-    const items = state.catalog.filter((item) => item.track === 'bar_feels');
+    const items = state.catalog.filter((item) =>
+      item?.track === 'bar_feels' && item?.assessmentKind === 'curated'
+    );
     if (!items.length) {
       return `<div class="dd-unavailable">
         Bar Exam Simulation is being prepared for this account.
@@ -963,7 +965,9 @@
   }
 
   function barSimulationHistoryMarkup() {
-    const attempts = state.history.filter((item) => item?.track === 'bar_feels');
+    const attempts = state.history.filter((item) =>
+      item?.track === 'bar_feels' && item?.assessmentKind === 'curated'
+    );
     const total = Math.max(attempts.length, Number(state.historyTotal) || 0);
     const rows = attempts.map((item) => {
       const attemptId = String(item.attemptId || '');
@@ -1676,7 +1680,7 @@
           <span>${state.active.examination.track === 'bar_feels'
             ? 'BAR EXAM SIMULATION'
             : 'SYLLABUS-BASED REVIEW'} &middot;
-            ${escapeHtml(state.active.examination.subject || 'Curated examination')}</span>
+            ${escapeHtml(state.active.examination.subject || (state.active.examination.assessmentKind === 'curated' ? 'Curated examination' : 'Private examination'))}</span>
         </div>
         <div class="dd-room-clock ${timerMode === 'none' ? 'is-hidden' : ''}" id="dd-room-clock">
           <small>${timerMode === 'strict' ? 'Overall time remaining' : 'Total writing time'}</small>
@@ -3940,8 +3944,14 @@
             offset: 0,
           }),
         ]);
-      state.catalog = catalog.items || [];
-      state.history = Array.isArray(history.items) ? history.items : [];
+      const catalogItems = Array.isArray(catalog.items) ? catalog.items : [];
+      const historyItems = Array.isArray(history.items) ? history.items : [];
+      state.catalog = track === 'bar_feels'
+        ? catalogItems.filter((item) => item?.track === 'bar_feels' && item?.assessmentKind === 'curated')
+        : catalogItems;
+      state.history = track === 'bar_feels'
+        ? historyItems.filter((item) => item?.track === 'bar_feels' && item?.assessmentKind === 'curated')
+        : historyItems;
       state.historyOffset = state.history.length;
       const reportedHistoryTotal = Number(history.total);
       state.historyTotal = Number.isFinite(reportedHistoryTotal) && reportedHistoryTotal >= 0

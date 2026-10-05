@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  RELEASE_SHA: d9afcf3dcdf837976783bd2c05e09ba961a3038f
+  RELEASE_SHA: e871e20f8b81f624d6dbba385aaa74160623c3d2
   EXPECTED_LIVE_SHA: c27bfa942d7cfbb80d7948be17a7bce7a3879dac
   SITE_URL: https://duediligence.ph
 

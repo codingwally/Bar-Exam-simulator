@@ -1,0 +1,102 @@
+name: Release Bar Feels upload UI removal
+
+on:
+  push:
+    branches:
+      - hotfix/remove-bar-feels-upload-ui-20261005
+    paths:
+      - .github/workflows/release-remove-bar-feels-upload-ui-20261005.yml
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: examination-room-production-cutover
+  cancel-in-progress: false
+
+env:
+  EXPECTED_LIVE_SHA: e871e20f8b81f624d6dbba385aaa74160623c3d2
+  SITE_URL: https://duediligence.ph
+
+jobs:
+  deploy:
+    name: Validate and deploy isolated Bar Feels UI cleanup
+    if: "${{ github.event.head_commit.message == 'release: remove broken Bar Feels upload UI' }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout isolated hotfix branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prove exact live baseline and isolated scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/hotfix/remove-bar-feels-upload-ui-20261005"
+          git cat-file -e "$EXPECTED_LIVE_SHA^{commit}"
+          live_sha="$(curl -fsS "$SITE_URL/.well-known/duediligence-release.txt?barui=$GITHUB_SHA")"
+          test "$live_sha" = "$EXPECTED_LIVE_SHA"
+          changed="$(git diff --name-only "$EXPECTED_LIVE_SHA..$GITHUB_SHA" | sort)"
+          expected="$(printf '%s\n'             '.github/workflows/release-remove-bar-feels-upload-ui-20261005.yml'             'assets/examinations.js'             'assets/feature-loader.js'             'index.html' | sort)"
+          test "$changed" = "$expected"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install reviewed Pages build dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Validate Bar Feels cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check assets/examinations.js
+          node --check assets/feature-loader.js
+          node scripts/test-unlimited-feature-access.mjs
+          node scripts/test-pages-artifact.mjs
+          ! grep -Fq "Authorized Uploaded Examination" assets/examinations.js
+          ! grep -Fq 'id="dd-upload-form"' assets/examinations.js
+          grep -Fq 'style="grid-column: 1 / -1;"' assets/examinations.js
+          grep -Fq "bar-ui=remove-private-upload-20261005-1" assets/feature-loader.js
+          grep -Fq "bar-ui=remove-private-upload-20261005-1" index.html
+          git diff --check "$EXPECTED_LIVE_SHA..$GITHUB_SHA"
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload exact hotfix artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .pages-dist
+
+      - name: Deploy exact hotfix to Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Verify production UI cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 36); do
+            marker="$(curl -fsS "$SITE_URL/.well-known/duediligence-release.txt?release=$GITHUB_SHA" || true)"
+            exam="$(curl -fsS "$SITE_URL/assets/examinations.js?barui=$GITHUB_SHA" || true)"
+            loader="$(curl -fsS "$SITE_URL/assets/feature-loader.js?barui=$GITHUB_SHA" || true)"
+            index="$(curl -fsS "$SITE_URL/?barui=$GITHUB_SHA" || true)"
+            if test "$marker" = "$GITHUB_SHA"               && ! grep -Fq "Authorized Uploaded Examination" <<<"$exam"               && ! grep -Fq 'id="dd-upload-form"' <<<"$exam"               && grep -Fq "bar-ui=remove-private-upload-20261005-1" <<<"$loader"               && grep -Fq "bar-ui=remove-private-upload-20261005-1" <<<"$index"; then
+              echo "Bar Feels upload UI removal is live."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "UI cleanup deployment did not become observable in time." >&2
+          exit 1

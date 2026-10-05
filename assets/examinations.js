@@ -1051,35 +1051,12 @@
       <div class="dd-exam-status" role="status" aria-live="polite"></div>
       ${barSimulationHistoryMarkup()}
       <div class="dd-bar-entry-grid">
-        <section class="dd-bar-entry-card">
+        <section class="dd-bar-entry-card" style="grid-column: 1 / -1;">
           <p class="dd-exam-kicker">Curated Route</p>
           <h2>Six Bar Examination Destinations</h2>
           <p>Complete twenty distinct essays in each destination, with individual A.L.A.C.
             assessment and the full suggested answer released under the examination rules.</p>
           <div class="dd-exam-card-list">${curatedBarCards()}</div>
-        </section>
-        <section class="dd-bar-entry-card">
-          <p class="dd-exam-kicker">Private Route</p>
-          <h2>Authorized Uploaded Examination</h2>
-          <p>Upload a plain-text or Word examination. The file remains private and
-            never enters the public question bank. PDF is not accepted in this beta because
-            the current static/Worker stack cannot parse it reliably without weakening validation.</p>
-          <form id="dd-upload-form">
-            <label class="dd-exam-field">Examination title
-              <input id="dd-upload-title" maxlength="180" required
-                placeholder="e.g., Synthetic Civil Law Review">
-            </label>
-            <div class="dd-upload-drop">
-              <label for="dd-upload-file"><strong>Select .txt or .docx</strong><br>
-                <small>1.5 MB maximum; signature and MIME validated</small></label>
-              <input id="dd-upload-file" type="file"
-                accept=".txt,.docx,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                required>
-            </div>
-            <div class="dd-exam-actions">
-              <button class="dd-exam-button is-primary" type="submit">Parse Securely</button>
-            </div>
-          </form>
         </section>
       </div>
     </div></div>`;

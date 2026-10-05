@@ -42,6 +42,14 @@ for (const access of [
   { allowed: true, unlimited: true, basis: 'provisional_payment', profileCompleted: true },
   { allowed: true, unlimited: true, basis: 'founding_beta', freeBeta: { active: true } },
   { allowed: true, unlimited: true, role: 'founder_admin' },
+  {
+    allowed: false,
+    unlimited: false,
+    role: 'admin',
+    basis: 'paid_subscription_expired',
+    paidSubscriptionExpired: true,
+    profileCompleted: true,
+  },
 ]) {
   predicateContext.access = access;
   assert.equal(vm.runInContext('canUseUnlimitedFeature(access)', predicateContext), true);
@@ -97,6 +105,12 @@ function featureLoaderHarness(access, unlimitedResult) {
     body: {
       append(element) {
         appended.push(element.href || element.src || element.tagName);
+        if (String(element.src || '').includes('assets/examinations.js')) {
+          window.DueDiligenceExaminations = Object.freeze({
+            openPerSubject: async () => true,
+            openBarFeels: async () => true,
+          });
+        }
         element.dispatch('load');
       },
     },
@@ -143,6 +157,21 @@ function featureLoaderHarness(access, unlimitedResult) {
   assert.equal(await eligible.window.DueDiligenceFeatureLoader.loadForFeature('bar-feels'), true);
   assert.equal(eligible.unlimitedChecks.length, 0);
   assert.ok(eligible.appended.some((asset) => String(asset).includes('examinations.js')));
+}
+
+{
+  const admin = featureLoaderHarness({
+    allowed: false,
+    unlimited: false,
+    role: 'admin',
+    basis: 'paid_subscription_expired',
+    paidSubscriptionExpired: true,
+    profileCompleted: true,
+  }, true);
+  assert.equal(typeof admin.window.DueDiligenceExaminations.openBarFeels, 'function');
+  assert.equal(await admin.window.DueDiligenceExaminations.openBarFeels(), true);
+  assert.equal(admin.unlimitedChecks.length, 0);
+  assert.ok(admin.appended.some((asset) => String(asset).includes('examinations.js')));
 }
 
 {

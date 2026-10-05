@@ -90,6 +90,17 @@
   }
 
   function hasResolvedUnlimitedAccess(access) {
+    const role = String(access?.role || '').trim().toLowerCase();
+    const basis = String(access?.basis || '').trim().toLowerCase();
+    const administrator = ['admin', 'founder_admin', 'super_admin'].includes(role)
+      || ['admin', 'founder_admin', 'super_admin'].includes(basis);
+    const unresolvedProfile = access?.basis === 'profile_required'
+      || (access?.commercialLaunchEnabled === true && access?.profileCompleted === false);
+    if (administrator) {
+      return access?.termsRequired !== true
+        && access?.reauthenticationRequired !== true
+        && !unresolvedProfile;
+    }
     return hasResolvedAllowedAccess(access) && access?.unlimited === true;
   }
 
@@ -372,6 +383,12 @@
       if (!await loadForFeature('subject-matter')) return null;
       if (global.DueDiligenceExaminations === placeholder) throw new Error('Syllabus-Based Review could not be opened.');
       return global.DueDiligenceExaminations.openPerSubject(...args);
+    },
+    openBarFeels: async (...args) => {
+      const placeholder = global.DueDiligenceExaminations;
+      if (!await loadForFeature('bar-feels')) return null;
+      if (global.DueDiligenceExaminations === placeholder) throw new Error('Bar Exam Simulation could not be opened.');
+      return global.DueDiligenceExaminations.openBarFeels(...args);
     },
   });
 

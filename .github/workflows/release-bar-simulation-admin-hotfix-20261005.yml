@@ -1,0 +1,102 @@
+name: Release Bar Simulation admin access hotfix
+
+on:
+  push:
+    branches:
+      - hotfix/bar-simulation-admin-live-20261005
+    paths:
+      - .github/workflows/release-bar-simulation-admin-hotfix-20261005.yml
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: examination-room-production-cutover
+  cancel-in-progress: false
+
+env:
+  EXPECTED_LIVE_SHA: c27bfa942d7cfbb80d7948be17a7bce7a3879dac
+  SITE_URL: https://duediligence.ph
+
+jobs:
+  deploy:
+    name: Validate and deploy isolated Bar Simulation admin hotfix
+    if: "${{ github.event.head_commit.message == 'release: deploy Bar Simulation admin hotfix' }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout isolated hotfix branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prove exact live baseline and isolated scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/hotfix/bar-simulation-admin-live-20261005"
+          [[ "$GITHUB_SHA" =~ ^[a-f0-9]{40}$ ]]
+          git cat-file -e "$EXPECTED_LIVE_SHA^{commit}"
+          live_sha="$(curl -fsS "$SITE_URL/.well-known/duediligence-release.txt?hotfix=$GITHUB_SHA")"
+          test "$live_sha" = "$EXPECTED_LIVE_SHA"
+          changed="$(git diff --name-only "$EXPECTED_LIVE_SHA..$GITHUB_SHA" | sort)"
+          expected="$(printf '%s\n'             '.github/workflows/release-bar-simulation-admin-hotfix-20261005.yml'             'assets/feature-loader.js'             'assets/phase4-experience.js'             'index.html'             'scripts/test-unlimited-feature-access.mjs' | sort)"
+          test "$changed" = "$expected"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install reviewed Pages build dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Validate admin access and Pages artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check assets/feature-loader.js
+          node --check assets/phase4-experience.js
+          node scripts/test-unlimited-feature-access.mjs
+          node scripts/test-pages-artifact.mjs
+          grep -Fq "openBarFeels: async" assets/feature-loader.js
+          grep -Fq "['admin', 'founder_admin', 'super_admin'].includes(role)" assets/feature-loader.js
+          grep -Fq "['admin', 'founder_admin', 'super_admin'].includes(role)" assets/phase4-experience.js
+          grep -Fq "admin-simulation=20261005-1" index.html
+          git diff --check "$EXPECTED_LIVE_SHA..$GITHUB_SHA"
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload exact hotfix artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .pages-dist
+
+      - name: Deploy exact hotfix to Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Verify hotfix is live
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 36); do
+            marker="$(curl -fsS "$SITE_URL/.well-known/duediligence-release.txt?release=$GITHUB_SHA" || true)"
+            loader="$(curl -fsS "$SITE_URL/assets/feature-loader.js?release=$GITHUB_SHA" || true)"
+            access="$(curl -fsS "$SITE_URL/assets/phase4-experience.js?release=$GITHUB_SHA" || true)"
+            index="$(curl -fsS "$SITE_URL/?release=$GITHUB_SHA" || true)"
+            if test "$marker" = "$GITHUB_SHA"               && grep -Fq "openBarFeels: async" <<<"$loader"               && grep -Fq "['admin', 'founder_admin', 'super_admin'].includes(role)" <<<"$loader"               && grep -Fq "['admin', 'founder_admin', 'super_admin'].includes(role)" <<<"$access"               && grep -Fq "admin-simulation=20261005-1" <<<"$index"; then
+              echo "Bar Simulation admin hotfix is live."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Hotfix deployment did not become observable in time." >&2
+          exit 1

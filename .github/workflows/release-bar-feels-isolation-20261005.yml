@@ -1,0 +1,108 @@
+name: Production Bar Feels catalog isolation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/release-bar-feels-isolation-20261005.yml
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: examination-room-production-cutover
+  cancel-in-progress: false
+
+env:
+  RELEASE_SHA: 0a20a8c393931600d8ea54410255262d6cccd4c0
+  EXPECTED_LIVE_SHA: c612e93e599341d57da291d14508be8fea508411
+  SITE_URL: https://duediligence.ph
+
+jobs:
+  deploy:
+    name: Deploy curated-only Bar Feels frontend guard
+    if: "${{ github.event.head_commit.message == 'release: publish curated-only Bar Feels guard' }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout repository history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify isolated release source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          git cat-file -e "$RELEASE_SHA^{commit}"
+          git cat-file -e "$EXPECTED_LIVE_SHA^{commit}"
+          live_sha="$(curl -fsS "$SITE_URL/.well-known/duediligence-release.txt?barisolation=$GITHUB_SHA")"
+          test "$live_sha" = "$EXPECTED_LIVE_SHA"
+          changed="$(git diff --name-only "$EXPECTED_LIVE_SHA..$RELEASE_SHA" | sort)"
+          expected="$(printf '%s\n'             'assets/examinations.js'             'assets/feature-loader.js'             'index.html' | sort)"
+          test "$changed" = "$expected"
+
+      - name: Checkout exact release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install reviewed Pages build dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Validate curated-only Bar Feels guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          node --check assets/examinations.js
+          node --check assets/feature-loader.js
+          GITHUB_SHA="$RELEASE_SHA" node scripts/test-pages-artifact.mjs
+          grep -Fq "item?.track === 'bar_feels' && item?.assessmentKind === 'curated'" assets/examinations.js
+          grep -Fq "bar-isolation=20261005-1" assets/feature-loader.js
+          grep -Fq "bar-isolation=20261005-1" index.html
+          git diff --check "$EXPECTED_LIVE_SHA..$RELEASE_SHA"
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload exact artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .pages-dist
+
+      - name: Deploy exact release
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Verify production
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 36); do
+            marker="$(curl -fsS "$SITE_URL/.well-known/duediligence-release.txt?release=$RELEASE_SHA" || true)"
+            exam="$(curl -fsS "$SITE_URL/assets/examinations.js?barisolation=$RELEASE_SHA" || true)"
+            loader="$(curl -fsS "$SITE_URL/assets/feature-loader.js?barisolation=$RELEASE_SHA" || true)"
+            index="$(curl -fsS "$SITE_URL/?barisolation=$RELEASE_SHA" || true)"
+            if test "$marker" = "$RELEASE_SHA"               && grep -Fq "item?.track === 'bar_feels' && item?.assessmentKind === 'curated'" <<<"$exam"               && grep -Fq "bar-isolation=20261005-1" <<<"$loader"               && grep -Fq "bar-isolation=20261005-1" <<<"$index"; then
+              echo "Curated-only Bar Feels frontend guard is live."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Production guard did not become observable in time." >&2
+          exit 1

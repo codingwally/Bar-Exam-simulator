@@ -26,7 +26,7 @@
       ],
       scripts: [
         'assets/study-workspace.js?v=syllabus-reveal-p0-20260826-2&feedback=offline-save-20260827-1',
-        'assets/examinations.js?v=pedro-release2-20260827-1&baseline=public-reliability-20260827-1&hotfix=ian-provisional-reveal-20260828-1&recovery=subject-review-timeout-20260828-1&results=history-20260828-1&simulation=simulation-timer-review-20260906-r2&totals=simulation-cumulative-score-20260906-r1&answers=simulation-submitted-answer-20260906-r1&access=astra-simulator-access-20260907-r1&source=astra-simulator-source-20260908-r1&syllabus=question-coaching-20260909-1&readability=results-reliability-20260909-1',
+        'assets/examinations.js?v=pedro-release2-20260827-1&baseline=public-reliability-20260827-1&hotfix=ian-provisional-reveal-20260828-1&recovery=subject-review-timeout-20260828-1&results=history-20260828-1&simulation=simulation-timer-review-20260906-r2&totals=simulation-cumulative-score-20260906-r1&answers=simulation-submitted-answer-20260906-r1&access=astra-simulator-access-20260907-r1&source=astra-simulator-source-20260908-r1&syllabus=question-coaching-20260909-1&readability=results-reliability-20260909-1&bar-ui=remove-private-upload-20261005-1',
       ],
     }),
     content: Object.freeze({

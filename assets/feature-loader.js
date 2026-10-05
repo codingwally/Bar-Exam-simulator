@@ -90,6 +90,17 @@
   }
 
   function hasResolvedUnlimitedAccess(access) {
+    const role = String(access?.role || '').trim().toLowerCase();
+    const basis = String(access?.basis || '').trim().toLowerCase();
+    const administrator = ['admin', 'founder_admin', 'super_admin'].includes(role)
+      || ['admin', 'founder_admin', 'super_admin'].includes(basis);
+    const unresolvedProfile = access?.basis === 'profile_required'
+      || (access?.commercialLaunchEnabled === true && access?.profileCompleted === false);
+    if (administrator) {
+      return access?.termsRequired !== true
+        && access?.reauthenticationRequired !== true
+        && !unresolvedProfile;
+    }
     return hasResolvedAllowedAccess(access) && access?.unlimited === true;
   }
 

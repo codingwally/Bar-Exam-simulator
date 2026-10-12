@@ -20,7 +20,7 @@ const SHELL = Object.freeze([
   '/assets/private-beta-landing.js?v=public-reliability-20260827-2&feedback=quiet-navigation-20260828-1&forecast=access-flow-20260902-1&auth=login-loop-p0-20260901-1&unlimited=feature-access-20260902-1&forecast-loop=astra-20260907-1&entry=astra-forecast-cancel-20260907-r1',
   '/assets/profile-photo.js?v=profile-photo-release2-20260827-1',
   '/assets/phase2-experience.js?v=profile-photo-release2-20260827-1&baseline=syllabus-reveal-p0-20260826-2-examination-room-4&profile=chambers-20260827-1&access=paid-expiry-20260827-1&pricing=regular-checkout-r3&legal=explicit-20260901-1&auth=login-loop-p0-20260901-1&unlimited=feature-access-20260902-1&terms=astra-activation-20260907-r1&analytics=astra-analytics-browser-20260908-r1&review=astra-late-offer-20260908-r1&asset-recovery=bootstrap-20260909-1&display=home-readable-20260910-1',
-  '/assets/phase4-experience.js?v=syllabus-reveal-p0-20260826-2&access=paid-expiry-20260827-1&recovery=subject-review-timeout-20260828-1&forecast-setup=20260901-2&auth=login-loop-p0-20260901-1&unlimited=feature-access-20260902-1&forecast-loop=astra-20260907-1&poll=astra-forecast-read-wait-20260907-r1',
+  '/assets/phase4-experience.js?v=syllabus-reveal-p0-20260826-2&admin-simulation=20261005-1&access=paid-expiry-20260827-1&recovery=subject-review-timeout-20260828-1&forecast-setup=20260901-2&auth=login-loop-p0-20260901-1&unlimited=feature-access-20260902-1&forecast-loop=astra-20260907-1&poll=astra-forecast-read-wait-20260907-r1',
   '/assets/pedro-navigation.js?v=pedro-release2-20260827-1',
   '/assets/icons/navigation/door-open.svg',
   '/assets/study-workspace.css?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4&feedback=offline-save-20260827-1',

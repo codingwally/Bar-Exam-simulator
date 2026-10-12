@@ -8,6 +8,10 @@ At 2026-10-12 02:03:34 UTC, the single event and expired result-export row still
 
 Only Supabase project `hlzqmreeoghbldnhlybr` is in scope. Production project `hbllomlijfznnuudpdvr` is excluded. The fixed manifest contains the ten original remaining identities; the already removed eleventh must stay absent. No password reset or new session is permitted for this cleanup.
 
+The native PostgreSQL17.6 cancellation/capture test passed all23 assertions in [run38220436365](https://github.com/codingwally/Bar-Exam-simulator/actions/runs/38220436365). Its helper, Debate migration, generator and harness hashes were independently compared with the checked-out source. The same unchanged cancellation source also passed in [run38221346757](https://github.com/codingwally/Bar-Exam-simulator/actions/runs/38221346757); its staging mutation job was skipped. A rollback-only invocation on actual staging returned the expected four-key capture. Independent readback at **2026-10-12 13:56:34.765640 UTC** found both original full-row hashes unchanged and the result job still running on its original expired lease. No durable cancellation, file removal or Auth deletion is established by that trial.
+
+The separate Auth cleanup plan has a fresh ten-fixture capture, exact identity/default-row hashes and current catalog fingerprints. Independent review reproduced its SQL byte for byte and found no targeting or cascade defect. Its successful deletion path has not been executed; actual Debate and Storage residue must be removed and independently verified first, followed by a rollback-only execution and fresh readback before any committed Auth cleanup. The SQL cannot establish physical file absence or fence every non-FK writer by itself.
+
 ## Execution sequence
 
 1. Recheck the exact installed helper and full event/job hashes, all original identities, all sessions and refresh-token rows, financial/privileged references, and current staging activity. Preserve an unchanged drain observation of at least65seconds. No active rehearsal may overlap the mutation phase.
@@ -26,10 +30,10 @@ Storage deletion uses the API, not direct `storage.objects` deletion, as require
 
 | Requirement | Verification | Current evidence boundary |
 | --- | --- | --- |
-| Only the original staging event/job/identities may be reconciled | Fixed manifest and exact full-row compare in capture generator; malformed/widened-input tests | No remote mutation executed by this source yet |
-| Cancellation and helper capture must be atomic | Native PostgreSQL17.6 tests: rollback, explicit commit, ownership/session/financial/helper drift, stale lease/claim | Native execution must pass before staging mutation |
+| Only the original staging event/job/identities may be reconciled | Fixed manifest and exact full-row compare in capture generator; malformed/widened-input tests | Actual staging rollback-only trial passed; independent hashes unchanged; no durable mutation |
+| Cancellation and helper capture must be atomic | Native PostgreSQL17.6 tests: rollback, explicit commit, ownership/session/financial/helper drift, stale lease/claim | All23 native assertions passed; actual committed cancellation remains pending |
 | Unrelated files and production remain unreachable | Fixed-origin/four-key Storage transport, private-bucket and snapshot guards | Inert transport tests; no provider claim |
 | Lost mutation response cannot cause automatic retry | Persisted per-key intent, failure journal, first-attempt/history gates, read-only subsequent inspection | Inert tests cover lost response, failed persistence and no replay |
 | Cleanup must not erase evidence of incomplete acceptance | Read-only report, preserved failed rehearsal receipts and exact remaining work | Full hosted rehearsal, physical media, real inbox, signed-in role journeys and whole-site audit remain open |
 
-Local verification on October12:28 tests passed, one native database test correctly skipped on Windows. The workflow executes that native test on an isolated PostgreSQL17.6 service with reduced inert Auth/Storage/billing dependencies and unchanged Debate migration/helper SQL. No production UI or runtime changes are included in this reconciliation supplement. The existing315 requirement states are not promoted by these maintenance checks.
+Local verification on October12:28 tests passed, one native database test correctly skipped on Windows. The workflow executed that native test on an isolated PostgreSQL17.6 service with reduced inert Auth/Storage/billing dependencies and unchanged Debate migration/helper SQL. This reconciliation implementation does not change the production UI or runtime. The containing branch separately aligns Home's offline cache URLs with the current page and updates affected test assumptions; that change is not deployed. The existing315 requirement states are not promoted by these maintenance checks.

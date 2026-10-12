@@ -1,5 +1,7 @@
 # Debate Room V3 requirement-to-test ledger
 
+**12 October maintenance:** [exact staging reconciliation for interrupted rehearsal34415569337](staging-reconciliation-34415569337.md) adds a fixed-fixture cancellation/capture transaction and a separate four-key Storage runner. Local guard tests passed; native database and actual cleanup evidence remain separate required steps. This does not promote any original requirement or claim a completed rehearsal or production release.
+
 **22 September follow-up:** [the full hosted rehearsal reached the corrected final result but failed during result-PDF readiness, with cleanup incomplete](hosted-export-recovery-20260922.md). Its successful stages and downloads are bounded evidence, not acceptance. The follow-up adds a focused recovery regression and allows the existing export claim to recover before the hosted download timeout. No production change or successful full-duration rerun is claimed; original requirement states below remain unchanged.
 
 The original 315 stable requirements below remain intact. [Later direct owner instructions and publication tests](publication-20260910.md) supersede the earlier restricted-preview access choice: public entry must include paid and unpaid members, with professional public copy. Public deployment and full acceptance require their own actual receipts.

@@ -188,7 +188,10 @@ test('dialog and cache references explain the storage location and deliver the n
   }
   assert.match(featureLoader, /study-workspace\.js\?v=syllabus-reveal-p0-20260826-2&feedback=offline-save-20260827-1/);
   assert.match(featureLoader, /study-workspace\.css[^'\n]*feedback=offline-save-20260827-1/);
-  assert.match(index, /feature-loader\.js\?v=syllabus-reveal-p0-20260826-2&feedback=offline-save-20260827-1/);
-  assert.match(serviceWorker, /duediligence-shell-20260827-public-reliability-2-examination-room-production-1/);
+  const loaderUrl = index.match(/src="(assets\/feature-loader\.js\?[^"]+)"/)?.[1]?.replaceAll('&amp;', '&');
+  assert.ok(loaderUrl, 'Home must load its versioned feature loader');
+  assert.equal(new URL(loaderUrl, 'https://fixture.invalid/').searchParams.get('feedback'), 'offline-save-20260827-1');
+  assert.ok(serviceWorker.includes(`'/${loaderUrl}'`), 'Offline cache must use the exact current Home loader URL');
+  assert.match(serviceWorker, /^const CACHE_VERSION = 'duediligence-shell-[a-z0-9-]+';/m);
   assert.match(serviceWorker, /study-workspace\.css[^'\n]*feedback=offline-save-20260827-1/);
 });

@@ -16,6 +16,9 @@ assert.doesNotMatch(page, /(?:unpkg|cdn\.jsdelivr\.net).*supabase/);
 assert.match(page, /supabase-2\.49\.8\.umd\.js/);
 assert.doesNotMatch(page, /DEBATE_LOCAL_REHEARSAL\s*[:=]\s*true/);
 for (const match of page.matchAll(/<script[^>]+src="([^"]+)"/g)) {
+  // Main bc20545 added the same reviewed AdSense tag to every public page.
+  // Keep application dependencies local; do not allow arbitrary remote scripts.
+  if (match[1] === 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4565325992372168') continue;
   const relative = match[1].split('?')[0];
   assert.ok(relative.startsWith('../'), 'Public Debate scripts must use reviewed local assets.');
   assert.ok((await stat(path.resolve(artifact, 'debate-room', relative))).isFile(), relative);

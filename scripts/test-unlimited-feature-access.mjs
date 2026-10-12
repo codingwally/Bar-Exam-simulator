@@ -42,6 +42,14 @@ for (const access of [
   { allowed: true, unlimited: true, basis: 'provisional_payment', profileCompleted: true },
   { allowed: true, unlimited: true, basis: 'founding_beta', freeBeta: { active: true } },
   { allowed: true, unlimited: true, role: 'founder_admin' },
+  {
+    allowed: false,
+    unlimited: false,
+    role: 'admin',
+    basis: 'paid_subscription_expired',
+    paidSubscriptionExpired: true,
+    profileCompleted: true,
+  },
 ]) {
   predicateContext.access = access;
   assert.equal(vm.runInContext('canUseUnlimitedFeature(access)', predicateContext), true);
@@ -97,6 +105,12 @@ function featureLoaderHarness(access, unlimitedResult) {
     body: {
       append(element) {
         appended.push(element.href || element.src || element.tagName);
+        if (String(element.src || '').includes('assets/examinations.js')) {
+          window.DueDiligenceExaminations = Object.freeze({
+            openPerSubject: async () => true,
+            openBarFeels: async () => true,
+          });
+        }
         element.dispatch('load');
       },
     },
@@ -146,6 +160,21 @@ function featureLoaderHarness(access, unlimitedResult) {
 }
 
 {
+  const admin = featureLoaderHarness({
+    allowed: false,
+    unlimited: false,
+    role: 'admin',
+    basis: 'paid_subscription_expired',
+    paidSubscriptionExpired: true,
+    profileCompleted: true,
+  }, true);
+  assert.equal(typeof admin.window.DueDiligenceExaminations.openBarFeels, 'function');
+  assert.equal(await admin.window.DueDiligenceExaminations.openBarFeels(), true);
+  assert.equal(admin.unlimitedChecks.length, 0);
+  assert.ok(admin.appended.some((asset) => String(asset).includes('examinations.js')));
+}
+
+{
   const unpaid = featureLoaderHarness({
     allowed: true,
     unlimited: false,
@@ -186,7 +215,7 @@ assert.match(indexBarFeels(html), /ensureUnlimitedFeatureAccess\('#bar-feels'/);
 assert.match(html, /if \(page === 'bar-feels'\)[\s\S]*Do not reveal the page before that asynchronous gate resolves/);
 assert.match(forecast, /openUnlimitedFeatureGate\(ROUTE,[\s\S]*featureId: 'bar-forecast'/);
 assert.doesNotMatch(namedFunction(forecast, 'routeToPlansAndPricing'), /toast/);
-assert.match(serviceWorker, /duediligence-shell-astra-analytics-count-copy-20260908-r1/);
+assert.match(serviceWorker, /duediligence-shell-focus-fullscreen-20260926-1/);
 for (const asset of [
   'phase2-experience.js',
   'phase4-experience.js',

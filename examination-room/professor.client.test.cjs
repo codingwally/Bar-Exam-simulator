@@ -97,7 +97,7 @@ function loadProfessorStartupHooks({ storageBlocked = false, indexedDbAvailable 
   };
   const exposedSource = professorSource.replace(
     /\n\s*initialize\(\);\s*\n\}\)\(window\);\s*$/,
-    '\n  global.__professorStartupTestHooks = { clientOnlyBlankDraft, editorExamFromStored, examContentFingerprint, normalizeAllowedEmails, invalidAllowedEmails, creatorAccessUnlocked, scheduleActivationPoll, stopActivationPolling, resetActivationPollingWindow, activationPollDelay, stopMonitorPolling, scheduleMonitorPoll, refreshMonitor, draftDb, saveLocalDraft, readLocalDraft, readActiveLocalDraft, readLocalDraftIndex, localDraftBelongsToCurrentProfessor, prepareDecryptedGradePayload, validateCompleteGradedPackageSets, serverDraftBackupBlockers, serverBackupWaitingLabel, examSummariesFromSession, examSummariesWithCurrentExam, overviewExamItems, overviewStatusPresentation, lifecycleOperationForExam, summariesAfterRemoval, duplicateDraft, isPristineDraft, normalizeQuestion, questionAfterTypeChange, questionSuggestion, marginSuggestion, state };\n})(window);',
+    '\n  global.__professorStartupTestHooks = { clientOnlyBlankDraft, editorExamFromStored, examContentFingerprint, normalizeAllowedEmails, invalidAllowedEmails, creatorAccessUnlocked, scheduleActivationPoll, stopActivationPolling, resetActivationPollingWindow, activationPollDelay, stopMonitorPolling, scheduleMonitorPoll, refreshMonitor, draftDb, saveLocalDraft, readLocalDraft, readActiveLocalDraft, readLocalDraftIndex, localDraftBelongsToCurrentProfessor, prepareDecryptedGradePayload, validateCompleteGradedPackageSets, serverDraftBackupBlockers, serverBackupWaitingLabel, examSummariesFromSession, examSummariesWithCurrentExam, overviewExamItems, overviewStatusPresentation, lifecycleOperationForExam, summariesAfterRemoval, duplicateDraft, isPristineDraft, normalizeQuestion, questionAfterTypeChange, questionSuggestion, marginSuggestion, parseExamDocumentText, documentPointValue, pdfPageText, pdfSafeText, wrapPdfText, serializePdfDocument, savedGradePoints, buildSubmittedAnswersPdf, state };\n})(window);',
   );
   vm.runInNewContext(exposedSource, { window, indexedDB: window.indexedDB }, { filename: 'professor.js' });
   return { ...window.__professorStartupTestHooks, __testWindow: window };
@@ -165,28 +165,67 @@ test('professor text and passphrase entry never depend on blocking browser promp
   assert.match(professorHtml, /id="confirmation-confirm"/);
 });
 
-test('offline grading copies remain passphrase-encrypted and examination-version bound', () => {
+test('one PDF text extraction populates exam title, coverage, instructions, questions, and exact points', () => {
+  const { parseExamDocumentText } = loadProfessorStartupHooks();
+  const questions = Array.from({ length: 13 }, (_, index) => `QUESTION ${index + 1} - 5 POINTS\nFacts for item ${index + 1}. Explain.`).join('\n');
+  const imported = parseExamDocumentText(`
+PERSONS AND FAMILY RELATIONS
+TEST EXAMINATION
+Coverage: Civil Code of the Philippines, Articles 2 to 14
+
+GENERAL INSTRUCTIONS
+1. Answer all thirteen (13) questions.
+2. Each question is worth five (5) points. Total raw score: 65 points.
+3. Use the ALAC format: Answer, Legal Basis, Application, and Conclusion.
+IMPORTANT: There are no subquestions.
+
+${questions}
+PFR Test Examination - Civil Code Articles 2 to 14 Page 2
+`);
+
+  assert.equal(imported.title, 'Persons and Family Relations — Test Examination');
+  assert.equal(imported.subject, 'Civil Code of the Philippines, Articles 2 to 14');
+  assert.equal(imported.jurisdiction, 'Philippines');
+  assert.match(imported.instructions, /Answer all thirteen/);
+  assert.match(imported.instructions, /Use the ALAC format/);
+  assert.match(imported.instructions, /There are no subquestions/);
+  assert.equal(imported.questions.length, 13);
+  assert.equal(imported.questions[0].prompt, 'Facts for item 1. Explain.');
+  assert.equal(imported.questions[12].prompt, 'Facts for item 13. Explain.');
+  assert.ok(imported.questions.every((question) => question.points === 5));
+  assert.equal(imported.questions.reduce((sum, question) => sum + question.points, 0), 65);
+});
+
+test('PDF upload is read in-browser and never tells a professor to prepare a TXT file', () => {
+  assert.match(professorSource, /async function extractPdfText\(file\)/);
+  assert.match(professorSource, /if \(extension === 'pdf'\)[\s\S]*extractPdfText\(file\)/);
+  assert.doesNotMatch(professorSource, /upload a TXT|TXT file|text file/i);
+  assert.doesNotMatch(professorHtml, /accept="[^"]*\.txt/);
+  assert.match(professorHtml, /professor\.js\?v=grading-prompts-key-status-20260926-1/);
+});
+
+test('legacy offline grading packages remain encrypted but are not exposed as professor download actions', () => {
   assert.match(professorSource, /PBKDF2/);
   assert.match(professorSource, /iterations:\s*310_000/);
   assert.match(professorSource, /AES-GCM/);
   assert.match(professorSource, /payload\.exam\?\.versionId !== state\.exam\.versionId/);
   assert.match(professorSource, /at least 12 characters/i);
-  assert.match(professorHtml, /href="offline-grading\.html"/);
-  assert.match(professorHtml, /Download offline copy/);
-  assert.match(professorHtml, /Open offline grading/);
-  assert.match(professorHtml, /Import graded copy/);
+  assert.doesNotMatch(professorHtml, /href="offline-grading\.html"/);
+  assert.doesNotMatch(professorHtml, /Download offline copy/);
+  assert.doesNotMatch(professorHtml, /Open offline grading/);
+  assert.doesNotMatch(professorHtml, /Import graded copy/);
   assert.match(professorSource, /source === 'offline_grading_workspace'/);
   assert.match(professorSource, /professorCommand\('import_grades'/);
   assert.match(professorSource, /importResult\.atomic !== true/);
   assert.doesNotMatch(professorSource, /for \(const grade of importedGrades\)[\s\S]{0,240}professorCommand\('save_grade'/);
-  assert.match(professorSource, /serviceWorker\.register\('\/service-worker\.js\?v=examination-room-reliability-20260828-1'/);
+  assert.match(professorSource, /serviceWorker\.register\('\/service-worker\.js\?v=classroom-preflight-20260925-1'/);
   assert.match(professorSource, /await state\.offlineWorkspaceReady/);
   assert.match(professorSource, /MAX_OFFLINE_PACKAGE_BYTES\s*=\s*20\s*\*\s*1024\s*\*\s*1024/);
   assert.match(professorSource, /jsonDownloadSize\(wrapper\)\s*>\s*MAX_OFFLINE_PACKAGE_BYTES/);
   assert.match(professorSource, /offlineGradingCore\.splitOfflineGradingPayload/);
   assert.match(professorSource, /numbered offline grading files downloaded/);
   assert.match(professorHtml, /offline-grading-core\.js\?v=greenfield-v1-20260826-3/);
-  assert.match(professorHtml, /id="import-grading-package"[^>]*multiple/);
+  assert.doesNotMatch(professorHtml, /id="import-grading-package"/);
   assert.match(professorSource, /async function importGradingPackages\(selectedFiles\)/);
   assert.match(professorSource, /Select the complete numbered set again/);
   assert.doesNotMatch(professorSource, /ask the platform owner to export a smaller class section/i);
@@ -196,6 +235,45 @@ test('offline grading copies remain passphrase-encrypted and examination-version
   assert.match(professorSource, /offlineGrades\.length !== expectedChangeCount/);
   assert.match(professorSource, /professorCommand\('import_grades',[\s\S]*?\}, prepared\.exportBatchId\)/);
   assert.doesNotMatch(professorSource, /offlineGrades\.length\s*\?\s*offlineGrades\s*:\s*allGrades/);
+});
+
+test('Professor downloads are browser-safe, password-free PDFs with class and individual grade breakdowns', () => {
+  assert.match(professorHtml, /id="download-all-submitted-answers"/);
+  assert.match(professorHtml, /Download all answers \(PDF\)/);
+  assert.match(professorHtml, /id="download-all-graded-answers"/);
+  assert.match(professorHtml, /Download all with grades \(PDF\)/);
+  assert.match(professorSource, /function downloadSubmittedAnswersPdf\s*\(/);
+  assert.match(professorSource, /function buildSubmittedAnswersPdf\s*\(/);
+  assert.match(professorSource, /type:\s*'application\/pdf'/);
+  assert.match(professorSource, /CLASS GRADE SUMMARY/);
+  assert.match(professorSource, /TOTAL GRADE:/);
+  assert.match(professorSource, /GRADE:/);
+  assert.match(professorSource, /PROFESSOR FEEDBACK:/);
+  assert.match(professorSource, /data-download-student-answers/);
+  assert.match(professorSource, /data-download-student-grades/);
+  assert.match(professorSource, /URL\.revokeObjectURL\(url\),\s*60_000/);
+  assert.doesNotMatch(professorSource, /URL\.revokeObjectURL\(url\),\s*0/);
+  assert.match(professorSource, /download-all-submitted-answers[^\n]+downloadSubmittedAnswersPdf/);
+  assert.match(professorSource, /download-all-graded-answers[^\n]+includeGrades:\s*true/);
+  assert.doesNotMatch(professorHtml, /Passphrase|Encrypt and download/);
+});
+
+test('PDF serializer emits a parseable multi-page PDF structure and safely wraps text', () => {
+  const { pdfSafeText, wrapPdfText, serializePdfDocument, savedGradePoints } = loadProfessorStartupHooks();
+  assert.equal(pdfSafeText('A — “quoted” café'), 'A - "quoted" cafe');
+  assert.deepEqual([...wrapPdfText('one two three four', 7)], ['one two', 'three', 'four']);
+  assert.equal(savedGradePoints({ points: '' }), null);
+  assert.equal(savedGradePoints({ points: null }), null);
+  assert.equal(savedGradePoints({ points: 0 }), 0);
+  const pdf = serializePdfDocument([
+    [{ type: 'text', text: 'Student One', x: 54, y: 786, size: 12, bold: true }],
+    [{ type: 'text', text: 'Grade: 18 / 20', x: 54, y: 786, size: 10, bold: false }],
+  ], 'Exam report');
+  assert.match(pdf, /^%PDF-1\.4/);
+  assert.match(pdf, /\/Count 2/);
+  assert.match(pdf, /Student One/);
+  assert.match(pdf, /Grade: 18 \/ 20/);
+  assert.match(pdf, /xref[\s\S]*trailer[\s\S]*%%EOF/);
 });
 
 test('recorded proctoring is optional, selectable, and never makes answer submission depend on storage', () => {
@@ -388,6 +466,22 @@ test('My examinations overview classifies, duplicates, and removes the clicked e
   assert.deepEqual(Array.from(summaries, (summary) => summary.id), [firstId, secondId]);
   assert.equal(overviewStatusPresentation(summaries[0]).label, 'Draft');
   assert.equal(overviewStatusPresentation(summaries[1]).label, 'Waiting for Admin');
+  assert.equal(
+    overviewStatusPresentation({
+      id: secondId,
+      status: 'published',
+      activation: { status: 'open', closesAt: '2099-12-31T23:59:59.000Z' },
+    }).label,
+    'Student key issued',
+  );
+  assert.equal(
+    overviewStatusPresentation({
+      id: secondId,
+      status: 'published',
+      activation: { status: 'open', closesAt: '2020-01-01T00:00:00.000Z' },
+    }).label,
+    'Room closed',
+  );
   assert.equal(lifecycleOperationForExam(summaries[0]), 'delete_draft');
   assert.equal(lifecycleOperationForExam({ status: 'draft', currentPublishedVersionId: secondId }), 'archive_exam');
   assert.equal(lifecycleOperationForExam(summaries[1]), 'archive_exam');
@@ -814,7 +908,7 @@ test('Professor Create page contains its question cards at a 319px viewport', ()
     /@media \(max-width: 390px\) \{[\s\S]*?\.questions-list[\s\S]*?\.question-layout[\s\S]*?\.choice-row/,
   );
   assert.match(professorHtml, /class="questions-list"/);
-  assert.match(professorHtml, /professor\.css\?v=creator-overview-20260828-1/);
+  assert.match(professorHtml, /professor\.css\?v=grading-prompts-key-status-20260926-1/);
   assert.match(professorHtml, /api\.js\?v=reliability-20260828-1/);
 });
 
@@ -871,7 +965,7 @@ test('creator receives monitor and grade access from activation without entering
   assert.match(professorHtml, /data-view="monitor" data-requires-activation="true" disabled aria-label="Monitor examination — available after Admin issues the student key"/);
   assert.match(professorHtml, /data-view="grade" data-requires-activation="true" disabled aria-label="Grade submissions — available after Admin issues the student key"/);
   assert.match(professorSource, /control\.setAttribute\('aria-label', unlocked[\s\S]*viewName/);
-  assert.match(professorHtml, /professor\.js\?v=reliability-20260828-1/);
+  assert.match(professorHtml, /professor\.js\?v=grading-prompts-key-status-20260926-1/);
 });
 
 test('creator approval survives reload and a published request keeps polling without a manual check', () => {
@@ -1022,4 +1116,18 @@ test('date and start-time inputs are removed while key access remains explicit',
 test('creator monitoring shows a technical entry record without privacy-gate wording', () => {
   assert.doesNotMatch(professorSource, /Privacy warning record/);
   assert.match(professorSource, /<dt>Entry record<\/dt>/);
+});
+
+
+test('individual Answers PDF prefers the server-stored submission artifact', () => {
+  assert.match(professorSource, /professorQuery\('submission_pdf'/);
+  assert.match(professorSource, /downloadServerSubmittedAnswersPdf\(sessionId\)/);
+  assert.match(professorSource, /Server submission PDF unavailable; using browser fallback/);
+});
+
+
+test('grading sheet renders the full question prompt above the student answer', () => {
+  assert.match(professorSource, /const questionPrompt = safeText\(question\.prompt \|\| question\.text, 20_000\)/);
+  assert.match(professorSource, /class="grading-question-prompt"[\s\S]*\$\{escapeHtml\(questionPrompt\)\}/);
+  assert.match(professorSource, /class="grading-content-label">Student answer<\/span>/);
 });

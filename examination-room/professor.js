@@ -66,11 +66,15 @@
     short_answer: 'Short answer',
     multiple_choice: 'Multiple choice',
   });
+  const PDF_JS_VERSION = '5.6.205';
+  const PDF_JS_MODULE_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDF_JS_VERSION}/build/pdf.min.mjs`;
+  const PDF_JS_WORKER_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDF_JS_VERSION}/build/pdf.worker.min.mjs`;
+  let pdfJsModulePromise = null;
 
   function registerExaminationRoomServiceWorker() {
     const serviceWorker = global.navigator?.serviceWorker;
     if (!serviceWorker?.register) return Promise.resolve(false);
-    return serviceWorker.register('/service-worker.js?v=examination-room-reliability-20260828-1')
+    return serviceWorker.register('/service-worker.js?v=classroom-preflight-20260925-1')
       .then(() => Promise.race([
         serviceWorker.ready.then(() => true),
         new Promise((resolve) => global.setTimeout(() => resolve(false), 5000)),
@@ -352,14 +356,36 @@
 
   function overviewStatusPresentation(summary) {
     const status = safeText(summary?.lifecycleState || summary?.status, 40).toLowerCase();
+    const activation = summary?.activation && typeof summary.activation === 'object'
+      ? summary.activation
+      : null;
+    const activationStatus = safeText(
+      activation?.status || summary?.activationStatus,
+      40,
+    ).toLowerCase();
+    const closesAt = Date.parse(String(activation?.closesAt || activation?.expiresAt || ''));
+    const activationExpired = Number.isFinite(closesAt) && closesAt <= Date.now();
+
+    if (status === 'blocked') return { tone: 'waiting', label: 'Blocked by Admin', help: 'Open the examination for recovery details' };
+    if (status === 'archived') return { tone: 'draft', label: 'Archived', help: 'This examination is no longer active' };
+    if (status === 'results_released') return { tone: 'active', label: 'Results released', help: 'Results were sent to selected students' };
+    if (status === 'grading') return { tone: 'active', label: 'Grading', help: 'Submissions are ready to review' };
+
+    if (activationStatus === 'closed' || activationExpired) {
+      return { tone: 'active', label: 'Room closed', help: 'The student key was issued; grading remains available' };
+    }
+    if (['active', 'open', 'scheduled'].includes(activationStatus)) {
+      return { tone: 'active', label: 'Student key issued', help: 'Monitor and Grade are available' };
+    }
+    if (activationStatus === 'revoked') {
+      return { tone: 'waiting', label: 'Key revoked', help: 'Request or issue a new student key before the next sitting' };
+    }
+
     if (status === 'draft') return { tone: 'draft', label: 'Draft', help: 'Ready to continue editing' };
+    if (['active', 'open', 'scheduled'].includes(status)) return { tone: 'active', label: 'Student key issued', help: 'Monitor and Grade are available' };
     if (['published', 'key_requested', 'awaiting_approval', 'awaiting_activation', 'requested', 'pending'].includes(status)) {
       return { tone: 'waiting', label: 'Waiting for Admin', help: 'Student key requested' };
     }
-    if (['active', 'open', 'scheduled'].includes(status)) return { tone: 'active', label: 'Student key issued', help: 'Monitor and Grade are available' };
-    if (status === 'grading') return { tone: 'active', label: 'Grading', help: 'Submissions are ready to review' };
-    if (status === 'results_released') return { tone: 'active', label: 'Results released', help: 'Results were sent to selected students' };
-    if (status === 'blocked') return { tone: 'waiting', label: 'Blocked by Admin', help: 'Open the examination for recovery details' };
     return { tone: 'draft', label: 'Saved examination', help: 'Open to review its current state' };
   }
 
@@ -1864,40 +1890,239 @@
     toast(`${imported.length} students imported. Review the roster before publishing.`);
   }
 
+  function titleCaseDocumentHeading(value) {
+    const text = safeText(value, 180);
+    if (!text || text !== text.toUpperCase()) return text;
+    return text.toLocaleLowerCase('en-PH')
+      .replace(/(^|[\s/&-])([a-z])/g, (_, prefix, letter) => `${prefix}${letter.toLocaleUpperCase('en-PH')}`)
+      .replace(/\b(And|Of|The|To|In|For)\b/g, (word, offset) => (offset === 0 ? word : word.toLocaleLowerCase('en-PH')));
+  }
+
+  function documentPointValue(value) {
+    const text = String(value || '');
+    const numeric = text.match(/(?:worth\s+)?(?:[a-z-]+\s*)?\((\d{1,4})\)\s*points?/i)
+      || text.match(/(?:^|[-–—:]|worth\s+)(\d{1,4})\s*points?/i);
+    return numeric ? Math.max(0, Math.min(1000, Number(numeric[1]) || 0)) : 0;
+  }
+
+  function joinedDocumentParagraphs(lines) {
+    const paragraphs = [];
+    let current = '';
+    const flush = () => {
+      if (current.trim()) paragraphs.push(current.replace(/\s+/g, ' ').trim());
+      current = '';
+    };
+    lines.forEach((line) => {
+      const value = String(line || '').trim();
+      if (!value) {
+        flush();
+        return;
+      }
+      if (/^(?:\d+[.)]|IMPORTANT\s*:)/i.test(value)) flush();
+      current = `${current} ${value}`.trim();
+    });
+    flush();
+    return paragraphs.join('\n');
+  }
+
+  function parseExamDocumentText(text) {
+    const lines = String(text || '')
+      .replace(/\r/g, '')
+      .replace(/\u00a0/g, ' ')
+      .split('\n')
+      .map((line) => line.replace(/[ \t]+/g, ' ').trim())
+      .filter((line) => !/^.+\s+Page\s+\d+\s*$/i.test(line));
+    const instructionIndex = lines.findIndex((line) => /^(?:GENERAL\s+)?INSTRUCTIONS?\s*:?$/i.test(line));
+    const questionHeading = /^\s*(?:QUESTION|ITEM)\s+(\d+)\s*(?:[-–—:]\s*)?(.*)$/i;
+    const firstQuestionIndex = lines.findIndex((line) => questionHeading.test(line));
+    const preludeEnd = instructionIndex >= 0 ? instructionIndex : firstQuestionIndex;
+    const prelude = lines.slice(0, preludeEnd >= 0 ? preludeEnd : 0).filter(Boolean);
+    const coverageLine = prelude.find((line) => /^coverage\s*:/i.test(line));
+    const headingLines = prelude.filter((line) => !/^coverage\s*:/i.test(line)).slice(0, 3);
+    const title = headingLines.length
+      ? headingLines.map(titleCaseDocumentHeading).join(' — ')
+      : '';
+    const subject = coverageLine
+      ? safeText(coverageLine.replace(/^coverage\s*:\s*/i, ''), 120)
+      : safeText(titleCaseDocumentHeading(headingLines[0] || ''), 120);
+    const instructionLines = instructionIndex >= 0
+      ? lines.slice(instructionIndex + 1, firstQuestionIndex >= 0 ? firstQuestionIndex : lines.length)
+      : [];
+    const instructions = safeText(joinedDocumentParagraphs(instructionLines), 10_000);
+    const defaultPoints = documentPointValue(instructions);
+    const questions = [];
+    let active = null;
+    const finishQuestion = () => {
+      if (!active) return;
+      const prompt = joinedDocumentParagraphs(active.lines).replace(/\n+/g, ' ').trim();
+      if (prompt) questions.push(normalizeQuestion({
+        id: global.crypto.randomUUID(),
+        type: 'essay',
+        points: active.points || defaultPoints,
+        prompt,
+        wordGuideline: '',
+        required: true,
+      }, questions.length));
+      active = null;
+    };
+    lines.slice(Math.max(0, firstQuestionIndex)).forEach((line) => {
+      const match = line.match(questionHeading);
+      if (match) {
+        finishQuestion();
+        active = { number: Number(match[1]), points: documentPointValue(match[2]), lines: [] };
+        const headingRemainder = match[2].replace(/[-–—:]?\s*(?:[a-z-]+\s*)?\(?\d{1,4}\)?\s*points?\s*$/i, '').trim();
+        if (headingRemainder) active.lines.push(headingRemainder);
+      } else if (active) {
+        active.lines.push(line);
+      }
+    });
+    finishQuestion();
+    if (!questions.length) {
+      const normalized = lines.join('\n').trim();
+      const parts = normalized.split(/\n(?=(?:Question\s+)?\d+[.)]\s+)/i)
+        .map((part) => part.replace(/^(?:Question\s+)?\d+[.)]\s*/i, '').trim())
+        .filter(Boolean);
+      parts.forEach((prompt, index) => questions.push(normalizeQuestion({
+        id: global.crypto.randomUUID(), type: 'essay', points: documentPointValue(prompt),
+        prompt: prompt.replace(/^(?:[-–—:]\s*)?(?:[a-z-]+\s*)?\(?\d{1,4}\)?\s*points?\s*/i, '').trim(),
+        wordGuideline: '', required: true,
+      }, index)));
+    }
+    const durationMatch = instructions.match(/(?:duration|time\s+limit)\s*:?\s*(\d+)\s*(hours?|minutes?)/i);
+    const durationMinutes = durationMatch
+      ? Number(durationMatch[1]) * (/hour/i.test(durationMatch[2]) ? 60 : 1)
+      : null;
+    return {
+      title,
+      subject,
+      jurisdiction: /philippin/i.test(`${subject}\n${instructions}\n${text}`) ? 'Philippines' : '',
+      instructions,
+      durationMinutes,
+      questions,
+    };
+  }
+
   function questionsFromText(text) {
-    const normalized = String(text || '').replace(/\r/g, '').trim();
-    const parts = normalized.split(/\n(?=(?:Question\s+)?\d+[.)]\s+)/i).map((part) => part.replace(/^(?:Question\s+)?\d+[.)]\s*/i, '').trim()).filter(Boolean);
-    return parts.map((prompt, index) => normalizeQuestion({
-      id: global.crypto.randomUUID(), type: 'essay', points: Math.max(1, Math.floor(100 / parts.length)),
-      prompt, wordGuideline: index === 0 ? '600–800 words' : '500–700 words', required: true,
-    }, index));
+    return parseExamDocumentText(text).questions;
+  }
+
+  async function pdfJsModule() {
+    if (!pdfJsModulePromise) {
+      pdfJsModulePromise = import(PDF_JS_MODULE_URL).then((module) => {
+        module.GlobalWorkerOptions.workerSrc = PDF_JS_WORKER_URL;
+        return module;
+      }).catch((error) => {
+        pdfJsModulePromise = null;
+        throw error;
+      });
+    }
+    return pdfJsModulePromise;
+  }
+
+  function pdfPageText(items) {
+    const lines = [];
+    items.filter((item) => typeof item?.str === 'string' && item.str.trim()).forEach((item) => {
+      const x = Number(item.transform?.[4] || 0);
+      const y = Number(item.transform?.[5] || 0);
+      let line = lines.find((candidate) => Math.abs(candidate.y - y) <= 2);
+      if (!line) {
+        line = { y, items: [] };
+        lines.push(line);
+      }
+      line.items.push({ x, text: item.str.trim() });
+    });
+    return lines
+      .sort((left, right) => right.y - left.y)
+      .map((line) => line.items.sort((left, right) => left.x - right.x).map((item) => item.text).join(' '))
+      .join('\n');
+  }
+
+  async function extractPdfText(file) {
+    const pdfjs = await pdfJsModule();
+    const loadingTask = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
+    const document = await loadingTask.promise;
+    try {
+      const pages = [];
+      for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
+        const page = await document.getPage(pageNumber);
+        pages.push(pdfPageText((await page.getTextContent()).items));
+      }
+      return pages.join('\n\n');
+    } finally {
+      await document.destroy();
+    }
+  }
+
+  function applyImportedExam(imported) {
+    if (!imported?.questions?.length) throw new api.ExaminationRoomApiError(
+      'PDF_QUESTIONS_NOT_FOUND',
+      'The PDF opened, but no numbered examination questions were found.',
+      422,
+      'Upload the original text-searchable PDF with numbered question headings. The file can include its title, instructions, and points.',
+    );
+    const updates = {
+      title: safeText(imported.title, 180),
+      subject: safeText(imported.subject, 120),
+      jurisdiction: safeText(imported.jurisdiction, 80),
+      instructions: safeText(imported.instructions, 10_000),
+      durationMinutes: Number(imported.durationMinutes) || null,
+    };
+    if (updates.title) {
+      state.exam.title = updates.title;
+      $('#exam-title').value = updates.title;
+      $('#command-title').value = updates.title;
+    }
+    if (updates.subject) {
+      state.exam.subject = updates.subject;
+      $('#subject').value = updates.subject;
+    }
+    if (updates.jurisdiction) {
+      state.exam.jurisdiction = updates.jurisdiction;
+      $('#jurisdiction').value = updates.jurisdiction;
+    }
+    if (updates.instructions) {
+      state.exam.instructions = updates.instructions;
+      $('#instructions').value = updates.instructions;
+    }
+    if (updates.durationMinutes && [...$('#duration-control').options].some((option) => Number(option.value) === updates.durationMinutes)) {
+      state.exam.durationMinutes = updates.durationMinutes;
+      $('#duration-control').value = String(updates.durationMinutes);
+    }
+    state.questions = imported.questions.map(normalizeQuestion);
+    state.exam.questions = state.questions;
+    renderQuestions();
+    autoResizeTitle();
+    updateReviewCount();
   }
 
   async function importSource(file) {
     if (!file) return;
     if (file.size > 8 * 1024 * 1024) {
-      showError({ message: 'That exam file is larger than 8 MB.', recovery: 'Remove unnecessary images or export the document as a smaller DOCX, text PDF, or TXT file, then try again.' }, null, 'Exam not uploaded');
+      showError({ message: 'That exam file is larger than 8 MB.', recovery: 'Remove unnecessary images or export the document as a smaller text-searchable PDF, then try again.' }, null, 'Exam not uploaded', 'source-import');
       return;
     }
     const extension = file.name.split('.').pop()?.toLowerCase();
-    if (!['docx', 'pdf', 'txt', 'rtf'].includes(extension)) {
-      showError({ message: 'That file type is not supported.', recovery: 'Upload a DOCX, text-based PDF, RTF, or TXT file.' }, null, 'Exam not uploaded');
+    if (!['docx', 'pdf', 'rtf'].includes(extension)) {
+      showError({ message: 'That file type is not supported.', recovery: 'Upload a PDF, DOCX, or RTF examination file.' }, null, 'Exam not uploaded', 'source-import');
       return;
     }
+    dismissErrorScope('source-import');
     $('#source-name').textContent = file.name;
     $('#source-size').textContent = formatBytes(file.size);
     $('#source-file').hidden = false;
-    $('#import-notice').hidden = false;
+    $('#import-notice').hidden = true;
     $('#exam-details').classList.add('has-source');
-    state.exam.sourceFileName = file.name;
-    state.exam.sourceFileSize = file.size;
     try {
-      if (extension === 'txt') {
-        const parsed = questionsFromText(await file.text());
-        if (parsed.length) {
-          state.questions = parsed;
-          renderQuestions();
-        }
+      let imported;
+      if (extension === 'pdf') {
+        const extractedText = await extractPdfText(file);
+        if (!extractedText.trim()) throw new api.ExaminationRoomApiError(
+          'PDF_TEXT_NOT_FOUND',
+          'This PDF does not contain readable examination text.',
+          422,
+          'Upload the original text-searchable PDF or re-export the source document as a PDF, then upload it again.',
+        );
+        imported = parseExamDocumentText(extractedText);
       } else if (!api.demoEnabled()) {
         const bytes = new Uint8Array(await file.arrayBuffer());
         let binary = '';
@@ -1906,15 +2131,24 @@
         const result = await api.professorCommand('import_document', {
           examId: state.exam.id, fileName: file.name, mimeType: file.type || 'application/octet-stream', base64: btoa(binary),
         }, api.requestId());
-        if (result.questions?.length) {
-          state.questions = result.questions.map(normalizeQuestion);
-          renderQuestions();
-        }
+        imported = result.exam || result;
+      } else {
+        throw new api.ExaminationRoomApiError('DOCUMENT_IMPORT_UNAVAILABLE', 'This file cannot be read in the demonstration workspace.', 503, 'Upload a PDF examination instead. PDF title, instructions, questions, and points are read directly in your browser.');
       }
+      applyImportedExam(imported);
+      state.exam.sourceFileName = file.name;
+      state.exam.sourceFileSize = file.size;
+      const totalPoints = state.questions.reduce((sum, question) => sum + Number(question.points || 0), 0);
+      const notice = $('#import-notice span');
+      if (notice) notice.textContent = `Exam populated from PDF: ${state.questions.length} questions, instructions, and ${totalPoints} total points.`;
+      $('#import-notice').hidden = false;
       scheduleAutosave();
-      toast('Source uploaded. AI numbering is a draft for your review; nothing was published.');
+      toast(`PDF read successfully. ${state.questions.length} questions and ${totalPoints} points were populated.`);
     } catch (error) {
-      showError(error, () => importSource(file), 'Source import delayed');
+      $('#import-notice').hidden = true;
+      showError(error, () => importSource(file), 'PDF not imported', 'source-import');
+    } finally {
+      $('#source-upload').value = '';
     }
   }
 
@@ -2012,6 +2246,100 @@
     return request;
   }
 
+  function integrityEventType(incident) {
+    return safeText(incident?.details?.clientEventType || incident?.type || 'event', 80).toLowerCase();
+  }
+
+  function integrityEventLabel(incident) {
+    const labels = {
+      attempt_started: 'Examination started',
+      attempt_resumed: 'Examination resumed',
+      window_blurred: 'Browser window lost focus',
+      window_focused: 'Browser window focused',
+      page_hidden: 'Examination tab/page hidden',
+      page_visible: 'Examination tab/page visible',
+      fullscreen_entered: 'Fullscreen entered',
+      fullscreen_exited: 'Fullscreen exited',
+      connection_lost: 'Connection lost',
+      connection_restored: 'Connection restored',
+      clipboard_copy: 'Copied text',
+      clipboard_cut: 'Cut text',
+      clipboard_paste: 'Pasted text',
+      focus_lost: 'Focus lost',
+      fullscreen_exit: 'Fullscreen exited',
+      network_disconnected: 'Connection lost',
+      camera_interrupted: 'Camera interrupted',
+      microphone_interrupted: 'Microphone interrupted',
+      device_changed: 'Device changed',
+      clock_anomaly: 'Clock anomaly',
+      other: 'Browser event',
+    };
+    const type = integrityEventType(incident);
+    return labels[type] || type.replace(/_/g, ' ');
+  }
+
+  function eventDurationText(milliseconds) {
+    const value = Math.max(0, Number(milliseconds) || 0);
+    if (!value) return '';
+    const totalSeconds = Math.round(value / 1000);
+    if (totalSeconds < 60) return `${totalSeconds}s`;
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}m ${seconds}s`;
+  }
+
+  function pairedEventDuration(incident, incidents, returnType) {
+    const currentTime = Date.parse(incident?.occurredAt || '');
+    if (!Number.isFinite(currentTime)) return null;
+    const later = (incidents || [])
+      .filter((entry) => entry.sessionId === incident.sessionId)
+      .filter((entry) => Date.parse(entry.occurredAt || '') > currentTime)
+      .sort((left, right) => Date.parse(left.occurredAt || '') - Date.parse(right.occurredAt || ''))
+      .find((entry) => integrityEventType(entry) === returnType);
+    if (!later) return null;
+    const laterTime = Date.parse(later.occurredAt || '');
+    return Number.isFinite(laterTime) ? laterTime - currentTime : null;
+  }
+
+  function integrityEventDescription(incident, incidents) {
+    const details = incident?.details || {};
+    const type = integrityEventType(incident);
+    const question = Number(details.questionNumber) > 0 ? `Question ${details.questionNumber}` : 'current question';
+    const characters = Math.max(0, Number(details.characterCount) || 0);
+
+    if (type === 'clipboard_paste') {
+      return `${characters.toLocaleString()} character${characters === 1 ? '' : 's'} pasted into ${question}. Clipboard contents were not stored.`;
+    }
+    if (type === 'clipboard_copy') {
+      return `${characters.toLocaleString()} selected character${characters === 1 ? '' : 's'} copied from ${question}. Clipboard contents were not stored.`;
+    }
+    if (type === 'clipboard_cut') {
+      return `${characters.toLocaleString()} selected character${characters === 1 ? '' : 's'} cut from ${question}. Clipboard contents were not stored.`;
+    }
+    if (type === 'page_hidden') {
+      const duration = pairedEventDuration(incident, incidents, 'page_visible');
+      return duration == null
+        ? `The examination page became hidden while the student was on ${question}.`
+        : `The examination page was hidden for approximately ${eventDurationText(duration)} while the student was on ${question}.`;
+    }
+    if (type === 'window_blurred') {
+      const duration = pairedEventDuration(incident, incidents, 'window_focused');
+      return duration == null
+        ? `The browser window lost focus while the student was on ${question}.`
+        : `The browser window was out of focus for approximately ${eventDurationText(duration)} while the student was on ${question}.`;
+    }
+    if (type === 'page_visible') return `The examination page became visible again on ${question}.`;
+    if (type === 'window_focused') return `The browser window regained focus on ${question}.`;
+    if (type === 'fullscreen_exited' || type === 'fullscreen_exit') return `The student exited fullscreen while on ${question}.`;
+    if (type === 'fullscreen_entered') return `The student entered fullscreen while on ${question}.`;
+    if (type === 'connection_lost' || type === 'network_disconnected') return `The browser reported a network disconnection on ${question}.`;
+    if (type === 'connection_restored') return `The browser reported that the network connection was restored on ${question}.`;
+    if (type === 'attempt_started') return 'The student opened this examination attempt.';
+    if (type === 'attempt_resumed') return 'The student resumed an existing server-backed examination attempt.';
+    if (incident?.durationMs) return `${integrityEventLabel(incident)} · duration ${eventDurationText(incident.durationMs)}.`;
+    return `${integrityEventLabel(incident)} recorded by the examination browser.`;
+  }
+
   function renderMonitor() {
     const data = state.monitor || { sessions: [], submissions: [], incidents: [] };
     const sessions = data.sessions || [];
@@ -2044,7 +2372,7 @@
       openButton.disabled = !creatorAccessUnlocked();
     }
     const query = $('#monitor-search').value.trim().toLowerCase();
-    const filtered = sessions.filter((session) => !query || `${session.fullName} ${session.studentNumber}`.toLowerCase().includes(query));
+    const filtered = sessions.filter((session) => !query || `${session.fullName} ${session.studentNumber} ${session.email || ''}`.toLowerCase().includes(query));
     $('#monitor-table-body').innerHTML = filtered.length ? filtered.map((session) => {
       const isSubmitted = submittedIds.has(session.id);
       const sessionStatus = ['revoked', 'blocked'].includes(session.status)
@@ -2052,12 +2380,12 @@
         : isSubmitted ? 'submitted' : session.connected ? 'in_progress' : 'disconnected';
       const latestIncident = [...(data.incidents || [])].reverse().find((incident) => incident.sessionId === session.id);
       const canRevoke = !isSubmitted && !['revoked', 'blocked'].includes(sessionStatus);
-      return `<tr data-monitor-session="${escapeHtml(session.id)}"><td><strong>${escapeHtml(session.fullName)}</strong>${session.email ? `<small>${escapeHtml(session.email)}</small>` : ''}</td><td>${escapeHtml(session.studentNumber)}</td><td><span class="status-label ${sessionStatus}"><i aria-hidden="true"></i>${escapeHtml(sessionStatus.replace('_', ' '))}</span></td><td>${escapeHtml(String(session.currentQuestion || '—'))}</td><td>${escapeHtml(timeAgo(session.lastSeenAt))}</td><td>${latestIncident ? escapeHtml(latestIncident.type.replace(/_/g, ' ')) : 'Clear'}</td><td><div class="session-actions"><button class="table-action" type="button" data-view-student="${escapeHtml(session.id)}">View</button>${canRevoke ? `<button class="table-action warning" type="button" data-revoke-session="${escapeHtml(session.id)}" data-revoke-mode="kick">Kick</button><button class="table-action danger" type="button" data-revoke-session="${escapeHtml(session.id)}" data-revoke-mode="block">Block</button>` : ''}</div></td></tr>`;
+      return `<tr data-monitor-session="${escapeHtml(session.id)}"><td><strong>${escapeHtml(session.fullName)}</strong>${session.email ? `<small>${escapeHtml(session.email)}</small>` : ''}</td><td>${escapeHtml(session.studentNumber)}</td><td><span class="status-label ${sessionStatus}"><i aria-hidden="true"></i>${escapeHtml(sessionStatus.replace('_', ' '))}</span></td><td>${escapeHtml(String(session.currentQuestion || '—'))}</td><td>${escapeHtml(timeAgo(session.lastSeenAt))}</td><td>${latestIncident ? escapeHtml(integrityEventLabel(latestIncident)) : 'Clear'}</td><td><div class="session-actions"><button class="table-action" type="button" data-view-student="${escapeHtml(session.id)}">Event logs</button>${canRevoke ? `<button class="table-action warning" type="button" data-revoke-session="${escapeHtml(session.id)}" data-revoke-mode="kick">Kick</button><button class="table-action danger" type="button" data-revoke-session="${escapeHtml(session.id)}" data-revoke-mode="block">Block</button>` : ''}</div></td></tr>`;
     }).join('') : '<tr><td colspan="7"><div class="empty-feed">No students have entered yet. Share the active student key; this page updates automatically.</div></td></tr>';
     const incidents = [...(data.incidents || [])].reverse();
     $('#incident-feed').innerHTML = incidents.length ? incidents.map((incident) => {
       const session = sessions.find((entry) => entry.id === incident.sessionId);
-      return `<article class="incident-entry"><i class="ph ph-warning-circle" aria-hidden="true"></i><div><strong>${escapeHtml(session?.fullName || 'Student session')}</strong><p>${escapeHtml(incident.type.replace(/_/g, ' '))}. Review the timing and context before deciding whether any follow-up is needed.</p><small>${escapeHtml(formatDateTime(incident.occurredAt))}</small></div></article>`;
+      return `<article class="incident-entry"><i class="ph ph-warning-circle" aria-hidden="true"></i><div><strong>${escapeHtml(session?.fullName || 'Student session')} · ${escapeHtml(integrityEventLabel(incident))}</strong><p>${escapeHtml(integrityEventDescription(incident, data.incidents || []))}</p><small>${escapeHtml(formatDateTime(incident.occurredAt))}</small></div></article>`;
     }).join('') : '<div class="empty-feed">No integrity events require review. A focus change, device interruption, or disconnection will appear here without automatically penalizing the student.</div>';
   }
 
@@ -2161,29 +2489,308 @@
     if (!session) return;
     const submission = (data.submissions || []).find((entry) => entry.sessionId === sessionId);
     const incidents = (data.incidents || []).filter((entry) => entry.sessionId === sessionId);
-    $('#student-detail-title').textContent = session.fullName;
+    const orderedIncidents = [...incidents].sort((left, right) => Date.parse(right.occurredAt || '') - Date.parse(left.occurredAt || ''));
+    const eventLog = orderedIncidents.length
+      ? orderedIncidents.map((incident) => `<article class="incident-entry"><i class="ph ph-activity" aria-hidden="true"></i><div><strong>${escapeHtml(integrityEventLabel(incident))}</strong><p>${escapeHtml(integrityEventDescription(incident, incidents))}</p><small>${escapeHtml(formatDateTime(incident.occurredAt))}${incident.severity && incident.severity !== 'info' ? ` · ${escapeHtml(incident.severity)}` : ''}</small></div></article>`).join('')
+      : '<div class="empty-feed">No examination events have been recorded for this session yet.</div>';
+    $('#student-detail-title').textContent = session.fullName + ' · Event logs';
     $('#student-detail-content').innerHTML = `<dl class="student-detail-grid">
+      ${session.email ? `<div><dt>Email</dt><dd>${escapeHtml(session.email)}</dd></div>` : ''}
       <div><dt>Student number</dt><dd>${escapeHtml(session.studentNumber)}</dd></div>
       <div><dt>Status</dt><dd>${escapeHtml(submission ? 'Submitted' : session.connected ? 'In progress' : 'Disconnected')}</dd></div>
       <div><dt>Current question</dt><dd>${escapeHtml(String(session.currentQuestion || 'Not available'))}</dd></div>
-      <div><dt>Last server backup</dt><dd>${escapeHtml(formatDateTime(session.lastSeenAt))}</dd></div>
+      <div><dt>Last seen</dt><dd>${escapeHtml(formatDateTime(session.lastSeenAt))}</dd></div>
       <div><dt>Entry record</dt><dd>${session.attemptBindingId || session.consentVersion ? 'Recorded' : 'Not available'}</dd></div>
-      <div><dt>Integrity events</dt><dd>${incidents.length}</dd></div>
+      <div><dt>Event log entries</dt><dd>${incidents.length}</dd></div>
       ${submission ? `<div><dt>Receipt</dt><dd>${escapeHtml(submission.receiptCode)}</dd></div><div><dt>Submitted</dt><dd>${escapeHtml(formatDateTime(submission.submittedAt))}</dd></div>` : ''}
-    </dl><p class="legal-note">Events are context for human review. They do not establish misconduct and do not alter the student’s grade automatically.</p>`;
+    </dl>
+    <section class="student-event-log"><h3>Examination event log</h3><p class="legal-note">This records browser signals such as tab/window focus changes, fullscreen changes, connectivity, and copy/paste actions. Clipboard contents are never stored.</p><div class="incident-feed">${eventLog}</div></section>
+    <p class="legal-note">Events are context for human review. They do not establish misconduct and do not alter the student’s grade automatically.</p>`;
     openDialog('student-detail-dialog');
   }
 
-  function downloadJson(filename, value) {
-    const blob = new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' });
+  function downloadBlob(filename, blob) {
+    if (global.navigator?.msSaveOrOpenBlob) {
+      global.navigator.msSaveOrOpenBlob(blob, filename);
+      return;
+    }
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     link.download = filename;
+    link.hidden = true;
     document.body.appendChild(link);
     link.click();
     link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 0);
+    // Revoking on the next tick can cancel downloads before the browser has
+    // opened the Blob, especially in Firefox and on slower devices.
+    global.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }
+
+  function downloadJson(filename, value) {
+    downloadBlob(filename, new Blob([JSON.stringify(value, null, 2)], {
+      type: 'application/json;charset=utf-8',
+    }));
+  }
+
+  function safeDownloadName(value, fallback = 'examination') {
+    const normalized = safeText(value, 120)
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .toLowerCase();
+    return normalized || fallback;
+  }
+
+  function gradingAnswerText(question, answer) {
+    if (viewModels?.professorAnswerLabel) return viewModels.professorAnswerLabel(question, answer);
+    if (answer == null || answer === '') return 'No submitted answer.';
+    if (typeof answer === 'string') return answer;
+    if (Array.isArray(answer)) return answer.join(', ');
+    return JSON.stringify(answer, null, 2);
+  }
+
+  function pdfSafeText(value) {
+    return String(value ?? '')
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/[\u201c\u201d]/g, '"')
+      .replace(/[\u2013\u2014]/g, '-')
+      .replace(/\u2026/g, '...')
+      .replace(/\u2022/g, '-')
+      .replace(/[^\x20-\x7e\n\r\t]/g, '?')
+      .replace(/\r\n?/g, '\n');
+  }
+
+  function pdfEscape(value) {
+    return pdfSafeText(value).replace(/([\\()])/g, '\\$1');
+  }
+
+  function wrapPdfText(value, maxCharacters) {
+    const output = [];
+    pdfSafeText(value).split('\n').forEach((paragraph) => {
+      const words = paragraph.trim().split(/\s+/).filter(Boolean);
+      if (!words.length) {
+        output.push('');
+        return;
+      }
+      let line = '';
+      words.forEach((word) => {
+        if (word.length > maxCharacters) {
+          if (line) output.push(line);
+          for (let start = 0; start < word.length; start += maxCharacters) output.push(word.slice(start, start + maxCharacters));
+          line = '';
+          return;
+        }
+        const candidate = line ? `${line} ${word}` : word;
+        if (candidate.length <= maxCharacters) line = candidate;
+        else {
+          output.push(line);
+          line = word;
+        }
+      });
+      if (line) output.push(line);
+    });
+    return output;
+  }
+
+  function createPdfComposer(documentTitle) {
+    const pages = [[]];
+    let y = 786;
+    const currentPage = () => pages[pages.length - 1];
+    const newPage = () => {
+      if (!currentPage().length) return;
+      pages.push([]);
+      y = 786;
+    };
+    const addText = (value, options = {}) => {
+      const size = Number(options.size || 10);
+      const leading = Number(options.leading || Math.max(13, size * 1.35));
+      const x = Number(options.x || 54);
+      const width = Number(options.width || (541 - x));
+      const maxCharacters = Math.max(12, Math.floor(width / (size * .52)));
+      if (options.pageBreakBefore) newPage();
+      y -= Number(options.spaceBefore || 0);
+      wrapPdfText(value, maxCharacters).forEach((line) => {
+        if (y < 62 + leading) {
+          pages.push([]);
+          y = 786;
+        }
+        currentPage().push({ type: 'text', text: line, x, y, size, bold: Boolean(options.bold) });
+        y -= leading;
+      });
+      y -= Number(options.spaceAfter || 0);
+    };
+    const addRule = () => {
+      if (y < 72) newPage();
+      currentPage().push({ type: 'rule', y });
+      y -= 12;
+    };
+    return { pages, addText, addRule, newPage, documentTitle };
+  }
+
+  function serializePdfDocument(pages, documentTitle) {
+    const pageObjectIds = pages.map((_, index) => 5 + (index * 2));
+    const contentObjectIds = pages.map((_, index) => 6 + (index * 2));
+    const objects = [];
+    objects[1] = '<< /Type /Catalog /Pages 2 0 R >>';
+    objects[2] = `<< /Type /Pages /Kids [${pageObjectIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pages.length} >>`;
+    objects[3] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>';
+    objects[4] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>';
+    pages.forEach((page, index) => {
+      const pageNumber = index + 1;
+      const commands = page.map((entry) => {
+        if (entry.type === 'rule') return `0.78 G 54 ${entry.y.toFixed(2)} m 541 ${entry.y.toFixed(2)} l S 0 G`;
+        return `BT /${entry.bold ? 'F2' : 'F1'} ${entry.size.toFixed(2)} Tf 1 0 0 1 ${entry.x.toFixed(2)} ${entry.y.toFixed(2)} Tm (${pdfEscape(entry.text)}) Tj ET`;
+      });
+      commands.push(`BT /F1 8 Tf 1 0 0 1 54 34 Tm (${pdfEscape(pdfSafeText(documentTitle).slice(0, 72))}) Tj ET`);
+      commands.push(`BT /F1 8 Tf 1 0 0 1 500 34 Tm (Page ${pageNumber} of ${pages.length}) Tj ET`);
+      const content = commands.join('\n');
+      objects[pageObjectIds[index]] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentObjectIds[index]} 0 R >>`;
+      objects[contentObjectIds[index]] = `<< /Length ${content.length} >>\nstream\n${content}\nendstream`;
+    });
+    let pdf = '%PDF-1.4\n%DDER\n';
+    const offsets = [0];
+    for (let id = 1; id < objects.length; id += 1) {
+      offsets[id] = pdf.length;
+      pdf += `${id} 0 obj\n${objects[id]}\nendobj\n`;
+    }
+    const xrefOffset = pdf.length;
+    pdf += `xref\n0 ${objects.length}\n0000000000 65535 f \n`;
+    for (let id = 1; id < objects.length; id += 1) pdf += `${String(offsets[id]).padStart(10, '0')} 00000 n \n`;
+    pdf += `trailer\n<< /Size ${objects.length} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+    return pdf;
+  }
+
+  function submittedSessions(sessionId = null) {
+    const data = state.grading || { sessions: [], submissions: [] };
+    const submittedIds = new Set((data.submissions || []).map((submission) => submission.sessionId));
+    return (data.sessions || []).filter((session) => submittedIds.has(session.id) && (!sessionId || session.id === sessionId));
+  }
+
+  function savedGradePoints(grade) {
+    if (grade?.points == null || grade.points === '') return null;
+    const points = Number(grade.points);
+    return Number.isFinite(points) ? points : null;
+  }
+
+  function buildSubmittedAnswersPdf({ includeGrades = false, sessionId = null } = {}) {
+    const data = state.grading || { sessions: [], submissions: [], answerRevisions: [], gradeRevisions: [] };
+    const submissionsBySession = new Map((data.submissions || []).map((submission) => [submission.sessionId, submission]));
+    const sessions = submittedSessions(sessionId);
+    if (!sessions.length) throw new Error(sessionId ? 'This student has no submitted answers.' : 'There are no submitted answers to download yet.');
+    const reportLabel = includeGrades ? 'Submitted answers with grades' : 'Submitted answers';
+    const composer = createPdfComposer(`${state.exam?.title || 'Examination'} - ${reportLabel}`);
+    composer.addText('DUE DILIGENCE - EXAMINATION ROOM', { size: 10, bold: true, spaceAfter: 12 });
+    composer.addText(state.exam?.title || 'Examination', { size: 22, bold: true, leading: 28, spaceAfter: 8 });
+    composer.addText(reportLabel, { size: 15, bold: true, spaceAfter: 8 });
+    composer.addText(`${sessionId ? 'Individual student report' : `${sessions.length} student${sessions.length === 1 ? '' : 's'}`} | Downloaded ${formatDateTime(new Date().toISOString())}`, { size: 10, spaceAfter: 12 });
+    composer.addText('Private education record. Store this PDF securely.', { size: 9, spaceAfter: 12 });
+    composer.addRule();
+
+    if (includeGrades && !sessionId) {
+      composer.addText('CLASS GRADE SUMMARY', { size: 14, bold: true, spaceBefore: 4, spaceAfter: 8 });
+      sessions.forEach((session, index) => {
+        const identity = gradingDisplayIdentity(session, index);
+        const grades = latestBy((data.gradeRevisions || []).filter((grade) => grade.sessionId === session.id), (grade) => grade.questionId);
+        const earned = state.questions.reduce((total, question) => total + (savedGradePoints(grades.get(question.id)) ?? 0), 0);
+        const possible = state.questions.reduce((total, question) => total + Number(question.points || 0), 0);
+        const complete = state.questions.every((question) => savedGradePoints(grades.get(question.id)) !== null);
+        composer.addText(`${index + 1}. ${identity.realName} (${identity.realStudentNumber || 'No student number'}) - ${earned} / ${possible} points - ${complete ? 'Fully graded' : 'Grading incomplete'}`, { size: 10, spaceAfter: 4 });
+      });
+    }
+
+    sessions.forEach((session, studentIndex) => {
+      composer.newPage();
+      const identity = gradingDisplayIdentity(session, studentIndex);
+      const submission = submissionsBySession.get(session.id) || {};
+      const answers = latestBy((data.answerRevisions || []).filter((revision) => revision.sessionId === session.id), (revision) => revision.questionId);
+      const grades = latestBy((data.gradeRevisions || []).filter((revision) => revision.sessionId === session.id), (revision) => revision.questionId);
+      const earned = state.questions.reduce((total, question) => total + (savedGradePoints(grades.get(question.id)) ?? 0), 0);
+      const possible = state.questions.reduce((total, question) => total + Number(question.points || 0), 0);
+      const complete = state.questions.every((question) => savedGradePoints(grades.get(question.id)) !== null);
+      composer.addText(`STUDENT ${studentIndex + 1} OF ${sessions.length}`, { size: 9, bold: true, spaceAfter: 5 });
+      composer.addText(identity.realName, { size: 18, bold: true, leading: 23, spaceAfter: 5 });
+      composer.addText(`Student number: ${identity.realStudentNumber || 'Not provided'} | Year level: ${session.yearLevel || 'Not provided'}`, { size: 10, spaceAfter: 3 });
+      composer.addText(`Submitted: ${formatDateTime(submission.submittedAt)} | Receipt: ${submission.receiptCode || 'Not available'}`, { size: 10, spaceAfter: 8 });
+      if (includeGrades) composer.addText(`TOTAL GRADE: ${earned} / ${possible} POINTS | ${complete ? 'FULLY GRADED' : 'GRADING INCOMPLETE'}`, { size: 12, bold: true, spaceAfter: 8 });
+      composer.addRule();
+      state.questions.forEach((question, questionIndex) => {
+        const answerText = gradingAnswerText(question, answers.get(question.id)?.answer);
+        composer.addText(`QUESTION ${questionIndex + 1} - ${Number(question.points || 0)} POINT${Number(question.points) === 1 ? '' : 'S'}`, { size: 11, bold: true, spaceBefore: 7, spaceAfter: 4 });
+        composer.addText(question.prompt || question.text || 'Question prompt not available.', { size: 10, spaceAfter: 5 });
+        composer.addText('SUBMITTED ANSWER', { size: 9, bold: true, spaceAfter: 3 });
+        composer.addText(answerText, { size: 10, leading: 14, x: 66, width: 475, spaceAfter: 5 });
+        if (includeGrades) {
+          const grade = grades.get(question.id);
+          const savedPoints = savedGradePoints(grade);
+          const hasGrade = savedPoints !== null;
+          composer.addText(`GRADE: ${hasGrade ? `${savedPoints} / ${Number(question.points || 0)} points` : `Not graded / ${Number(question.points || 0)} points`}`, { size: 10, bold: true, spaceAfter: 3 });
+          composer.addText(`PROFESSOR FEEDBACK: ${hasGrade ? (safeText(grade.feedback, 5_000) || 'No feedback provided.') : 'Not graded.'}`, { size: 9, x: 66, width: 475, spaceAfter: 5 });
+        }
+        composer.addRule();
+      });
+    });
+    return new Blob([serializePdfDocument(composer.pages, composer.documentTitle)], { type: 'application/pdf' });
+  }
+
+  function base64PdfBlob(value, contentType = 'application/pdf') {
+    const binary = atob(String(value || ''));
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    return new Blob([bytes], { type: contentType });
+  }
+
+  async function downloadServerSubmittedAnswersPdf(sessionId) {
+    const result = await api.professorQuery('submission_pdf', {
+      examId: state.exam.id,
+      sessionId,
+    });
+    if (!result?.contentBase64 || !result?.filename) {
+      throw new Error('The server PDF is not ready.');
+    }
+    downloadBlob(
+      safeText(result.filename, 180) || 'questions-and-answers.pdf',
+      base64PdfBlob(result.contentBase64, result.contentType || 'application/pdf'),
+    );
+    return result;
+  }
+
+  async function downloadSubmittedAnswersPdf({ includeGrades = false, sessionId = null, button = null } = {}) {
+    if (!state.grading) await refreshGrading();
+    const submittedCount = submittedSessions(sessionId).length;
+    if (!submittedCount) {
+      showError({ message: sessionId ? 'This student has no submitted answers to download.' : 'There are no submitted answers to download yet.', recovery: 'Wait for at least one student submission, choose Refresh, then download again.' }, null, 'Nothing downloaded');
+      return;
+    }
+    if (button) setButtonBusy(button, true, 'Preparing PDF…');
+    try {
+      const selectedSession = sessionId ? (state.grading?.sessions || []).find((session) => session.id === sessionId) : null;
+      const studentIndex = selectedSession ? submittedSessions().findIndex((session) => session.id === sessionId) : -1;
+      const identity = selectedSession ? gradingDisplayIdentity(selectedSession, studentIndex) : null;
+
+      if (sessionId && !includeGrades) {
+        try {
+          const serverPdf = await downloadServerSubmittedAnswersPdf(sessionId);
+          toast(`${identity?.realName || 'Student'} downloaded from the server PDF copy (${Math.max(1, Math.round(Number(serverPdf.size || 0) / 1024))} KB).`);
+          return;
+        } catch (serverError) {
+          console.warn('Server submission PDF unavailable; using browser fallback.', serverError);
+        }
+      }
+
+      if (includeGrades && state.selectedGradingSessionId) await saveAllGrades(null, { silent: true, requireComplete: false });
+      const scope = sessionId ? safeDownloadName(identity?.realName, 'student') : 'all-students';
+      const suffix = includeGrades ? 'answers-with-grades' : 'submitted-answers';
+      downloadBlob(`${safeDownloadName(state.exam?.title)}-${scope}-${suffix}.pdf`, buildSubmittedAnswersPdf({ includeGrades, sessionId }));
+      toast(`${sessionId ? identity?.realName || 'Student' : `${submittedCount} student${submittedCount === 1 ? '' : 's'}`} downloaded as a PDF${includeGrades ? ' with grade breakdowns' : ''}.`);
+    } catch (error) {
+      showError({ message: error?.message || 'The PDF could not be created.', recovery: 'Refresh the Grade view, then choose the PDF download again. The stored submission and answers are unchanged.' }, () => downloadSubmittedAnswersPdf({ includeGrades, sessionId, button }), 'PDF not downloaded');
+    } finally {
+      if (button) setButtonBusy(button, false);
+    }
   }
 
   function jsonDownloadSize(value) {
@@ -2260,7 +2867,7 @@
     const displayName = state.anonymousGrading ? identity.alias : identity.realName;
     const answers = latestBy((data.answerRevisions || []).filter((revision) => revision.sessionId === session.id), (revision) => revision.questionId);
     const grades = latestBy((data.gradeRevisions || []).filter((revision) => revision.sessionId === session.id), (revision) => revision.questionId);
-    $('#grading-sheet').innerHTML = `<header class="grading-student-head"><div><p class="section-kicker">Individual response</p><h2>${escapeHtml(displayName)}</h2><p>${escapeHtml(state.anonymousGrading ? 'The professor may reveal the real roster at any time.' : `${identity.realStudentNumber} · ${session.yearLevel}`)}</p></div><span class="grade-save-state"><i class="ph ph-check-circle" aria-hidden="true"></i> Enter all scores, then save this student once</span></header>
+    $('#grading-sheet').innerHTML = `<header class="grading-student-head"><div><p class="section-kicker">Individual response</p><h2>${escapeHtml(displayName)}</h2><p>${escapeHtml(state.anonymousGrading ? 'The professor may reveal the real roster at any time.' : `${identity.realStudentNumber} · ${session.yearLevel}`)}</p></div><div class="grading-student-actions"><button class="button secondary compact" type="button" data-download-student-answers><i class="ph ph-file-pdf" aria-hidden="true"></i>Answers PDF</button><button class="button secondary compact" type="button" data-download-student-grades><i class="ph ph-file-pdf" aria-hidden="true"></i>Answers + grades PDF</button><span class="grade-save-state"><i class="ph ph-check-circle" aria-hidden="true"></i> Enter all scores, then save this student once</span></div></header>
       ${state.questions.map((question, index) => {
         const answer = answers.get(question.id)?.answer;
         const grade = grades.get(question.id) || {};
@@ -2273,7 +2880,8 @@
               : Array.isArray(answer)
                 ? answer.join(', ')
                 : JSON.stringify(answer);
-        return `<article class="grade-question" data-grade-question="${escapeHtml(question.id)}"><header><h3>Question ${index + 1}</h3><strong>${question.points} points</strong></header><div class="student-answer">${escapeHtml(answerText)}</div><div class="grade-controls"><label><span>Points awarded</span><input type="number" min="0" max="${question.points}" step=".5" value="${grade.points ?? ''}" data-grade-points></label><label><span>Professor feedback</span><textarea maxlength="5000" data-grade-feedback>${escapeHtml(grade.feedback || '')}</textarea></label></div></article>`;
+        const questionPrompt = safeText(question.prompt || question.text, 20_000) || 'Question prompt not available.';
+        return `<article class="grade-question" data-grade-question="${escapeHtml(question.id)}"><header><h3>Question ${index + 1}</h3><strong>${question.points} points</strong></header><div class="grading-question-prompt"><span class="grading-content-label">Question</span><div>${escapeHtml(questionPrompt)}</div></div><div class="student-answer"><span class="grading-content-label">Student answer</span><div>${escapeHtml(answerText)}</div></div><div class="grade-controls"><label><span>Points awarded</span><input type="number" min="0" max="${question.points}" step=".5" value="${grade.points ?? ''}" data-grade-points></label><label><span>Professor feedback</span><textarea maxlength="5000" data-grade-feedback>${escapeHtml(grade.feedback || '')}</textarea></label></div></article>`;
       }).join('')}
       <div class="grading-save-all"><button class="button primary" type="button" data-save-all-grades>Save all grades</button><p>One save for this student's complete grading sheet. A score of 0 is valid; blank means not yet graded.</p></div>`;
   }
@@ -2897,7 +3505,7 @@
     } else if (action === 'open_monitor') switchView('monitor');
     else if (action === 'open_grading' || action === 'open_results' || action === 'open_downloads') {
       switchView('grade');
-      if (action === 'open_downloads') global.setTimeout(() => $('#export-grading-package')?.focus(), 350);
+      if (action === 'open_downloads') global.setTimeout(() => $('#download-all-submitted-answers')?.focus(), 350);
     }
   }
 
@@ -3162,19 +3770,15 @@
     $('#grading-sheet').addEventListener('click', (event) => {
       const button = event.target.closest('[data-save-all-grades]');
       if (button) saveAllGrades(button).catch(() => {});
+      const downloadAnswers = event.target.closest('[data-download-student-answers]');
+      if (downloadAnswers) downloadSubmittedAnswersPdf({ sessionId: state.selectedGradingSessionId, button: downloadAnswers });
+      const downloadGrades = event.target.closest('[data-download-student-grades]');
+      if (downloadGrades) downloadSubmittedAnswersPdf({ includeGrades: true, sessionId: state.selectedGradingSessionId, button: downloadGrades });
     });
     $('#anonymous-grading-toggle').addEventListener('change', (event) => { state.anonymousGrading = event.target.checked; renderGrading(); });
-    $('#release-results')?.addEventListener('click', releaseResults);
-    // Offline grading tools remain available in the dedicated advanced offline
-    // workspace, but they are intentionally not part of the normal professor
-    // grading screen. Keep these bindings optional so the online workspace
-    // does not depend on technical offline controls being present.
-    $('#export-grading-package')?.addEventListener('click', exportGradingPackage);
-    $('#import-grading-package')?.addEventListener('change', async (event) => {
-      const files = [...(event.target.files || [])];
-      await importGradingPackages(files);
-      event.target.value = '';
-    });
+    $('#release-results').addEventListener('click', releaseResults);
+    $('#download-all-submitted-answers').addEventListener('click', (event) => downloadSubmittedAnswersPdf({ button: event.currentTarget }));
+    $('#download-all-graded-answers').addEventListener('click', (event) => downloadSubmittedAnswersPdf({ includeGrades: true, button: event.currentTarget }));
     $('#text-entry-form').addEventListener('submit', (event) => {
       event.preventDefault();
       const input = $('#text-entry-input');

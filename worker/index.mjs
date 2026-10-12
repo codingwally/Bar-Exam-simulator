@@ -240,7 +240,14 @@ import {
   buildExaminationRoomKeyEmail,
   deliverExaminationRoomPublicationRequestEmail,
   deliverExaminationRoomResultReleaseEmails,
+  deliverExaminationRoomSubmissionAnswersEmail,
+  deliverExaminationRoomProfessorSubmissionEmail,
 } from './examination-room-email.mjs';
+import {
+  bytesToBase64 as examinationRoomSubmissionBytesToBase64,
+  ensureExaminationRoomSubmissionPdf,
+  examinationRoomSubmissionPdfFilename,
+} from './examination-room-submission-artifacts.mjs';
 import { googleAccessToken } from './google-oauth.mjs';
 import {
   outboundEmailMode,
@@ -317,9 +324,24 @@ const authenticatedUserTokenCache = new Map();
 let laborBankCache = null;
 let websiteBankCache = null;
 
+const CANONICAL_BROWSER_ORIGINS = new Set([
+  'https://duediligence.ph',
+  'https://www.duediligence.ph',
+]);
+
+function isAllowedBrowserOrigin(origin, allowedOrigin) {
+  return Boolean(origin) && (
+    origin === allowedOrigin
+    || CANONICAL_BROWSER_ORIGINS.has(origin)
+  );
+}
+
 function corsHeaders(origin, allowedOrigin) {
+  const responseOrigin = isAllowedBrowserOrigin(origin, allowedOrigin)
+    ? origin
+    : (allowedOrigin || 'https://duediligence.ph');
   return {
-    'Access-Control-Allow-Origin': origin === allowedOrigin ? origin : allowedOrigin,
+    'Access-Control-Allow-Origin': responseOrigin,
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': [
       'Content-Type',
@@ -354,7 +376,7 @@ function jsonResponse(body, status, origin, allowedOrigin) {
 
 function assertOrigin(request, allowedOrigin) {
   const origin = request.headers.get('Origin') || '';
-  if (!allowedOrigin || origin !== allowedOrigin) {
+  if (!isAllowedBrowserOrigin(origin, allowedOrigin)) {
     throw new ExaminerError('ORIGIN_NOT_ALLOWED', 'This grading origin is not allowed.', 403);
   }
   return origin;
@@ -550,8 +572,12 @@ async function enforceExaminationRoomV1RateLimit(request, env, scope, boundedPay
       : boundedPayload;
     subject = scope === 'student_preview' || scope === 'student_consent'
       ? `${String(payload?.roomKey || '').slice(0, 100)}\0${String(
-        payload?.identity?.studentNumber || payload?.studentNumber || '',
-      ).slice(0, 128)}`
+        payload?.identity?.email
+          || payload?.email
+          || payload?.identity?.studentNumber
+          || payload?.studentNumber
+          || '',
+      ).trim().toLowerCase().slice(0, 320)}`
       : String(payload?.sessionId || '').slice(0, 128);
   }
   const limiterSecret = env.EXAMINATION_ROOM_KEY_PEPPER || env.GUEST_USAGE_HMAC_KEY;
@@ -824,6 +850,8 @@ async function examinationRoomV1ServiceRpc(env, functionName, body) {
     'examination_room_v1_import_grades',
     'examination_room_v1_claim_result_email_deliveries',
     'examination_room_v1_complete_result_email_deliveries',
+    'examination_room_v1_submission_delivery_context',
+    'examination_room_v1_professor_submission_artifact_context',
   ]);
   if (!allowedFunctions.has(functionName)) {
     throw new ExaminationRoomV1RouteError(
@@ -10359,6 +10387,71 @@ const examinationRoomMedia = createExaminationRoomMediaControl({
   now: () => new Date().toISOString(),
 });
 
+
+async function examinationRoomSubmissionDeliveryContext(env, sessionId) {
+  return examinationRoomV1Result(await examinationRoomV1ServiceRpc(
+    env,
+    'examination_room_v1_submission_delivery_context',
+    { p_session_id: sessionId },
+  ));
+}
+
+async function examinationRoomProfessorSubmissionArtifactContext(env, details) {
+  return examinationRoomV1Result(await examinationRoomV1ServiceRpc(
+    env,
+    'examination_room_v1_professor_submission_artifact_context',
+    {
+      p_actor_user_id: details.actorUserId,
+      p_institution_id: details.institutionId,
+      p_exam_id: details.examId,
+      p_session_id: details.sessionId,
+    },
+  ));
+}
+
+async function examinationRoomProfessorSubmissionPdf(env, context) {
+  const artifact = await ensureExaminationRoomSubmissionPdf(env, context);
+  return {
+    filename: examinationRoomSubmissionPdfFilename(context),
+    contentType: artifact.contentType || 'application/pdf',
+    contentBase64: examinationRoomSubmissionBytesToBase64(artifact.bytes),
+    objectKey: artifact.objectKey,
+    size: artifact.size,
+    stored: true,
+  };
+}
+
+async function deliverExaminationRoomProfessorSubmissionPackage(env, details) {
+  const context = await examinationRoomSubmissionDeliveryContext(env, details.sessionId);
+  const artifact = await ensureExaminationRoomSubmissionPdf(env, context);
+  const manifest = context?.submissionManifest && typeof context.submissionManifest === 'object'
+    ? context.submissionManifest
+    : {};
+  const delivery = await deliverExaminationRoomProfessorSubmissionEmail(env, {
+    professorRecipient: context.professorEmail,
+    professorName: context.professorName,
+    studentName: context.studentName,
+    studentNumber: context.studentNumber,
+    studentEmail: context.studentEmail,
+    subject: context.subject || manifest.subject,
+    examTitle: manifest.title,
+    submittedAt: context.submittedAt,
+    receiptCode: context.receiptCode,
+    submissionId: context.submissionId,
+    idempotencyHash: details.idempotencyHash,
+    questions: Array.isArray(manifest.questions) ? manifest.questions : [],
+    pdfFilename: examinationRoomSubmissionPdfFilename(context),
+    pdfBase64: examinationRoomSubmissionBytesToBase64(artifact.bytes),
+  });
+  if (!['sent', 'suppressed'].includes(String(delivery?.status || ''))) {
+    console.error('Examination Room professor submission email was not delivered', {
+      status: String(delivery?.status || 'failed').slice(0, 40),
+      safeErrorCode: String(delivery?.safeErrorCode || 'unknown').slice(0, 80),
+    });
+  }
+  return { artifact, delivery };
+}
+
 const examinationRoomV1Handlers = createExaminationRoomV1Handlers({
   parseJson: parseBoundedJson,
   respond: jsonResponse,
@@ -10457,9 +10550,48 @@ const examinationRoomV1Handlers = createExaminationRoomV1Handlers({
     }
     return null;
   },
-  afterStudentCommand: ({ operation, env, executionContext }) => {
+  submissionArtifactContext: examinationRoomProfessorSubmissionArtifactContext,
+  submissionPdf: examinationRoomProfessorSubmissionPdf,
+  afterStudentCommand: ({
+    operation,
+    env,
+    executionContext,
+    submissionEmailDetails,
+  }) => {
     if (operation === 'submit') {
       scheduleExaminationRoomRecoveryDrain(env, executionContext);
+
+      if (submissionEmailDetails?.sessionId && submissionEmailDetails?.idempotencyHash) {
+        const professorPackageWork = deliverExaminationRoomProfessorSubmissionPackage(
+          env,
+          submissionEmailDetails,
+        ).catch((error) => {
+          console.error('Examination Room professor submission package failed', {
+            message: String(error?.message || 'unknown').slice(0, 160),
+          });
+        });
+        if (executionContext?.waitUntil) executionContext.waitUntil(professorPackageWork);
+      }
+
+      if (submissionEmailDetails?.recipient) {
+        const emailWork = deliverExaminationRoomSubmissionAnswersEmail(
+          env,
+          submissionEmailDetails,
+        ).then((delivery) => {
+          if (!['sent', 'suppressed'].includes(String(delivery?.status || ''))) {
+            console.error('Examination Room submitted-answer email was not delivered', {
+              status: String(delivery?.status || 'failed').slice(0, 40),
+              safeErrorCode: String(delivery?.safeErrorCode || 'unknown').slice(0, 80),
+            });
+          }
+          return delivery;
+        }).catch((error) => {
+          console.error('Examination Room submitted-answer email failed', {
+            message: String(error?.message || 'unknown').slice(0, 160),
+          });
+        });
+        if (executionContext?.waitUntil) executionContext.waitUntil(emailWork);
+      }
     }
   },
   hmacHex,

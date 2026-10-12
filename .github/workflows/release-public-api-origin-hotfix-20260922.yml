@@ -1,0 +1,130 @@
+name: Emergency public API browser preflight hotfix
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/release-public-api-origin-hotfix-20260922.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-api-origin-hotfix
+  cancel-in-progress: false
+
+env:
+  RELEASE_SOURCE_SHA: e52a45757cde3b0e3f47463db65e82ecbadbbb2b
+  BASE_SHA: 0a8a83502af785f39a5ed58852dbee932fc53db2
+  PUBLIC_API_URL: https://duediligence-api.wallyesteban1993.workers.dev
+
+jobs:
+  deploy:
+    name: Verify and deploy public API browser preflight
+    if: "${{ github.event.head_commit.message == 'release: deploy public API browser preflight' }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: production-worker
+
+    steps:
+      - name: Checkout exact hotfix source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_SOURCE_SHA }}
+          fetch-depth: 0
+
+      - name: Prove isolated alias-only scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$RELEASE_SOURCE_SHA"
+          git cat-file -e "$BASE_SHA^{commit}"
+          python - <<'PY'
+          import os, subprocess
+          base=os.environ['BASE_SHA']
+          source=os.environ['RELEASE_SOURCE_SHA']
+          expected={'worker/public-api-alias.mjs','worker/public-api-alias.test.mjs'}
+          changed=set(subprocess.check_output(['git','diff','--name-only',f'{base}..{source}'],text=True).splitlines())
+          if changed != expected:
+              raise SystemExit(f'unexpected hotfix scope: {sorted(changed)}')
+          print('Exact public API alias hotfix scope verified.')
+          PY
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validate alias browser preflight behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check worker/public-api-alias.mjs
+          node --test worker/public-api-alias.test.mjs
+          git diff --check "$BASE_SHA..$RELEASE_SOURCE_SHA"
+          grep -Fq "function preflightResponse(request)" worker/public-api-alias.mjs
+          grep -Fq "request.method === 'OPTIONS'" worker/public-api-alias.mjs
+          grep -Fq "Access-Control-Allow-Headers" worker/public-api-alias.mjs
+          grep -Fq "'Authorization'" worker/public-api-alias.mjs
+          grep -Fq "'X-DD-Beta-Access'" worker/public-api-alias.mjs
+
+      - name: Deploy provider-neutral public API alias only
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          wranglerVersion: "4.114.0"
+          command: deploy --config wrangler.public-api.toml
+
+      - name: Verify production origin behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          verify_origin() {
+            origin="$1"
+            expected_cors="$2"
+            body_file="$RUNNER_TEMP/origin-probe-$(echo "$origin" | tr -cd '[:alnum:]').json"
+            headers_file="$RUNNER_TEMP/origin-probe-$(echo "$origin" | tr -cd '[:alnum:]').headers"
+
+            status="$(curl --silent --show-error               --output "$body_file"               --dump-header "$headers_file"               --write-out '%{http_code}'               --request POST               --header "Origin: $origin"               --header 'Content-Type: application/json'               --data '{}'               "$PUBLIC_API_URL/examination-room/v1/student/preview")"
+
+            if [[ "$status" = "403" ]] && grep -Fq '"code":"ORIGIN_NOT_ALLOWED"' "$body_file"; then
+              echo "Origin $origin is still rejected." >&2
+              cat "$body_file" >&2
+              exit 1
+            fi
+
+            grep -qi "^access-control-allow-origin: $expected_cors" "$headers_file"
+            echo "$origin accepted by the public API boundary with HTTP $status."
+          }
+
+          verify_origin 'https://duediligence.ph' 'https://duediligence.ph'
+          verify_origin 'https://www.duediligence.ph' 'https://www.duediligence.ph'
+
+          preflight_headers="$RUNNER_TEMP/exam-room-preflight.headers"
+          preflight_status="$(curl --silent --show-error --max-time 20 \
+            --output /dev/null \
+            --dump-header "$preflight_headers" \
+            --write-out '%{http_code}' \
+            --request OPTIONS \
+            --header 'Origin: https://duediligence.ph' \
+            --header 'Access-Control-Request-Method: POST' \
+            --header 'Access-Control-Request-Headers: authorization,content-type,x-dd-beta-access' \
+            "$PUBLIC_API_URL/")"
+          test "$preflight_status" = "204"
+          grep -qi '^access-control-allow-origin: https://duediligence.ph' "$preflight_headers"
+          grep -qi '^access-control-allow-methods: .*POST.*OPTIONS' "$preflight_headers"
+          grep -qi '^access-control-allow-headers: .*Content-Type' "$preflight_headers"
+          grep -qi '^access-control-allow-headers: .*Authorization' "$preflight_headers"
+          grep -qi '^access-control-allow-headers: .*X-DD-Beta-Access' "$preflight_headers"
+          echo "Authenticated grading preflight is accepted by the public API boundary."
+
+          attacker_body="$RUNNER_TEMP/attacker-origin.json"
+          attacker_status="$(curl --silent --show-error             --output "$attacker_body"             --write-out '%{http_code}'             --request POST             --header 'Origin: https://attacker.example'             --header 'Content-Type: application/json'             --data '{}'             "$PUBLIC_API_URL/examination-room/v1/student/preview")"
+          test "$attacker_status" = "403"
+          grep -Fq '"code":"ORIGIN_NOT_ALLOWED"' "$attacker_body"
+          echo "Unapproved origins remain rejected."

@@ -1,0 +1,115 @@
+name: Examination Room email-isolated admission release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/release-examination-room-email-rate-limit-20260925.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: examination-room-email-rate-limit-hotfix
+  cancel-in-progress: false
+
+env:
+  LIVE_WORKER_SHA: 1e8161f34627e066560c162c55a9bbd095f7be24
+  PATCH_SOURCE_SHA: 12f2741630bb5283bce96cf5f3d6514f7b70cea8
+  PUBLIC_API_URL: https://duediligence-api.wallyesteban1993.workers.dev
+  APPLICATION_URL: https://duediligence-gemini-examiner.wallyesteban1993.workers.dev
+
+jobs:
+  deploy:
+    name: Verify and deploy email-isolated student admission
+    if: "${{ github.event.head_commit.message == 'release: isolate Examination Room admission by email' }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment:
+      name: production-worker
+
+    steps:
+      - name: Checkout exact live Worker baseline
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.LIVE_WORKER_SHA }}
+          fetch-depth: 0
+
+      - name: Overlay only reviewed rate-limit change
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "$PATCH_SOURCE_SHA^{commit}"
+          git show "$PATCH_SOURCE_SHA:worker/index.mjs" > worker/index.mjs
+
+          changed="$(git diff --name-only)"
+          test "$changed" = "worker/index.mjs"
+
+          grep -Fq "payload?.identity?.email" worker/index.mjs
+          grep -Fq "payload?.email" worker/index.mjs
+          grep -Fq "payload?.identity?.studentNumber" worker/index.mjs
+          grep -Fq "const CANONICAL_BROWSER_ORIGINS = new Set([" worker/index.mjs
+          node --check worker/index.mjs
+          node --check worker/maintenance-entry.mjs
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Worker dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Run Examination Room Worker tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test             worker/examination-room-v1-index.test.mjs             worker/examination-room-v1-routes.test.mjs             worker/examination-room-v1-core.test.mjs             worker/examination-room-v1-owner.test.mjs             worker/examination-room-v1-recovery.test.mjs             worker/examination-room-activation-window.test.mjs
+          git diff --check
+
+      - name: Prepare behavior-equivalent Worker deployment config
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp worker/wrangler.toml worker/wrangler.examination-room-classroom.toml
+          sed -i             -e '/^GEMINI_GROUNDING_ENABLED =/d'             -e '/^ALLOW_LEGACY_GUESTS =/d'             -e '/^AI_PREPARED_BETA_BADGE =/d'             -e '/^CONTENT_HUMAN_REVIEW_REQUIRED =/d'             worker/wrangler.examination-room-classroom.toml
+
+      - name: Deploy application Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          wranglerVersion: "4.114.0"
+          command: deploy --config wrangler.examination-room-classroom.toml
+
+      - name: Verify canonical origin and 30 isolated admission probes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for endpoint in "$APPLICATION_URL" "$PUBLIC_API_URL"; do
+            body="$RUNNER_TEMP/origin-probe.json"
+            headers="$RUNNER_TEMP/origin-probe.headers"
+            status="$(curl --silent --show-error --max-time 20               --output "$body"               --dump-header "$headers"               --write-out '%{http_code}'               --request POST               --header 'Origin: https://duediligence.ph'               --header 'Content-Type: application/json'               --data '{"roomKey":"ER1-AAAA-AAAA-A","identity":{"fullName":"Origin Probe","studentNumber":"SAME-STUDENT-NO","email":"origin-probe@example.com","subject":"Probe","yearLevel":"First year"}}'               "$endpoint/examination-room/v1/student/preview" || true)"
+
+            if [[ "$status" = "403" ]] && grep -Fq '"code":"ORIGIN_NOT_ALLOWED"' "$body"; then
+              echo "Canonical origin is still rejected by $endpoint." >&2
+              cat "$body" >&2
+              exit 1
+            fi
+            grep -qi '^access-control-allow-origin: https://duediligence.ph' "$headers"
+
+            failures=0
+            rate_limited=0
+            for i in $(seq 1 30); do
+              code="$(curl --silent --show-error --max-time 20                 --output "$RUNNER_TEMP/admission-$i.json"                 --write-out '%{http_code}'                 --request POST                 --header 'Origin: https://duediligence.ph'                 --header 'Content-Type: application/json'                 --data "{\"roomKey\":\"ER1-AAAA-AAAA-A\",\"identity\":{\"fullName\":\"Classroom Probe $i\",\"studentNumber\":\"SAME-STUDENT-NO\",\"email\":\"classroom-probe-$i@example.com\",\"subject\":\"Probe\",\"yearLevel\":\"First year\"}}"                 "$endpoint/examination-room/v1/student/preview" || true)"
+              if [[ "$code" = "429" ]]; then rate_limited=$((rate_limited + 1)); fi
+              if [[ "$code" =~ ^5 ]]; then failures=$((failures + 1)); fi
+            done
+
+            test "$rate_limited" -eq 0
+            test "$failures" -eq 0
+            echo "30 distinct-email admission probes completed without shared rate limiting at $endpoint."
+          done

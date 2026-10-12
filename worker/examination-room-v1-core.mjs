@@ -1516,10 +1516,10 @@ export function buildSubmissionManifest(input) {
         if (!selected || candidate.revision > selected.revision) selected = candidate;
       }
     }
-    if (!selected || !hasCompleteAnswer(selected)) {
+    if (!selected) {
       fail(
         ERROR_CODES.SUBMISSION_ANSWER_MISSING,
-        `Answer question ${question.number} before submitting the examination.`,
+        `Create a final answer-state revision for question ${question.number} before submitting the examination.`,
         { field: 'submission.answerRevisions', questionNumber: question.number },
       );
     }
@@ -1619,14 +1619,10 @@ function normalizeSubmissionQuestion(input, index) {
     );
   }
   const questionShape = { number, type, choices };
+  // A final submission may intentionally contain an unanswered question.
+  // The positive revision number proves the student's final answer state was
+  // frozen server-side; a null/blank answer means "unanswered", not "missing".
   const answer = normalizeAnswerValue(input.answer, questionShape, `${field}.answer`);
-  if (!hasCompleteAnswer({ questionType: type, answer })) {
-    fail(
-      ERROR_CODES.SUBMISSION_MANIFEST_INVALID,
-      `Reload the submission because question ${number} has no final answer.`,
-      { field: `${field}.answer`, questionNumber: number },
-    );
-  }
   return deepFreeze({
     questionNumber: number,
     questionKey: `q${String(number).padStart(3, '0')}`,

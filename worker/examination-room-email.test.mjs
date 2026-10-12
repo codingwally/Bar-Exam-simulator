@@ -6,8 +6,10 @@ import {
   buildExaminationRoomKeyEmail,
   buildExaminationRoomPublicationRequestEmail,
   buildExaminationRoomResultEmail,
+  buildExaminationRoomSubmissionAnswersEmail,
   deliverExaminationRoomPublicationRequestEmail,
   deliverExaminationRoomResultReleaseEmails,
+  deliverExaminationRoomSubmissionAnswersEmail,
   escapeExaminationRoomEmailHtml,
   examinationRoomEmailBrand,
 } from './examination-room-email.mjs';
@@ -252,4 +254,51 @@ test('result delivery reports suppressed and recoverable provider failures per s
   assert.equal(suppressed.outcomes[0].safeErrorCode, 'email_suppressed');
   assert.equal(failed.status, 'failed');
   assert.equal(failed.outcomes[0].safeErrorCode, 'provider_503');
+});
+
+
+test('submission answer email contains answers only and no question prompts, grades, or feedback', () => {
+  const email = buildExaminationRoomSubmissionAnswersEmail({}, {
+    examTitle: 'Constitutional Law Test',
+    answers: [
+      { questionNumber: 1, type: 'essay', answer: 'My first answer', prompt: 'SECRET QUESTION TEXT' },
+      { questionNumber: 2, type: 'multiple-choice', answer: 1, choices: ['Choice A', 'Choice B'], prompt: 'ANOTHER SECRET QUESTION' },
+      { questionNumber: 3, type: 'essay', answer: null, prompt: 'THIRD SECRET QUESTION' },
+    ],
+  });
+  assert.match(email.text, /Answer 1\nMy first answer/);
+  assert.match(email.text, /Answer 2\nChoice B/);
+  assert.match(email.text, /Answer 3\nUnanswered/);
+  assert.doesNotMatch(email.text, /SECRET QUESTION|score|grade|feedback/iu);
+  assert.doesNotMatch(email.html, /SECRET QUESTION|ANOTHER SECRET QUESTION|THIRD SECRET QUESTION/iu);
+});
+
+test('submission answer email delivery uses the examination recipient and retry-safe provider key', async () => {
+  const calls = [];
+  const transport = async (url, options) => {
+    calls.push({ url, headers: options.headers, body: JSON.parse(options.body) });
+    return new Response(JSON.stringify({ id: 'submitted-answers-email-1' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  };
+  const env = {
+    EXAMINATION_ROOM_EMAIL_MODE: 'enabled',
+    EXAMINATION_ROOM_EMAIL_FROM: 'Due Diligence <exams@duediligence.ph>',
+    RESEND_API_KEY: 'test-provider-key',
+  };
+  const message = {
+    recipient: 'STUDENT@EXAMPLE.COM',
+    idempotencyHash: 'f'.repeat(64),
+    examTitle: 'Constitutional Law Test',
+    answers: [{ questionNumber: 1, type: 'essay', answer: 'Submitted answer' }],
+  };
+  const first = await deliverExaminationRoomSubmissionAnswersEmail(env, message, transport);
+  const retry = await deliverExaminationRoomSubmissionAnswersEmail(env, message, transport);
+  assert.equal(first.status, 'sent');
+  assert.equal(retry.status, 'sent');
+  assert.deepEqual(calls[0].body.to, ['student@example.com']);
+  assert.equal(calls[0].headers['Idempotency-Key'], `exam-room-submitted-answers-${'f'.repeat(64)}`);
+  assert.equal(calls[0].headers['Idempotency-Key'], calls[1].headers['Idempotency-Key']);
+  assert.doesNotMatch(calls[0].body.text, /question prompt|score|grade|feedback/iu);
 });

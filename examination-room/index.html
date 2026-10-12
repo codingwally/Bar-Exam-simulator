@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4565325992372168" crossorigin="anonymous"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
   <meta name="theme-color" content="#06182e">
@@ -11,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&amp;family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/regular/style.css">
-  <link rel="stylesheet" href="professor.css?v=creator-overview-20260828-1">
+  <link rel="stylesheet" href="professor.css?v=grading-prompts-key-status-20260926-1">
 </head>
 <body>
   <a class="skip-link" href="#exam-editor">Skip to examination editor</a>
@@ -150,14 +151,14 @@
               <div class="source-header">
                 <div><p class="section-kicker">Source material</p><p>Start from a file or continue editing directly below.</p></div>
                 <label class="button secondary compact" for="source-upload"><i class="ph ph-upload-simple" aria-hidden="true"></i><span>Upload exam</span></label>
-                <input id="source-upload" type="file" accept=".docx,.pdf,.txt,.rtf" hidden>
+                <input id="source-upload" type="file" accept=".pdf,.docx,.rtf" hidden>
               </div>
               <div class="source-file" id="source-file">
                 <i class="ph ph-microsoft-word-logo source-word-icon" aria-hidden="true"></i>
                 <span><strong id="source-name">Constitutional_Law_Midterm.docx</strong><small id="source-size">187 KB</small></span>
                 <button class="icon-action" type="button" id="remove-source" aria-label="Remove source file"><i class="ph ph-x" aria-hidden="true"></i></button>
               </div>
-              <div class="success-notice" id="import-notice"><i class="ph ph-check-circle" aria-hidden="true"></i><span>AI organized the content into questions and numbering for your review.</span><button type="button" id="view-mapping">View mapping</button></div>
+              <div class="success-notice" id="import-notice"><i class="ph ph-check-circle" aria-hidden="true"></i><span>The uploaded exam was populated into the fields below.</span><button type="button" id="view-mapping">View mapping</button></div>
             </section>
 
             <section class="editor-section questions-section" id="questions" aria-labelledby="questions-title">
@@ -227,7 +228,7 @@
               <fieldset class="safety-options">
                 <legend>Integrity mode</legend>
                 <label><input type="radio" name="integrity-tier-main" value="standard" checked><span><i class="ph ph-file-lock" aria-hidden="true"></i><strong>Standard</strong><small>Authenticated access, timer, local recovery, and server backup.</small></span></label>
-                <label><input type="radio" name="integrity-tier-main" value="focus_monitoring"><span><i class="ph ph-monitor" aria-hidden="true"></i><strong>Focus monitoring</strong><small>Logs fullscreen and visibility changes as signals for professor review.</small></span></label>
+                <label><input type="radio" name="integrity-tier-main" value="focus_monitoring"><span><i class="ph ph-monitor" aria-hidden="true"></i><strong>Focus monitoring</strong><small>Requests fullscreen when the student begins, then logs fullscreen and visibility changes for professor review.</small></span></label>
                 <label><input type="radio" name="integrity-tier-main" value="recorded_proctoring"><span><i class="ph ph-video-camera" aria-hidden="true"></i><strong>Recorded proctoring <em>Optional</em></strong><small>Records the selected devices in encrypted segments with automatic storage fallback.</small></span></label>
               </fieldset>
               <div class="recording-options" id="recording-options" hidden>
@@ -265,7 +266,7 @@
       <div class="monitor-layout">
         <main>
           <div class="operations-metrics" id="monitor-metrics"></div>
-          <section class="operations-panel"><header><div><h2>Student status</h2><p>Latest server-backed state for every student.</p></div><label class="search-control"><i class="ph ph-magnifying-glass" aria-hidden="true"></i><input id="monitor-search" type="search" placeholder="Search name or student number"></label></header><div class="monitor-table-wrap"><table><thead><tr><th>Student</th><th>Student no.</th><th>Status</th><th>Question</th><th>Last backup</th><th>Integrity</th><th>Action</th></tr></thead><tbody id="monitor-table-body"></tbody></table></div></section>
+          <section class="operations-panel"><header><div><h2>Student status</h2><p>Latest server-backed state for every student.</p></div><label class="search-control"><i class="ph ph-magnifying-glass" aria-hidden="true"></i><input id="monitor-search" type="search" placeholder="Search name, email, or student number"></label></header><div class="monitor-table-wrap"><table><thead><tr><th>Student</th><th>Student no.</th><th>Status</th><th>Question</th><th>Last seen</th><th>Integrity</th><th>Action</th></tr></thead><tbody id="monitor-table-body"></tbody></table></div></section>
         </main>
         <aside>
           <section class="operations-panel incident-feed"><header><div><h2>Review queue</h2><p>Focus and device events requiring human context.</p></div></header><div id="incident-feed"></div></section>
@@ -277,7 +278,7 @@
     <section class="app-view grade-view" id="grade-view" data-app-view="grade" hidden aria-labelledby="grade-title">
       <header class="operations-header">
         <div><p class="section-kicker">Grade submissions</p><h1 id="grade-title">Constitutional Law — Midterm Examination</h1><p>One student at a time, with durable grade revisions and professor-controlled identity.</p></div>
-        <div class="operations-actions"><button class="button primary" id="release-results" type="button">Release selected results</button></div>
+        <div class="operations-actions"><button class="button secondary" id="download-all-submitted-answers" type="button"><i class="ph ph-file-pdf" aria-hidden="true"></i>Download all answers (PDF)</button><button class="button secondary" id="download-all-graded-answers" type="button"><i class="ph ph-file-pdf" aria-hidden="true"></i>Download all with grades (PDF)</button><button class="button primary" id="release-results" type="button">Release selected results</button></div>
       </header>
       <div class="grading-layout">
         <aside class="student-submission-list"><header><h2>Students</h2><label><input id="anonymous-grading-toggle" type="checkbox"><span>Anonymous grading</span></label></header><div id="grading-student-list"></div></aside>
@@ -358,6 +359,6 @@
   <script src="view-models.js?v=greenfield-v1-20260826-1"></script>
   <script src="api.js?v=reliability-20260828-1"></script>
   <script src="offline-grading-core.js?v=greenfield-v1-20260826-3"></script>
-  <script src="professor.js?v=save-all-grades-20260920-2"></script>
+  <script src="professor.js?v=grading-prompts-key-status-20260926-1"></script>
 </body>
 </html>

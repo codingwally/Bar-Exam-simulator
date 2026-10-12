@@ -50,7 +50,7 @@ const LEGACY_SESSION_GATE_CODES = new Set([
   'CONSENT_REPLAY_INVALID',
 ]);
 
-const PROFESSOR_QUERY_OPERATIONS = new Set(['role_status', 'session', 'exam', 'monitor', 'grading']);
+const PROFESSOR_QUERY_OPERATIONS = new Set(['role_status', 'session', 'exam', 'monitor', 'grading', 'submission_pdf']);
 const PROFESSOR_COMMAND_OPERATIONS = new Set([
   'request_access',
   'save_draft',
@@ -880,6 +880,21 @@ export function createExaminationRoomV1Handlers(dependencies) {
         return deps.respond({ ok: true, ...result }, 200, origin, allowedOrigin);
       }
       const context = await professorContext(request, env, payload.institutionId);
+      if (operation === 'submission_pdf') {
+        if (typeof deps.submissionArtifactContext !== 'function' || typeof deps.submissionPdf !== 'function') {
+          fail('EXAM_ROOM_V1_SUBMISSION_PDF_UNAVAILABLE', 'The server submission PDF is temporarily unavailable.', 503, 'Use the local Answers PDF download for now and retry the server copy later.');
+        }
+        const examId = uuid(payload.examId, 'the examination identifier');
+        const sessionId = uuid(payload.sessionId, 'the student session identifier');
+        const artifactContext = ensureStoreResult(await deps.submissionArtifactContext(env, {
+          actorUserId: context.user.id,
+          institutionId: context.institutionId,
+          examId,
+          sessionId,
+        }));
+        const artifact = await deps.submissionPdf(env, artifactContext);
+        return deps.respond({ ok: true, ...artifact }, 200, origin, allowedOrigin);
+      }
       const safePayload = operation === 'session'
         ? {}
         : { examId: uuid(payload.examId, 'the examination identifier') };
@@ -1500,6 +1515,7 @@ export function createExaminationRoomV1Handlers(dependencies) {
         requestHash: info.requestHash,
         clientEventId: info.clientEventId,
       };
+      let submissionEmailDetails = null;
 
       if (operation === 'heartbeat') {
         safePayload = {
@@ -1509,13 +1525,23 @@ export function createExaminationRoomV1Handlers(dependencies) {
           occurredAt: deps.now(),
         };
       } else if (operation === 'record_event') {
+        const clientEventType = cleanText(payload.type || 'client_event', 80, 'event type', { required: true });
         const kindMap = {
-          focus_lost: 'focus_lost', fullscreen_exit: 'fullscreen_exit',
-          camera_interrupted: 'camera_interrupted', microphone_interrupted: 'microphone_interrupted',
-          network_disconnected: 'network_disconnected', device_changed: 'device_changed',
-          clock_anomaly: 'clock_anomaly', other: 'other',
+          focus_lost: 'focus_lost',
+          window_blurred: 'focus_lost',
+          page_hidden: 'focus_lost',
+          fullscreen_exit: 'fullscreen_exit',
+          fullscreen_exited: 'fullscreen_exit',
+          camera_interrupted: 'camera_interrupted',
+          microphone_interrupted: 'microphone_interrupted',
+          network_disconnected: 'network_disconnected',
+          connection_lost: 'network_disconnected',
+          device_changed: 'device_changed',
+          clock_anomaly: 'clock_anomaly',
+          other: 'other',
         };
-        const incidentKind = kindMap[String(payload.type || '').trim()] || 'other';
+        const incidentKind = kindMap[clientEventType] || 'other';
+        const clientDetails = isPlainRecord(payload.details) ? payload.details : {};
         safePayload = {
           ...safePayload,
           incidentKind,
@@ -1524,10 +1550,18 @@ export function createExaminationRoomV1Handlers(dependencies) {
             : payload.severity === 'review' ? 'warning' : 'info',
           occurredAt: isoInstant(payload.occurredAt ?? deps.now(), 'the event time'),
           durationMs: payload.durationMs == null ? null : positiveInteger(payload.durationMs, 'event duration', 0, 86_400_000),
-          details: safeEventDetails(payload.details ?? {}),
+          details: safeEventDetails({
+            ...clientDetails,
+            clientEventType,
+            visibilityState: cleanText(payload.visibilityState || '', 32, 'visibility state'),
+            fullscreen: payload.fullscreen === true,
+            clientSequence: Number.isSafeInteger(Number(payload.clientSequence))
+              ? Number(payload.clientSequence)
+              : null,
+          }),
         };
       } else {
-        const sessionContext = ensureStoreResult(await deps.rpc(env, {
+        let sessionContext = ensureStoreResult(await deps.rpc(env, {
           scope: 'student', operation: 'session_context', actorUserId: null, institutionId: null,
           payload: { sessionId: credential.sessionId, sessionTokenHash: credential.sessionTokenHash },
         }));
@@ -1573,11 +1607,149 @@ export function createExaminationRoomV1Handlers(dependencies) {
             savedAt: deps.now(),
           };
         } else if (operation === 'submit') {
+          const submittedAnswers = Array.isArray(payload.answers) ? payload.answers : [];
+          const submissionCompletedAt = isoInstant(
+            payload.clientCompletedAt ?? payload.submittedAt ?? deps.now(),
+            'submission time',
+          );
+
+          // Preserve a server-side intent before answer reconciliation. This
+          // proves the student submitted while the session was still active,
+          // so the same idempotent upload may finish after a transient outage
+          // or session expiry without creating a general late-submit bypass.
+          await callRpc(env, {
+            scope: 'student',
+            operation: 'submission_intent',
+            actorUserId: null,
+            institutionId: null,
+            payload: {
+              sessionId: credential.sessionId,
+              sessionTokenHash: credential.sessionTokenHash,
+              requestHash: info.requestHash,
+              clientEventId: info.clientEventId,
+              clientCompletedAt: submissionCompletedAt,
+            },
+          }, [credential.rawSessionToken, info.rawRequestKey]);
+
+          // Backward compatibility for examination tabs opened before the
+          // answer-upload client hotfix. Those tabs include the complete local
+          // answer snapshot in the submit payload even when autosave never
+          // reached the server. Persist that snapshot first so the existing
+          // open tab can finish without a refresh or loss of local answers.
+          if (submittedAnswers.length) {
+            for (let answerIndex = 0; answerIndex < submittedAnswers.length; answerIndex += 1) {
+              const submittedAnswer = plainRecord(submittedAnswers[answerIndex], `submitted answer ${answerIndex + 1}`);
+              const questionReference = cleanText(
+                submittedAnswer.questionId ?? submittedAnswer.questionKey ?? submittedAnswer.questionNumber,
+                128,
+                'question',
+                { required: true },
+              );
+              const clientQuestionNumber = /^q-(\d{1,3})$/u.test(questionReference)
+                ? Number(questionReference.slice(2))
+                : Number.NaN;
+              const question = publicationManifest.questions.find((entry) => (
+                entry.key === questionReference
+                || String(entry.number) === questionReference
+                || entry.number === clientQuestionNumber
+              ));
+              if (!question) {
+                fail(
+                  'EXAM_ROOM_V1_QUESTION_NOT_FOUND',
+                  'That submitted answer is not part of this examination version.',
+                  409,
+                  'Keep this page open and retry submission. Your local answers remain available.',
+                );
+              }
+
+              // A blank response is still a final response. Persist a null
+              // revision so students may intentionally leave a question
+              // unanswered and the signed receipt can cover every question.
+              let submittedValue = submittedAnswer.answer ?? null;
+              if (question.type === 'multiple-choice' && typeof submittedValue === 'string') {
+                const legacyChoice = /^option-(\d+)$/iu.exec(submittedValue.trim());
+                if (legacyChoice) submittedValue = Number(legacyChoice[1]) - 1;
+              }
+
+              // Freeze unanswered questions too. A null revision is a valid
+              // final answer state and lets the receipt cover every published
+              // question without pretending the student supplied an answer.
+              if (submittedValue === '') submittedValue = null;
+
+              // A retry can arrive after autosave or an earlier submit attempt
+              // already persisted this exact value. Do not manufacture a new
+              // revision (or reuse the submit-derived request key with a new
+              // revision number); the existing immutable revision is already
+              // the correct server-backed snapshot for the final receipt.
+              const existingRevision = Array.isArray(sessionContext.answerRevisions)
+                ? sessionContext.answerRevisions.find((revision) => (
+                  Number(revision?.questionNumber) === question.number
+                  && revision?.questionKey === question.key
+                ))
+                : null;
+              if (existingRevision && existingRevision.answer === submittedValue) {
+                continue;
+              }
+
+              const answerRequest = await requestContext(
+                env,
+                `${info.rawRequestKey}:answer:${question.number}`,
+              );
+              const answerRevision = normalizeAnswerRevision({
+                attemptId: credential.sessionId,
+                questionNumber: question.number,
+                revision: positiveInteger(
+                  sessionContext.nextRevisionByQuestion?.[question.key],
+                  'the answer revision',
+                  1,
+                  1_000_000_000,
+                  1,
+                ),
+                idempotencyKey: answerRequest.rawRequestKey,
+                answer: submittedValue,
+              }, { versionManifest: publicationManifest, publicationHash });
+              const answerPayload = { ...answerRevision };
+              delete answerPayload.idempotencyKey;
+              delete answerPayload.idempotencyInput;
+
+              await callRpc(env, {
+                scope: 'student',
+                operation: 'save_answer',
+                actorUserId: null,
+                institutionId: null,
+                payload: {
+                  sessionId: credential.sessionId,
+                  sessionTokenHash: credential.sessionTokenHash,
+                  requestHash: answerRequest.requestHash,
+                  clientEventId: answerRequest.clientEventId,
+                  answerRevision: answerPayload,
+                  answerHash: await deps.sha256Hex?.(answerRevision.idempotencyInput)
+                    || await pepperedHmac(env, 'answer-revision', answerRevision.idempotencyInput),
+                  flagged: submittedAnswer.flagged === true,
+                  source: 'submission',
+                  submissionRequestHash: info.requestHash,
+                  savedAt: submissionCompletedAt,
+                },
+              }, [credential.rawSessionToken, answerRequest.rawRequestKey]);
+            }
+
+            sessionContext = ensureStoreResult(await deps.rpc(env, {
+              scope: 'student',
+              operation: 'session_context',
+              actorUserId: null,
+              institutionId: null,
+              payload: {
+                sessionId: credential.sessionId,
+                sessionTokenHash: credential.sessionTokenHash,
+              },
+            }));
+          }
+
           const submission = buildSubmissionManifest({
             submissionId: deps.randomUUID(),
             attemptId: credential.sessionId,
             idempotencyKey: info.rawRequestKey,
-            submittedAt: isoInstant(payload.submittedAt ?? deps.now(), 'submission time'),
+            submittedAt: submissionCompletedAt,
             versionManifest: publicationManifest,
             publicationHash,
             studentIdentity: sessionContext.studentIdentity,
@@ -1591,10 +1763,23 @@ export function createExaminationRoomV1Handlers(dependencies) {
             ...safePayload,
             submissionManifest: manifest,
             manifestHash: await deps.sha256Hex?.(submission.hashInput) || await pepperedHmac(env, 'submission-manifest', submission.hashInput),
+            submissionRequestHash: info.requestHash,
             answerSelections: submission.manifest.questions.map((question) => ({
               questionNumber: question.questionNumber,
               questionKey: question.questionKey,
               revision: question.revision,
+            })),
+          };
+          submissionEmailDetails = {
+            sessionId: credential.sessionId,
+            recipient: String(sessionContext.studentEmail || '').trim().toLowerCase(),
+            idempotencyHash: info.requestHash,
+            examTitle: submission.manifest.title,
+            answers: submission.manifest.questions.map((question) => ({
+              questionNumber: question.questionNumber,
+              type: question.type,
+              choices: [...question.choices],
+              answer: question.answer,
             })),
           };
         }
@@ -1604,7 +1789,14 @@ export function createExaminationRoomV1Handlers(dependencies) {
         scope: 'student', operation, actorUserId: null, institutionId: null, payload: safePayload,
       }, [credential.rawSessionToken, info.rawRequestKey]);
       if (operation === 'submit' && typeof deps.afterStudentCommand === 'function') {
-        deps.afterStudentCommand({ operation, result, env, executionContext });
+        deps.afterStudentCommand({
+          operation,
+          result,
+          env,
+          executionContext,
+          requestHash: info.requestHash,
+          submissionEmailDetails,
+        });
       }
       return deps.respond({ ok: true, ...result }, operation === 'submit' ? 201 : 200, origin, allowedOrigin);
     }, origin, allowedOrigin);

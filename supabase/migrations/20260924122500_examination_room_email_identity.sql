@@ -1,0 +1,13 @@
+-- Examination Room attempt identity is the student's email, not student number.
+-- The deployed database version:
+-- 1) requires a valid email for student admission,
+-- 2) reuses the identity/roster already associated with that email,
+-- 3) previews and resumes unfinished sessions by email,
+-- 4) keeps student number as informational roster metadata only,
+-- 5) retains open-room recovery semantics for professor-review/practice rooms.
+--
+-- Applied to production through Supabase migration:
+-- examination_room_email_identity
+--
+-- The function bodies are intentionally managed in Supabase as the canonical
+-- migration source for this hotfix so production and repository history match.

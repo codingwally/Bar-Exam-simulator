@@ -250,9 +250,12 @@
   }
 
   function canUseUnlimitedFeature(access = state.access) {
-    return access?.allowed === true
-      && access?.unlimited === true
-      && !setupRequired(access);
+    const role = String(access?.role || '').trim().toLowerCase();
+    const basis = String(access?.basis || '').trim().toLowerCase();
+    const administrator = ['admin', 'founder_admin', 'super_admin'].includes(role)
+      || ['admin', 'founder_admin', 'super_admin'].includes(basis);
+    return !setupRequired(access)
+      && (administrator || (access?.allowed === true && access?.unlimited === true));
   }
 
   function unlimitedFeatureDefinition(routeHash = '', options = {}) {

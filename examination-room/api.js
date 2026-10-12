@@ -7,6 +7,7 @@
   const DEMO_STATE_KEY = 'duediligence.examination-room.v1.demo-state';
   const DEMO_EVENT_KEY = 'duediligence.examination-room.v1.demo-event';
   const DEFAULT_REQUEST_TIMEOUT_MS = 20_000;
+  const STUDENT_SUBMISSION_REQUEST_TIMEOUT_MS = 60_000;
   const ASSISTANT_REQUEST_TIMEOUT_MS = 60_000;
   const ADMIN_RECOVERY_REQUEST_TIMEOUT_MS = 120_000;
   const ADMIN_RECOVERY_OPERATIONS = new Set(['create_snapshot', 'retry_snapshot', 'restore_snapshot', 'recovery_detail']);
@@ -1823,13 +1824,44 @@
       sessionToken: result.sessionToken || session.sessionToken || session.id,
       serverNow: result.serverTime || iso(),
       startedAt,
-      expiresAt: session.expiresAt || iso((duration + Number(session.extraMinutes || 0)) * 60 * 1000),
+      expiresAt: session.expiresAt || session.leaseExpiresAt || iso((duration + Number(session.extraMinutes || 0)) * 60 * 1000),
+      resumed: result.resumed === true,
     };
   }
 
   async function loadExam({ attemptId, sessionToken }) {
     const result = await studentQuery('resume', { sessionId: attemptId, sessionToken });
-    return { questions: studentSafeQuestions(result.exam?.questions || result.questions || []) };
+    const questions = studentSafeQuestions(result.exam?.questions || result.questions || []);
+    const answers = {};
+    const flags = {};
+    const revisions = Array.isArray(result.answerRevisions)
+      ? result.answerRevisions
+      : Array.isArray(result.revisions)
+        ? result.revisions
+        : [];
+
+    for (const revision of revisions) {
+      const question = questions.find((entry) => (
+        String(entry.id) === String(revision?.questionId ?? revision?.questionKey ?? '')
+        || Number(entry.number) === Number(revision?.questionNumber)
+      ));
+      if (!question) continue;
+
+      let answer = revision?.answer ?? revision?.value ?? null;
+      if (question.type === 'multiple_choice' && Number.isSafeInteger(answer)) {
+        answer = question.options?.[answer]?.id ?? null;
+      }
+      answers[question.id] = answer;
+      flags[question.id] = revision?.flagged === true || revision?.isFlagged === true;
+    }
+
+    return {
+      questions,
+      answers,
+      flags,
+      resumed: result.resumed === true || revisions.length > 0,
+      session: result.session ? clone(result.session) : null,
+    };
   }
 
   async function syncOperations({ attemptId, sessionToken, operations = [] }) {
@@ -1838,13 +1870,23 @@
     for (const operation of operations) {
       const payload = operation.payload || {};
       if (operation.kind === 'integrity.event') {
+        const eventType = payload.eventType || 'client_event';
+        const severity = ['clipboard_paste', 'page_hidden', 'fullscreen_exited'].includes(eventType)
+          ? 'warning'
+          : 'info';
         await studentCommand('record_event', {
           sessionId: attemptId,
           sessionToken,
-          type: payload.eventType || 'client_event',
-          severity: 'info',
+          type: eventType,
+          severity,
           occurredAt: operation.occurredAt,
-          details: payload.details || {},
+          details: {
+            ...(payload.details || {}),
+            clientEventType: eventType,
+            visibilityState: payload.visibilityState || '',
+            fullscreen: payload.fullscreen === true,
+            clientSequence: operation.sequence,
+          },
           visibilityState: payload.visibilityState,
           fullscreen: payload.fullscreen,
           clientSequence: operation.sequence,
@@ -1878,11 +1920,11 @@
       ...payload,
       sessionId: payload.attemptId,
       manifestHash: payload.manifestHash,
-    }, payload.idempotencyKey);
+    }, payload.idempotencyKey, { timeoutMs: STUDENT_SUBMISSION_REQUEST_TIMEOUT_MS });
     const submission = result.submission || result.receipt || result;
     return {
       receiptId: submission.receiptCode || submission.receiptId || submission.id,
-      submittedAt: submission.submittedAt,
+      submittedAt: submission.submittedAt || submission.receivedAt || result.submittedAt || result.receivedAt,
       signature: submission.signature || submission.manifestHash || submission.id,
       answerCount: submission.answerCount ?? (payload.answers || []).filter((entry) => entry.answer !== null && entry.answer !== '').length,
       examVersion: submission.examVersion || submission.examVersionId || payload.examVersion,

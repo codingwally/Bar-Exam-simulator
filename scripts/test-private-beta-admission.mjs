@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import vm from 'node:vm';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const paths = {
@@ -108,11 +109,37 @@ assert.match(source.workerCore, /constantTimeHexEqual/);
 assert.match(source.workerCore, /verifyPrivateBetaAccessCode/);
 assert.match(source.workerCore, /crypto\.subtle\.sign/);
 
-assert.match(
-  source.wrangler,
-  /PRIVATE_BETA_GATE_ENABLED = "false"/,
-  'The commercial launch must retire the private-beta admission gate.',
-);
+function assertPrivateBetaGateDisabled(config) {
+  const bindings = config.split(/\r?\n/u).map((line) => line.replace(/#.*$/u, '').trim())
+    .filter((line) => /^["']?PRIVATE_BETA_GATE_ENABLED["']?\s*=/u.test(line));
+  assert.ok(bindings.length <= 1 && bindings.every((line) => /^(?:PRIVATE_BETA_GATE_ENABLED|"PRIVATE_BETA_GATE_ENABLED"|'PRIVATE_BETA_GATE_ENABLED')\s*=\s*(["'])false\1$/u.test(line)),
+    'The commercial launch must keep the private-beta admission gate disabled.');
+}
+assertPrivateBetaGateDisabled(source.wrangler);
+for (const config of ['', 'PRIVATE_BETA_GATE_ENABLED = "false"', '"PRIVATE_BETA_GATE_ENABLED" = "false"', '# PRIVATE_BETA_GATE_ENABLED = "true"']) {
+  assertPrivateBetaGateDisabled(config);
+}
+for (const config of [
+  'PRIVATE_BETA_GATE_ENABLED = "true"',
+  '"PRIVATE_BETA_GATE_ENABLED" = "true"',
+  'PRIVATE_BETA_GATE_ENABLED = true',
+  'PRIVATE_BETA_GATE_ENABLED = "other"',
+  'PRIVATE_BETA_GATE_ENABLED = "false"\nPRIVATE_BETA_GATE_ENABLED = "false"',
+  'PRIVATE_BETA_GATE_ENABLED = "false"\nPRIVATE_BETA_GATE_ENABLED = "true"',
+  'PRIVATE_BETA_GATE_ENABLED = "false"\n"PRIVATE_BETA_GATE_ENABLED" = "false"',
+]) {
+  assert.throws(() => assertPrivateBetaGateDisabled(config));
+}
+const gateFunctionSource = source.workerIndex.match(/function privateBetaGateEnabled\(env\) \{[\s\S]*?\n\}/)?.[0];
+assert.ok(gateFunctionSource, 'The private-beta runtime gate must remain explicitly testable');
+const privateBetaGateEnabled = vm.runInNewContext(`(${gateFunctionSource})`);
+assert.equal(privateBetaGateEnabled({}), false, 'Omitting the binding must keep admission disabled');
+for (const value of [undefined, null, false, 'false', '', 'other', 1]) {
+  assert.equal(privateBetaGateEnabled({ PRIVATE_BETA_GATE_ENABLED: value }), false);
+}
+for (const value of [true, 'true', 'TRUE']) {
+  assert.equal(privateBetaGateEnabled({ PRIVATE_BETA_GATE_ENABLED: value }), true);
+}
 assert.match(
   source.wrangler,
   /PRIVATE_BETA_DISCLOSURE_VERSION = "beta-disclosure-v1-2026-07-31"/,

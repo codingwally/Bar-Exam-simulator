@@ -370,7 +370,19 @@ assert.match(html, /assets\/feature-loader\.js[^"\n]*coaching=report-20260901-1/
 assert.match(html, /assets\/feature-loader\.js[^"\n]*forecast-loop=astra-20260907-1/);
 assert.match(html, /assets\/private-beta-landing\.js[^"\n]*forecast-loop=astra-20260907-1/);
 assert.match(html, /assets\/phase4-experience\.js[^"\n]*forecast-loop=astra-20260907-1/);
-assert.match(serviceWorker, /duediligence-shell-astra-analytics-count-copy-20260908-r1/);
+// The shared cache may advance with other features; retain exact current Home
+// and lazy-loaded Forecast URLs instead of requiring an older cache name.
+assert.match(serviceWorker, /^const CACHE_VERSION = 'duediligence-shell-[a-z0-9-]+';/m);
+for (const asset of ['feature-loader', 'private-beta-landing', 'phase4-experience']) {
+  const pageUrl = html.match(new RegExp(`src="(assets/${asset}\\.js\\?[^"\\n]+)"`))?.[1]?.replaceAll('&amp;', '&');
+  assert.ok(pageUrl, `${asset} must have a versioned Home script URL.`);
+  assert.ok(serviceWorker.includes(`'/${pageUrl}'`), `${asset} must use the exact Home URL in the offline shell.`);
+}
+for (const extension of ['js', 'css']) {
+  const loaderUrls = [...loader.matchAll(new RegExp(`'((?:assets/)bar-forecast\\.${extension}\\?[^'\\n]+)'`, 'g'))];
+  assert.equal(loaderUrls.length, 1, `Forecast ${extension} must have one lazy-loaded URL.`);
+  assert.ok(serviceWorker.includes(`'/${loaderUrls[0][1]}'`), `Forecast ${extension} must use the exact lazy-loader URL in the offline shell.`);
+}
 assert.match(serviceWorker, /assets\/feature-loader\.js[^'\n]*forecast=access-flow-20260902-1/);
 assert.match(serviceWorker, /assets\/feature-loader\.js[^'\n]*coaching=report-20260901-1/);
 assert.match(serviceWorker, /assets\/feature-loader\.js[^'\n]*forecast-loop=astra-20260907-1/);

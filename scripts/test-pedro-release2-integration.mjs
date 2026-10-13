@@ -81,10 +81,14 @@ assert.match(worker, /callGeminiStructured\([\s\S]*\{ quiet: true \}/);
 assert.match(worker, /return \{ result: generated\.result \}/);
 assert.doesNotMatch(worker, /pedroHandlers[\s\S]{0,900}generated\.model/);
 
-assert.match(
-  serviceWorker,
-  /CACHE_VERSION = 'duediligence-shell-astra-analytics-count-copy-20260908-r1-asset-recovery-20260909-r1-home-readable-20260910-1'/,
-);
+assert.match(serviceWorker, /^const CACHE_VERSION = 'duediligence-shell-[a-z0-9-]+';/m);
+for (const asset of ['assets/pedro-navigation.js', 'assets/phase2-config.js']) {
+  const references = [...index.matchAll(/<script src="([^"]+)"/g)]
+    .map((match) => match[1].replaceAll('&amp;', '&'))
+    .filter((reference) => reference.startsWith(`${asset}?`));
+  assert.equal(references.length, 1, `${asset} must have one Home script reference`);
+  assert.ok(serviceWorker.includes(`'/${references[0]}'`), `${asset} must use the exact Home URL in the offline shell`);
+}
 assert.match(serviceWorker, /assets\/pedro-navigation\.js\?v=pedro-release2-20260827-1/);
 assert.match(serviceWorker, /assets\/phase2-config\.js\?v=provider-neutral-release2-20260827-1/);
 for (const asset of [

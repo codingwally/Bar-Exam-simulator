@@ -165,7 +165,15 @@ assert.match(frontend, /The examiner response was incomplete\. Retrying once saf
 assert.doesNotMatch(frontend, /secure browser|proctored|encrypted examination environment/i);
 assert.match(frontend, /simulationCumulativeScoreMarkup\(verdict\)[\s\S]*Individual ALAC assessments/,
   'The September 6 owner-approved cumulative score must appear before individual assessments.');
-assert.match(frontend, /PDF is not accepted in this beta/);
+// The current Bar Feels entry intentionally offers curated examinations only.
+// Keep its supported setup route and prevent the removed upload card returning.
+const barFeelsRenderer = frontend.match(/function renderBarFeels\(\) \{[\s\S]*?(?=\n  (?:async )?function )/)?.[0] || '';
+assert.match(barFeelsRenderer, /Six Bar Examination Destinations/);
+assert.match(barFeelsRenderer, /\$\{curatedBarCards\(\)\}/);
+assert.doesNotMatch(barFeelsRenderer, /dd-upload-(?:form|title|file)|Authorized Uploaded Examination|Private Route|PDF is not accepted/);
+const curatedBarRenderer = frontend.match(/function curatedBarCards\(\) \{[\s\S]*?(?=\n  (?:async )?function )/)?.[0] || '';
+assert.match(curatedBarRenderer, /item\?\.track === 'bar_feels' && item\?\.assessmentKind === 'curated'/);
+assert.match(curatedBarRenderer, /data-exam-setup="\$\{escapeHtml\(item\.versionId\)\}"[\s\S]*Review &amp; Begin/);
 assert.match(frontend, /bindRoom\(root\)/);
 assert.match(
   frontend,

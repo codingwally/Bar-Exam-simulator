@@ -179,11 +179,26 @@ assert.ok(worker.includes("pathname === '/support'"), 'Worker must expose native
 assert.ok(worker.indexOf('reserveGradeAccess') < worker.indexOf('callGemini(env'), 'guest slot must be reserved before Gemini');
 assert.ok(worker.includes("new URL('/auth/v1/user'"), 'signed-in bypass must verify the Supabase token');
 assert.ok(worker.includes('GUEST_USAGE_HMAC_KEY'), 'guest identity must use an encrypted Worker secret');
-assert.match(
-  wrangler,
-  /ALLOW_LEGACY_GUESTS\s*=\s*"false"/,
-  'the committed Worker configuration must end in strict guest enforcement',
-);
+function assertStrictGuestConfiguration(source) {
+  const bindings = source.split(/\r?\n/).filter((line) => /^\s*["']?ALLOW_LEGACY_GUESTS["']?\s*=/.test(line));
+  assert.ok(bindings.length <= 1, 'the Worker configuration must not duplicate the legacy guest binding');
+  if (bindings.length) {
+    assert.match(bindings[0], /^\s*(?:ALLOW_LEGACY_GUESTS|"ALLOW_LEGACY_GUESTS"|'ALLOW_LEGACY_GUESTS')\s*=\s*(["'])false\1\s*(?:#.*)?$/,
+      'an explicit legacy guest binding must remain false');
+  }
+}
+// False defaults may be omitted to stay within the Worker binding limit.
+// Omission is safe only while the runtime requires an explicit true opt-in.
+assert.match(worker, /if \(!hasGuestHeaders && String\(env\.ALLOW_LEGACY_GUESTS\)\.toLowerCase\(\) === 'true'\) \{/);
+assertStrictGuestConfiguration(wrangler);
+assertStrictGuestConfiguration('ALLOW_LEGACY_GUESTS = "false"');
+for (const invalid of [
+  'ALLOW_LEGACY_GUESTS = "true"',
+  'ALLOW_LEGACY_GUESTS = "enabled"',
+  'ALLOW_LEGACY_GUESTS = false',
+  'ALLOW_LEGACY_GUESTS = "false"\nALLOW_LEGACY_GUESTS = "false"',
+  'ALLOW_LEGACY_GUESTS = "false"\nALLOW_LEGACY_GUESTS = "true"',
+]) assert.throws(() => assertStrictGuestConfiguration(invalid), assert.AssertionError);
 assert.ok(experience.includes('trapOverlayFocus'), 'Phase 2 dialogs must trap keyboard focus');
 assert.equal(
   experience.includes('terms-commercial-v1-2026-08-18'),

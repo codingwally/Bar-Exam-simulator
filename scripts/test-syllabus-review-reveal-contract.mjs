@@ -601,14 +601,36 @@ assert.ok(
   index.includes('assets/phase2-experience.js?v=profile-photo-release2-20260827-1'),
   'assets/phase2-experience.js must use the profile-photo release cache key',
 );
-assert.ok(
-  index.includes('assets/phase4-experience.js?v=syllabus-reveal-p0-20260826-2&amp;access=paid-expiry-20260827-1&amp;recovery=subject-review-timeout-20260828-1&amp;forecast-setup=20260901-2'),
-  'assets/phase4-experience.js must use the reviewed cache-busting release',
-);
-assert.ok(
-  index.includes('assets/feature-loader.js?v=profile-photo-release2-20260827-1&amp;baseline=public-reliability-20260827-1&amp;feedback=offline-save-20260827-1&amp;hotfix=ian-provisional-reveal-20260828-1&amp;recovery=subject-review-timeout-20260828-1&amp;cta=home-subscription-20260828-2&amp;collapse=home-read-more-20260828-1&amp;results=history-20260828-1&amp;forecast=access-flow-20260902-1'),
-  'assets/feature-loader.js must publish the provisional-to-paid reveal hotfix',
-);
+function assertPrecachedScriptRelease(asset, requiredParameters) {
+  const references = [...index.matchAll(/<script src="([^"]+)"/g)]
+    .map((match) => match[1].replaceAll('&amp;', '&'))
+    .filter((reference) => reference.startsWith(`${asset}?`));
+  assert.equal(references.length, 1, `${asset} must have one Home script reference`);
+  const reference = references[0];
+  const parameters = new URL(reference, 'https://fixture.invalid').searchParams;
+  for (const [name, expected] of Object.entries(requiredParameters)) {
+    assert.deepEqual(parameters.getAll(name), [expected], `${asset} must retain its reviewed ${name} release`);
+  }
+  assert.ok(serviceWorker.includes(`'/${reference}'`), `${asset} must use the exact Home URL in the offline shell`);
+}
+
+assertPrecachedScriptRelease('assets/phase4-experience.js', {
+  v: 'syllabus-reveal-p0-20260826-2',
+  access: 'paid-expiry-20260827-1',
+  recovery: 'subject-review-timeout-20260828-1',
+  'forecast-setup': '20260901-2',
+});
+assertPrecachedScriptRelease('assets/feature-loader.js', {
+  v: 'profile-photo-release2-20260827-1',
+  baseline: 'public-reliability-20260827-1',
+  feedback: 'offline-save-20260827-1',
+  hotfix: 'ian-provisional-reveal-20260828-1',
+  recovery: 'subject-review-timeout-20260828-1',
+  cta: 'home-subscription-20260828-2',
+  collapse: 'home-read-more-20260828-1',
+  results: 'history-20260828-1',
+  forecast: 'access-flow-20260902-1',
+});
 for (const asset of [
   'assets/study-workspace.js',
 ]) {
@@ -625,7 +647,7 @@ for (const asset of [
     `${asset} must use the public reliability lazy-load cache-busting release`,
   );
 }
-assert.match(serviceWorker, /duediligence-shell-astra-analytics-count-copy-20260908-r1/);
+assert.match(serviceWorker, /^const CACHE_VERSION = 'duediligence-shell-[a-z0-9-]+';/m);
 assert.match(studyWorkspace, /service-worker\.js\?v=commercial-readiness-profile-analytics-offline-paid-expiry-20260827-1/);
 assert.ok(
   featureLoader.includes('assets/examinations.js?v=pedro-release2-20260827-1&baseline=public-reliability-20260827-1&hotfix=ian-provisional-reveal-20260828-1&recovery=subject-review-timeout-20260828-1'),

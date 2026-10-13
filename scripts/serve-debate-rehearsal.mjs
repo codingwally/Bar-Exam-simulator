@@ -114,6 +114,9 @@ async function buildLocalSite(runtime) {
   let html = await readFile(path.join(ROOT, 'debate-room/index.html'), 'utf8');
   // Local actor auth and disconnected media need no SDK/CDN/runtime-secret configuration.
   html = html.replace(/<script\b[^>]*src="[^"]*(?:supabase|phase2-config|auth-session-storage|vendor\/livekit|study-room-backgrounds)[^"]*"[^>]*><\/script>/g, '');
+  // Advertising is outside this disconnected rehearsal. Remove only the known
+  // public tag; the CSP and browser checks still reject any other external script.
+  html = html.replace(/<script\b[^>]*src="https:\/\/pagead2\.googlesyndication\.com\/pagead\/js\/adsbygoogle\.js\?client=ca-pub-4565325992372168"[^>]*><\/script>/g, '');
   html = html.replace('</head>', `<script>globalThis.DEBATE_LOCAL_REHEARSAL=true;</script></head>`);
   const toolbar = `<aside id="local-rehearsal-tools" aria-label="Local software rehearsal controls" style="padding:12px 18px;border-bottom:2px solid #c5a059;background:#102c44;display:flex;flex-wrap:wrap;gap:12px;align-items:center;font:14px sans-serif"><strong>LOCAL SOFTWARE REHEARSAL</strong><span>No media, real email or provider traffic. Same local font files as staging.</span><label style="margin:0">Act as <select id="local-actor" style="max-width:280px">${REHEARSAL_ACTORS.map(actor => `<option value="${actor.id}">${escape(actor.label)}</option>`).join('')}</select></label><button id="local-setup" type="button">Prepare a real rehearsal event</button><button id="local-minute" type="button">Advance simulated time 1 minute</button><span id="local-clock-label"></span><span id="local-tool-status" role="status"></span></aside>
   <script>

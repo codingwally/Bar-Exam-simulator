@@ -1,0 +1,126 @@
+name: Reconcile one interrupted staging Debate rehearsal
+run-name: Debate rehearsal 34415569337 / ${{ inputs.operation || 'validation' }}
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/*debate-reconcile*34415569337.mjs'
+      - '.github/workflows/debate-reconcile-staging-34415569337.yml'
+      - 'supabase/staging/debate-hosted-cleanup.sql'
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Inspect is read-only. Remove-files removes only the four exact synthetic file keys, after separate SQL capture.
+        type: choice
+        options: [inspect, remove-files]
+        default: inspect
+        required: true
+      candidate_sha:
+        description: Exact reviewed main SHA containing this one-off runner
+        type: string
+        required: true
+      expected_snapshot_json:
+        description: Sanitized snapshot returned by the reviewed exact cancellation-and-capture SQL transaction
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: duediligence-staging-worker
+  cancel-in-progress: false
+
+jobs:
+  inert-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify fixed target, privacy, lost-response and no-retry boundaries without credentials
+        run: node --test scripts/test-debate-reconcile-storage-34415569337.mjs
+  native-capture-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    services:
+      postgres:
+        image: postgres:17.6
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: debate_reconcile_ci_only
+          POSTGRES_DB: debate_reconcile_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d debate_reconcile_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify exact cancellation and capture roll back together on every failed guard
+        env:
+          DEBATE_RECONCILE_SQL_CI: '1'
+          PGHOST: 127.0.0.1
+          PGPORT: '5432'
+          PGUSER: postgres
+          PGDATABASE: debate_reconcile_ci
+          PGPASSWORD: debate_reconcile_ci_only
+        run: node --test scripts/test-debate-reconcile-capture-34415569337.mjs
+      - name: Preserve sanitized native verification
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debate-reconcile-34415569337-native
+          path: artifacts/debate-local-rehearsal/reconcile-34415569337-native-ci/report.json
+          if-no-files-found: warn
+          retention-days: 30
+  staging-files:
+    needs: [inert-validation, native-capture-validation]
+    if: ${{ github.event_name == 'workflow_dispatch' && github.repository == 'codingwally/Bar-Exam-simulator' && github.ref == 'refs/heads/main' && github.actor != 'dependabot[bot]' }}
+    environment: staging-e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      RECONCILE_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Require exact trusted main and first attempt
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RECONCILE_CANDIDATE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$GITHUB_RUN_ATTEMPT" = '1'
+          test "$(git rev-parse HEAD)" = "$RECONCILE_CANDIDATE_SHA"
+          test "$GITHUB_SHA" = "$RECONCILE_CANDIDATE_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
+          echo "RECONCILE_CHECKOUT_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+      - name: Read prior dispatches so a failed removal cannot be replayed blindly
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/debate-local-rehearsal/reconcile-history
+          gh api --paginate --slurp 'repos/codingwally/Bar-Exam-simulator/actions/workflows/debate-reconcile-staging-34415569337.yml/runs?event=workflow_dispatch&per_page=100' > artifacts/debate-local-rehearsal/reconcile-history/runs.json
+          echo 'RECONCILE_PRIOR_RUNS_PATH=artifacts/debate-local-rehearsal/reconcile-history/runs.json' >> "$GITHUB_ENV"
+      - name: Inspect or remove only the exact captured staging files
+        env:
+          STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/debate-reconcile-storage-34415569337.mjs
+      - name: Preserve per-key journal even when an outcome is unknown
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debate-reconcile-34415569337-files-${{ github.run_id }}
+          path: artifacts/debate-local-rehearsal/reconcile-34415569337/journal.jsonl
+          if-no-files-found: warn
+          retention-days: 30

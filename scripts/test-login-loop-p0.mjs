@@ -281,8 +281,13 @@ assert.equal(completedProfileLoads, 1, 'Completing first-user onboarding must re
 
 for (const asset of ['phase2-experience.js', 'phase4-experience.js', 'private-beta-landing.js']) {
   assert.match(indexHtml, new RegExp(`${asset.replace('.', '\\.') }[^"\\n]*auth=login-loop-p0-20260901-1`));
+  const pageUrl = indexHtml.match(new RegExp(`src="(assets/${asset.replace('.', '\\.')}\\?[^"\\n]+)"`))?.[1]?.replaceAll('&amp;', '&');
+  assert.ok(pageUrl, `${asset} must have a versioned Home script URL.`);
+  assert.ok(serviceWorker.includes(`'/${pageUrl}'`), `${asset} must use the exact Home URL in the offline shell.`);
 }
-assert.match(serviceWorker, /duediligence-shell-astra-analytics-count-copy-20260908-r1/);
+// Other features legitimately rotate the shared cache name; the URL matches
+// above keep this login repair present in the current offline shell.
+assert.match(serviceWorker, /^const CACHE_VERSION = 'duediligence-shell-[a-z0-9-]+';/m);
 assert.match(serviceWorker, /phase2-experience\.js[^'\n]*auth=login-loop-p0-20260901-1/);
 assert.match(serviceWorker, /private-beta-landing\.js[^'\n]*auth=login-loop-p0-20260901-1/);
 

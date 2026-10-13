@@ -262,7 +262,19 @@ assert.match(html, /assets\/phase2\.css\?release=profile-photo-release2-20260827
 assert.match(html, /assets\/private-beta-landing\.css[^"\n]*subject-matter-gil-fixes-20260817-4/);
 assert.match(html, /assets\/due-diligence-controls\.css\?v=subject-matter-controls-20260817-4/);
 assert.match(loader, /subject-matter-gil-fixes-20260817-4/);
-assert.match(serviceWorker, /duediligence-shell-astra-analytics-count-copy-20260908-r1/);
+assert.match(serviceWorker, /^const CACHE_VERSION = 'duediligence-shell-[a-z0-9-]+';/m);
+const designPageAssets = [...html.matchAll(/(?:src|href)="(assets\/(?:phase2\.css|private-beta-landing\.css|due-diligence-controls\.css|quorum-first-shell\.(?:css|js))\?[^"]+)"/g)]
+  .map((match) => match[1].replaceAll('&amp;', '&'));
+assert.equal(designPageAssets.length, 5, 'Home must reference all five shared design assets');
+for (const reference of designPageAssets) {
+  assert.ok(serviceWorker.includes(`'/${reference}'`), `${reference} must have the exact Home URL in the offline shell`);
+}
+const studyStyleReferences = new Set([...loader.matchAll(/'(assets\/study-workspace\.css\?[^']+)'/g)]
+  .map((match) => match[1]));
+assert.equal(studyStyleReferences.size, 1, 'Study views must share one stylesheet release');
+for (const reference of studyStyleReferences) {
+  assert.ok(serviceWorker.includes(`'/${reference}'`), 'The offline Study stylesheet must match its lazy-load URL');
+}
 assert.match(serviceWorker, /quorum-first-shell\.css\?v=profile-photo-release2-20260827-1/);
 assert.match(serviceWorker, /quorum-first-shell\.js\?v=syllabus-review-20260823-1/);
 assert.match(serviceWorker, /phase2\.css\?release=profile-photo-release2-20260827-1/);

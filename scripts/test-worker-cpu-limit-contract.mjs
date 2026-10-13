@@ -13,10 +13,30 @@ export function assertExistingPlanCompatibleCpuConfig(source) {
   'Custom CPU settings require a separately approved supported plan; do not block deployment on an unapproved upgrade.');
 }
 
-const [staging, production, alias, mandatory, release] = await Promise.all([
+const [staging, production, alias, mandatory, release, workerSource] = await Promise.all([
   '../worker/wrangler.staging.toml', '../worker/wrangler.toml', '../worker/wrangler.public-api.toml',
   '../.github/workflows/validate-mandatory-early-access.yml', '../.github/workflows/release-unlimited-feature-access.yml',
+  '../worker/index.mjs',
 ].map(file => readFile(new URL(file, import.meta.url), 'utf8')));
+
+function assertDisabledOptionalBinding(config, name) {
+  // Main d608e80 removed redundant false bindings to stay within the existing
+  // plan's binding limit. Both omission and explicit false retain these controls.
+  const bindings = config.split(/\r?\n/u).map(line => line.replace(/#.*$/u, '').trim())
+    .filter(line => new RegExp(`^${name}\\s*=`, 'u').test(line));
+  assert.ok(bindings.length <= 1 && bindings.every(line => new RegExp(`^${name}\\s*=\\s*"false"$`, 'u').test(line)),
+    `${name} must remain disabled`);
+  assert.ok(workerSource.includes(`String(env.${name}).toLowerCase() === 'true'`),
+    `${name} omission is safe only while the runtime requires explicit true`);
+}
+
+test('optional false bindings may be omitted but cannot be enabled or duplicated', () => {
+  for (const name of ['GEMINI_GROUNDING_ENABLED', 'ALLOW_LEGACY_GUESTS']) {
+    for (const source of ['', `${name} = "false"`, `# ${name} = "true"`]) assertDisabledOptionalBinding(source, name);
+    for (const source of [`${name} = "true"`, `${name} = true`, `${name} = "false"\n${name} = "true"`])
+      assert.throws(() => assertDisabledOptionalBinding(source, name));
+  }
+});
 
 test('both actual application configs remain compatible with the existing plan', () => {
   assertExistingPlanCompatibleCpuConfig(staging);
@@ -48,11 +68,11 @@ test('CPU configuration does not change grading, authorization, cron, or automat
   ]) {
     for (const line of [
       'compatibility_date = "2026-07-26"', 'compatibility_flags = ["nodejs_compat"]',
-      'GEMINI_MODEL = "gemini-3.5-flash-lite"', 'GEMINI_GROUNDING_ENABLED = "false"',
-      'ALLOW_LEGACY_GUESTS = "false"', 'PHASE4_ACCESS_ENFORCEMENT = "true"',
+      'GEMINI_MODEL = "gemini-3.5-flash-lite"', 'PHASE4_ACCESS_ENFORCEMENT = "true"',
       'PHASE4_MODEL_QUALITY_ENFORCEMENT = "true"', 'REQUIRE_AUTHENTICATED_SUBMISSIONS = "true"',
       'OUTBOUND_EMAIL_MODE = "suppressed"',
     ]) assert.ok(config.split(/\r?\n/u).includes(line), `Existing control must remain: ${line}`);
+    for (const binding of ['GEMINI_GROUNDING_ENABLED', 'ALLOW_LEGACY_GUESTS']) assertDisabledOptionalBinding(config, binding);
     const cronLines = config.split(/\r?\n/u).filter(line => /^\s*crons\s*=/u.test(line));
     assert.equal(cronLines.length, 1, `${name} must declare its schedule exactly once`);
     const crons = JSON.parse(cronLines[0].replace(/^\s*crons\s*=\s*/u, ''));

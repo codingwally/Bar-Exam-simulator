@@ -37,6 +37,9 @@ test('local rehearsal HTTP perimeter and real command authorization', async t =>
   const page = await request('/debate-room/'); expect('Only built Debate page is served', page.status, 200);
   assert.match(page.text, /LOCAL SOFTWARE REHEARSAL/); assert.match(page.text, /DEBATE_LOCAL_REHEARSAL=true/);
   expect('All SDK and hosted configuration script URLs are absent locally', /<script\b[^>]*src="[^"]*(?:supabase|phase2-config|livekit)/i.test(page.text), false);
+  expect('Advertising script is absent from the disconnected local page', page.text.includes('https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4565325992372168'), false);
+  expect('The first-party Debate application script remains present', /<script type="module" src="\.\.\/assets\/debate-room\.js\?/.test(page.text), true);
+  assert.match(page.headers['content-security-policy'], /script-src 'self' 'unsafe-inline';/);
   assert.match(page.headers['content-security-policy'], /connect-src 'self'/); assert.match(page.headers['content-security-policy'], /media-src 'none'/);
   expect('Cross-origin allow header is absent', Object.hasOwn(page.headers, 'access-control-allow-origin'), false);
   const localCss = (await request('/assets/debate-room.css')).text;

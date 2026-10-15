@@ -311,7 +311,7 @@ test('two evidence submits upload and attach only once; the guard lasts until th
   h.fetches[0].respond({ ok: true, attachment: { uploadId: 'durable-upload-one', storageKey: 'private-key' } });
   await untilFetch(h, 2); await h.submitEvidence(form); assert.equal(h.fetches.length, 2, 'The attachment command is also protected');
   const envelope = JSON.parse(h.fetches[1].options.body); assert.equal(envelope.command, 'share_evidence'); assert.equal(envelope.payload.attachment.uploadId, 'durable-upload-one');
-  h.fetches[1].respond({ ok: true, event: { ...event, revision: 11 }, receipt: { result: { saved: true } } }); await operation;
+  h.fetches[1].respond({ ok: true, event: { ...event, revision: 11 }, receipt: { id: 'evidence-receipt', eventId: event.id, command: 'share_evidence', revision: 11, committedAt: 123000, result: { saved: true } } }); await operation;
   assert.equal(h.state.evidenceUploading, false); assert.equal(submit.disabled, false); const { text, ...evidenceFields } = fields; assertDraftsCleared(evidenceFields); assert.equal(text.value, 'PRIVATE_text', 'Saving evidence must preserve an unrelated current message draft');
   assert.equal(h.timers.size, 0, 'Upload and command deadlines must be cleared');
 });
@@ -394,7 +394,7 @@ test('active-event 403 clears private DOM, draft timers and media without signin
 for (const operation of ['command', 'retryPending']) {
   test(`delayed ${operation} receipt cannot readopt its old event after a view change`, async () => {
     const h = harness(); const oldEvent = openFixture(h);
-    if (operation === 'retryPending') h.state.pending = { command: 'save_draft', eventId: oldEvent.id, idempotencyKey: 'same-receipt-key' };
+    if (operation === 'retryPending') { h.state.pending = { command: 'save_draft', eventId: oldEvent.id, idempotencyKey: 'same-receipt-key' }; h.state.pendingAccount = { id: h.state.session.user.id, generation: h.state.accountGeneration }; }
     const pending = operation === 'command' ? h.command('save_draft', { matchId: oldEvent.activeMatchId }) : h.retryPending();
     const rejected = assert.rejects(pending, viewChanged);
     assert.equal(h.fetches[0].options.method, 'POST');

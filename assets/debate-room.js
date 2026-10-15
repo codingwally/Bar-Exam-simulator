@@ -6,7 +6,7 @@ const $ = id => document.getElementById(id);
 const esc = value => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const copy = value => JSON.parse(JSON.stringify(value));
 const id = () => crypto.randomUUID();
-const state = {session:null,client:null,event:null,matchId:null,panel:'overview',busy:false,sync:null,observerPage:0,tiles:new Map(),lastStage:null,judgeDirty:false,pending:null,accountGeneration:0,mutedPeople:new Set(),blockedPeople:new Set(),pinnedTile:null,messageHistory:new Map(),historyDone:new Set(),freshInvite:null,viewGeneration:0};
+const state = {session:null,client:null,event:null,matchId:null,panel:'overview',busy:false,sync:null,observerPage:0,tiles:new Map(),lastStage:null,judgeDirty:false,pending:null,pendingAccount:null,accountGeneration:0,mutedPeople:new Set(),blockedPeople:new Set(),pinnedTile:null,messageHistory:new Map(),historyDone:new Set(),freshInvite:null,viewGeneration:0};
 const localRehearsal = ['127.0.0.1','localhost'].includes(location.hostname) && globalThis.DEBATE_LOCAL_REHEARSAL === true;
 const config = globalThis.DueDiligencePhase2Config || globalThis.DUE_DILIGENCE_PHASE2_CONFIG || {};
 let apiBase = localRehearsal ? location.origin : (config.workerUrl || config.apiBaseUrl || '');
@@ -19,7 +19,7 @@ const host = () => !!state.event && (state.event.ownerId === state.event.myId ||
 const moderationOfficial = () => { const m=currentMatch(); return m && (host() || [m.moderatorId,m.chiefId].includes(state.event.myId)); };
 const official = () => { const m=currentMatch(); return m && (host() || [m.moderatorId,m.timekeeperId,m.chiefId].includes(state.event.myId)); };
 const panelAdmin = () => host() || currentMatch()?.chiefId===state.event?.myId;
-const clearSensitiveViews = () => {closeLiveTools();state.viewGeneration++;for(const form of ['message-form','evidence-form'])$(form).reset();for(const name of ['judge-content','results-content','messages','evidence-list','live-motion','stage-controls','active-match','stage-label','speaker-label','run-of-show','private-space-controls','affirmative-name','negative-name','next-stage','presentation','stage-announcement'])$(name).replaceChildren();delete $('stage-controls').dataset.renderKey;for(const tile of state.tiles.values())tile.remove();state.tiles.clear();};
+const clearSensitiveViews = () => {closeLiveTools();state.viewGeneration++;state.pending=null;state.pendingAccount=null;state.busy=false;for(const form of ['message-form','evidence-form'])$(form).reset();for(const name of ['judge-content','results-content','messages','evidence-list','live-motion','stage-controls','active-match','stage-label','speaker-label','run-of-show','private-space-controls','affirmative-name','negative-name','next-stage','presentation','stage-announcement'])$(name).replaceChildren();delete $('stage-controls').dataset.renderKey;for(const tile of state.tiles.values())tile.remove();state.tiles.clear();};
 const mediaIdentity = personId => currentMatch()?.mediaParticipants?.find(p=>p.userId===personId)?.identity || '';
 const personName = personId => state.event?.members.find(p=>p.id === personId)?.displayName || 'Unassigned';
 const sideName = side => side === 'affirmative' ? 'Affirmative' : side === 'negative' ? 'Negative' : 'Unresolved';
@@ -93,6 +93,7 @@ function publicErrorMessage(value) {
 }
 const deliveryName = type => ({export:'Download',mail:'Results email',invitation_mail:'Invitation email',media:'Room connection',delete_evidence:'Evidence removal',delete_export:'Download removal'})[type] || 'Event request';
 function status(message,error=false) { $('status').textContent=error?publicErrorMessage(message):message; $('status').dataset.error=String(error); }
+const viewChangedError = () => Object.assign(new Error('Your account or event changed. Refresh the event to check which actions were saved.'),{status:409,code:'VIEW_CHANGED'});
 async function request(path,body) {
   if (!apiBase) throw new Error('Debate Room is temporarily unavailable. Your other Due Diligence features remain available.');
   const accountGeneration=state.accountGeneration,viewGeneration=state.viewGeneration; const began=performance.now(); const controller=new AbortController(); const timeout=setTimeout(()=>controller.abort(),18000);
@@ -100,10 +101,13 @@ async function request(path,body) {
     const response=await fetch(`${apiBase.replace(/\/$/,'')}${path}`,{method:body?'POST':'GET',cache:'no-store',credentials:'omit',
       headers:{Authorization:`Bearer ${state.session?.access_token || ''}`,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined,signal:controller.signal});
     const result=await response.json().catch(()=>null);
-    if(accountGeneration!==state.accountGeneration||viewGeneration!==state.viewGeneration){const error=new Error('Your account or event changed. Refresh the event to check which actions were saved.');error.status=409;error.code='VIEW_CHANGED';throw error;}
+    if(accountGeneration!==state.accountGeneration||viewGeneration!==state.viewGeneration)throw viewChangedError();
     if (!response.ok || result?.ok === false) { const error=new Error(result?.error?.message || 'The action could not be confirmed. Refresh to check your saved work.'); error.code=result?.error?.code; error.details=result?.error?.details; error.status=response.status; throw error; }
     if (Number.isFinite(result.serverNow)) state.sync={server:result.serverNow+(performance.now()-began)/2,local:performance.now(),rtt:performance.now()-began};
     return result;
+  } catch(error) {
+    if(accountGeneration!==state.accountGeneration||viewGeneration!==state.viewGeneration)throw viewChangedError();
+    throw error;
   } finally { clearTimeout(timeout); }
 }
 function adopt(event,force=false) {
@@ -127,26 +131,59 @@ function adopt(event,force=false) {
 async function refresh() {
   if (!state.event || state.busy) return;
   try { const result=await request(`/debate-room/snapshot?eventId=${encodeURIComponent(state.event.id)}`); adopt(result.event); }
-  catch(error) { status(error.message,true); if(error.status===401)await signOutCleanup();else if(error.status===403||['NOT_MEMBER','EVENT_NOT_FOUND'].includes(error.code)){discardEventView();await media.leave();status('Your access to this event changed. Its private content has been cleared.',true);loadEvents().catch(()=>{});} }
+  catch(error) {
+    if(error.code==='VIEW_CHANGED')return;
+    const accessLost=error.status===401||error.status===403||['NOT_MEMBER','EVENT_NOT_FOUND'].includes(error.code);
+    const owner=state.pendingAccount;
+    if(accessLost&&state.pending&&owner?.id===state.session?.user?.id&&owner.generation===state.accountGeneration){
+      const pending=state.pending;
+      discardEventView();state.pending=pending;state.pendingAccount=owner;
+      const view=state.viewGeneration;
+      await media.leave();
+      if(owner.generation===state.accountGeneration&&owner.id===state.session?.user?.id&&view===state.viewGeneration&&state.pending===pending&&state.pendingAccount===owner)
+        status('Your access needs to be restored. Private event content has been cleared. Once access returns for this account, use Retry last action to check whether your previous action was saved.',true);
+      return;
+    }
+    status(error.message,true);
+    if(error.status===401)await signOutCleanup();
+    else if(accessLost){discardEventView();const account=state.accountGeneration,view=state.viewGeneration;await media.leave();if(account!==state.accountGeneration||view!==state.viewGeneration)return;status('Your access to this event changed. Its private content has been cleared.',true);loadEvents().catch(()=>{});}
+  }
 }
 async function command(name,payload={},eventId=state.event?.id) {
-  if(navigator.onLine===false)throw new Error('Reconnect before changing the saved event.');
   if (state.busy) throw new Error('The previous action is still being confirmed.');
-  const envelope={eventId,command:name,payload,expectedRevision:state.event&&state.event.id===eventId?state.event.revision:name==='join_public_event'?undefined:0,idempotencyKey:id()};
-  state.busy=true; state.pending=envelope; status('Saving…');
+  if (state.pending) throw new Error('Use Retry last action to confirm the previous action before making another change.');
+  const envelope={eventId,command:name,payload:copy(payload),expectedRevision:state.event&&state.event.id===eventId?state.event.revision:name==='join_public_event'?undefined:0,idempotencyKey:id()};
+  return sendCommand(envelope);
+}
+async function sendCommand(envelope,confirmation='Saved.') {
+  if(navigator.onLine===false)throw new Error('Reconnect before changing the saved event.');
+  if(state.busy)throw new Error('The previous action is still being confirmed.');
+  const account=state.accountGeneration,actor=state.session?.user?.id,view=state.viewGeneration,recovering=state.pending===envelope;
+  if(recovering&&(state.pendingAccount?.id!==actor||state.pendingAccount?.generation!==account)){state.pending=null;state.pendingAccount=null;throw viewChangedError();}
+  const current=()=>account===state.accountGeneration&&actor===state.session?.user?.id&&view===state.viewGeneration;
+  const owner={id:actor,generation:account};
+  state.busy=true; state.pending=envelope;state.pendingAccount=owner; status('Saving…');
   try {
-    const result=await request('/debate-room/command',envelope); state.pending=null;
-    if(result.event)adopt(result.event,true); status('Saved.'); return result.receipt?.result || {};
+    const result=await request('/debate-room/command',envelope);
+    if(!current())throw viewChangedError();
+    const receipt=result?.receipt,event=result?.event;
+    if(result?.ok!==true||!receipt||typeof receipt!=='object'||Array.isArray(receipt)||typeof receipt.id!=='string'||!receipt.id||receipt.command!==envelope.command||typeof receipt.eventId!=='string'||!receipt.eventId||envelope.eventId&&receipt.eventId!==envelope.eventId||!Number.isSafeInteger(receipt.revision)||receipt.revision<1||!Number.isFinite(receipt.committedAt)||!event||event.id!==receipt.eventId||event.myId!==state.session?.user?.id||!Number.isSafeInteger(event.revision)||event.revision<receipt.revision)throw new Error('The action could not be confirmed.');
+    state.pending=null;state.pendingAccount=null;
+    if(result.event)adopt(result.event,true); status(confirmation); return result.receipt.result || {};
   } catch(error) {
-    if(error.status)state.pending=null;
-    status(`${error.message}${!error.status?' We could not confirm whether this action was saved. Use Retry last action to check it safely.':''}`,true);
+    if(!current())throw viewChangedError();
+    const uncertain=!Number.isInteger(error.status)||error.status<400||error.status>=500||[408,425,429,499].includes(error.status)||recovering&&[401,403].includes(error.status);
+    if(uncertain){state.pending=envelope;state.pendingAccount=owner;error.message='We could not confirm whether this action was saved. Use Retry last action to check it safely before making another change.';}
+    else {state.pending=null;state.pendingAccount=null;}
+    status(error.message,true);
     throw error;
-  } finally { state.busy=false; }
+  } finally { if(current())state.busy=false; }
 }
 function discardEventView(){clearTimeout(state.draftTimer);clearSensitiveViews();state.event=null;state.matchId=null;state.judgeDirty=false;state.pending=null;state.freshInvite=null;state.messageHistory.clear();state.historyDone.clear();for(const name of ['overview-content','participants-content','rules-content','vote-content','schedule-content','help-content'])$(name).replaceChildren();for(const tile of state.tiles.values())tile.remove();state.tiles.clear();$('dialog').close();$('dialog-fields').replaceChildren();$('context-change-note').hidden=true;$('event').hidden=true;$('lobby').hidden=false;history.replaceState(null,'',location.pathname);}
 async function retryPending() {
+  if(state.busy)throw new Error('The previous action is still being confirmed.');
   if(!state.pending)return refresh();
-  const result=await request('/debate-room/command',state.pending); state.pending=null; if(result.event)adopt(result.event,true); status('The saved action is confirmed.');
+  return sendCommand(state.pending,'The saved action is confirmed.');
 }
 async function loadEvents() {
   const result=await request('/debate-room/events');
@@ -276,7 +313,7 @@ function renderJudge() {
   const draft=(['CLOSED','FINAL'].includes(m.ballotState)?m.myBallot:m.myDraft) || m.myDraft || m.myBallot || {};const card=decimalCard(draft.scorecard || {speakers:{},closing:{}});
   $('judge-content').innerHTML=`<div class="section-heading"><h2>My private scorecard</h2><p id="draft-status" role="status">${draft.savedAt?'Saved draft restored':'No saved draft yet'}</p></div><p>Scoring mode: ${esc(judgingName(m.rules.judgingMode))}. Blanks are incomplete; entering zero counts as a score. Your private notes are not shared with the organizer or other judges.</p><form id="score-form">${m.rules.judgingMode==='simple'?`<label>Winner<select name="winner"><option value="">Choose a side</option>${['affirmative','negative'].map(s=>option(s,sideName(s),draft.winner)).join('')}</select></label>`:`<div class="table-scroll"><table><thead><tr><th>Speaker</th>${SPEAKER_CRITERIA.map(k=>`<th>${esc(m.rules.rubric.labels[k])}<br>0–${m.rules.rubric.weights[k]}</th>`).join('')}</tr></thead><tbody>${SEATS.map(seat=>`<tr><td>${seat}<br>${esc(personName(m.seats[seat]))}</td>${SPEAKER_CRITERIA.map(k=>`<td><input aria-label="${esc(`${seat} ${m.rules.rubric.labels[k]}`)}" name="${seat}.${k}" type="number" min="0" max="${m.rules.rubric.weights[k]}" step="0.01" value="${esc(card.speakers?.[seat]?.[k] ?? '')}"></td>`).join('')}</tr>`).join('')}</tbody></table></div><div class="columns">${['affirmative','negative'].map(s=>field(`${sideName(s)} closing — ${personName(m.seats[m.closingSeats[s]])}`,`closing.${s}`,card.closing?.[s] ?? '', 'number',`min="0" max="${m.rules.rubric.weights.closing}" step="0.01"`)).join('')}</div><p id="score-preview" class="score-total"></p><label>Choice if exact scores are tied<select name="tieBreakChoice"><option value="">Only needed for an exact tied scorecard</option>${['affirmative','negative'].map(s=>option(s,sideName(s),card.tieBreakSide)).join('')}</select></label>`}<label>Reasoned decision / tie explanation<textarea name="reason" maxlength="4000" rows="3">${esc(draft.reason || card.tieBreakReason || '')}</textarea></label>${['affirmative','negative'].map(side=>`<label>Feedback for ${sideName(side)} (shared only if the official releases it)<textarea name="feedback.${side}" maxlength="4000" rows="3">${esc(draft.feedback?.[side] || '')}</textarea></label>`).join('')}<label>Private notes<textarea name="notes" maxlength="12000" rows="5">${esc(draft.notes || '')}</textarea></label><div class="actions"><button type="submit" class="primary">Save private draft</button>${button('Review and submit final ballot','submit-ballot')}${button('My scorecard PDF','export','data-kind="scorecard"')}${button(['RUNOFF_REQUIRED','AWAITING_RUNOFF'].includes(m.nominationStatus?.status)?'Complete Best Debater runoff':'Nominate Best Debater','nominate')}</div></form><p>Final ballots: ${esc(humanState(m.ballotState))} · ${m.ballotCompletion.received}/${m.ballotCompletion.required} received.</p>${panelAdmin()?`<div class="actions">${button('Open final ballots','open-ballots')}${button('Close ballots','close-ballots')}${button('Panel change / recusal','panel-change')}</div>`:''}`;
   $('score-form').addEventListener('input',()=>{state.judgeDirty=true;$('draft-status').textContent='Unsaved changes';previewScore();});
-  $('score-form').addEventListener('focusout',()=>{clearTimeout(state.draftTimer);state.draftTimer=setTimeout(()=>{if(state.judgeDirty&&!state.busy)saveDraft().catch(()=>{});},650);});
+  $('score-form').addEventListener('focusout',()=>{clearTimeout(state.draftTimer);state.draftTimer=setTimeout(()=>{if(state.judgeDirty&&!state.busy&&!state.pending)saveDraft().catch(()=>{});},650);});
   $('score-form').onsubmit=async event=>{event.preventDefault();await guarded(saveDraft);};if(m.ballotState==='FINAL')for(const control of $('score-form').querySelectorAll('input,textarea,select,button[type=submit],[data-action=submit-ballot],[data-action=nominate]'))control.disabled=true;previewScore();
 }
 function decimalCard(value){const card=copy(value);if(card.encoding==='hundredths'){for(const scores of Object.values(card.speakers||{}))for(const key of Object.keys(scores))if(scores[key]!=null)scores[key]=scores[key]/100;for(const key of Object.keys(card.closing||{}))if(card.closing[key]!=null)card.closing[key]=card.closing[key]/100;card.encoding='decimal';}return card;}
@@ -295,8 +332,8 @@ function fixtureCards(fixtures,draft=false){return (fixtures||[]).map(f=>`<artic
 function renderSchedule(){const e=state.event,t=e.eventAwards;$('schedule-content').innerHTML=`<div class="section-heading"><h2>Matches &amp; standings</h2><div class="actions">${host()?button('Set up match','match')+button('Generate pairings','fixtures')+button('Event report PDF','export','data-kind="event_report"')+button('End event','end-event'):''}</div></div><p>Sequential matches are the default. Provisional or unresolved results cannot advance a dependent official match.</p>${e.matches.map(m=>m.officialRecordsExpired?`<article><h3>${esc(m.title)}</h3><p>Official records expired under the approved retention policy. Scores, rules and downloads are no longer available.</p></article>`:`<article><h3>${esc(m.title)}</h3>${m.rematchOf?`<p>Rematch of ${esc(e.matches.find(prior=>prior.id===m.rematchOf)?.title||'an unresolved match')}</p>`:''}${m.rematchId?button('Open linked rematch','select-match',`data-match="${esc(m.rematchId)}"`):''}<p>${esc(humanState(m.phase))} · ${esc(judgingName(m.rules.judgingMode))}${m.requiresReview?' · Correction review required':''}</p>${button('Open match','select-match',`data-match="${esc(m.id)}"`)}${host()?button('Advance to match','advance-match',`data-match="${esc(m.id)}"`):''}</article>`).join('<hr>')}<hr>${e.fixtureDraft?.needsReview?`<section><h3>Review draft pairings</h3>${fixtureCards(e.fixtureDraft.fixtures,true)}<p>${(e.fixtureDraft.idleSlots||[]).map(slot=>esc(`Round ${slot.round}: ${teamName(slot.teamId)} rests`)).join('; ')}</p>${button('Publish reviewed pairings','publish-fixtures')}</section><hr>`:''}<h3>Published pairings</h3>${fixtureCards(e.fixtures)||'<p>No published pairings.</p>'}<hr><h3>Standings</h3>${e.standings?.rows?.length?`<div class="table-scroll"><table><thead><tr><th>Rank</th><th>Team</th><th>Wins</th><th>Played</th><th>Comparable mean</th></tr></thead><tbody>${e.standings.rows.map(row=>`<tr><td>${row.rank}${row.tied?' (tied)':''}</td><td>${esc(teamName(row.teamId))}</td><td>${row.wins}</td><td>${row.played}</td><td>${esc(row.meanScore?.display??'Unavailable')}</td></tr>`).join('')}</tbody></table></div><p>Wins first; complete mutual mini-league next; comparable mean score next. Any remaining qualification tie needs the declared tie resolution.</p>`: '<p>No final standings yet.</p>'}<hr><h3>Tournament awards</h3><p>At least ${t?.minimumMatches||2} actual completed comparable matches are required. Different rubrics are evaluated separately.</p>${t?.reason?`<p>${esc(t.reason)}</p>`:''}${(t?.comparableGroups||[]).map((group,i)=>`<section><h3>Comparable rubric group ${i+1}</h3>${awardsSummary(group,true)}${group.bestDebater?.eligibleRunoffJudgeIds?.includes(e.myId)&&['RUNOFF_REQUIRED','AWAITING_RUNOFF'].includes(group.bestDebater.status)?button('Submit tournament runoff nomination','tournament-nominate',`data-group="${i}"`):''}</section>`).join('')||'<p>No eligible comparable group yet.</p>'}`;}
 function renderHelp(){const m=currentMatch();$('help-content').innerHTML=`<div class="columns"><section><h2>Host &amp; moderator</h2><p>Confirm seats and neutral officials. Release the motion to both teams together. Start each stage when everyone is ready; Next prepares the next timer. During questioning, both assigned speakers may unmute. Each participant controls their own microphone and camera.</p><p>Moderator script: “The motion is before the house. We now invite the assigned speaker. The questioning period includes both questions and answers. At the end, the panel will deliberate under the accepted rules.”</p><h2>Speaker</h2><p>Check in, test your microphone, and accept your team’s rules as captain. Choose Mic when it is your turn to speak. Request technical help if your camera, microphone or connection stops working; disconnection does not automatically forfeit the match.</p></section><section><h2>Judge</h2><p>Save private notes during speeches. Enter every score, review your ballot, and submit when final ballots open. Missing scores are not zero. A tied scorecard needs a reasoned choice; a tied panel remains unresolved under the declared process.</p><h2>Observer</h2><p>Camera begins off. Request the floor before speaking. Check in before the poll opens to be eligible for observer voting; Audience Choice never decides the official winner.</p></section></div><hr><h2>Connection and device help</h2><p>Enter room before turning on devices. If sound is blocked, use Enable sound. When sharing, enable audio if your browser offers it. Ask another participant to confirm they can hear it. If a background effect fails, your camera turns off and your microphone can continue. Choose None only if you want to show your actual background.</p><div class="actions">${button('Request help or ruling','request-help')}${button('Retry last action','retry')}${host()&&m?.tieResolution?.rematchAvailable?button('Create linked rematch','rematch'):''}${moderationOfficial()?button('Record approved accommodation','record-accommodation')+button('End match / exceptional conclusion','conclude')+button('Substitute registered reserve','substitute'):''}</div><hr><h2>Help queue</h2>${(m?.incidents || []).map(i=>`<article><p>${esc(incidentName(i.kind || i.type))} · ${esc(incidentReason(i))}${i.status || i.state?' · '+esc(humanState(i.status || i.state)):''}</p>${moderationOfficial()?button('Acknowledge / resolve','resolve-incident',`data-incident="${esc(i.id)}"`):''}</article>`).join('')||'<p>No visible requests.</p>'}<hr><h2>Written records</h2>${state.event.canManageRetention?button('Review retention policy','retention')+button('Clean up eligible expired records','cleanup'):''}<p>Current policy: ${state.event.retention?.approved?'Approved':'Awaiting owner approval'}${state.event.retention?.hold?' · Documented hold active':''}. Chat ${state.event.retention?.chatDays} days; evidence ${state.event.retention?.evidenceDays} days; official records ${state.event.retention?.officialDays} days.</p><p>Standard record-keeping periods: chat and unsubmitted notes 30 days after event end; evidence 90 days; official scorecards, results, rules and activity records 365 days. An approved dispute hold can suspend deletion. Recording, transcription and livestreaming are not enabled.</p>`;}
 
-async function guarded(fn){try{return await fn();}catch(error){status(error.message,true);}}
-function renewOwnedClock(){const m=currentMatch();if(!state.session||!state.event?.myId||!m?.timer||state.busy||m.timer.controllerId!==state.event.myId)return;return guarded(()=>command('renew_clock',matchPayload({timerVersion:m.timer.version})));}
+async function guarded(fn){try{return await fn();}catch(error){if(error.code!=='VIEW_CHANGED')status(error.message,true);}}
+function renewOwnedClock(){const m=currentMatch();if(!state.session||!state.event?.myId||!m?.timer||state.busy||state.pending||m.timer.controllerId!==state.event.myId)return;return guarded(()=>command('renew_clock',matchPayload({timerVersion:m.timer.version})));}
 const media=new DebateMedia({audioRoot:$('audio-elements'),presentation:$('presentation'),onIssue:message=>status(message,true),onState:value=>{
   applyPersonalAudio();
   $('media-status').textContent=value.joined?'Connected. Your devices follow your choices and the current floor.':value.state==='disconnected'?'You are outside the call. The competition record remains saved.':`Room connection: ${value.state}`;
@@ -394,7 +431,7 @@ function rulesDialog(){
 async function transitionSpace(space){if(state.mediaTransition)return;state.mediaTransition=true;try{await media.suspend();await command('enter_space',matchPayload({space,deviceId}));await enterMediaWhenReady();}finally{state.mediaTransition=false;}}
 async function enterMediaWhenReady(){const result=await request('/debate-room/media',{eventId:state.event.id,matchId:currentMatch().id,deviceId});if(result.event)adopt(result.event);await media.join(result.credential || result);renderLive();}
 async function reconcileMedia(){if(state.mediaTransition||!media.credential||!state.event)return;const m=currentMatch(),session=m?.myMedia;if(!session||['left','failed'].includes(session.status)){await media.leave();return;}if(media.joined&&session.identity===media.credential.identity&&session.status==='ready')return;state.mediaTransition=true;try{await media.suspend();await enterMediaWhenReady();}catch(error){status(error.message,true);}finally{state.mediaTransition=false;}}
-async function leaveCurrentMedia(){const match=currentMatch(),hadSession=match?.myMedia,matchId=match?.id,eventId=state.event?.id,view=state.viewGeneration;await media.leave();if(hadSession&&eventId===state.event?.id&&view===state.viewGeneration&&matchId===currentMatch()?.id&&!state.busy)await command('leave_media',{matchId,deviceId},eventId);}
+async function leaveCurrentMedia(){const match=currentMatch(),hadSession=match?.myMedia,matchId=match?.id,eventId=state.event?.id,view=state.viewGeneration;await media.leave();if(hadSession&&eventId===state.event?.id&&view===state.viewGeneration&&matchId===currentMatch()?.id&&!state.busy&&!state.pending)await command('leave_media',{matchId,deviceId},eventId);}
 async function signOutCleanup(){
   state.accountGeneration++;clearSensitiveViews();state.mutedPeople=new Set();state.blockedPeople=new Set();state.pinnedTile=null;state.messageHistory.clear();state.historyDone.clear();state.freshInvite=null;
   clearTimeout(state.draftTimer);state.judgeDirty=false;state.event=null;state.session=null;state.pending=null;state.sync=null;
@@ -452,7 +489,7 @@ $('evidence-form').onsubmit=event=>{event.preventDefault();const form=event.curr
 $('request-help').onclick=()=>actions['request-help']();
 setInterval(updateClock,250);setInterval(()=>{if(state.session&&state.event&&!document.hidden)refresh();},4000);
 setInterval(renewOwnedClock,10000);
-setInterval(()=>{if(media.joined&&!state.busy)guarded(()=>command('renew_media',matchPayload({deviceId})));},45000);
+setInterval(()=>{if(media.joined&&!state.busy&&!state.pending)guarded(()=>command('renew_media',matchPayload({deviceId})));},45000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});
 window.addEventListener('pagehide',()=>{clearTimeout(state.draftTimer);media.leave();});
 window.addEventListener('offline',()=>status('You are offline. Your screen shows the last saved debate and may be out of date. Reconnect before changing the debate.',true));

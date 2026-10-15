@@ -35,10 +35,11 @@ async function roomSources() {
   return { files, readAsset: async file => { assert.ok(Object.hasOwn(files, file), 'Only the fixed room asset closure may be read'); return files[file]; } };
 }
 
-test('current room documents and the changed media import use new cache keys, preserving Study repair versions', async () => {
+test('recovered room client uses a new cache key, preserving unchanged media, style and Study repair versions', async () => {
   const source = await roomSources(), refs = await roomAssetReferences(source);
   assert.deepEqual(refs.map(ref => ref.file), ['assets/debate-room.js','assets/debate-room.css','assets/debate-media.js','assets/study-room-live.js']);
-  for (const ref of refs.slice(0, 3)) assert.equal(new URL(ref.url).search, '?v=debate-v3-20260910-2');
+  assert.equal(new URL(refs[0].url).search, '?v=debate-v3-20261014-1');
+  for (const ref of refs.slice(1, 3)) assert.equal(new URL(ref.url).search, '?v=debate-v3-20260910-2');
   const study = new URL(refs[3].url);
   assert.equal(study.searchParams.get('v'), 'study-room-always-open-20260908-1');
   assert.equal(study.searchParams.get('entry'), 'v3-20260909-1');
@@ -53,7 +54,8 @@ test('returning browsers bypass the prior room cache keys and the verifier uses 
     [`${TARGET.origin}/assets/debate-room.js?v=debate-v3-20260909`, Buffer.from('old timer error')],
     [`${TARGET.origin}/assets/debate-room.css?v=debate-v3-20260909`, Buffer.from('old room layout')],
     [`${TARGET.origin}/assets/debate-media.js`, Buffer.from('old media copy')],
-    ...refs.slice(0, 3).map(ref => [ref.url.replace('debate-v3-20260910-2', 'debate-v3-20260910-1'), Buffer.from('previous public wording')]),
+    [refs[0].url.replace('debate-v3-20261014-1', 'debate-v3-20260910-2'), Buffer.from('previous command recovery')],
+    ...refs.slice(1, 3).map(ref => [ref.url.replace('debate-v3-20260910-2', 'debate-v3-20260910-1'), Buffer.from('previous public wording')]),
     [refs[3].url.replace('&responsiveness=catalog-read-20260910-1',''), Buffer.from('old catalog refresh')],
   ]);
   const verified = await verifyRoomAssetReferences({ ...source, fetcher: async (url, options) => {

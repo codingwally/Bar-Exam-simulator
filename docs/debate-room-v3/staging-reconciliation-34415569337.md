@@ -2,6 +2,14 @@
 
 This follows the [hosted export interruption](hosted-export-recovery-20260922.md). It is maintenance of the original synthetic staging fixture. It is not a deployment, a successful rehearsal, or acceptance of the website audit.
 
+## Completed reconciliation, 14 October
+
+[The permanent receipt](evidence/staging-reconciliation-34415569337-20261014.json) records committed cancellation, removal of three exact files through the Storage API, deletion of the exact event and its children, and final removal of the ten remaining synthetic identities with their forty default rows and ten email identities. The previously removed eleventh identity stayed absent. No new accounts or sessions were created.
+
+The Auth phase paused when the scanned catalog grew from 489 to 490 fields. Omitting only `storage.buckets.lifecycle_configuration_generation` from the fresh catalog exactly reconstructed the previous PostgreSQL JSONB hash; all other catalog boundaries and captured identity/default rows were unchanged. The creation mechanism of that metadata field was not established. The refreshed transaction retained every original guard and lock. Its real rollback trial passed and an independent readback at 03:11:36 UTC confirmed that all captured rows were preserved. Only then was the same guarded transaction committed. Independent readback at 03:12:08 UTC found all eleven original identities absent, zero related sessions/refresh rows, zero foreign-key matches, zero unexpected non-FK references and all 19 dependency scopes empty. Auth audit history was preserved.
+
+[Read-only Storage inspection 38504751769](https://github.com/codingwally/Bar-Exam-simulator/actions/runs/38504751769) independently confirmed all four possible private files absent at 03:10:08 UTC. The original [removal 38384489950](https://github.com/codingwally/Bar-Exam-simulator/actions/runs/38384489950) was not replayed. These actions targeted staging only. The failed rehearsal remains failed; production publication and the full website audit are not established by cleanup. The October 12 observations and execution procedure below are retained as historical evidence.
+
 ## Observed state
 
 At 2026-10-12 02:03:34 UTC, the single event and expired result-export row still had the same full-row hashes as the September 30 observation. Three private files remained. The result PDF was never confirmed stored. The installed private/public cleanup helper body hashes, ownership, security mode, configuration and privileges matched the reviewed implementation. The latest restricted-staging workflow was still the completed failed run34415569337; no new rehearsal had been started by this task.
@@ -30,10 +38,11 @@ Storage deletion uses the API, not direct `storage.objects` deletion, as require
 
 | Requirement | Verification | Current evidence boundary |
 | --- | --- | --- |
-| Only the original staging event/job/identities may be reconciled | Fixed manifest and exact full-row compare in capture generator; malformed/widened-input tests | Actual staging rollback-only trial passed; independent hashes unchanged; no durable mutation |
-| Cancellation and helper capture must be atomic | Native PostgreSQL17.6 tests: rollback, explicit commit, ownership/session/financial/helper drift, stale lease/claim | All23 native assertions passed; actual committed cancellation remains pending |
-| Unrelated files and production remain unreachable | Fixed-origin/four-key Storage transport, private-bucket and snapshot guards | Inert transport tests; no provider claim |
+| Only the original staging event/job/identities may be reconciled | Fixed manifest and exact full-row compare in capture generator; malformed/widened-input tests | Committed exact cleanup and independent staging absence recorded on October 13–14 |
+| Cancellation and helper capture must be atomic | Native PostgreSQL17.6 tests: rollback, explicit commit, ownership/session/financial/helper drift, stale lease/claim | All23 native assertions passed; actual cancellation independently confirmed with unchanged event hash |
+| Unrelated files and production remain unreachable | Fixed-origin/four-key Storage transport, private-bucket and snapshot guards | Three exact files removed through Storage API; all four possible keys independently absent; production excluded |
 | Lost mutation response cannot cause automatic retry | Persisted per-key intent, failure journal, first-attempt/history gates, read-only subsequent inspection | Inert tests cover lost response, failed persistence and no replay |
+| Only original synthetic accounts and verified default cascades are removed | Exact Auth/default/identity capture, sessions and dependency scan, full catalog hashes, rollback trial, committed transaction and independent readback | Ten remaining accounts, forty default rows and ten email identities removed; all eleven original identities absent; audit preserved |
 | Cleanup must not erase evidence of incomplete acceptance | Read-only report, preserved failed rehearsal receipts and exact remaining work | Full hosted rehearsal, physical media, real inbox, signed-in role journeys and whole-site audit remain open |
 
 Local verification on October12:28 tests passed, one native database test correctly skipped on Windows. The workflow executed that native test on an isolated PostgreSQL17.6 service with reduced inert Auth/Storage/billing dependencies and unchanged Debate migration/helper SQL. This reconciliation implementation does not change the production UI or runtime. The containing branch separately aligns Home's offline cache URLs with the current page and updates affected test assumptions; that change is not deployed. The existing315 requirement states are not promoted by these maintenance checks.

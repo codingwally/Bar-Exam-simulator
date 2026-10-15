@@ -37,6 +37,7 @@ const workerTests = (await readdir(path.join(root, 'worker'))).filter(file => /^
 const groups = [
   ['server-domain-database', ['--test', '--test-concurrency=1', ...workerTests]],
   ['client-state-media-dates', ['--test', 'scripts/test-debate-client-state.mjs', 'scripts/test-debate-desktop-layout.mjs', 'scripts/test-debate-media.mjs', 'scripts/test-debate-dates.mjs', 'scripts/test-debate-entry.mjs']],
+  ['command-recovery', ['--test', 'scripts/test-debate-command-recovery.mjs', 'scripts/test-debate-service-recovery.mjs', 'scripts/test-debate-clock-diagnostics.mjs']],
   ['study-admission-sql', ['scripts/test-study-room-admission-sql.mjs']],
   ...['always-open', 'backgrounds', 'background-picker', 'hotfix-behavior', 'live'].map(name => ['study-' + name, ['scripts/test-study-room-' + name + '.mjs']]),
   ['local-http-boundaries', ['--test', 'scripts/test-debate-rehearsal-server.mjs']],

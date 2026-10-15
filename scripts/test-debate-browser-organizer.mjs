@@ -6,6 +6,7 @@ import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { recordClockRequest, recordClockResponse } from './debate-clock-diagnostics.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUTPUT = path.join(ROOT, 'artifacts/debate-local-rehearsal/browser-organizer-ci');
@@ -210,6 +211,7 @@ export async function runBrowserOrganizer() {
       if (new URL(request.url()).pathname === '/debate-room/command') {
         const input = request.postDataJSON();
         Object.assign(observation, { command: input?.command, eventId: input?.eventId, matchId: input?.payload?.matchId, timerVersion: input?.payload?.timerVersion });
+        recordClockRequest(report, observation, input, snapshotFor(page));
         if (input?.command === 'claim_clock') {
           observation.manualClaimId = manualClaimIntents.get(page) || null;
           report.clockClaims.push(observation);
@@ -217,14 +219,18 @@ export async function runBrowserOrganizer() {
       }
       observedRequests.set(request, observation);
     });
+    page.on('requestfailed', request => recordClockResponse(observedRequests.get(request), {
+      receivedAt: Date.now(), transportFailed: true }));
     page.on('response', response => {
       const receivedAt = Date.now();
       const work = (async () => {
         const url = new URL(response.url());
         if (url.origin !== origin || !url.pathname.startsWith('/debate-room/')) return;
         if (!['/debate-room/command', '/debate-room/claim', '/debate-room/snapshot'].includes(url.pathname)) return;
-        const body = await response.json().catch(() => null); if (!body) return;
+        const body = await response.json().catch(() => null);
         const observation = observedRequests.get(response.request()), actorId = observation?.actorId;
+        recordClockResponse(observation, { body, status: response.status(), receivedAt });
+        if (!body) return;
         if (url.pathname === '/debate-room/command' && !response.ok()) report.commandRejections.push({ ...observation, code: body.error?.code, status: response.status(), at: receivedAt, url: response.url() });
         captured.push({ sequence: ++trafficSequence, actorId, body }); if (captured.length > 80) captured.shift();
         if (body.event && actorId === actorIds.get(page)) {
@@ -247,7 +253,7 @@ export async function runBrowserOrganizer() {
     await notSaving(page);
   };
   const tab = async (page, panel) => { await page.locator(`#event-tabs [data-panel="${panel}"]`).click(); await page.locator(`#panel-${panel}`).waitFor({ state: 'visible' }); };
-  const command = async (page, name, click, { reject } = {}) => {
+  const command = async (page, name, click, { reject, confirmation = 'Saved.' } = {}) => {
     await notSaving(page);
     if (name === 'claim_clock') manualClaimIntents.set(page, ++manualClaimSequence);
     const waiting = page.waitForResponse(response => {
@@ -277,7 +283,7 @@ export async function runBrowserOrganizer() {
     }
     report.actions.push({ command: name, actorId: actorIds.get(page), receiptId: body.receipt.id, revision: body.event.revision,
       eventId: body.event.id, matchId: response.request().postDataJSON()?.payload?.matchId || null });
-    await textIncludes(page, '#status', 'Saved.');
+    await textIncludes(page, '#status', confirmation);
     return body;
   };
   const submit = async (page, name, options) => {
@@ -389,7 +395,44 @@ export async function runBrowserOrganizer() {
     await host.locator('#create-event').click(); await field(host, 'title').fill(report.eventTitle); await field(host, 'rehearsal').check();
     await field(host, 'description').fill('Clearly synthetic Linux browser rehearsal using actual local SQL; no media or outbound email.');
     await field(host, 'visibility').selectOption('public');
-    const created = await submit(host, 'create_event'); eventId = created.event.id; report.eventId = eventId;
+    // Exercise a real committed action whose acknowledgement is lost. The
+    // synthetic server still executes the unchanged service and local SQL.
+    let committedCreate, originalCreateBody, recoveredCreateBody, injectedCreateFailure = false;
+    const createRoute = async route => {
+      const input = route.request().postDataJSON();
+      if (input?.command !== 'create_event') return route.continue();
+      if (injectedCreateFailure) { recoveredCreateBody = route.request().postData(); return route.continue(); }
+      injectedCreateFailure = true;
+      originalCreateBody = route.request().postData();
+      const actual = await route.fetch();
+      assert.equal(actual.status(), 200);
+      committedCreate = await actual.json();
+      assert.ok(committedCreate.ok && committedCreate.receipt?.id);
+      await route.fulfill({ status: 503, contentType: 'application/json',
+        body: JSON.stringify({ ok: false, error: { code: 'STORE_UNAVAILABLE',
+          message: 'Synthetic acknowledgement interruption after the saved action.' } }) });
+    };
+    await host.route('**/debate-room/command', createRoute);
+    await submit(host, 'create_event', { reject: 'STORE_UNAVAILABLE' });
+    await host.locator('#dialog-cancel').click();
+    await host.locator('#lobby-retry').waitFor({ state: 'visible' });
+    check('Uncertain event creation leaves the lobby retry action reachable', await host.locator('#lobby').isVisible());
+    const created = await command(host, 'create_event', () => host.locator('#lobby-retry').click(),
+      { confirmation: 'The saved action is confirmed.' });
+    await host.unroute('**/debate-room/command', createRoute);
+    assert.equal(recoveredCreateBody, originalCreateBody, 'Retry sends the entire original envelope and key');
+    assert.deepEqual(created.receipt, committedCreate.receipt, 'The exact original receipt is recovered');
+    const recoveredRequest = report.actions.at(-1);
+    check('Lobby retry recovers the original creation without adding an event revision',
+      created.event.id === committedCreate.event.id && created.event.revision === committedCreate.event.revision
+        && recoveredRequest.receiptId === committedCreate.receipt.id);
+    const createRequests = report.commandRejections.filter(item => item.command === 'create_event');
+    assert.equal(createRequests.length, 1);
+    // Compare the outgoing envelope rather than recording its private key.
+    const savedOriginal = JSON.parse(originalCreateBody);
+    check('Synthetic committed creation has a bound receipt', created.receipt.command === savedOriginal.command
+      && created.receipt.eventId === created.event.id);
+    eventId = created.event.id; report.eventId = eventId;
     await host.reload(); await textIncludes(host, '#event-title', report.eventTitle); await fresh(host);
     check('New event survives actual browser reload', snapshotFor(host).id === eventId);
     await command(host, 'check_in', () => host.locator('#check-in').click());

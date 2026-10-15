@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FIXTURE_TARGET } from './debate-staging-fixtures.mjs';
 import { HOSTED_ACTOR_NAMES } from './debate-hosted-cleanup.mjs';
+import { recordClockRequest, recordClockResponse } from './debate-clock-diagnostics.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const sha = value => createHash('sha256').update(value).digest('hex');
@@ -454,6 +455,7 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
       if (new URL(request.url()).pathname === '/debate-room/command') {
         const input = request.postDataJSON();
         Object.assign(observation, { command: input?.command, eventId: input?.eventId, matchId: input?.payload?.matchId, timerVersion: input?.payload?.timerVersion });
+        recordClockRequest(report, observation, input, snapshotFor(page));
         if (input?.command === 'claim_clock') {
           observation.manualClaimId = manualClaimIntents.get(page) || null;
           report.clockClaims.push(observation);
@@ -461,6 +463,8 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
       }
       observedRequests.set(request, observation);
     });
+    page.on('requestfailed', request => recordClockResponse(observedRequests.get(request), {
+      receivedAt: Date.now(), transportFailed: true }));
     page.on('response', response => {
       const receivedAt = Date.now();
       const work = (async () => {
@@ -479,8 +483,10 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
         }
         if (url.origin !== origin || !url.pathname.startsWith('/debate-room/')) return;
         if (!['/debate-room/command', '/debate-room/claim', '/debate-room/snapshot'].includes(url.pathname)) return;
-        const body = await response.json().catch(() => null); if (!body) return;
+        const body = await response.json().catch(() => null);
         const observation = observedRequests.get(response.request()), actorId = observation?.actorId;
+        recordClockResponse(observation, { body, status: response.status(), receivedAt });
+        if (!body) return;
         if (url.pathname === '/debate-room/command' && !response.ok()) report.commandRejections.push({ ...observation, code: body.error?.code, status: response.status(), at: receivedAt, url: response.url() });
         captured.push({ sequence: ++trafficSequence, actorId, body }); if (captured.length > 80) captured.shift();
         if (body.event && actorId === actorIds.get(page)) {

@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "kind": "EXACT_SYNTHETIC_STAGING_RECONCILIATION",
+  "runId": "34415569337",
+  "status": "COMMITTED_AND_INDEPENDENTLY_VERIFIED_ABSENT",
+  "projectRef": "hlzqmreeoghbldnhlybr",
+  "excludedProductionProject": "hbllomlijfznnuudpdvr",
+  "eventId": "de-aeb554ed338a0f459afdd2f4dc6995cc",
+  "sourceSha": "16d2fd855eb66449706984c884543cb6f5395dcb",
+  "publicDeployment": false,
+  "completedRehearsal": false,
+  "customerEmailsSent": false,
+  "accountsProvisioned": 0,
+  "expiredJobCancellation": {
+    "committed": true,
+    "independentReadbackAt": "2026-10-13T10:34:12.452757Z",
+    "drainMs": 81609,
+    "originalEventSha256": "57ac8821818dea071df52785cfb80194099a20734dd7c1a0e01d4c3285d8422d",
+    "cancelledJobSha256": "9baf50a37f94b2027540ea0dd93575bdba2a66564006da71341c2765a5e7480d"
+  },
+  "files": {
+    "removeRun": 38384489950,
+    "removed": 3,
+    "alreadyAbsent": 1,
+    "finalInspectionRun": 38504751769,
+    "finalInspectionAt": "2026-10-14T03:10:08.577Z",
+    "allFourPotentialKeysAbsent": true,
+    "method": "Storage API only"
+  },
+  "debateRows": {
+    "committed": true,
+    "independentReadbackAt": "2026-10-13T10:39:43.492268Z",
+    "scopesVerifiedZero": 9
+  },
+  "catalogDrift": {
+    "previousCount": 489,
+    "currentCount": 490,
+    "previousSha256": "24e30412f1d4db02296daafa16bd96fb6ce22c9bde431ebeadca067cacc64a7d",
+    "currentSha256": "f59944290264df008230067f3cb1056da42f64e75a9091812fa219cc7ec68ba0",
+    "uniqueAddedRecord": {
+      "schema": "storage",
+      "table": "buckets",
+      "column": "lifecycle_configuration_generation",
+      "dataType": "uuid"
+    },
+    "proof": "Exact frozen catalog CTE, followed by PostgreSQL JSONB aggregate hashing after omitting each of490 distinct current records. Exactly one omission reconstructs the previous hash.",
+    "creationMechanism": "NOT_PROVED",
+    "otherCatalogBoundariesUnchanged": true
+  },
+  "auth": {
+    "rollbackPassed": true,
+    "rollbackIndependentReadbackAt": "2026-10-14T03:11:36.514491+00:00",
+    "rollbackPreservedEveryCapturedFieldExceptReadTime": true,
+    "committed": true,
+    "independentReadbackAt": "2026-10-14T03:12:08.381563+00:00",
+    "deletedOriginalSyntheticIdentities": 10,
+    "deletedDefaultRows": 40,
+    "deletedEmailIdentityRows": 10,
+    "allElevenOriginalIdentitiesAbsent": true,
+    "allSessionsAndRefreshRowsAbsent": true,
+    "allDirectForeignKeyMatchesZero": true,
+    "unexpectedNonForeignKeyReferences": 0,
+    "preservedAudit": {
+      "count": 0,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    }
+  },
+  "requiredAbsenceCounts": {
+    "debate_audit": 0,
+    "debate_votes": 0,
+    "auth_sessions": 0,
+    "debate_events": 0,
+    "debate_outbox": 0,
+    "excluded_auth": 0,
+    "debate_ballots": 0,
+    "debate_uploads": 0,
+    "debate_receipts": 0,
+    "storage_objects": 0,
+    "role_assignments": 0,
+    "excluded_sessions": 0,
+    "debate_rate_limits": 0,
+    "auth_refresh_tokens": 0,
+    "excluded_identities": 0,
+    "debate_match_versions": 0,
+    "excluded_refresh_tokens": 0,
+    "storage_s3_multipart_uploads": 0,
+    "storage_s3_multipart_uploads_parts": 0
+  },
+  "evidenceRoot": "artifacts/debate-local-rehearsal/",
+  "evidenceHashes": {
+    "exact-cancel-20261013-COMMIT.sql": "cca17964e8048e5238129108369a917e349fae00b420b9e5facb6589c4313ffb",
+    "exact-cancel-20261013-commit-readback.json": "107cb2e9e08b09ec8224987708a899bd4dcb383981b5ccaf5e7071f6e9a03e89",
+    "exact-debate-delete-20261013-COMMIT.sql": "c8153b3cd1aff866b0ce888ff9bb2f670123653c76d3a402f5a22b9de2c9e2df",
+    "exact-debate-delete-20261013-commit-response.json": "c237013c2e1422a4da8431ea1bf58e6ebcf91e953ddacf00c3aa1e45f2e564c7",
+    "reconcile-remove-38384489950/journal.jsonl": "f795b9792f0862806a8a0406f5cabbe1765a97155c29eba642a7079f9bd5b186",
+    "reconcile-inspect-38504751769/journal.jsonl": "025de93cf708025d9d26dd8f1d4776f4e02a23b19cf3650343f1a2ce8c71f294",
+    "reconcile-34415569337-auth/auth-20261014-ROLLBACK.sql": "981a28f0a809b3a11c34bfff9683d8401ac3036e1c9a9d3b637fb2d8fc3b4a19",
+    "reconcile-34415569337-auth/auth-20261014-COMMIT.sql": "66d7e8a58538c6f813df25d1215454d719686842e28a5976545e0fa773a21df2",
+    "reconcile-34415569337-auth/auth-20261014-rollback-response.json": "4608d67ef9fe65af8b4f34f5fddaca43c0b06af531a337dbf0ca7cb8f449ce5d",
+    "reconcile-34415569337-auth/capture-20261014-after-rollback.json": "c5d2cbe1dd3c0d1db51f706512ed71f99ded0e041dfe8f08c3219599ecc49f35",
+    "reconcile-34415569337-auth/auth-20261014-commit-response.json": "7611f20a15bb9cbb7ade61d856d516e2126479fa2adba634f86d657f5399d284",
+    "reconcile-34415569337-auth/capture-20261014-after-commit.json": "c6d225aac22be266a0eef409983583f5909edcc1d3d64513487cf7baf9ec36f8",
+    "reconcile-34415569337-auth/catalog-drift-proof-20261014.json": "5ea0d863f6948c8fbbbf73d51959f5d242e7ef9165e946920845007d8f443704",
+    "reconcile-34415569337-auth/catalog-omission-query-20261014.sql": "3c9ec75232505fec70ba5f0d073cf83eaf500f8d4a974de365a1842ed2883e16"
+  },
+  "remainingGaps": [
+    "Historical clock renewal503 provider cause remains unproved.",
+    "A new full hosted rehearsal has not passed.",
+    "Physical media, capacity, real inbox delivery and production paid/unpaid/admin journeys remain open.",
+    "This maintenance does not complete the315 requirements or whole-site audit."
+  ]
+}

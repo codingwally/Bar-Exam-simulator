@@ -233,7 +233,7 @@ export async function captureRemote({ token, accountId, fetcher = fetch, base })
   return sanitizeBaseline({ deployments, settings, scriptSettings, version, schedules, subdomain, service }, base);
 }
 export const REQUIRED_SUITE_GROUPS = Object.freeze([
-  'server-domain-database', 'client-state-media-dates', 'study-admission-sql',
+  'server-domain-database', 'client-state-media-dates', 'command-recovery', 'study-admission-sql',
   'study-always-open', 'study-backgrounds', 'study-background-picker', 'study-hotfix-behavior', 'study-live',
   'local-http-boundaries', 'accelerated-organizer', 'eligible-tournament-exports', 'staging-preflight-gates', 'worker-configuration-contract',
 ]);
@@ -256,6 +256,8 @@ export const CRITICAL_SOURCES = Object.freeze([
   'scripts/test-debate-v3.mjs', 'scripts/build-pages-artifact.mjs', 'scripts/build-staging-artifact.mjs',
   'scripts/test-feature-decommission-boundary.mjs', 'scripts/test-debate-artifact.mjs', 'scripts/test-worker-cpu-limit-contract.mjs',
   'scripts/test-debate-client-state.mjs', 'scripts/test-debate-desktop-layout.mjs', 'scripts/test-debate-media.mjs', 'scripts/test-debate-dates.mjs',
+  'scripts/test-debate-command-recovery.mjs', 'scripts/test-debate-service-recovery.mjs',
+  'scripts/debate-clock-diagnostics.mjs', 'scripts/test-debate-clock-diagnostics.mjs',
   'scripts/serve-debate-rehearsal.mjs', 'scripts/test-debate-rehearsal-server.mjs', 'scripts/test-debate-organizer-rehearsal.mjs', 'scripts/test-debate-tournament-export.mjs',
   'scripts/test-study-room-admission-sql.mjs', 'scripts/test-study-room-always-open.mjs', 'scripts/test-study-room-backgrounds.mjs',
   'scripts/test-study-room-background-picker.mjs', 'scripts/test-study-room-hotfix-behavior.mjs', 'scripts/test-study-room-live.mjs',

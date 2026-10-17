@@ -226,3 +226,4 @@ for (const forbidden of [
 }
 
 console.log('Phase 2 authentication, commercial onboarding, support, and access contract tests passed.');
+await import('./test-native-view-navigation.mjs');

@@ -1,13 +1,258 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
+import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { mkdir, readFile, readlink, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
+import { networkInterfaces } from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { assertCiExecution, hostedBrowserEnvironment, finalizeHostedBrowserShutdown, HOSTED_DEFAULT_TIMED_STAGES,
   assertHostedDefaultRunOfShow, assertHostedFinishedAttempt, assertHostedCorrectedAwards, assertHostedExportVersion,
   assertHostedNextMatchState, assertHostedPriorMatchPreserved, summarizeHostedBootstrap, summarizeHostedNavigation,
-  summarizeHostedEvidenceUpload, submitHostedEvidenceWithUpload, waitForHostedExportReady } from './test-debate-browser-hosted-organizer.mjs';
+  summarizeHostedEvidenceUpload, submitHostedEvidenceWithUpload, waitForHostedExportReady,
+  isReviewedHostedAdvertisingRequest, createHostedAdvertisingBlocker, blockHostedExternalRequest } from './test-debate-browser-hosted-organizer.mjs';
 import { createRunOfShow, calculateAwards } from '../worker/debate-domain.mjs';
 
 const seats = Object.fromEntries(['A1', 'A2', 'A3', 'N1', 'N2', 'N3'].map(seat => [seat, `inert-${seat}`]));
+
+const advertisingUrl = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4565325992372168';
+const stagingOrigin = 'https://duediligence-examinations-staging.wallyesteban1993.workers.dev';
+const advertisingError = 'Failed to load resource: net::ERR_BLOCKED_BY_CLIENT';
+function advertisingHarness() {
+  let time = 1000;
+  const page = {}, report = { status: 'PASS_HOSTED_BROWSER_ORGANIZER_CONTROL_ONLY', pageErrors: [], unexpectedNetwork: [], consoleErrors: [] };
+  const blocker = createHostedAdvertisingBlocker(report, { now: () => time });
+  const metadata = { url: advertisingUrl, method: 'GET', resourceType: 'script', destination: 'script',
+    redirectedFrom: null, frameUrl: `${stagingOrigin}/debate-room/`, mainFrame: true };
+  const make = (changes = {}, options = {}) => {
+    const input = { ...metadata, ...changes };
+    const request = { url: () => input.url, method: () => input.method, resourceType: () => input.resourceType,
+      allHeaders: async () => ({ 'sec-fetch-dest': input.destination, authorization: 'PRIVATE_NOT_RECORDED' }),
+      redirectedFrom: () => input.redirectedFrom, failure: () => ({ errorText: options.failure || 'net::ERR_BLOCKED_BY_CLIENT' }),
+      frame: () => ({ url: () => input.frameUrl, parentFrame: () => input.mainFrame ? null : {}, page: () => options.page || page }) };
+    const calls = [];
+    const route = { request: () => request, abort: async code => {
+      calls.push(code); if (options.abortError) throw new Error('PRIVATE_ABORT_FAILURE');
+      if (!options.noFailure) blocker.requestFailed(request);
+    }, continue: () => assert.fail('Advertising must never continue'), fetch: () => assert.fail('Advertising must never be fetched') };
+    return { input, request, route, calls };
+  };
+  const consoleError = ({ text = advertisingError, url = advertisingUrl, onPage = page, at = time } = {}) => {
+    const error = { messageSha256: 'a'.repeat(64), at };
+    report.consoleErrors.push(error); blocker.console(onPage, text, url, error); return error;
+  };
+  const finish = () => { blocker.finalize(); finalizeHostedBrowserShutdown(report); return report.status; };
+  return { page, report, blocker, metadata, make, consoleError, finish, advance: milliseconds => { time += milliseconds; },
+    route: route => blockHostedExternalRequest({ route, origin: stagingOrigin, advertisingBlocker: blocker, report }) };
+}
+
+test('hosted advertising block aborts the exact reviewed script before transport with only bounded diagnostics', async () => {
+  const h = advertisingHarness(), request = h.make();
+  assert.equal(isReviewedHostedAdvertisingRequest(request.input), true);
+  assert.equal(await h.route(request.route), true); assert.deepEqual(request.calls, ['blockedbyclient']);
+  const error = h.consoleError();
+  assert.equal(h.finish(), 'PASS_HOSTED_BROWSER_ORGANIZER_CONTROL_ONLY');
+  assert.equal(error.blockedAdvertisingId, 1); assert.equal(error.expectedBlockedAdvertising, true);
+  assert.equal(h.report.unexpectedNetwork.length, 0);
+  assert.deepEqual(h.report.blockedAdvertising.records.map(record => ({ id: record.id, method: record.method,
+    resourceType: record.resourceType, destination: record.destination, abortConfirmed: record.abortConfirmed,
+    requestFailure: record.requestFailure, responseObserved: record.responseObserved })),
+  [{ id: 1, method: 'GET', resourceType: 'script', destination: 'script', abortConfirmed: true,
+    requestFailure: 'BLOCKED_BY_CLIENT', responseObserved: false }]);
+  assert.ok(!JSON.stringify(h.report).includes('PRIVATE')); assert.ok(!JSON.stringify(h.report).includes(advertisingUrl));
+});
+
+test('unknown advertising origins, URL variants, methods, destinations and redirected requests stay unexpected and blocked', async () => {
+  for (const changes of [
+    { url: 'https://unreviewed.invalid/private?secret=PRIVATE' }, { url: advertisingUrl.replace('https:', 'http:') },
+    { url: advertisingUrl.replace('pagead2.', 'pagead3.') }, { url: advertisingUrl.replace('/pagead/js/', '/other/') },
+    { url: advertisingUrl.replace('4565325992372168', '4565325992372169') }, { url: advertisingUrl + '&extra=PRIVATE' },
+    { url: advertisingUrl + '#PRIVATE' }, { url: advertisingUrl.replace('https://', 'https://PRIVATE@') },
+    { method: 'POST' }, { method: 'HEAD' }, { resourceType: 'fetch' }, { resourceType: 'document' },
+    { destination: 'empty' }, { destination: undefined }, { redirectedFrom: {} },
+  ]) {
+    const h = advertisingHarness(), request = h.make(changes);
+    assert.equal(isReviewedHostedAdvertisingRequest(request.input), false, JSON.stringify(changes));
+    assert.equal(await h.route(request.route), true); assert.deepEqual(request.calls, ['blockedbyclient']);
+    assert.equal(h.report.blockedAdvertising.records.length, 0); assert.equal(h.report.unexpectedNetwork.length, 1);
+    h.consoleError(); assert.equal(h.finish(), 'FAIL'); assert.ok(!JSON.stringify(h.report).includes('PRIVATE'));
+  }
+});
+
+test('only the fixed staging Debate main frame may intentionally block the reviewed advertising dependency', async () => {
+  const valid = advertisingHarness(), hashNavigation = valid.make({ frameUrl: `${stagingOrigin}/debate-room/#event=PRIVATE&invite=PRIVATE` });
+  assert.equal(await valid.route(hashNavigation.route), true); assert.equal(valid.finish(), 'PASS_HOSTED_BROWSER_ORGANIZER_CONTROL_ONLY');
+  assert.ok(!JSON.stringify(valid.report).includes('PRIVATE'));
+  for (const changes of [{ frameUrl: 'about:blank' }, { frameUrl: 'https://duediligence.ph/debate-room/' },
+    { frameUrl: `${stagingOrigin}/study-room/` }, { frameUrl: `${stagingOrigin}/debate-room/?other=PRIVATE` },
+    { frameUrl: `${stagingOrigin}/debate-room/index.html` }, { mainFrame: false },
+    { frameUrl: `${stagingOrigin.replace('https://', 'https://PRIVATE@')}/debate-room/` }]) {
+    const h = advertisingHarness(), request = h.make(changes);
+    assert.equal(await h.route(request.route), true); assert.equal(h.report.unexpectedNetwork.length, 1);
+    assert.equal(h.report.blockedAdvertising.records.length, 0); assert.equal(h.finish(), 'FAIL');
+  }
+});
+
+test('advertising classification leaves the existing staging and exact Auth endpoint boundary unchanged', async () => {
+  for (const url of [`${stagingOrigin}/debate-room/command`, 'https://hlzqmreeoghbldnhlybr.supabase.co/auth/v1/token',
+    'https://hlzqmreeoghbldnhlybr.supabase.co/auth/v1/user']) {
+    const h = advertisingHarness(), request = h.make({ url, method: 'POST', resourceType: 'fetch' });
+    assert.equal(await h.route(request.route), false); assert.equal(request.calls.length, 0); assert.equal(h.report.unexpectedNetwork.length, 0);
+  }
+  for (const url of ['https://hlzqmreeoghbldnhlybr.supabase.co/rest/v1/private',
+    'https://another-project.supabase.co/auth/v1/user', 'https://pagead2.googlesyndication.com/redirect']) {
+    const h = advertisingHarness(), request = h.make({ url });
+    assert.equal(await h.route(request.route), true); assert.equal(h.report.unexpectedNetwork.length, 1); assert.equal(h.finish(), 'FAIL');
+  }
+});
+
+test('expected advertising console errors require the exact blocked request, page, message, URL and time window', async () => {
+  const unbound = advertisingHarness(); unbound.consoleError(); assert.equal(unbound.finish(), 'FAIL');
+  for (const changes of [{ onPage: {} }, { text: 'PRIVATE_SCRIPT_ERROR' }, { text: advertisingError + ' extra' },
+    { url: advertisingUrl + '&extra=PRIVATE' }, { at: 999 }, { at: 2501 }]) {
+    const h = advertisingHarness(), request = h.make(); await h.route(request.route);
+    const error = h.consoleError(changes); assert.equal(h.finish(), 'FAIL'); assert.notEqual(error.expectedBlockedAdvertising, true);
+  }
+  const duplicate = advertisingHarness(), request = duplicate.make(); await duplicate.route(request.route);
+  duplicate.consoleError(); duplicate.consoleError(); assert.equal(duplicate.finish(), 'FAIL');
+  const late = advertisingHarness(), lateRequest = late.make(); await late.route(lateRequest.route); late.consoleError();
+  late.advance(3000); late.blocker.requestFailed(lateRequest.request); assert.equal(late.finish(), 'FAIL');
+});
+
+test('only the exact aborted request may supply failure proof and any response or unknown failure prevents acceptance', async () => {
+  for (const options of [{ noFailure: true }, { failure: 'PRIVATE_FAILURE' }]) {
+    const h = advertisingHarness(), request = h.make({}, options); await h.route(request.route);
+    h.blocker.requestFailed(h.make().request); h.consoleError(); assert.equal(h.finish(), 'FAIL');
+    assert.ok(!JSON.stringify(h.report).includes('PRIVATE'));
+  }
+  const response = advertisingHarness(), request = response.make(); await response.route(request.route);
+  response.blocker.response(request.request); response.consoleError(); assert.equal(response.finish(), 'FAIL');
+  const abort = advertisingHarness(), failed = abort.make({}, { abortError: true });
+  await assert.rejects(abort.route(failed.route), /PRIVATE_ABORT_FAILURE/); assert.equal(abort.finish(), 'FAIL');
+  assert.ok(!JSON.stringify(abort.report).includes('PRIVATE'));
+});
+
+test('advertising errors may arrive before abort completion but need confirmed failure by shutdown', async () => {
+  const h = advertisingHarness(), request = h.make({}, { noFailure: true });
+  await h.route(request.route); const error = h.consoleError(); assert.notEqual(error.expectedBlockedAdvertising, true);
+  h.advance(5); h.blocker.requestFailed(request.request);
+  assert.equal(h.finish(), 'PASS_HOSTED_BROWSER_ORGANIZER_CONTROL_ONLY'); assert.equal(error.expectedBlockedAdvertising, true);
+  h.report.consoleErrors.push({ expectedBlockedAdvertising: true, blockedAdvertisingId: 999 });
+  assert.equal(h.finish(), 'FAIL');
+});
+
+test('advertising diagnostics have a fixed bound and overflow still blocks transport while failing verification', async () => {
+  const h = advertisingHarness();
+  for (let index = 0; index < 257; index++) {
+    const request = h.make(); assert.equal(await h.route(request.route), true); assert.deepEqual(request.calls, ['blockedbyclient']);
+  }
+  assert.equal(h.report.blockedAdvertising.records.length, 256); assert.equal(h.report.blockedAdvertising.overflow, true);
+  assert.equal(h.finish(), 'FAIL'); assert.equal(h.report.unexpectedNetwork.length, 0);
+});
+
+test('isolated Linux browser observes and correlates the real blocked advertising request without outbound transport', {
+  skip: process.env.DEBATE_HOSTED_AD_BROWSER_CI !== '1', timeout: 45000,
+}, async () => {
+  assert.equal(process.platform, 'linux', 'This probe must never launch a browser on the user desktop.');
+  assert.equal(process.env.GITHUB_ACTIONS, 'true');
+  assert.deepEqual(Object.keys(process.env).sort(), ['DEBATE_HOSTED_AD_BROWSER_CI', 'DEBATE_HOST_NETWORK_NAMESPACE', 'GITHUB_ACTIONS', 'PATH']);
+  assert.match(process.env.DEBATE_HOST_NETWORK_NAMESPACE, /^net:\[\d+\]$/);
+  const namespace = await readlink('/proc/self/ns/net');
+  assert.notEqual(namespace, process.env.DEBATE_HOST_NETWORK_NAMESPACE);
+  assert.deepEqual(networkInterfaces(), {}, 'The probe requires no active network interface, including loopback.');
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const output = path.join(root, 'artifacts/debate-local-rehearsal/hosted-advertising-browser-ci');
+  const digest = value => createHash('sha256').update(value).digest('hex');
+  // This isolated namespace runs as root while checkout belongs to the runner.
+  // Trust only this exact checkout for these read-only Git operations.
+  const command = args => execFileSync('git', ['-c', 'safe.directory=' + root, ...args], {
+    cwd: root, encoding: 'utf8', env: hostedBrowserEnvironment(),
+  }).trim();
+  const sourceSha = command(['rev-parse', 'HEAD']); assert.match(sourceSha, /^[a-f0-9]{40}$/);
+  const sourceTree = command(['rev-parse', 'HEAD^{tree}']); assert.match(sourceTree, /^[a-f0-9]{40}$/);
+  assert.equal(command(['status', '--porcelain', '--untracked-files=all']), '');
+  const sourceHashes = {};
+  for (const file of ['scripts/test-debate-browser-hosted-organizer.mjs', 'scripts/test-debate-hosted-browser-safety.mjs',
+    '.github/workflows/debate-v3-validation.yml', 'debate-room/index.html']) sourceHashes[file] = digest(await readFile(path.join(root, file)));
+  const publicHtml = await readFile(path.join(root, 'debate-room/index.html'), 'utf8');
+  const adTags = publicHtml.match(/<script\b[^>]*src="https:\/\/pagead2\.googlesyndication\.com\/pagead\/js\/adsbygoogle\.js\?client=ca-pub-4565325992372168"[^>]*><\/script>/g);
+  assert.equal(adTags?.length, 1, 'The probe must use the exact current public advertising tag.');
+  await mkdir(path.dirname(output), { recursive: true }); await mkdir(output);
+  const browserHome = path.join(output, 'empty-browser-home');
+  await mkdir(browserHome);
+  const report = { kind: 'ISOLATED_FULFILLED_HTML_ADVERTISING_BROWSER_PROBE', status: 'RUNNING', sourceSha, sourceTree, sourceHashes,
+    startedAt: new Date().toISOString(), network: { separateNamespace: true, activeInterfaces: 0 },
+    actualBrowser: true, hostedAcceptance: false, credentialsStored: false, rawOutputStored: false,
+    advertisingAllowedOutbound: false, isolatedBrowserHome: true, fulfilledDocuments: 0,
+    pageErrors: [], unexpectedNetwork: [], consoleErrors: [], diagnosticOverflow: false };
+  const blocker = createHostedAdvertisingBlocker(report), pendingRoutes = new Set();
+  let browser, context, failure;
+  const boundedError = (collection, value) => {
+    if (collection.length < 8) collection.push(value); else report.diagnosticOverflow = true;
+  };
+  try {
+    const require = createRequire(import.meta.url), { chromium } = require('playwright');
+    report.playwrightVersion = require('playwright/package.json').version;
+    assert.equal(report.playwrightVersion, '1.54.2', 'Use the existing pinned browser tooling.');
+    browser = await chromium.launch({ headless: true, channel: 'chrome', env: { PATH: process.env.PATH, HOME: browserHome } });
+    report.browserVersion = browser.version();
+    context = await browser.newContext({ serviceWorkers: 'block' });
+    const page = await context.newPage();
+    page.on('pageerror', error => boundedError(report.pageErrors, { messageSha256: digest(String(error.message)) }));
+    page.on('requestfailed', request => blocker.requestFailed(request));
+    page.on('response', response => blocker.response(response.request()));
+    page.on('console', message => {
+      if (message.type() !== 'error') return;
+      const error = { messageSha256: digest(message.text()), at: Date.now() };
+      blocker.console(page, message.text(), message.location().url, error); boundedError(report.consoleErrors, error);
+    });
+    await context.route('**/*', route => {
+      const work = (async () => {
+        try {
+          const request = route.request();
+          if (request.url() === `${stagingOrigin}/debate-room/` && request.method() === 'GET'
+            && request.resourceType() === 'document' && request.isNavigationRequest() && request.frame().parentFrame() === null) {
+            report.fulfilledDocuments++;
+            return await route.fulfill({ status: 200, contentType: 'text/html',
+              body: `<!doctype html><html><head><link rel="icon" href="data:,">${adTags[0]}</head><body>Isolated advertising boundary check</body></html>` });
+          }
+          if (await blockHostedExternalRequest({ route, origin: stagingOrigin, advertisingBlocker: blocker, report })) return;
+          // The probe has no real application or Auth server. Even normally
+          // permitted first-party requests must never leave this inert context.
+          boundedError(report.pageErrors, { code: 'UNEXPECTED_INERT_PROBE_REQUEST' });
+          await route.abort('blockedbyclient');
+        } catch (error) {
+          boundedError(report.pageErrors, { messageSha256: digest(String(error?.message || 'ERROR')) });
+          await route.abort('blockedbyclient').catch(() => {});
+        }
+      })();
+      pendingRoutes.add(work); void work.finally(() => pendingRoutes.delete(work)); return work;
+    });
+    const failed = page.waitForEvent('requestfailed', { predicate: request => request.url() === advertisingUrl, timeout: 10000 });
+    const consoleError = page.waitForEvent('console', { predicate: message => message.type() === 'error'
+      && message.text() === advertisingError && message.location().url === advertisingUrl, timeout: 10000 });
+    await Promise.all([page.goto(`${stagingOrigin}/debate-room/`, { waitUntil: 'load', timeout: 15000 }), failed, consoleError]);
+    await context.close(); context = null; await browser.close(); browser = null; await Promise.allSettled([...pendingRoutes]);
+    assert.equal(report.fulfilledDocuments, 1); assert.equal(report.blockedAdvertising.records.length, 1);
+    assert.equal(report.consoleErrors.length, 1); assert.equal(report.blockedAdvertising.records[0].consoleObserved, true);
+    assert.equal(blocker.finalize(), true); assert.equal(report.diagnosticOverflow, false);
+    report.status = 'PASS_ISOLATED_ADVERTISING_REQUEST_BLOCK'; finalizeHostedBrowserShutdown(report);
+    assert.equal(report.status, 'PASS_ISOLATED_ADVERTISING_REQUEST_BLOCK');
+  } catch (error) {
+    failure = error; report.status = 'FAIL'; report.failureSha256 = digest(String(error?.message || 'ERROR'));
+  } finally {
+    await context?.close().catch(() => { report.status = 'FAIL'; });
+    await browser?.close().catch(() => { report.status = 'FAIL'; });
+    await Promise.allSettled([...pendingRoutes]); blocker.finalize(); finalizeHostedBrowserShutdown(report);
+    report.finishedAt = new Date().toISOString();
+    const bytes = JSON.stringify(report, null, 2) + '\n';
+    await writeFile(path.join(output, 'report.json'), bytes);
+    await writeFile(path.join(output, 'report.sha256'), digest(bytes) + '\n');
+  }
+  assert.equal(report.status, 'PASS_ISOLATED_ADVERTISING_REQUEST_BLOCK', failure ? 'Isolated advertising browser probe failed; inspect sanitized report.' : undefined);
+});
 
 test('export readiness allows an expired claim to recover before the independent download wait', async () => {
   const jobId = 'inert-export-result', observations = [];

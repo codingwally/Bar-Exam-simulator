@@ -1,0 +1,390 @@
+{
+  "schemaVersion": 1,
+  "status": "BLOCK_SHARED_STAGING_CANDIDATE_PENDING_COMPATIBILITY_RESOLUTION",
+  "reviewedAt": "2026-10-17T02:44:16.483Z",
+  "method": "Offline review of saved read-only staging metadata and exact current candidate Git blobs; no cloud calls, database statements, tests against user data, tracked-file edits or deployments performed by this review.",
+  "candidate": "0de7f7049bc7e6f8cef0b73d332c3db101cb4375",
+  "projectRef": "hlzqmreeoghbldnhlybr",
+  "productionProjectQueried": false,
+  "captures": {
+    "ledger": "2026-10-16 07:27:09.869943+00",
+    "metadata": "2026-10-16 13:20:52.469998+00",
+    "fragments": "2026-10-16 13:22:05.591239+00"
+  },
+  "decisiveBlock": {
+    "worker": {
+      "file": "worker/examination-room-v1-routes.mjs",
+      "sha256": "16daa581232e011b28b16bbaa171b8e3d231bffd9319de9da5d645d39af78e15",
+      "submitBranchLine": 1609,
+      "awaitCallLine": 1620,
+      "operationLine": 1622,
+      "operation": "submission_intent",
+      "requiredBeforeAnswerReconciliation": true
+    },
+    "installedStudentFunction": {
+      "present": true,
+      "settings": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": "p_operation text, p_payload jsonb",
+      "body_sha256": "78c5e72a4ea24b569eea5153ff1e954162427e869fef50cd045ae2b37b909e19",
+      "result_type": "jsonb",
+      "schema_name": "examination_room_v1",
+      "anon_execute": false,
+      "function_name": "api_student",
+      "feature_markers": {
+        "open_room_lease": false,
+        "submission_intent": false,
+        "replay_submitted_at": false,
+        "submit_audit_hash_v2": true,
+        "response_submitted_at": false,
+        "student_email_context": false,
+        "email_identity_references": false,
+        "pending_submission_binding": false,
+        "submit_final_uses_audit_hash": true
+      },
+      "security_definer": false,
+      "trimmed_body_sha256": "b87aaa6befe2a239d322eea368820571eaf1a4878a12c3282ede5d68f0022cc7",
+      "service_role_execute": false,
+      "authenticated_execute": false
+    },
+    "wholeBodyStringCounts": {
+      "submission_intent_string_count": 0,
+      "pending_submission_string_count": 0
+    },
+    "conclusion": "Candidate student submission always awaits submission_intent; the captured installed api_student contains neither submission_intent nor pendingSubmission. The captured schema does not implement that required candidate contract. Do not deploy this candidate to shared staging on the strength of Debate-only checks.",
+    "behaviorLimit": "No end-to-end submission was attempted. Exact runtime error and user-visible effect are not reproduced by this metadata review."
+  },
+  "ledgerAssessment": {
+    "namedDifferentSql": 6,
+    "noNamedOrExactLedgerMatch": 9,
+    "normalizedNamedMatches": 5,
+    "normalizedNamedDifferences": 1,
+    "namedComparisons": [
+      {
+        "file": "supabase/migrations/20260913020000_optimize_admin_user_directory.sql",
+        "installedVersion": "20260912184643",
+        "sourceNormalizedSha256": "db21e902d9358af127862acf6dd958a1f94d9608a3089edd0fea61e20885a160",
+        "installedNormalizedSha256": "db21e902d9358af127862acf6dd958a1f94d9608a3089edd0fea61e20885a160",
+        "normalizedMatch": true
+      },
+      {
+        "file": "supabase/migrations/20260913021500_admin_dashboard_work_mem.sql",
+        "installedVersion": "20260912184923",
+        "sourceNormalizedSha256": "a7babc985148f9e1e6acd21cc06c0d078174c27c47597e45a0dfee8c74e810ae",
+        "installedNormalizedSha256": "a7babc985148f9e1e6acd21cc06c0d078174c27c47597e45a0dfee8c74e810ae",
+        "normalizedMatch": true
+      },
+      {
+        "file": "supabase/migrations/20260924085000_examination_room_resume_existing_session.sql",
+        "installedVersion": "20260924091448",
+        "sourceNormalizedSha256": "f79c89be4e90f5ae6ca7c50e779b422daac83d6afc260b9a765ff6c3fdd66285",
+        "installedNormalizedSha256": "b9aff0ada7655c5ffdf49a4893526a8e5da22ff30451f4715eac2c5b3fc1d310",
+        "normalizedMatch": false
+      },
+      {
+        "file": "supabase/migrations/20260925135512_subject_matter_incremental_course_cap_200.sql",
+        "installedVersion": "20260925135454",
+        "sourceNormalizedSha256": "54679a263df9a1d992112114b1739cccbe2193b7a8754bbd3a2c27e12ee57b06",
+        "installedNormalizedSha256": "54679a263df9a1d992112114b1739cccbe2193b7a8754bbd3a2c27e12ee57b06",
+        "normalizedMatch": true
+      },
+      {
+        "file": "supabase/migrations/20260925173700_examination_room_submit_audit_hash_v2.sql",
+        "installedVersion": "20260925173523",
+        "sourceNormalizedSha256": "64e9e8403ca0ec553a178619843013d0e7a873812c04f75991e140ed55409648",
+        "installedNormalizedSha256": "64e9e8403ca0ec553a178619843013d0e7a873812c04f75991e140ed55409648",
+        "normalizedMatch": true
+      },
+      {
+        "file": "supabase/migrations/20260925180000_examination_room_submission_pdf_artifacts.sql",
+        "installedVersion": "20260925174629",
+        "sourceNormalizedSha256": "6f44fa0825f4abb460fde67802e3fc7f819d752040bde6ac786c2e938298c76a",
+        "installedNormalizedSha256": "6f44fa0825f4abb460fde67802e3fc7f819d752040bde6ac786c2e938298c76a",
+        "normalizedMatch": true
+      }
+    ]
+  },
+  "bodyComparisons": [
+    {
+      "file": "supabase/migrations/20260913020000_optimize_admin_user_directory.sql",
+      "function": "private.admin_user_directory_scoped_v1",
+      "sourceBodySha256": "df60cbf89ef00a46c0cbab97ccbfad5a4c16a0fb9796c431b3e2740dede654b3",
+      "installedBodySha256": "df60cbf89ef00a46c0cbab97ccbfad5a4c16a0fb9796c431b3e2740dede654b3",
+      "present": true,
+      "exactBodyMatch": true,
+      "trimmedBodyMatch": true
+    },
+    {
+      "file": "supabase/migrations/20260913020000_optimize_admin_user_directory.sql",
+      "function": "private.admin_user_engagement_directory_scoped_v1",
+      "sourceBodySha256": "32e861a4cfe98b283c1fe8a313bdb6f15aa6d3cf244cc687c688eb5365ce36da",
+      "installedBodySha256": "32e861a4cfe98b283c1fe8a313bdb6f15aa6d3cf244cc687c688eb5365ce36da",
+      "present": true,
+      "exactBodyMatch": true,
+      "trimmedBodyMatch": true
+    },
+    {
+      "file": "supabase/migrations/20260924085000_examination_room_resume_existing_session.sql",
+      "function": "examination_room_v1.protect_student_session_binding",
+      "sourceBodySha256": "a9ad8868f5d4750ab9c423c2368fc186e1764f36c6e63ae6d1a3d98ddd4ead76",
+      "installedBodySha256": "7030894f8c4692b5adb5605d2f9068538ff4814a9d4a041f3bcde091d25f2fed",
+      "present": true,
+      "exactBodyMatch": false,
+      "trimmedBodyMatch": false
+    },
+    {
+      "file": "supabase/migrations/20260924085000_examination_room_resume_existing_session.sql",
+      "function": "examination_room_v1.recover_existing_student_session",
+      "sourceBodySha256": "97b566674e6da2b08c522f738b88065650f71c41289730d95aca342a6fccb4ef",
+      "installedBodySha256": "97b566674e6da2b08c522f738b88065650f71c41289730d95aca342a6fccb4ef",
+      "present": true,
+      "exactBodyMatch": true,
+      "trimmedBodyMatch": true
+    },
+    {
+      "file": "supabase/migrations/20260924085000_examination_room_resume_existing_session.sql",
+      "function": "public.examination_room_v1_api",
+      "sourceBodySha256": "7e4a95085b4db167e38fbddc3c02b0edd61502c80c287c7c68fe2cf404f0d23e",
+      "installedBodySha256": "7e4a95085b4db167e38fbddc3c02b0edd61502c80c287c7c68fe2cf404f0d23e",
+      "present": true,
+      "exactBodyMatch": true,
+      "trimmedBodyMatch": true
+    },
+    {
+      "file": "supabase/migrations/20260924121500_examination_room_resume_before_sealed_evidence.sql",
+      "function": "examination_room_v1.recover_existing_student_session",
+      "sourceBodySha256": "a25162f4a84ae35443839ab659fbf01ab547993f42b76820778a6a24167383f0",
+      "installedBodySha256": "97b566674e6da2b08c522f738b88065650f71c41289730d95aca342a6fccb4ef",
+      "present": true,
+      "exactBodyMatch": false,
+      "trimmedBodyMatch": false
+    },
+    {
+      "file": "supabase/migrations/20260924121500_examination_room_resume_before_sealed_evidence.sql",
+      "function": "examination_room_v1.apply_open_room_lease",
+      "sourceBodySha256": "96f1008c13e0a2eca0fbbdd0bd11dd6f8ff8c9e48e892f7df3f0aeac6bdf3b9d",
+      "installedBodySha256": null,
+      "present": false,
+      "exactBodyMatch": false,
+      "trimmedBodyMatch": false
+    },
+    {
+      "file": "supabase/migrations/20260925180000_examination_room_submission_pdf_artifacts.sql",
+      "function": "public.examination_room_v1_submission_delivery_context",
+      "sourceBodySha256": "3d8a245056b151731e67b2c9b736c2d8758e1719f86d5ab3c6bf5e56f794207c",
+      "installedBodySha256": "3d8a245056b151731e67b2c9b736c2d8758e1719f86d5ab3c6bf5e56f794207c",
+      "present": true,
+      "exactBodyMatch": true,
+      "trimmedBodyMatch": true
+    },
+    {
+      "file": "supabase/migrations/20260925180000_examination_room_submission_pdf_artifacts.sql",
+      "function": "public.examination_room_v1_professor_submission_artifact_context",
+      "sourceBodySha256": "34659d84202e858720065b09ff8fe17966374f990b389c01a0b80c7ec9fbff8b",
+      "installedBodySha256": "34659d84202e858720065b09ff8fe17966374f990b389c01a0b80c7ec9fbff8b",
+      "present": true,
+      "exactBodyMatch": true,
+      "trimmedBodyMatch": true
+    }
+  ],
+  "fragmentProbes": [
+    {
+      "file": "supabase/migrations/20260925203000_examination_room_monitor_current_activation_only.sql",
+      "label": "new_filter",
+      "function_name": "examination_room_v1.api_professor_view",
+      "function_present": true,
+      "exact_new_fragment_present": false,
+      "exact_old_fragment_present": null,
+      "whitespace_normalized_new_fragment_present": false
+    },
+    {
+      "file": "supabase/migrations/20260925201500_examination_room_monitor_live_presence.sql",
+      "label": "new_fragment",
+      "function_name": "examination_room_v1.api_professor_view",
+      "function_present": true,
+      "exact_new_fragment_present": false,
+      "exact_old_fragment_present": true,
+      "whitespace_normalized_new_fragment_present": false
+    },
+    {
+      "file": "supabase/migrations/20260925195500_examination_room_monitor_event_logs.sql",
+      "label": "new_fragment",
+      "function_name": "examination_room_v1.api_professor_view",
+      "function_present": true,
+      "exact_new_fragment_present": false,
+      "exact_old_fragment_present": true,
+      "whitespace_normalized_new_fragment_present": false
+    },
+    {
+      "file": "supabase/migrations/20260925173700_examination_room_submit_audit_hash_v2.sql",
+      "label": "new_replay",
+      "function_name": "examination_room_v1.api_student",
+      "function_present": true,
+      "exact_new_fragment_present": true,
+      "exact_old_fragment_present": false,
+      "whitespace_normalized_new_fragment_present": true
+    },
+    {
+      "file": "supabase/migrations/20260922132200_examination_room_submit_replay_receipt_time.sql",
+      "label": "new_response",
+      "function_name": "examination_room_v1.api_student",
+      "function_present": true,
+      "exact_new_fragment_present": false,
+      "exact_old_fragment_present": true,
+      "whitespace_normalized_new_fragment_present": false
+    },
+    {
+      "file": "supabase/migrations/20260922113200_examination_room_submission_intent_retry.sql",
+      "label": "new_gate",
+      "function_name": "examination_room_v1.api_student",
+      "function_present": true,
+      "exact_new_fragment_present": false,
+      "exact_old_fragment_present": false,
+      "whitespace_normalized_new_fragment_present": false
+    },
+    {
+      "file": "supabase/migrations/20260922113200_examination_room_submission_intent_retry.sql",
+      "label": "new_privacy",
+      "function_name": "examination_room_v1.api_student",
+      "function_present": true,
+      "exact_new_fragment_present": false,
+      "exact_old_fragment_present": true,
+      "whitespace_normalized_new_fragment_present": false
+    },
+    {
+      "file": "supabase/migrations/20260920153000_fix_examination_room_partial_draft_grade_maximum.sql",
+      "label": "new_fragment",
+      "function_name": "examination_room_v1.api_professor",
+      "function_present": true,
+      "exact_new_fragment_present": false,
+      "exact_old_fragment_present": true,
+      "whitespace_normalized_new_fragment_present": false
+    }
+  ],
+  "additionalConfirmedGaps": [
+    "Installed protect_student_session_binding body differs from the current candidate body even after trimming; exact semantics of the installed difference were not captured.",
+    "Installed recover_existing_student_session and public dispatcher exactly match the candidate earlier resume migration bodies, not the later resume-before-sealed-evidence recovery body. apply_open_room_lease and student_sessions_open_room_lease trigger are absent in the captured targeted metadata.",
+    "Expected partial draft grading, submit receipt time, monitor event/email, heartbeat presence, and current activation fragments are absent. Old fragments are still present for partial draft grading, submit receipt time, monitor event/email and heartbeat presence.",
+    "Candidate email-identity migration contains comments only; captured student/recovery/dispatcher email identity markers are absent and recovery still references studentNumber. This is a compatibility concern, not proof of every admission helper or email flow being absent."
+  ],
+  "limits": [
+    "Evidence is historical to the three stated October 16 captures, not a fresh October 17 database snapshot.",
+    "Migration ledger covers versions from 20260909 onward. A missing ledger name alone does not prove a feature absent; function metadata and fragment evidence provide the bounded confirmations above.",
+    "Comment/whitespace normalization is a textual comparison, not a general SQL semantic equivalence proof. Five normalized matches explain their raw-byte ledger mismatch, but do not certify all runtime schema details.",
+    "Eight fragment probes cover selected implementation anchors, not full behavior. Current-activation absence has no saved old-fragment comparison; new_gate has neither exact old nor new fragment, and no replacement was attempted.",
+    "No migration repair or application is authorized by this receipt. Current approved source was inspected only for compatibility; retired implementation was not used as implementation guidance.",
+    "No conclusion about current production compatibility, complete website correctness, live publication, full hosted rehearsal or migration safety is made."
+  ],
+  "savedEvidence": [
+    {
+      "file": "artifacts/debate-local-rehearsal/staging-migration-ledger-20261016.json",
+      "sha256": "ee37e8eac58ac1bbe1e3ef16e046d0113dc22eb95c31b296f819269971d43c66"
+    },
+    {
+      "file": "artifacts/debate-local-rehearsal/staging-migration-comparison-20261016.json",
+      "sha256": "23b99a2669e54994dba6a0bd64e7696aeaf083f012b1defb4cfc7b24e0cd075c"
+    },
+    {
+      "file": "artifacts/debate-local-rehearsal/compare-staging-migrations-20261016.mjs",
+      "sha256": "4f3b644d68eddd857d58fe2b005d712bad806b3650874dc8045a9530f51de1b1"
+    },
+    {
+      "file": "artifacts/debate-local-rehearsal/staging-schema-metadata-20261016.json",
+      "sha256": "a19e89eee2abcc90533885f9f1174185603947db6f8d024a59e66f408fd7a998"
+    },
+    {
+      "file": "artifacts/debate-local-rehearsal/staging-schema-fragments-20261016.json",
+      "sha256": "3167cf71b9db8af1f2a3ef3c2ed6dcafb6aff26fb1536205174e87fa5d589868"
+    },
+    {
+      "file": "artifacts/debate-local-rehearsal/staging-schema-local-contracts-20261016.json",
+      "sha256": "3213d7bc8c64e43ed1cb53e4ba8d6afb9fd56362a1fc5eeaaf25a3d6d0dfb3ee"
+    },
+    {
+      "file": "artifacts/debate-local-rehearsal/schema-compatibility-probes-20261016.mjs",
+      "sha256": "cc45b4ccaf0bd26ea754c6dca9b6fb4ade3a7a38c45e0489d060200db1906b87"
+    },
+    {
+      "file": "artifacts/debate-local-rehearsal/staging-schema-fragment-query-20261016.sql",
+      "sha256": "c0b9a0f67c6f78de6f971e083bde20459af5882b9d72339f24aefb27a855e1f1"
+    }
+  ],
+  "sourceHashChecks": [
+    {
+      "file": "supabase/migrations/20260913020000_optimize_admin_user_directory.sql",
+      "gitBlobSha256": "ae0487da8c49402e455170e8fa93429cc3057cdcfe4cd5d0bd508bb12f8126e7",
+      "matchesSavedComparison": true
+    },
+    {
+      "file": "supabase/migrations/20260913021500_admin_dashboard_work_mem.sql",
+      "gitBlobSha256": "e42503edb820efa4c1b1bbc0d9b3adc5be4284930e00b9746735820e6c154a42",
+      "matchesSavedComparison": true
+    },
+    {
+      "file": "supabase/migrations/20260920153000_fix_examination_room_partial_draft_grade_maximum.sql",
+      "gitBlobSha256": "cd0a66938876e687ede5bfb7d0bbf364bb4c052d8cb1ac00d5161936251e27c8",
+      "matchesSavedComparison": true
+    },
+    {
+      "file": "supabase/migrations/20260922113200_examination_room_submission_intent_retry.sql",
+      "gitBlobSha256": "888f29b01d413f2a061568a5eb9eb1e57b6525271b6615389c39e9e61918f211",
+      "matchesSavedComparison": true
+    },
+    {
+      "file": "supabase/migrations/20260922132200_examination_room_submit_replay_receipt_time.sql",
+      "gitBlobSha256": "596b1e6994db207a7ba99068ccbc51e136e9f19c45b2a3b9becf3b74281df41a",
+      "matchesSavedComparison": true
+    },
+    {
+      "file": "supabase/migrations/20260922133500_examination_room_submission_answer_email_context.sql",
+      "gitBlobSha256": "eda1e134c0f963bf48ff3fd5aa2a88e3013f8314adf8f9fc3be1db331a2cbc7e",
+      "matchesSavedComparison": true
+    },
+    {
+      "file": "supabase/migrations/20260924085000_examination_room_resume_existing_session.sql",
+      "gitBlobSha256": "dd642b4620ef3f143a12c4f7bdc5aa2973d982da0561c0aa2aefa25fb34e96d6",
+      "matchesSavedComparison": true
+    },
+    {
+      "file": "supabase/migrations/20260924121500_examination_room_resume_before_sealed_evidence.sql",
+      "gitBlobSha256": "59f627dfdb53cc1f5baf317f9b164e1b8c9dd433f4a85bf30ec970d0aead77e8",
+      "matchesSavedComparison": true
+    },
+    {
+      "file": "supabase/migrations/20260924122500_examination_room_email_identity.sql",
+      "gitBlobSha256": "1a7fcdd67bea3fc88f8370fcd59541dc3ad2a86e23d45d4ec001bc5dfd0b78c2",
+      "matchesSavedComparison": true
+    },
+    {
+      "file": "supabase/migrations/20260925135512_subject_matter_incremental_course_cap_200.sql",
+      "gitBlobSha256": "81fa402624e4c0c6c77a902657d6e4cee4bb504e467d6967a154c418c089bff0",
+      "matchesSavedComparison": true
+    },
+    {
+      "file": "supabase/migrations/20260925173700_examination_room_submit_audit_hash_v2.sql",
+      "gitBlobSha256": "9a064b95672203ea4949cd73624218bd168c5074dc548fedd2468dfb5f5c31ab",
+      "matchesSavedComparison": true
+    },
+    {
+      "file": "supabase/migrations/20260925180000_examination_room_submission_pdf_artifacts.sql",
+      "gitBlobSha256": "00dc43a7c1cf3f1b6051a63c68899f0a00960b4fdf17a4dd84c6713b5c113752",
+      "matchesSavedComparison": true
+    },
+    {
+      "file": "supabase/migrations/20260925195500_examination_room_monitor_event_logs.sql",
+      "gitBlobSha256": "14d318b73666e24e93f967045afca202d120c71dc4095a2e141e8586672a8ad7",
+      "matchesSavedComparison": true
+    },
+    {
+      "file": "supabase/migrations/20260925201500_examination_room_monitor_live_presence.sql",
+      "gitBlobSha256": "02583635ba92d4bda9eb8d5350c5a9cabdea9ea2dd94547fc9cf3c045f50229b",
+      "matchesSavedComparison": true
+    },
+    {
+      "file": "supabase/migrations/20260925203000_examination_room_monitor_current_activation_only.sql",
+      "gitBlobSha256": "d9aed20f67c60c19c7f4239f83ec05920ae3fa919995d457fc0ca537b6931536",
+      "matchesSavedComparison": true
+    }
+  ]
+}

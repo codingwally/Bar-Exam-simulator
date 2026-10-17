@@ -12,7 +12,8 @@ import { assertCiExecution, hostedBrowserEnvironment, finalizeHostedBrowserShutd
   assertHostedDefaultRunOfShow, assertHostedFinishedAttempt, assertHostedCorrectedAwards, assertHostedExportVersion,
   assertHostedNextMatchState, assertHostedPriorMatchPreserved, summarizeHostedBootstrap, summarizeHostedNavigation,
   summarizeHostedEvidenceUpload, submitHostedEvidenceWithUpload, waitForHostedExportReady,
-  isReviewedHostedAdvertisingRequest, createHostedAdvertisingBlocker, blockHostedExternalRequest } from './test-debate-browser-hosted-organizer.mjs';
+  isReviewedHostedAdvertisingRequest, isHostedAdvertisingBlockConsoleError, createHostedAdvertisingBlocker,
+  blockHostedExternalRequest } from './test-debate-browser-hosted-organizer.mjs';
 import { createRunOfShow, calculateAwards } from '../worker/debate-domain.mjs';
 
 const seats = Object.fromEntries(['A1', 'A2', 'A3', 'N1', 'N2', 'N3'].map(seat => [seat, `inert-${seat}`]));
@@ -29,7 +30,7 @@ function advertisingHarness() {
   const make = (changes = {}, options = {}) => {
     const input = { ...metadata, ...changes };
     const request = { url: () => input.url, method: () => input.method, resourceType: () => input.resourceType,
-      allHeaders: async () => ({ 'sec-fetch-dest': input.destination, authorization: 'PRIVATE_NOT_RECORDED' }),
+      headers: () => ({ 'sec-fetch-dest': input.destination, authorization: 'PRIVATE_NOT_RECORDED' }),
       redirectedFrom: () => input.redirectedFrom, failure: () => ({ errorText: options.failure || 'net::ERR_BLOCKED_BY_CLIENT' }),
       frame: () => ({ url: () => input.frameUrl, parentFrame: () => input.mainFrame ? null : {}, page: () => options.page || page }) };
     const calls = [];
@@ -71,13 +72,46 @@ test('unknown advertising origins, URL variants, methods, destinations and redir
     { url: advertisingUrl.replace('4565325992372168', '4565325992372169') }, { url: advertisingUrl + '&extra=PRIVATE' },
     { url: advertisingUrl + '#PRIVATE' }, { url: advertisingUrl.replace('https://', 'https://PRIVATE@') },
     { method: 'POST' }, { method: 'HEAD' }, { resourceType: 'fetch' }, { resourceType: 'document' },
-    { destination: 'empty' }, { destination: undefined }, { redirectedFrom: {} },
+    { destination: 'empty' }, { destination: '' }, { destination: null }, { destination: 'SCRIPT' }, { redirectedFrom: {} },
   ]) {
     const h = advertisingHarness(), request = h.make(changes);
     assert.equal(isReviewedHostedAdvertisingRequest(request.input), false, JSON.stringify(changes));
     assert.equal(await h.route(request.route), true); assert.deepEqual(request.calls, ['blockedbyclient']);
     assert.equal(h.report.blockedAdvertising.records.length, 0); assert.equal(h.report.unexpectedNetwork.length, 1);
     h.consoleError(); assert.equal(h.finish(), 'FAIL'); assert.ok(!JSON.stringify(h.report).includes('PRIVATE'));
+  }
+});
+
+test('missing Fetch Metadata permits only the exact browser-classified script and records absence honestly', async () => {
+  const h = advertisingHarness(), request = h.make({ destination: undefined });
+  assert.equal(isReviewedHostedAdvertisingRequest(request.input), true);
+  assert.equal(await h.route(request.route), true); assert.deepEqual(request.calls, ['blockedbyclient']);
+  h.consoleError(); assert.equal(h.finish(), 'PASS_HOSTED_BROWSER_ORGANIZER_CONTROL_ONLY');
+  assert.equal(h.report.blockedAdvertising.records[0].destination, null);
+  for (const changes of [{ resourceType: 'fetch' }, { method: 'POST' }, { redirectedFrom: {} },
+    { frameUrl: 'https://duediligence.ph/debate-room/' }, { mainFrame: false }, { url: advertisingUrl + '&extra=PRIVATE' }]) {
+    const invalid = advertisingHarness(), other = invalid.make({ destination: undefined, ...changes });
+    assert.equal(isReviewedHostedAdvertisingRequest(other.input), false);
+    assert.equal(await invalid.route(other.route), true); assert.deepEqual(other.calls, ['blockedbyclient']);
+    assert.equal(invalid.report.blockedAdvertising.records.length, 0); assert.equal(invalid.finish(), 'FAIL');
+  }
+});
+
+test('only the two exact browser blocked-by-client messages and failures may correlate to the reviewed abort', async () => {
+  for (const suffix of ['', '.Inspector']) {
+    const text = advertisingError + suffix, h = advertisingHarness();
+    const request = h.make({}, { failure: 'net::ERR_BLOCKED_BY_CLIENT' + suffix });
+    assert.equal(isHostedAdvertisingBlockConsoleError(text, advertisingUrl), true);
+    assert.equal(isHostedAdvertisingBlockConsoleError(text, advertisingUrl + '&extra=PRIVATE'), false);
+    await h.route(request.route); const error = h.consoleError({ text });
+    assert.equal(h.finish(), 'PASS_HOSTED_BROWSER_ORGANIZER_CONTROL_ONLY'); assert.equal(error.expectedBlockedAdvertising, true);
+    const unbound = advertisingHarness(); unbound.consoleError({ text }); assert.equal(unbound.finish(), 'FAIL');
+    h.consoleError({ text }); assert.equal(h.finish(), 'FAIL');
+  }
+  for (const suffix of ['.Inspector extra', '.inspector', '.Other', '.Inspector.Inspector']) {
+    assert.equal(isHostedAdvertisingBlockConsoleError(advertisingError + suffix, advertisingUrl), false);
+    const h = advertisingHarness(), request = h.make({}, { failure: 'net::ERR_BLOCKED_BY_CLIENT' + suffix });
+    await h.route(request.route); h.consoleError(); assert.equal(h.finish(), 'FAIL');
   }
 });
 
@@ -186,9 +220,9 @@ test('isolated Linux browser observes and correlates the real blocked advertisin
     startedAt: new Date().toISOString(), network: { separateNamespace: true, activeInterfaces: 0 },
     actualBrowser: true, hostedAcceptance: false, credentialsStored: false, rawOutputStored: false,
     advertisingAllowedOutbound: false, isolatedBrowserHome: true, fulfilledDocuments: 0,
-    pageErrors: [], unexpectedNetwork: [], consoleErrors: [], diagnosticOverflow: false };
+    pageErrors: [], unexpectedNetwork: [], consoleErrors: [], interceptedAdvertisingRequests: [], diagnosticOverflow: false };
   const blocker = createHostedAdvertisingBlocker(report), pendingRoutes = new Set();
-  let browser, context, failure;
+  let browser, context, failure, phase = 'BROWSER_STARTUP';
   const boundedError = (collection, value) => {
     if (collection.length < 8) collection.push(value); else report.diagnosticOverflow = true;
   };
@@ -212,6 +246,16 @@ test('isolated Linux browser observes and correlates the real blocked advertisin
       const work = (async () => {
         try {
           const request = route.request();
+          if (request.url() === advertisingUrl) {
+            const destination = request.headers()['sec-fetch-dest'], frame = request.frame();
+            boundedError(report.interceptedAdvertisingRequests, {
+              method: request.method() === 'GET' ? 'GET' : 'OTHER',
+              resourceType: request.resourceType() === 'script' ? 'script' : 'OTHER',
+              destination: destination === undefined ? null : destination === 'script' ? 'script' : 'OTHER',
+              redirected: request.redirectedFrom() !== null, mainFrame: frame.parentFrame() === null,
+              expectedFrame: frame.url() === `${stagingOrigin}/debate-room/`,
+            });
+          }
           if (request.url() === `${stagingOrigin}/debate-room/` && request.method() === 'GET'
             && request.resourceType() === 'document' && request.isNavigationRequest() && request.frame().parentFrame() === null) {
             report.fulfilledDocuments++;
@@ -230,10 +274,12 @@ test('isolated Linux browser observes and correlates the real blocked advertisin
       })();
       pendingRoutes.add(work); void work.finally(() => pendingRoutes.delete(work)); return work;
     });
+    phase = 'OBSERVE_BLOCKED_REQUEST';
     const failed = page.waitForEvent('requestfailed', { predicate: request => request.url() === advertisingUrl, timeout: 10000 });
     const consoleError = page.waitForEvent('console', { predicate: message => message.type() === 'error'
-      && message.text() === advertisingError && message.location().url === advertisingUrl, timeout: 10000 });
+      && isHostedAdvertisingBlockConsoleError(message.text(), message.location().url), timeout: 10000 });
     await Promise.all([page.goto(`${stagingOrigin}/debate-room/`, { waitUntil: 'load', timeout: 15000 }), failed, consoleError]);
+    phase = 'VERIFY_SHUTDOWN';
     await context.close(); context = null; await browser.close(); browser = null; await Promise.allSettled([...pendingRoutes]);
     assert.equal(report.fulfilledDocuments, 1); assert.equal(report.blockedAdvertising.records.length, 1);
     assert.equal(report.consoleErrors.length, 1); assert.equal(report.blockedAdvertising.records[0].consoleObserved, true);
@@ -241,7 +287,7 @@ test('isolated Linux browser observes and correlates the real blocked advertisin
     report.status = 'PASS_ISOLATED_ADVERTISING_REQUEST_BLOCK'; finalizeHostedBrowserShutdown(report);
     assert.equal(report.status, 'PASS_ISOLATED_ADVERTISING_REQUEST_BLOCK');
   } catch (error) {
-    failure = error; report.status = 'FAIL'; report.failureSha256 = digest(String(error?.message || 'ERROR'));
+    failure = error; report.status = 'FAIL'; report.failurePhase = phase; report.failureSha256 = digest(String(error?.message || 'ERROR'));
   } finally {
     await context?.close().catch(() => { report.status = 'FAIL'; });
     await browser?.close().catch(() => { report.status = 'FAIL'; });

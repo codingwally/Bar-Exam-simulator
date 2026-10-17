@@ -144,11 +144,18 @@ export function assertCiExecution({ platform = process.platform, env = process.e
 // advertising dependency before transport; no advertising host is allowlisted.
 const REVIEWED_AD_SCRIPT = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4565325992372168';
 const AD_BLOCK_LIMIT = 256;
-const AD_BLOCK_ERROR = 'Failed to load resource: net::ERR_BLOCKED_BY_CLIENT';
+const AD_BLOCK_FAILURES = new Set(['net::ERR_BLOCKED_BY_CLIENT', 'net::ERR_BLOCKED_BY_CLIENT.Inspector']);
+export function isHostedAdvertisingBlockConsoleError(raw, location) {
+  return location === REVIEWED_AD_SCRIPT && [...AD_BLOCK_FAILURES].some(failure => raw === `Failed to load resource: ${failure}`);
+}
 export function isReviewedHostedAdvertisingRequest({ url, method, resourceType, destination, redirectedFrom, frameUrl, mainFrame }) {
   let frame;
   try { frame = new URL(frameUrl); } catch { return false; }
-  return url === REVIEWED_AD_SCRIPT && method === 'GET' && resourceType === 'script' && destination === 'script'
+  // Fetch Metadata may be omitted at interception; the isolated browser probe
+  // records whether it is present. The browser's script resource type remains
+  // mandatory, and any supplied destination other than script is rejected.
+  return url === REVIEWED_AD_SCRIPT && method === 'GET' && resourceType === 'script'
+    && (destination === undefined || destination === 'script')
     && redirectedFrom === null && mainFrame === true && frame.origin === FIXTURE_TARGET.workerUrl
     && frame.pathname === '/debate-room/' && frame.search === '' && frame.username === '' && frame.password === '';
 }
@@ -160,7 +167,7 @@ export function createHostedAdvertisingBlocker(report, { now = Date.now } = {}) 
     async block(route) {
       const request = route.request();
       if (request.url() !== REVIEWED_AD_SCRIPT) return false;
-      const frame = request.frame(), headers = await request.allHeaders();
+      const frame = request.frame(), headers = request.headers();
       if (!isReviewedHostedAdvertisingRequest({ url: request.url(), method: request.method(), resourceType: request.resourceType(),
         destination: headers['sec-fetch-dest'], redirectedFrom: request.redirectedFrom(), frameUrl: frame.url(),
         mainFrame: frame.parentFrame() === null })) return false;
@@ -170,7 +177,7 @@ export function createHostedAdvertisingBlocker(report, { now = Date.now } = {}) 
         return true;
       }
       const record = { id: observed.length + 1, dependency: 'REVIEWED_ADVERTISING_SCRIPT', method: 'GET', resourceType: 'script',
-        destination: 'script', urlSha256: sha(REVIEWED_AD_SCRIPT), blockedAt: now(), abortConfirmed: false,
+        destination: headers['sec-fetch-dest'] ?? null, urlSha256: sha(REVIEWED_AD_SCRIPT), blockedAt: now(), abortConfirmed: false,
         requestFailure: 'NOT_OBSERVED', responseObserved: false, consoleObserved: false };
       const entry = { page: frame.page(), record, console: null };
       observed.push(entry); requests.set(request, entry); diagnostic.records.push(record);
@@ -179,14 +186,16 @@ export function createHostedAdvertisingBlocker(report, { now = Date.now } = {}) 
     },
     requestFailed(request) {
       const entry = requests.get(request); if (!entry) return;
-      entry.record.requestFailure = request.failure()?.errorText === 'net::ERR_BLOCKED_BY_CLIENT' ? 'BLOCKED_BY_CLIENT' : 'OTHER';
+      const errorText = request.failure()?.errorText;
+      entry.record.requestFailure = AD_BLOCK_FAILURES.has(errorText) ? 'BLOCKED_BY_CLIENT' : 'OTHER';
+      entry.record.requestFailureSha256 = sha(errorText || '');
       entry.record.failedAt = now();
     },
     response(request) {
       const entry = requests.get(request); if (entry) entry.record.responseObserved = true;
     },
     console(page, raw, location, error) {
-      if (raw !== AD_BLOCK_ERROR || location !== REVIEWED_AD_SCRIPT) return;
+      if (!isHostedAdvertisingBlockConsoleError(raw, location)) return;
       const entry = observed.findLast(value => value.page === page && !value.console
         && error.at >= value.record.blockedAt && error.at - value.record.blockedAt <= 1500);
       if (!entry) return;

@@ -2080,12 +2080,18 @@
   }
 
   function syncNativeViewWithHash(options = {}) {
+    if (state.nativeViewClosing
+        && options.reason !== 'browser-back' && options.reason !== 'route-change') return false;
     if (state.nativeViewMode === 'action' && state.nativeView) {
       const actionStillCurrent = history.state?.dd2ActionView === state.nativeView
         && history.state?.dd2ActionId === state.nativeViewActionId;
       if (actionStillCurrent) return false;
       hideNativeView({ reason: options.reason || 'history' });
       return true;
+    }
+    if (state.nativeViewClosing) {
+      if (history.state?.dd2View === state.nativeView) return false;
+      state.nativeViewClosing = false;
     }
     const hashView = location.hash.replace(/^#/, '').split(/[/?]/, 1)[0];
     if (nativeDefinition(hashView)) renderNativeView(hashView, { push: false });
@@ -2094,6 +2100,9 @@
   }
 
   function renderNativeView(view, options = {}) {
+    // Keep the current dialog isolated until its owned Back navigation settles.
+    // Only settled history reconciliation may release this closing state.
+    if (state.nativeViewClosing) return;
     clearCommercialPricingRefresh();
     const definition = nativeDefinition(view);
     if (!definition) {
@@ -2232,8 +2241,8 @@
   }
 
   function closeNativeView(reason = 'dismiss') {
+    if (!state.nativeView || state.nativeViewClosing) return;
     if (state.nativeViewMode === 'action') {
-      if (state.nativeViewClosing) return;
       state.nativeViewClosing = true;
       const ownsHistoryEntry = history.state?.dd2ActionView === state.nativeView
         && history.state?.dd2ActionId === state.nativeViewActionId;
@@ -2246,11 +2255,16 @@
     }
     const returnToQuorum = state.nativeViewReturnToQuorum;
     const shouldRewindHistory = Boolean(history.state?.dd2View) && !returnToQuorum;
+    if (shouldRewindHistory) {
+      state.nativeViewClosing = true;
+      history.back();
+      return;
+    }
     hideNativeView({ reason });
     if (returnToQuorum) {
       history.replaceState({}, '', `${location.pathname}${location.search}#quorum`);
       global.DueDiligencePublicHome?.show?.();
-    } else if (shouldRewindHistory) history.back();
+    }
   }
 
   async function submitSupport(event) {

@@ -20,6 +20,21 @@ async function validPdf(document) {
   assert.ok(pdf.getPageCount() > 0); assert.equal(pdf.getTitle(), document.eventTitle + ' - Event report');
 }
 
+test('published vote and standings labels use singular only for exactly one without changing recorded values', async () => {
+  for (const count of [0, 1, 2]) {
+    const document = example();
+    document.audienceChoice = { state: 'Published', result: { published: true, status: count ? 'PUBLISHED' : 'NO_VOTES', winner: count ? 'affirmative' : null,
+      counts: { affirmative: count, negative: 0 }, choicePercentages: { affirmative: count ? 100 : null, negative: count ? 0 : null },
+      validVotes: count, eligibleCount: 3, turnoutPercent: count * 100 / 3, invalidatedCount: 0 } };
+    document.standings = { rows: [{ rank: 1, teamId: 'team-one', wins: count, played: count, scoredMatches: count, meanScore: 85 }] };
+    const before = JSON.stringify(document), text = await csv(document);
+    assert.ok(text.includes(`Affirmative: ${count} ${count === 1 ? 'vote' : 'votes'}`));
+    assert.ok(text.includes(`Negative: 0 votes`));
+    assert.ok(text.includes(`${count} ${count === 1 ? 'win' : 'wins'} / ${count} played; ${count} scored ${count === 1 ? 'match' : 'matches'}; comparable mean 85`));
+    assert.equal(JSON.stringify(document), before);
+  }
+});
+
 test('empty finalized award summaries produce explicit guidance and retain any recorded reason', async () => {
   for (const summary of [undefined, null, {}, { status: 'UNAVAILABLE' }, { status: 'UNAVAILABLE', reason: 'This match used winner-only ballots.' }]) {
     const document = example(); document.result.awards = summary; const before = JSON.stringify(document);

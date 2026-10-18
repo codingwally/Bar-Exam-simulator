@@ -140,9 +140,94 @@ export function assertCiExecution({ platform = process.platform, env = process.e
   assert.equal(env.DEBATE_HOSTED_BROWSER_CI, '1', 'Explicit DEBATE_HOSTED_BROWSER_CI=1 is required.');
 }
 
+// Public HTML remains byte-identical. The rehearsal intercepts this one reviewed
+// advertising dependency before transport; no advertising host is allowlisted.
+const REVIEWED_AD_SCRIPT = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4565325992372168';
+const AD_BLOCK_LIMIT = 256;
+const AD_BLOCK_FAILURES = new Set(['net::ERR_BLOCKED_BY_CLIENT', 'net::ERR_BLOCKED_BY_CLIENT.Inspector']);
+export function isHostedAdvertisingBlockConsoleError(raw, location) {
+  return location === REVIEWED_AD_SCRIPT && [...AD_BLOCK_FAILURES].some(failure => raw === `Failed to load resource: ${failure}`);
+}
+export function isReviewedHostedAdvertisingRequest({ url, method, resourceType, destination, redirectedFrom, frameUrl, mainFrame }) {
+  let frame;
+  try { frame = new URL(frameUrl); } catch { return false; }
+  // Fetch Metadata may be omitted at interception; the isolated browser probe
+  // records whether it is present. The browser's script resource type remains
+  // mandatory, and any supplied destination other than script is rejected.
+  return url === REVIEWED_AD_SCRIPT && method === 'GET' && resourceType === 'script'
+    && (destination === undefined || destination === 'script')
+    && redirectedFrom === null && mainFrame === true && frame.origin === FIXTURE_TARGET.workerUrl
+    && frame.pathname === '/debate-room/' && frame.search === '' && frame.username === '' && frame.password === '';
+}
+
+export function createHostedAdvertisingBlocker(report, { now = Date.now } = {}) {
+  const requests = new WeakMap(), observed = [];
+  const diagnostic = report.blockedAdvertising = { limit: AD_BLOCK_LIMIT, records: [], overflow: false, verified: false };
+  return {
+    async block(route) {
+      const request = route.request();
+      if (request.url() !== REVIEWED_AD_SCRIPT) return false;
+      const frame = request.frame(), headers = request.headers();
+      if (!isReviewedHostedAdvertisingRequest({ url: request.url(), method: request.method(), resourceType: request.resourceType(),
+        destination: headers['sec-fetch-dest'], redirectedFrom: request.redirectedFrom(), frameUrl: frame.url(),
+        mainFrame: frame.parentFrame() === null })) return false;
+      if (observed.length >= AD_BLOCK_LIMIT) {
+        diagnostic.overflow = true;
+        await route.abort('blockedbyclient');
+        return true;
+      }
+      const record = { id: observed.length + 1, dependency: 'REVIEWED_ADVERTISING_SCRIPT', method: 'GET', resourceType: 'script',
+        destination: headers['sec-fetch-dest'] ?? null, urlSha256: sha(REVIEWED_AD_SCRIPT), blockedAt: now(), abortConfirmed: false,
+        requestFailure: 'NOT_OBSERVED', responseObserved: false, consoleObserved: false };
+      const entry = { page: frame.page(), record, console: null };
+      observed.push(entry); requests.set(request, entry); diagnostic.records.push(record);
+      await route.abort('blockedbyclient'); record.abortConfirmed = true;
+      return true;
+    },
+    requestFailed(request) {
+      const entry = requests.get(request); if (!entry) return;
+      const errorText = request.failure()?.errorText;
+      entry.record.requestFailure = AD_BLOCK_FAILURES.has(errorText) ? 'BLOCKED_BY_CLIENT' : 'OTHER';
+      entry.record.requestFailureSha256 = sha(errorText || '');
+      entry.record.failedAt = now();
+    },
+    response(request) {
+      const entry = requests.get(request); if (entry) entry.record.responseObserved = true;
+    },
+    console(page, raw, location, error) {
+      if (!isHostedAdvertisingBlockConsoleError(raw, location)) return;
+      const entry = observed.findLast(value => value.page === page && !value.console
+        && error.at >= value.record.blockedAt && error.at - value.record.blockedAt <= 1500);
+      if (!entry) return;
+      entry.console = error; entry.record.consoleObserved = true; entry.record.consoleAt = error.at;
+      error.blockedAdvertisingId = entry.record.id;
+    },
+    finalize() {
+      diagnostic.verified = !diagnostic.overflow && observed.every(({ record }) => record.abortConfirmed
+        && record.requestFailure === 'BLOCKED_BY_CLIENT' && !record.responseObserved);
+      for (const entry of observed) if (entry.console) entry.console.expectedBlockedAdvertising = diagnostic.verified
+        && Math.abs(entry.record.failedAt - entry.console.at) <= 1500;
+      return diagnostic.verified;
+    },
+  };
+}
+
+export async function blockHostedExternalRequest({ route, origin, advertisingBlocker, report }) {
+  if (await advertisingBlocker.block(route)) return true;
+  const url = new URL(route.request().url());
+  const authRoute = url.origin === FIXTURE_TARGET.supabaseUrl && ['/auth/v1/token', '/auth/v1/user'].includes(url.pathname);
+  if (url.origin === origin || authRoute) return false;
+  report.unexpectedNetwork.push({ originSha256: sha(url.origin), pathSha256: sha(url.pathname) });
+  await route.abort('blockedbyclient');
+  return true;
+}
+
 export function finalizeHostedBrowserShutdown(report) {
   const verified = report.pageErrors.length === 0 && report.unexpectedNetwork.length === 0 &&
-    report.consoleErrors.every(error => error.expectedResourceRejection === true);
+    (!report.blockedAdvertising || report.blockedAdvertising.verified === true) &&
+    report.consoleErrors.every(error => error.expectedResourceRejection === true ||
+      error.expectedBlockedAdvertising === true && report.blockedAdvertising?.verified === true &&
+      report.blockedAdvertising.records.some(record => record.id === error.blockedAdvertisingId && record.consoleObserved));
   report.shutdownObservationsVerified = verified;
   if (!verified) report.status = 'FAIL';
 }
@@ -282,11 +367,13 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
       mainWorkerBootstrap: true, studyRoomUi: false, physicalMedia: false, providerMedia: false,
       realEmail: false, nativePostgresConcurrency: false, controlEndurance90Minutes: false, hostedDeployment: true, googleOAuth: false },
     gaps: ['Real temporary password sessions bootstrap the normal SDK; Google OAuth callback is not exercised.',
+      'The exact reviewed advertising script is blocked before transport; advertising delivery and rendering are not exercised.',
       'Study Room UI has a separate test; Debate waiting state does not prove Study admission.',
       'Physical microphones/cameras/screen audio, provider media, live capacity and real email remain unverified. Timers use real default durations; media endurance is not claimed.',
       'The next three-judge match is checked only if the flow reaches it; a second final decision and tournament awards remain rehearsal-excluded.',
       'PDF signatures, page counts and exact downloaded bytes are checked; PDF page layout requires the separate visual export review.'],
   };
+  const advertisingBlocker = createHostedAdvertisingBlocker(report);
   const check = (name, condition, detail = {}) => { assert.ok(condition, name); report.checks.push({ name, status: 'PASS', ...detail }); };
   let browser, host, guest, eventId, matchId;
   const origin = workerUrl, appUrl = `${workerUrl}/debate-room/`;
@@ -446,8 +533,9 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
       checkpoint: checkpoints.get(page) || 'APP_ACTIVITY', at: Date.now(), ...summarizeHostedNavigation(page.url(), origin, eventId) }); });
     page.on('pageerror', error => report.pageErrors.push({ actorId: actorIds.get(page), messageSha256: sha(error.message) }));
     page.on('console', message => { if (message.type() === 'error') { const raw = message.text();
-      report.consoleErrors.push({ actorId: actorIds.get(page), message: /^Failed to load resource: the server responded with a status of \d+/.exec(raw)?.[0] || 'REDACTED_BROWSER_ERROR',
-        messageSha256: sha(raw), location: (() => { try { return new URL(message.location().url).origin + new URL(message.location().url).pathname; } catch { return 'UNKNOWN'; } })(), at: Date.now() }); } });
+      const error = { actorId: actorIds.get(page), message: /^Failed to load resource: the server responded with a status of \d+/.exec(raw)?.[0] || 'REDACTED_BROWSER_ERROR',
+        messageSha256: sha(raw), location: (() => { try { return new URL(message.location().url).origin + new URL(message.location().url).pathname; } catch { return 'UNKNOWN'; } })(), at: Date.now() };
+      advertisingBlocker.console(page, raw, message.location().url, error); report.consoleErrors.push(error); } });
     page.on('request', request => {
       const observation = { requestId: ++requestSequence, actorId: actorIds.get(page), requestedAt: Date.now(),
         checkpoint: checkpoints.get(page) || 'APP_ACTIVITY' };
@@ -463,9 +551,12 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
       }
       observedRequests.set(request, observation);
     });
-    page.on('requestfailed', request => recordClockResponse(observedRequests.get(request), {
-      receivedAt: Date.now(), transportFailed: true }));
+    page.on('requestfailed', request => {
+      advertisingBlocker.requestFailed(request);
+      recordClockResponse(observedRequests.get(request), { receivedAt: Date.now(), transportFailed: true });
+    });
     page.on('response', response => {
+      advertisingBlocker.response(response.request());
       const receivedAt = Date.now();
       const work = (async () => {
         const url = new URL(response.url());
@@ -571,8 +662,8 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
     await context.route('**/*', async route => {
       try {
       const request = route.request(), url = new URL(request.url());
+      if (await blockHostedExternalRequest({ route, origin, advertisingBlocker, report })) return;
       const authRoute = url.origin === FIXTURE_TARGET.supabaseUrl && ['/auth/v1/token', '/auth/v1/user'].includes(url.pathname);
-      if (url.origin !== origin && !authRoute) { report.unexpectedNetwork.push({ originSha256: sha(url.origin), pathSha256: sha(url.pathname) }); return route.abort('blockedbyclient'); }
       if (url.origin === origin && url.pathname === '/debate-room/command' && request.method() === 'POST') {
         const input = request.postDataJSON();
         if (input?.command === 'create_event') await lifecycle.recordEventIntent({ title: input.payload.title, idempotencyKey: input.idempotencyKey });
@@ -871,7 +962,8 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
     check('Every timer claim came from an explicit DOM action and committed receipt', report.clockClaims.length > 0 && report.clockClaims.every(claim => claim.manualClaimId && claim.receiptId));
     for (const error of report.consoleErrors) error.expectedResourceRejection = /^Failed to load resource: the server responded with a status of \d+/i.test(error.message)
       && report.expectedRejections.some(rejection => rejection.actorId === error.actorId && rejection.url === error.location && Math.abs(error.at - rejection.at) <= 1500 && error.message.includes(String(rejection.status)));
-    check('No unexpected browser console errors', report.consoleErrors.every(error => error.expectedResourceRejection === true));
+    check('Reviewed advertising requests were blocked before transport', advertisingBlocker.finalize() && report.blockedAdvertising.records.length > 0);
+    check('No unexpected browser console errors', report.consoleErrors.every(error => error.expectedResourceRejection === true || error.expectedBlockedAdvertising === true));
     check('At most two pages are open', [...contexts.keys()].reduce((n, context) => n + context.pages().length, 0) <= 2);
     check('Actual main Worker JSON bootstrap includes events and discover', [...BOOTSTRAP_PATHS].every(route => report.bootstrap.some(item => item.path === route && item.status === 200 && item.ok === true && item.contentType === 'application/json')));
     check('Every hosted bootstrap request succeeds', report.bootstrap.every(item => item.status === 200 && item.ok === true));
@@ -889,6 +981,7 @@ export async function runHostedBrowserOrganizer({ lifecycle, workerUrl, sourceSh
     }
     await browser?.close().catch(() => { report.status = 'FAIL'; report.browserCloseFailure = true; });
     await Promise.allSettled([...pendingObservation]);
+    advertisingBlocker.finalize();
     finalizeHostedBrowserShutdown(report);
     report.finishedAt = new Date().toISOString(); report.elapsedMs = Date.now() - started;
     await writeFile(path.join(OUTPUT, 'report.json'), JSON.stringify(report, null, 2) + '\n');

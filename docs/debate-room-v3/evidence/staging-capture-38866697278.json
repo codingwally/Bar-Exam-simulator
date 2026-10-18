@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS_READ_ONLY_CONFIGURATION_CAPTURE",
+  "runId": "38866697278",
+  "runUrl": "https://github.com/codingwally/Bar-Exam-simulator/actions/runs/38866697278",
+  "candidateSha": "0de7f7049bc7e6f8cef0b73d332c3db101cb4375",
+  "capturedAt": "2026-10-16T07:21:42.754Z",
+  "worker": "duediligence-examinations-staging",
+  "projectRef": "hlzqmreeoghbldnhlybr",
+  "origin": "https://duediligence-examinations-staging.wallyesteban1993.workers.dev",
+  "deploymentId": "788f4b2c-49a8-4580-b5b1-7a0644c16d54",
+  "versionId": "d5b1af37-70bd-40ae-90a0-d5c6af870c62",
+  "trafficPercent": 100,
+  "configurationFingerprint": "2339d8c141fcaae80d995ca72843e336f68021ae5eccca3889d5f858c4ae6d64",
+  "baselineFileSha256": "b3bc918e78b3efea282e7f0f59d517f7982865cf7c8399cd6658a81044c223a9",
+  "matchesPriorRehearsalConfiguration": true,
+  "priorRehearsalRunId": "34415569337",
+  "gates": {
+    "publicDebateEnabled": false,
+    "mediaEnabled": false,
+    "sweeperEnabled": false,
+    "approvedMediaCapacity": 0,
+    "debateInvitationEmailMode": "suppressed",
+    "debateResultsEmailMode": "suppressed",
+    "outboundEmailMode": "suppressed",
+    "studyRoomEnabled": true
+  },
+  "deploymentPerformed": false,
+  "accountsProvisioned": 0,
+  "databaseWritesPerformed": false,
+  "limitations": [
+    "The run only captured the existing staging configuration. Its candidate SHA identifies the capture code, not a new deployed Worker.",
+    "The unchanged configuration does not prove compatibility between newer shared application code and the current staging database.",
+    "A new exact-candidate preparation and successful real-duration hosted rehearsal remain required.",
+    "No production state, physical media, real inbox delivery or complete website audit is verified by this receipt."
+  ]
+}

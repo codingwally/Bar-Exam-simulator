@@ -139,6 +139,13 @@ jobs:
         env:
           DEBATE_SYNTHETIC_BROWSER_CI: '1'
         run: node scripts/test-debate-browser-organizer.mjs
+      - name: Verify the hosted advertising boundary without network or credentials
+        if: ${{ !cancelled() && steps.browser_tooling.outcome == 'success' }}
+        timeout-minutes: 2
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo -n unshare --net -- env -i PATH="$PATH" GITHUB_ACTIONS=true DEBATE_HOSTED_AD_BROWSER_CI=1 DEBATE_HOST_NETWORK_NAMESPACE="$(readlink /proc/self/ns/net)" node scripts/test-debate-hosted-browser-safety.mjs
       - name: Verify Study waiting and administrator approval through the UI
         if: ${{ !cancelled() && steps.browser_tooling.outcome == 'success' }}
         timeout-minutes: 5
@@ -176,6 +183,8 @@ jobs:
             artifacts/debate-local-rehearsal/study-browser-ci/harness-only/request-log.jsonl
             artifacts/debate-local-rehearsal/study-browser-ci/harness-only/manifest.json
             artifacts/debate-local-rehearsal/study-browser-ci/harness-only/harness.json
+            artifacts/debate-local-rehearsal/hosted-advertising-browser-ci/report.json
+            artifacts/debate-local-rehearsal/hosted-advertising-browser-ci/report.sha256
           if-no-files-found: warn
           retention-days: 14
       - name: Preserve local verification report

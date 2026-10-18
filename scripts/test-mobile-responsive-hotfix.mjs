@@ -55,10 +55,10 @@ assert.match(adminPhoneCss, /\.exam-admin-question-list > article > header\s*\{[
 assert.match(adminPhoneCss, /\.exam-admin-question-list > article > footer > :is\(code, span\),[\s\S]*overflow-wrap:\s*anywhere;[^}]*word-break:\s*break-word;/s);
 
 assert.match(homeHtml, /quorum-first-shell\.css\?v=profile-photo-release2-20260827-1&amp;baseline=public-reliability-20260827-3/);
-assert.match(professorHtml, /professor\.css\?v=creator-overview-20260828-1/);
+assert.match(professorHtml, /professor\.css\?v=grading-prompts-key-status-20260926-1/);
 assert.match(adminHtml, /examination-room-admin\.css\?v=owner-command-center-20260828-7/);
 assert.match(adminHtml, /examination-room-admin\.js\?v=reliability-20260828-1/);
-assert.match(serviceWorker, /CACHE_VERSION = 'duediligence-shell-astra-analytics-count-copy-20260908-r1-asset-recovery-20260909-r1-home-readable-20260910-1'/);
+assert.match(serviceWorker, /CACHE_VERSION = 'duediligence-shell-focus-fullscreen-20260926-1-native-close-20261016-1'/);
 assert.match(serviceWorker, /quorum-first-shell\.css\?v=profile-photo-release2-20260827-1&baseline=public-reliability-20260827-3/);
 
 console.log('Mobile header, creator-title, and Admin Examination Room responsive hotfix contracts passed.');

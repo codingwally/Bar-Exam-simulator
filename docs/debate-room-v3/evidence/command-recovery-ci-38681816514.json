@@ -1,0 +1,268 @@
+{
+  "schemaVersion": 1,
+  "kind": "INDEPENDENT_DOWNLOADED_ARTIFACT_VERIFICATION",
+  "status": "PASS_WITH_EXPLICIT_SCOPE_LIMITS",
+  "runId": "38681816514",
+  "candidate": "0d367c6713f153681128f9eff0427948c97e2ddc",
+  "binding": {
+    "candidateTree": "60e303b7d8db610d79c225aec9adfe2af5155f4e",
+    "artifactCheckout": "2326962fb7e0fed7d4857e38963ecc5f23eebd1c",
+    "artifactCheckoutTree": "60e303b7d8db610d79c225aec9adfe2af5155f4e",
+    "candidateTreeMatchesArtifactClaim": true,
+    "mergeObjectAvailableLocally": false,
+    "independentlyReadMergeTree": null,
+    "mergeApi": {
+      "source": "github-merge-commit.json",
+      "capturedBy": "Parent agent via GitHub git-commit API",
+      "sha256": "712b13a0233b5804a3f262b176a5aa37e51ea68aa6d9ea2a7c66fc3e4f11d880",
+      "sha": "2326962fb7e0fed7d4857e38963ecc5f23eebd1c",
+      "tree": "60e303b7d8db610d79c225aec9adfe2af5155f4e",
+      "parents": [
+        "16d2fd855eb66449706984c884543cb6f5395dcb",
+        "0d367c6713f153681128f9eff0427948c97e2ddc"
+      ],
+      "treeAndParentsVerified": true
+    },
+    "gitBlobMethod": "git cat-file blob candidate:path; no Windows checkout newline normalization",
+    "remoteQueriesPerformedByThisReviewer": false
+  },
+  "sourceComparisonCount": 265,
+  "exactGitBlobComparisons": 264,
+  "derivedLegacyComparisons": 1,
+  "uniqueCandidateBlobCount": 155,
+  "sourceComparisonsSha256": "b05364ba06b45f4afd6956a83464949cae43acb15311d36fd0b6dbc0b35b8727",
+  "reportDigests": [
+    {
+      "file": "browser/browser-organizer-ci/manifest.json",
+      "sha256": "1505def73d05774dd1bdda41e9b64073f7bf21a97381787f4f70e91efa398be1",
+      "bytes": 2906
+    },
+    {
+      "file": "browser/browser-organizer-ci/report.json",
+      "sha256": "e37fe9523c8f587b875dfaf4c2758b88f91eee9ecb75aed50eb95bc1837925d7",
+      "bytes": 452714
+    },
+    {
+      "file": "browser/study-browser-ci/harness-only/harness.json",
+      "sha256": "6f222fb088814f693ade874bc3d6563ffe4de3e117bf044f41b6dcc7ada346f9",
+      "bytes": 2025
+    },
+    {
+      "file": "browser/study-browser-ci/harness-only/report.json",
+      "sha256": "ed6401a1490fb82292921178fdb2ddcab912f26abe77a353188bc9f5689b4f9f",
+      "bytes": 2548
+    },
+    {
+      "file": "browser/study-browser-ci/harness.json",
+      "sha256": "ebc1f3333bea5c7544bffae0f9238ab60c2372da494dffd47f2c59505b2780c7",
+      "bytes": 2026
+    },
+    {
+      "file": "browser/study-browser-ci/report.json",
+      "sha256": "1fd99b1c85581e16e47b4034dc3b62a704520147145e27434820da4f962bd3b1",
+      "bytes": 5376
+    },
+    {
+      "file": "delivery/report.json",
+      "sha256": "19b5655c560862c4f1f9ea2091feaca6be58882984eb2065db0f393bd68931ea",
+      "bytes": 38858
+    },
+    {
+      "file": "local/staging-dml-probe-ci/report.json",
+      "sha256": "56a3f34e41154cab0c0e336e8869cc1571b609f84d624f320d50cdd15563cf0e",
+      "bytes": 9309
+    },
+    {
+      "file": "local/suite-2026-10-15T04-30-38.711Z/report.json",
+      "sha256": "5eb9229ff11f8a0a61e35b6a24b0db7d5d1182966a9819a17871508758f5076c",
+      "bytes": 24139
+    },
+    {
+      "file": "metadata/report.json",
+      "sha256": "d0530403aef2233ffd38dda8e49bb039148467d53ea14d58320364779ed1aa09",
+      "bytes": 8784
+    },
+    {
+      "file": "native/report.json",
+      "sha256": "2f1a211ad93da083f5190677ba7424227668335b6293f46f4c2db7a1f6ff86e3",
+      "bytes": 11910
+    }
+  ],
+  "reportResults": [
+    {
+      "file": "browser/browser-organizer-ci/report.json",
+      "status": "PASS_SYNTHETIC_BROWSER_ORGANIZER",
+      "checks": 447,
+      "groups": null
+    },
+    {
+      "file": "browser/study-browser-ci/harness-only/report.json",
+      "status": "PASS_SYNTHETIC_STUDY_HTTP_SQL",
+      "checks": 5,
+      "groups": null
+    },
+    {
+      "file": "browser/study-browser-ci/report.json",
+      "status": "PASS_SYNTHETIC_STUDY_BROWSER",
+      "checks": 15,
+      "groups": null
+    },
+    {
+      "file": "delivery/report.json",
+      "status": "PASS_WORKERD_INERT_STORAGE_DELIVERY",
+      "checks": 75,
+      "groups": null
+    },
+    {
+      "file": "local/staging-dml-probe-ci/report.json",
+      "status": "PASS_LOCAL_VERSION_ADAPTED_SQL_AND_EXPECTED_ERRORS",
+      "checks": 64,
+      "groups": null
+    },
+    {
+      "file": "local/suite-2026-10-15T04-30-38.711Z/report.json",
+      "status": "PASS_LOCAL_SUITE",
+      "checks": null,
+      "groups": 14
+    },
+    {
+      "file": "metadata/report.json",
+      "status": "PASS_PINNED_WRANGLER_OFFLINE_METADATA",
+      "checks": 11,
+      "groups": null
+    },
+    {
+      "file": "native/report.json",
+      "status": "PASS_NATIVE_POSTGRES17_ATOMIC_CLEANUP",
+      "checks": 35,
+      "groups": null
+    }
+  ],
+  "browser": {
+    "checks": 447,
+    "actions": 196,
+    "stages": 16,
+    "actualDurationMs": 78188,
+    "unexpectedNetwork": 0,
+    "pageErrors": 0,
+    "expectedConsoleResourceRejections": 4,
+    "unexpectedConsoleErrors": 0,
+    "recoveryAssertions": [
+      {
+        "name": "Uncertain event creation leaves the lobby retry action reachable",
+        "status": "PASS"
+      },
+      {
+        "name": "Lobby retry recovers the original creation without adding an event revision",
+        "status": "PASS"
+      },
+      {
+        "name": "Synthetic committed creation has a bound receipt",
+        "status": "PASS"
+      },
+      {
+        "name": "Every synthetic lease expiry recovered through an explicit DOM claim",
+        "status": "PASS"
+      }
+    ],
+    "downloads": [
+      {
+        "kind": "rules",
+        "file": "downloads/rules-duediligence-debate-ci-full-browser-debate-2026-10-15t04-31-45-309z-rules-r1.pdf",
+        "bytes": 14865,
+        "sha256": "badd998aa39f5e05708efcb77655c150bddec64bea8e8737852795cf68f70442",
+        "signature": "%PDF-"
+      },
+      {
+        "kind": "scorecard",
+        "file": "downloads/scorecard-duediligence-debate-ci-full-browser-debate-2026-10-15t04-31-45-309z-scorecard-r1.pdf",
+        "bytes": 12814,
+        "sha256": "c73aef186e1b95a3badee9ec51e784311cdfd31fe84e548ee27208af6772ac1e",
+        "signature": "%PDF-"
+      },
+      {
+        "kind": "result",
+        "file": "downloads/result-duediligence-debate-ci-full-browser-debate-2026-10-15t04-31-45-309z-result-r2.pdf",
+        "bytes": 13547,
+        "sha256": "fcfc573db30abf3d2667a8c48b754633746bc24f86e6a53045501b745f80761e",
+        "signature": "%PDF-"
+      },
+      {
+        "kind": "event_report",
+        "file": "downloads/event_report-duediligence-debate-ci-full-browser-debate-2026-10-15t04-31-45-309z-event-report-r2.pdf",
+        "bytes": 14107,
+        "sha256": "e2714d30e479b3fc53273a0f2f2409c2d52eea7f7df440ed07ea9b3e7b2dd3e8",
+        "signature": "%PDF-"
+      },
+      {
+        "kind": "csv",
+        "file": "downloads/csv-duediligence-debate-ci-full-browser-debate-2026-10-15t04-31-45-309z-csv-r2.csv",
+        "bytes": 2116,
+        "sha256": "13a7d94aa41281cf9712480b6157189cf1f5af7b5ef77f1e725f8bee81343f61",
+        "signature": "CSV"
+      },
+      {
+        "kind": "certificate",
+        "file": "downloads/certificate-duediligence-debate-ci-full-browser-debate-2026-10-15t04-31-45-309z-certificate-r2.pdf",
+        "bytes": 11037,
+        "sha256": "f6623e76bdae797b22d512c87e85ee324967484da0b56845b3ca6127f72e4e6d",
+        "signature": "%PDF-"
+      }
+    ],
+    "clockDiagnostics": {
+      "entries": 85,
+      "maximumEntries": 2048,
+      "exactAllowedKeysVerified": true,
+      "boundedScalarsVerified": true,
+      "rawPrivateFieldNamesAbsent": true,
+      "sha256": "c6f592eebf8b27b3a2984aa752b7ee507f2d11e6c3e811a4074a02e08b19f666"
+    },
+    "claims": {
+      "actualBrowserDom": true,
+      "actualLocalSql": true,
+      "syntheticIdentity": true,
+      "actualHostedAuth": false,
+      "mainWorkerBootstrap": false,
+      "studyRoomUi": false,
+      "physicalMedia": false,
+      "providerMedia": false,
+      "realEmail": false,
+      "nativePostgresConcurrency": false,
+      "endurance90Minutes": false,
+      "hostedDeployment": false
+    },
+    "gaps": [
+      "Local HTML deliberately replaces hosted auth and removes provider scripts; this is not the main Worker or real Supabase sign-in path.",
+      "Study Room UI has a separate test; Debate waiting state does not prove Study admission.",
+      "No microphone, camera, provider, real email, native multi-connection Postgres, 90-minute endurance or hosted deployment is exercised.",
+      "The next three-judge match is started, not played to another final decision; tournament awards remain rehearsal-excluded.",
+      "PDF signatures, page counts and exact downloaded bytes are checked; PDF page layout requires the separate visual export review."
+    ]
+  },
+  "recoveryTests": {
+    "file": "local/suite-2026-10-15T04-30-38.711Z/command-recovery.txt",
+    "sha256": "a5555a00863468ffaa9bac76a0ed7b23f8856c47cc03c87736ffe0973656b6fd",
+    "tests": 73,
+    "passed": 73,
+    "failed": 0,
+    "skipped": 0
+  },
+  "limitations": [
+    "Synthetic merge object was unavailable locally; exact merge SHA, tree and ordered parents were instead verified against the parent-supplied GitHub git-commit API capture and candidate Git tree.",
+    "Downloaded artifact contents are verified internally and against local Git objects; no remote job provenance request was made by this reviewer.",
+    "No hosted rehearsal, physical media, real mail, production deployment, complete website audit or acceptance status is inferred from these artifacts."
+  ],
+  "acceptanceUpgrade": false,
+  "verifiedAt": "2026-10-16T01:26:14.944Z",
+  "originalReceiptSha256": "d78dd24c4db56a539f07bf797f66f5a4bdb775dba91609d3165c901ea7e135dd",
+  "merge": {
+    "pullRequest": 411,
+    "url": "https://github.com/codingwally/Bar-Exam-simulator/pull/411",
+    "state": "MERGED",
+    "at": "2026-10-16T07:21:02Z",
+    "sha": "0de7f7049bc7e6f8cef0b73d332c3db101cb4375",
+    "tree": "60e303b7d8db610d79c225aec9adfe2af5155f4e",
+    "treeMatchesTestedCandidate": true
+  },
+  "productionDeploymentPerformed": false
+}

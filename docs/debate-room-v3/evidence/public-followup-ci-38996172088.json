@@ -1,0 +1,302 @@
+{
+  "schemaVersion": 1,
+  "kind": "INDEPENDENT_DOWNLOADED_ARTIFACT_REVIEW",
+  "status": "SOURCE_MATCH_AND_SCOPED_PASSES_WITH_FAILED_RUN",
+  "reviewedAt": "2026-10-17T08:39:18.196Z",
+  "candidateSha": "6a5c03327c0f6d8349eda9ca2b23393ee7db3278",
+  "candidateTree": "cf0d35ed2503681ae83395e6fbb8a9169c2deb55",
+  "testedMergeSha": "44d0e0bc65e64c88458e838a586933b9268d1424",
+  "testedMergeTree": "cf0d35ed2503681ae83395e6fbb8a9169c2deb55",
+  "treeVerification": "Local candidate git tree equals tested merge tree independently retrieved from GitHub Git commits API; merge parents are main0de7f7049 and candidate6a5c033.",
+  "runs": {
+    "debate": {
+      "id": 38996172088,
+      "status": "completed",
+      "conclusion": "failure",
+      "jobs": {
+        "local-validation": "failure",
+        "wrangler-metadata": "success",
+        "hosted-cleanup-postgres": "success"
+      }
+    },
+    "home": {
+      "id": 38996172055,
+      "status": "completed",
+      "conclusion": "success",
+      "jobs": {
+        "component-rendering": "success"
+      }
+    }
+  },
+  "sourceVerification": {
+    "sourceHashMapComparisons": 271,
+    "exactGitBlobComparisons": 270,
+    "documentedDerivedComparisons": 1,
+    "additionalExplicitSourceFieldComparisons": 7,
+    "totalComparisons": 278,
+    "uniqueExactGitPaths": 161,
+    "mismatches": [],
+    "method": "Raw SHA256 of git show candidate:path buffers, independent of current working files. One legacy SQL hash reconstructed by exact documented event-ID and path-pattern reversal.",
+    "reports": [
+      {
+        "file": "artifacts/debate-local-rehearsal/public-followup-38996172088/debate-v3-delivery-workerd/report.json",
+        "sha256": "223317320bf81f76434b41917fa0c8f65d466ebe3adadbf15c33fcfce2d2f482",
+        "comparisons": 13
+      },
+      {
+        "file": "artifacts/debate-local-rehearsal/public-followup-38996172088/debate-v3-local-evidence/suite-2026-10-17T02-45-41.752Z/report.json",
+        "sha256": "772e86309da4cd7e3abad49d179a31158f09e3977d99e01d285e8e1d02a13216",
+        "comparisons": 152
+      },
+      {
+        "file": "artifacts/debate-local-rehearsal/public-followup-38996172088/debate-v3-native-cleanup-evidence/report.json",
+        "sha256": "9c182b1d4c6c86625abe8b3418c65b4936fa6ce32efed3b8534ce6c26a140a85",
+        "comparisons": 7
+      },
+      {
+        "file": "artifacts/debate-local-rehearsal/public-followup-38996172088/debate-v3-synthetic-browser-evidence/browser-organizer-ci/manifest.json",
+        "sha256": "b354f9d674907a42002b4366ae3cfdbe131ae008d124304b63c5902cf11d7976",
+        "comparisons": 20
+      },
+      {
+        "file": "artifacts/debate-local-rehearsal/public-followup-38996172088/debate-v3-synthetic-browser-evidence/browser-organizer-ci/report.json",
+        "sha256": "1a50a0dc96f33ba4057b808cb4082c4349fed70ca98e25a97274e7ac5468ede8",
+        "comparisons": 20
+      },
+      {
+        "file": "artifacts/debate-local-rehearsal/public-followup-38996172088/debate-v3-synthetic-browser-evidence/hosted-advertising-browser-ci/report.json",
+        "sha256": "ba5f9b246b7c99bec2c6bff16f8aa3fc783450a5ebdf127a96c5713b6b45ee52",
+        "comparisons": 4
+      },
+      {
+        "file": "artifacts/debate-local-rehearsal/public-followup-38996172088/debate-v3-synthetic-browser-evidence/study-browser-ci/harness-only/harness.json",
+        "sha256": "6f222fb088814f693ade874bc3d6563ffe4de3e117bf044f41b6dcc7ada346f9",
+        "comparisons": 10
+      },
+      {
+        "file": "artifacts/debate-local-rehearsal/public-followup-38996172088/debate-v3-synthetic-browser-evidence/study-browser-ci/harness-only/report.json",
+        "sha256": "fa0e7383bf86b801aca6c42e1716994a53d715c7a9e46f484608ce23913c21b0",
+        "comparisons": 10
+      },
+      {
+        "file": "artifacts/debate-local-rehearsal/public-followup-38996172088/debate-v3-synthetic-browser-evidence/study-browser-ci/harness.json",
+        "sha256": "ebc1f3333bea5c7544bffae0f9238ab60c2372da494dffd47f2c59505b2780c7",
+        "comparisons": 10
+      },
+      {
+        "file": "artifacts/debate-local-rehearsal/public-followup-38996172088/debate-v3-synthetic-browser-evidence/study-browser-ci/report.json",
+        "sha256": "fa89f4a5091baf9e4f8959922e1f500cbed4364a087ef719f43ff245e9c8f93b",
+        "comparisons": 10
+      },
+      {
+        "file": "artifacts/debate-local-rehearsal/public-followup-38996172088/debate-v3-wrangler-metadata/report.json",
+        "sha256": "eccd07ef5416dadd3af7daea0dfda229c3caff476ef2aeefd6844d82b82ec74d",
+        "comparisons": 6
+      },
+      {
+        "file": "artifacts/debate-local-rehearsal/public-followup-home-38996172055/home-display-component-evidence/report.json",
+        "sha256": "8f7373a8010d87d051876d730e245868147b3dff0582a5cf9e8e3e49dba13b17",
+        "comparisons": 9
+      }
+    ],
+    "extraComparisons": [
+      {
+        "report": "artifacts/debate-local-rehearsal/public-followup-38996172088/debate-v3-synthetic-browser-evidence/browser-organizer-ci/report.json",
+        "key": "testSha256",
+        "file": "scripts/test-debate-browser-organizer.mjs",
+        "sha256": "7d966a8e4755b3b710e632355a543f1e10b4dea6ba7aaf5c9158b7be85795b03"
+      },
+      {
+        "report": "artifacts/debate-local-rehearsal/public-followup-home-38996172055/home-display-component-evidence/report.json",
+        "key": "testSha256",
+        "file": "scripts/test-home-display-browser.mjs",
+        "sha256": "27e3c2a7c655a8b96df4904635689f768fd3ce8d3114748b62c52007a8b67767"
+      },
+      {
+        "report": "artifacts/debate-local-rehearsal/public-followup-38996172088/debate-v3-local-evidence/staging-dml-probe-ci/report.json",
+        "key": "serviceSourceHashLf",
+        "file": "worker/debate-service.mjs",
+        "sha256": "398557be44e80197fc7323220d3078c11d7fc596fe73c590229b9e4d559fa493"
+      },
+      {
+        "report": "artifacts/debate-local-rehearsal/public-followup-38996172088/debate-v3-local-evidence/staging-dml-probe-ci/report.json",
+        "key": "fixtureSha256",
+        "file": "docs/debate-room-v3/evidence/staging-dml-rollback-probe-service-398557be.fixtures.json",
+        "sha256": "b3d44e9a5b163a346022db85456c46778aaf53d1fc356bef62e8738a1a0d2c4c"
+      },
+      {
+        "report": "artifacts/debate-local-rehearsal/public-followup-38996172088/debate-v3-local-evidence/staging-dml-probe-ci/report.json",
+        "key": "probeManifestSha256",
+        "file": "docs/debate-room-v3/evidence/staging-dml-rollback-probe-service-398557be.manifest.json",
+        "sha256": "46beccd04863a9f4a655efd1a48419b93befd21d3b0ab07961572ebceef495c6"
+      },
+      {
+        "report": "artifacts/debate-local-rehearsal/public-followup-38996172088/debate-v3-local-evidence/staging-dml-probe-ci/report.json",
+        "key": "generatorSourceHashLf",
+        "file": "scripts/debate-staging-dml-probe.mjs",
+        "sha256": "bd9170038d8369de60e484c203d7c958d7985c86cdd95c64a0ba18335b5141e6"
+      },
+      {
+        "report": "artifacts/debate-local-rehearsal/public-followup-38996172088/debate-v3-local-evidence/staging-dml-probe-ci/report.json",
+        "key": "hostedArtifactSha256",
+        "file": "docs/debate-room-v3/evidence/staging-dml-rollback-probe-service-398557be.sql",
+        "sha256": "579a4a63ca51914566b9daf864ab3f0fdac7a23c2590bcf1c842b047814c6b4f"
+      }
+    ]
+  },
+  "localSuite": {
+    "status": "PASS_LOCAL_SUITE",
+    "groups": 14,
+    "allGroupsPass": true,
+    "sourceChangesDuringRun": 0
+  },
+  "debateBrowser": {
+    "status": "PASS_SYNTHETIC_BROWSER_ORGANIZER",
+    "checks": 652,
+    "actions": 196,
+    "stages": 16,
+    "allStagesFinished": true,
+    "downloads": 6,
+    "downloadKinds": [
+      "rules",
+      "scorecard",
+      "result",
+      "event_report",
+      "csv",
+      "certificate"
+    ],
+    "downloadHashesVerified": true,
+    "screenshots": 27,
+    "screenshotExistenceVerified": true,
+    "visualReviewPerformed": false,
+    "layoutMeasurements": 15,
+    "clockDiagnostics": 86,
+    "actualDurationMs": 77284,
+    "simulatedAdvanceMs": 5603835,
+    "unexpectedNetwork": 0,
+    "pageErrors": 0,
+    "consoleErrors": 4,
+    "expectedConsoleRejections": 4,
+    "expectedRejections": 4
+  },
+  "study": {
+    "browserStatus": "PASS_SYNTHETIC_STUDY_BROWSER",
+    "browserChecks": 15,
+    "browserErrors": 0,
+    "httpSqlStatus": "PASS_SYNTHETIC_STUDY_HTTP_SQL",
+    "httpSqlChecks": 5,
+    "httpSqlErrors": 0,
+    "additionalApprovalRooms": [
+      {
+        "roomKey": "1",
+        "status": "PASS"
+      },
+      {
+        "roomKey": "7",
+        "status": "PASS"
+      }
+    ]
+  },
+  "home": {
+    "status": "PASS_COMPONENT_BROWSER",
+    "checks": 25,
+    "screenshots": 6,
+    "screenshotHashesVerified": true,
+    "visualReviewPerformed": false,
+    "unexpectedNetwork": 0
+  },
+  "metadata": {
+    "status": "PASS_PINNED_WRANGLER_OFFLINE_METADATA",
+    "checks": 11,
+    "checkoutSha": "44d0e0bc65e64c88458e838a586933b9268d1424",
+    "realDeployment": false
+  },
+  "nativeCleanup": {
+    "status": "PASS_NATIVE_POSTGRES17_ATOMIC_CLEANUP",
+    "checks": 35,
+    "expectedErrors": 38,
+    "engine": "17.6 (Debian 17.6-2.pgdg13+1)",
+    "nativeConcurrentConnections": true,
+    "hostedExecuted": false
+  },
+  "localDml": {
+    "status": "PASS_LOCAL_VERSION_ADAPTED_SQL_AND_EXPECTED_ERRORS",
+    "checks": 64,
+    "expectedErrors": 6,
+    "actualExpectedSqlstatesMatched": true,
+    "hostedExecuted": false,
+    "schemaInstallRollback": false,
+    "nativeConcurrentConnections": false
+  },
+  "delivery": {
+    "status": "PASS_WORKERD_INERT_STORAGE_DELIVERY",
+    "checks": 75,
+    "redirectCases": 64,
+    "unexpectedFakeStorageOutboundCalls": 0,
+    "fullAcceptance": false
+  },
+  "advertising": {
+    "status": "FAIL",
+    "actualBrowser": true,
+    "reportSha256": "ba5f9b246b7c99bec2c6bff16f8aa3fc783450a5ebdf127a96c5713b6b45ee52",
+    "sidecarVerified": true,
+    "unexpectedNetwork": 1,
+    "consoleErrors": 1,
+    "intentionalBlockedAdvertisingRecords": 0,
+    "shutdownObservationsVerified": false,
+    "networkNamespaceActiveInterfaces": 0,
+    "advertisingAllowedOutbound": false,
+    "failureSha256": "9ba5c324297167930471b8a7e23af4a16889450c1a49b20365eb9184fb6cd2d5"
+  },
+  "reportDigests": [
+    {
+      "file": "artifacts/debate-local-rehearsal/public-followup-38996172088/debate-v3-delivery-workerd/report.json",
+      "sha256": "223317320bf81f76434b41917fa0c8f65d466ebe3adadbf15c33fcfce2d2f482"
+    },
+    {
+      "file": "artifacts/debate-local-rehearsal/public-followup-38996172088/debate-v3-local-evidence/staging-dml-probe-ci/report.json",
+      "sha256": "75524cde623e059b4066ea4a03e8ad7c0c4534c0a725bd24d23f092f2fae273c"
+    },
+    {
+      "file": "artifacts/debate-local-rehearsal/public-followup-38996172088/debate-v3-local-evidence/suite-2026-10-17T02-45-41.752Z/report.json",
+      "sha256": "772e86309da4cd7e3abad49d179a31158f09e3977d99e01d285e8e1d02a13216"
+    },
+    {
+      "file": "artifacts/debate-local-rehearsal/public-followup-38996172088/debate-v3-native-cleanup-evidence/report.json",
+      "sha256": "9c182b1d4c6c86625abe8b3418c65b4936fa6ce32efed3b8534ce6c26a140a85"
+    },
+    {
+      "file": "artifacts/debate-local-rehearsal/public-followup-38996172088/debate-v3-synthetic-browser-evidence/browser-organizer-ci/report.json",
+      "sha256": "1a50a0dc96f33ba4057b808cb4082c4349fed70ca98e25a97274e7ac5468ede8"
+    },
+    {
+      "file": "artifacts/debate-local-rehearsal/public-followup-38996172088/debate-v3-synthetic-browser-evidence/hosted-advertising-browser-ci/report.json",
+      "sha256": "ba5f9b246b7c99bec2c6bff16f8aa3fc783450a5ebdf127a96c5713b6b45ee52"
+    },
+    {
+      "file": "artifacts/debate-local-rehearsal/public-followup-38996172088/debate-v3-synthetic-browser-evidence/study-browser-ci/harness-only/report.json",
+      "sha256": "fa0e7383bf86b801aca6c42e1716994a53d715c7a9e46f484608ce23913c21b0"
+    },
+    {
+      "file": "artifacts/debate-local-rehearsal/public-followup-38996172088/debate-v3-synthetic-browser-evidence/study-browser-ci/report.json",
+      "sha256": "fa89f4a5091baf9e4f8959922e1f500cbed4364a087ef719f43ff245e9c8f93b"
+    },
+    {
+      "file": "artifacts/debate-local-rehearsal/public-followup-38996172088/debate-v3-wrangler-metadata/report.json",
+      "sha256": "eccd07ef5416dadd3af7daea0dfda229c3caff476ef2aeefd6844d82b82ec74d"
+    },
+    {
+      "file": "artifacts/debate-local-rehearsal/public-followup-home-38996172055/home-display-component-evidence/report.json",
+      "sha256": "8f7373a8010d87d051876d730e245868147b3dff0582a5cf9e8e3e49dba13b17"
+    }
+  ],
+  "limitations": [
+    "Run38996172088 remains failed; successful constituent checks do not upgrade it or satisfy acceptance.",
+    "Advertising probe failed with one unrecognized network request and one console error; its zero intentional-block records and unverified shutdown must be repaired and rerun.",
+    "Receipt is bound to candidate6a5c033, not later working-file repairs or commits.",
+    "Synthetic organizer uses accelerated timers and substituted Auth/provider transport; 77.284seconds is not the required real-duration hosted rehearsal.",
+    "No hosted Auth, physical media, real inbox, capacity, production deployment, live rollback, or overall website acceptance is established.",
+    "Independent reviewer verified source/blob and download/screenshot digests but did not visually inspect screenshots; parent review remains separate.",
+    "Current shared staging compatibility blocker remains outside these isolated test passes."
+  ]
+}

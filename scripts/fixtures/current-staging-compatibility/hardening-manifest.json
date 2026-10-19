@@ -1,0 +1,85 @@
+{
+  "status": "NOT_READY_PENDING_REAL_POSTGRES_TESTS",
+  "sourceCandidate": "662c5cadc0f18497f673c79b40bd239680b77d93",
+  "sourceFaithfulManifestSha256": "180b2fa177d2dc159bb71067e2efea50cb8ab7b5f86aeba2393230249ba44aea",
+  "syntaxCorrection": "String.replace replacement-string dollar expansion avoided using split/join; original files preserved.",
+  "objects": [
+    {
+      "signature": "examination_room_v1.api_student(text,jsonb)",
+      "beforeDefinitionSha256": "b2f4901d8f02d6bcae1814a117491da061e94c131432e87f82b150e442bda046",
+      "afterDefinitionSha256": "d9bb3bddf9c530971a3d437cc4123ab25939d9ec1800bac91b1bb6436ae27232",
+      "beforeBodySha256": "78c5e72a4ea24b569eea5153ff1e954162427e869fef50cd045ae2b37b909e19",
+      "afterBodySha256": "208cb22b1c0f242a2909c17ac52823834f095455c0cb7b17e3f396bd47584ef2",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres}",
+      "settings": [
+        "search_path=pg_catalog"
+      ],
+      "file": "api_student.postimage.sql"
+    },
+    {
+      "signature": "examination_room_v1.prepare_student_admission(jsonb)",
+      "beforeDefinitionSha256": "263b9b20e8132ccaf946045a6512d813365dd42107296c5b0b2e20302a17a397",
+      "afterDefinitionSha256": "d4bb7260b80243609f4209ac647be2fb19773913b739da4944f46f7e9fabfde2",
+      "beforeBodySha256": "7d60faf31d196c7387604eec0077b8d05055f5f5e959b5bf1fb77042041ba7a7",
+      "afterBodySha256": "f549672b37b6e9b79199217fcbc5a296d1a887584cb6a0033740687676292436",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres}",
+      "settings": [
+        "search_path=pg_catalog"
+      ],
+      "file": "prepare_student_admission.postimage.sql"
+    },
+    {
+      "signature": "examination_room_v1.recover_existing_student_session(jsonb)",
+      "beforeDefinitionSha256": "c30d7b63e3cec523180fab0d22603d5c49161d430a4d00f88f319e4f181213b1",
+      "afterDefinitionSha256": "3e33651ef89d43e27b5a69783034e7351614bbbf560136f7318cff59c49ec4b9",
+      "beforeBodySha256": "97b566674e6da2b08c522f738b88065650f71c41289730d95aca342a6fccb4ef",
+      "afterBodySha256": "f3a32fc71102eac5c83553d83c97238928c5ea603a6097b7a057c4d45eb0dfb6",
+      "securityDefiner": true,
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres}",
+      "settings": [
+        "search_path=pg_catalog"
+      ],
+      "file": "recover_existing_student_session.postimage.sql"
+    },
+    {
+      "signature": "public.examination_room_v1_api(text,text,uuid,uuid,jsonb)",
+      "beforeDefinitionSha256": "9fc7ecec84dcada0860b443b3190cbc4bc93c8b6f1642dcb2e077249357b06ad",
+      "afterDefinitionSha256": "8bbcaebcee32d2faca6f6c3e029b8480e8ac8af5c9ab0e8e72715c7a0050ede7",
+      "beforeBodySha256": "7e4a95085b4db167e38fbddc3c02b0edd61502c80c287c7c68fe2cf404f0d23e",
+      "afterBodySha256": "c0c64ae2a57554badd6bb2ba8046dde8ea4ee58c01ea200e50333c2dbf1fdae1",
+      "securityDefiner": true,
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "settings": [
+        "search_path=pg_catalog"
+      ],
+      "file": "examination_room_v1_api.postimage.sql"
+    }
+  ],
+  "outputHashes": {
+    "prepare_student_admission.syntax-corrected.sql": "4ec3b88915f80c6ca65e588751fb1906b021f9bc59c11b0306c4d67388c46d03",
+    "recover_existing_student_session.syntax-corrected.sql": "7f8413c7a5b0741f17d09198620515389e37fc7823c7bf84e2243df2980e6cfd",
+    "api_student.postimage.sql": "d9bb3bddf9c530971a3d437cc4123ab25939d9ec1800bac91b1bb6436ae27232",
+    "prepare_student_admission.postimage.sql": "d4bb7260b80243609f4209ac647be2fb19773913b739da4944f46f7e9fabfde2",
+    "recover_existing_student_session.postimage.sql": "3e33651ef89d43e27b5a69783034e7351614bbbf560136f7318cff59c49ec4b9",
+    "examination_room_v1_api.postimage.sql": "8bbcaebcee32d2faca6f6c3e029b8480e8ac8af5c9ab0e8e72715c7a0050ede7",
+    "exact-patches.json": "c193b70296eae29819deba1ba5a50f87f8a18c3a56df86988051a77cb7da7d7d"
+  },
+  "tests": [
+    "tests/seed.sql",
+    "tests/pre.sql",
+    "tests/post.sql",
+    "tests/race.mjs"
+  ],
+  "remainingGaps": [
+    "No SQL executed by composer.",
+    "Display-number contract intentionally unchanged.",
+    "No automatic historical identity merge or lease backfill.",
+    "Advisory protocol requires all writers to use the bounded admission/recovery path."
+  ]
+}

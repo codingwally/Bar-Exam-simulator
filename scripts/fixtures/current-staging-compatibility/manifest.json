@@ -1,0 +1,46 @@
+{
+  "status": "OFFLINE_PACKAGE_NOT_SQL_VERIFIED",
+  "sourceCandidate": "662c5cadc0f18497f673c79b40bd239680b77d93",
+  "target": "disposable-local-only",
+  "database": "duediligence_compatibility_fixture",
+  "capturedStagingProject": "hlzqmreeoghbldnhlybr",
+  "mutationScope": [
+    "examination_room_v1.api_student(text,jsonb)",
+    "examination_room_v1.prepare_student_admission(jsonb)",
+    "examination_room_v1.recover_existing_student_session(jsonb)",
+    "public.examination_room_v1_api(text,text,uuid,uuid,jsonb)",
+    "examination_room_v1.api_professor(text,uuid,uuid,jsonb)",
+    "examination_room_v1.api_professor_view(text,uuid,uuid,uuid)"
+  ],
+  "newFunction": "examination_room_v1.apply_open_room_lease()",
+  "newTrigger": "CREATE TRIGGER student_sessions_open_room_lease BEFORE INSERT ON examination_room_v1.student_sessions FOR EACH ROW EXECUTE FUNCTION examination_room_v1.apply_open_room_lease()",
+  "protectedFunctions": 42,
+  "sourceCaptures": {
+    "staging-function-preimages-20261018.json": "794d08bd557b19587569ba02e32b3d00262e8a2e38d4c5f01bdf6797d10be47b",
+    "staging-function-dependencies-20261018.json": "20df0f57d377e2693c27b6512c1552ea816fdffb399570c177e6ac0d49b12094",
+    "staging-schema-shape-20261018.json": "f4dccded8ec4fa9c2ddb8f594d668f78fedd0b50e52bec419dbcaa6ca3f7dca2",
+    "staging-runtime-metadata-20261018.json": "c76bf9b9ad5dcc61185036af426725c53e6053442c78709ca3a9455fc21616b5",
+    "staging-external-column-metadata-20261019.json": "63c1726dd8d601f76b2e2d6b6025e138ac7f83452fb11b09cb1ac89432769e1a"
+  },
+  "files": {
+    "current-schema.sql": "87aabda412f40f78287f5e1ad98382d0774b579aed3ebda3707cd013c641dc2b",
+    "verify-current-schema.sql": "20bd4c13dc9c5b1981e987d66f0135ee4fa662fa34f6fd8ed4c5fe8285e420fe",
+    "forward.sql": "b6f1c1ebb4aa28d61b10ddf61713a1fb295f21dbecbd018a23c3994e10e7eab8",
+    "inverse.sql": "a3a26b928a0cd120add9224afa12965af46e232d10b4350c491241d4b3b5be02",
+    "baseline.json": "670be5671f7dcdaf9273c129bbe4c4834c85db4a4ff1952aef944a93703cefa9",
+    "postimage.json": "ef39134f74ca324c24fb23ddb7e538cf8252571dd05c22b421cbafac1aead2e4",
+    "target-definitions.json": "4eefe9f39bda33d3e91b6afb95920775a6b2ce3bbc59f78dc0e956568f5f52ed",
+    "table-names.json": "6f7a8bff728dc7e8ad83c56a6bd6bda030044db80740bb3a1496778b983adf6e",
+    "fixture-manifest.json": "fa1ef3414b8b82c4fcf7497e900441a7b65249c6fc88709c630e7fe099be7a3b",
+    "hardening-manifest.json": "c951a8d13d6d547ff2fed1adb126227256f797debbdf40db41ba7ecab3a84b0b",
+    "hardening-patches.json": "c193b70296eae29819deba1ba5a50f87f8a18c3a56df86988051a77cb7da7d7d",
+    "professor-manifest.json": "46558bccf6c848bced1d003d717fa1153a8ef3b166dd89cdbff852fedd7e683b",
+    "professor-seed.sql": "e24c66bd2ff636b2a8a0e2992a4dfdf5591aacc322ef9ae1805f6c17f9f3c076",
+    "professor-pre.sql": "d179702bfef72ca176d3e4f7190b71f2179f318d5dd04e1523e7c5852ea89e59",
+    "professor-post.sql": "0a4a5dc21e13cef3e37f4c43783aded82d58622d3e03a13691706a195c618f38",
+    "student-seed.sql": "e7f133477259b08342125e4a27974fb704baba48549ee9c8471b6f3f65d653fc",
+    "student-pre.sql": "9e8e41ae4ea0a9dfe4872316abad6989a6187ee3eda431f5ec591fefccca883a",
+    "student-post.sql": "02b6a08df307483c80b9cb524d99b96150e01e00e0a6332edd498452a3afd499",
+    "student-race.mjs": "e0f7cb3f0bcb63c12519e6ff2ef6152c22b926535b61912e966efe2dec5d8d60"
+  }
+}

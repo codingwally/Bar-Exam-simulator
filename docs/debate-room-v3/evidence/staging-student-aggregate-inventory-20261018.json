@@ -1,0 +1,40 @@
+{
+  "project": "hlzqmreeoghbldnhlybr",
+  "query": "-- Read-only aggregate inventory for staging hlzqmreeoghbldnhlybr only.\n-- No identifiers, emails, answers, request hashes, or tokens are returned.\nBEGIN TRANSACTION READ ONLY;\nSET LOCAL statement_timeout = '15s';\nWITH\nsnapshot AS MATERIALIZED (SELECT statement_timestamp() AS at),\nsessions AS MATERIALIZED (\n  SELECT s.session_status, s.lease_expires_at, s.started_at,\n         a.activation_status, a.closes_at,\n         coalesce(v.controls ->> 'lateSubmissions', 'not_allowed') AS late_policy,\n         s.session_metadata ? 'pendingSubmission' AS has_pending,\n         coalesce(s.session_metadata #>> '{pendingSubmission,requestHash}', '') ~ '^[0-9a-f]{64}$' AS has_valid_pending_hash,\n         EXISTS (SELECT 1 FROM examination_room_v1.submissions sub WHERE sub.session_id = s.id) AS has_submission,\n         EXISTS (SELECT 1 FROM examination_room_v1.audit_events ae WHERE ae.session_id = s.id AND ae.event_type = 'student.submission_intent') AS has_intent_audit,\n         EXISTS (SELECT 1 FROM examination_room_v1.audit_events ae WHERE ae.session_id = s.id AND ae.event_type = 'student.submit') AS has_submit_audit\n  FROM examination_room_v1.student_sessions s\n  JOIN examination_room_v1.room_activations a ON a.id = s.activation_id\n  JOIN examination_room_v1.exam_versions v ON v.id = s.exam_version_id\n),\nduplicate_email AS MATERIALIZED (\n  SELECT count(*) AS identities\n  FROM examination_room_v1.student_identities\n  WHERE identity_status = 'active' AND email_normalized IS NOT NULL\n  GROUP BY institution_id, lower(btrim(email_normalized))\n  HAVING count(*) > 1\n),\nduplicate_room_email AS MATERIALIZED (\n  SELECT count(*) AS attempts, count(DISTINCT er.student_identity_id) AS identities\n  FROM examination_room_v1.student_sessions s\n  JOIN examination_room_v1.exam_roster er ON er.id = s.roster_id\n  JOIN examination_room_v1.student_identities si ON si.id = er.student_identity_id\n  WHERE s.session_status IN ('created','active')\n    AND si.email_normalized IS NOT NULL\n    AND NOT EXISTS (SELECT 1 FROM examination_room_v1.submissions sub WHERE sub.session_id = s.id)\n  GROUP BY s.activation_id, lower(btrim(si.email_normalized))\n  HAVING count(*) > 1\n)\nSELECT (SELECT at FROM snapshot) AS captured_at,\n  jsonb_build_object(\n    'total', count(*),\n    'unfinished', count(*) FILTER (WHERE session_status IN ('created','active') AND NOT has_submission),\n    'submitted', count(*) FILTER (WHERE has_submission),\n    'revoked', count(*) FILTER (WHERE session_status = 'revoked'),\n    'professor_review_open_lease_mismatch', count(*) FILTER (WHERE session_status IN ('created','active') AND NOT has_submission AND late_policy = 'professor_review' AND activation_status = 'open' AND closes_at > (SELECT at FROM snapshot) AND lease_expires_at IS DISTINCT FROM closes_at),\n    'professor_review_open_expired_lease', count(*) FILTER (WHERE session_status IN ('created','active') AND NOT has_submission AND late_policy = 'professor_review' AND activation_status = 'open' AND closes_at > (SELECT at FROM snapshot) AND lease_expires_at <= (SELECT at FROM snapshot)),\n    'strict_expired_lease', count(*) FILTER (WHERE session_status IN ('created','active') AND late_policy <> 'professor_review' AND lease_expires_at <= (SELECT at FROM snapshot)),\n    'any_pending_metadata', count(*) FILTER (WHERE has_pending),\n    'valid_pending_hash', count(*) FILTER (WHERE has_valid_pending_hash),\n    'revoked_with_pending', count(*) FILTER (WHERE session_status = 'revoked' AND has_pending),\n    'expired_with_pending', count(*) FILTER (WHERE session_status = 'expired' AND has_pending),\n    'intent_audit', count(*) FILTER (WHERE has_intent_audit),\n    'submit_audit', count(*) FILTER (WHERE has_submit_audit),\n    'intent_and_submit_audit', count(*) FILTER (WHERE has_intent_audit AND has_submit_audit)\n  ) AS sessions,\n  (SELECT jsonb_build_object('groups', count(*), 'identities', coalesce(sum(identities),0), 'largest_group', coalesce(max(identities),0)) FROM duplicate_email) AS active_duplicate_normalized_email,\n  (SELECT jsonb_build_object('groups', count(*), 'attempts', coalesce(sum(attempts),0), 'identities', coalesce(sum(identities),0)) FROM duplicate_room_email) AS unfinished_duplicate_room_email,\n  (SELECT jsonb_build_object(\n    'rosters', count(*),\n    'entered_number_differs', count(*) FILTER (WHERE er.accommodations ->> 'enteredStudentNumber' IS NOT NULL AND er.accommodations ->> 'enteredStudentNumber' IS DISTINCT FROM si.external_student_id),\n    'email_external_identifier', count(*) FILTER (WHERE si.external_student_id LIKE 'EMAIL-%')\n  ) FROM examination_room_v1.exam_roster er JOIN examination_room_v1.student_identities si ON si.id = er.student_identity_id) AS roster_number_mapping\nFROM sessions;\nCOMMIT;\n\r\n",
+  "rows": [
+    {
+      "captured_at": "2026-10-18 11:09:23.409469+00",
+      "sessions": {
+        "total": 0,
+        "revoked": 0,
+        "submitted": 0,
+        "unfinished": 0,
+        "intent_audit": 0,
+        "submit_audit": 0,
+        "valid_pending_hash": 0,
+        "any_pending_metadata": 0,
+        "expired_with_pending": 0,
+        "revoked_with_pending": 0,
+        "strict_expired_lease": 0,
+        "intent_and_submit_audit": 0,
+        "professor_review_open_expired_lease": 0,
+        "professor_review_open_lease_mismatch": 0
+      },
+      "active_duplicate_normalized_email": {
+        "groups": 0,
+        "identities": 0,
+        "largest_group": 0
+      },
+      "unfinished_duplicate_room_email": {
+        "groups": 0,
+        "attempts": 0,
+        "identities": 0
+      },
+      "roster_number_mapping": {
+        "rosters": 0,
+        "entered_number_differs": 0,
+        "email_external_identifier": 0
+      }
+    }
+  ]
+}

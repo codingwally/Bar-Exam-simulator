@@ -1,0 +1,65 @@
+[
+  {
+    "label": "move activation mutation after email lock",
+    "before": "  lifecycle_result := public.examination_room_v1_lifecycle_guard(activation_row.exam_id);\n  if lifecycle_result ->> 'ok' <> 'true' then\n    return lifecycle_result;\n  end if;\n\n  if activation_row.activation_status not in ('scheduled', 'open')\n     or activation_row.closes_at <= clock_timestamp() then\n    return examination_room_v1.api_error(\n      'ROOM_KEY_INVALID', 'The room key is expired, revoked, or not recognized.', 401,\n      'Copy the complete current key from the Professor message and try again.'\n    );\n  end if;\n\n  if activation_row.activation_status = 'scheduled' then\n    update examination_room_v1.room_activations activation\n    set activation_status = 'open',\n        opens_at = least(activation.opens_at, clock_timestamp()),\n        deactivated_at = null,\n        deactivated_by_user_id = null,\n        deactivation_reason = null\n    where activation.id = activation_row.id\n      and activation.activation_status = 'scheduled'\n      and activation.closes_at > clock_timestamp()\n    returning activation.* into activation_row;\n\n    if not found then\n      select activation.* into activation_row\n      from examination_room_v1.room_activations activation\n      where activation.key_hash = p_payload ->> 'roomKeyHash'\n        and activation.activation_status = 'open'\n        and activation.closes_at > clock_timestamp();\n    end if;\n    if activation_row.id is null then\n      return examination_room_v1.api_error(\n        'ROOM_KEY_INVALID', 'The room key is expired, revoked, or not recognized.', 401,\n        'Copy the complete current key from the Professor message and try again.'\n      );\n    end if;\n  end if;\n\n",
+    "after": "  -- Validate before acquiring admission locks.\n\n",
+    "beforeSha256": "3bb62c945deeeb3af2fa64a6276a59dbf7ff07a1950d76360a97438a0b954ed0",
+    "afterSha256": "5075a3d175e2be3106b83cfcf15002c2755914b163b828bd2778a4aaee11dd2d"
+  },
+  {
+    "label": "serialize email admission and recheck activation",
+    "before": "  select\n    exam.owner_user_id,",
+    "after": "  -- A waiting transaction must re-read identity/session rows after its peer commits.\n  -- Repeatable-read snapshots cannot provide that contract; ask the caller to retry.\n  if current_setting('transaction_isolation') <> 'read committed' then\n    raise exception using errcode = '40001', message = 'admission requires read committed isolation';\n  end if;\n  perform pg_advisory_xact_lock(hashtextextended(\n    'examination-room-v1:email-admission:' || activation_row.institution_id::text || ':' || student_email,\n    20261019\n  ));\n  -- Recheck after the lock. Hold the activation before identity/roster/session locks.\n  select activation.* into activation_row\n  from examination_room_v1.room_activations activation\n  where activation.id = activation_row.id\n    and activation.key_hash = p_payload ->> 'roomKeyHash'\n  for update;\n  if activation_row.id is null then\n    return examination_room_v1.api_error(\n      'ROOM_KEY_INVALID', 'The room key is expired, revoked, or not recognized.', 401,\n      'Copy the complete current key from the Professor message and try again.'\n    );\n  end if;\n\n  lifecycle_result := public.examination_room_v1_lifecycle_guard(activation_row.exam_id);\n  if lifecycle_result ->> 'ok' <> 'true' then\n    return lifecycle_result;\n  end if;\n\n  if activation_row.activation_status not in ('scheduled', 'open')\n     or activation_row.closes_at <= clock_timestamp() then\n    return examination_room_v1.api_error(\n      'ROOM_KEY_INVALID', 'The room key is expired, revoked, or not recognized.', 401,\n      'Copy the complete current key from the Professor message and try again.'\n    );\n  end if;\n\n  if activation_row.activation_status = 'scheduled' then\n    update examination_room_v1.room_activations activation\n    set activation_status = 'open',\n        opens_at = least(activation.opens_at, clock_timestamp()),\n        deactivated_at = null,\n        deactivated_by_user_id = null,\n        deactivation_reason = null\n    where activation.id = activation_row.id\n      and activation.activation_status = 'scheduled'\n      and activation.closes_at > clock_timestamp()\n    returning activation.* into activation_row;\n\n    if not found then\n      select activation.* into activation_row\n      from examination_room_v1.room_activations activation\n      where activation.key_hash = p_payload ->> 'roomKeyHash'\n        and activation.activation_status = 'open'\n        and activation.closes_at > clock_timestamp();\n    end if;\n    if activation_row.id is null then\n      return examination_room_v1.api_error(\n        'ROOM_KEY_INVALID', 'The room key is expired, revoked, or not recognized.', 401,\n        'Copy the complete current key from the Professor message and try again.'\n      );\n    end if;\n  end if;\n\n  select\n    exam.owner_user_id,",
+    "beforeSha256": "1879cd49588b38a59734617f4af140dc541bd245565cd676a3243cf9594317d7",
+    "afterSha256": "9e8ef1bc8e1766c87aa6fd9dd8e9322f516b229a2b2f80f716998c099d24c367"
+  },
+  {
+    "label": "recovery lock identity variables",
+    "before": "  v_session_id uuid;",
+    "after": "  v_activation_id uuid;\n  v_admission_institution_id uuid;\n  v_session_id uuid;",
+    "beforeSha256": "4f5555f3e2c856e5635864541e1c7ff196b7003be2a761ce3e629230ea234f05",
+    "afterSha256": "8cd91514ee6792750566714dbb76f8492112bef7f1fd40e67b8e84c9d21d8203"
+  },
+  {
+    "label": "recovery email then activation lock before session",
+    "before": "  select\n    s.id, s.exam_id, s.exam_version_id,",
+    "after": "  select a.id, a.institution_id into v_activation_id, v_admission_institution_id\n  from examination_room_v1.room_activations a\n  where a.key_hash = p_payload ->> 'roomKeyHash';\n  if v_activation_id is not null then\n    if current_setting('transaction_isolation') <> 'read committed' then\n      raise exception using errcode = '40001', message = 'admission requires read committed isolation';\n    end if;\n    perform pg_advisory_xact_lock(hashtextextended(\n      'examination-room-v1:email-admission:' || v_admission_institution_id::text || ':' || v_email,\n      20261019\n    ));\n    perform 1 from examination_room_v1.room_activations a\n    where a.id = v_activation_id for share;\n  end if;\n\n  select\n    s.id, s.exam_id, s.exam_version_id,",
+    "beforeSha256": "b8609201bfd28fa9cdc44ff1775a159ccc23e6f1c685dcdfccc008072ebda638",
+    "afterSha256": "fa3987c5c579128b63b09c07911bf2451d180d633a93ddaa6f8308b021f0bb55"
+  },
+  {
+    "label": "activation lock before credential session lock",
+    "before": "  session_token_hash := p_payload ->> 'sessionTokenHash';\n  select",
+    "after": "  session_token_hash := p_payload ->> 'sessionTokenHash';\n  -- Close/revoke operations lock activation before session. Use that same order,\n  -- holding a shared activation lock while the existing session row is locked.\n  perform 1\n  from examination_room_v1.room_activations a\n  join examination_room_v1.student_sessions s on s.activation_id = a.id\n  where s.id = session_id and s.session_token_hash = session_token_hash\n  for share of a;\n  select",
+    "beforeSha256": "25b1f6c83a21705fa261237bdc5b5c12eae72fa1e681c750560e3f1cbd809044",
+    "afterSha256": "e0ad07dc6b9593dc2afc3c67494f7f1a9ffe0bda12caacd7170ee58858923389"
+  },
+  {
+    "label": "revocation before context and mutation replay",
+    "before": "  if p_operation = 'result' and session_status = 'revoked' then",
+    "after": "  if p_operation in ('resume', 'session_context', 'heartbeat', 'record_event', 'save_answer', 'submission_intent')\n     and (session_status = 'revoked' or activation_status = 'revoked') then\n    return examination_room_v1.api_error(\n      'SESSION_REVOKED', 'This examination credential or room key has been revoked.', 403,\n      'Ask the examination administrator to review access. Previously saved work remains preserved.'\n    );\n  end if;\n\n  if p_operation = 'result' and session_status = 'revoked' then",
+    "beforeSha256": "210b913c2ee82907d6b6b0ea85947d6aea848c7961e4abdeac47c80897560e79",
+    "afterSha256": "083c254baa91e6ecb414de50f513e8728d89251be55a84c1a591a87d534dcbf6"
+  },
+  {
+    "label": "only bound accepted final receipt survives revocation",
+    "before": "  request_hash := p_payload ->> 'requestHash';\n  audit_request_hash := case",
+    "after": "  -- Revocation is not a transient timeout. Only an accepted receipt already\n  -- bound to this exact session and request can be returned, without writing.\n  if p_operation = 'submit' and (session_status = 'revoked' or activation_status = 'revoked') then\n    select audit.event_data -> 'response', sub.submitted_at_client\n    into replay, occurred_at\n    from examination_room_v1.submissions sub\n    join examination_room_v1.audit_events audit\n      on audit.session_id = sub.session_id\n     and audit.institution_id = institution_id\n     and audit.event_type = 'student.submit'\n     and audit.request_hash in (\n       p_payload ->> 'requestHash',\n       encode(extensions.digest((p_payload ->> 'requestHash') || ':student.submit', 'sha256'), 'hex')\n     )\n    where sub.session_id = session_id\n      and sub.idempotency_key_hash = p_payload ->> 'requestHash'\n      and sub.submission_status = 'accepted'\n      and audit.event_data #>> '{response,ok}' = 'true'\n      and audit.event_data #>> '{response,submission,id}' = sub.id::text\n    order by (audit.request_hash = encode(extensions.digest(\n      (p_payload ->> 'requestHash') || ':student.submit', 'sha256'), 'hex')) desc\n    limit 1;\n    if replay is not null then\n      if replay #>> '{submission,submittedAt}' is null then\n        replay := jsonb_set(replay, '{submission,submittedAt}', to_jsonb(occurred_at), true);\n      end if;\n      return jsonb_set(replay, '{duplicate}', 'true'::jsonb, true);\n    end if;\n    return examination_room_v1.api_error(\n      'SESSION_REVOKED', 'This examination credential or room key has been revoked.', 403,\n      'Ask the examination administrator to review access. Previously saved work remains preserved.'\n    );\n  end if;\n\n  request_hash := p_payload ->> 'requestHash';\n  audit_request_hash := case",
+    "beforeSha256": "f295cbfb2c69b9bedc2fe4b9193bbc8401a8db38d8450402efb257e02998b6a1",
+    "afterSha256": "9a08dd83278435587cbb5b5bd0a4fdb28362cfd18b58ffc13438f8bf762d74cb"
+  },
+  {
+    "label": "pending final continuation is only for unfinished attempts",
+    "before": "       p_operation = 'submit'\n       and exists (",
+    "after": "       p_operation = 'submit'\n       and session_status in ('created', 'active', 'expired')\n       and not exists (\n         select 1 from examination_room_v1.submissions accepted where accepted.session_id = session_id\n       )\n       and exists (",
+    "beforeSha256": "bf8032cde4c77a3b2d2ac815cfe048306b0415f41e602e7d51502fedb986a332",
+    "afterSha256": "428277be82cffb4026af5508a3011055307158d22780c16abd8a06709ebff7ef"
+  },
+  {
+    "label": "pending answer continuation is only for unfinished attempts",
+    "before": "       p_operation = 'save_answer'\n       and coalesce(p_payload ->> 'source', '') = 'submission'\n       and exists (",
+    "after": "       p_operation = 'save_answer'\n       and coalesce(p_payload ->> 'source', '') = 'submission'\n       and session_status in ('created', 'active', 'expired')\n       and not exists (\n         select 1 from examination_room_v1.submissions accepted where accepted.session_id = session_id\n       )\n       and exists (",
+    "beforeSha256": "b0c20acd90765cd252182aac8e150c8f9cbf4cf20782600c75ffc4a2ddd2d32b",
+    "afterSha256": "60d0f0804ae387c75ab72f92555edb1fb48d1b86afc4ae91cccdaf2b90c84a46"
+  }
+]

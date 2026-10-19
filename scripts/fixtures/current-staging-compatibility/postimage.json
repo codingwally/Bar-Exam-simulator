@@ -1,0 +1,639 @@
+[
+  {
+    "schema": "examination_room_v1",
+    "name": "api_admin",
+    "signature": "examination_room_v1.api_admin(text,uuid,uuid,jsonb)",
+    "definitionSha256": "7276e6df45b37831883ca9a28bc3b0731de3b4a312369d1104c81da1ecf513dd",
+    "bodySha256": "6657d93aede10f8a3b4e9d38d389d54dc6ef72f3bc1191d2dcb7f6c0856f9125",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "api_error",
+    "signature": "examination_room_v1.api_error(text,text,integer,text)",
+    "definitionSha256": "92d7ff0cb2d931bbd072df5d349a616965ea7383625ad6d59fd39eca77b137e4",
+    "bodySha256": "63b3bc300c697d001bd2e0fdb51e673c598db03d0b654e2551fd098c42d50d0a",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "api_professor",
+    "signature": "examination_room_v1.api_professor(text,uuid,uuid,jsonb)",
+    "definitionSha256": "5113e63f861843751dd22a8639604daf5b1b02a073df718aa91e24b7428c7493",
+    "bodySha256": "bee4776a358980d92785303cae1b1205010745c278b429ff1a15c2dbd3a330ce",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "api_professor_view",
+    "signature": "examination_room_v1.api_professor_view(text,uuid,uuid,uuid)",
+    "definitionSha256": "f68eb2a60edd19af46c61ad8fabc8b3bc4084b795622d874841ab38dad3e97ce",
+    "bodySha256": "429f80a433e1bdfdec1fe7044f86bf82db0c1e1794e3abce68b7099cd183f5b4",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "api_record_audit",
+    "signature": "examination_room_v1.api_record_audit(uuid,uuid,uuid,uuid,text,text,text,uuid,text,timestamp with time zone,jsonb,uuid)",
+    "definitionSha256": "07190f7fcffa5d8b24ba4165d4c9ad7d09ce506e255712ef15f33f0f3986d4a1",
+    "bodySha256": "538afa7098e32587f056d5dc62a9acaa9aee027c0d3430a73acb236cf3d2b9bd",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "api_replay",
+    "signature": "examination_room_v1.api_replay(uuid,text,text)",
+    "definitionSha256": "9f9ad9f65d49b2f89b1239ce8bb4fdce661805ebe3295ac9821ae9bb7c5cbf63",
+    "bodySha256": "f4fd12d2421e2dce70147e3c0886370ab8a581ac44068364effc9b72da1e305e",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "api_student",
+    "signature": "examination_room_v1.api_student(text,jsonb)",
+    "definitionSha256": "d9bb3bddf9c530971a3d437cc4123ab25939d9ec1800bac91b1bb6436ae27232",
+    "bodySha256": "208cb22b1c0f242a2909c17ac52823834f095455c0cb7b17e3f396bd47584ef2",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "build_publication_manifest",
+    "signature": "examination_room_v1.build_publication_manifest(uuid,timestamp with time zone)",
+    "definitionSha256": "4a3647c6606454793e632d63db70eaef5fbe86700db343f9874fba5885430cc9",
+    "bodySha256": "7df2a2721f3fc16a452479e80ae22367ddf8fcc8b995b319c6e0ed97589c67fc",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "creator_authorized",
+    "signature": "examination_room_v1.creator_authorized(uuid,uuid)",
+    "definitionSha256": "a473426aa5bf9c2f559d2b509f47f9c082f8b3fed33845b7a0c1260426f4f5b0",
+    "bodySha256": "8aec9542309e1c01b3edc0ea7c7087b73aeeff740b7ee1dff68b3d59abbc9d4c",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "creator_revoke_session",
+    "signature": "examination_room_v1.creator_revoke_session(uuid,uuid,jsonb)",
+    "definitionSha256": "feb9f9e6e2458b3efe6fb1b4e0d562a2793df99a203618ca0f7b21574bf59e39",
+    "bodySha256": "8f1e280682d1249ab23ad729ff4e8b30a85e9f1e683c4cad4fb7a31fe6b51bdc",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "ensure_exam_current_version_published",
+    "signature": "examination_room_v1.ensure_exam_current_version_published()",
+    "definitionSha256": "e505d487c7d1ccda4e782b2ffad6d1d19a1d127699632c076af304b55e18bc4c",
+    "bodySha256": "ae68b6fb25772eca4ac8a3305a54dd785919c2723ab561b97e6a8dfa3a8b87a0",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "ensure_releasable_grade",
+    "signature": "examination_room_v1.ensure_releasable_grade()",
+    "definitionSha256": "5d92c026833a7acbbe1cdaa44e9a0088fecafd35f47560fd37ec77ff6987fd21",
+    "bodySha256": "4317f150df2c8cc4eb03433a257996abe5c47d70852e5ce0d14e3248e3788768",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "grader_safe_submission_manifest",
+    "signature": "examination_room_v1.grader_safe_submission_manifest(jsonb,boolean,text,uuid)",
+    "definitionSha256": "6de4e7c72329e22dc48a5093cbf3220eeb852e06efc22911a25fbfd5e39a4fb3",
+    "bodySha256": "109b502d1dec6f856243dd1b4c8198f75938edade5f842ce6c8bda0cbea510d8",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "json_rows",
+    "signature": "examination_room_v1.json_rows(jsonb)",
+    "definitionSha256": "599e4c83c981a0d4e8c68acf89d3fcceb7af630b6d5c01a8e087e78765d01357",
+    "bodySha256": "917518f0cefe5e2d13674efa53ae121fcb869304a7c28c7cbb7de6652d3f40f8",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "jsonb_sha256",
+    "signature": "examination_room_v1.jsonb_sha256(jsonb)",
+    "definitionSha256": "f9bce66b9a8f68ce44485ad0b86468d446e2998162927dde38265939a3a15875",
+    "bodySha256": "55d8de4f9ad53e6ead49dd9ffca9ffe0e997ba74226413a2e32d3682bcd1518f",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "lock_request",
+    "signature": "examination_room_v1.lock_request(uuid,text)",
+    "definitionSha256": "465ef70b0cc6f0b854ddd204231b538b16bb9a8fbadd1126598af1250452ebc9",
+    "bodySha256": "fc0331f880070fc45f1cc378816cee90d46b53d87db2d793b2f3abe6fe5eaadd",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "next_snapshot_sequence",
+    "signature": "examination_room_v1.next_snapshot_sequence(uuid)",
+    "definitionSha256": "bf75198d14a274d23d6a50068655085fad79caad79bd0f1a248c5b7c0d80baa7",
+    "bodySha256": "df2db1d17d7b8f8b45c74e89c6c0374807110419117e28a0b41eeabc15e0c46f",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "normalize_default_student_warning",
+    "signature": "examination_room_v1.normalize_default_student_warning()",
+    "definitionSha256": "9e2d022da93519b500aada19a4beb3bd692e13fa2c9c49985d02d16f3ff420e7",
+    "bodySha256": "7fd42c9b5bb0973d808316fa72c35f1a363cbfd0f2498cd2e21f5f26082e2a08",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "normalized_allowed_emails",
+    "signature": "examination_room_v1.normalized_allowed_emails(jsonb)",
+    "definitionSha256": "34198a6304ef9c1f6f92fd4114a00e1d27208c26241fac8149e2a0a5c41c5275",
+    "bodySha256": "d98533d6b194a90694557a31238ab59ce33df632cf7cffb136cb8a9317695222",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "owner_authorized",
+    "signature": "examination_room_v1.owner_authorized(uuid)",
+    "definitionSha256": "4bb04bfa47a9fa50ec42f2ebb9c47d2af81a9474cc3355fbc5281d231209a474",
+    "bodySha256": "3574c6b327c5378c12f4d953c4862be199eddbe1e7b86b2b3669fac4a2d93205",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "owner_exam_bundle",
+    "signature": "examination_room_v1.owner_exam_bundle(uuid)",
+    "definitionSha256": "6b13cb369cdb1c3fb4c6369447dcc1225c5e70a06665aa99291487b99027710d",
+    "bodySha256": "c19e0e2777efd12e3b3f8199f69d53d598796e16da53f2acb25afbb504a4cabb",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "owner_exam_bundle_before_result_email",
+    "signature": "examination_room_v1.owner_exam_bundle_before_result_email(uuid)",
+    "definitionSha256": "ca2e687d64c72872aad61523a4fbefe825cbbaad9acd69c9980e0daef12f940a",
+    "bodySha256": "e2fda112c6566c56c3f524594b1660b72c1327318f58e937eb33dd8a1326fcd0",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "owner_snapshot_event_bundle",
+    "signature": "examination_room_v1.owner_snapshot_event_bundle(examination_room_v1.recovery_snapshots)",
+    "definitionSha256": "5d9fe43b12f40a6d3debafbe4c21e1e270b12b8ac5b0fed8e0e4d717da60ef2a",
+    "bodySha256": "fa24e3d243a8d71fd5f22e698b0354c78eb8cac75633c5b84a8bd42159641346",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "owner_snapshot_payload",
+    "signature": "examination_room_v1.owner_snapshot_payload(uuid)",
+    "definitionSha256": "399b06154a8fbaea7081f9116f8cd1d736f6e014aaef12819e9b8ed4e5a1f3df",
+    "bodySha256": "a500a81d55b0d81f5718b52c38f90aea86cd58a8fac4d58afb52a7671352bd39",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "prepare_student_admission",
+    "signature": "examination_room_v1.prepare_student_admission(jsonb)",
+    "definitionSha256": "d4bb7260b80243609f4209ac647be2fb19773913b739da4944f46f7e9fabfde2",
+    "bodySha256": "f549672b37b6e9b79199217fcbc5a296d1a887584cb6a0033740687676292436",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "prevent_delete",
+    "signature": "examination_room_v1.prevent_delete()",
+    "definitionSha256": "c697643b94d1eb985d076daf1f510834e8be39373aae23b659d9778e7e9f3dbf",
+    "bodySha256": "2babad1f225eb542c30e632b215bed9bdaf3fe2fb931d6f6c61011306f1489a2",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "prevent_mutation",
+    "signature": "examination_room_v1.prevent_mutation()",
+    "definitionSha256": "184d4deaa5678a07c26415a01f0ebae0a8b5e160c67245d8be1959cb5e0c5f69",
+    "bodySha256": "af664f1ce37de88d7994bbb4e7e67db2eebfabd3e0f5dc73a4d7dc002791a692",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "protect_email_delivery_event",
+    "signature": "examination_room_v1.protect_email_delivery_event()",
+    "definitionSha256": "6c37b44db201da9c2740622b36fedc144e1d891e80e2c8bb1444f7f7cf53a72d",
+    "bodySha256": "3ef1a89d75c15671527f4e0fa8bb38925364131becd594241024e16546bc3c51",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "protect_grade_revision_item_set",
+    "signature": "examination_room_v1.protect_grade_revision_item_set()",
+    "definitionSha256": "e0cd8fd5c9b2c5e0e3756040a60f74b07644c1f6d9cf26c8f7be5167df524b4d",
+    "bodySha256": "b05845daaa070a8696fd2572605107762b6919ddf06da59e32626136e159487b",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "protect_professor_access_request_history",
+    "signature": "examination_room_v1.protect_professor_access_request_history()",
+    "definitionSha256": "6cc89d9726b20f9920a250d59640d6bde0834b78ef83a44b75e02a0c0b1b9d6d",
+    "bodySha256": "659f2beff2f8ba1f6773f650eb120cc515b8ccbc9b4ada30516537da883318d1",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "protect_published_question",
+    "signature": "examination_room_v1.protect_published_question()",
+    "definitionSha256": "4773e7cfc9cad7b2e5fc853a70c6bddab5f9f00922f9119f6cf45073bf03a4ff",
+    "bodySha256": "191a7975701371fa890ee878aa5816bba36b9e02cf797a3ec4864739149c08f2",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "protect_recovery_snapshot",
+    "signature": "examination_room_v1.protect_recovery_snapshot()",
+    "definitionSha256": "1fde5878173075071ed8ccd74b1792d9c043c7bdf7055701ce8f7070c1f97739",
+    "bodySha256": "f2259c5dd84c19500d3b98dcf478a0ce1fa80686382d3e4350847618cfa0fe6d",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "protect_staff_membership_history",
+    "signature": "examination_room_v1.protect_staff_membership_history()",
+    "definitionSha256": "a79aaa26edbe8c60d215554e8f7c7a26c4cedc3a6d953dcde8507dfa78c75da5",
+    "bodySha256": "e7263f3cbf7811cd6e13e2f5225dafb6baa00d6d126c7cf849742dcf67fa9b96",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "protect_student_session_binding",
+    "signature": "examination_room_v1.protect_student_session_binding()",
+    "definitionSha256": "802b52b6d076c21d36d830a92740fa683af36302809384a6ed0da06de574f40e",
+    "bodySha256": "7030894f8c4692b5adb5605d2f9068538ff4814a9d4a041f3bcde091d25f2fed",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "protect_submission_answer_set",
+    "signature": "examination_room_v1.protect_submission_answer_set()",
+    "definitionSha256": "90466c13788a7d464d08d67d6a3a5b68210883140ab2e57a335f6750d790716c",
+    "bodySha256": "c950ba3d5ce84b1590b6be154013ca5abe8c6b12dd9eeea54fbeeee028908f2e",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "queue_grading_snapshot",
+    "signature": "examination_room_v1.queue_grading_snapshot()",
+    "definitionSha256": "e555ae1bbd482820fe834c4ff0806f6fdb52d2b296f593431b5f756168de4d74",
+    "bodySha256": "07758f4327ded35900e2ef3f8b932474d52163e28a546e6a8be450bc08ccc0a7",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "recover_existing_student_session",
+    "signature": "examination_room_v1.recover_existing_student_session(jsonb)",
+    "definitionSha256": "3e33651ef89d43e27b5a69783034e7351614bbbf560136f7318cff59c49ec4b9",
+    "bodySha256": "f3a32fc71102eac5c83553d83c97238928c5ea603a6097b7a057c4d45eb0dfb6",
+    "owner": "postgres",
+    "securityDefiner": true,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "seal_exam_version",
+    "signature": "examination_room_v1.seal_exam_version()",
+    "definitionSha256": "eb8234aad39b21203994085df20faf3c1744071e8bd05384620593bb51074415",
+    "bodySha256": "c9c148a6d6182da7e5f8b8cde3c66de4a4358efbd7332b1e1c9d689a7f77ec71",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "set_snapshot_source",
+    "signature": "examination_room_v1.set_snapshot_source()",
+    "definitionSha256": "e861a27c7fe71fe2e37b185cab513947d06ea09138801009864a8d5418502f58",
+    "bodySha256": "5af1c9a737d4a8115e0ab67c3eee489cfe400ed0f7905ab941f34feedccf508e",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "touch_updated_at",
+    "signature": "examination_room_v1.touch_updated_at()",
+    "definitionSha256": "354fd59c57b17c349514d24ce4a8e4fa8d3d177fb99291c64992d24d617f0e3a",
+    "bodySha256": "92fa7c305a8b856faea0575b27eaa33c1e39952cf9fe87b4c0cbf7d7eab556bd",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "uuid_from_hash",
+    "signature": "examination_room_v1.uuid_from_hash(text)",
+    "definitionSha256": "d0d7dc854b466854f2c982e528e7e65a9de4ee33b4c7dea229a5ee737fcf64bb",
+    "bodySha256": "66a736cf40ccbfc250f8446fbdd7de911585bb37f4da459125b74a2ad2b6e2b1",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "valid_allowed_emails",
+    "signature": "examination_room_v1.valid_allowed_emails(text[])",
+    "definitionSha256": "e7be18f5b1812c66834c764b2c65b466b6ebc372b09a888b3b7dc79f76078566",
+    "bodySha256": "ba3b55cad702ac3f3fa66745c7815eec5f43444f758d9738284208d082cf6b6a",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "validate_exam_owner",
+    "signature": "examination_room_v1.validate_exam_owner()",
+    "definitionSha256": "f86d20fc206e887476f2363856d60d7c84cff4950362c185be6b434a7f7ca058",
+    "bodySha256": "4c0f0147ebb06f4e457ed09c2f0cea9d1fdd2799d48d1b23037213804672ffc4",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "validate_privacy_acceptance",
+    "signature": "examination_room_v1.validate_privacy_acceptance()",
+    "definitionSha256": "277bca90bee4d10f74b5475c143c36ab7c81fa5c0b6f708d5bfbcb1d7c38051c",
+    "bodySha256": "ea0070f61cc42e6de2d0eace5f2708617191d2f0c16086e8b4b73ee9f9439671",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "validate_room_activation",
+    "signature": "examination_room_v1.validate_room_activation()",
+    "definitionSha256": "8f96672da3ed19d205bd697b255bc8e29b74080a90c4278fa8ca67a91fbed880",
+    "bodySha256": "e46e006a39104dd3b5b8045fecd747243d9e366eed30046d5f13643be751762b",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "validate_submission_receipt",
+    "signature": "examination_room_v1.validate_submission_receipt()",
+    "definitionSha256": "8a7c5d74463a6c9fe4555b42c271d524ecbead0f59bc613feef222af9f5534a9",
+    "bodySha256": "5aa6cbbae171e04b1a28bf94961759513c804d4fa60db267e03a30c85e7f33bd",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "schema": "public",
+    "name": "examination_room_v1_api",
+    "signature": "public.examination_room_v1_api(text,text,uuid,uuid,jsonb)",
+    "definitionSha256": "8bbcaebcee32d2faca6f6c3e029b8480e8ac8af5c9ab0e8e72715c7a0050ede7",
+    "bodySha256": "c0c64ae2a57554badd6bb2ba8046dde8ea4ee58c01ea200e50333c2dbf1fdae1",
+    "owner": "postgres",
+    "securityDefiner": true,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres,service_role=X/postgres}"
+  },
+  {
+    "schema": "public",
+    "name": "examination_room_v1_lifecycle_guard",
+    "signature": "public.examination_room_v1_lifecycle_guard(uuid)",
+    "definitionSha256": "5be56ab90978ae40cdd821a7577bbe3ce977f9d6766c95fac4f111c4fbc9677b",
+    "bodySha256": "2913cd1f0af99c9a7999ceb93666e3ebacaed79333d33fb3e4e6049eb75c260c",
+    "owner": "postgres",
+    "securityDefiner": true,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres,service_role=X/postgres}"
+  },
+  {
+    "schema": "examination_room_v1",
+    "name": "apply_open_room_lease",
+    "signature": "examination_room_v1.apply_open_room_lease()",
+    "definitionSha256": "f724efdff5bd3cde6cdd051a90931905049582cc52c6a47d3bd7ed6cd8a6e216",
+    "bodySha256": "96f1008c13e0a2eca0fbbdd0bd11dd6f8ff8c9e48e892f7df3f0aeac6bdf3b9d",
+    "owner": "postgres",
+    "securityDefiner": false,
+    "settings": [
+      "search_path=pg_catalog"
+    ],
+    "acl": "{postgres=X/postgres}"
+  }
+]

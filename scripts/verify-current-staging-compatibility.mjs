@@ -51,10 +51,13 @@ function run(sql,{applicationName='compatibility-native',expectedCode,expectedMe
   assert.match(applicationName,/^[a-zA-Z0-9_-]{1,60}$/);
   return new Promise((resolve,reject)=>{
     const child=spawn('psql',['-X','-qAt','-v','ON_ERROR_STOP=1','-v','VERBOSITY=verbose'],{env:{...env,PGAPPNAME:applicationName},stdio:['pipe','pipe','pipe']});
-    let stdout='',stderr='',killed=false;
+    let stdout='',stderr='',killed=false,inputError=null;
     const timer=setTimeout(()=>{killed=true;child.kill('SIGKILL');},45000);
     child.stdout.on('data',x=>{stdout+=x;if(stdout.length>2000000){killed=true;child.kill('SIGKILL');}});
     child.stderr.on('data',x=>{stderr+=x;if(stderr.length>2000000){killed=true;child.kill('SIGKILL');}});
+    // psql can reject an early statement while the large fixture is still being
+    // written. Preserve its real SQL diagnostic instead of crashing on EPIPE.
+    child.stdin.on('error',error=>{inputError=error.code??'STDIN_ERROR';});
     child.on('error',e=>{clearTimeout(timer);reject(new Error('PSQL_START_FAILED',{cause:e}));});
     child.on('close',code=>{
       clearTimeout(timer);
@@ -65,6 +68,7 @@ function run(sql,{applicationName='compatibility-native',expectedCode,expectedMe
         report.expectedErrors.push({applicationName,sqlState,expectedMessage:expectedMessage??null,diagnosticSha256:sha(stderr)}); return resolve(sqlState);
       }
       if(code!==0)return reject(Object.assign(new Error('NATIVE_SQL_FAILED'),{sqlState,applicationName,diagnostic:stderr.slice(-3000)}));
+      if(inputError)return reject(Object.assign(new Error('PSQL_INPUT_FAILED'),{applicationName,diagnostic:inputError}));
       resolve(stdout.trim());
     });
     const prefix=(fixture?"SET duediligence.compatibility_fixture='isolated-current-capture-20261018';\n":'')+(bootstrap?'':'SET ROLE postgres;\n');

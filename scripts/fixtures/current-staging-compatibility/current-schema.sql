@@ -1010,7 +1010,7 @@ begin
   );
 end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."api_admin"(p_operation text, p_actor_user_id uuid, p_institution_id uuid, p_payload jsonb) OWNER TO "postgres";
 
@@ -1036,7 +1036,7 @@ AS $function$
     )
   );
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."api_error"(p_code text, p_message text, p_status integer, p_recovery text) OWNER TO "postgres";
 
@@ -2333,7 +2333,7 @@ begin
   );
 end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."api_professor"(p_operation text, p_actor_user_id uuid, p_institution_id uuid, p_payload jsonb) OWNER TO "postgres";
 
@@ -2615,7 +2615,7 @@ begin
   );
 end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."api_professor_view"(p_operation text, p_actor_user_id uuid, p_institution_id uuid, p_exam_id uuid) OWNER TO "postgres";
 
@@ -2698,7 +2698,7 @@ begin
   );
 end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."api_record_audit"(p_institution_id uuid, p_exam_id uuid, p_session_id uuid, p_actor_user_id uuid, p_actor_role text, p_event_type text, p_subject_type text, p_subject_id uuid, p_request_hash text, p_occurred_at timestamp with time zone, p_response jsonb, p_correlation_id uuid) OWNER TO "postgres";
 
@@ -2747,7 +2747,7 @@ begin
   return coalesce(stored_response, jsonb_build_object('ok', true, 'duplicate', true));
 end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."api_replay"(p_institution_id uuid, p_request_hash text, p_event_type text) OWNER TO "postgres";
 
@@ -3702,7 +3702,7 @@ begin
   );
 end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."api_student"(p_operation text, p_payload jsonb) OWNER TO "postgres";
 
@@ -3758,7 +3758,7 @@ AS $function$
   ) q on true
   where v.id = p_exam_version_id;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."build_publication_manifest"(p_exam_version_id uuid, p_published_at timestamp with time zone) OWNER TO "postgres";
 
@@ -3799,7 +3799,7 @@ AS $function$
         )
     );
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."creator_authorized"(p_actor_user_id uuid, p_institution_id uuid) OWNER TO "postgres";
 
@@ -3905,7 +3905,7 @@ begin
   return response;
 end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."creator_revoke_session"(p_actor_user_id uuid, p_institution_id uuid, p_payload jsonb) OWNER TO "postgres";
 
@@ -3936,7 +3936,7 @@ begin
   return new;
 end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."ensure_exam_current_version_published"() OWNER TO "postgres";
 
@@ -4000,7 +4000,7 @@ begin
   return new;
 end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."ensure_releasable_grade"() OWNER TO "postgres";
 
@@ -4031,7 +4031,7 @@ AS $function$
     )
   end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."grader_safe_submission_manifest"(p_manifest jsonb, p_anonymous_grading boolean, p_grading_alias text, p_opaque_session_id uuid) OWNER TO "postgres";
 
@@ -4047,7 +4047,7 @@ CREATE OR REPLACE FUNCTION examination_room_v1.json_rows(p_value jsonb)
 AS $function$
   select coalesce(p_value, '[]'::jsonb);
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."json_rows"(p_value jsonb) OWNER TO "postgres";
 
@@ -4063,7 +4063,7 @@ CREATE OR REPLACE FUNCTION examination_room_v1.jsonb_sha256(p_value jsonb)
 AS $function$
   select encode(sha256(convert_to(p_value::text, 'UTF8')), 'hex');
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."jsonb_sha256"(p_value jsonb) OWNER TO "postgres";
 
@@ -4084,7 +4084,7 @@ AS $function$
     )
   );
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."lock_request"(p_institution_id uuid, p_request_hash text) OWNER TO "postgres";
 
@@ -4111,7 +4111,7 @@ begin
   return next_sequence;
 end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."next_snapshot_sequence"(p_exam_id uuid) OWNER TO "postgres";
 
@@ -4137,7 +4137,7 @@ begin
   return new;
 end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."normalize_default_student_warning"() OWNER TO "postgres";
 
@@ -4164,7 +4164,7 @@ AS $function$
     ), '{}'::text[])
   end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."normalized_allowed_emails"(p_value jsonb) OWNER TO "postgres";
 
@@ -4185,7 +4185,7 @@ AS $function$
       and owner_role.role in ('founder_admin', 'super_admin')
   );
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."owner_authorized"(p_actor_user_id uuid) OWNER TO "postgres";
 
@@ -4215,7 +4215,7 @@ begin
   );
 end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."owner_exam_bundle"(p_exam_id uuid) OWNER TO "postgres";
 
@@ -4417,7 +4417,7 @@ begin
   return bundle;
 end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."owner_exam_bundle_before_result_email"(p_exam_id uuid) OWNER TO "postgres";
 
@@ -4633,7 +4633,7 @@ begin
   return bundle;
 end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."owner_snapshot_event_bundle"(p_snapshot examination_room_v1.recovery_snapshots) OWNER TO "postgres";
 
@@ -4673,7 +4673,7 @@ begin
   );
 end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."owner_snapshot_payload"(p_snapshot_id uuid) OWNER TO "postgres";
 
@@ -4912,7 +4912,7 @@ begin
   );
 end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."prepare_student_admission"(p_payload jsonb) OWNER TO "postgres";
 
@@ -4932,7 +4932,7 @@ begin
   return null;
 end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."prevent_delete"() OWNER TO "postgres";
 
@@ -4952,7 +4952,7 @@ begin
   return null;
 end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."prevent_mutation"() OWNER TO "postgres";
 
@@ -5002,7 +5002,7 @@ begin
   return null;
 end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."protect_email_delivery_event"() OWNER TO "postgres";
 
@@ -5062,7 +5062,7 @@ begin
   return new;
 end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."protect_grade_revision_item_set"() OWNER TO "postgres";
 
@@ -5125,7 +5125,7 @@ begin
   return new;
 end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."protect_professor_access_request_history"() OWNER TO "postgres";
 
@@ -5176,7 +5176,7 @@ begin
   return new;
 end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."protect_published_question"() OWNER TO "postgres";
 
@@ -5261,7 +5261,7 @@ begin
   return null;
 end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."protect_recovery_snapshot"() OWNER TO "postgres";
 
@@ -5308,7 +5308,7 @@ begin
   return null;
 end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."protect_staff_membership_history"() OWNER TO "postgres";
 
@@ -5358,7 +5358,7 @@ begin
   return new;
 end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."protect_student_session_binding"() OWNER TO "postgres";
 
@@ -5417,7 +5417,7 @@ begin
   return new;
 end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."protect_submission_answer_set"() OWNER TO "postgres";
 
@@ -5501,7 +5501,7 @@ begin
   return new;
 end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."queue_grading_snapshot"() OWNER TO "postgres";
 
@@ -5643,7 +5643,7 @@ begin
   return v_response;
 end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."recover_existing_student_session"(p_payload jsonb) OWNER TO "postgres";
 
@@ -5698,7 +5698,7 @@ begin
   return null;
 end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."seal_exam_version"() OWNER TO "postgres";
 
@@ -5729,7 +5729,7 @@ begin
   return new;
 end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."set_snapshot_source"() OWNER TO "postgres";
 
@@ -5747,7 +5747,7 @@ begin
   return new;
 end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."touch_updated_at"() OWNER TO "postgres";
 
@@ -5769,7 +5769,7 @@ AS $function$
     substr(p_hash, 21, 12)
   )::uuid;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."uuid_from_hash"(p_hash text) OWNER TO "postgres";
 
@@ -5797,7 +5797,7 @@ AS $function$
       select count(distinct email_value)::integer from unnest(p_emails) email_value
     );
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."valid_allowed_emails"(p_emails text[]) OWNER TO "postgres";
 
@@ -5829,7 +5829,7 @@ begin
   return new;
 end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."validate_exam_owner"() OWNER TO "postgres";
 
@@ -5867,7 +5867,7 @@ begin
   return new;
 end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."validate_privacy_acceptance"() OWNER TO "postgres";
 
@@ -5927,7 +5927,7 @@ begin
   return new;
 end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."validate_room_activation"() OWNER TO "postgres";
 
@@ -5964,7 +5964,7 @@ begin
   return new;
 end;
 $function$
-
+;
 
 ALTER FUNCTION "examination_room_v1"."validate_submission_receipt"() OWNER TO "postgres";
 
@@ -6112,7 +6112,7 @@ exception
     );
 end;
 $function$
-
+;
 
 ALTER FUNCTION "public"."examination_room_v1_api"(p_scope text, p_operation text, p_actor_user_id uuid, p_institution_id uuid, p_payload jsonb) OWNER TO "postgres";
 
@@ -6146,7 +6146,7 @@ AS $function$
   from (select p_exam_id as requested_id) requested
   left join examination_room_v1.exams exam on exam.id = requested.requested_id;
 $function$
-
+;
 
 ALTER FUNCTION "public"."examination_room_v1_lifecycle_guard"(p_exam_id uuid) OWNER TO "postgres";
 

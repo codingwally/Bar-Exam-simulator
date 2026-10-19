@@ -23,15 +23,15 @@
     "staging-external-column-metadata-20261019.json": "63c1726dd8d601f76b2e2d6b6025e138ac7f83452fb11b09cb1ac89432769e1a"
   },
   "files": {
-    "current-schema.sql": "87aabda412f40f78287f5e1ad98382d0774b579aed3ebda3707cd013c641dc2b",
-    "verify-current-schema.sql": "20bd4c13dc9c5b1981e987d66f0135ee4fa662fa34f6fd8ed4c5fe8285e420fe",
+    "current-schema.sql": "a66c84ddb2238ad78a33cc8c4cbd926baab8b354f7a6db34277aa9b115374a95",
+    "verify-current-schema.sql": "33af51cdddeeb4b87b58dde15ce0a95df767f3e7a2cb96ca70f24082aa65b641",
     "forward.sql": "b6f1c1ebb4aa28d61b10ddf61713a1fb295f21dbecbd018a23c3994e10e7eab8",
     "inverse.sql": "a3a26b928a0cd120add9224afa12965af46e232d10b4350c491241d4b3b5be02",
     "baseline.json": "670be5671f7dcdaf9273c129bbe4c4834c85db4a4ff1952aef944a93703cefa9",
     "postimage.json": "ef39134f74ca324c24fb23ddb7e538cf8252571dd05c22b421cbafac1aead2e4",
     "target-definitions.json": "4eefe9f39bda33d3e91b6afb95920775a6b2ce3bbc59f78dc0e956568f5f52ed",
     "table-names.json": "6f7a8bff728dc7e8ad83c56a6bd6bda030044db80740bb3a1496778b983adf6e",
-    "fixture-manifest.json": "fa1ef3414b8b82c4fcf7497e900441a7b65249c6fc88709c630e7fe099be7a3b",
+    "fixture-manifest.json": "1e8944adbf74f3ed9cc0557dbf9d663b5402ed59e45b80c405dd94a0a5d9e601",
     "hardening-manifest.json": "c951a8d13d6d547ff2fed1adb126227256f797debbdf40db41ba7ecab3a84b0b",
     "hardening-patches.json": "c193b70296eae29819deba1ba5a50f87f8a18c3a56df86988051a77cb7da7d7d",
     "professor-manifest.json": "46558bccf6c848bced1d003d717fa1153a8ef3b166dd89cdbff852fedd7e683b",

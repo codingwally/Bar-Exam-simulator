@@ -296,18 +296,18 @@
   ],
   "generator": {
     "name": "build-current-schema.mjs",
-    "sha256": "b68ed4f51d670a6552e669bb2034027f2eb342d8744a4d5d1fbcda8913a24a48"
+    "sha256": "9c2264a5350cfc2bec8d6d1fcc35f6094b7a6c99ba19d81ead4e617c6723112a"
   },
   "outputs": [
     {
       "name": "current-schema.sql",
-      "bytes": 350195,
-      "sha256": "87aabda412f40f78287f5e1ad98382d0774b579aed3ebda3707cd013c641dc2b"
+      "bytes": 350243,
+      "sha256": "a66c84ddb2238ad78a33cc8c4cbd926baab8b354f7a6db34277aa9b115374a95"
     },
     {
       "name": "verify-current-schema.sql",
-      "bytes": 203499,
-      "sha256": "20bd4c13dc9c5b1981e987d66f0135ee4fa662fa34f6fd8ed4c5fe8285e420fe"
+      "bytes": 378408,
+      "sha256": "33af51cdddeeb4b87b58dde15ce0a95df767f3e7a2cb96ca70f24082aa65b641"
     }
   ]
 }

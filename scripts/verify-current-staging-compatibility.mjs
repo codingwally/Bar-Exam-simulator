@@ -92,6 +92,7 @@ try {
   await phase('current-schema.sql',true);await phase('verify-current-schema.sql');await verifyCatalog(baseline,'48 exact captured function definitions and permissions');
   await run(files.get('forward.sql'),{fixture:false,expectedCode:'P0001',expectedMessage:'DISPOSABLE_FIXTURE_REQUIRED'});await verifyCatalog(baseline,'Missing disposable marker denies without changes');
   for(const role of ['anon','authenticated']) await run(`SET ROLE ${role}; SELECT public.examination_room_v1_api('student','preview',NULL,NULL,'{}');`,{expectedCode:'42501'});
+  await run("SET ROLE service_role; SELECT examination_room_v1.api_student('session_context','{}');",{expectedCode:'42501'});
   const result=JSON.parse(await run("SET ROLE service_role; SELECT public.examination_room_v1_api('student','not-a-listed-operation',NULL,NULL,'{}');"));check('Service role can dispatch while unregistered operation is rejected',result.ok===false&&result.errorCode==='UNKNOWN_OPERATION');
   await phase('professor-seed.sql');await phase('student-seed.sql');await phase('professor-pre.sql');await phase('student-pre.sql');
   const seeded=await data();

@@ -24,6 +24,8 @@ Professor cases cover partial draft arithmetic against the submitted publication
 
 The original generators, exact read-only capture queries and source blobs remain in this task's ignored `artifacts/debate-local-rehearsal/` evidence. This frozen package is independently hash-checked and does not run those generators during verification.
 
+Whitespace inside captured function bodies is intentionally preserved because definition hashes cover those bytes. The four trailing-blank lines reported by a whole-diff whitespace check occur inside these captured/generated SQL strings; changing them would change the evidence or proposed definition hashes.
+
 ## Limits
 
 The three external account/profile/role tables are empty synthetic projections with captured column types. They do not reproduce Supabase authentication, external RLS/triggers, email delivery, storage, Worker routing or browsers. Supporting platform roles are inert placeholders for schema permissions. No paid provider, mail consumer or real user is attached.

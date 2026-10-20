@@ -80,7 +80,8 @@ BEGIN
     response := public.examination_room_v1_api('professor',operation,null,compat_professor_test.uid(1),jsonb_build_object('examId',compat_professor_test.uid(21)));
     PERFORM compat_professor_test.code(response,'CREATOR_WORKSPACE_REQUIRED','P05 public missing actor ' || operation);
   END LOOP;
-  UPDATE examination_room_v1.exams SET anonymous_grading=true WHERE id=compat_professor_test.uid(21);
+  UPDATE examination_room_v1.exams SET anonymous_grading=true,current_published_version_id=compat_professor_test.uid(45)
+    WHERE id=compat_professor_test.uid(21);
   grading := examination_room_v1.api_professor_view('grading',compat_professor_test.uid(11),compat_professor_test.uid(1),compat_professor_test.uid(21));
   PERFORM compat_professor_test.assert_true(grading-'generatedAt'=(SELECT value FROM compat_professor_test.baseline WHERE name='anonymous_grading'),
     'M04 exact anonymous grading/history response preserved');
@@ -90,7 +91,8 @@ BEGIN
   PERFORM compat_professor_test.assert_true(NOT EXISTS(SELECT 1 FROM jsonb_array_elements(grading->'sessions') s
     WHERE s->>'id'=ANY(ARRAY[compat_professor_test.uid(10001)::text,compat_professor_test.uid(10002)::text,compat_professor_test.uid(10003)::text])),
     'M04 anonymous response uses opaque grading identifiers');
-  UPDATE examination_room_v1.exams SET anonymous_grading=false WHERE id=compat_professor_test.uid(21);
+  UPDATE examination_room_v1.exams SET anonymous_grading=false,current_published_version_id=compat_professor_test.uid(42)
+    WHERE id=compat_professor_test.uid(21);
 
   -- Partial maximum must be bound to submitted version 41 (30), not current 42 (90).
   p := compat_professor_test.grade_payload(2,compat_professor_test.score_items(false));

@@ -80,13 +80,17 @@ INSERT INTO examination_room_v1.exams(id,institution_id,owner_user_id,title)
 SELECT compat_professor_test.uid(n),compat_professor_test.uid(1),compat_professor_test.uid(11),'Synthetic grading ' || n
 FROM generate_series(21,23) n;
 
-CREATE FUNCTION compat_professor_test.publish(exam_n integer, version_n integer, version_number integer, points integer[]) RETURNS void
+CREATE FUNCTION compat_professor_test.publish(exam_n integer, version_n integer, version_number integer, points integer[],
+  anonymous_mode boolean DEFAULT false) RETURNS void
 LANGUAGE plpgsql SET search_path TO pg_catalog AS $$
 DECLARE v uuid := compat_professor_test.uid(version_n); manifest jsonb; published timestamptz := clock_timestamp(); idx integer;
 BEGIN
-  INSERT INTO examination_room_v1.exam_versions(id,exam_id,institution_id,version_number,title_snapshot,duration_seconds,privacy_notice_version_id,content_sha256,created_at)
+  INSERT INTO examination_room_v1.exam_versions(id,exam_id,institution_id,version_number,title_snapshot,duration_seconds,
+    anonymous_grading_snapshot,controls,privacy_notice_version_id,content_sha256,created_at)
   VALUES(v,compat_professor_test.uid(exam_n),compat_professor_test.uid(1),version_number,
-    'Synthetic immutable version',3600,compat_professor_test.uid(31),compat_professor_test.hash('unsealed-' || version_n),published);
+    'Synthetic immutable version',3600,anonymous_mode,
+    jsonb_build_object('identityMode',CASE WHEN anonymous_mode THEN 'anonymous_grading' ELSE 'real_names' END),
+    compat_professor_test.uid(31),compat_professor_test.hash('unsealed-' || version_n),published);
   FOR idx IN 1..array_length(points,1) LOOP
     INSERT INTO examination_room_v1.questions(id,exam_version_id,position,question_key,question_kind,prompt,points,content_sha256)
     VALUES(compat_professor_test.uid(version_n * 100 + idx),v,idx,'q' || lpad(idx::text,3,'0'),'essay',
@@ -95,7 +99,8 @@ BEGIN
   manifest := examination_room_v1.build_publication_manifest(v,published);
   UPDATE examination_room_v1.exam_versions SET publication_status='published',published_by_user_id=compat_professor_test.uid(11),
     published_at=published,publication_manifest=manifest,content_sha256=examination_room_v1.jsonb_sha256(manifest) WHERE id=v;
-  UPDATE examination_room_v1.exams SET status='published',current_published_version_id=v WHERE id=compat_professor_test.uid(exam_n);
+  UPDATE examination_room_v1.exams SET status='published',anonymous_grading=anonymous_mode,current_published_version_id=v
+    WHERE id=compat_professor_test.uid(exam_n);
 END $$;
 SELECT compat_professor_test.publish(21,41,1,ARRAY[10,20]);
 SELECT compat_professor_test.publish(21,42,2,ARRAY[90]);
@@ -202,10 +207,13 @@ DO $historical$ DECLARE response jsonb; BEGIN
 END $historical$;
 INSERT INTO compat_professor_test.baseline(name,value)
 VALUES('grading',examination_room_v1.api_professor_view('grading',compat_professor_test.uid(11),compat_professor_test.uid(1),compat_professor_test.uid(21))-'generatedAt');
-UPDATE examination_room_v1.exams SET anonymous_grading=true WHERE id=compat_professor_test.uid(21);
+-- The current-version guard requires the display mode to match its sealed snapshot.
+-- Publish a distinct anonymous version; never mutate an already sealed version.
+SELECT compat_professor_test.publish(21,45,3,ARRAY[90],true);
 INSERT INTO compat_professor_test.baseline(name,value)
 VALUES('anonymous_grading',examination_room_v1.api_professor_view('grading',compat_professor_test.uid(11),compat_professor_test.uid(1),compat_professor_test.uid(21))-'generatedAt');
-UPDATE examination_room_v1.exams SET anonymous_grading=false WHERE id=compat_professor_test.uid(21);
+UPDATE examination_room_v1.exams SET anonymous_grading=false,current_published_version_id=compat_professor_test.uid(42)
+  WHERE id=compat_professor_test.uid(21);
 INSERT INTO compat_professor_test.baseline(name,value) VALUES('write_state',compat_professor_test.write_state());
 INSERT INTO compat_professor_test.baseline(name,value) VALUES('sealed_state',compat_professor_test.sealed_state());
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA compat_professor_test FROM PUBLIC;

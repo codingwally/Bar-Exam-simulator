@@ -35,12 +35,12 @@
     "hardening-manifest.json": "c951a8d13d6d547ff2fed1adb126227256f797debbdf40db41ba7ecab3a84b0b",
     "hardening-patches.json": "c193b70296eae29819deba1ba5a50f87f8a18c3a56df86988051a77cb7da7d7d",
     "professor-manifest.json": "46558bccf6c848bced1d003d717fa1153a8ef3b166dd89cdbff852fedd7e683b",
-    "professor-seed.sql": "e24c66bd2ff636b2a8a0e2992a4dfdf5591aacc322ef9ae1805f6c17f9f3c076",
+    "professor-seed.sql": "a23d8f9e92d2a12107e33d30926f1b625675d5be9d5773a3c7e0213a5db6e462",
     "professor-pre.sql": "d179702bfef72ca176d3e4f7190b71f2179f318d5dd04e1523e7c5852ea89e59",
-    "professor-post.sql": "0a4a5dc21e13cef3e37f4c43783aded82d58622d3e03a13691706a195c618f38",
+    "professor-post.sql": "f1881ee852d581bb9d6f68a3a8eda5c1f84c3cc72f12cdfe5b4cbe50194d4f50",
     "student-seed.sql": "e7f133477259b08342125e4a27974fb704baba48549ee9c8471b6f3f65d653fc",
     "student-pre.sql": "9e8e41ae4ea0a9dfe4872316abad6989a6187ee3eda431f5ec591fefccca883a",
-    "student-post.sql": "02b6a08df307483c80b9cb524d99b96150e01e00e0a6332edd498452a3afd499",
+    "student-post.sql": "45271532a4b872f4ca1929a3f82531a503a80b4534a109e715579ce1940ee157",
     "student-race.mjs": "e0f7cb3f0bcb63c12519e6ff2ef6152c22b926535b61912e966efe2dec5d8d60"
   }
 }

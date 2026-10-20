@@ -7,6 +7,9 @@ DECLARE n integer; r jsonb; p jsonb; a jsonb; before_state jsonb; op text;
 BEGIN
  PERFORM compat_student_test.assert_true(current_database()='duediligence_compatibility_fixture' AND current_setting('duediligence.compatibility_fixture',true)='isolated-current-capture-20261018','fixture guard');
  FOR n IN 1..10 LOOP
+   -- Session 6 represents a historical receipt from before submission intents.
+   -- Its raw submit hash must remain available for the immutable legacy audit.
+   CONTINUE WHEN n=6;
    r:=examination_room_v1.api_student('submission_intent',compat_student_test.payload(n,'submit'));
    PERFORM compat_student_test.assert_true(r->>'ok'='true','valid intent '||n||': '||r::text);
  END LOOP;
@@ -73,6 +76,15 @@ BEGIN
  final5:=compat_student_test.final_payload(5);
  accepted5:=examination_room_v1.api_student('submit',final5);
  PERFORM compat_student_test.assert_true(accepted5->>'ok'='true','historical v2 accepted submit');
+ PERFORM compat_student_test.assert_true(
+  EXISTS(SELECT 1 FROM examination_room_v1.audit_events
+    WHERE session_id=compat_student_test.uid(30005) AND event_type='student.submission_intent'
+      AND request_hash=final5->>'requestHash')
+  AND EXISTS(SELECT 1 FROM examination_room_v1.audit_events
+    WHERE session_id=compat_student_test.uid(30005) AND event_type='student.submit'
+      AND request_hash=encode(extensions.digest((final5->>'requestHash')||':student.submit','sha256'),'hex')
+      AND event_data#>>'{response,submission,id}'=accepted5#>>'{submission,id}'),
+  'current intent and namespaced final audit coexist for the accepted submission');
  UPDATE examination_room_v1.room_activations SET activation_status='revoked' WHERE id=compat_student_test.uid(4005);
  before_state:=compat_student_test.write_state();
  r:=examination_room_v1.api_student('submit',final5);

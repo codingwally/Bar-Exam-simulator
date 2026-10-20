@@ -4,6 +4,8 @@ This is a frozen, metadata-only reconstruction of the currently approved replace
 
 The separate Debate rehearsal is blocked because the current Worker expects submission and recovery contracts missing from the captured shared staging database. These tests prepare a bounded repair without replaying historical migrations or changing the working site.
 
+Native execution passed on 20 October in run39426693601. [The permanent verification record](../../../docs/debate-room-v3/staging-compatibility-verification-20261020.md) binds the exact source, report, independent review, failed attempts and fresh read-only staging comparison. This does not change the package's disposable-only scope or its hosted verification gaps.
+
 ## Run and scope
 
 Run the dedicated `Current staging database compatibility` workflow. It provisions PostgreSQL 17.6 with a fixed disposable database, no provider credentials, and loopback-only access. Its native runner is `scripts/verify-current-staging-compatibility.mjs`. Local package integrity can be checked without SQL:

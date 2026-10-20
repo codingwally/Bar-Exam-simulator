@@ -1,0 +1,280 @@
+{
+  "kind": "INDEPENDENT_NATIVE_SUCCESS_REVIEW",
+  "reviewedAt": "2026-10-20T13:03:42.443Z",
+  "reviewer": "native_success_receipt_review",
+  "sourceHead": "70dce183f020c6fc52d98662e99184e03d885d92",
+  "testedMerge": "9928436e4293ccf9cf7bc823ceb2ccc1ca9282e8",
+  "sourceTree": "f16a6f5d082723b99976f340d820cf580d96c843",
+  "testedTree": "f16a6f5d082723b99976f340d820cf580d96c843",
+  "identicalTrees": true,
+  "mergeParents": [
+    "662c5cadc0f18497f673c79b40bd239680b77d93",
+    "70dce183f020c6fc52d98662e99184e03d885d92"
+  ],
+  "runId": 39426693601,
+  "runUrl": "https://github.com/codingwally/Bar-Exam-simulator/actions/runs/39426693601",
+  "runConclusion": "success",
+  "runEvent": "pull_request",
+  "reportedSourceHead": "70dce183f020c6fc52d98662e99184e03d885d92",
+  "nativeJob": {
+    "completedAt": "2026-10-20T13:00:37Z",
+    "conclusion": "success",
+    "databaseId": 118640952783,
+    "name": "native-postgres",
+    "startedAt": "2026-10-20T13:00:03Z",
+    "status": "completed",
+    "steps": [
+      {
+        "completedAt": "2026-10-20T13:00:04Z",
+        "conclusion": "success",
+        "name": "Set up job",
+        "number": 1,
+        "startedAt": "2026-10-20T13:00:03Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-10-20T13:00:25Z",
+        "conclusion": "success",
+        "name": "Initialize containers",
+        "number": 2,
+        "startedAt": "2026-10-20T13:00:04Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-10-20T13:00:28Z",
+        "conclusion": "success",
+        "name": "Run actions/checkout@v4",
+        "number": 3,
+        "startedAt": "2026-10-20T13:00:25Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-10-20T13:00:29Z",
+        "conclusion": "success",
+        "name": "Run actions/setup-node@v4",
+        "number": 4,
+        "startedAt": "2026-10-20T13:00:28Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-10-20T13:00:32Z",
+        "conclusion": "success",
+        "name": "Verify exact current schema and bounded repairs in a disposable database",
+        "number": 5,
+        "startedAt": "2026-10-20T13:00:29Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-10-20T13:00:33Z",
+        "conclusion": "success",
+        "name": "Retain scoped native verification evidence",
+        "number": 6,
+        "startedAt": "2026-10-20T13:00:32Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-10-20T13:00:33Z",
+        "conclusion": "success",
+        "name": "Post Run actions/setup-node@v4",
+        "number": 10,
+        "startedAt": "2026-10-20T13:00:33Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-10-20T13:00:33Z",
+        "conclusion": "success",
+        "name": "Post Run actions/checkout@v4",
+        "number": 11,
+        "startedAt": "2026-10-20T13:00:33Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-10-20T13:00:35Z",
+        "conclusion": "success",
+        "name": "Stop containers",
+        "number": 12,
+        "startedAt": "2026-10-20T13:00:33Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-10-20T13:00:35Z",
+        "conclusion": "success",
+        "name": "Complete job",
+        "number": 13,
+        "startedAt": "2026-10-20T13:00:35Z",
+        "status": "completed"
+      }
+    ],
+    "url": "https://github.com/codingwally/Bar-Exam-simulator/actions/runs/39426693601/job/118640952783"
+  },
+  "reportPath": "artifacts/debate-local-rehearsal/native-compatibility-39426693601/report.json",
+  "reportSha256": "18c729bd5b9a455b6b37bca7d58cf48ac9ec4883f8a97dd5f1118357f9c041d7",
+  "comparisonMethod": "SHA256 of raw git show buffers; working-tree line endings excluded",
+  "comparisonCount": 21,
+  "matchedCount": 21,
+  "comparisons": [
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/current-schema.sql",
+      "expected": "a66c84ddb2238ad78a33cc8c4cbd926baab8b354f7a6db34277aa9b115374a95",
+      "actual": "a66c84ddb2238ad78a33cc8c4cbd926baab8b354f7a6db34277aa9b115374a95"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/verify-current-schema.sql",
+      "expected": "33af51cdddeeb4b87b58dde15ce0a95df767f3e7a2cb96ca70f24082aa65b641",
+      "actual": "33af51cdddeeb4b87b58dde15ce0a95df767f3e7a2cb96ca70f24082aa65b641"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/forward.sql",
+      "expected": "b6f1c1ebb4aa28d61b10ddf61713a1fb295f21dbecbd018a23c3994e10e7eab8",
+      "actual": "b6f1c1ebb4aa28d61b10ddf61713a1fb295f21dbecbd018a23c3994e10e7eab8"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/inverse.sql",
+      "expected": "a3a26b928a0cd120add9224afa12965af46e232d10b4350c491241d4b3b5be02",
+      "actual": "a3a26b928a0cd120add9224afa12965af46e232d10b4350c491241d4b3b5be02"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/baseline.json",
+      "expected": "670be5671f7dcdaf9273c129bbe4c4834c85db4a4ff1952aef944a93703cefa9",
+      "actual": "670be5671f7dcdaf9273c129bbe4c4834c85db4a4ff1952aef944a93703cefa9"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/postimage.json",
+      "expected": "ef39134f74ca324c24fb23ddb7e538cf8252571dd05c22b421cbafac1aead2e4",
+      "actual": "ef39134f74ca324c24fb23ddb7e538cf8252571dd05c22b421cbafac1aead2e4"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/target-definitions.json",
+      "expected": "4eefe9f39bda33d3e91b6afb95920775a6b2ce3bbc59f78dc0e956568f5f52ed",
+      "actual": "4eefe9f39bda33d3e91b6afb95920775a6b2ce3bbc59f78dc0e956568f5f52ed"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/table-names.json",
+      "expected": "6f7a8bff728dc7e8ad83c56a6bd6bda030044db80740bb3a1496778b983adf6e",
+      "actual": "6f7a8bff728dc7e8ad83c56a6bd6bda030044db80740bb3a1496778b983adf6e"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/fixture-manifest.json",
+      "expected": "1e8944adbf74f3ed9cc0557dbf9d663b5402ed59e45b80c405dd94a0a5d9e601",
+      "actual": "1e8944adbf74f3ed9cc0557dbf9d663b5402ed59e45b80c405dd94a0a5d9e601"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/hardening-manifest.json",
+      "expected": "c951a8d13d6d547ff2fed1adb126227256f797debbdf40db41ba7ecab3a84b0b",
+      "actual": "c951a8d13d6d547ff2fed1adb126227256f797debbdf40db41ba7ecab3a84b0b"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/hardening-patches.json",
+      "expected": "c193b70296eae29819deba1ba5a50f87f8a18c3a56df86988051a77cb7da7d7d",
+      "actual": "c193b70296eae29819deba1ba5a50f87f8a18c3a56df86988051a77cb7da7d7d"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/professor-manifest.json",
+      "expected": "46558bccf6c848bced1d003d717fa1153a8ef3b166dd89cdbff852fedd7e683b",
+      "actual": "46558bccf6c848bced1d003d717fa1153a8ef3b166dd89cdbff852fedd7e683b"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/professor-seed.sql",
+      "expected": "a23d8f9e92d2a12107e33d30926f1b625675d5be9d5773a3c7e0213a5db6e462",
+      "actual": "a23d8f9e92d2a12107e33d30926f1b625675d5be9d5773a3c7e0213a5db6e462"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/professor-pre.sql",
+      "expected": "d179702bfef72ca176d3e4f7190b71f2179f318d5dd04e1523e7c5852ea89e59",
+      "actual": "d179702bfef72ca176d3e4f7190b71f2179f318d5dd04e1523e7c5852ea89e59"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/professor-post.sql",
+      "expected": "f1881ee852d581bb9d6f68a3a8eda5c1f84c3cc72f12cdfe5b4cbe50194d4f50",
+      "actual": "f1881ee852d581bb9d6f68a3a8eda5c1f84c3cc72f12cdfe5b4cbe50194d4f50"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/student-seed.sql",
+      "expected": "e7f133477259b08342125e4a27974fb704baba48549ee9c8471b6f3f65d653fc",
+      "actual": "e7f133477259b08342125e4a27974fb704baba48549ee9c8471b6f3f65d653fc"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/student-pre.sql",
+      "expected": "9e8e41ae4ea0a9dfe4872316abad6989a6187ee3eda431f5ec591fefccca883a",
+      "actual": "9e8e41ae4ea0a9dfe4872316abad6989a6187ee3eda431f5ec591fefccca883a"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/student-post.sql",
+      "expected": "45271532a4b872f4ca1929a3f82531a503a80b4534a109e715579ce1940ee157",
+      "actual": "45271532a4b872f4ca1929a3f82531a503a80b4534a109e715579ce1940ee157"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/student-race.mjs",
+      "expected": "e0f7cb3f0bcb63c12519e6ff2ef6152c22b926535b61912e966efe2dec5d8d60",
+      "actual": "e0f7cb3f0bcb63c12519e6ff2ef6152c22b926535b61912e966efe2dec5d8d60"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/manifest.json",
+      "expected": "ac5be7b2899a7a48bf573ef03ec02d515477d9e12961cbc58b3640f03a3cfd11",
+      "actual": "ac5be7b2899a7a48bf573ef03ec02d515477d9e12961cbc58b3640f03a3cfd11"
+    },
+    {
+      "file": "scripts/verify-current-staging-compatibility.mjs",
+      "expected": "0b49b81a269efb4af8b8bb330edd60fae559cf70aad68577e865f26b7a769bf4",
+      "actual": "0b49b81a269efb4af8b8bb330edd60fae559cf70aad68577e865f26b7a769bf4"
+    }
+  ],
+  "observedCounts": {
+    "runnerChecks": 25,
+    "expectedOuterSqlErrors": 7,
+    "phases": 16,
+    "overlappingConnectionRaces": 4
+  },
+  "nativeVersion": "170006",
+  "fixtureDatabase": "duediligence_compatibility_fixture",
+  "sqlExecuted": true,
+  "findings": [
+    {
+      "severity": "none",
+      "text": "All 19 executable package inputs, manifest and harness match the successful run exactly; tested merge has the same entire tree as source head."
+    },
+    {
+      "severity": "none",
+      "text": "Runner uses ON_ERROR_STOP=1, rejects nonzero SQL exits and rejects expected-error SQLSTATE/message mismatches. PASS status is assigned only after all sequential phases and four awaited races complete."
+    },
+    {
+      "severity": "none",
+      "text": "Both SQL assertion helpers reject FALSE and NULL via IS DISTINCT FROM true. Professor and student test blocks have no catch-all exception handlers or unconditional early exit. The six professor immutable-edit checks catch only SQLSTATE55000, while an unexpectedly successful write raises uncaught P0001."
+    },
+    {
+      "severity": "none",
+      "text": "The only behavior-loop skip is documented student session6 initial submission_intent. Session6 subsequently executes separately constructed, constraint-checked historical accepted receipt replay and no-write assertions; current namespaced receipt assertions remain exercised on session5."
+    },
+    {
+      "severity": "none",
+      "text": "No trigger disable, session_replication_role override or no-op guard replacement appears in seeds or behavior tests. Captured trigger definitions and enabled state, constraints, metadata and function bytes are compared before seeds; original catalog is checked again after inverse."
+    },
+    {
+      "severity": "none",
+      "text": "Each concurrency case requires a real holder lock and blocked waiter observation before release, awaits both separate connections, then executes result/data assertions. No unconditional check(true) can bypass those awaited operations."
+    },
+    {
+      "severity": "documentation",
+      "text": "The report inherits fixture-manifest prose saying native execution is still required. This is stale generation-time wording, not a runtime gap; the report execution status, phases and native run establish this bounded execution."
+    }
+  ],
+  "limitations": [
+    "Synthetic external tables have captured column types only; their real defaults, constraints, grants, RLS, triggers and data are deliberately not replicated.",
+    "Support roles supabase_admin, supabase_auth_admin and dashboard_user are inert NOLOGIN placeholders for captured schema ACLs; their production role flags and memberships were not captured.",
+    "Supabase platform services, authentication tokens, API gateway behavior, provider email delivery, storage and network access are outside this database fixture.",
+    "Relation storage options, comments, sequences, extension ownership and role memberships were not captured. Current namespace columns have no identity/generated columns or sequence defaults.",
+    "25 is the outer runner check count. SQL assertions execute inside the successful phases but the report does not separately instrument or enumerate every dynamic SQL assertion. Seven expectedErrors are outer-process failures; six caught immutable SQLSTATE55000 probes and the caught40001 isolation probe are additional in-phase checks.",
+    "The four observed races prove only the deliberately exercised schedules in this synthetic database, not general concurrency/load correctness.",
+    "No Worker/browser submission, Supabase Auth/gateway/platform, live free/paid/admin journey, mail inbox, media/capacity, production release or deployment state is proved.",
+    "Accepted-receipt replay after revocation is SQL-only; the normal Worker context/intent path and student display-number consistency remain integration gaps.",
+    "The inverse is proven before committed behavior-dependent race writes; it is not proof of safe hosted rollback after new live writes.",
+    "The database is a frozen October18-19 capture, not fresh hosted staging verification."
+  ],
+  "scope": {
+    "hostedSqlExecuted": false,
+    "deployments": false,
+    "providerCalls": 0,
+    "trackedEdits": false,
+    "reviewOnly": true
+  }
+}

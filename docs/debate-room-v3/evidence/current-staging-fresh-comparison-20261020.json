@@ -1,0 +1,117 @@
+{
+  "status": "FRESH_READ_ONLY_CAPTURES_MATCH_TESTED_INPUT_SNAPSHOTS",
+  "project": "hlzqmreeoghbldnhlybr",
+  "capturedAtRange": [
+    "2026-10-20 13:02:26.333216+00",
+    "2026-10-20 13:02:27.462875+00",
+    "2026-10-20 13:02:28.962943+00",
+    "2026-10-20 13:02:30.21832+00",
+    "2026-10-20 13:02:31.778418+00",
+    "2026-10-20 13:02:33.099763+00"
+  ],
+  "comparisons": [
+    {
+      "source": "staging-function-preimages-20261018.json",
+      "fresh": "staging-function-preimages-20261020.json",
+      "rows": 10,
+      "previousSha256": "794d08bd557b19587569ba02e32b3d00262e8a2e38d4c5f01bdf6797d10be47b",
+      "freshSha256": "3691a2ad98f5391f46fe5e7e8d00d27e77876c5ae0718a0d0b652e1e8625ef60",
+      "capturedAt": "2026-10-20 13:02:28.962943+00",
+      "normalizedRowsSha256": "5702a1d0647e6b08f4eeb606bb62e24ca14dc8e8b66c008c94ca594323bff476",
+      "result": "EXACT_MATCH_EXCEPT_CAPTURE_TIMESTAMP"
+    },
+    {
+      "source": "staging-function-dependencies-20261018.json",
+      "fresh": "staging-function-dependencies-20261020.json",
+      "rows": 46,
+      "previousSha256": "20df0f57d377e2693c27b6512c1552ea816fdffb399570c177e6ac0d49b12094",
+      "freshSha256": "c144ac91e1d2c9b7857b8e382ad84b2c0c087e0ca170096a6bf176fee4700303",
+      "capturedAt": "2026-10-20 13:02:30.21832+00",
+      "normalizedRowsSha256": "93ab2e6957edc4e3858d2c714cb26c793f3f65ecbcae0c7dd87798657fbc2fd0",
+      "result": "EXACT_MATCH_EXCEPT_CAPTURE_TIMESTAMP"
+    },
+    {
+      "source": "staging-schema-shape-20261018.json",
+      "fresh": "staging-schema-shape-20261020.json",
+      "rows": 1,
+      "previousSha256": "f4dccded8ec4fa9c2ddb8f594d668f78fedd0b50e52bec419dbcaa6ca3f7dca2",
+      "freshSha256": "ca1ddc372c8e5137064172f788b7285f58a3a1809fac6ca4a3830a99275923a9",
+      "capturedAt": "2026-10-20 13:02:27.462875+00",
+      "normalizedRowsSha256": "5abc32a336e70a39c1422f923ab86949ad93b2ee7778a5bb7a2c61207680da82",
+      "result": "EXACT_MATCH_EXCEPT_CAPTURE_TIMESTAMP"
+    },
+    {
+      "source": "staging-runtime-metadata-20261018.json",
+      "fresh": "staging-runtime-metadata-20261020.json",
+      "rows": 1,
+      "previousSha256": "c76bf9b9ad5dcc61185036af426725c53e6053442c78709ca3a9455fc21616b5",
+      "freshSha256": "4f4226e50127f7988477e42116a6e756ee2886744b9bfb0e3a701410e76355d8",
+      "capturedAt": "2026-10-20 13:02:31.778418+00",
+      "normalizedRowsSha256": "6ce724593f22e6d65067f84710cf8a140fc60cf4211bf291baa0599371bb585a",
+      "result": "EXACT_MATCH_EXCEPT_CAPTURE_TIMESTAMP"
+    },
+    {
+      "source": "staging-external-column-metadata-20261019.json",
+      "fresh": "staging-external-column-metadata-20261020.json",
+      "rows": 1,
+      "previousSha256": "63c1726dd8d601f76b2e2d6b6025e138ac7f83452fb11b09cb1ac89432769e1a",
+      "freshSha256": "02cf1a3ad16f9fb6241f9bef4b54730568f187d3e6d8660e11e000dd56120e1b",
+      "capturedAt": "2026-10-20 13:02:26.333216+00",
+      "normalizedRowsSha256": "e1373ce7cc56e4055785ce4f7065fe22919012694ea84eeb27aca28085a48d01",
+      "result": "EXACT_MATCH_EXCEPT_CAPTURE_TIMESTAMP"
+    },
+    {
+      "source": "staging-student-aggregate-inventory-20261018.json",
+      "fresh": "staging-student-aggregate-inventory-20261020.json",
+      "rows": 1,
+      "previousSha256": "e9d34af180afb600bc8a9f1993f859427fe7044bb0ddf61084ff716ea7f080f1",
+      "freshSha256": "c83f803791913188ced1d67be1d5447c03976a0c5c4acba35b4ae21da753ed8a",
+      "capturedAt": "2026-10-20 13:02:33.099763+00",
+      "normalizedRowsSha256": "ccd1f7293aedc91180de9c23f1e072f366772fba5a3f5d0147e663f6b8382fdc",
+      "result": "EXACT_MATCH_EXCEPT_CAPTURE_TIMESTAMP"
+    }
+  ],
+  "aggregateInventory": {
+    "captured_at": "2026-10-20 13:02:33.099763+00",
+    "sessions": {
+      "total": 0,
+      "revoked": 0,
+      "submitted": 0,
+      "unfinished": 0,
+      "intent_audit": 0,
+      "submit_audit": 0,
+      "valid_pending_hash": 0,
+      "any_pending_metadata": 0,
+      "expired_with_pending": 0,
+      "revoked_with_pending": 0,
+      "strict_expired_lease": 0,
+      "intent_and_submit_audit": 0,
+      "professor_review_open_expired_lease": 0,
+      "professor_review_open_lease_mismatch": 0
+    },
+    "active_duplicate_normalized_email": {
+      "groups": 0,
+      "identities": 0,
+      "largest_group": 0
+    },
+    "unfinished_duplicate_room_email": {
+      "groups": 0,
+      "attempts": 0,
+      "identities": 0
+    },
+    "roster_number_mapping": {
+      "rosters": 0,
+      "entered_number_differs": 0,
+      "email_external_identifier": 0
+    }
+  },
+  "hostedMutation": false,
+  "stagingDeployment": false,
+  "productionDeployment": false,
+  "limits": [
+    "Separate read-only transactions; this is not a locked cutover snapshot.",
+    "Zero current sessions and rosters is a dated aggregate observation, not a guarantee before a future update.",
+    "Does not validate hosted authentication, Worker configuration, browser behavior, mail or delivery.",
+    "The disposable forward and inverse remain guarded against hosted use."
+  ]
+}

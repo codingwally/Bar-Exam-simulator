@@ -2,6 +2,8 @@
 
 Status: **IN PROGRESS; NOT OVERALL ACCEPTANCE.** Read-only inventory prepared from the current checkout at `662c5cadc0f18497f673c79b40bd239680b77d93` and saved evidence. No browser, cloud, database, test account, payment, mail, provider, install, deployment or test execution was performed by this inventory pass. Promoted on 19 October from the independently checked inventory: 40 route groups, 12 cross-cutting groups, 52 unique IDs and 184 resolved source references. Its original ignored artifact has SHA-256 `e9b5ab348cb4eb743e551d4b7448c25db8f849dba07723ab42a3619e4dd596a7`; this durable copy preserves the dated evidence and open statuses.
 
+**20 October execution update:** [The native compatibility suite passed](staging-compatibility-verification-20261020.md), and six fresh read-only staging captures match its input snapshots. This closes the scoped synthetic SQL checks recorded below; it does not close any complete route or hosted acceptance row.
+
 ## Continuity with the existing audit
 
 This continues OWNER-08 in `docs/debate-room-v3/publication-20260910.md`. It does not start a parallel audit or replace the 315-row Debate requirement ledger.
@@ -139,3 +141,16 @@ Every applicable route row above must receive these checks; passing one feature 
 For execution, append a result line per stable ID and scenario: `ID | scenario | source/release | environment/date | role | actual action | expected/observed | status | evidence | cleanup | remaining gap`. Keep **NOT RUN** distinct from **PASS**, **FAIL**, **BLOCKED**, and **NOT APPLICABLE with reason**. All currently unexecuted rows remain open.
 
 This inventory does not complete or pause the audit. The next useful work is the compatibility resolution plus bounded route-level evidence; the outstanding full hosted rehearsal, physical media, real delivery, full role coverage and production readback remain explicit gates.
+
+## Execution results — 20 October 2026
+
+All rows below use exact candidate `70dce183`, disposable PostgreSQL 17.6, native run39426693601 and its [independently verified evidence](staging-compatibility-verification-20261020.md). The container was stopped by the job; behavior phases rolled back synthetic changes, and concurrent-connection tests committed only into that disposable database. No hosted user data or schema was changed.
+
+| ID | Scenario / actual result | Status | Remaining gap |
+| --- | --- | --- | --- |
+| SITE-029 / SITE-035 | Captured schema and actual permissions; missing/partial-state rejection; atomic definition update, repeat, inverse and restoration; protected functions and all synthetic table hashes preserved | SCOPED_LOCAL_PASS | Hosted target-bound application, fresh Worker/config preservation and creator/admin browser flow |
+| SITE-030 | Real SQL intent, matching expiry continuation, receipt replay, no post-acceptance revision, privacy/revocation, canonical admission and recovery | SCOPED_LOCAL_PASS | Worker/browser receipt recovery after revocation, entered-number display, actual hosted submission and released-result journey |
+| SITE-031 / SITE-X07 | Partial draft versus strict complete release, submitted-version maximum, invalid manifests, authorization, replay, batch atomicity and immutable grading evidence | SCOPED_LOCAL_PASS | Actual browser/offline workflow, provider accuracy, exported result and selected-recipient delivery |
+| SITE-X06 | Four overlapping connection pairs: same normalized email across rooms, simultaneous consent, session revoke/intent and key revoke/intent; real blocking observed | SCOPED_LOCAL_PASS | Hosted multi-browser races and other routes' concurrency cases |
+| SITE-X09 | Actual anon/authenticated denials, internal service-role denial, valid public dispatch, actor isolation and unchanged captured ACLs | SCOPED_LOCAL_PASS | Full hosted Auth/RLS integration and free/paid/admin browser matrix |
+| SITE-X11 | Source/input hashes matched 21/21; tested merge and candidate trees identical; six fresh read-only capture comparisons exact except timestamps | SCOPED_LOCAL_PASS | This is test evidence only; current production revision and any future deployment/readback remain open |

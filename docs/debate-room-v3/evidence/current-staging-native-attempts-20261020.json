@@ -1,0 +1,82 @@
+{
+  "pullRequest": "https://github.com/codingwally/Bar-Exam-simulator/pull/413",
+  "scope": "Disposable PostgreSQL 17.6 only; no hosted database or production mutation",
+  "attempts": [
+    {
+      "runId": 39257545123,
+      "candidate": "4366e262831befa1ddb493693c9f56f8dbad8e9a",
+      "result": "FAILED_CONTAINER_INITIALIZATION",
+      "sqlExecuted": false,
+      "cause": "GitHub runner did not group single-quoted health command; Docker rejected -U.",
+      "correction": "Use double quotes and pin the observed PostgreSQL image digest.",
+      "reportAvailable": false
+    },
+    {
+      "runId": 39257733221,
+      "candidate": "0952a151575845e5e4e6f3092cb51410b4c5b28c",
+      "result": "FAILED_UNHANDLED_STDIN_EPIPE",
+      "sqlExecuted": "not established by retained report",
+      "cause": "psql closed early during fixture input; unhandled EPIPE prevented retention of its SQL diagnostic.",
+      "correction": "Handle stdin errors and retain process exit SQLSTATE and stderr.",
+      "reportAvailable": false
+    },
+    {
+      "runId": 39257926603,
+      "candidate": "b8f8253f5beae6b66d9cee37720671a48bd02b4a",
+      "result": "FAILED_FIXTURE_IMPORT",
+      "sqlExecuted": true,
+      "checksPassed": 1,
+      "behaviorPhasesPassed": 0,
+      "sqlState": "42601",
+      "cause": "Missing statement delimiter after first captured function definition, before ALTER FUNCTION.",
+      "correction": "Added the missing external statement delimiters in candidate 552cbf2 without changing captured function bodies; subsequent run imported and verified the exact catalog.",
+      "report": "artifacts/debate-local-rehearsal/native-compatibility-39257926603/report.json"
+    },
+    {
+      "runId": 39258322983,
+      "candidate": "552cbf25ac7aa999707a3e3b227e3fe8ccde761c",
+      "testedMerge": "05ad15cc79ceac06e0e0c542792201f5dad35fa1",
+      "result": "FAILED_PROFESSOR_SYNTHETIC_SEED",
+      "sqlExecuted": true,
+      "checksPassed": 4,
+      "phasesPassed": ["current-schema.sql", "verify-current-schema.sql"],
+      "expectedDenialsObserved": 4,
+      "sqlState": "23514",
+      "cause": "Synthetic professor seed changed anonymous_grading while its current sealed publication retained a different anonymity snapshot; the real publication guard rejected it.",
+      "correction": "Candidate 39a45c5 publishes a separate sealed anonymous version and switches the display flag with its current-version pointer. Both synthetic seeds and preimage behavior passed in the next native run.",
+      "report": "artifacts/debate-local-rehearsal/native-compatibility-39258322983/report.json"
+    },
+    {
+      "runId": 39384112940,
+      "candidate": "39a45c5883866993fefa6fe58b8f1babd4952aed",
+      "testedMerge": "e79bbea730ffa900f5dac038a88ec3dbcaa84110",
+      "result": "FAILED_FORCED_ROLLBACK_PROBE",
+      "sqlExecuted": true,
+      "checksPassed": 6,
+      "phasesPassed": ["current-schema.sql", "verify-current-schema.sql", "professor-seed.sql", "student-seed.sql", "professor-pre.sql", "student-pre.sql"],
+      "expectedDenialsObserved": 6,
+      "sqlState": "42601",
+      "cause": "JavaScript replacement-string semantics collapsed the forced rollback probe's double-dollar SQL delimiters to single dollar signs.",
+      "correction": "Candidate 70dce18 uses a replacement callback to preserve the intended literal SQL delimiters.",
+      "report": "artifacts/debate-local-rehearsal/native-compatibility-39384112940/report.json"
+    },
+    {
+      "runId": 39426693601,
+      "candidate": "70dce183f020c6fc52d98662e99184e03d885d92",
+      "testedMerge": "9928436e4293ccf9cf7bc823ceb2ccc1ca9282e8",
+      "result": "PASS_SCOPED_NATIVE_DATABASE_CHECKS",
+      "sqlExecuted": true,
+      "checksPassed": 25,
+      "phasesPassed": 16,
+      "expectedDenialsObserved": 7,
+      "overlappingConnectionRacesPassed": 4,
+      "independentSourceHashComparisons": 21,
+      "report": "artifacts/debate-local-rehearsal/native-compatibility-39426693601/report.json",
+      "independentReview": "artifacts/debate-local-rehearsal/native-success-review-20261020.json"
+    }
+  ],
+  "fullDatabaseVerificationPassed": false,
+  "scopedNativeDatabaseVerificationPassed": true,
+  "hostedRehearsalPassed": false,
+  "overallAuditComplete": false
+}

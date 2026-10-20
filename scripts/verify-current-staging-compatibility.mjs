@@ -103,7 +103,7 @@ try {
   await run(`BEGIN; ALTER FUNCTION examination_room_v1.api_error(text,text,integer,text) SET work_mem='4MB';\n${files.get('forward.sql')}`,{expectedCode:'P0001',expectedMessage:'PROTECTED_DEPENDENCY_CHANGED'});await verifyCatalog(baseline,'Changed protected dependency aborts atomically');
   const first=JSON.parse(files.get('target-definitions.json'))[0];
   await run(`BEGIN; ${first.after};\n${files.get('forward.sql')}`,{expectedCode:'P0001',expectedMessage:'UNKNOWN_OR_PARTIAL_PACKAGE_PREIMAGE'});await verifyCatalog(baseline,'Mixed package state aborts and transaction restores original');
-  const forced=files.get('forward.sql').replace(/COMMIT;\s*$/, "DO $$ BEGIN RAISE EXCEPTION 'TEST_FORCED_ROLLBACK_AFTER_VERIFIED_POSTIMAGE'; END $$;\nCOMMIT;\n");
+  const forced=files.get('forward.sql').replace(/COMMIT;\s*$/, () => "DO $$ BEGIN RAISE EXCEPTION 'TEST_FORCED_ROLLBACK_AFTER_VERIFIED_POSTIMAGE'; END $$;\nCOMMIT;\n");
   await run(forced,{expectedCode:'P0001',expectedMessage:'TEST_FORCED_ROLLBACK_AFTER_VERIFIED_POSTIMAGE'});await verifyCatalog(baseline,'Late failure rolls back all six definitions and new lease objects');assert.deepEqual(await data(),seeded);check('Failure probes preserve all synthetic data hashes',true);
   await phase('forward.sql');await verifyCatalog(postimage,'All six composed definitions installed with preserved dependencies');assert.deepEqual(await data(),seeded);check('Definition update has no standalone row changes',true);
   await phase('forward.sql');await verifyCatalog(postimage,'Complete forward repeat is a verified no-op');

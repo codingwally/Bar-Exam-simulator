@@ -1,5 +1,7 @@
 # Public room and navigation follow-up
 
+**Current status, 18 October 2026:** PR412 merged as `662c5cadc0f18497f673c79b40bd239680b77d93`, with the exact tested tree. [Fresh independent verification](evidence/public-followup-ci-39041655878.json) covers the corrected candidate; Debate run39041655878, Home run39041655817 and shared-site run39041655841 passed. The Linux advertising probe now records the absent destination header and Chrome's `.Inspector` abort message, confirms the exact request was blocked and observes no unexpected request. Earlier failed checkpoints below remain historical. No production deployment or full hosted acceptance followed the merge. Superseded PR376 was closed with its branch preserved.
+
 This reconciles the still-unpublished PR376 changes onto the current main branch after PR411. It preserves command recovery, the current Study Room implementation, newer Examination Room work and existing entitlements. It adds no production deployment or database migration.
 
 | Requirement | Verification | Evidence boundary |

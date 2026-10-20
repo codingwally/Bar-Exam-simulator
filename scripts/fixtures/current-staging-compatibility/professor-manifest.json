@@ -1,0 +1,121 @@
+{
+  "status": "OFFLINE_COMPOSITION_ONLY_NOT_SQL_EXECUTED_NOT_APPLIED",
+  "candidate": "662c5cadc0f18497f673c79b40bd239680b77d93",
+  "branch": "codex/debate-staging-compatibility-20261018",
+  "target_project": "hlzqmreeoghbldnhlybr",
+  "preimages_captured_at": "2026-10-18 05:37:46.982818+00",
+  "preimage_capture_sha256": "794d08bd557b19587569ba02e32b3d00262e8a2e38d4c5f01bdf6797d10be47b",
+  "sources": [
+    {
+      "path": "supabase/migrations/20260920153000_fix_examination_room_partial_draft_grade_maximum.sql",
+      "local_sha256": "96ede0863d4bc7e2c883c07e913150172da26673a27213a96f54b9828063ccb3",
+      "git_blob": "3689ec6e3d925f3eabc494b96f5ea91241f91d54",
+      "git_sha256": "cd0a66938876e687ede5bfb7d0bbf364bb4c052d8cb1ac00d5161936251e27c8"
+    },
+    {
+      "path": "supabase/migrations/20260925195500_examination_room_monitor_event_logs.sql",
+      "local_sha256": "ea251a1dbbbdce3291632efad06db60d75049df78327ce1181b5817d53a1f4b0",
+      "git_blob": "733b1174a989ce89748122acf17ffd499068ea2b",
+      "git_sha256": "14d318b73666e24e93f967045afca202d120c71dc4095a2e141e8586672a8ad7"
+    },
+    {
+      "path": "supabase/migrations/20260925201500_examination_room_monitor_live_presence.sql",
+      "local_sha256": "df86532dc5b0b5d4cca3370775d160efcbbf4dba77f947f7e47d381ba3414ea0",
+      "git_blob": "2591779d38c5989afff96062b2a87ce01c460606",
+      "git_sha256": "02583635ba92d4bda9eb8d5350c5a9cabdea9ea2dd94547fc9cf3c045f50229b"
+    },
+    {
+      "path": "supabase/migrations/20260925203000_examination_room_monitor_current_activation_only.sql",
+      "local_sha256": "f8c8475bbf0ae8abbef7141c1f0bdfc1d9cccf3df34de6c612408aa20e12b9dd",
+      "git_blob": "6f843c1fee596d82091692ae1af208b973a58fbe",
+      "git_sha256": "d9aed20f67c60c19c7f4239f83ec05920ae3fa919995d457fc0ca537b6931536"
+    }
+  ],
+  "deliberate_source_narrowing": "Email source migration globally matches twice. Only its one monitor occurrence is applied; grading/history remains byte-identical as explicitly directed by parent.",
+  "changes": [
+    {
+      "function": "examination_room_v1.api_professor(text,uuid,uuid,jsonb)",
+      "before_definition_sha256": "75e15930ec34a9683791d53eaa380645bffe48c33ee9c5cd1ada618930c5e294",
+      "after_definition_sha256": "5113e63f861843751dd22a8639604daf5b1b02a073df718aa91e24b7428c7493",
+      "before_body_sha256": "a6025f0b8a979c2ef01c9d20849de06661a0f664c88e88e319c8de1762be5d78",
+      "after_body_sha256": "bee4776a358980d92785303cae1b1205010745c278b429ff1a15c2dbd3a330ce",
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres}",
+      "security_definer": false,
+      "settings": [
+        "search_path=pg_catalog"
+      ],
+      "prefix_sha256": "814d9f3c4f50a49afdb6431f4e6ec6db31c34dbd682a8e3ff128ef11578e6bbb",
+      "release_results_and_tail_sha256": "ddc2c3e0e494916890fff0375baa1761298f11ccfdb04443db0b5ad0a76bb7b6",
+      "replacements": [
+        {
+          "fragment": "partial_draft_maximum",
+          "before": 1,
+          "after": 1,
+          "scope": "save_grade"
+        }
+      ]
+    },
+    {
+      "function": "examination_room_v1.api_professor_view(text,uuid,uuid,uuid)",
+      "before_definition_sha256": "95da22913df65a696f4bd8b003fb286b61df3c8cd1b01fe7144888a6c713c3ca",
+      "after_definition_sha256": "f68eb2a60edd19af46c61ad8fabc8b3bc4084b795622d874841ab38dad3e97ce",
+      "before_body_sha256": "c066ab9b3d82c6e34af8897d35f8b97e3ce9af656512c073aac7a9b980f50840",
+      "after_body_sha256": "429f80a433e1bdfdec1fe7044f86bf82db0c1e1794e3abce68b7099cd183f5b4",
+      "owner": "postgres",
+      "acl": "{postgres=X/postgres}",
+      "security_definer": false,
+      "settings": [
+        "search_path=pg_catalog"
+      ],
+      "authorization_prefix_sha256": "4e65ea48911b7bf033a29ad6801cb4f971e8d69de073a73307348720b295d8a5",
+      "grading_and_tail_sha256": "029db28b920740ef8be8e2d2434152e6cda0b3dbefe9604e3c941eb95abf2511",
+      "replacements": [
+        {
+          "fragment": "email",
+          "before": 1,
+          "after": 1,
+          "scope": "monitor only; grading occurrence excluded"
+        },
+        {
+          "fragment": "live_presence",
+          "before": 1,
+          "after": 1,
+          "scope": "monitor.sessions"
+        },
+        {
+          "fragment": "current_activation",
+          "before": 3,
+          "after": 3,
+          "scope": "monitor.sessions/submissions/incidents"
+        }
+      ]
+    }
+  ],
+  "local_checks": [
+    "exact candidate and branch",
+    "exact source byte hashes and committed LF equality",
+    "exact captured definition and body hashes",
+    "exact signatures/security/ACL/search path",
+    "single save_grade replacement",
+    "single monitor email and presence replacements",
+    "three per-array current-activation filters",
+    "unchanged authorization prefixes",
+    "unchanged strict final-release and grading/history suffixes",
+    "exact inverse reproduces both original definitions"
+  ],
+  "output_hashes": {
+    "proposed-postimage.sql": "63f579e3a31ee3b3dbe059ad821584754b7828f2487bb1d61bacad11c817480c",
+    "captured-preimage.sql": "53bc2085bdf74c5219fbe59c2323319f9086662e463f98a6614dfb5442328908",
+    "guarded-forward.sql": "2e9b9d3c77c2b6b4422ac597c59648a36bc1ddd9ba42831959dd1538ce4422cc",
+    "guarded-inverse.sql": "7ff8e0261cb2215924afe0380eeeab79411e0a4a23790a1316b352d6ccc188ee",
+    "current-schema-dependencies.json": "79633a571551cc295cbd00590fb3cfa6073109c89d79ba723c03c680e6205d2c",
+    "current-function-dependencies.json": "181e952c203754df65b8e8c5591f80842f6450e0a9105de6a2be2aab50ee504a"
+  },
+  "gaps": [
+    "No SQL compilation/execution, permission probe, repeat execution, inverse execution, or real branch regression has run.",
+    "Custom setting does not attest target project; enclosing authorized runner must verify connection.",
+    "Selected real current helper bodies are included; fixture construction triggers are in the parent capture. Public/profiles/auth shapes and integration permission evidence must be verified separately.",
+    "No staging or production changes were made."
+  ]
+}

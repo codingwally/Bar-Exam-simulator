@@ -1,0 +1,313 @@
+{
+  "format": "duediligence-current-capture-fixture-v1",
+  "purpose": "Disposable PostgreSQL compatibility verification only; not a migration or deployment.",
+  "database": "duediligence_compatibility_fixture",
+  "bootstrapRole": "fixture_bootstrap",
+  "fixtureMarker": "isolated-current-capture-20261018",
+  "postgresVersion": "17.6",
+  "sources": [
+    {
+      "name": "staging-schema-shape-20261018.json",
+      "bytes": 259136,
+      "sha256": "f4dccded8ec4fa9c2ddb8f594d668f78fedd0b50e52bec419dbcaa6ca3f7dca2"
+    },
+    {
+      "name": "staging-function-dependencies-20261018.json",
+      "bytes": 227943,
+      "sha256": "20df0f57d377e2693c27b6512c1552ea816fdffb399570c177e6ac0d49b12094"
+    },
+    {
+      "name": "staging-function-preimages-20261018.json",
+      "bytes": 139410,
+      "sha256": "794d08bd557b19587569ba02e32b3d00262e8a2e38d4c5f01bdf6797d10be47b"
+    },
+    {
+      "name": "staging-runtime-metadata-20261018.json",
+      "bytes": 5388,
+      "sha256": "c76bf9b9ad5dcc61185036af426725c53e6053442c78709ca3a9455fc21616b5"
+    },
+    {
+      "name": "staging-external-column-metadata-20261019.json",
+      "bytes": 2622,
+      "sha256": "63c1726dd8d601f76b2e2d6b6025e138ac7f83452fb11b09cb1ac89432769e1a"
+    }
+  ],
+  "counts": {
+    "tables": 28,
+    "columns": 403,
+    "constraints": 347,
+    "indexes": 122,
+    "explicitIndexes": 34,
+    "triggers": 53,
+    "namespaceFunctions": 46,
+    "publicFunctions": 2,
+    "policies": 0,
+    "externalSyntheticTables": 3,
+    "externalCapturedColumns": 10
+  },
+  "functionDefinitions": [
+    {
+      "signature": "examination_room_v1.api_admin(p_operation text, p_actor_user_id uuid, p_institution_id uuid, p_payload jsonb)",
+      "bodySha256": "6657d93aede10f8a3b4e9d38d389d54dc6ef72f3bc1191d2dcb7f6c0856f9125",
+      "definitionSha256": "7276e6df45b37831883ca9a28bc3b0731de3b4a312369d1104c81da1ecf513dd"
+    },
+    {
+      "signature": "examination_room_v1.api_error(p_code text, p_message text, p_status integer, p_recovery text)",
+      "bodySha256": "63b3bc300c697d001bd2e0fdb51e673c598db03d0b654e2551fd098c42d50d0a",
+      "definitionSha256": "92d7ff0cb2d931bbd072df5d349a616965ea7383625ad6d59fd39eca77b137e4"
+    },
+    {
+      "signature": "examination_room_v1.api_professor(p_operation text, p_actor_user_id uuid, p_institution_id uuid, p_payload jsonb)",
+      "bodySha256": "a6025f0b8a979c2ef01c9d20849de06661a0f664c88e88e319c8de1762be5d78",
+      "definitionSha256": "75e15930ec34a9683791d53eaa380645bffe48c33ee9c5cd1ada618930c5e294"
+    },
+    {
+      "signature": "examination_room_v1.api_professor_view(p_operation text, p_actor_user_id uuid, p_institution_id uuid, p_exam_id uuid)",
+      "bodySha256": "c066ab9b3d82c6e34af8897d35f8b97e3ce9af656512c073aac7a9b980f50840",
+      "definitionSha256": "95da22913df65a696f4bd8b003fb286b61df3c8cd1b01fe7144888a6c713c3ca"
+    },
+    {
+      "signature": "examination_room_v1.api_record_audit(p_institution_id uuid, p_exam_id uuid, p_session_id uuid, p_actor_user_id uuid, p_actor_role text, p_event_type text, p_subject_type text, p_subject_id uuid, p_request_hash text, p_occurred_at timestamp with time zone, p_response jsonb, p_correlation_id uuid)",
+      "bodySha256": "538afa7098e32587f056d5dc62a9acaa9aee027c0d3430a73acb236cf3d2b9bd",
+      "definitionSha256": "07190f7fcffa5d8b24ba4165d4c9ad7d09ce506e255712ef15f33f0f3986d4a1"
+    },
+    {
+      "signature": "examination_room_v1.api_replay(p_institution_id uuid, p_request_hash text, p_event_type text)",
+      "bodySha256": "f4fd12d2421e2dce70147e3c0886370ab8a581ac44068364effc9b72da1e305e",
+      "definitionSha256": "9f9ad9f65d49b2f89b1239ce8bb4fdce661805ebe3295ac9821ae9bb7c5cbf63"
+    },
+    {
+      "signature": "examination_room_v1.api_student(p_operation text, p_payload jsonb)",
+      "bodySha256": "78c5e72a4ea24b569eea5153ff1e954162427e869fef50cd045ae2b37b909e19",
+      "definitionSha256": "b2f4901d8f02d6bcae1814a117491da061e94c131432e87f82b150e442bda046"
+    },
+    {
+      "signature": "examination_room_v1.build_publication_manifest(p_exam_version_id uuid, p_published_at timestamp with time zone)",
+      "bodySha256": "7df2a2721f3fc16a452479e80ae22367ddf8fcc8b995b319c6e0ed97589c67fc",
+      "definitionSha256": "4a3647c6606454793e632d63db70eaef5fbe86700db343f9874fba5885430cc9"
+    },
+    {
+      "signature": "examination_room_v1.creator_authorized(p_actor_user_id uuid, p_institution_id uuid)",
+      "bodySha256": "8aec9542309e1c01b3edc0ea7c7087b73aeeff740b7ee1dff68b3d59abbc9d4c",
+      "definitionSha256": "a473426aa5bf9c2f559d2b509f47f9c082f8b3fed33845b7a0c1260426f4f5b0"
+    },
+    {
+      "signature": "examination_room_v1.creator_revoke_session(p_actor_user_id uuid, p_institution_id uuid, p_payload jsonb)",
+      "bodySha256": "8f1e280682d1249ab23ad729ff4e8b30a85e9f1e683c4cad4fb7a31fe6b51bdc",
+      "definitionSha256": "feb9f9e6e2458b3efe6fb1b4e0d562a2793df99a203618ca0f7b21574bf59e39"
+    },
+    {
+      "signature": "examination_room_v1.ensure_exam_current_version_published()",
+      "bodySha256": "ae68b6fb25772eca4ac8a3305a54dd785919c2723ab561b97e6a8dfa3a8b87a0",
+      "definitionSha256": "e505d487c7d1ccda4e782b2ffad6d1d19a1d127699632c076af304b55e18bc4c"
+    },
+    {
+      "signature": "examination_room_v1.ensure_releasable_grade()",
+      "bodySha256": "4317f150df2c8cc4eb03433a257996abe5c47d70852e5ce0d14e3248e3788768",
+      "definitionSha256": "5d92c026833a7acbbe1cdaa44e9a0088fecafd35f47560fd37ec77ff6987fd21"
+    },
+    {
+      "signature": "examination_room_v1.grader_safe_submission_manifest(p_manifest jsonb, p_anonymous_grading boolean, p_grading_alias text, p_opaque_session_id uuid)",
+      "bodySha256": "109b502d1dec6f856243dd1b4c8198f75938edade5f842ce6c8bda0cbea510d8",
+      "definitionSha256": "6de4e7c72329e22dc48a5093cbf3220eeb852e06efc22911a25fbfd5e39a4fb3"
+    },
+    {
+      "signature": "examination_room_v1.json_rows(p_value jsonb)",
+      "bodySha256": "917518f0cefe5e2d13674efa53ae121fcb869304a7c28c7cbb7de6652d3f40f8",
+      "definitionSha256": "599e4c83c981a0d4e8c68acf89d3fcceb7af630b6d5c01a8e087e78765d01357"
+    },
+    {
+      "signature": "examination_room_v1.jsonb_sha256(p_value jsonb)",
+      "bodySha256": "55d8de4f9ad53e6ead49dd9ffca9ffe0e997ba74226413a2e32d3682bcd1518f",
+      "definitionSha256": "f9bce66b9a8f68ce44485ad0b86468d446e2998162927dde38265939a3a15875"
+    },
+    {
+      "signature": "examination_room_v1.lock_request(p_institution_id uuid, p_request_hash text)",
+      "bodySha256": "fc0331f880070fc45f1cc378816cee90d46b53d87db2d793b2f3abe6fe5eaadd",
+      "definitionSha256": "465ef70b0cc6f0b854ddd204231b538b16bb9a8fbadd1126598af1250452ebc9"
+    },
+    {
+      "signature": "examination_room_v1.next_snapshot_sequence(p_exam_id uuid)",
+      "bodySha256": "df2db1d17d7b8f8b45c74e89c6c0374807110419117e28a0b41eeabc15e0c46f",
+      "definitionSha256": "bf75198d14a274d23d6a50068655085fad79caad79bd0f1a248c5b7c0d80baa7"
+    },
+    {
+      "signature": "examination_room_v1.normalize_default_student_warning()",
+      "bodySha256": "7fd42c9b5bb0973d808316fa72c35f1a363cbfd0f2498cd2e21f5f26082e2a08",
+      "definitionSha256": "9e2d022da93519b500aada19a4beb3bd692e13fa2c9c49985d02d16f3ff420e7"
+    },
+    {
+      "signature": "examination_room_v1.normalized_allowed_emails(p_value jsonb)",
+      "bodySha256": "d98533d6b194a90694557a31238ab59ce33df632cf7cffb136cb8a9317695222",
+      "definitionSha256": "34198a6304ef9c1f6f92fd4114a00e1d27208c26241fac8149e2a0a5c41c5275"
+    },
+    {
+      "signature": "examination_room_v1.owner_authorized(p_actor_user_id uuid)",
+      "bodySha256": "3574c6b327c5378c12f4d953c4862be199eddbe1e7b86b2b3669fac4a2d93205",
+      "definitionSha256": "4bb04bfa47a9fa50ec42f2ebb9c47d2af81a9474cc3355fbc5281d231209a474"
+    },
+    {
+      "signature": "examination_room_v1.owner_exam_bundle(p_exam_id uuid)",
+      "bodySha256": "c19e0e2777efd12e3b3f8199f69d53d598796e16da53f2acb25afbb504a4cabb",
+      "definitionSha256": "6b13cb369cdb1c3fb4c6369447dcc1225c5e70a06665aa99291487b99027710d"
+    },
+    {
+      "signature": "examination_room_v1.owner_exam_bundle_before_result_email(p_exam_id uuid)",
+      "bodySha256": "e2fda112c6566c56c3f524594b1660b72c1327318f58e937eb33dd8a1326fcd0",
+      "definitionSha256": "ca2e687d64c72872aad61523a4fbefe825cbbaad9acd69c9980e0daef12f940a"
+    },
+    {
+      "signature": "examination_room_v1.owner_snapshot_event_bundle(p_snapshot examination_room_v1.recovery_snapshots)",
+      "bodySha256": "fa24e3d243a8d71fd5f22e698b0354c78eb8cac75633c5b84a8bd42159641346",
+      "definitionSha256": "5d9fe43b12f40a6d3debafbe4c21e1e270b12b8ac5b0fed8e0e4d717da60ef2a"
+    },
+    {
+      "signature": "examination_room_v1.owner_snapshot_payload(p_snapshot_id uuid)",
+      "bodySha256": "a500a81d55b0d81f5718b52c38f90aea86cd58a8fac4d58afb52a7671352bd39",
+      "definitionSha256": "399b06154a8fbaea7081f9116f8cd1d736f6e014aaef12819e9b8ed4e5a1f3df"
+    },
+    {
+      "signature": "examination_room_v1.prepare_student_admission(p_payload jsonb)",
+      "bodySha256": "7d60faf31d196c7387604eec0077b8d05055f5f5e959b5bf1fb77042041ba7a7",
+      "definitionSha256": "263b9b20e8132ccaf946045a6512d813365dd42107296c5b0b2e20302a17a397"
+    },
+    {
+      "signature": "examination_room_v1.prevent_delete()",
+      "bodySha256": "2babad1f225eb542c30e632b215bed9bdaf3fe2fb931d6f6c61011306f1489a2",
+      "definitionSha256": "c697643b94d1eb985d076daf1f510834e8be39373aae23b659d9778e7e9f3dbf"
+    },
+    {
+      "signature": "examination_room_v1.prevent_mutation()",
+      "bodySha256": "af664f1ce37de88d7994bbb4e7e67db2eebfabd3e0f5dc73a4d7dc002791a692",
+      "definitionSha256": "184d4deaa5678a07c26415a01f0ebae0a8b5e160c67245d8be1959cb5e0c5f69"
+    },
+    {
+      "signature": "examination_room_v1.protect_email_delivery_event()",
+      "bodySha256": "3ef1a89d75c15671527f4e0fa8bb38925364131becd594241024e16546bc3c51",
+      "definitionSha256": "6c37b44db201da9c2740622b36fedc144e1d891e80e2c8bb1444f7f7cf53a72d"
+    },
+    {
+      "signature": "examination_room_v1.protect_grade_revision_item_set()",
+      "bodySha256": "b05845daaa070a8696fd2572605107762b6919ddf06da59e32626136e159487b",
+      "definitionSha256": "e0cd8fd5c9b2c5e0e3756040a60f74b07644c1f6d9cf26c8f7be5167df524b4d"
+    },
+    {
+      "signature": "examination_room_v1.protect_professor_access_request_history()",
+      "bodySha256": "659f2beff2f8ba1f6773f650eb120cc515b8ccbc9b4ada30516537da883318d1",
+      "definitionSha256": "6cc89d9726b20f9920a250d59640d6bde0834b78ef83a44b75e02a0c0b1b9d6d"
+    },
+    {
+      "signature": "examination_room_v1.protect_published_question()",
+      "bodySha256": "191a7975701371fa890ee878aa5816bba36b9e02cf797a3ec4864739149c08f2",
+      "definitionSha256": "4773e7cfc9cad7b2e5fc853a70c6bddab5f9f00922f9119f6cf45073bf03a4ff"
+    },
+    {
+      "signature": "examination_room_v1.protect_recovery_snapshot()",
+      "bodySha256": "f2259c5dd84c19500d3b98dcf478a0ce1fa80686382d3e4350847618cfa0fe6d",
+      "definitionSha256": "1fde5878173075071ed8ccd74b1792d9c043c7bdf7055701ce8f7070c1f97739"
+    },
+    {
+      "signature": "examination_room_v1.protect_staff_membership_history()",
+      "bodySha256": "e7263f3cbf7811cd6e13e2f5225dafb6baa00d6d126c7cf849742dcf67fa9b96",
+      "definitionSha256": "a79aaa26edbe8c60d215554e8f7c7a26c4cedc3a6d953dcde8507dfa78c75da5"
+    },
+    {
+      "signature": "examination_room_v1.protect_student_session_binding()",
+      "bodySha256": "7030894f8c4692b5adb5605d2f9068538ff4814a9d4a041f3bcde091d25f2fed",
+      "definitionSha256": "802b52b6d076c21d36d830a92740fa683af36302809384a6ed0da06de574f40e"
+    },
+    {
+      "signature": "examination_room_v1.protect_submission_answer_set()",
+      "bodySha256": "c950ba3d5ce84b1590b6be154013ca5abe8c6b12dd9eeea54fbeeee028908f2e",
+      "definitionSha256": "90466c13788a7d464d08d67d6a3a5b68210883140ab2e57a335f6750d790716c"
+    },
+    {
+      "signature": "examination_room_v1.queue_grading_snapshot()",
+      "bodySha256": "07758f4327ded35900e2ef3f8b932474d52163e28a546e6a8be450bc08ccc0a7",
+      "definitionSha256": "e555ae1bbd482820fe834c4ff0806f6fdb52d2b296f593431b5f756168de4d74"
+    },
+    {
+      "signature": "examination_room_v1.recover_existing_student_session(p_payload jsonb)",
+      "bodySha256": "97b566674e6da2b08c522f738b88065650f71c41289730d95aca342a6fccb4ef",
+      "definitionSha256": "c30d7b63e3cec523180fab0d22603d5c49161d430a4d00f88f319e4f181213b1"
+    },
+    {
+      "signature": "examination_room_v1.seal_exam_version()",
+      "bodySha256": "c9c148a6d6182da7e5f8b8cde3c66de4a4358efbd7332b1e1c9d689a7f77ec71",
+      "definitionSha256": "eb8234aad39b21203994085df20faf3c1744071e8bd05384620593bb51074415"
+    },
+    {
+      "signature": "examination_room_v1.set_snapshot_source()",
+      "bodySha256": "5af1c9a737d4a8115e0ab67c3eee489cfe400ed0f7905ab941f34feedccf508e",
+      "definitionSha256": "e861a27c7fe71fe2e37b185cab513947d06ea09138801009864a8d5418502f58"
+    },
+    {
+      "signature": "examination_room_v1.touch_updated_at()",
+      "bodySha256": "92fa7c305a8b856faea0575b27eaa33c1e39952cf9fe87b4c0cbf7d7eab556bd",
+      "definitionSha256": "354fd59c57b17c349514d24ce4a8e4fa8d3d177fb99291c64992d24d617f0e3a"
+    },
+    {
+      "signature": "examination_room_v1.uuid_from_hash(p_hash text)",
+      "bodySha256": "66a736cf40ccbfc250f8446fbdd7de911585bb37f4da459125b74a2ad2b6e2b1",
+      "definitionSha256": "d0d7dc854b466854f2c982e528e7e65a9de4ee33b4c7dea229a5ee737fcf64bb"
+    },
+    {
+      "signature": "examination_room_v1.valid_allowed_emails(p_emails text[])",
+      "bodySha256": "ba3b55cad702ac3f3fa66745c7815eec5f43444f758d9738284208d082cf6b6a",
+      "definitionSha256": "e7be18f5b1812c66834c764b2c65b466b6ebc372b09a888b3b7dc79f76078566"
+    },
+    {
+      "signature": "examination_room_v1.validate_exam_owner()",
+      "bodySha256": "4c0f0147ebb06f4e457ed09c2f0cea9d1fdd2799d48d1b23037213804672ffc4",
+      "definitionSha256": "f86d20fc206e887476f2363856d60d7c84cff4950362c185be6b434a7f7ca058"
+    },
+    {
+      "signature": "examination_room_v1.validate_privacy_acceptance()",
+      "bodySha256": "ea0070f61cc42e6de2d0eace5f2708617191d2f0c16086e8b4b73ee9f9439671",
+      "definitionSha256": "277bca90bee4d10f74b5475c143c36ab7c81fa5c0b6f708d5bfbcb1d7c38051c"
+    },
+    {
+      "signature": "examination_room_v1.validate_room_activation()",
+      "bodySha256": "e46e006a39104dd3b5b8045fecd747243d9e366eed30046d5f13643be751762b",
+      "definitionSha256": "8f96672da3ed19d205bd697b255bc8e29b74080a90c4278fa8ca67a91fbed880"
+    },
+    {
+      "signature": "examination_room_v1.validate_submission_receipt()",
+      "bodySha256": "5aa6cbbae171e04b1a28bf94961759513c804d4fa60db267e03a30c85e7f33bd",
+      "definitionSha256": "8a7c5d74463a6c9fe4555b42c271d524ecbead0f59bc613feef222af9f5534a9"
+    },
+    {
+      "signature": "public.examination_room_v1_api(p_scope text, p_operation text, p_actor_user_id uuid, p_institution_id uuid, p_payload jsonb)",
+      "bodySha256": "7e4a95085b4db167e38fbddc3c02b0edd61502c80c287c7c68fe2cf404f0d23e",
+      "definitionSha256": "9fc7ecec84dcada0860b443b3190cbc4bc93c8b6f1642dcb2e077249357b06ad"
+    },
+    {
+      "signature": "public.examination_room_v1_lifecycle_guard(p_exam_id uuid)",
+      "bodySha256": "2913cd1f0af99c9a7999ceb93666e3ebacaed79333d33fb3e4e6049eb75c260c",
+      "definitionSha256": "5be56ab90978ae40cdd821a7577bbe3ce977f9d6766c95fac4f111c4fbc9677b"
+    }
+  ],
+  "limitations": [
+    "Synthetic external tables have captured column types only; their real defaults, constraints, grants, RLS, triggers and data are deliberately not replicated.",
+    "Support roles supabase_admin, supabase_auth_admin and dashboard_user are inert NOLOGIN placeholders for captured schema ACLs; their production role flags and memberships were not captured.",
+    "Supabase platform services, authentication tokens, API gateway behavior, provider email delivery, storage and network access are outside this database fixture.",
+    "Relation storage options, comments, sequences, extension ownership and role memberships were not captured. Current namespace columns have no identity/generated columns or sequence defaults.",
+    "Generating these files proves deterministic composition only. PostgreSQL execution and behavioral tests are still required."
+  ],
+  "generator": {
+    "name": "build-current-schema.mjs",
+    "sha256": "9c2264a5350cfc2bec8d6d1fcc35f6094b7a6c99ba19d81ead4e617c6723112a"
+  },
+  "outputs": [
+    {
+      "name": "current-schema.sql",
+      "bytes": 350243,
+      "sha256": "a66c84ddb2238ad78a33cc8c4cbd926baab8b354f7a6db34277aa9b115374a95"
+    },
+    {
+      "name": "verify-current-schema.sql",
+      "bytes": 378408,
+      "sha256": "33af51cdddeeb4b87b58dde15ce0a95df767f3e7a2cb96ca70f24082aa65b641"
+    }
+  ]
+}

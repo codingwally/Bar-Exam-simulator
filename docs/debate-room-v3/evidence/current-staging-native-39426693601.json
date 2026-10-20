@@ -1,0 +1,311 @@
+{
+  "kind": "ISOLATED_CURRENT_POSTGRES_COMPATIBILITY",
+  "status": "PASS_SCOPED_NATIVE_DATABASE_CHECKS",
+  "startedAt": "2026-10-20T13:00:29.361Z",
+  "candidate": "9928436e4293ccf9cf7bc823ceb2ccc1ca9282e8",
+  "manifestSha256": "ac5be7b2899a7a48bf573ef03ec02d515477d9e12961cbc58b3640f03a3cfd11",
+  "harnessSha256": "0b49b81a269efb4af8b8bb330edd60fae559cf70aad68577e865f26b7a769bf4",
+  "packageFileHashes": {
+    "current-schema.sql": "a66c84ddb2238ad78a33cc8c4cbd926baab8b354f7a6db34277aa9b115374a95",
+    "verify-current-schema.sql": "33af51cdddeeb4b87b58dde15ce0a95df767f3e7a2cb96ca70f24082aa65b641",
+    "forward.sql": "b6f1c1ebb4aa28d61b10ddf61713a1fb295f21dbecbd018a23c3994e10e7eab8",
+    "inverse.sql": "a3a26b928a0cd120add9224afa12965af46e232d10b4350c491241d4b3b5be02",
+    "baseline.json": "670be5671f7dcdaf9273c129bbe4c4834c85db4a4ff1952aef944a93703cefa9",
+    "postimage.json": "ef39134f74ca324c24fb23ddb7e538cf8252571dd05c22b421cbafac1aead2e4",
+    "target-definitions.json": "4eefe9f39bda33d3e91b6afb95920775a6b2ce3bbc59f78dc0e956568f5f52ed",
+    "table-names.json": "6f7a8bff728dc7e8ad83c56a6bd6bda030044db80740bb3a1496778b983adf6e",
+    "fixture-manifest.json": "1e8944adbf74f3ed9cc0557dbf9d663b5402ed59e45b80c405dd94a0a5d9e601",
+    "hardening-manifest.json": "c951a8d13d6d547ff2fed1adb126227256f797debbdf40db41ba7ecab3a84b0b",
+    "hardening-patches.json": "c193b70296eae29819deba1ba5a50f87f8a18c3a56df86988051a77cb7da7d7d",
+    "professor-manifest.json": "46558bccf6c848bced1d003d717fa1153a8ef3b166dd89cdbff852fedd7e683b",
+    "professor-seed.sql": "a23d8f9e92d2a12107e33d30926f1b625675d5be9d5773a3c7e0213a5db6e462",
+    "professor-pre.sql": "d179702bfef72ca176d3e4f7190b71f2179f318d5dd04e1523e7c5852ea89e59",
+    "professor-post.sql": "f1881ee852d581bb9d6f68a3a8eda5c1f84c3cc72f12cdfe5b4cbe50194d4f50",
+    "student-seed.sql": "e7f133477259b08342125e4a27974fb704baba48549ee9c8471b6f3f65d653fc",
+    "student-pre.sql": "9e8e41ae4ea0a9dfe4872316abad6989a6187ee3eda431f5ec591fefccca883a",
+    "student-post.sql": "45271532a4b872f4ca1929a3f82531a503a80b4534a109e715579ce1940ee157",
+    "student-race.mjs": "e0f7cb3f0bcb63c12519e6ff2ef6152c22b926535b61912e966efe2dec5d8d60"
+  },
+  "sqlExecuted": true,
+  "hostedExecuted": false,
+  "providerCalls": 0,
+  "productionDeployed": false,
+  "checks": [
+    {
+      "name": "PostgreSQL 17.6 and fixed disposable database",
+      "passed": true
+    },
+    {
+      "name": "48 exact captured function definitions and permissions",
+      "passed": true
+    },
+    {
+      "name": "Missing disposable marker denies without changes",
+      "passed": true
+    },
+    {
+      "name": "Service role can dispatch while unregistered operation is rejected",
+      "passed": true
+    },
+    {
+      "name": "Changed protected dependency aborts atomically",
+      "passed": true
+    },
+    {
+      "name": "Mixed package state aborts and transaction restores original",
+      "passed": true
+    },
+    {
+      "name": "Late failure rolls back all six definitions and new lease objects",
+      "passed": true
+    },
+    {
+      "name": "Failure probes preserve all synthetic data hashes",
+      "passed": true
+    },
+    {
+      "name": "All six composed definitions installed with preserved dependencies",
+      "passed": true
+    },
+    {
+      "name": "Definition update has no standalone row changes",
+      "passed": true
+    },
+    {
+      "name": "Complete forward repeat is a verified no-op",
+      "passed": true
+    },
+    {
+      "name": "Behavior phases roll back their synthetic mutations",
+      "passed": true
+    },
+    {
+      "name": "Exact inverse restores all original definitions and removes only new lease objects",
+      "passed": true
+    },
+    {
+      "name": "Inverse repeat and preimage behavior preserve data",
+      "passed": true
+    },
+    {
+      "name": "student race 1: overlapping connections and real blocking observed",
+      "passed": true
+    },
+    {
+      "name": "student concurrent institutional email recheck has one identity and two distinct exam rosters",
+      "passed": true
+    },
+    {
+      "name": "student race 2: overlapping connections and real blocking observed",
+      "passed": true
+    },
+    {
+      "name": "student simultaneous consent resumes single session without duplicate consent",
+      "passed": true
+    },
+    {
+      "name": "student race 3: overlapping connections and real blocking observed",
+      "passed": true
+    },
+    {
+      "name": "student session revocation race denies pending intent",
+      "passed": true
+    },
+    {
+      "name": "student race 4: overlapping connections and real blocking observed",
+      "passed": true
+    },
+    {
+      "name": "student activation revocation race observes current activation after blocking",
+      "passed": true
+    },
+    {
+      "name": "student admission rejects stale-snapshot isolation rather than allowing duplicate identity",
+      "passed": true
+    },
+    {
+      "name": "Actual separate-connection concurrency cases executed",
+      "passed": true
+    },
+    {
+      "name": "Concurrency cases preserve installed function definitions and permissions",
+      "passed": true
+    }
+  ],
+  "expectedErrors": [
+    {
+      "applicationName": "compatibility-native",
+      "sqlState": "P0001",
+      "expectedMessage": "DISPOSABLE_FIXTURE_REQUIRED",
+      "diagnosticSha256": "4d904ae2b4df2d53ee1045556ca148cccef39e5f082a8004274dad0338fcc600"
+    },
+    {
+      "applicationName": "compatibility-native",
+      "sqlState": "42501",
+      "expectedMessage": null,
+      "diagnosticSha256": "0302b34abdfee75aa42f40794d84132d48ccbd507deafed86f16ebfb233274e0"
+    },
+    {
+      "applicationName": "compatibility-native",
+      "sqlState": "42501",
+      "expectedMessage": null,
+      "diagnosticSha256": "0302b34abdfee75aa42f40794d84132d48ccbd507deafed86f16ebfb233274e0"
+    },
+    {
+      "applicationName": "compatibility-native",
+      "sqlState": "42501",
+      "expectedMessage": null,
+      "diagnosticSha256": "f6ba8fb8e9989852fbae79770defc144815057d1baab11c5e43139ad18716272"
+    },
+    {
+      "applicationName": "compatibility-native",
+      "sqlState": "P0001",
+      "expectedMessage": "PROTECTED_DEPENDENCY_CHANGED",
+      "diagnosticSha256": "c2d516b7c020b9f74241607128f21785017a872a24e0d894c4cd6fb5c15cb86a"
+    },
+    {
+      "applicationName": "compatibility-native",
+      "sqlState": "P0001",
+      "expectedMessage": "UNKNOWN_OR_PARTIAL_PACKAGE_PREIMAGE",
+      "diagnosticSha256": "6bfb8628f89275d54e59b7d410f4f39c7a67949aa86f9c838929873854d1cef3"
+    },
+    {
+      "applicationName": "compatibility-native",
+      "sqlState": "P0001",
+      "expectedMessage": "TEST_FORCED_ROLLBACK_AFTER_VERIFIED_POSTIMAGE",
+      "diagnosticSha256": "8f6084e31e4e4ff1cbed9d79768824e674475c89358b28db10b35d0e03a37da0"
+    }
+  ],
+  "phases": [
+    {
+      "name": "current-schema.sql",
+      "passed": true,
+      "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "markers": []
+    },
+    {
+      "name": "verify-current-schema.sql",
+      "passed": true,
+      "stdoutSha256": "7ba4de64fe2209d130a465aeae1464bc2d73c654d153613a170ad48494ecccf6",
+      "markers": [
+        "CURRENT_CAPTURE_CATALOG_VERIFIED"
+      ]
+    },
+    {
+      "name": "professor-seed.sql",
+      "passed": true,
+      "stdoutSha256": "3471fe5cebc74d2609adf02ae8474dce3c560cb064333c405a875bc218113031",
+      "markers": [
+        "PASS professor synthetic seed: real constraints, immutable publication, complete answers, historical final release"
+      ]
+    },
+    {
+      "name": "student-seed.sql",
+      "passed": true,
+      "stdoutSha256": "d8f7c46e41fc32db1379e4ee0f53cb5f73b89caefc12d5d5549fe31af8f727b2",
+      "markers": [
+        "PASS student synthetic seed with actual guards"
+      ]
+    },
+    {
+      "name": "professor-pre.sql",
+      "passed": true,
+      "stdoutSha256": "9c90b0942fc085264fe10110743afbe177f39317c2bb97e6bb274572f698931a",
+      "markers": [
+        "PASS professor pre-image cases rolled back"
+      ]
+    },
+    {
+      "name": "student-pre.sql",
+      "passed": true,
+      "stdoutSha256": "46faae39301b3c1e032aeb132fc303c548efc7ba97deb71229fcabeebde51661",
+      "markers": [
+        "PASS student captured baseline: missing intent is not attributed to already-installed staging behavior"
+      ]
+    },
+    {
+      "name": "forward.sql",
+      "passed": true,
+      "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "markers": []
+    },
+    {
+      "name": "forward.sql",
+      "passed": true,
+      "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "markers": []
+    },
+    {
+      "name": "professor-post.sql",
+      "passed": true,
+      "stdoutSha256": "8f36b9e937db84bcabb6f253d371a6317c85dded0b5e9ad893d337439f83eb1c",
+      "markers": [
+        "PASS professor post-image cases rolled back"
+      ]
+    },
+    {
+      "name": "student-post.sql",
+      "passed": true,
+      "stdoutSha256": "95f01ca18b65c1fcec98d4d5aa0bbd84ed600d948b4125ec26d1f41d7c20bb99",
+      "markers": [
+        "PASS student revocation, exact expiry recovery, accepted receipts, privacy, admission and resume cases"
+      ]
+    },
+    {
+      "name": "inverse.sql",
+      "passed": true,
+      "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "markers": []
+    },
+    {
+      "name": "inverse.sql",
+      "passed": true,
+      "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "markers": []
+    },
+    {
+      "name": "verify-current-schema.sql",
+      "passed": true,
+      "stdoutSha256": "7ba4de64fe2209d130a465aeae1464bc2d73c654d153613a170ad48494ecccf6",
+      "markers": [
+        "CURRENT_CAPTURE_CATALOG_VERIFIED"
+      ]
+    },
+    {
+      "name": "professor-pre.sql",
+      "passed": true,
+      "stdoutSha256": "9c90b0942fc085264fe10110743afbe177f39317c2bb97e6bb274572f698931a",
+      "markers": [
+        "PASS professor pre-image cases rolled back"
+      ]
+    },
+    {
+      "name": "student-pre.sql",
+      "passed": true,
+      "stdoutSha256": "46faae39301b3c1e032aeb132fc303c548efc7ba97deb71229fcabeebde51661",
+      "markers": [
+        "PASS student captured baseline: missing intent is not attributed to already-installed staging behavior"
+      ]
+    },
+    {
+      "name": "forward.sql",
+      "passed": true,
+      "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "markers": []
+    }
+  ],
+  "limitations": [
+    "Synthetic external tables have captured column types only; their real defaults, constraints, grants, RLS, triggers and data are deliberately not replicated.",
+    "Support roles supabase_admin, supabase_auth_admin and dashboard_user are inert NOLOGIN placeholders for captured schema ACLs; their production role flags and memberships were not captured.",
+    "Supabase platform services, authentication tokens, API gateway behavior, provider email delivery, storage and network access are outside this database fixture.",
+    "Relation storage options, comments, sequences, extension ownership and role memberships were not captured. Current namespace columns have no identity/generated columns or sequence defaults.",
+    "Generating these files proves deterministic composition only. PostgreSQL execution and behavioral tests are still required."
+  ],
+  "server": {
+    "user": "fixture_bootstrap",
+    "address": "172.18.0.2/32",
+    "version": "170006",
+    "database": "duediligence_compatibility_fixture"
+  },
+  "finishedAt": "2026-10-20T13:00:32.476Z"
+}

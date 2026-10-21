@@ -1,0 +1,24 @@
+{
+  "status": "REVIEW_ONLY_NOT_APPROVED",
+  "targetProjectId": "hlzqmreeoghbldnhlybr",
+  "productionProjectIdForbidden": "hbllomlijfznnuudpdvr",
+  "nativeRunId": 39426693601,
+  "testedSourceHead": "70dce183f020c6fc52d98662e99184e03d885d92",
+  "finalVerifiedSourceHead": "c5359908af2bfcb145b40362f563eea02efe85f8",
+  "finalNativeRunId": 39427673315,
+  "testedPackageManifestSha256": "ac5be7b2899a7a48bf573ef03ec02d515477d9e12961cbc58b3640f03a3cfd11",
+  "targetAcknowledgment": null,
+  "releaseAuthorizationEvidenceSha256": null,
+  "currentCaptureEvidenceSha256": null,
+  "cutover": {
+    "status": "PAUSE_AND_DRAIN_NOT_ESTABLISHED",
+    "methodDescription": null,
+    "pauseEvidenceSha256": null,
+    "drainEvidenceSha256": null,
+    "allowedAfterUtc": null,
+    "expiresAtUtc": null,
+    "originalRowState": null,
+    "writesNeverResumed": false,
+    "inverseAuthorizationEvidenceSha256": null
+  }
+}

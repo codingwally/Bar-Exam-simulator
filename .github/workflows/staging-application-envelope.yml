@@ -1,0 +1,55 @@
+name: Staging application envelope verification
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/staging-application-envelope.yml'
+      - 'scripts/verify-staging-application-envelope.mjs'
+      - 'scripts/fixtures/staging-application-envelope/**'
+      - 'scripts/verify-current-staging-compatibility.mjs'
+      - 'scripts/fixtures/current-staging-compatibility/**'
+
+permissions:
+  contents: read
+
+jobs:
+  native-envelope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:17.6@sha256:00bc86618629af00d2937fdc5a5d63db3ff8450acf52f0636ec813c7f4902929
+        env:
+          POSTGRES_USER: fixture_bootstrap
+          POSTGRES_PASSWORD: isolated_compatibility_only
+          POSTGRES_DB: duediligence_compatibility_fixture
+        ports:
+          - '127.0.0.1:5432:5432'
+        options: >-
+          --health-cmd "pg_isready -U fixture_bootstrap -d duediligence_compatibility_fixture"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify exact review envelope in a fresh disposable database
+        env:
+          STAGING_ENVELOPE_SQL_CI: '1'
+          PGHOST: 127.0.0.1
+          PGPORT: '5432'
+          PGUSER: fixture_bootstrap
+          PGDATABASE: duediligence_compatibility_fixture
+          PGPASSWORD: isolated_compatibility_only
+        run: node scripts/verify-staging-application-envelope.mjs scripts/fixtures/staging-application-envelope artifacts/debate-local-rehearsal/staging-application-envelope-ci
+      - name: Retain scoped envelope evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-application-envelope-evidence
+          path: artifacts/debate-local-rehearsal/staging-application-envelope-ci/report.json
+          if-no-files-found: warn
+          retention-days: 14

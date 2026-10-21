@@ -1,0 +1,87 @@
+{
+  "status": "NOT_APPLIED_REVIEW_ONLY",
+  "targetProjectId": "hlzqmreeoghbldnhlybr",
+  "forbiddenProductionProjectId": "hbllomlijfznnuudpdvr",
+  "authorization": "REVIEW_ONLY_NOT_APPROVED",
+  "supportedTool": "mcp__codex_apps__supabase_apply_migration",
+  "descriptorInspected": "project_id, name, query; DDL is applied through migrations; no runtime role guarantee documented",
+  "originalNativeRun": {
+    "id": 39426693601,
+    "sourceHead": "70dce183f020c6fc52d98662e99184e03d885d92",
+    "testedMerge": "9928436e4293ccf9cf7bc823ceb2ccc1ca9282e8",
+    "sourceTree": "f16a6f5d082723b99976f340d820cf580d96c843",
+    "reportSha256": "18c729bd5b9a455b6b37bca7d58cf48ac9ec4883f8a97dd5f1118357f9c041d7"
+  },
+  "finalNativeRun": {
+    "id": 39427673315,
+    "sourceHead": "c5359908af2bfcb145b40362f563eea02efe85f8",
+    "testedMerge": "2deb4050cd48e7ab8b907317840d24f2aa7c93b5",
+    "sourceTree": "cd4256bd0e013c7203904896b113ecb47fa16ecd"
+  },
+  "nativeReviewSha256": "8dd1b8082cff8f66a42f67b41bc84972b325de999a82ec55e45a7bbf30a3f95f",
+  "finalNativeReviewSha256": "17e424387815815ec754091fc652f493d19368d8bab74239f9f7b9b3212ef74c",
+  "originalNativeScope": "Disposable envelope and exact six function bodies plus lease, metadata, behavior, repeat/inverse and four races. Does not execute this new staging envelope.",
+  "newEnvelopeNativeSqlExecuted": false,
+  "changedFunctions": 6,
+  "newFunctions": 1,
+  "newTriggers": 1,
+  "protectedFunctions": 42,
+  "lockedTables": 28,
+  "applicationRowDml": false,
+  "credentialOrProviderCalls": false,
+  "cutoverEnforced": false,
+  "freshCaptureSha256": {
+    "staging-function-preimages-20261020.json": "3691a2ad98f5391f46fe5e7e8d00d27e77876c5ae0718a0d0b652e1e8625ef60",
+    "staging-function-dependencies-20261020.json": "c144ac91e1d2c9b7857b8e382ad84b2c0c087e0ca170096a6bf176fee4700303",
+    "staging-schema-shape-20261020.json": "ca1ddc372c8e5137064172f788b7285f58a3a1809fac6ca4a3830a99275923a9",
+    "staging-runtime-metadata-20261020.json": "4f4226e50127f7988477e42116a6e756ee2886744b9bfb0e3a701410e76355d8",
+    "staging-external-column-metadata-20261020.json": "02cf1a3ad16f9fb6241f9bef4b54730568f187d3e6d8660e11e000dd56120e1b",
+    "staging-student-aggregate-inventory-20261020.json": "c83f803791913188ced1d67be1d5447c03976a0c5c4acba35b4ae21da753ed8a",
+    "staging-executor-identity-20261020.json": "4ec15114173783fc8f53d01dc34a05d0be47c51d5a5b6b938c00084a3e3a655d"
+  },
+  "datedPreservationCaptureSha256": "e6328ba75bf44f60ece90f29eb061e6cad06200e38416623f038769bfc6aff01",
+  "datedPreservationCaptureAt": "2026-10-20 21:18:21.414765+00",
+  "digestSerializationSettings": {
+    "TimeZone": "UTC",
+    "DateStyle": "ISO, YMD",
+    "IntervalStyle": "postgres",
+    "extra_float_digits": "3",
+    "bytea_output": "hex"
+  },
+  "runtimeServerVersionDiagnostic": "17.6",
+  "enforcedServerVersionNum": "170006",
+  "testedPackageManifestSha256": "ac5be7b2899a7a48bf573ef03ec02d515477d9e12961cbc58b3640f03a3cfd11",
+  "generatorSha256": "68153f6ae6866776d687ad24a228dc0533127f1d1c8157d62c65235e0e01295a",
+  "files": {
+    "forward.review.sql": "6c58c215426d0fc26ef1575aa63b42e1823d337dc7bdcc3130d0432079e8f205",
+    "inverse.review.sql": "f530b5b7c5115b549c9a5728bf9c927a61e7f1c1b5b5b4e5ba716814b1d7bca5",
+    "binding.template.json": "d6a2109999ed4ca0f906892c1c275d4e6a795b202df59b30a5035288e550fe35",
+    "definition-index.json": "27644703bcabfecd5d790c67d8b8b18c2e669ee1587816374b6d2568bd70d7f2",
+    "cutover-row-state-capture.sql": "934f654141f15c66ff4d67ffee13b59ca3f05ebc7fa88dcd4a1f9c5a30f9045c",
+    "executor-identity-capture.sql": "b81c579d2258301ea5dfe9222350b674cdfa4aab09dd590e6c0c7447ff3fbe4f"
+  },
+  "unresolved": [
+    "Owner or release authorization for this concrete staging-only change has not been recorded in this packet.",
+    "No concrete enforced pause/drain of Worker ingress, scheduled/queue tasks, direct SQL clients and already-running function invocations is established.",
+    "No current cutover row-digest snapshot, current config/deployment fingerprint or cutover evidence hashes are bound.",
+    "The dated preservation capture covers 28 target tables and 14 Study/Debate tables; it is an observation only, not an enforced cutover snapshot or proof of hosted behavior.",
+    "Supplied evidence hashes and approval fields are review bindings, not independently authenticated authorization or proof that ingress was actually paused; a human or authorized release controller must verify the referenced evidence.",
+    "Read-only execute_sql observed postgres; apply_migration must enforce the same database/current/session role at execution or abort.",
+    "Role memberships and complete effective permissions were not captured; exact function ACLs, selected role flags and schema ACLs do not prove unchanged effective authorization.",
+    "The supported migration request target binds Supabase project identity; PostgreSQL database/role names alone cannot distinguish staging from production.",
+    "The new envelope itself requires native execution and negative-case review before application; the prior disposable pass does not certify it.",
+    "A timed executor cancellation/statement limit for this one large DO statement remains to be confirmed for the supported migration tool.",
+    "Expiry is checked at entry, before changes and before envelope return; commit acknowledgment time is outside this SQL statement and must remain inside the enforced operational pause.",
+    "Inverse is allowed only before write access is resumed, while original row digests and zero sessions/rosters still hold; otherwise a new forward repair is required."
+  ],
+  "fixturePurpose": "DISPOSABLE_NATIVE_ENVELOPE_VERIFICATION_ONLY",
+  "originalReviewManifestSha256": "8ff2b49598f40bb5f0079cb31a452d63ca13ab745bd84c925d23aae03fcd0745",
+  "frozenFromReview": "staging-application-review-20261020",
+  "freezingDoesNotAuthorizeApplication": true,
+  "omittedReviewOutputs": [
+    "binding.used.json",
+    "dated-data-reference.json",
+    "forward.tool-request.json",
+    "inverse.tool-request.json"
+  ]
+}

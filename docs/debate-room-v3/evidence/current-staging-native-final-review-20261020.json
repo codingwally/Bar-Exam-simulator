@@ -1,0 +1,99 @@
+{
+  "status": "PASS_SOURCE_AND_TESTED_TREE_BOUND",
+  "source": "c5359908af2bfcb145b40362f563eea02efe85f8",
+  "testedMerge": "2deb4050cd48e7ab8b907317840d24f2aa7c93b5",
+  "sourceTree": "cd4256bd0e013c7203904896b113ecb47fa16ecd",
+  "testedTree": "cd4256bd0e013c7203904896b113ecb47fa16ecd",
+  "runId": 39427673315,
+  "comparisons": [
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/current-schema.sql",
+      "sha256": "a66c84ddb2238ad78a33cc8c4cbd926baab8b354f7a6db34277aa9b115374a95"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/verify-current-schema.sql",
+      "sha256": "33af51cdddeeb4b87b58dde15ce0a95df767f3e7a2cb96ca70f24082aa65b641"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/forward.sql",
+      "sha256": "b6f1c1ebb4aa28d61b10ddf61713a1fb295f21dbecbd018a23c3994e10e7eab8"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/inverse.sql",
+      "sha256": "a3a26b928a0cd120add9224afa12965af46e232d10b4350c491241d4b3b5be02"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/baseline.json",
+      "sha256": "670be5671f7dcdaf9273c129bbe4c4834c85db4a4ff1952aef944a93703cefa9"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/postimage.json",
+      "sha256": "ef39134f74ca324c24fb23ddb7e538cf8252571dd05c22b421cbafac1aead2e4"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/target-definitions.json",
+      "sha256": "4eefe9f39bda33d3e91b6afb95920775a6b2ce3bbc59f78dc0e956568f5f52ed"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/table-names.json",
+      "sha256": "6f7a8bff728dc7e8ad83c56a6bd6bda030044db80740bb3a1496778b983adf6e"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/fixture-manifest.json",
+      "sha256": "1e8944adbf74f3ed9cc0557dbf9d663b5402ed59e45b80c405dd94a0a5d9e601"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/hardening-manifest.json",
+      "sha256": "c951a8d13d6d547ff2fed1adb126227256f797debbdf40db41ba7ecab3a84b0b"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/hardening-patches.json",
+      "sha256": "c193b70296eae29819deba1ba5a50f87f8a18c3a56df86988051a77cb7da7d7d"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/professor-manifest.json",
+      "sha256": "46558bccf6c848bced1d003d717fa1153a8ef3b166dd89cdbff852fedd7e683b"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/professor-seed.sql",
+      "sha256": "a23d8f9e92d2a12107e33d30926f1b625675d5be9d5773a3c7e0213a5db6e462"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/professor-pre.sql",
+      "sha256": "d179702bfef72ca176d3e4f7190b71f2179f318d5dd04e1523e7c5852ea89e59"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/professor-post.sql",
+      "sha256": "f1881ee852d581bb9d6f68a3a8eda5c1f84c3cc72f12cdfe5b4cbe50194d4f50"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/student-seed.sql",
+      "sha256": "e7f133477259b08342125e4a27974fb704baba48549ee9c8471b6f3f65d653fc"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/student-pre.sql",
+      "sha256": "9e8e41ae4ea0a9dfe4872316abad6989a6187ee3eda431f5ec591fefccca883a"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/student-post.sql",
+      "sha256": "45271532a4b872f4ca1929a3f82531a503a80b4534a109e715579ce1940ee157"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/student-race.mjs",
+      "sha256": "e0f7cb3f0bcb63c12519e6ff2ef6152c22b926535b61912e966efe2dec5d8d60"
+    },
+    {
+      "file": "scripts/fixtures/current-staging-compatibility/manifest.json",
+      "sha256": "ac5be7b2899a7a48bf573ef03ec02d515477d9e12961cbc58b3640f03a3cfd11"
+    },
+    {
+      "file": "scripts/verify-current-staging-compatibility.mjs",
+      "sha256": "0b49b81a269efb4af8b8bb330edd60fae559cf70aad68577e865f26b7a769bf4"
+    }
+  ],
+  "checks": 25,
+  "phases": 16,
+  "expectedOuterErrors": 7,
+  "hostedExecuted": false,
+  "productionDeployed": false
+}

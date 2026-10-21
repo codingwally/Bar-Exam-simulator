@@ -1,0 +1,29 @@
+# Staging application procedure verification — 21 October 2026
+
+**In progress; no hosted application or deployment.** This continues the [current compatibility repair](staging-compatibility-verification-20261020.md) and the [website audit ledger](website-audit-ledger-20261018.md). The earlier native database suite passed twice and PR413 merged. Its six repair definitions and new lease function/trigger remain unchanged. This step verifies the separate atomic envelope intended for a later, explicitly controlled staging update.
+
+The [frozen inputs](../../scripts/fixtures/staging-application-envelope/README.md) retain a default refusal before locks or changes. They bind the staging project in the review contract, require the observed non-superuser executor identity, compare captured runtime/schema/authorization metadata, lock 28 tables, compare fresh deterministic row counts/digests and accept only the complete preimage or postimage. The inverse additionally requires that writes never resumed. SQL database and role names do not prove project identity or actual authorization.
+
+Offline regeneration passed 37 integrity/refusal checks. Independent review matched all 19 original package inputs, all ten original review outputs, six forward and six inverse definitions, and the new lease bytes. That review found an idempotent-return timing gap: a repeat could return after its allowed window expired while checking the full catalog. Both repeat paths now check expiry immediately before returning. A native late-expiry test is required; offline inspection does not prove SQL execution.
+
+Native verification of this new envelope is pending. Its disposable runner must test approval/target/identity/cutover refusals, schema/function/data drift, partial state, real table-lock contention, successful application and repeat, exact inverse and repeat, late expiry, and forced late rollback. Reports must identify test-only approval declarations and fault injections, preserve each failed attempt, and bind every input to the exact tested Git tree. The synthetic approval declarations are never permission to update a hosted project.
+
+## Operational requirements still open
+
+No enforced staging ingress pause/drain is established. No current cutover row snapshot or authorization is bound. The supported migration executor's identity, transaction boundary, statement deadline and cancellation behavior remain to be verified; an observed read-only executor is insufficient. A [read-only role capture](evidence/staging-role-memberships-20261021.json) at 21 October 03:29:54 UTC recorded 17 relevant roles and 15 membership edges. It includes recursively granted roles of the eight selected roots, with no password or customer data. It is a dated observation, not a complete effective-permission/client inventory, and does not expand the disposable fixture's narrower role model.
+
+The current Worker source shows why disabling HTTP alone would be insufficient:
+
+| Surface | Existing behavior | Cutover implication |
+| --- | --- | --- |
+| Eleven current room HTTP aliases | `EXAMINATION_ROOM_ENABLED=false` rejects access before handlers | Stops requests receiving that setting; does not establish coverage of all versions/previews or earlier requests |
+| Two-minute scheduled work | Calls room recovery without checking that HTTP flag | Scheduled room entry must also be fenced; removing the shared cron would affect unrelated recovery work |
+| Immediate background work | Publish, release, revoke and submit can schedule recovery/delivery after the response | Existing invocations must drain; a 300-second job lease is not proof an invocation ended |
+| Database requests | Current room RPC fetch has no explicit abort deadline | An arbitrary waiting interval cannot establish drain |
+| Preview and direct callers | The dated capture enables worker and preview URLs; no queue binding is visible in the captured configuration | All reachable versions, privileged callers and schedules still need inventory; no account-wide absence of consumers is claimed |
+
+The existing release policy pins the enabled room flag and two-minute cron. A temporary maintenance change must therefore be a separate reviewed operation, not an override hidden in ordinary release inputs. The least disruptive implementation option is a dedicated staging maintenance fence covering HTTP, scheduled room recovery and immediate background entry, with bounded calls and observable drain. That is proposed work, not an existing capability; older deployed invocations and privileged direct callers still require a separate exclusion/drain method. A broad cron stop would additionally need a restoration plan for payment notifications, avatar cleanup, Admin Pulse and Forecast work. A temporary database privilege fence would change the exact ACL preimage and require a newly reviewed envelope. None of these options has been applied.
+
+Before application, the procedure needs a reviewed way to stop new requests and drain in-flight work, a fresh preservation capture under that pause, a verified target and executor, and authorization for the exact request. The pause must last through commit acknowledgment and independent readback. Once writes resume, this inverse is prohibited. Current Study and Debate behavior and the superior pricing task's work must remain protected.
+
+No accounts were prepared, real emails sent, payments initiated, paid providers called or production changes made by this step. The full hosted Debate rehearsal, Worker/browser receipt recovery, free/paid/admin journeys, physical media, actual mail delivery, site-wide latency and current production readback remain open.

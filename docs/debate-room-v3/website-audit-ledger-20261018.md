@@ -154,3 +154,13 @@ All rows below use exact candidate `70dce183`, disposable PostgreSQL 17.6, nativ
 | SITE-X06 | Four overlapping connection pairs: same normalized email across rooms, simultaneous consent, session revoke/intent and key revoke/intent; real blocking observed | SCOPED_LOCAL_PASS | Hosted multi-browser races and other routes' concurrency cases |
 | SITE-X09 | Actual anon/authenticated denials, internal service-role denial, valid public dispatch, actor isolation and unchanged captured ACLs | SCOPED_LOCAL_PASS | Full hosted Auth/RLS integration and free/paid/admin browser matrix |
 | SITE-X11 | Source/input hashes matched 21/21; tested merge and candidate trees identical; six fresh read-only capture comparisons exact except timestamps | SCOPED_LOCAL_PASS | This is test evidence only; current production revision and any future deployment/readback remain open |
+
+## Execution results — 22 October 2026
+
+The [new application-envelope verification](staging-application-envelope-20261021.md) uses candidate `18e07351`, disposable PostgreSQL 17.6 and run39744211450. All 29 executable-input/source comparisons passed. Synthetic approvals were used only in process memory, with no hosted execution or account provisioning. The container was stopped after the job.
+
+| ID | Scenario / actual result | Status | Remaining gap |
+| --- | --- | --- | --- |
+| SITE-029 / SITE-035 | Exact staging procedure defaults refuse; valid synthetic binding applies/repeats/reverses/repeats; catalog, schema, all 28 counts/digests and synthetic external sentinels preserved | SCOPED_LOCAL_PASS | Enforced hosted pause/drain, fresh cutover state, supported executor identity/deadline, applicable authorization and actual creator/admin journeys |
+| SITE-X06 / SITE-X09 | Two actual overlapping connection locks reject safely; 21 expected SQL refusals include identity/target, partial state, schema/data/function drift, expired windows and inverse after resumed writes; late failures roll back | SCOPED_LOCAL_PASS | Hosted invocation drain, actual Auth/role memberships, multi-browser races and all other route concurrency |
+| SITE-X11 | 29 exact source/input hashes and equal candidate/tested trees; both failed attempts retained separately from pass | SCOPED_LOCAL_PASS | No application or publication established; hosted rehearsal and current production readback remain open |

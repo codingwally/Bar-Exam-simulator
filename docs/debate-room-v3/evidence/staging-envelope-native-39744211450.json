@@ -1,0 +1,751 @@
+{
+  "kind": "ISOLATED_STAGING_APPLICATION_ENVELOPE",
+  "status": "PASS_SCOPED_NATIVE_ENVELOPE_CHECKS",
+  "startedAt": "2026-10-22T07:58:08.285Z",
+  "candidate": "386b8594d91b921ab36d369760c46a50febf0c36",
+  "harnessSha256": "47d2c914e2ed26f05be02c18c151b95d0771af929390703f230b7426afd44ac6",
+  "envelopeManifestSha256": "4ba79da69cecd5ebffe62c2a143256c1314d54cb86e75fe6fab18a22314b7ed5",
+  "originalReviewManifestSha256": "54da3d3b61e538a9ff4541d295a251a92c8bcad504be0f1e54c9fff37051a8f4",
+  "envelopeInputHashes": {
+    "forward.review.sql": "41c5b18d93bc2500f27a46f2e77aaf4574e57ae5a6a5694005b9fad199abe68e",
+    "inverse.review.sql": "85197063b6452f1864305f21534f602cd509bcc661b9c421f8aae556722064df",
+    "binding.template.json": "d6a2109999ed4ca0f906892c1c275d4e6a795b202df59b30a5035288e550fe35",
+    "definition-index.json": "27644703bcabfecd5d790c67d8b8b18c2e669ee1587816374b6d2568bd70d7f2",
+    "cutover-row-state-capture.sql": "934f654141f15c66ff4d67ffee13b59ca3f05ebc7fa88dcd4a1f9c5a30f9045c",
+    "executor-identity-capture.sql": "b81c579d2258301ea5dfe9222350b674cdfa4aab09dd590e6c0c7447ff3fbe4f"
+  },
+  "testedSourceHashes": {
+    "scripts/fixtures/current-staging-compatibility/manifest.json": "ac5be7b2899a7a48bf573ef03ec02d515477d9e12961cbc58b3640f03a3cfd11",
+    "scripts/fixtures/current-staging-compatibility/current-schema.sql": "a66c84ddb2238ad78a33cc8c4cbd926baab8b354f7a6db34277aa9b115374a95",
+    "scripts/fixtures/current-staging-compatibility/verify-current-schema.sql": "33af51cdddeeb4b87b58dde15ce0a95df767f3e7a2cb96ca70f24082aa65b641",
+    "scripts/fixtures/current-staging-compatibility/forward.sql": "b6f1c1ebb4aa28d61b10ddf61713a1fb295f21dbecbd018a23c3994e10e7eab8",
+    "scripts/fixtures/current-staging-compatibility/inverse.sql": "a3a26b928a0cd120add9224afa12965af46e232d10b4350c491241d4b3b5be02",
+    "scripts/fixtures/current-staging-compatibility/baseline.json": "670be5671f7dcdaf9273c129bbe4c4834c85db4a4ff1952aef944a93703cefa9",
+    "scripts/fixtures/current-staging-compatibility/postimage.json": "ef39134f74ca324c24fb23ddb7e538cf8252571dd05c22b421cbafac1aead2e4",
+    "scripts/fixtures/current-staging-compatibility/target-definitions.json": "4eefe9f39bda33d3e91b6afb95920775a6b2ce3bbc59f78dc0e956568f5f52ed",
+    "scripts/fixtures/current-staging-compatibility/table-names.json": "6f7a8bff728dc7e8ad83c56a6bd6bda030044db80740bb3a1496778b983adf6e",
+    "scripts/fixtures/current-staging-compatibility/fixture-manifest.json": "1e8944adbf74f3ed9cc0557dbf9d663b5402ed59e45b80c405dd94a0a5d9e601",
+    "scripts/fixtures/current-staging-compatibility/hardening-manifest.json": "c951a8d13d6d547ff2fed1adb126227256f797debbdf40db41ba7ecab3a84b0b",
+    "scripts/fixtures/current-staging-compatibility/hardening-patches.json": "c193b70296eae29819deba1ba5a50f87f8a18c3a56df86988051a77cb7da7d7d",
+    "scripts/fixtures/current-staging-compatibility/professor-manifest.json": "46558bccf6c848bced1d003d717fa1153a8ef3b166dd89cdbff852fedd7e683b",
+    "scripts/fixtures/current-staging-compatibility/professor-seed.sql": "a23d8f9e92d2a12107e33d30926f1b625675d5be9d5773a3c7e0213a5db6e462",
+    "scripts/fixtures/current-staging-compatibility/professor-pre.sql": "d179702bfef72ca176d3e4f7190b71f2179f318d5dd04e1523e7c5852ea89e59",
+    "scripts/fixtures/current-staging-compatibility/professor-post.sql": "f1881ee852d581bb9d6f68a3a8eda5c1f84c3cc72f12cdfe5b4cbe50194d4f50",
+    "scripts/fixtures/current-staging-compatibility/student-seed.sql": "e7f133477259b08342125e4a27974fb704baba48549ee9c8471b6f3f65d653fc",
+    "scripts/fixtures/current-staging-compatibility/student-pre.sql": "9e8e41ae4ea0a9dfe4872316abad6989a6187ee3eda431f5ec591fefccca883a",
+    "scripts/fixtures/current-staging-compatibility/student-post.sql": "45271532a4b872f4ca1929a3f82531a503a80b4534a109e715579ce1940ee157",
+    "scripts/fixtures/current-staging-compatibility/student-race.mjs": "e0f7cb3f0bcb63c12519e6ff2ef6152c22b926535b61912e966efe2dec5d8d60",
+    "scripts/verify-current-staging-compatibility.mjs": "0b49b81a269efb4af8b8bb330edd60fae559cf70aad68577e865f26b7a769bf4"
+  },
+  "sqlExecuted": true,
+  "hostedExecuted": false,
+  "providerCalls": 0,
+  "productionDeployed": false,
+  "authorizationGranted": false,
+  "simulatedBindingsOnly": true,
+  "boundSqlPersisted": false,
+  "checks": [
+    {
+      "name": "Fresh loopback PostgreSQL 17.6 bootstrap",
+      "passed": true
+    },
+    {
+      "name": "Original fixture imported and verified without changes",
+      "passed": true
+    },
+    {
+      "name": "Envelope authenticates directly as captured non-superuser postgres",
+      "passed": true
+    },
+    {
+      "name": "Initial exact captured catalog and nonempty synthetic sentinels",
+      "passed": true
+    },
+    {
+      "name": "Exact envelope schema calculation matches captured shape under its own settings",
+      "passed": true
+    },
+    {
+      "name": "envelope-default-forward: rejection preserves catalog and rows",
+      "passed": true
+    },
+    {
+      "name": "envelope-default-inverse: rejection preserves catalog and rows",
+      "passed": true
+    },
+    {
+      "name": "envelope-wrong-project: rejection preserves catalog and rows",
+      "passed": true
+    },
+    {
+      "name": "envelope-expired: rejection preserves catalog and rows",
+      "passed": true
+    },
+    {
+      "name": "envelope-incomplete-cutover: rejection preserves catalog and rows",
+      "passed": true
+    },
+    {
+      "name": "envelope-no-row-snapshot: rejection preserves catalog and rows",
+      "passed": true
+    },
+    {
+      "name": "envelope-wrong-session: rejection preserves catalog and rows",
+      "passed": true
+    },
+    {
+      "name": "envelope-wrong-configured-role: rejection preserves catalog and rows",
+      "passed": true
+    },
+    {
+      "name": "envelope-wrong-database: rejection preserves catalog and rows",
+      "passed": true
+    },
+    {
+      "name": "envelope-protected-function-drift: rejection preserves catalog and rows",
+      "passed": true
+    },
+    {
+      "name": "envelope-partial-package: rejection preserves catalog and rows",
+      "passed": true
+    },
+    {
+      "name": "envelope-schema-drift: rejection preserves catalog and rows",
+      "passed": true
+    },
+    {
+      "name": "envelope-data-drift: rejection preserves catalog and rows",
+      "passed": true
+    },
+    {
+      "name": "envelope-late-forward-rollback: rejection preserves catalog and rows",
+      "passed": true
+    },
+    {
+      "name": "envelope-table-contention: rejection preserves catalog and rows",
+      "passed": true
+    },
+    {
+      "name": "table: actual overlapping connection rejected within bounded time",
+      "passed": true
+    },
+    {
+      "name": "envelope-advisory-contention: rejection preserves catalog and rows",
+      "passed": true
+    },
+    {
+      "name": "advisory: actual overlapping connection rejected within bounded time",
+      "passed": true
+    },
+    {
+      "name": "envelope-forward: exact package and unchanged rows",
+      "passed": true
+    },
+    {
+      "name": "envelope-forward-repeat: exact package and unchanged rows",
+      "passed": true
+    },
+    {
+      "name": "envelope-forward-repeat-expiry: final repeat guard rejects after expiry without changes",
+      "passed": true
+    },
+    {
+      "name": "envelope-inverse-writes-resumed: rejection preserves catalog and rows",
+      "passed": true
+    },
+    {
+      "name": "envelope-inverse-no-authorization: rejection preserves catalog and rows",
+      "passed": true
+    },
+    {
+      "name": "envelope-late-inverse-rollback: rejection preserves catalog and rows",
+      "passed": true
+    },
+    {
+      "name": "envelope-inverse: exact package and unchanged rows",
+      "passed": true
+    },
+    {
+      "name": "envelope-inverse-repeat: exact package and unchanged rows",
+      "passed": true
+    },
+    {
+      "name": "envelope-inverse-repeat-expiry: final repeat guard rejects after expiry without changes",
+      "passed": true
+    }
+  ],
+  "expectedErrors": [
+    {
+      "name": "envelope-default-forward",
+      "sqlState": "P0001",
+      "expectedMessage": "REVIEW_ONLY_STAGING_RELEASE_NOT_APPROVED",
+      "diagnostic": "ERROR:  P0001: REVIEW_ONLY_STAGING_RELEASE_NOT_APPROVED\nLOCATION:  exec_stmt_raise, pl_exec.c:3911",
+      "diagnosticSha256": "74f882e93628788e86d4b5c6698ff4096e382f239bfa30996c2ba6dc63917930"
+    },
+    {
+      "name": "envelope-default-inverse",
+      "sqlState": "P0001",
+      "expectedMessage": "REVIEW_ONLY_STAGING_RELEASE_NOT_APPROVED",
+      "diagnostic": "ERROR:  P0001: REVIEW_ONLY_STAGING_RELEASE_NOT_APPROVED\nLOCATION:  exec_stmt_raise, pl_exec.c:3911",
+      "diagnosticSha256": "74f882e93628788e86d4b5c6698ff4096e382f239bfa30996c2ba6dc63917930"
+    },
+    {
+      "name": "envelope-wrong-project",
+      "sqlState": "P0001",
+      "expectedMessage": "REVIEW_ONLY_STAGING_RELEASE_NOT_APPROVED",
+      "diagnostic": "ERROR:  P0001: REVIEW_ONLY_STAGING_RELEASE_NOT_APPROVED\nLOCATION:  exec_stmt_raise, pl_exec.c:3911",
+      "diagnosticSha256": "74f882e93628788e86d4b5c6698ff4096e382f239bfa30996c2ba6dc63917930"
+    },
+    {
+      "name": "envelope-expired",
+      "sqlState": "P0001",
+      "expectedMessage": "ENFORCED_CURRENT_CUTOVER_EVIDENCE_REQUIRED",
+      "diagnostic": "ERROR:  P0001: ENFORCED_CURRENT_CUTOVER_EVIDENCE_REQUIRED\nLOCATION:  exec_stmt_raise, pl_exec.c:3911",
+      "diagnosticSha256": "43faff5e8b0c39346263ec1100271d2b0c62c65315c4c6eda083f4852b724797"
+    },
+    {
+      "name": "envelope-incomplete-cutover",
+      "sqlState": "P0001",
+      "expectedMessage": "ENFORCED_CURRENT_CUTOVER_EVIDENCE_REQUIRED",
+      "diagnostic": "ERROR:  P0001: ENFORCED_CURRENT_CUTOVER_EVIDENCE_REQUIRED\nLOCATION:  exec_stmt_raise, pl_exec.c:3911",
+      "diagnosticSha256": "43faff5e8b0c39346263ec1100271d2b0c62c65315c4c6eda083f4852b724797"
+    },
+    {
+      "name": "envelope-no-row-snapshot",
+      "sqlState": "P0001",
+      "expectedMessage": "ENFORCED_CURRENT_CUTOVER_EVIDENCE_REQUIRED",
+      "diagnostic": "ERROR:  P0001: ENFORCED_CURRENT_CUTOVER_EVIDENCE_REQUIRED\nLOCATION:  exec_stmt_raise, pl_exec.c:3911",
+      "diagnosticSha256": "43faff5e8b0c39346263ec1100271d2b0c62c65315c4c6eda083f4852b724797"
+    },
+    {
+      "name": "envelope-wrong-session",
+      "sqlState": "P0001",
+      "expectedMessage": "STAGING_EXECUTOR_IDENTITY_MISMATCH",
+      "diagnostic": "ERROR:  P0001: STAGING_EXECUTOR_IDENTITY_MISMATCH\nLOCATION:  exec_stmt_raise, pl_exec.c:3911",
+      "diagnosticSha256": "8a17dd0f371d819cada7788c920e3dab7836721134ed9811c2a0ac72135cd25f"
+    },
+    {
+      "name": "envelope-wrong-configured-role",
+      "sqlState": "P0001",
+      "expectedMessage": "STAGING_EXECUTOR_IDENTITY_MISMATCH",
+      "diagnostic": "ERROR:  P0001: STAGING_EXECUTOR_IDENTITY_MISMATCH\nLOCATION:  exec_stmt_raise, pl_exec.c:3911",
+      "diagnosticSha256": "8a17dd0f371d819cada7788c920e3dab7836721134ed9811c2a0ac72135cd25f"
+    },
+    {
+      "name": "envelope-wrong-database",
+      "sqlState": "P0001",
+      "expectedMessage": "STAGING_EXECUTOR_IDENTITY_MISMATCH",
+      "diagnostic": "ERROR:  P0001: STAGING_EXECUTOR_IDENTITY_MISMATCH\nLOCATION:  exec_stmt_raise, pl_exec.c:3911",
+      "diagnosticSha256": "8a17dd0f371d819cada7788c920e3dab7836721134ed9811c2a0ac72135cd25f"
+    },
+    {
+      "name": "envelope-protected-function-drift",
+      "sqlState": "P0001",
+      "expectedMessage": "UNKNOWN_OR_PARTIAL_PACKAGE_PREIMAGE",
+      "diagnostic": "ERROR:  P0001: UNKNOWN_OR_PARTIAL_PACKAGE_PREIMAGE\nLOCATION:  exec_stmt_raise, pl_exec.c:3911",
+      "diagnosticSha256": "9d6f3ad361b9765356dcfc827945c42d05baba51f9ae347e3bb676be07e8f1fb"
+    },
+    {
+      "name": "envelope-partial-package",
+      "sqlState": "P0001",
+      "expectedMessage": "UNKNOWN_OR_PARTIAL_PACKAGE_PREIMAGE",
+      "diagnostic": "ERROR:  P0001: UNKNOWN_OR_PARTIAL_PACKAGE_PREIMAGE\nLOCATION:  exec_stmt_raise, pl_exec.c:3911",
+      "diagnosticSha256": "9d6f3ad361b9765356dcfc827945c42d05baba51f9ae347e3bb676be07e8f1fb"
+    },
+    {
+      "name": "envelope-schema-drift",
+      "sqlState": "P0001",
+      "expectedMessage": "STAGING_SCHEMA_CHANGED",
+      "diagnostic": "ERROR:  P0001: STAGING_SCHEMA_CHANGED\nLOCATION:  exec_stmt_raise, pl_exec.c:3911",
+      "diagnosticSha256": "b7d978d498c016b07685bc727e0b27d2bfcf9f94e4ed1f039670fd25fb37ecc3"
+    },
+    {
+      "name": "envelope-data-drift",
+      "sqlState": "P0001",
+      "expectedMessage": "STAGING_DATA_CHANGED_SINCE_CUTOVER_SNAPSHOT",
+      "diagnostic": "ERROR:  P0001: STAGING_DATA_CHANGED_SINCE_CUTOVER_SNAPSHOT\nLOCATION:  exec_stmt_raise, pl_exec.c:3911",
+      "diagnosticSha256": "810c51222f0e39971cdb1b085bc2aaa7ff27db571e2e891457b28b6a4a13ac9e"
+    },
+    {
+      "name": "envelope-late-forward-rollback",
+      "sqlState": "P0001",
+      "expectedMessage": "TEST_FORCED_FAILURE_AFTER_EXACT_FORWARD",
+      "diagnostic": "ERROR:  P0001: TEST_FORCED_FAILURE_AFTER_EXACT_FORWARD\nLOCATION:  exec_stmt_raise, pl_exec.c:3911",
+      "diagnosticSha256": "2a4f902537858a7f93c3236660fed33a431b2ece3ae2dc392858c685691868cb"
+    },
+    {
+      "name": "envelope-table-contention",
+      "sqlState": "55P03",
+      "expectedMessage": null,
+      "diagnostic": "ERROR:  55P03: could not obtain lock on relation \"examination_room_v1.institutions\"\nLOCATION:  RangeVarGetRelidExtended, namespace.c:598",
+      "diagnosticSha256": "5b76aef407aa1940e15f4ad60f593fe02ef3756189d2984f055ba056078bd846"
+    },
+    {
+      "name": "envelope-advisory-contention",
+      "sqlState": "P0001",
+      "expectedMessage": "COMPATIBILITY_UPDATE_BUSY",
+      "diagnostic": "ERROR:  P0001: COMPATIBILITY_UPDATE_BUSY\nLOCATION:  exec_stmt_raise, pl_exec.c:3911",
+      "diagnosticSha256": "32dbfe735cb95af44226f6eae63dbab2be3cc3ebf2f5eb476f175820e31c75ce"
+    },
+    {
+      "name": "envelope-forward-repeat-expiry",
+      "sqlState": "P0001",
+      "expectedMessage": "CUTOVER_WINDOW_EXPIRED_BEFORE_ENVELOPE_RETURN",
+      "diagnostic": "ERROR:  P0001: CUTOVER_WINDOW_EXPIRED_BEFORE_ENVELOPE_RETURN\nLOCATION:  exec_stmt_raise, pl_exec.c:3911",
+      "diagnosticSha256": "972357d8750b2d6a084de5ff9a9b564b1e892484b1dd6c20ced3d59672666659"
+    },
+    {
+      "name": "envelope-inverse-writes-resumed",
+      "sqlState": "P0001",
+      "expectedMessage": "INVERSE_FORBIDDEN_AFTER_WRITES_RESUMED_OR_WITHOUT_SEPARATE_AUTHORIZATION",
+      "diagnostic": "ERROR:  P0001: INVERSE_FORBIDDEN_AFTER_WRITES_RESUMED_OR_WITHOUT_SEPARATE_AUTHORIZATION\nLOCATION:  exec_stmt_raise, pl_exec.c:3911",
+      "diagnosticSha256": "8c12cf48f7380aa549d93a5f1e0e1f3631ff268d80e74a4f7a3bf5324120e753"
+    },
+    {
+      "name": "envelope-inverse-no-authorization",
+      "sqlState": "P0001",
+      "expectedMessage": "INVERSE_FORBIDDEN_AFTER_WRITES_RESUMED_OR_WITHOUT_SEPARATE_AUTHORIZATION",
+      "diagnostic": "ERROR:  P0001: INVERSE_FORBIDDEN_AFTER_WRITES_RESUMED_OR_WITHOUT_SEPARATE_AUTHORIZATION\nLOCATION:  exec_stmt_raise, pl_exec.c:3911",
+      "diagnosticSha256": "8c12cf48f7380aa549d93a5f1e0e1f3631ff268d80e74a4f7a3bf5324120e753"
+    },
+    {
+      "name": "envelope-late-inverse-rollback",
+      "sqlState": "P0001",
+      "expectedMessage": "TEST_FORCED_FAILURE_AFTER_EXACT_INVERSE",
+      "diagnostic": "ERROR:  P0001: TEST_FORCED_FAILURE_AFTER_EXACT_INVERSE\nLOCATION:  exec_stmt_raise, pl_exec.c:3911",
+      "diagnosticSha256": "e844ba38901408db3b65302805199108d0258990660bcf752fc70201ea20487f"
+    },
+    {
+      "name": "envelope-inverse-repeat-expiry",
+      "sqlState": "P0001",
+      "expectedMessage": "CUTOVER_WINDOW_EXPIRED_BEFORE_ENVELOPE_RETURN",
+      "diagnostic": "ERROR:  P0001: CUTOVER_WINDOW_EXPIRED_BEFORE_ENVELOPE_RETURN\nLOCATION:  exec_stmt_raise, pl_exec.c:3911",
+      "diagnosticSha256": "d519d8e3ae199024d55a0de56e24c79f94bde28f470d6bfe84a45b90e94e303f"
+    }
+  ],
+  "bindingInjections": [
+    {
+      "name": "envelope-wrong-project",
+      "phase": "forward",
+      "delimiter": "$review_binding$",
+      "replacements": 1,
+      "simulationOnly": true,
+      "authorizationGranted": false,
+      "bindingSha256": "9acf126acb458ae5464f252a0bb26c7907620a79db8cefc786378159d07e904d",
+      "templateSha256": "41c5b18d93bc2500f27a46f2e77aaf4574e57ae5a6a5694005b9fad199abe68e"
+    },
+    {
+      "name": "envelope-expired",
+      "phase": "forward",
+      "delimiter": "$review_binding$",
+      "replacements": 1,
+      "simulationOnly": true,
+      "authorizationGranted": false,
+      "bindingSha256": "d8c3ece664073e887eb0201de73432181af954bfedecee0332e43e60c32b0643",
+      "templateSha256": "41c5b18d93bc2500f27a46f2e77aaf4574e57ae5a6a5694005b9fad199abe68e"
+    },
+    {
+      "name": "envelope-incomplete-cutover",
+      "phase": "forward",
+      "delimiter": "$review_binding$",
+      "replacements": 1,
+      "simulationOnly": true,
+      "authorizationGranted": false,
+      "bindingSha256": "24ebbf41c56ea1c0668577297720d09b2c531c041a732be6ae1145b42fdc9c85",
+      "templateSha256": "41c5b18d93bc2500f27a46f2e77aaf4574e57ae5a6a5694005b9fad199abe68e"
+    },
+    {
+      "name": "envelope-no-row-snapshot",
+      "phase": "forward",
+      "delimiter": "$review_binding$",
+      "replacements": 1,
+      "simulationOnly": true,
+      "authorizationGranted": false,
+      "bindingSha256": "c0703b5ea01a202e586dd2dfa92b61f3ba697137a4da42333e0bb47a4c758ab2",
+      "templateSha256": "41c5b18d93bc2500f27a46f2e77aaf4574e57ae5a6a5694005b9fad199abe68e"
+    },
+    {
+      "name": "envelope-wrong-session",
+      "phase": "forward",
+      "delimiter": "$review_binding$",
+      "replacements": 1,
+      "simulationOnly": true,
+      "authorizationGranted": false,
+      "bindingSha256": "fe84dece3284884449f0788cd49e93fc7f9d4cc2f562a873620183a8b67ac2e3",
+      "templateSha256": "41c5b18d93bc2500f27a46f2e77aaf4574e57ae5a6a5694005b9fad199abe68e"
+    },
+    {
+      "name": "envelope-wrong-configured-role",
+      "phase": "forward",
+      "delimiter": "$review_binding$",
+      "replacements": 1,
+      "simulationOnly": true,
+      "authorizationGranted": false,
+      "bindingSha256": "c31ea67e3fe4aaa5ed60d4b4049ae549d2cbff5ef24a942f080df42edeb91b64",
+      "templateSha256": "41c5b18d93bc2500f27a46f2e77aaf4574e57ae5a6a5694005b9fad199abe68e"
+    },
+    {
+      "name": "envelope-wrong-database",
+      "phase": "forward",
+      "delimiter": "$review_binding$",
+      "replacements": 1,
+      "simulationOnly": true,
+      "authorizationGranted": false,
+      "bindingSha256": "1627cd4c67b32b435ce2f9ae86c208090405463de37b27e15416e9bdba72a142",
+      "templateSha256": "41c5b18d93bc2500f27a46f2e77aaf4574e57ae5a6a5694005b9fad199abe68e"
+    },
+    {
+      "name": "envelope-protected-function-drift",
+      "phase": "forward",
+      "delimiter": "$review_binding$",
+      "replacements": 1,
+      "simulationOnly": true,
+      "authorizationGranted": false,
+      "bindingSha256": "599cbf250fce8e0948045b37965d7b2146ea9d618546e9e4f926e3d264f18e6b",
+      "templateSha256": "41c5b18d93bc2500f27a46f2e77aaf4574e57ae5a6a5694005b9fad199abe68e"
+    },
+    {
+      "name": "envelope-partial-package",
+      "phase": "forward",
+      "delimiter": "$review_binding$",
+      "replacements": 1,
+      "simulationOnly": true,
+      "authorizationGranted": false,
+      "bindingSha256": "a0730279cc3a3f8dfe2a67025aabc80fc41041fd133c83aab159ee68fd1fa22c",
+      "templateSha256": "41c5b18d93bc2500f27a46f2e77aaf4574e57ae5a6a5694005b9fad199abe68e"
+    },
+    {
+      "name": "envelope-schema-drift",
+      "phase": "forward",
+      "delimiter": "$review_binding$",
+      "replacements": 1,
+      "simulationOnly": true,
+      "authorizationGranted": false,
+      "bindingSha256": "7a5eef70111c118dac8e8a618131845a5def65aa4ca927f1a2ca18afb81c3cb5",
+      "templateSha256": "41c5b18d93bc2500f27a46f2e77aaf4574e57ae5a6a5694005b9fad199abe68e"
+    },
+    {
+      "name": "envelope-data-drift",
+      "phase": "forward",
+      "delimiter": "$review_binding$",
+      "replacements": 1,
+      "simulationOnly": true,
+      "authorizationGranted": false,
+      "bindingSha256": "7be1cc4bd80c24633a254d88ba2378870d68d8803a8f946e5f8abdf673d43baa",
+      "templateSha256": "41c5b18d93bc2500f27a46f2e77aaf4574e57ae5a6a5694005b9fad199abe68e"
+    },
+    {
+      "name": "envelope-late-forward-rollback",
+      "phase": "forward",
+      "delimiter": "$review_binding$",
+      "replacements": 1,
+      "simulationOnly": true,
+      "authorizationGranted": false,
+      "bindingSha256": "25b588db392482e8c836e7d3ee6b122a00767e45fe855fb28a8ffb8bf83e50d4",
+      "templateSha256": "41c5b18d93bc2500f27a46f2e77aaf4574e57ae5a6a5694005b9fad199abe68e"
+    },
+    {
+      "name": "envelope-table-contention",
+      "phase": "forward",
+      "delimiter": "$review_binding$",
+      "replacements": 1,
+      "simulationOnly": true,
+      "authorizationGranted": false,
+      "bindingSha256": "39e9b03229bce5a79439af671d927862917fccbb67d5bd4abf119ccb588540c8",
+      "templateSha256": "41c5b18d93bc2500f27a46f2e77aaf4574e57ae5a6a5694005b9fad199abe68e"
+    },
+    {
+      "name": "envelope-advisory-contention",
+      "phase": "forward",
+      "delimiter": "$review_binding$",
+      "replacements": 1,
+      "simulationOnly": true,
+      "authorizationGranted": false,
+      "bindingSha256": "6a349dbe3547a87779c5bd3a59843c8a1850cf2088117aef7d7606f7a1f88785",
+      "templateSha256": "41c5b18d93bc2500f27a46f2e77aaf4574e57ae5a6a5694005b9fad199abe68e"
+    },
+    {
+      "name": "envelope-forward",
+      "phase": "forward",
+      "delimiter": "$review_binding$",
+      "replacements": 1,
+      "simulationOnly": true,
+      "authorizationGranted": false,
+      "bindingSha256": "17164af638b9da482f14d293c93967572380e51ffe61b06eee599dc8fead7211",
+      "templateSha256": "41c5b18d93bc2500f27a46f2e77aaf4574e57ae5a6a5694005b9fad199abe68e"
+    },
+    {
+      "name": "envelope-forward-repeat",
+      "phase": "forward",
+      "delimiter": "$review_binding$",
+      "replacements": 1,
+      "simulationOnly": true,
+      "authorizationGranted": false,
+      "bindingSha256": "4622b841b91d1bf0115eebf37f016a4eb594bde2ebaada020ed280366949d363",
+      "templateSha256": "41c5b18d93bc2500f27a46f2e77aaf4574e57ae5a6a5694005b9fad199abe68e"
+    },
+    {
+      "name": "envelope-forward-repeat-expiry",
+      "phase": "forward",
+      "delimiter": "$review_binding$",
+      "replacements": 1,
+      "simulationOnly": true,
+      "authorizationGranted": false,
+      "bindingSha256": "cb3faba91b39dcb2815c705bcbf87dca92408fdaba48865646314b40dd926caf",
+      "templateSha256": "41c5b18d93bc2500f27a46f2e77aaf4574e57ae5a6a5694005b9fad199abe68e"
+    },
+    {
+      "name": "envelope-inverse-writes-resumed",
+      "phase": "inverse",
+      "delimiter": "$review_binding$",
+      "replacements": 1,
+      "simulationOnly": true,
+      "authorizationGranted": false,
+      "bindingSha256": "587da18e0879af3bc558e72023afb0ff70bfb55627859d7c298e338f308a1ebf",
+      "templateSha256": "85197063b6452f1864305f21534f602cd509bcc661b9c421f8aae556722064df"
+    },
+    {
+      "name": "envelope-inverse-no-authorization",
+      "phase": "inverse",
+      "delimiter": "$review_binding$",
+      "replacements": 1,
+      "simulationOnly": true,
+      "authorizationGranted": false,
+      "bindingSha256": "c2268ae8a88773bbb8966a369de704ae6f428f4f8d0c24af372090944b94b654",
+      "templateSha256": "85197063b6452f1864305f21534f602cd509bcc661b9c421f8aae556722064df"
+    },
+    {
+      "name": "envelope-late-inverse-rollback",
+      "phase": "inverse",
+      "delimiter": "$review_binding$",
+      "replacements": 1,
+      "simulationOnly": true,
+      "authorizationGranted": false,
+      "bindingSha256": "8fe866a9574c3fc920499c9708f2e621b51e5dc6b2c3b006587fb5958862ef2c",
+      "templateSha256": "85197063b6452f1864305f21534f602cd509bcc661b9c421f8aae556722064df"
+    },
+    {
+      "name": "envelope-inverse",
+      "phase": "inverse",
+      "delimiter": "$review_binding$",
+      "replacements": 1,
+      "simulationOnly": true,
+      "authorizationGranted": false,
+      "bindingSha256": "4f87f42f76dba052d57d637e64a8876c6c2f04e9d2d9c4e10c74a325f6f00187",
+      "templateSha256": "85197063b6452f1864305f21534f602cd509bcc661b9c421f8aae556722064df"
+    },
+    {
+      "name": "envelope-inverse-repeat",
+      "phase": "inverse",
+      "delimiter": "$review_binding$",
+      "replacements": 1,
+      "simulationOnly": true,
+      "authorizationGranted": false,
+      "bindingSha256": "8a89d070a413c25247c7397d3317a07f57d8a12898ccd7cbaf4ac0ac662a78ad",
+      "templateSha256": "85197063b6452f1864305f21534f602cd509bcc661b9c421f8aae556722064df"
+    },
+    {
+      "name": "envelope-inverse-repeat-expiry",
+      "phase": "inverse",
+      "delimiter": "$review_binding$",
+      "replacements": 1,
+      "simulationOnly": true,
+      "authorizationGranted": false,
+      "bindingSha256": "a75dda6a5214871643df40f2724d0b49959e2dd445aed683acdb46362f7b325b",
+      "templateSha256": "85197063b6452f1864305f21534f602cd509bcc661b9c421f8aae556722064df"
+    }
+  ],
+  "faultInjections": [
+    {
+      "name": "envelope-late-forward-rollback",
+      "phase": "forward",
+      "kind": "OUTER_TRANSACTION_FAILURE_AFTER_EXACT_ENVELOPE",
+      "simulationOnly": true,
+      "frozenInputChanged": false,
+      "templateSha256": "41c5b18d93bc2500f27a46f2e77aaf4574e57ae5a6a5694005b9fad199abe68e",
+      "prefixSha256": "b3c34a6baecf4bc98f21f56f9f1fc003051b61aaec14fcd8d7e80b6341f2ecce",
+      "suffixSha256": "982e2b5ad24a430d8026e03dc651654192ab2d8e9be57e79e27051c96ef45994"
+    },
+    {
+      "name": "envelope-forward-repeat-expiry",
+      "phase": "forward",
+      "kind": "IN_MEMORY_DELAY_AT_EXACT_REPEAT_EXPIRY_GUARD",
+      "simulationOnly": true,
+      "frozenInputChanged": false,
+      "functionBodiesChanged": false,
+      "replacements": 1,
+      "templateSha256": "41c5b18d93bc2500f27a46f2e77aaf4574e57ae5a6a5694005b9fad199abe68e",
+      "injectedFragmentSha256": "f74596d6d619abcc8fd8dcfdd5b94321e983038c552bb9c87ca6fd3f99d53ca4",
+      "boundDelayedSqlSha256": "d7eb72c5e8d3463b151e0e368612290c429c191ea5c2eba8ac4455337375d62b",
+      "maximumPlannedDelayMs": 8100
+    },
+    {
+      "name": "envelope-late-inverse-rollback",
+      "phase": "inverse",
+      "kind": "OUTER_TRANSACTION_FAILURE_AFTER_EXACT_ENVELOPE",
+      "simulationOnly": true,
+      "frozenInputChanged": false,
+      "templateSha256": "85197063b6452f1864305f21534f602cd509bcc661b9c421f8aae556722064df",
+      "prefixSha256": "b3c34a6baecf4bc98f21f56f9f1fc003051b61aaec14fcd8d7e80b6341f2ecce",
+      "suffixSha256": "961cbf2f8d96a821ad9063f4d80785877bd02d5285731711633ed58a40eadd20"
+    },
+    {
+      "name": "envelope-inverse-repeat-expiry",
+      "phase": "inverse",
+      "kind": "IN_MEMORY_DELAY_AT_EXACT_REPEAT_EXPIRY_GUARD",
+      "simulationOnly": true,
+      "frozenInputChanged": false,
+      "functionBodiesChanged": false,
+      "replacements": 1,
+      "templateSha256": "85197063b6452f1864305f21534f602cd509bcc661b9c421f8aae556722064df",
+      "injectedFragmentSha256": "f74596d6d619abcc8fd8dcfdd5b94321e983038c552bb9c87ca6fd3f99d53ca4",
+      "boundDelayedSqlSha256": "46c90e3a379a3085daed4bcc0bb22e58d08815aa6bebe6b67c6de3b55c127b5e",
+      "maximumPlannedDelayMs": 8100
+    }
+  ],
+  "phases": [
+    {
+      "name": "envelope-forward",
+      "passed": true
+    },
+    {
+      "name": "envelope-forward-repeat",
+      "passed": true
+    },
+    {
+      "name": "envelope-inverse",
+      "passed": true
+    },
+    {
+      "name": "envelope-inverse-repeat",
+      "passed": true
+    }
+  ],
+  "limitations": [
+    "Local simulated approval is synthetic test data. It is not owner approval, release permission, or evidence of a real ingress pause and drain.",
+    "PostgreSQL cannot authenticate a Supabase project from a JSON assertion. Hosted execution needs independently verified structured project binding and authorization.",
+    "No hosted SQL, migration tool, Worker, authentication service, browser, email provider, payment, storage, or production deployment is exercised.",
+    "Only the new envelope is exercised here. Earlier behavioral and concurrency results apply only while all 21 previously tested source inputs retain their hashes.",
+    "External Auth/Profile/role tables are minimal synthetic projections. Actual Study and Debate tables and hosted role memberships are not reproduced.",
+    "The late-failure probe uses an outer transaction around the exact bound envelope; its injected exception verifies rollback before commit, not failure after commit.",
+    "The two repeat-expiry probes insert a reported in-memory delay immediately before the repeat return guard. Frozen inputs and function bodies remain unchanged; ordinary application and repeat probes execute the exact template.",
+    "Local psql deadlines and termination do not establish the supported hosted migration executor deadline or cancellation behavior."
+  ],
+  "server": {
+    "user": "fixture_bootstrap",
+    "address": "172.18.0.2/32",
+    "version": "170006",
+    "database": "duediligence_compatibility_fixture"
+  },
+  "executorIdentityResultSha256": "dc5f40fedafde5f06461d10aa4c6b416144834909ce4660940e68f92f3e5e8fa",
+  "syntheticBaselineRowsSha256": "74455edf9b7ef35f294ae1e650e06cf67c959dd322d1e9210b39bf291e8016e4",
+  "syntheticExternalBaselineSha256": "a3b7e03603fe424d88e091aa707be9fdb28eebe1e57957efdf149aa639621b80",
+  "envelopeBaselineShapeDiagnostic": {
+    "templateSha256": "41c5b18d93bc2500f27a46f2e77aaf4574e57ae5a6a5694005b9fad199abe68e",
+    "calculationSha256": "88c63304acfa8e479607cbb2e627a750a2504860f882c99157f746a8db1ca2b6",
+    "settings": {
+      "TimeZone": "UTC",
+      "DateStyle": "ISO, YMD",
+      "lc_collate": "en_US.utf8",
+      "search_path": "\"$user\", public",
+      "bytea_output": "hex",
+      "IntervalStyle": "postgres",
+      "extra_float_digits": "3"
+    },
+    "explicitEnvelopeSettings": [
+      {
+        "name": "lock_timeout",
+        "value": "5s"
+      },
+      {
+        "name": "TimeZone",
+        "value": "UTC"
+      },
+      {
+        "name": "DateStyle",
+        "value": "ISO, YMD"
+      },
+      {
+        "name": "IntervalStyle",
+        "value": "postgres"
+      },
+      {
+        "name": "extra_float_digits",
+        "value": "3"
+      },
+      {
+        "name": "bytea_output",
+        "value": "hex"
+      }
+    ],
+    "expectedShapeSha256": "b7027b2b4c2e2d77fada1546333a66bbb6feb2d333f371020f9839556fd0cfe1",
+    "actualShapeSha256": "b7027b2b4c2e2d77fada1546333a66bbb6feb2d333f371020f9839556fd0cfe1",
+    "sectionDigests": [
+      {
+        "section": "relations",
+        "expectedType": "array",
+        "actualType": "array",
+        "expectedItems": 28,
+        "actualItems": 28,
+        "expectedSha256": "9a4a58ee713cedc40dfdf9cd4be5db651172379c076f8b56297771bc35fe4952",
+        "actualSha256": "9a4a58ee713cedc40dfdf9cd4be5db651172379c076f8b56297771bc35fe4952",
+        "equal": true
+      },
+      {
+        "section": "columns",
+        "expectedType": "array",
+        "actualType": "array",
+        "expectedItems": 403,
+        "actualItems": 403,
+        "expectedSha256": "a9331680ba2e689cee7f5d8b93f5d30c87d1b4a45937897017d16f84bab693b8",
+        "actualSha256": "a9331680ba2e689cee7f5d8b93f5d30c87d1b4a45937897017d16f84bab693b8",
+        "equal": true
+      },
+      {
+        "section": "constraints",
+        "expectedType": "array",
+        "actualType": "array",
+        "expectedItems": 347,
+        "actualItems": 347,
+        "expectedSha256": "0e18dd8ed4de9e01b8d8257796a5bff2c1143593909956305cdca3cd351ae666",
+        "actualSha256": "0e18dd8ed4de9e01b8d8257796a5bff2c1143593909956305cdca3cd351ae666",
+        "equal": true
+      },
+      {
+        "section": "indexes",
+        "expectedType": "array",
+        "actualType": "array",
+        "expectedItems": 122,
+        "actualItems": 122,
+        "expectedSha256": "93b4b29a821a518b8674f816e68c4a51756e8997909c15d30aee26cde8eb01b4",
+        "actualSha256": "93b4b29a821a518b8674f816e68c4a51756e8997909c15d30aee26cde8eb01b4",
+        "equal": true
+      },
+      {
+        "section": "triggers",
+        "expectedType": "array",
+        "actualType": "array",
+        "expectedItems": 53,
+        "actualItems": 53,
+        "expectedSha256": "805b8d0a84b89105ad8f6a5ed6e565a812bba195a28678bb3d7c3c86d43146dd",
+        "actualSha256": "805b8d0a84b89105ad8f6a5ed6e565a812bba195a28678bb3d7c3c86d43146dd",
+        "equal": true
+      },
+      {
+        "section": "policies",
+        "expectedType": "null",
+        "actualType": "null",
+        "expectedItems": null,
+        "actualItems": null,
+        "expectedSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "actualSha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "equal": true
+      }
+    ],
+    "differenceCount": 0,
+    "differences": [],
+    "differencesTruncated": false,
+    "passed": true
+  },
+  "finishedAt": "2026-10-22T07:58:31.252Z"
+}

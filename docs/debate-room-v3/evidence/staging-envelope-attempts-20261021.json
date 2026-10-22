@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "scope": "Isolated PostgreSQL application-envelope verification only",
+  "hostedExecuted": false,
+  "productionDeployed": false,
+  "attempts": [
+    {
+      "runId": 39580780099,
+      "runUrl": "https://github.com/codingwally/Bar-Exam-simulator/actions/runs/39580780099",
+      "source": "2a546e740ade7a339de50b2db44fcfb6cf37ff0d",
+      "testedMerge": "402c4f3f5f1249867aaad5a38170bbd40b5a1649",
+      "status": "FAIL_BEFORE_APPLICATION",
+      "checks": 13,
+      "expectedErrors": 9,
+      "applicationPhases": 0,
+      "failedProbe": "envelope-protected-function-drift",
+      "sqlState": "P0001",
+      "expectedMessage": "UNKNOWN_OR_PARTIAL_PACKAGE_PREIMAGE",
+      "actualMessage": "STAGING_SCHEMA_CHANGED",
+      "report": "staging-envelope-native-39580780099.json",
+      "resolution": "Corrected the optional-trigger filter to preserve captured array order. Added bounded native schema diagnostics. Rerun pending; no guard weakened and no application or reversal claimed."
+    }
+  ]
+}

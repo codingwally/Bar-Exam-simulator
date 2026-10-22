@@ -51,10 +51,10 @@
   "runtimeServerVersionDiagnostic": "17.6",
   "enforcedServerVersionNum": "170006",
   "testedPackageManifestSha256": "ac5be7b2899a7a48bf573ef03ec02d515477d9e12961cbc58b3640f03a3cfd11",
-  "generatorSha256": "68153f6ae6866776d687ad24a228dc0533127f1d1c8157d62c65235e0e01295a",
+  "generatorSha256": "f7644451d43631934b28a72ee137ef7aba5caeb91e4f2b8d3e82c0df6924f420",
   "files": {
-    "forward.review.sql": "6c58c215426d0fc26ef1575aa63b42e1823d337dc7bdcc3130d0432079e8f205",
-    "inverse.review.sql": "f530b5b7c5115b549c9a5728bf9c927a61e7f1c1b5b5b4e5ba716814b1d7bca5",
+    "forward.review.sql": "41c5b18d93bc2500f27a46f2e77aaf4574e57ae5a6a5694005b9fad199abe68e",
+    "inverse.review.sql": "85197063b6452f1864305f21534f602cd509bcc661b9c421f8aae556722064df",
     "binding.template.json": "d6a2109999ed4ca0f906892c1c275d4e6a795b202df59b30a5035288e550fe35",
     "definition-index.json": "27644703bcabfecd5d790c67d8b8b18c2e669ee1587816374b6d2568bd70d7f2",
     "cutover-row-state-capture.sql": "934f654141f15c66ff4d67ffee13b59ca3f05ebc7fa88dcd4a1f9c5a30f9045c",
@@ -75,7 +75,7 @@
     "Inverse is allowed only before write access is resumed, while original row digests and zero sessions/rosters still hold; otherwise a new forward repair is required."
   ],
   "fixturePurpose": "DISPOSABLE_NATIVE_ENVELOPE_VERIFICATION_ONLY",
-  "originalReviewManifestSha256": "8ff2b49598f40bb5f0079cb31a452d63ca13ab745bd84c925d23aae03fcd0745",
+  "originalReviewManifestSha256": "54da3d3b61e538a9ff4541d295a251a92c8bcad504be0f1e54c9fff37051a8f4",
   "frozenFromReview": "staging-application-review-20261020",
   "freezingDoesNotAuthorizeApplication": true,
   "omittedReviewOutputs": [

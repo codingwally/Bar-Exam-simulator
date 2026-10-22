@@ -124,7 +124,7 @@ const report = {
 };
 const check = (name, condition = true) => { assert.ok(condition, name); report.checks.push({ name, passed: true }); };
 
-function start(sql, { name = 'envelope-native', bootstrap = false, database = 'postgres', setupRole = false, fixture = false, expectedCode, expectedMessage, keepOpen = false } = {}) {
+function start(sql, { name = 'envelope-native', bootstrap = false, database = 'postgres', setupRole = false, fixture = false, expectedCode, expectedMessage, keepOpen = false, diagnosticNotice = false } = {}) {
   assert.match(name, /^[a-zA-Z0-9_-]{1,60}$/);
   assert.ok(['postgres', 'template1', 'unused_bootstrap_database', 'duediligence_compatibility_fixture'].includes(database));
   const connection = { ...env, PGDATABASE: database, PGUSER: bootstrap ? 'fixture_bootstrap' : 'postgres', PGPASSWORD: bootstrap ? expectedEnv.PGPASSWORD : 'isolated_envelope_role_only', PGAPPNAME: name };
@@ -150,6 +150,13 @@ function start(sql, { name = 'envelope-native', bootstrap = false, database = 'p
       }
       if (code !== 0) return reject(Object.assign(new Error('NATIVE_SQL_FAILED'), { applicationName: name, sqlState, diagnostic }));
       if (inputError) return reject(Object.assign(new Error('PSQL_INPUT_FAILED'), { applicationName: name, diagnostic: inputError }));
+      if (diagnosticNotice) {
+        const marker = 'ENVELOPE_SCHEMA_DIAGNOSTIC:';
+        const notices = stderr.split('\n').filter(line => line.includes(marker));
+        if (notices.length !== 1 || stdout.trim()) return reject(new Error('SCHEMA_DIAGNOSTIC_RECORD_MISSING_OR_AMBIGUOUS'));
+        try { return resolve(JSON.parse(notices[0].slice(notices[0].indexOf(marker) + marker.length))); }
+        catch { return reject(new Error('SCHEMA_DIAGNOSTIC_RECORD_INVALID')); }
+      }
       resolve(stdout.trim());
     });
   });
@@ -194,6 +201,88 @@ async function verifyUnchanged(expected, label) {
   assert.deepEqual(await rowState(), referenceRows, `${label}: all 28 target table counts and digests`);
   assert.deepEqual(JSON.parse(await run(canonicalSettings + externalSql)), referenceExternal, `${label}: external rows, columns and roles`);
   check(label);
+}
+async function diagnoseEnvelopeSchema() {
+  const sql = files.get('forward.review.sql');
+  const schemaDelimiter = '$expected_schema$';
+  const expectedParts = sql.split(schemaDelimiter);
+  assert.equal(expectedParts.length, 5, 'Exactly two schema guards must be present');
+  assert.equal(expectedParts[1], expectedParts[3], 'Both schema guards must have the same captured expectation');
+  const expected = JSON.parse(expectedParts[1]);
+  const startMarker = "  SELECT to_jsonb(s)-'captured_at' INTO actual FROM (SELECT clock_timestamp() AS captured_at,\n(SELECT jsonb_agg(jsonb_build_object('table',c.relname";
+  const shapeStart = sql.indexOf(startMarker);
+  const shapeEnd = sql.indexOf('  IF actual IS DISTINCT FROM ' + schemaDelimiter, shapeStart);
+  assert.ok(shapeStart >= 0 && shapeEnd > shapeStart, 'Exact envelope schema calculation must be found');
+  const shapeCalculation = sql.slice(shapeStart, shapeEnd);
+  // Reuse the actual envelope calculation, including trigger normalization and
+  // its explicit settings. Do not normalize or sort results in JavaScript.
+  const beforeLocks = sql.slice(0, sql.indexOf('  IF NOT pg_try_advisory_xact_lock'));
+  const settingStatements = [...beforeLocks.matchAll(/^  PERFORM set_config\('([^']+)','((?:[^']|'')*)',true\);$/gm)];
+  assert.ok(settingStatements.length >= 6);
+  const allowedSettings = new Set(['lock_timeout', 'TimeZone', 'DateStyle', 'IntervalStyle', 'extra_float_digits', 'bytea_output', 'search_path']);
+  for (const setting of settingStatements) assert.ok(allowedSettings.has(setting[1]), 'Unreviewed diagnostic setting');
+  const diagnosticBody = settingStatements.map(match => match[0]).join('\n') + '\n' + shapeCalculation;
+  const diagnosticDelimiter = '$envelope_schema_diagnostic$';
+  assert.ok(!diagnosticBody.includes(diagnosticDelimiter));
+  const actualRecord = await run(`BEGIN TRANSACTION READ ONLY;\nDO ${diagnosticDelimiter}\nDECLARE actual jsonb;\nBEGIN\n${diagnosticBody}
+  RAISE NOTICE 'ENVELOPE_SCHEMA_DIAGNOSTIC:%', jsonb_build_object('shape',actual,'settings',jsonb_build_object('search_path',current_setting('search_path'),'TimeZone',current_setting('TimeZone'),'DateStyle',current_setting('DateStyle'),'IntervalStyle',current_setting('IntervalStyle'),'extra_float_digits',current_setting('extra_float_digits'),'bytea_output',current_setting('bytea_output'),'lc_collate',current_setting('lc_collate')));
+END;\n${diagnosticDelimiter};\nCOMMIT;`, { name: 'envelope-baseline-shape-diagnostic', diagnosticNotice: true });
+  const type = value => value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value;
+  const small = value => {
+    if (typeof value === 'string') return value.length <= 160 ? value : { length: value.length, sha256: sha(value) };
+    if (value === null || ['number', 'boolean'].includes(typeof value)) return value;
+    if (Array.isArray(value)) return { length: value.length };
+    if (value && typeof value === 'object') return { keys: Object.keys(value).sort().slice(0, 12) };
+    return null;
+  };
+  let differenceCount = 0;
+  const differences = [];
+  const recordDifference = (key, before, after) => {
+    differenceCount++;
+    if (differences.length < 32) differences.push({ path: key, expectedType: type(before), actualType: type(after), expected: small(before), actual: small(after) });
+  };
+  const compare = (before, after, key = '$') => {
+    if (type(before) !== type(after)) return recordDifference(key, before, after);
+    if (before === null || typeof before !== 'object') {
+      if (before !== after) recordDifference(key, before, after);
+    } else if (Array.isArray(before)) {
+      if (before.length !== after.length) recordDifference(key + '.length', before.length, after.length);
+      for (let i = 0; i < Math.min(before.length, after.length); i++) compare(before[i], after[i], `${key}[${i}]`);
+    } else {
+      for (const child of [...new Set([...Object.keys(before), ...Object.keys(after)])].sort()) compare(before[child], after[child], `${key}.${child}`);
+    }
+  };
+  compare(expected, actualRecord.shape);
+  // JSON object key order is immaterial to jsonb equality; array order remains
+  // significant. Canonicalize object keys only when producing digest evidence.
+  const canonicalJson = value => JSON.stringify(value, function (key, current) {
+    if (current && typeof current === 'object' && !Array.isArray(current)) {
+      return Object.fromEntries(Object.keys(current).sort().map(name => [name, current[name]]));
+    }
+    return current;
+  });
+  const sectionNames = ['relations', 'columns', 'constraints', 'indexes', 'triggers', 'policies'];
+  const sectionDigests = sectionNames.map(section => {
+    const before = expected[section], after = actualRecord.shape[section];
+    const beforeJson = canonicalJson(before), afterJson = canonicalJson(after);
+    return {
+      section, expectedType: type(before), actualType: type(after),
+      expectedItems: Array.isArray(before) ? before.length : null,
+      actualItems: Array.isArray(after) ? after.length : null,
+      expectedSha256: beforeJson === undefined ? null : sha(beforeJson),
+      actualSha256: afterJson === undefined ? null : sha(afterJson),
+      equal: beforeJson === afterJson,
+    };
+  });
+  report.envelopeBaselineShapeDiagnostic = {
+    templateSha256: manifest.files['forward.review.sql'], calculationSha256: sha(shapeCalculation),
+    settings: actualRecord.settings, explicitEnvelopeSettings: settingStatements.map(match => ({ name: match[1], value: match[2].replaceAll("''", "'") })),
+    expectedShapeSha256: sha(canonicalJson(expected)), actualShapeSha256: sha(canonicalJson(actualRecord.shape)), sectionDigests,
+    differenceCount, differences, differencesTruncated: differenceCount > differences.length,
+    passed: differenceCount === 0,
+  };
+  if (differenceCount) throw new Error('EXACT_ENVELOPE_BASELINE_SCHEMA_MISMATCH');
+  check('Exact envelope schema calculation matches captured shape under its own settings');
 }
 function simulatedBinding(overrides = {}) {
   const now = Date.now();
@@ -310,6 +399,7 @@ try {
   report.syntheticBaselineRowsSha256 = sha(JSON.stringify(referenceRows));
   report.syntheticExternalBaselineSha256 = sha(JSON.stringify(referenceExternal));
   await verifyUnchanged(baseline, 'Initial exact captured catalog and nonempty synthetic sentinels');
+  await diagnoseEnvelopeSchema();
   for (const phase of ['forward', 'inverse']) await deny(`envelope-default-${phase}`, { phase, binding: null, expectedMessage: 'REVIEW_ONLY_STAGING_RELEASE_NOT_APPROVED' });
   await deny('envelope-wrong-project', { binding: simulatedBinding({ targetProjectId: manifest.forbiddenProductionProjectId }), expectedMessage: 'REVIEW_ONLY_STAGING_RELEASE_NOT_APPROVED' });
   await deny('envelope-expired', { binding: simulatedBinding({ cutover: { allowedAfterUtc: new Date(Date.now()-120000).toISOString(), expiresAtUtc: new Date(Date.now()-60000).toISOString() } }), expectedMessage: 'ENFORCED_CURRENT_CUTOVER_EVIDENCE_REQUIRED' });

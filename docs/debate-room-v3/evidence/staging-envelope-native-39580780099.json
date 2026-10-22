@@ -1,0 +1,277 @@
+{
+  "kind": "ISOLATED_STAGING_APPLICATION_ENVELOPE",
+  "status": "FAIL",
+  "startedAt": "2026-10-21T09:56:23.744Z",
+  "candidate": "402c4f3f5f1249867aaad5a38170bbd40b5a1649",
+  "harnessSha256": "e5b1d44e707e2b58e9148adf9c3dea1e7818176ccfb1fa99d9a22735554bb9ee",
+  "envelopeManifestSha256": "a9dc0caf166e028d140087d45b1442e3290355d4f0eaca3c52732eb715ac877d",
+  "originalReviewManifestSha256": "8ff2b49598f40bb5f0079cb31a452d63ca13ab745bd84c925d23aae03fcd0745",
+  "envelopeInputHashes": {
+    "forward.review.sql": "6c58c215426d0fc26ef1575aa63b42e1823d337dc7bdcc3130d0432079e8f205",
+    "inverse.review.sql": "f530b5b7c5115b549c9a5728bf9c927a61e7f1c1b5b5b4e5ba716814b1d7bca5",
+    "binding.template.json": "d6a2109999ed4ca0f906892c1c275d4e6a795b202df59b30a5035288e550fe35",
+    "definition-index.json": "27644703bcabfecd5d790c67d8b8b18c2e669ee1587816374b6d2568bd70d7f2",
+    "cutover-row-state-capture.sql": "934f654141f15c66ff4d67ffee13b59ca3f05ebc7fa88dcd4a1f9c5a30f9045c",
+    "executor-identity-capture.sql": "b81c579d2258301ea5dfe9222350b674cdfa4aab09dd590e6c0c7447ff3fbe4f"
+  },
+  "testedSourceHashes": {
+    "scripts/fixtures/current-staging-compatibility/manifest.json": "ac5be7b2899a7a48bf573ef03ec02d515477d9e12961cbc58b3640f03a3cfd11",
+    "scripts/fixtures/current-staging-compatibility/current-schema.sql": "a66c84ddb2238ad78a33cc8c4cbd926baab8b354f7a6db34277aa9b115374a95",
+    "scripts/fixtures/current-staging-compatibility/verify-current-schema.sql": "33af51cdddeeb4b87b58dde15ce0a95df767f3e7a2cb96ca70f24082aa65b641",
+    "scripts/fixtures/current-staging-compatibility/forward.sql": "b6f1c1ebb4aa28d61b10ddf61713a1fb295f21dbecbd018a23c3994e10e7eab8",
+    "scripts/fixtures/current-staging-compatibility/inverse.sql": "a3a26b928a0cd120add9224afa12965af46e232d10b4350c491241d4b3b5be02",
+    "scripts/fixtures/current-staging-compatibility/baseline.json": "670be5671f7dcdaf9273c129bbe4c4834c85db4a4ff1952aef944a93703cefa9",
+    "scripts/fixtures/current-staging-compatibility/postimage.json": "ef39134f74ca324c24fb23ddb7e538cf8252571dd05c22b421cbafac1aead2e4",
+    "scripts/fixtures/current-staging-compatibility/target-definitions.json": "4eefe9f39bda33d3e91b6afb95920775a6b2ce3bbc59f78dc0e956568f5f52ed",
+    "scripts/fixtures/current-staging-compatibility/table-names.json": "6f7a8bff728dc7e8ad83c56a6bd6bda030044db80740bb3a1496778b983adf6e",
+    "scripts/fixtures/current-staging-compatibility/fixture-manifest.json": "1e8944adbf74f3ed9cc0557dbf9d663b5402ed59e45b80c405dd94a0a5d9e601",
+    "scripts/fixtures/current-staging-compatibility/hardening-manifest.json": "c951a8d13d6d547ff2fed1adb126227256f797debbdf40db41ba7ecab3a84b0b",
+    "scripts/fixtures/current-staging-compatibility/hardening-patches.json": "c193b70296eae29819deba1ba5a50f87f8a18c3a56df86988051a77cb7da7d7d",
+    "scripts/fixtures/current-staging-compatibility/professor-manifest.json": "46558bccf6c848bced1d003d717fa1153a8ef3b166dd89cdbff852fedd7e683b",
+    "scripts/fixtures/current-staging-compatibility/professor-seed.sql": "a23d8f9e92d2a12107e33d30926f1b625675d5be9d5773a3c7e0213a5db6e462",
+    "scripts/fixtures/current-staging-compatibility/professor-pre.sql": "d179702bfef72ca176d3e4f7190b71f2179f318d5dd04e1523e7c5852ea89e59",
+    "scripts/fixtures/current-staging-compatibility/professor-post.sql": "f1881ee852d581bb9d6f68a3a8eda5c1f84c3cc72f12cdfe5b4cbe50194d4f50",
+    "scripts/fixtures/current-staging-compatibility/student-seed.sql": "e7f133477259b08342125e4a27974fb704baba48549ee9c8471b6f3f65d653fc",
+    "scripts/fixtures/current-staging-compatibility/student-pre.sql": "9e8e41ae4ea0a9dfe4872316abad6989a6187ee3eda431f5ec591fefccca883a",
+    "scripts/fixtures/current-staging-compatibility/student-post.sql": "45271532a4b872f4ca1929a3f82531a503a80b4534a109e715579ce1940ee157",
+    "scripts/fixtures/current-staging-compatibility/student-race.mjs": "e0f7cb3f0bcb63c12519e6ff2ef6152c22b926535b61912e966efe2dec5d8d60",
+    "scripts/verify-current-staging-compatibility.mjs": "0b49b81a269efb4af8b8bb330edd60fae559cf70aad68577e865f26b7a769bf4"
+  },
+  "sqlExecuted": true,
+  "hostedExecuted": false,
+  "providerCalls": 0,
+  "productionDeployed": false,
+  "authorizationGranted": false,
+  "simulatedBindingsOnly": true,
+  "boundSqlPersisted": false,
+  "checks": [
+    {
+      "name": "Fresh loopback PostgreSQL 17.6 bootstrap",
+      "passed": true
+    },
+    {
+      "name": "Original fixture imported and verified without changes",
+      "passed": true
+    },
+    {
+      "name": "Envelope authenticates directly as captured non-superuser postgres",
+      "passed": true
+    },
+    {
+      "name": "Initial exact captured catalog and nonempty synthetic sentinels",
+      "passed": true
+    },
+    {
+      "name": "envelope-default-forward: rejection preserves catalog and rows",
+      "passed": true
+    },
+    {
+      "name": "envelope-default-inverse: rejection preserves catalog and rows",
+      "passed": true
+    },
+    {
+      "name": "envelope-wrong-project: rejection preserves catalog and rows",
+      "passed": true
+    },
+    {
+      "name": "envelope-expired: rejection preserves catalog and rows",
+      "passed": true
+    },
+    {
+      "name": "envelope-incomplete-cutover: rejection preserves catalog and rows",
+      "passed": true
+    },
+    {
+      "name": "envelope-no-row-snapshot: rejection preserves catalog and rows",
+      "passed": true
+    },
+    {
+      "name": "envelope-wrong-session: rejection preserves catalog and rows",
+      "passed": true
+    },
+    {
+      "name": "envelope-wrong-configured-role: rejection preserves catalog and rows",
+      "passed": true
+    },
+    {
+      "name": "envelope-wrong-database: rejection preserves catalog and rows",
+      "passed": true
+    }
+  ],
+  "expectedErrors": [
+    {
+      "name": "envelope-default-forward",
+      "sqlState": "P0001",
+      "expectedMessage": "REVIEW_ONLY_STAGING_RELEASE_NOT_APPROVED",
+      "diagnostic": "ERROR:  P0001: REVIEW_ONLY_STAGING_RELEASE_NOT_APPROVED\nLOCATION:  exec_stmt_raise, pl_exec.c:3911",
+      "diagnosticSha256": "74f882e93628788e86d4b5c6698ff4096e382f239bfa30996c2ba6dc63917930"
+    },
+    {
+      "name": "envelope-default-inverse",
+      "sqlState": "P0001",
+      "expectedMessage": "REVIEW_ONLY_STAGING_RELEASE_NOT_APPROVED",
+      "diagnostic": "ERROR:  P0001: REVIEW_ONLY_STAGING_RELEASE_NOT_APPROVED\nLOCATION:  exec_stmt_raise, pl_exec.c:3911",
+      "diagnosticSha256": "74f882e93628788e86d4b5c6698ff4096e382f239bfa30996c2ba6dc63917930"
+    },
+    {
+      "name": "envelope-wrong-project",
+      "sqlState": "P0001",
+      "expectedMessage": "REVIEW_ONLY_STAGING_RELEASE_NOT_APPROVED",
+      "diagnostic": "ERROR:  P0001: REVIEW_ONLY_STAGING_RELEASE_NOT_APPROVED\nLOCATION:  exec_stmt_raise, pl_exec.c:3911",
+      "diagnosticSha256": "74f882e93628788e86d4b5c6698ff4096e382f239bfa30996c2ba6dc63917930"
+    },
+    {
+      "name": "envelope-expired",
+      "sqlState": "P0001",
+      "expectedMessage": "ENFORCED_CURRENT_CUTOVER_EVIDENCE_REQUIRED",
+      "diagnostic": "ERROR:  P0001: ENFORCED_CURRENT_CUTOVER_EVIDENCE_REQUIRED\nLOCATION:  exec_stmt_raise, pl_exec.c:3911",
+      "diagnosticSha256": "43faff5e8b0c39346263ec1100271d2b0c62c65315c4c6eda083f4852b724797"
+    },
+    {
+      "name": "envelope-incomplete-cutover",
+      "sqlState": "P0001",
+      "expectedMessage": "ENFORCED_CURRENT_CUTOVER_EVIDENCE_REQUIRED",
+      "diagnostic": "ERROR:  P0001: ENFORCED_CURRENT_CUTOVER_EVIDENCE_REQUIRED\nLOCATION:  exec_stmt_raise, pl_exec.c:3911",
+      "diagnosticSha256": "43faff5e8b0c39346263ec1100271d2b0c62c65315c4c6eda083f4852b724797"
+    },
+    {
+      "name": "envelope-no-row-snapshot",
+      "sqlState": "P0001",
+      "expectedMessage": "ENFORCED_CURRENT_CUTOVER_EVIDENCE_REQUIRED",
+      "diagnostic": "ERROR:  P0001: ENFORCED_CURRENT_CUTOVER_EVIDENCE_REQUIRED\nLOCATION:  exec_stmt_raise, pl_exec.c:3911",
+      "diagnosticSha256": "43faff5e8b0c39346263ec1100271d2b0c62c65315c4c6eda083f4852b724797"
+    },
+    {
+      "name": "envelope-wrong-session",
+      "sqlState": "P0001",
+      "expectedMessage": "STAGING_EXECUTOR_IDENTITY_MISMATCH",
+      "diagnostic": "ERROR:  P0001: STAGING_EXECUTOR_IDENTITY_MISMATCH\nLOCATION:  exec_stmt_raise, pl_exec.c:3911",
+      "diagnosticSha256": "8a17dd0f371d819cada7788c920e3dab7836721134ed9811c2a0ac72135cd25f"
+    },
+    {
+      "name": "envelope-wrong-configured-role",
+      "sqlState": "P0001",
+      "expectedMessage": "STAGING_EXECUTOR_IDENTITY_MISMATCH",
+      "diagnostic": "ERROR:  P0001: STAGING_EXECUTOR_IDENTITY_MISMATCH\nLOCATION:  exec_stmt_raise, pl_exec.c:3911",
+      "diagnosticSha256": "8a17dd0f371d819cada7788c920e3dab7836721134ed9811c2a0ac72135cd25f"
+    },
+    {
+      "name": "envelope-wrong-database",
+      "sqlState": "P0001",
+      "expectedMessage": "STAGING_EXECUTOR_IDENTITY_MISMATCH",
+      "diagnostic": "ERROR:  P0001: STAGING_EXECUTOR_IDENTITY_MISMATCH\nLOCATION:  exec_stmt_raise, pl_exec.c:3911",
+      "diagnosticSha256": "8a17dd0f371d819cada7788c920e3dab7836721134ed9811c2a0ac72135cd25f"
+    }
+  ],
+  "bindingInjections": [
+    {
+      "name": "envelope-wrong-project",
+      "phase": "forward",
+      "delimiter": "$review_binding$",
+      "replacements": 1,
+      "simulationOnly": true,
+      "authorizationGranted": false,
+      "bindingSha256": "6972ee15520d2281f31bcc6305d1453c07900fc5f1d124621bedce120c844e90",
+      "templateSha256": "6c58c215426d0fc26ef1575aa63b42e1823d337dc7bdcc3130d0432079e8f205"
+    },
+    {
+      "name": "envelope-expired",
+      "phase": "forward",
+      "delimiter": "$review_binding$",
+      "replacements": 1,
+      "simulationOnly": true,
+      "authorizationGranted": false,
+      "bindingSha256": "420fdeb212ca81ecfa852fabe3d00402e47c924a00b3557b9f24f78301bc15c3",
+      "templateSha256": "6c58c215426d0fc26ef1575aa63b42e1823d337dc7bdcc3130d0432079e8f205"
+    },
+    {
+      "name": "envelope-incomplete-cutover",
+      "phase": "forward",
+      "delimiter": "$review_binding$",
+      "replacements": 1,
+      "simulationOnly": true,
+      "authorizationGranted": false,
+      "bindingSha256": "850dc532392f56edc4051bb6233e25a2e73ae324b55324ab1dc55842483ca5b4",
+      "templateSha256": "6c58c215426d0fc26ef1575aa63b42e1823d337dc7bdcc3130d0432079e8f205"
+    },
+    {
+      "name": "envelope-no-row-snapshot",
+      "phase": "forward",
+      "delimiter": "$review_binding$",
+      "replacements": 1,
+      "simulationOnly": true,
+      "authorizationGranted": false,
+      "bindingSha256": "95f456da5c03f195d14fee8bb85f05efd691d338eaa7a24f41cd2d30b66ef172",
+      "templateSha256": "6c58c215426d0fc26ef1575aa63b42e1823d337dc7bdcc3130d0432079e8f205"
+    },
+    {
+      "name": "envelope-wrong-session",
+      "phase": "forward",
+      "delimiter": "$review_binding$",
+      "replacements": 1,
+      "simulationOnly": true,
+      "authorizationGranted": false,
+      "bindingSha256": "67372a59c798372600ae09ccae5d91d13c243fbcd0d0b185f0eea80dcd115713",
+      "templateSha256": "6c58c215426d0fc26ef1575aa63b42e1823d337dc7bdcc3130d0432079e8f205"
+    },
+    {
+      "name": "envelope-wrong-configured-role",
+      "phase": "forward",
+      "delimiter": "$review_binding$",
+      "replacements": 1,
+      "simulationOnly": true,
+      "authorizationGranted": false,
+      "bindingSha256": "87f497aab8451868a93b4975272e5746a482ccc0bdd88968f7d63ad08e89c87f",
+      "templateSha256": "6c58c215426d0fc26ef1575aa63b42e1823d337dc7bdcc3130d0432079e8f205"
+    },
+    {
+      "name": "envelope-wrong-database",
+      "phase": "forward",
+      "delimiter": "$review_binding$",
+      "replacements": 1,
+      "simulationOnly": true,
+      "authorizationGranted": false,
+      "bindingSha256": "22df2dbda55266cd5b3ec37f645e8f49990ad9c70151e5f1896071eaee006d34",
+      "templateSha256": "6c58c215426d0fc26ef1575aa63b42e1823d337dc7bdcc3130d0432079e8f205"
+    },
+    {
+      "name": "envelope-protected-function-drift",
+      "phase": "forward",
+      "delimiter": "$review_binding$",
+      "replacements": 1,
+      "simulationOnly": true,
+      "authorizationGranted": false,
+      "bindingSha256": "08fb2e18ee873b81698d4f7c359eca0b30648b303c91797620d95cea1bea18dd",
+      "templateSha256": "6c58c215426d0fc26ef1575aa63b42e1823d337dc7bdcc3130d0432079e8f205"
+    }
+  ],
+  "faultInjections": [],
+  "phases": [],
+  "limitations": [
+    "Local simulated approval is synthetic test data. It is not owner approval, release permission, or evidence of a real ingress pause and drain.",
+    "PostgreSQL cannot authenticate a Supabase project from a JSON assertion. Hosted execution needs independently verified structured project binding and authorization.",
+    "No hosted SQL, migration tool, Worker, authentication service, browser, email provider, payment, storage, or production deployment is exercised.",
+    "Only the new envelope is exercised here. Earlier behavioral and concurrency results apply only while all 21 previously tested source inputs retain their hashes.",
+    "External Auth/Profile/role tables are minimal synthetic projections. Actual Study and Debate tables and hosted role memberships are not reproduced.",
+    "The late-failure probe uses an outer transaction around the exact bound envelope; its injected exception verifies rollback before commit, not failure after commit.",
+    "The two repeat-expiry probes insert a reported in-memory delay immediately before the repeat return guard. Frozen inputs and function bodies remain unchanged; ordinary application and repeat probes execute the exact template.",
+    "Local psql deadlines and termination do not establish the supported hosted migration executor deadline or cancellation behavior."
+  ],
+  "server": {
+    "user": "fixture_bootstrap",
+    "address": "172.18.0.2/32",
+    "version": "170006",
+    "database": "duediligence_compatibility_fixture"
+  },
+  "executorIdentityResultSha256": "bc786f1f37a1e2e1b33cce433bea13a9d16693c837428cf301b2c3145239ee5f",
+  "syntheticBaselineRowsSha256": "a84d3d1b4d6de3358034dd87e5e57a945efacdf9526cd1b5c244763517861e45",
+  "syntheticExternalBaselineSha256": "a3b7e03603fe424d88e091aa707be9fdb28eebe1e57957efdf149aa639621b80",
+  "error": {
+    "name": "Error",
+    "message": "EXPECTED_SQL_DENIAL_MISMATCH",
+    "sqlState": "P0001",
+    "applicationName": "envelope-protected-function-drift",
+    "diagnostic": "ERROR:  P0001: STAGING_SCHEMA_CHANGED\nLOCATION:  exec_stmt_raise, pl_exec.c:3911"
+  },
+  "finishedAt": "2026-10-21T09:56:26.181Z"
+}

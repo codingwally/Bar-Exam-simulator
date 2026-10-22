@@ -1,0 +1,331 @@
+{
+  "schemaVersion": 1,
+  "status": "READ_ONLY_ROLE_MEMBERSHIP_CAPTURE",
+  "projectId": "hlzqmreeoghbldnhlybr",
+  "query": "BEGIN TRANSACTION READ ONLY;\nSET LOCAL statement_timeout='15s';\nWITH RECURSIVE relevant(roleid) AS (\n  SELECT oid FROM pg_roles WHERE rolname IN ('postgres','service_role','anon','authenticated','supabase_admin','supabase_auth_admin','dashboard_user','pg_database_owner')\n  UNION\n  SELECT m.roleid FROM pg_auth_members m JOIN relevant r ON m.member=r.roleid\n)\nSELECT clock_timestamp() AS captured_at,\n       current_database() AS database_name,\n       current_user AS current_user_name,\n       (SELECT jsonb_agg(jsonb_build_object('role',r.rolname,'superuser',r.rolsuper,'inherit',r.rolinherit,'createRole',r.rolcreaterole,'createDatabase',r.rolcreatedb,'canLogin',r.rolcanlogin,'replication',r.rolreplication,'bypassRls',r.rolbypassrls,'connectionLimit',r.rolconnlimit) ORDER BY r.rolname) FROM pg_roles r JOIN relevant v ON v.roleid=r.oid) AS relevant_roles,\n       (SELECT coalesce(jsonb_agg(jsonb_build_object('member',member_role.rolname,'grantedRole',parent_role.rolname,'grantor',grantor_role.rolname,'adminOption',m.admin_option,'inheritOption',m.inherit_option,'setOption',m.set_option) ORDER BY member_role.rolname,parent_role.rolname,grantor_role.rolname),'[]'::jsonb) FROM pg_auth_members m JOIN relevant v ON v.roleid=m.member JOIN pg_roles member_role ON member_role.oid=m.member JOIN pg_roles parent_role ON parent_role.oid=m.roleid JOIN pg_roles grantor_role ON grantor_role.oid=m.grantor) AS relevant_memberships;\nCOMMIT;",
+  "rows": [
+    {
+      "captured_at": "2026-10-21 03:29:54.546725+00",
+      "database_name": "postgres",
+      "current_user_name": "postgres",
+      "relevant_roles": [
+        {
+          "role": "anon",
+          "inherit": true,
+          "canLogin": false,
+          "bypassRls": false,
+          "superuser": false,
+          "createRole": false,
+          "replication": false,
+          "createDatabase": false,
+          "connectionLimit": -1
+        },
+        {
+          "role": "authenticated",
+          "inherit": true,
+          "canLogin": false,
+          "bypassRls": false,
+          "superuser": false,
+          "createRole": false,
+          "replication": false,
+          "createDatabase": false,
+          "connectionLimit": -1
+        },
+        {
+          "role": "authenticator",
+          "inherit": false,
+          "canLogin": true,
+          "bypassRls": false,
+          "superuser": false,
+          "createRole": false,
+          "replication": false,
+          "createDatabase": false,
+          "connectionLimit": -1
+        },
+        {
+          "role": "dashboard_user",
+          "inherit": true,
+          "canLogin": false,
+          "bypassRls": false,
+          "superuser": false,
+          "createRole": true,
+          "replication": true,
+          "createDatabase": true,
+          "connectionLimit": -1
+        },
+        {
+          "role": "pg_create_subscription",
+          "inherit": true,
+          "canLogin": false,
+          "bypassRls": false,
+          "superuser": false,
+          "createRole": false,
+          "replication": false,
+          "createDatabase": false,
+          "connectionLimit": -1
+        },
+        {
+          "role": "pg_database_owner",
+          "inherit": true,
+          "canLogin": false,
+          "bypassRls": false,
+          "superuser": false,
+          "createRole": false,
+          "replication": false,
+          "createDatabase": false,
+          "connectionLimit": -1
+        },
+        {
+          "role": "pg_monitor",
+          "inherit": true,
+          "canLogin": false,
+          "bypassRls": false,
+          "superuser": false,
+          "createRole": false,
+          "replication": false,
+          "createDatabase": false,
+          "connectionLimit": -1
+        },
+        {
+          "role": "pg_read_all_data",
+          "inherit": true,
+          "canLogin": false,
+          "bypassRls": false,
+          "superuser": false,
+          "createRole": false,
+          "replication": false,
+          "createDatabase": false,
+          "connectionLimit": -1
+        },
+        {
+          "role": "pg_read_all_settings",
+          "inherit": true,
+          "canLogin": false,
+          "bypassRls": false,
+          "superuser": false,
+          "createRole": false,
+          "replication": false,
+          "createDatabase": false,
+          "connectionLimit": -1
+        },
+        {
+          "role": "pg_read_all_stats",
+          "inherit": true,
+          "canLogin": false,
+          "bypassRls": false,
+          "superuser": false,
+          "createRole": false,
+          "replication": false,
+          "createDatabase": false,
+          "connectionLimit": -1
+        },
+        {
+          "role": "pg_signal_backend",
+          "inherit": true,
+          "canLogin": false,
+          "bypassRls": false,
+          "superuser": false,
+          "createRole": false,
+          "replication": false,
+          "createDatabase": false,
+          "connectionLimit": -1
+        },
+        {
+          "role": "pg_stat_scan_tables",
+          "inherit": true,
+          "canLogin": false,
+          "bypassRls": false,
+          "superuser": false,
+          "createRole": false,
+          "replication": false,
+          "createDatabase": false,
+          "connectionLimit": -1
+        },
+        {
+          "role": "postgres",
+          "inherit": true,
+          "canLogin": true,
+          "bypassRls": true,
+          "superuser": false,
+          "createRole": true,
+          "replication": true,
+          "createDatabase": true,
+          "connectionLimit": -1
+        },
+        {
+          "role": "service_role",
+          "inherit": true,
+          "canLogin": false,
+          "bypassRls": true,
+          "superuser": false,
+          "createRole": false,
+          "replication": false,
+          "createDatabase": false,
+          "connectionLimit": -1
+        },
+        {
+          "role": "supabase_admin",
+          "inherit": true,
+          "canLogin": true,
+          "bypassRls": true,
+          "superuser": true,
+          "createRole": true,
+          "replication": true,
+          "createDatabase": true,
+          "connectionLimit": -1
+        },
+        {
+          "role": "supabase_auth_admin",
+          "inherit": false,
+          "canLogin": true,
+          "bypassRls": false,
+          "superuser": false,
+          "createRole": true,
+          "replication": false,
+          "createDatabase": false,
+          "connectionLimit": -1
+        },
+        {
+          "role": "supabase_privileged_role",
+          "inherit": true,
+          "canLogin": false,
+          "bypassRls": false,
+          "superuser": false,
+          "createRole": false,
+          "replication": false,
+          "createDatabase": false,
+          "connectionLimit": -1
+        }
+      ],
+      "relevant_memberships": [
+        {
+          "member": "authenticator",
+          "grantor": "supabase_admin",
+          "setOption": true,
+          "adminOption": false,
+          "grantedRole": "anon",
+          "inheritOption": false
+        },
+        {
+          "member": "authenticator",
+          "grantor": "supabase_admin",
+          "setOption": true,
+          "adminOption": false,
+          "grantedRole": "authenticated",
+          "inheritOption": false
+        },
+        {
+          "member": "authenticator",
+          "grantor": "supabase_admin",
+          "setOption": true,
+          "adminOption": false,
+          "grantedRole": "service_role",
+          "inheritOption": false
+        },
+        {
+          "member": "pg_monitor",
+          "grantor": "supabase_admin",
+          "setOption": true,
+          "adminOption": false,
+          "grantedRole": "pg_read_all_settings",
+          "inheritOption": true
+        },
+        {
+          "member": "pg_monitor",
+          "grantor": "supabase_admin",
+          "setOption": true,
+          "adminOption": false,
+          "grantedRole": "pg_read_all_stats",
+          "inheritOption": true
+        },
+        {
+          "member": "pg_monitor",
+          "grantor": "supabase_admin",
+          "setOption": true,
+          "adminOption": false,
+          "grantedRole": "pg_stat_scan_tables",
+          "inheritOption": true
+        },
+        {
+          "member": "postgres",
+          "grantor": "supabase_admin",
+          "setOption": true,
+          "adminOption": true,
+          "grantedRole": "anon",
+          "inheritOption": true
+        },
+        {
+          "member": "postgres",
+          "grantor": "supabase_admin",
+          "setOption": true,
+          "adminOption": true,
+          "grantedRole": "authenticated",
+          "inheritOption": true
+        },
+        {
+          "member": "postgres",
+          "grantor": "supabase_admin",
+          "setOption": true,
+          "adminOption": true,
+          "grantedRole": "authenticator",
+          "inheritOption": true
+        },
+        {
+          "member": "postgres",
+          "grantor": "supabase_admin",
+          "setOption": true,
+          "adminOption": true,
+          "grantedRole": "pg_create_subscription",
+          "inheritOption": true
+        },
+        {
+          "member": "postgres",
+          "grantor": "supabase_admin",
+          "setOption": true,
+          "adminOption": true,
+          "grantedRole": "pg_monitor",
+          "inheritOption": true
+        },
+        {
+          "member": "postgres",
+          "grantor": "supabase_admin",
+          "setOption": true,
+          "adminOption": true,
+          "grantedRole": "pg_read_all_data",
+          "inheritOption": true
+        },
+        {
+          "member": "postgres",
+          "grantor": "supabase_admin",
+          "setOption": true,
+          "adminOption": true,
+          "grantedRole": "pg_signal_backend",
+          "inheritOption": true
+        },
+        {
+          "member": "postgres",
+          "grantor": "supabase_admin",
+          "setOption": true,
+          "adminOption": true,
+          "grantedRole": "service_role",
+          "inheritOption": true
+        },
+        {
+          "member": "postgres",
+          "grantor": "supabase_admin",
+          "setOption": true,
+          "adminOption": false,
+          "grantedRole": "supabase_privileged_role",
+          "inheritOption": true
+        }
+      ]
+    }
+  ],
+  "hostedWrites": false,
+  "limitations": [
+    "Dated role metadata only; not a maintained cutover fence.",
+    "Recursively includes inherited/granted parent roles of eight relevant roots; it is not an inventory of every client or effective permission.",
+    "Disposable envelope fixtures deliberately retain their documented limited role model; this capture does not retroactively expand their coverage.",
+    "Must refresh at a future cutover and review effective permissions, direct callers, invocations and executor behavior separately."
+  ]
+}

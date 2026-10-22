@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS_READ_ONLY_CONFIGURATION_CAPTURE",
+  "runId": "39428225690",
+  "runUrl": "https://github.com/codingwally/Bar-Exam-simulator/actions/runs/39428225690",
+  "candidateSha": "ca841e5de5f3849d3062789fc440595f699b9224",
+  "capturedAt": "2026-10-20T13:11:10.210Z",
+  "worker": "duediligence-examinations-staging",
+  "origin": "https://duediligence-examinations-staging.wallyesteban1993.workers.dev",
+  "projectRef": "hlzqmreeoghbldnhlybr",
+  "deploymentId": "788f4b2c-49a8-4580-b5b1-7a0644c16d54",
+  "versionId": "d5b1af37-70bd-40ae-90a0-d5c6af870c62",
+  "trafficPercent": 100,
+  "configurationFingerprint": "2339d8c141fcaae80d995ca72843e336f68021ae5eccca3889d5f858c4ae6d64",
+  "baselineFileSha256": "073175a7597f57a7a93bb8a9ff881e0ed3340b7663e561e6bebb16193021b472",
+  "sourceHashes": {
+    ".github/workflows/debate-v3-staging.yml": "f750a2c0da5947beee3e99115a653004a36e1c6c712dc4196d6f3b5af0f49846",
+    "scripts/debate-staging-release.mjs": "b5a81d41fb31dbd2bc6d6fc498bbe6b5e89224af0d0405a4a7d228e492cf3226",
+    "worker/debate-staging-policy.json": "4c8217966c8b2426acab90bfdb6e268e51d4c9878fc6e1d152cf56797cbc84ef",
+    "worker/wrangler.staging.toml": "e93d72892b472843119f573e377ee374ef4c436e5efe380c622da694858000f2"
+  },
+  "priorReadOnlyRunId": "38866697278",
+  "unchangedFromPriorReadOnlyCapture": true,
+  "gates": {
+    "publicDebateEnabled": false,
+    "mediaEnabled": false,
+    "sweeperEnabled": false,
+    "approvedMediaCapacity": 0,
+    "debateInvitationEmailMode": "suppressed",
+    "debateResultsEmailMode": "suppressed",
+    "outboundEmailMode": "suppressed",
+    "studyRoomEnabled": true,
+    "examinationRoomEnabled": true
+  },
+  "deploymentPerformed": false,
+  "accountsProvisioned": 0,
+  "databaseWritesPerformed": false,
+  "limitations": [
+    "The candidate identifies capture code, not a newly deployed Worker.",
+    "Read-only capture does not establish hosted compatibility or full browser acceptance.",
+    "Refresh at any eventual cutover; preserve another owner's later work.",
+    "No production state or new public release is established."
+  ]
+}

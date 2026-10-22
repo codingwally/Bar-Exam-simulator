@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS_INDEPENDENT_SCOPED_NATIVE_EVIDENCE_REVIEW",
+  "reviewedOn": "2026-10-22",
+  "runId": 39744211450,
+  "source": "18e07351b1d876d5e309d9e9bc3302df2d4dd0d8",
+  "testedMerge": "386b8594d91b921ab36d369760c46a50febf0c36",
+  "matchingTree": "016876bf2d0f12ae83bd072f00c50a4acf0b6406",
+  "rawReportSha256": "ed83a171d94ec56f3f30db9cc0a261ff7a0c34f58603804877c4937ecbc5eb48",
+  "sourceInputsMatched": 29,
+  "testedMergeInputsMatched": 29,
+  "uniquePassingChecks": 32,
+  "uniqueExpectedSqlErrors": 21,
+  "successfulPhases": 4,
+  "schemaDifferences": 0,
+  "schemaSectionsMatched": 6,
+  "reviewedAssertions": [
+    "Exact expected SQLSTATE and message denials remain mandatory.",
+    "Every expected refusal and successful phase verifies unchanged function catalog, schema and synthetic row state.",
+    "Table and advisory contention observe a distinct backend holding the real lock before the contender runs.",
+    "Both in-memory delayed-repeat probes execute the final expiry guard and require its exact exception.",
+    "Two outer-transaction forced errors verify rollback before commit; no rollback after commit is claimed.",
+    "The final runner correction changes only the diagnostic collation lookup; no envelope guard or function body was weakened."
+  ],
+  "hostedExecuted": false,
+  "authorizationGranted": false,
+  "remaining": [
+    "Enforced hosted pause and drain",
+    "Supported migration executor identity, deadline, cancellation and commit acknowledgment",
+    "Fresh cutover metadata, effective privileges and row snapshots",
+    "Applicable release authorization",
+    "Complete hosted browser rehearsal and website audit"
+  ]
+}

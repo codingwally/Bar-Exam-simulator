@@ -1,0 +1,3 @@
+# Preserve the exact review input bytes on every checkout.
+*.sql -text
+*.json -text

@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "scope": "Isolated PostgreSQL application-envelope verification only",
+  "hostedExecuted": false,
+  "productionDeployed": false,
+  "attempts": [
+    {
+      "runId": 39580780099,
+      "runUrl": "https://github.com/codingwally/Bar-Exam-simulator/actions/runs/39580780099",
+      "source": "2a546e740ade7a339de50b2db44fcfb6cf37ff0d",
+      "testedMerge": "402c4f3f5f1249867aaad5a38170bbd40b5a1649",
+      "status": "FAIL_BEFORE_APPLICATION",
+      "checks": 13,
+      "expectedErrors": 9,
+      "applicationPhases": 0,
+      "failedProbe": "envelope-protected-function-drift",
+      "sqlState": "P0001",
+      "expectedMessage": "UNKNOWN_OR_PARTIAL_PACKAGE_PREIMAGE",
+      "actualMessage": "STAGING_SCHEMA_CHANGED",
+      "report": "staging-envelope-native-39580780099.json",
+      "resolution": "Corrected the optional-trigger filter to preserve captured array order. Subsequent run39744211450 passed exact schema comparison and all scoped application/refusal checks. The original failed report remains unchanged."
+    },
+    {
+      "runId": 39744016065,
+      "runUrl": "https://github.com/codingwally/Bar-Exam-simulator/actions/runs/39744016065",
+      "source": "f50c892b4166fc1b095114a029d20ca60a01dbe5",
+      "testedMerge": "3f8cf20d3c4ec3a069ae934629879b7677cd5588",
+      "status": "FAIL",
+      "checks": 4,
+      "expectedErrors": 0,
+      "applicationPhases": 0,
+      "failedProbe": "envelope-baseline-shape-diagnostic",
+      "sqlState": "42704",
+      "error": {
+        "name": "Error",
+        "message": "NATIVE_SQL_FAILED",
+        "sqlState": "42704",
+        "applicationName": "envelope-baseline-shape-diagnostic",
+        "diagnostic": "ERROR:  42704: unrecognized configuration parameter \"lc_collate\"\nLOCATION:  find_option, guc.c:1278"
+      },
+      "report": "staging-envelope-native-39744016065.json",
+      "reportSha256": "505c21b5c4199cc8ff6e7c38300eb866b8ed0c2ec4e81521e4e5e41ad514be16",
+      "resolution": "Diagnostic-only metadata lookup failed before shape readback; corrected lc_collate lookup to pg_database.datcollate without changing the envelope."
+    },
+    {
+      "runId": 39744211450,
+      "runUrl": "https://github.com/codingwally/Bar-Exam-simulator/actions/runs/39744211450",
+      "source": "18e07351b1d876d5e309d9e9bc3302df2d4dd0d8",
+      "testedMerge": "386b8594d91b921ab36d369760c46a50febf0c36",
+      "status": "PASS_SCOPED_NATIVE_ENVELOPE_CHECKS",
+      "checks": 32,
+      "expectedErrors": 21,
+      "applicationPhases": 4,
+      "failedProbe": null,
+      "sqlState": null,
+      "error": null,
+      "report": "staging-envelope-native-39744211450.json",
+      "reportSha256": "ed83a171d94ec56f3f30db9cc0a261ff7a0c34f58603804877c4937ecbc5eb48",
+      "resolution": "Passed all scoped native envelope checks with exact metadata, actual lock contention, bounded expiry rejection, atomic rollback, and unchanged synthetic rows. No hosted application or authorization."
+    }
+  ]
+}

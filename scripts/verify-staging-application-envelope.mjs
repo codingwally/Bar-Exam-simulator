@@ -225,7 +225,7 @@ async function diagnoseEnvelopeSchema() {
   const diagnosticDelimiter = '$envelope_schema_diagnostic$';
   assert.ok(!diagnosticBody.includes(diagnosticDelimiter));
   const actualRecord = await run(`BEGIN TRANSACTION READ ONLY;\nDO ${diagnosticDelimiter}\nDECLARE actual jsonb;\nBEGIN\n${diagnosticBody}
-  RAISE NOTICE 'ENVELOPE_SCHEMA_DIAGNOSTIC:%', jsonb_build_object('shape',actual,'settings',jsonb_build_object('search_path',current_setting('search_path'),'TimeZone',current_setting('TimeZone'),'DateStyle',current_setting('DateStyle'),'IntervalStyle',current_setting('IntervalStyle'),'extra_float_digits',current_setting('extra_float_digits'),'bytea_output',current_setting('bytea_output'),'lc_collate',current_setting('lc_collate')));
+  RAISE NOTICE 'ENVELOPE_SCHEMA_DIAGNOSTIC:%', jsonb_build_object('shape',actual,'settings',jsonb_build_object('search_path',current_setting('search_path'),'TimeZone',current_setting('TimeZone'),'DateStyle',current_setting('DateStyle'),'IntervalStyle',current_setting('IntervalStyle'),'extra_float_digits',current_setting('extra_float_digits'),'bytea_output',current_setting('bytea_output'),'lc_collate',(SELECT datcollate FROM pg_database WHERE datname=current_database())));
 END;\n${diagnosticDelimiter};\nCOMMIT;`, { name: 'envelope-baseline-shape-diagnostic', diagnosticNotice: true });
   const type = value => value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value;
   const small = value => {

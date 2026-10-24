@@ -1,0 +1,20 @@
+{
+  "name": "due-diligence-exam-desk",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:documents": "node build-documents.mjs",
+    "test:documents": "node --test test/document-import.test.mjs test/document-parsers.test.mjs"
+  },
+  "dependencies": {
+    "mammoth": "1.13.0",
+    "pdfjs-dist": "6.4.299"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "jszip": "3.10.2",
+    "linkedom": "0.18.12",
+    "pdf-lib": "1.17.1",
+    "wrangler": "4.152.0"
+  }
+}

@@ -55,8 +55,10 @@ The preview is a new static-only Worker:
 `https://duediligence-professor-entry-preview.wallyesteban1993.workers.dev/index.html#examination-room`.
 It is public and contains the same already-public website assets. It has no
 Worker script, routes, data bindings, credentials, or exam papers. The fixed
-Worker name and account ID are checked; existing asset-recovery preview is not
-modified. Cloudflare's existing account token and account ID repository secrets
+Worker name is checked, and a read-only
+[Workers subdomain request](https://developers.cloudflare.com/api/resources/workers/subresources/subdomains/methods/get/)
+must confirm the account owns `wallyesteban1993` before deployment. The existing
+asset-recovery preview is not modified. Cloudflare's existing account token and account ID repository secrets
 are required for this operation. The CLI version is pinned to Wrangler 4.152.0;
 its static asset fields follow the
 [official configuration reference](https://developers.cloudflare.com/workers/wrangler/configuration/#assets).

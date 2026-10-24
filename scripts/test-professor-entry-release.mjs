@@ -9,7 +9,7 @@ import vm from 'node:vm';
 import {
   ASSETS, BASE_SHA, DASHBOARD, LIVE_ORIGIN, PREVIEW_ORIGIN, MARKER,
   deriveCandidate, entrySpans, manifest, previewConfig, sha256,
-  verifyArtifacts, verifyDashboard, verifyProvenance, verifyPublic,
+  verifyArtifacts, verifyDashboard, verifyProvenance, verifyPublic, verifyPreviewAccount,
 } from './professor-entry-release.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -162,4 +162,16 @@ test('preview configuration is a separate static-only Worker with no resource bi
   assert.equal(value.assets.html_handling, 'none');
   assert.equal(value.assets.not_found_handling, 'none');
   assert.throws(() => previewConfig('/tmp/candidate', 'other'));
+});
+
+test('preview account preflight reads the existing subdomain before any deployment', async () => {
+  await verifyPreviewAccount('a'.repeat(32), 'synthetic-test-token', async (url, options) => {
+    assert.equal(url, `https://api.cloudflare.com/client/v4/accounts/${'a'.repeat(32)}/workers/subdomain`);
+    assert.equal(options.method, 'GET'); assert.equal(options.redirect, 'error');
+    assert.equal(options.headers.Authorization, 'Bearer synthetic-test-token');
+    return Response.json({ success: true, result: { subdomain: 'wallyesteban1993' } });
+  });
+  await assert.rejects(verifyPreviewAccount('a'.repeat(32), 'synthetic-test-token', async () => Response.json({ success: true, result: { subdomain: 'another-account' } })));
+  await assert.rejects(verifyPreviewAccount('a'.repeat(32), 'synthetic-test-token', async () => new Response('{}', { status: 403 })));
+  await assert.rejects(verifyPreviewAccount('a'.repeat(32), '', async () => { throw new Error('A missing token must not make a request'); }));
 });

@@ -227,12 +227,26 @@ export function previewConfig(artifactDir, accountId) {
   };
 }
 
+export async function verifyPreviewAccount(accountId, token, fetcher = fetch) {
+  assert.match(accountId, /^[a-f0-9]{32}$/u);
+  assert.ok(typeof token === 'string' && token.trim().length > 0, 'The existing account token is required');
+  const response = await fetcher(`https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/subdomain`, {
+    method: 'GET', redirect: 'error', signal: AbortSignal.timeout(20_000),
+    headers: { Authorization: `Bearer ${token.trim()}` },
+  });
+  assert.equal(response.status, 200, 'Could not verify the existing preview account');
+  const result = await response.json();
+  assert.equal(result.success, true);
+  assert.equal(result.result?.subdomain, 'wallyesteban1993', 'Refusing to deploy the preview to another account');
+}
+
 async function main() {
   const [operation, ...args] = process.argv.slice(2);
   if (operation === 'prepare') await prepare(...args);
   else if (operation === 'provenance') await verifyProvenance();
   else if (operation === 'preview-config') {
     const [artifactDir, output] = args;
+    await verifyPreviewAccount(process.env.CLOUDFLARE_ACCOUNT_ID, process.env.CLOUDFLARE_API_TOKEN);
     await mkdir(path.dirname(output), { recursive: true });
     await writeFile(output, `${JSON.stringify(previewConfig(artifactDir, process.env.CLOUDFLARE_ACCOUNT_ID), null, 2)}\n`);
   } else if (['before', 'staged', 'after', 'local'].includes(operation)) {

@@ -139,6 +139,11 @@ synthetic local certificate and browsers and publishes review evidence without
 access to production credentials. `test/firefox-reload-diagnostic.mjs` separately
 tests generic service-worker reloads without starting an examination.
 
+The public shell is installed atomically and versioned in `public/exam-sw.mjs`.
+Bump its cache version with every public shell release. Existing examination
+tabs keep their consistent shell until they close; APIs and authoritative
+questions, deadlines and receipts always use the server.
+
 Local concurrency results are evidence of completeness and race handling, not a
 claim about hosted throughput or every physical device. Real mobile Safari,
 Android, school networks and live D1/provider capacity require a deployment

@@ -1,11 +1,10 @@
 import {createServer} from 'node:http';
 import {readFile} from 'node:fs/promises';
-import {fileURLToPath} from 'node:url';
 import {loadPlaywright} from './playwright-runtime.mjs';
 // Generic browser-engine diagnostic. It never starts an exam or changes data.
-// mode: minimal, exam-shell, or exam-modules; optional repeat count defaults20.
+// Modes: minimal, exam-shell, or exam-modules. The repeat count defaults to 20.
 const mode=process.argv[2]||'minimal',count=Number(process.argv[3]||20);
-if(!['minimal','exam-shell','exam-modules'].includes(mode)||!Number.isSafeInteger(count)||count<1||count>200)throw Error('Use minimal|exam-shell|exam-modules and1-200reloads');
+if(!['minimal','exam-shell','exam-modules'].includes(mode)||!Number.isSafeInteger(count)||count<1||count>200)throw Error('Use minimal|exam-shell|exam-modules and 1 to 200 reloads');
 const actualWorker=await readFile(new URL('../public/exam-sw.mjs',import.meta.url),'utf8'),tinyWorker="self.addEventListener('fetch', event => event.respondWith(fetch(event.request)));";
 const fixture=`<!doctype html><title>Firefox reload diagnostic</title><h1>Generic worker fixture</h1><script>navigator.serviceWorker.register('/exam-sw.mjs').then(()=>navigator.serviceWorker.ready).then(()=>{document.body.dataset.ready='true'});</script>${mode==='exam-modules'?'<script type="module" src="/student.mjs"></script>':''}`;
 const publicRoot=new URL('../public/',import.meta.url);

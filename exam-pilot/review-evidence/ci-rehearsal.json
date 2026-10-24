@@ -1,0 +1,40 @@
+{
+  "implementationRevision": "2e3ca325c6d6a24968197fad41483e260dbc0702",
+  "runUrl": "https://github.com/codingwally/Bar-Exam-simulator/actions/runs/40081239013",
+  "runner": "GitHub-hosted Ubuntu 26.04",
+  "playwright": "1.64.1",
+  "deterministicTests": 102,
+  "browserFlow": "PASS",
+  "browserDetails": "compatibility-chromium-firefox-webkit.json",
+  "firefoxReloads": [
+    {
+      "mode": "minimal",
+      "browser": "157.0",
+      "result": "PASS",
+      "reloads": 20,
+      "examStarted": false
+    },
+    {
+      "mode": "exam-shell",
+      "browser": "157.0",
+      "result": "PASS",
+      "reloads": 20,
+      "examStarted": false
+    },
+    {
+      "mode": "exam-modules",
+      "browser": "157.0",
+      "result": "PASS",
+      "reloads": 20,
+      "examStarted": false
+    }
+  ],
+  "productionCredentials": false,
+  "publicDeployment": false,
+  "limitations": [
+    "Synthetic local HTTPS with a temporary self-signed certificate.",
+    "No live Google Sheets or email delivery.",
+    "No hosted throughput or physical-device certification.",
+    "Windows Firefox reloads were inconclusive under severe local memory pressure."
+  ]
+}

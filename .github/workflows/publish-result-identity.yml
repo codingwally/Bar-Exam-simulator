@@ -38,7 +38,7 @@ jobs:
           path: baseline
       - uses: actions/checkout@v4
         with:
-          ref: 7715afb28e7f63165ca4d133f99b8f145327e916
+          ref: 8ed2a21d3fa33d065fdf1c3f69f631210ca08e25
           fetch-depth: 0
           path: runtime
       - uses: actions/setup-node@v4

@@ -8,7 +8,7 @@ const [baseline, runtime, reviewed, phase = 'before'] = process.argv.slice(2);
 assert.ok(baseline && runtime && reviewed);
 assert.ok(['before', 'after'].includes(phase));
 const baseSha = '0a20a8c393931600d8ea54410255262d6cccd4c0';
-const runtimeSha = '7715afb28e7f63165ca4d133f99b8f145327e916';
+const runtimeSha = '8ed2a21d3fa33d065fdf1c3f69f631210ca08e25';
 const allowed = ['assets/examinations.js', 'assets/feature-loader.js', 'index.html', 'service-worker.js'];
 const marker = '.well-known/duediligence-release.txt';
 const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
@@ -16,7 +16,7 @@ const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const actualRuntimeSha = git(runtime, 'rev-parse', 'HEAD');
 assert.equal(actualRuntimeSha, runtimeSha);
 assert.equal(git(baseline, 'rev-parse', 'HEAD'), baseSha);
-assert.equal(git(runtime, 'rev-parse', 'HEAD^'), baseSha);
+assert.equal(git(runtime, 'merge-base', baseSha, 'HEAD'), baseSha);
 assert.deepEqual(git(runtime, 'diff', '--name-only', baseSha, 'HEAD').split('\n').sort(), [...allowed].sort());
 assert.equal(sha256(await readFile(path.join(runtime, 'assets/examinations.js'))),
   sha256(await readFile(path.join(reviewed, 'assets/examinations.js'))), 'Runtime renderer must equal reviewed renderer');

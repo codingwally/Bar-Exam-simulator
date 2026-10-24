@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: Preview the validated open PR, or publish its merged exact tree
+        description: Preview the validated PR or merged main, or publish its merged exact tree
         type: choice
         options: [preview, publish]
         default: preview
@@ -40,7 +40,7 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: examination-room-production-cutover
+  group: ${{ github.event_name == 'pull_request' && format('professor-entry-pr-{0}', github.event.pull_request.number) || 'examination-room-production-cutover' }}
   cancel-in-progress: false
 
 env:
@@ -221,6 +221,10 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: .wrangler/professor-entry/candidate
+      - name: Recheck current main immediately before publication inside the shared release lock
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/professor-entry-release.mjs provenance
       - uses: actions/deploy-pages@v4
       - name: Verify all published bytes
         run: |

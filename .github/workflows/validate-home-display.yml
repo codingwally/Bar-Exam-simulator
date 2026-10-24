@@ -7,19 +7,28 @@ on:
       - 'assets/lex-forum.css'
       - 'assets/quorum-first-shell.css'
       - 'assets/phase2-experience.js'
+      - 'assets/phase2-config.js'
+      - 'assets/phase2.css'
+      - 'assets/private-beta-landing.js'
+      - 'assets/private-beta-landing.css'
+      - 'assets/private-beta-session.js'
       - 'assets/feature-loader.js'
       - 'assets/icons/community/camera.svg'
       - 'assets/icons/navigation/mic.svg'
       - 'assets/vendor/debate-fonts/**'
       - 'index.html'
+      - 'manifest.webmanifest'
       - 'scripts/test-home-display*.mjs'
+      - 'scripts/test-native-view-browser.mjs'
+      - 'scripts/test-native-view-navigation.mjs'
+      - 'service-worker.js'
       - 'scripts/test-lex-forum.mjs'
 permissions:
   contents: read
 jobs:
   component-rendering:
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,7 +48,11 @@ jobs:
         env:
           HOME_DISPLAY_BROWSER_CI: '1'
         run: node scripts/test-home-display-browser.mjs
-      - name: Preserve component-only evidence without customer data
+      - name: Verify actual public dialog dismissal and browser history on isolated loopback
+        env:
+          NATIVE_VIEW_BROWSER_CI: '1'
+        run: node scripts/test-native-view-browser.mjs
+      - name: Preserve local component and public dialog evidence without customer data
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -48,5 +61,7 @@ jobs:
             artifacts/debate-local-rehearsal/home-display-browser/report.json
             artifacts/debate-local-rehearsal/home-display-browser/home-*.png
             artifacts/debate-local-rehearsal/home-display-browser/navigation-*.png
+            artifacts/debate-local-rehearsal/native-view-browser/report.json
+            artifacts/debate-local-rehearsal/native-view-browser/*.png
           if-no-files-found: warn
           retention-days: 14

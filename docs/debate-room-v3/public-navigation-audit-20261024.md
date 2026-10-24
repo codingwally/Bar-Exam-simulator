@@ -1,0 +1,23 @@
+# Public direct-link dismissal audit — 24 October 2026
+
+Status: **FIXED LOCALLY; NOT DEPLOYED.** This is a scoped continuation of SITE-004, SITE-005, SITE-006, SITE-X02 and SITE-X11 in the [website audit ledger](website-audit-ledger-20261018.md). No complete route or overall acceptance status is closed. [The manual observation record](evidence/public-navigation-manual-20261024.json) separates public reproduction from final-source loopback checks and their limitations.
+
+The signed-out public browser reproduced a mismatch on direct `/#support` and `/#partnership` entry: Back hid the view but retained its hash. A later read still observed the closed view with the old URL, and reloading Partnerships opened it again. The observed public page used the earlier navigation asset URL; this observation does not establish an exact deployed commit. The prior PR412 repair covers delayed owned-history dismissal and does not correct this direct-link case.
+
+The correction clears a still-current, unowned native route to the public Home path while preserving its pathname, query and unrelated history state. It does not traverse browser history or start another Home navigation. Owned route dismissal keeps the existing delayed Back behavior; paid-access action callbacks are unchanged. If another route was selected before dismissal, that route is preserved. Only the old view's stale ownership marker is removed, so the next dialog can still return correctly. Cache references advance together, including the current student entry's registration/script URLs; no student behavior changed.
+
+An intermediate fallback to `#quorum` passed the initial dismissal/reload check but caused the next legal-dialog return to open sign-in. Actual frontend browser testing exposed this integration problem. The final fallback uses the public root instead. In the final isolated browser observation, direct Support Back returned to `/`, a real reload kept both native and sign-in overlays closed, and a subsequent Terms link/Escape returned to `/` with focus restored to Terms and no sign-in overlay.
+
+Local verification:
+
+- Before the fix, 15 of the initial 21 navigation cases failed, while six earlier cases passed. After the correction and added foreign-route coverage, all 22 native-navigation cases pass, including twelve direct route/control combinations, delayed Back, stale ownership, paid-action focus/callbacks and cache behavior.
+- Dialog-exit, Phase 2, mobile responsive and Pages-artifact checks passed. Phase 2 imports the native-navigation suite, so existing shared validation already executes it.
+- The current student-client suite initially exposed two old cache-URL expectations. After updating only those expectations, all 17 tests passed.
+- An independent review found no remaining route-branch logic regression. Related landing, authentication, unlimited-access, pricing-safety and Pedro checks passed in that review.
+- The local browser used the actual frontend with outgoing connections, service workers and form submission blocked. It used no account, payment, email or provider. This is not hosted authentication, network-performance or complete visual evidence.
+
+The automated browser matrix and exact candidate evidence will be recorded separately. One early manual same-document Terms/Back action left the view open; a fresh direct Terms case and a later native click succeeded. That first-action anomaly is retained as unclassified until the automatic matrix assesses normal page-load readiness without retrying failed actions. A clipped mobile screenshot could not be captured; DOM viewport measurements alone are not full mobile visual approval.
+
+The controlled staging procedure remains open. Independent source review found no existing selective pause/drain mechanism: a new Worker flag cannot terminate old invocations or exclude direct database callers. The central room RPC and submission-PDF Storage request lack deadlines; the existing recovery Storage timeout and 300-second ownership leases do not prove global drain or server cancellation. No maintenance flag, database change or shared deployment was applied. Study Room, pricing, entitlements and recovery data remain protected.
+
+Production verification of this fix, signed-in and paid/admin navigation, full hosted Debate rehearsal, actual email delivery, grading accuracy, physical media, latency/capacity and the wider website audit remain incomplete.

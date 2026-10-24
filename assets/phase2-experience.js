@@ -2254,16 +2254,29 @@
       return;
     }
     const returnToQuorum = state.nativeViewReturnToQuorum;
-    const shouldRewindHistory = Boolean(history.state?.dd2View) && !returnToQuorum;
+    const closingView = state.nativeView;
+    const hashView = location.hash.replace(/^#/, '').split(/[/?]/, 1)[0];
+    const stillOnClosingRoute = hashView === closingView;
+    const shouldRewindHistory = history.state?.dd2View === closingView
+      && stillOnClosingRoute && !returnToQuorum;
     if (shouldRewindHistory) {
       state.nativeViewClosing = true;
       history.back();
       return;
     }
     hideNativeView({ reason });
-    if (returnToQuorum) {
-      history.replaceState({}, '', `${location.pathname}${location.search}#quorum`);
-      global.DueDiligencePublicHome?.show?.();
+    if (returnToQuorum || stillOnClosingRoute) {
+      // A direct link has no owned Back entry. Clear its route so reload cannot
+      // reopen the dismissed view, while preserving unrelated navigation state.
+      const nextHistoryState = { ...(history.state || {}) };
+      delete nextHistoryState.dd2View;
+      const returnHash = returnToQuorum ? '#quorum' : '';
+      history.replaceState(nextHistoryState, '', `${location.pathname}${location.search}${returnHash}`);
+      if (returnToQuorum) global.DueDiligencePublicHome?.show?.();
+    } else if (history.state?.dd2View === closingView) {
+      const nextHistoryState = { ...(history.state || {}) };
+      delete nextHistoryState.dd2View;
+      history.replaceState(nextHistoryState, '', `${location.pathname}${location.search}${location.hash}`);
     }
   }
 

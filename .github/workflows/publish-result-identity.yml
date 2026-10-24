@@ -1,0 +1,97 @@
+name: Publish isolated selected-attempt result repair
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_production:
+        description: Owner requested this minimal result-identity repair after verification
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: examination-room-production-cutover
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'codingwally/Bar-Exam-simulator' && github.ref == 'refs/heads/main' && inputs.confirm_production
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: github-pages
+      url: https://duediligence.ph
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: reviewed
+      - uses: actions/checkout@v4
+        with:
+          ref: 0a20a8c393931600d8ea54410255262d6cccd4c0
+          path: baseline
+      - uses: actions/checkout@v4
+        with:
+          ref: 8ed2a21d3fa33d065fdf1c3f69f631210ca08e25
+          fetch-depth: 0
+          path: runtime
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Require merged fix and successful exact-source mandatory validation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {execFileSync} from 'node:child_process';
+          const api = route => JSON.parse(execFileSync('gh',['api',`repos/${process.env.GITHUB_REPOSITORY}/${route}`],{encoding:'utf8'}));
+          const pr = api('pulls/415');
+          assert.equal(pr.merged,true);
+          assert.equal(pr.head.ref,'fix/simulation-result-identity-20261024');
+          const runs = api(`actions/workflows/validate-mandatory-early-access.yml/runs?head_sha=${pr.head.sha}&per_page=20`).workflow_runs;
+          assert.ok(runs.some(run=>run.event==='pull_request' && run.head_sha===pr.head.sha && run.conclusion==='success'));
+          NODE
+      - name: Run selected-attempt and submission regressions against reviewed code
+        working-directory: reviewed
+        run: |
+          node scripts/test-examination-result-identity.mjs
+          node scripts/test-examination-result-identity.mjs ../runtime
+          node scripts/test-bar-simulation-submitted-answer.mjs ../runtime
+          node scripts/test-bar-simulation-cumulative-score.mjs ../runtime
+          node --test scripts/test-syllabus-submission-reliability.mjs scripts/test-syllabus-review-reveal-contract.mjs scripts/test-syllabus-coaching-layout.mjs scripts/test-astra-simulator-access.mjs
+      - name: Install locked baseline and candidate build dependencies
+        run: |
+          npm ci --prefix baseline/worker --ignore-scripts --no-audit --no-fund
+          npm ci --prefix runtime/worker --ignore-scripts --no-audit --no-fund
+      - name: Build exact baseline and candidate artifacts
+        run: |
+          (cd baseline && GITHUB_SHA=0a20a8c393931600d8ea54410255262d6cccd4c0 node scripts/test-pages-artifact.mjs)
+          (cd runtime && GITHUB_SHA="$(git rev-parse HEAD)" node scripts/test-pages-artifact.mjs)
+      - name: Verify every live baseline file and the four-file change boundary
+        run: node reviewed/scripts/verify-result-identity-release.mjs baseline runtime reviewed before
+      - name: Preserve exact rollback artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: result-identity-rollback-0a20a8c
+          path: baseline/.pages-dist
+          include-hidden-files: true
+          retention-days: 90
+      - uses: actions/configure-pages@v4
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: runtime/.pages-dist
+      - uses: actions/deploy-pages@v4
+      - name: Verify published bytes
+        run: |
+          for attempt in $(seq 1 12); do
+            if node reviewed/scripts/verify-result-identity-release.mjs baseline runtime reviewed after; then exit 0; fi
+            sleep 5
+          done
+          exit 1

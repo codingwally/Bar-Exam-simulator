@@ -7,7 +7,7 @@ import test from 'node:test';
 const source = fs.readFileSync(path.resolve(process.argv[2] || '.', 'assets/examinations.js'), 'utf8');
 const paid = { allowed: true, unlimited: true, basis: 'paid_subscription' };
 const denied = { allowed: false, unlimited: false, basis: 'subscription_required' };
-const result = (answer) => ({ attempt: { counts: { total: 1 } }, results: [
+const result = (answer, attemptId = 'synthetic-attempt') => ({ attempt: { attemptId, counts: { total: 1 } }, results: [
   { ordinal: 1, questionId: 'synthetic-question', answerText: answer, prompt: 'Synthetic prompt', aiScore: 4,
     aiAssessment: { rationale: 'Synthetic coaching.', performanceLabel: 'Practice assessment' } },
 ] });
@@ -116,9 +116,9 @@ test('overlapping verdict requests render only the newest result for the same ow
   c.window.DueDiligencePhase4.request = () => (++count === 1 ? first : second).promise;
   const older = c.window.DueDiligenceExaminations.openVerdict('older');
   const newer = c.window.DueDiligenceExaminations.openVerdict('newer');
-  second.resolve({ data: result('NEWEST PRIVATE ANSWER') }); await newer;
+  second.resolve({ data: result('NEWEST PRIVATE ANSWER', 'newer') }); await newer;
   assert.match(c.root.innerHTML, /NEWEST PRIVATE ANSWER/);
-  first.resolve({ data: result('STALE PRIVATE ANSWER') }); await older;
+  first.resolve({ data: result('STALE PRIVATE ANSWER', 'older') }); await older;
   assert.match(c.root.innerHTML, /NEWEST PRIVATE ANSWER/); assert.doesNotMatch(c.root.innerHTML, /STALE PRIVATE ANSWER/);
 });
 

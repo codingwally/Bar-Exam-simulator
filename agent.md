@@ -29,6 +29,14 @@ If a proposed solution does not improve the product, do not implement it.
 
 # Examination Room Blank-Slate Boundary
 
+The owner began a new Constitutional Law I pilot on 2026-10-24. Its approved
+brief and current request govern the isolated implementation in `exam-pilot/`.
+It uses its own Worker, database and private backup bucket. The existing site,
+Simulator, legacy Examination Room runtime and historical records are unchanged.
+The warm, readable student treatment in the new brief applies only to this pilot.
+This authorization does not permit restoring retired code or deploying an
+unverified official examination.
+
 The former Examination Room is intentionally decommissioned. It is not an
 existing feature to repair, renovate, preserve, or improve. This section
 overrides **Repository First**, renovation references, and compatibility

@@ -38,3 +38,6 @@ supabase/staging/debate-hosted-cleanup-event-ids-upgrade.sql -text
 assets/vendor/debate-fonts/* -text
 # These verbatim upstream licenses contain one trailing space; keep pinned bytes.
 assets/vendor/debate-fonts/*.OFL.txt -whitespace
+# The isolated exam ships the same unmodified licensed font bytes.
+exam-pilot/public/fonts/* -text
+exam-pilot/public/fonts/*.OFL.txt -whitespace

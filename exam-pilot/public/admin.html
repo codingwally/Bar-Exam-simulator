@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Examiner desk · Due Diligence</title>
+    <link rel="stylesheet" href="/admin.css" />
+    <script type="module" src="/admin.mjs"></script>
+  </head>
+  <body>
+    <a class="skip" href="#main" tabindex="0">Skip to examiner desk</a>
+    <header class="masthead">
+      <a href="/admin/exams" class="brand"
+        >Due Diligence<span>Examination room</span></a
+      ><span>Private examiner desk</span>
+    </header>
+    <main id="main" tabindex="-1">
+      <div class="page-heading">
+        <div>
+          <p class="eyebrow">Constitutional Law I · Atty. Aguila</p>
+          <h1>Examiner desk</h1>
+          <p class="lede">
+            Prepare the questions, choose the schedule, and keep every received
+            answer together.
+          </p>
+        </div>
+        <p id="identity" class="small"></p>
+      </div>
+      <div id="notice" role="status" aria-live="polite" class="notice">
+        Checking private examiner access…
+      </div>
+      <noscript
+        ><p class="notice error">
+          Enable JavaScript to use the examiner desk. This page never grants
+          access without server authentication.
+        </p></noscript
+      >
+      <div id="desk" hidden>
+        <div class="exam-select">
+          <label for="exam">Examination</label
+          ><select id="exam">
+            <option value="official">Official Midterm</option>
+            <option value="practice">Practice / access test</option>
+          </select>
+          <p id="exam-status" class="status"></p>
+        </div>
+        <details id="next-exam" hidden>
+          <summary>Create the next official examination</summary>
+          <p>
+            The current examination will move into private history with its
+            questions, answers and receipts intact. The same official student
+            link will point to a new, empty examination. No dates or questions
+            are copied.
+          </p>
+          <label for="next-exam-label">New examination title</label
+          ><input
+            id="next-exam-label"
+            type="text"
+            maxlength="160"
+            autocomplete="off"
+          /><label for="next-exam-reason"
+            >Reason for archiving the current examination</label
+          ><textarea id="next-exam-reason" rows="2" maxlength="1000"></textarea
+          ><label class="check"
+            ><input id="next-exam-confirm" type="checkbox" /> I authorize
+            preserving this examination in history and creating a new empty
+            official examination.</label
+          ><button id="next-exam-create" type="button" class="secondary">
+            Create next official examination
+          </button>
+        </details>
+        <nav aria-label="Examiner sections" class="section-nav">
+          <a href="#questions">Questions</a><a href="#schedule">Schedule</a
+          ><a href="#examinees">Examinees & responses</a
+          ><a href="#activity">Activity</a
+          ><a href="#backups">Backups & controls</a>
+        </nav>
+        <section id="questions" aria-labelledby="questions-heading">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">01 · Prepare</p>
+              <h2 id="questions-heading">Questions</h2>
+            </div>
+            <span id="draft-state" class="small"></span>
+          </div>
+          <p>
+            Keep answer keys out of this editor. Saving a draft never opens the
+            examination. Scheduled questions remain a separate, preserved
+            version.
+          </p>
+          <p id="published-note" class="notice" hidden></p>
+          <div id="question-tools">
+            <details>
+              <summary>Upload CSV or paste questions</summary>
+              <div class="import-grid">
+                <div>
+                  <label for="question-file">Upload a .csv file</label
+                  ><input
+                    id="question-file"
+                    type="file"
+                    accept=".csv,text/csv"
+                  />
+                  <p class="small">
+                    Tested CSV import preserves quoted multiline text. DOCX and
+                    XLSX are not accepted. Export them as CSV, or paste and
+                    check every question below.
+                  </p>
+                  <button id="template" type="button" class="secondary">
+                    Download CSV template
+                  </button>
+                </div>
+                <div>
+                  <label for="paste">Paste numbered questions</label
+                  ><textarea
+                    id="paste"
+                    rows="7"
+                    placeholder="1. First complete question…&#10;&#10;2. Second complete question…"
+                  ></textarea>
+                  <p class="small">
+                    Start each question with 1., 2., and so on. Check item
+                    boundaries carefully if a question contains a numbered list.
+                  </p>
+                  <button id="parse" type="button" class="secondary">
+                    Preview pasted questions
+                  </button>
+                </div>
+              </div>
+            </details>
+            <div class="toolbar">
+              <button id="add-question" type="button" class="secondary">
+                Add a question</button
+              ><button id="save-draft" type="button">Save draft</button
+              ><button id="download-draft" type="button" class="secondary">
+                Download this draft</button
+              ><span id="question-count" class="small"></span>
+            </div>
+          </div>
+          <div
+            id="question-errors"
+            class="notice error"
+            role="alert"
+            hidden
+          ></div>
+          <ol id="question-editor" class="question-list"></ol>
+          <p id="empty-questions" class="empty">
+            No official questions yet. Add, upload or paste the examiner’s
+            questions.
+          </p>
+          <details id="published-questions" hidden>
+            <summary>View the preserved scheduled question set</summary>
+            <div id="published-preview" class="complete-preview"></div>
+          </details>
+        </section>
+        <section id="schedule" aria-labelledby="schedule-heading">
+          <p class="eyebrow">02 · Arrange</p>
+          <h2 id="schedule-heading">Exam schedule</h2>
+          <p id="schedule-help">
+            All dates and times below are Philippine time (PHT, UTC+08:00).
+            Every official examinee shares the same closing time, including late
+            arrivals. No manual start is needed.
+          </p>
+          <p id="current-schedule" class="notice" hidden></p>
+          <p id="practice-schedule" class="notice" hidden>
+            Practice lasts five minutes from each student’s own start. Its
+            deadline cannot be changed by refreshing or reopening the page.
+          </p>
+          <form id="schedule-form">
+            <div class="field-grid">
+              <div>
+                <label for="start-date">Opening date · PHT</label
+                ><input id="start-date" type="date" required />
+              </div>
+              <div>
+                <label for="start-time">Opening time · PHT</label
+                ><input id="start-time" type="time" required />
+              </div>
+            </div>
+            <fieldset>
+              <legend>Choose how the examination closes</legend>
+              <div class="radio-row">
+                <label
+                  ><input type="radio" name="end-mode" value="date" checked />
+                  Closing date and time</label
+                ><label
+                  ><input type="radio" name="end-mode" value="duration" />
+                  Duration after opening</label
+                >
+              </div>
+            </fieldset>
+            <div id="end-fields" class="field-grid">
+              <div>
+                <label for="end-date">Closing date · PHT</label
+                ><input id="end-date" type="date" required />
+              </div>
+              <div>
+                <label for="end-time">Closing time · PHT</label
+                ><input id="end-time" type="time" required />
+              </div>
+            </div>
+            <div id="duration-field" hidden>
+              <label for="duration">Duration in minutes</label
+              ><input
+                id="duration"
+                type="number"
+                min="1"
+                step="1"
+                inputmode="numeric"
+              />
+            </div>
+            <button type="submit">Review questions & schedule</button>
+          </form>
+          <div id="schedule-review" class="review" hidden tabindex="-1">
+            <h3>Review before scheduling</h3>
+            <p id="schedule-summary"></p>
+            <p id="countdown-example" class="notice"></p>
+            <div id="review-questions" class="complete-preview"></div>
+            <label class="check"
+              ><input id="schedule-confirm" type="checkbox" /> I checked every
+              question and the exact PHT opening and closing times. This
+              confirmed version will open automatically.</label
+            ><label for="schedule-reason"
+              >Reason for changing a previously scheduled exam, if
+              applicable</label
+            ><input id="schedule-reason" type="text" maxlength="1000" />
+            <div class="toolbar">
+              <button id="schedule-save" type="button" disabled>
+                Save and Schedule</button
+              ><button id="schedule-back" type="button" class="secondary">
+                Return to editing
+              </button>
+            </div>
+          </div>
+          <p id="student-link" class="small"></p>
+        </section>
+        <section id="examinees" aria-labelledby="examinees-heading">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">03 · Collect</p>
+              <h2 id="examinees-heading">Examinees & responses</h2>
+            </div>
+            <button id="export" type="button" class="secondary">
+              Download all answers · CSV
+            </button>
+          </div>
+          <p>
+            Every registered attempt is retained, including blank answers.
+            Connection status is an observation for review; it is never a
+            misconduct decision.
+          </p>
+          <form id="search-form" class="search">
+            <div>
+              <label for="search"
+                >Find by student name, email or attempt ID</label
+              ><input id="search" type="search" maxlength="200" />
+            </div>
+            <button type="submit" class="secondary">Search</button
+            ><button id="refresh-attempts" type="button" class="secondary">
+              Refresh
+            </button>
+          </form>
+          <p id="attempt-update" class="small"></p>
+          <div id="attempts" aria-live="polite"></div>
+          <button id="more-attempts" type="button" class="secondary" hidden>
+            Load more examinees
+          </button>
+          <article id="response" class="response" hidden tabindex="-1">
+            <div class="section-heading">
+              <h3 id="response-title">Student responses</h3>
+              <button id="response-close" type="button" class="secondary">
+                Close responses
+              </button>
+            </div>
+            <p id="response-meta"></p>
+            <div class="toolbar">
+              <button id="student-report" type="button" class="secondary">
+                Download student report</button
+              ><button
+                id="receipt-download"
+                type="button"
+                class="secondary"
+                hidden
+              >
+                Download receipt
+              </button>
+            </div>
+            <div id="receipt" class="notice"></div>
+            <div id="practice-readiness" hidden>
+              <h4>Practice readiness observations</h4>
+              <p>
+                Readiness is complete only when every required step was actually
+                observed. An untested step is not a pass.
+              </p>
+              <ul id="readiness-checks"></ul>
+            </div>
+            <div id="answer-set"></div>
+            <details id="late-drafts" hidden>
+              <summary>Separate late / offline recovered drafts</summary>
+              <p>
+                These are preserved for examiner review. They do not replace the
+                official on-time submission.
+              </p>
+              <div id="recovered-set"></div>
+            </details>
+            <div class="recovery">
+              <h4>Authorize recovery of this existing attempt</h4>
+              <p class="small">
+                Verify the student’s identity first. A one-use recovery link
+                retains this attempt and its original deadline. Share it
+                privately with that student only.
+              </p>
+              <label for="recovery-reason"
+                >Identity verification and recovery reason</label
+              ><textarea
+                id="recovery-reason"
+                rows="2"
+                maxlength="1000"
+              ></textarea
+              ><label class="check"
+                ><input id="recovery-confirm" type="checkbox" /> I verified
+                identity and authorize access to this existing attempt.</label
+              ><button id="recover" type="button" class="secondary">
+                Create private recovery link
+              </button>
+              <div id="practice-reset-control" hidden>
+                <h4>Authorize a new practice attempt</h4>
+                <p class="small">
+                  Use the verification and reason above. This explicitly resets
+                  practice access for troubleshooting, preserves this old record
+                  and revokes its editing session. It never resets an official
+                  attempt.
+                </p>
+                <button id="practice-reset" type="button" class="secondary">
+                  Reset practice access
+                </button>
+              </div>
+              <p id="recovery-result" class="notice" hidden></p>
+            </div>
+          </article>
+        </section>
+        <section id="activity" aria-labelledby="activity-heading">
+          <p class="eyebrow">04 · Review</p>
+          <h2 id="activity-heading">Activity events</h2>
+          <p>
+            Events record what the browser or server observed. A missed
+            heartbeat has an unknown cause. Only Atty. Aguila determines whether
+            conduct is misconduct.
+          </p>
+          <form id="event-search-form" class="search">
+            <div>
+              <label for="event-search"
+                >Search events, or open a student’s responses to focus on that
+                attempt</label
+              ><input id="event-search" type="search" maxlength="200" />
+            </div>
+            <button type="submit" class="secondary">Search events</button
+            ><button id="all-events" type="button" class="secondary">
+              All examinees
+            </button>
+          </form>
+          <p id="events-scope" class="small"></p>
+          <ol id="events" class="event-list"></ol>
+          <button id="more-events" type="button" class="secondary" hidden>
+            Load more events
+          </button>
+        </section>
+        <section id="backups" aria-labelledby="backups-heading">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">05 · Preserve</p>
+              <h2 id="backups-heading">Backups & delivery</h2>
+            </div>
+            <button id="refresh-backups" type="button" class="secondary">
+              Refresh backup status
+            </button>
+          </div>
+          <p>
+            Server saves come first. Independent backups and delivery run
+            afterward and can retry without holding up students. The owner’s
+            full-answer email destination is
+            <strong>wallyesteban1993@gmail.com</strong>.
+          </p>
+          <div id="backup-configuration"></div>
+          <p id="backup-summary" class="notice"></p>
+          <label for="backup-filter">Delivery status</label
+          ><select id="backup-filter">
+            <option value="">All jobs</option>
+            <option value="failed">Failed · needs review</option>
+            <option value="pending">Pending retry</option>
+            <option value="processing">Processing</option>
+            <option value="sent">Sent / completed</option>
+          </select>
+          <div id="backup-jobs"></div>
+          <button id="more-backups" type="button" class="secondary" hidden>
+            Load more backup jobs
+          </button>
+          <p class="small">
+            Professor access is managed through the private administrator
+            identity allowlist. Atty. Aguila’s email has not been supplied. Do
+            not add an unconfirmed recipient or make answer files public.
+          </p>
+          <details id="admission-controls">
+            <summary>Student link & new registrations</summary>
+            <p>
+              These exceptional actions affect new registrations only. Existing
+              attempts continue and retain their answers and deadlines. Ordinary
+              question upload and scheduling never change the student URL.
+            </p>
+            <p id="admission-status" class="small"></p>
+            <label for="admission-action">Student-link action</label
+            ><select id="admission-action">
+              <option value="">Choose an action</option>
+              <option value="rotate">
+                Replace the link for new registrations
+              </option>
+              <option value="revoke">Stop new registrations</option>
+              <option value="enable">
+                Enable new registrations with the current link
+              </option></select
+            ><label for="admission-reason">Examiner explanation</label
+            ><textarea
+              id="admission-reason"
+              rows="2"
+              maxlength="1000"
+            ></textarea
+            ><label class="check"
+              ><input id="admission-confirm" type="checkbox" /> I authorize this
+              recorded change to new registrations.</label
+            ><button id="admission-save" type="button" class="secondary">
+              Apply student-link action
+            </button>
+          </details>
+          <details id="exceptional-controls">
+            <summary>Exceptional examination controls</summary>
+            <p>
+              These controls are audited. They preserve prior answers and
+              receipts. Enter a reason, choose an action, then explicitly
+              confirm it.
+            </p>
+            <label for="control-action">Action</label
+            ><select id="control-action">
+              <option value="">Choose an action</option>
+              <option value="pause">Pause examination access</option>
+              <option value="resume">Resume examination access</option>
+              <option value="cancel">Cancel examination</option></select
+            ><label for="control-reason">Examiner explanation</label
+            ><textarea id="control-reason" rows="3" maxlength="1000"></textarea
+            ><label class="check"
+              ><input id="control-confirm" type="checkbox" /> I authorize this
+              action and its audit record.</label
+            ><button id="control-save" type="button" class="secondary">
+              Apply confirmed action
+            </button>
+          </details>
+        </section>
+      </div>
+    </main>
+    <footer>
+      Due Diligence · Constitutional Law I
+      <span
+        >Private records. Download and share only with authorized
+        examiners.</span
+      >
+    </footer>
+  </body>
+</html>

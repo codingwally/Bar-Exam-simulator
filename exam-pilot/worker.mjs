@@ -2238,9 +2238,12 @@ export async function drainOutbox(env, limit = 20, deliver = deliverJob) {
   );
   for (const job of jobs) {
     const claimToken = id();
+    // A timed-out client cannot cancel a Sheets write already accepted remotely.
+    // Cover our 120s provider budget + Google's 180s processing cap + 60s margin
+    // before another writer for this attempt may acquire the same target.
     const claim = await run(
       db,
-      `UPDATE outbox SET status='processing',lease_until=${DB_NOW}+180000,attempts=attempts+1,claim_token=? WHERE id=? AND status IN ('pending','failed','processing') AND lease_until<=${DB_NOW} AND NOT EXISTS(SELECT 1 FROM outbox other WHERE other.id<>outbox.id AND other.attempt_id=outbox.attempt_id AND other.target=outbox.target AND other.status='processing' AND other.lease_until>${DB_NOW})`,
+      `UPDATE outbox SET status='processing',lease_until=${DB_NOW}+CASE WHEN target='sheets' THEN 360000 ELSE 180000 END,attempts=attempts+1,claim_token=? WHERE id=? AND status IN ('pending','failed','processing') AND lease_until<=${DB_NOW} AND NOT EXISTS(SELECT 1 FROM outbox other WHERE other.id<>outbox.id AND other.attempt_id=outbox.attempt_id AND other.target=outbox.target AND other.status='processing' AND other.lease_until>${DB_NOW})`,
       claimToken,
       job.id,
     );

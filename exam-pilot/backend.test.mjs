@@ -1317,7 +1317,7 @@ test(
   }),
 );
 test(
-  "pending final Sheets mirror cannot overtake a running older snapshot",
+  "pending final Sheets mirror cannot overtake an older remote write after the former 180-second lease",
   withFixture(async (f) => {
     const a = await f.register();
     await f.save(a.cookie);
@@ -1340,6 +1340,12 @@ test(
     };
     const first = drainOutbox(f.env, 20, deliver);
     await entered;
+    const lease = f.db.sqlite.prepare("SELECT lease_until FROM outbox WHERE target='sheets' AND status='processing'").get();
+    assert.ok(lease.lease_until > Date.now() + 350000);
+    assert.ok(lease.lease_until <= Date.now() + 360100);
+    // Advance past the former lease while Google could still be processing a
+    // client-aborted request. A newer final copy must remain behind this lock.
+    f.db.sqlite.exec("UPDATE outbox SET lease_until=lease_until-181000 WHERE target='sheets' AND status='processing'");
     await f.request("/api/exams/practice/submit", {
       method: "POST",
       cookie: a.cookie,

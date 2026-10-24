@@ -189,8 +189,21 @@ for (const engine of engines) {
       "Exact synthetic first answer.",
     );
     pass("review returns to the flagged answer without replacing writing");
+    stage = "service-worker-ready";
+    let serviceWorkerTimer;
+    try {
+      // A Node-side timer also fires if the renderer stops responding. Missing
+      // service-worker readiness must fail with evidence, never silently pass.
+      await Promise.race([
+        page.evaluate(() => navigator.serviceWorker.ready.then(() => true)),
+        new Promise((_, reject) => {
+          serviceWorkerTimer = setTimeout(() => reject(new Error("Service worker was not ready within 30 seconds; offline readiness could not be verified.")), 30000);
+        }),
+      ]);
+    } finally {
+      clearTimeout(serviceWorkerTimer);
+    }
     stage = "reload-with-preferences";
-    await page.evaluate(() => navigator.serviceWorker.ready);
     await page.reload();
     await page.locator("textarea").waitFor();
     await page.waitForFunction(() => {

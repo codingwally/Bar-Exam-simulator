@@ -1980,42 +1980,38 @@
   }
 
   function examinationRoomContent() {
-    const signedIn = Boolean(state.session?.access_token && state.user);
-    const intro = !signedIn
-      ? 'Choose an entrance. Sign in once to create and manage an examination; students continue with the room key supplied by their professor.'
-      : 'Choose an entrance. Your signed-in account can create and manage its own examinations; students use the separate room-key lobby.';
+    const intro = 'Prepare an examination in the professor dashboard. Students take each examination through the separate link their professor shares.';
     return `
       <div class="dd2-examination-door-intro">
         <p>${escapeHtml(intro)}</p>
       </div>
       <div class="dd2-examination-door-grid">
-        <article class="dd2-examination-door dd2-professor-entrance${signedIn ? ' is-role-selected' : ''}" aria-labelledby="dd2-professor-door-title">
+        <article class="dd2-examination-door dd2-professor-entrance is-role-selected" aria-labelledby="dd2-professor-door-title">
           <div class="dd2-door-heading">
             <span class="dd2-door-icon" aria-hidden="true"><img src="assets/icons/navigation/door-open.svg" width="42" height="42" alt=""></span>
-            <span class="dd2-door-role" id="dd2-professor-door-badge">${signedIn ? 'Signed in · ready' : 'Sign-in required'}</span>
+            <span class="dd2-door-role" id="dd2-professor-door-badge">Private professor access</span>
           </div>
           <h3 id="dd2-professor-door-title">Professor door</h3>
-          <p>Create and save without role approval. Publish only when ready; after Admin issues the student key, Monitor and Grade unlock automatically.</p>
+          <p>Upload your question paper, review every question, share the exam link, and collect your students’ answers.</p>
           <div class="dd2-door-status" id="dd2-examination-room-status" role="status" aria-live="polite">
-            ${signedIn ? 'Opening your examination workspace…' : 'Sign in to create or manage an examination.'}
+            Sign in privately to prepare examinations and read student responses.
           </div>
-          <button class="dd2-button dd2-button-primary dd2-door-action" id="dd2-professor-door" type="button" disabled aria-disabled="true">Opening workspace…</button>
+          <button class="dd2-button dd2-button-primary dd2-door-action" id="dd2-professor-door" type="button" disabled aria-disabled="true">Open professor dashboard</button>
           <button class="dd2-door-retry" id="dd2-professor-door-retry" type="button" hidden>Try again</button>
         </article>
         <article class="dd2-examination-door dd2-student-entrance" aria-labelledby="dd2-student-door-title">
           <div class="dd2-door-heading">
             <span class="dd2-door-icon" aria-hidden="true"><img src="assets/icons/navigation/door-open.svg" width="42" height="42" alt=""></span>
-            <span class="dd2-door-role">Room key required</span>
+            <span class="dd2-door-role">Your examination link</span>
           </div>
           <h3 id="dd2-student-door-title">Student door</h3>
-          <p>Enter the room key, your real name, student number, subject, and year level. Questions stay sealed until the examination opens.</p>
-          <div class="dd2-door-status is-ready" role="status">Ready for your room key. You do not need a Due Diligence account.</div>
-          <a class="dd2-button dd2-button-primary dd2-door-action" id="dd2-student-door" href="/examination-room/student.html">Enter student door</a>
+          <p>Open the examination link shared by your professor. Enter your name and email, take the exam, and submit your answers.</p>
+          <div class="dd2-door-status is-ready" role="status">Use the link for your own examination. You do not need a Due Diligence account.</div>
         </article>
       </div>
       <aside class="dd2-door-safety-note">
-        <strong>Two simple entrances, one controlled room.</strong>
-        <span>The Professor door requires only sign-in and keeps each examination under its creator. The Student door opens only the key-and-identity lobby until Admin has approved the published exam.</span>
+        <strong>Prepare, share, and collect.</strong>
+        <span>The professor dashboard is private. Students use their own examination link, enter their name and email, and submit their answers.</span>
       </aside>`;
   }
 
@@ -2367,13 +2363,8 @@
     return payload;
   }
 
-  function professorDoorDestination(institutionId = '') {
-    const destination = new URL('/examination-room/', location.origin);
-    destination.searchParams.set('live', '1');
-    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(institutionId)) {
-      destination.searchParams.set('institution', institutionId);
-    }
-    return `${destination.pathname}${destination.search}`;
+  function professorDoorDestination() {
+    return 'https://duediligence-constitutional-exam.wallyesteban1993.workers.dev/admin/exams';
   }
 
   function resetProfessorDoor(message, options = {}) {
@@ -2393,34 +2384,18 @@
     if (retry) retry.hidden = options.retry !== true;
   }
 
-  async function checkProfessorDoor(institutionId = '') {
-    state.examinationRoomDoorRequest += 1;
-    const token = state.session?.access_token || '';
-    if (!token || !state.user) {
-      resetProfessorDoor(
-        'Sign in through Due Diligence to create or manage an examination. Student entry remains available.',
-        { enabled: true, buttonText: 'Sign in to create an exam', badge: 'Sign-in required', status: 'locked' },
-      );
-      const button = document.getElementById('dd2-professor-door');
-      if (button) button.dataset.mode = 'sign-in';
-      return;
-    }
-    const displayName = String(state.profile?.display_name || state.user?.user_metadata?.full_name || 'Creator').trim();
+  async function checkProfessorDoor() {
     resetProfessorDoor(
-      `${displayName}, the Professor workspace is ready. Create and save without approval; Admin is involved only after you publish and request the student key.`,
-      { enabled: true, buttonText: 'Enter professor door', badge: 'Signed in · ready', status: 'ready' },
+      'Sign in privately to upload your paper, share its examination link, and read the responses.',
+      { enabled: true, buttonText: 'Open professor dashboard', badge: 'Private professor access', status: 'ready' },
     );
     const button = document.getElementById('dd2-professor-door');
-    if (button) button.dataset.destination = professorDoorDestination(institutionId);
+    if (button) button.dataset.destination = professorDoorDestination();
   }
 
   function activateProfessorDoor() {
     const button = document.getElementById('dd2-professor-door');
     if (!button || button.disabled) return;
-    if (button.dataset.mode === 'sign-in') {
-      showEntry({ allowDismiss: true, returnHash: '#examination-room' });
-      return;
-    }
     if (button.dataset.destination) location.assign(button.dataset.destination);
   }
 

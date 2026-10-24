@@ -182,6 +182,10 @@ on:
       - 'scripts/test-commercial-launch-staging.mjs'
       - 'scripts/staging-commercial-user.mjs'
       - 'scripts/test-examination-room-door-menu.mjs'
+      - 'scripts/professor-entry-release.mjs'
+      - 'scripts/test-professor-entry-release.mjs'
+      - 'release/professor-entry-20261024.json'
+      - '.github/workflows/publish-professor-entry.yml'
       - 'scripts/test-examination-room-database.mjs'
       - 'scripts/test-examination-room-commercial-stress.mjs'
       - 'scripts/test-examination-room-v1-staging-smoke.mjs'
@@ -468,6 +472,8 @@ jobs:
           node scripts/test-admin-pricing-release.mjs
           node scripts/test-auth-route-overlay.mjs
           node scripts/test-onboarding-flow.mjs
+          git fetch --no-tags --depth=1 origin 8ed2a21d3fa33d065fdf1c3f69f631210ca08e25
+          node --test scripts/test-professor-entry-release.mjs
           node scripts/test-lifetime-grade-ui.mjs
           node scripts/test-commercial-launch-migration.mjs
           node scripts/test-complete-beta-release.mjs

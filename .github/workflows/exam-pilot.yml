@@ -1,4 +1,4 @@
-name: Verify isolated Constitutional Law examination service
+name: Verify Due Diligence practice examination platform
 on:
   pull_request:
     paths: ["exam-pilot/**", ".github/workflows/exam-pilot.yml"]
@@ -23,6 +23,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 24 }
+      - name: Build private document readers from pinned dependencies
+        run: |
+          npm ci --prefix exam-pilot --ignore-scripts --no-audit --no-fund
+          npm run build:documents --prefix exam-pilot
       - name: Verify new service without touching the existing application
         run: node exam-pilot/run-tests.mjs
   browsers:
@@ -33,6 +37,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 24 }
+      - name: Build private document readers from pinned dependencies
+        run: |
+          npm ci --prefix exam-pilot --ignore-scripts --no-audit --no-fund
+          npm run build:documents --prefix exam-pilot
       - name: Install pinned browser review tools outside the application
         run: |
           npm install --prefix exam-pilot/.wrangler/test-deps --no-audit --no-fund --ignore-scripts playwright@1.64.1
@@ -60,6 +68,14 @@ jobs:
           node exam-pilot/test/firefox-reload-diagnostic.mjs minimal 20
           node exam-pilot/test/firefox-reload-diagnostic.mjs exam-shell 20
           node exam-pilot/test/firefox-reload-diagnostic.mjs exam-modules 20
+      - name: Review the practice workspace and document upload workflows on three engines
+        env:
+          DD_ALLOW_SELF_SIGNED: "true"
+          DD_BROWSER_ENGINES: chromium,firefox,webkit
+          DD_PLAYWRIGHT_MODULE: ${{ github.workspace }}/exam-pilot/.wrangler/test-deps/node_modules/playwright
+        run: |
+          node exam-pilot/test/workspace-browser.mjs https://localhost:8802
+          node exam-pilot/test/document-workflows-browser.mjs https://localhost:8802
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -68,8 +84,21 @@ jobs:
             exam-pilot/.wrangler/evidence/
             exam-pilot/.wrangler/server.log
           retention-days: 30
+  connection:
+    if: github.event_name == 'workflow_dispatch' && inputs.action != 'verify'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - name: Inspect existing Cloudflare authorization without creating resources
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node exam-pilot/access-setup.mjs check
   infrastructure:
-    needs: [verify, browsers]
+    needs: [verify, browsers, connection]
     if: github.event_name == 'workflow_dispatch' && inputs.action != 'verify'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -77,12 +106,23 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 24 }
+      - name: Build private document readers for deployment
+        if: inputs.action == 'deploy-isolated'
+        run: |
+          npm ci --prefix exam-pilot --ignore-scripts --no-audit --no-fund
+          npm run build:documents --prefix exam-pilot
       - name: Read available isolated infrastructure
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: node exam-pilot/infrastructure.mjs check
-      - name: Provision isolated database and private backup bucket
+      - name: Protect the professor desk using existing Zero Trust
+        if: inputs.action == 'deploy-isolated'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node exam-pilot/access-setup.mjs setup
+      - name: Provision the free isolated practice database
         if: inputs.action == 'deploy-isolated'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

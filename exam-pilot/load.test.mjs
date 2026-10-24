@@ -8,7 +8,7 @@ import { createTestDatabase } from "./test-support.mjs";
 for (const count of [13, 25, 50, 100]) {
   test(`${count} concurrent registrants save all 20 answers and obtain matching immutable receipts`, async (t) => {
     const db = createTestDatabase();
-    const env = { EXAM_DB: db };
+    const env = { EXAM_DB: db, EXAM_BACKUPS: { put: async () => {}, head: async () => null } };
     const app = createApp({
       adminAuthenticator: async () => ({ email: "synthetic@example.invalid" }),
     });

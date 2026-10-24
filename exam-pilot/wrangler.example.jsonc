@@ -18,12 +18,6 @@
       "database_id": "REPLACE_WITH_VERIFIED_D1_ID"
     }
   ],
-  "r2_buckets": [
-    {
-      "binding": "EXAM_BACKUPS",
-      "bucket_name": "duediligence-constitutional-exam-private"
-    }
-  ],
   "triggers": { "crons": ["* * * * *"] },
   "vars": {
     "ADMIN_EMAILS": "wallyesteban1993@gmail.com",

@@ -24,7 +24,7 @@ try {
   for (const horizon of [172800, 7200, 1200, 360, 240, 30]) {
     const startsAt = Date.now() + horizon * 1000;
     await api('/api/admin/exams/official/schedule', {starts_at: new Date(startsAt).toISOString(), ends_at: new Date(startsAt + 120000).toISOString(), expected_draft_version: 1, confirmed: true, reason: 'Synthetic countdown boundary review'});
-    await page.reload(); await page.getByRole('heading', {name: 'Test is not available yet', exact: true}).waitFor();
+    await page.reload(); await page.getByText(/Test is not available yet/).waitFor();
     const countdown = await page.locator('[data-countdown]').innerText();
     assert.ok(!['', '—', '00:00:00'].includes(countdown), `No immediate countdown at ${horizon}`);
     if (horizon >= 86400) assert.match(countdown, /day/);

@@ -4,6 +4,9 @@ CREATE TABLE IF NOT EXISTS exams (
  draft_version INTEGER NOT NULL DEFAULT 0, draft_json TEXT NOT NULL DEFAULT '[]', published_version INTEGER,
  starts_at INTEGER, ends_at INTEGER, control TEXT NOT NULL DEFAULT 'normal' CHECK(control IN ('normal','paused','cancelled')),
  admission_enabled INTEGER NOT NULL DEFAULT 1 CHECK(admission_enabled IN (0,1)), access_key_hash TEXT, access_key TEXT,
+ duration_minutes INTEGER NOT NULL DEFAULT 5 CHECK(duration_minutes BETWEEN 1 AND 360),
+ instructions TEXT NOT NULL DEFAULT '', archived_at INTEGER,
+ source_text TEXT NOT NULL DEFAULT '', source_name TEXT NOT NULL DEFAULT '', source_format TEXT NOT NULL DEFAULT '',
  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS question_versions (
@@ -27,6 +30,15 @@ CREATE INDEX IF NOT EXISTS attempts_exam ON attempts(exam_id,created_at,id);
 CREATE TABLE IF NOT EXISTS sessions (
  token_hash TEXT PRIMARY KEY, attempt_id TEXT NOT NULL REFERENCES attempts(id), expires_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS platform_browsers (
+ token_hash TEXT PRIMARY KEY, expires_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS platform_exam_sessions (
+ browser_token_hash TEXT NOT NULL REFERENCES platform_browsers(token_hash),
+ exam_id TEXT NOT NULL REFERENCES exams(id), attempt_id TEXT NOT NULL REFERENCES attempts(id),
+ PRIMARY KEY(browser_token_hash,exam_id)
+);
+CREATE INDEX IF NOT EXISTS platform_sessions_attempt ON platform_exam_sessions(attempt_id);
 CREATE TABLE IF NOT EXISTS answer_operations (
  id TEXT PRIMARY KEY, attempt_id TEXT NOT NULL REFERENCES attempts(id), question_id TEXT NOT NULL REFERENCES questions(id),
  revision INTEGER NOT NULL, text TEXT NOT NULL, hash TEXT NOT NULL, saved_at INTEGER NOT NULL,

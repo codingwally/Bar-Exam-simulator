@@ -1,10 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { answerPacket, deliverJob } from "./delivery.mjs";
+import { answerPacket, deliverJob, studentTabTitle } from "./delivery.mjs";
 
 const payload = {
   schemaVersion: 1,
-  exam: { id: "exam-test", title: "Synthetic examination" },
+  exam: { id: "exam-test", title: "Synthetic examination", instructions: "Read every question carefully.", durationMinutes: 20 },
   attempt: {
     id: "attempt-test",
     name: "Synthetic Student",
@@ -47,6 +47,8 @@ test("owner packet contains every question including explicit blanks and receipt
     "receipt-checksum",
     "attempt-test",
     "synthetic@example.invalid",
+    "Submitted (PHT): 1970-01-01 08:00:01 PHT (UTC+08:00)",
+    "Read every question carefully.",
   ])
     assert.ok(packet.includes(text), text);
 });
@@ -170,7 +172,7 @@ test("large complete owner copies are divided without truncation and each part h
     sent.length,
   );
 });
-test("Google mirror preserves long answers, uses literal cells and atomic replacement, retries same tab", async () => {
+test("Google mirror preserves long Unicode answers, uses literal cells and atomic replacement, retries the same readable tab", async () => {
   const keys = await crypto.subtle.generateKey(
     {
       name: "RSASSA-PKCS1-v1_5",
@@ -191,26 +193,19 @@ test("Google mirror preserves long answers, uses literal cells and atomic replac
     }),
   };
   const long = structuredClone(payload);
-  long.answers[0].text = "=" + "x".repeat(90000);
+  long.answers[0].text = "=" + "x".repeat(39998) + "🤝" + "x".repeat(50000);
   long.questions[0].text = "Q".repeat(80000);
   const writes = [];
+  const sheets = [{ properties: { title: "attempt_attempttest", sheetId: 12, gridProperties: { rowCount: 1000 } } }];
   const fetcher = async (url, options) => {
     if (url.includes("oauth2.googleapis.com"))
       return Response.json({ access_token: "synthetic" });
     if (url.includes("?fields="))
-      return Response.json({
-        sheets: [
-          {
-            properties: {
-              title: "attempt_attempttest",
-              sheetId: 12,
-              gridProperties: { rowCount: 1000 },
-            },
-          },
-        ],
-      });
+      return Response.json({ sheets });
     writes.push({ url, options });
-    return Response.json({ replies: [{}, {}] });
+    const added = JSON.parse(options.body).requests[0].addSheet;
+    if (added) sheets.push({ properties: { ...added.properties, sheetId: 13 } });
+    return Response.json({ replies: JSON.parse(options.body).requests.map(() => ({})) });
   };
   await deliverJob(
     { id: "sheets-job", target: "sheets", payload: long },
@@ -225,18 +220,56 @@ test("Google mirror preserves long answers, uses literal cells and atomic replac
   assert.equal(writes[0].url, writes[1].url);
   assert.ok(writes[0].url.endsWith(":batchUpdate"));
   const update = JSON.parse(writes[0].options.body).requests[1].updateCells;
+  const properties = JSON.parse(writes[0].options.body).requests[0].updateSheetProperties.properties;
+  assert.equal(properties.title, await studentTabTitle(long.attempt));
+  assert.ok(properties.title.startsWith("Synthetic Student · "));
   const rows = update.rows.map((row) =>
     row.values.map((cell) => cell.userEnteredValue.stringValue),
   );
-  const chunks = rows.slice(7, 10).map((row) => row[2]);
+  const header = rows.findIndex(row => row[0] === "Question");
+  const chunks = rows.slice(header + 1, header + 4).map((row) => row[2]);
   assert.equal(chunks.join(""), long.answers[0].text);
   assert.equal(
     rows
-      .slice(7, 10)
+      .slice(header + 1, header + 4)
       .map((row) => row[1])
       .join(""),
     long.questions[0].text,
   );
   assert.equal(update.range.endRowIndex, 1000);
   assert.ok(rows.at(-1).includes("[BLANK ANSWER]"));
+  for (const chunk of chunks) {
+    assert.ok(chunk.length <= 40000);
+    assert.equal(/[\uD800-\uDBFF]$/.test(chunk), false);
+    assert.equal(/^[\uDC00-\uDFFF]/.test(chunk), false);
+  }
+  assert.ok(rows.some(row => row[0] === "Examination title" && row[1] === "Synthetic examination"));
+  assert.ok(rows.some(row => row[0] === "Student email" && row[1] === "synthetic@example.invalid"));
+  assert.ok(rows.some(row => row[0] === "Submitted (PHT)" && row[1].includes("PHT (UTC+08:00)")));
+  assert.ok(rows.some(row => row[0] === "Examination instructions" && row[1] === payload.exam.instructions));
+  assert.equal(chunks[0][0], "=");
+  assert.ok(update.rows.flatMap(row => row.values).every(cell => !cell.userEnteredValue.formulaValue));
+  assert.ok(update.rows.flatMap(row => row.values).every(cell => cell.userEnteredFormat.wrapStrategy === "WRAP"));
+  assert.ok(JSON.parse(writes[0].options.body).requests.some(request => request.updateDimensionProperties?.properties.pixelSize === 560));
+  const next = structuredClone(payload);
+  next.attempt.id = "a-different-student-attempt";
+  await deliverJob({ id: "another-student-job", target: "sheets", payload: next }, env, fetcher);
+  const created = writes.map(write => JSON.parse(write.options.body).requests[0].addSheet).find(Boolean);
+  assert.deepEqual(created.properties.gridProperties, { rowCount: 100, columnCount: 6 });
+  const nextGrid = JSON.parse(writes.at(-1).options.body).requests[0].updateSheetProperties.properties.gridProperties;
+  assert.equal(nextGrid.rowCount, 100);
+  assert.equal(nextGrid.columnCount, 6);
+});
+
+test("readable tab suffix preserves all UUID bits and safely handles forbidden title characters", async () => {
+  const first = { id: "7db5bd4c-8467-4412-b543-4542d82ca683", name: "=Student [Private]: / ? * \\ ' ".repeat(5) };
+  const second = { ...first, id: "7db5bd4c-8467-4412-b543-4542d82ca684" };
+  const title = await studentTabTitle(first), other = await studentTabTitle(second);
+  assert.notEqual(title, other);
+  assert.ok(title.length <= 100);
+  assert.equal(/[:\\/?*\[\]\u0000-\u001f]/.test(title), false);
+  const suffix = title.split(" · ").at(-1);
+  assert.equal(suffix.length, 22);
+  assert.equal(Buffer.from(suffix, "base64url").toString("hex"), first.id.replaceAll("-", ""));
+  assert.equal(await studentTabTitle(first), title);
 });

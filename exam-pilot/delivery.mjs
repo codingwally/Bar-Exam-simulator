@@ -17,6 +17,27 @@ function required(env, name) {
 }
 const timestamp = (value) =>
   value == null ? "Not recorded" : new Date(value).toISOString();
+const phtTimestamp = (value) => value == null ? "Not recorded" : `${new Date(Number(value) + 8 * 3600000).toISOString().slice(0, 19).replace("T", " ")} PHT (UTC+08:00)`;
+function textParts(value, limit) {
+  const parts = [];
+  for (let offset = 0; offset < value.length;) {
+    let end = Math.min(offset + limit, value.length);
+    if (end < value.length && /[\uD800-\uDBFF]/.test(value[end - 1])) end--;
+    parts.push(value.slice(offset, end));
+    offset = end;
+  }
+  return parts.length ? parts : [""];
+}
+export async function studentTabTitle(attempt) {
+  const compact = String(attempt.id).replaceAll("-", "");
+  // UUIDs keep all 128 identity bits in 22 readable characters. Unlike a
+  // truncated ID, two UUID attempts cannot share this suffix.
+  const identity = /^[a-f0-9]{32}$/i.test(compact)
+    ? Uint8Array.from(compact.match(/../g), byte => parseInt(byte, 16))
+    : new Uint8Array(await crypto.subtle.digest("SHA-256", encoder.encode(String(attempt.id)))).slice(0, 16);
+  const name = String(attempt.name || "Student").replace(/[:\\/?*\[\]\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().replace(/^'+|'+$/g, "") || "Student";
+  return `${textParts(name, 60)[0]} · ${base64url(identity)}`;
+}
 
 export function answerPacket(payload) {
   const { exam, attempt, questions, answers, receipt } = payload;
@@ -26,12 +47,16 @@ export function answerPacket(payload) {
     `Attempt: ${attempt.id}`,
     `Student: ${attempt.name}`,
     `Email: ${attempt.email}`,
+    `Started (PHT): ${phtTimestamp(attempt.startedAt)}`,
+    `Deadline (PHT): ${phtTimestamp(attempt.deadlineAt)}`,
+    `Submitted (PHT): ${receipt ? phtTimestamp(receipt.serverTime) : "Not submitted"}`,
     `Started (UTC): ${timestamp(attempt.startedAt)}`,
     `Deadline (UTC): ${timestamp(attempt.deadlineAt)}`,
     `Finalized (UTC): ${timestamp(receipt?.serverTime ?? attempt.finalizedAt)}`,
     `Finalization: ${receipt?.finalizationType ?? "In progress"}`,
     `Receipt: ${receipt?.id ?? "Pending"}`,
     `Checksum: ${receipt?.checksum ?? "Pending"}`,
+    ...(exam.instructions ? ["", "Examination instructions:", exam.instructions] : []),
     "",
   ];
   const map = new Map(answers.map((answer) => [answer.questionId, answer]));
@@ -169,13 +194,7 @@ export async function deliverJob(job, env, fetcher = fetch) {
           `Checksum: ${payload.receipt.checksum}`,
         ].join("\n");
     // Resend's 24-hour idempotency window is supplemented by the durable outbox.
-    const parts = [];
-    for (let offset = 0; offset < text.length; ) {
-      let end = Math.min(offset + 300000, text.length);
-      if (end < text.length && /[\uD800-\uDBFF]/.test(text[end - 1])) end--;
-      parts.push(text.slice(offset, end));
-      offset = end;
-    }
+    const parts = textParts(text, 300000);
     const references = [];
     for (let index = 0; index < parts.length; index++) {
       const multipart = parts.length > 1;
@@ -216,7 +235,8 @@ export async function deliverJob(job, env, fetcher = fetch) {
     const token = await googleToken(env, fetcher);
     // A dedicated tab per attempt is replaced atomically with RAW text, making retries
     // idempotent and avoiding append duplicates or formula execution in answers.
-    const tab = `attempt_${payload.attempt.id.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 70)}`;
+    const tab = await studentTabTitle(payload.attempt);
+    const legacyTab = `attempt_${payload.attempt.id.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 70)}`;
     const origin = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheet}`;
     const headers = {
       Authorization: `Bearer ${token}`,
@@ -226,14 +246,14 @@ export async function deliverJob(job, env, fetcher = fetch) {
     let metadata = await (
       await providerRequest(fetcher, metadataURL, { headers }, "Google Sheets")
     ).json();
-    if (!metadata.sheets?.some((sheet) => sheet.properties?.title === tab)) {
+    if (!metadata.sheets?.some((sheet) => [tab, legacyTab].includes(sheet.properties?.title))) {
       // Another delivery may create the tab concurrently. Confirm existence after an
       // ambiguous add, rather than treating a provider error as a successful mirror.
       const added = await fetcher(`${origin}:batchUpdate`, {
         method: "POST",
         headers,
         body: JSON.stringify({
-          requests: [{ addSheet: { properties: { title: tab } } }],
+          requests: [{ addSheet: { properties: { title: tab, gridProperties: { rowCount: 100, columnCount: 6 } } } }],
         }),
         signal: AbortSignal.timeout(15000),
       });
@@ -258,41 +278,47 @@ export async function deliverJob(job, env, fetcher = fetch) {
         )
       ).json();
     }
-    const properties = metadata.sheets?.find(
-      (sheet) => sheet.properties?.title === tab,
-    )?.properties;
+    const properties = (metadata.sheets?.find(sheet => sheet.properties?.title === tab)
+      || metadata.sheets?.find(sheet => sheet.properties?.title === legacyTab))?.properties;
     if (!Number.isInteger(properties?.sheetId))
       throw new Error("Google Sheets did not identify the mirror tab");
     const answers = new Map(
       payload.answers.map((answer) => [answer.questionId, answer]),
     );
     const values = [
-      ["Exam", payload.exam.id],
-      ["Attempt", payload.attempt.id],
-      ["Student", payload.attempt.name],
-      ["Email", payload.attempt.email],
+      ["EXAMINATION SUBMISSION", payload.exam.title],
+      ["Student name", payload.attempt.name],
+      ["Student email", payload.attempt.email],
+      ["Examination title", payload.exam.title],
+      ["Status", payload.receipt ? "Submitted — final answers" : "In progress — autosaved draft"],
+      ["Submitted (PHT)", payload.receipt ? phtTimestamp(payload.receipt.serverTime) : "Not submitted"],
+      ["Started (PHT)", phtTimestamp(payload.attempt.startedAt)],
+      ["Deadline (PHT)", phtTimestamp(payload.attempt.deadlineAt)],
       ["Receipt", payload.receipt?.id ?? "In progress"],
-      ["Checksum", payload.receipt?.checksum ?? ""],
+      ["Receipt checksum", payload.receipt?.checksum ?? ""],
+      ["Attempt ID", payload.attempt.id],
+      ["Exam ID", payload.exam.id],
+      ["Answered questions", payload.receipt ? `${payload.receipt.answeredCount} of ${payload.receipt.questionCount}` : "Not submitted"],
+      ["Finalization", payload.receipt?.finalizationType ?? "In progress"],
+      ["Time allowed", payload.exam.durationMinutes ? `${payload.exam.durationMinutes} minutes` : "See deadline"],
+      ["Examination instructions", payload.exam.instructions || ""],
+      [],
       [
         "Question",
-        "Question text",
-        "Answer",
+        "Complete question and instructions",
+        "Student answer",
         "Revision",
-        "Server saved UTC",
-        "Checksum",
+        "Server saved (PHT)",
+        "Answer checksum",
       ],
     ];
+    const questionHeader = values.length - 1;
     for (const question of payload.questions) {
       const answer = answers.get(question.id);
       // Google Sheets has a 50k character cell limit. Split full long content across
       // explicitly numbered continuation rows; never truncate an examination answer.
-      const chunks = (answer?.text || "[BLANK ANSWER]").match(
-        /[\s\S]{1,40000}/g,
-      ) || [""];
-      const questionChunks =
-        `${question.text}${question.instructions ? `\n\nInstructions: ${question.instructions}` : ""}`.match(
-          /[\s\S]{1,40000}/g,
-        ) || [""];
+      const chunks = textParts(answer?.text || "[BLANK ANSWER]", 40000);
+      const questionChunks = textParts(`${question.text}${question.instructions ? `\n\nInstructions: ${question.instructions}` : ""}`, 40000);
       for (
         let index = 0;
         index < Math.max(chunks.length, questionChunks.length);
@@ -303,7 +329,7 @@ export async function deliverJob(job, env, fetcher = fetch) {
           questionChunks[index] || "",
           chunks[index] || "",
           answer?.revision ?? 0,
-          answer?.savedAt == null ? "" : timestamp(answer.savedAt),
+          answer?.savedAt == null ? "" : phtTimestamp(answer.savedAt),
           answer?.hash ?? "",
         ]);
     }
@@ -313,52 +339,50 @@ export async function deliverJob(job, env, fetcher = fetch) {
     );
     // One atomic batch replaces all mirror cells, including clearing old trailing
     // continuation rows. Explicit string values never execute spreadsheet formulas.
+    const requests = [
+      {
+        updateSheetProperties: {
+          properties: { sheetId: properties.sheetId, title: tab, gridProperties: { rowCount, columnCount: Math.max(properties.gridProperties?.columnCount || 6, 6), frozenRowCount: 1 } },
+          fields: "title,gridProperties.rowCount,gridProperties.columnCount,gridProperties.frozenRowCount",
+        },
+      },
+      {
+        updateCells: {
+          range: { sheetId: properties.sheetId, startRowIndex: 0, endRowIndex: rowCount, startColumnIndex: 0, endColumnIndex: 6 },
+          rows: values.map((row, rowIndex) => ({
+            values: row.map((value, columnIndex) => ({
+              userEnteredValue: { stringValue: String(value) },
+              userEnteredFormat: {
+                wrapStrategy: "WRAP", verticalAlignment: "TOP",
+                textFormat: { fontFamily: "Arial", fontSize: 11, bold: rowIndex === 0 || rowIndex === questionHeader || (rowIndex < questionHeader - 1 && columnIndex === 0), ...([0, questionHeader].includes(rowIndex) ? { foregroundColor: { red: 1, green: 1, blue: 1 } } : {}) },
+                ...([0, questionHeader].includes(rowIndex) ? { backgroundColor: { red: 0.08, green: 0.13, blue: 0.20 } } : {}),
+              },
+            })),
+          })),
+          fields: "userEnteredValue,userEnteredFormat",
+        },
+      },
+      ...[[0, 1, 180], [1, 3, 560], [3, 4, 90], [4, 6, 240]].map(([startIndex, endIndex, pixelSize]) => ({
+        updateDimensionProperties: { range: { sheetId: properties.sheetId, dimension: "COLUMNS", startIndex, endIndex }, properties: { pixelSize }, fields: "pixelSize" },
+      })),
+    ];
     const response = await providerRequest(
       fetcher,
       `${origin}:batchUpdate`,
       {
         method: "POST",
         headers,
-        body: JSON.stringify({
-          requests: [
-            {
-              updateSheetProperties: {
-                properties: {
-                  sheetId: properties.sheetId,
-                  gridProperties: { rowCount },
-                },
-                fields: "gridProperties.rowCount",
-              },
-            },
-            {
-              updateCells: {
-                range: {
-                  sheetId: properties.sheetId,
-                  startRowIndex: 0,
-                  endRowIndex: rowCount,
-                  startColumnIndex: 0,
-                  endColumnIndex: 6,
-                },
-                rows: values.map((row) => ({
-                  values: row.map((value) => ({
-                    userEnteredValue: { stringValue: String(value) },
-                  })),
-                })),
-                fields: "userEnteredValue",
-              },
-            },
-          ],
-        }),
+        body: JSON.stringify({ requests }),
       },
       "Google Sheets",
     );
     const result = await response.json();
-    if (result.replies?.length !== 2)
+    if (result.replies?.length !== requests.length)
       throw new Error(
         "Google Sheets did not confirm the complete atomic mirror",
       );
     return {
-      reference: `https://docs.google.com/spreadsheets/d/${spreadsheet}/edit`,
+      reference: `https://docs.google.com/spreadsheets/d/${spreadsheet}/edit#gid=${properties.sheetId}`,
     };
   }
   throw new Error("Unknown backup delivery target");

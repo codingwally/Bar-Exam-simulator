@@ -11,7 +11,7 @@ import {
 
 function fixture() {
   const db = createTestDatabase(),
-    env = { EXAM_DB: db },
+    env = { EXAM_DB: db, EXAM_BACKUPS: { put: async () => {}, head: async () => null } },
     app = createApp({
       authenticateAdmin: async () => ({ email: "synthetic@example.invalid" }),
     });
@@ -855,10 +855,10 @@ test(
       f.db.sqlite.prepare("SELECT COUNT(*) n FROM answer_operations").get().n,
       1,
     );
-    assert.equal(
-      f.db.sqlite.prepare("SELECT text FROM answers").get().text,
-      "one",
-    );
+    const winner = results.findIndex((r) => r.status === 200);
+    const committed = ["one", "two"][winner];
+    assert.equal(f.db.sqlite.prepare("SELECT text FROM answers").get().text, committed);
+    assert.equal(f.db.sqlite.prepare("SELECT text FROM answer_operations").get().text, committed);
   }),
 );
 test(

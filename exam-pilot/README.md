@@ -1,160 +1,269 @@
-# Constitutional Law I examination pilot
+# Due Diligence examination platform
 
-An isolated examination service for Due Diligence and Atty. Aguila. It does not
-change the public website, subscriber access, graders, Simulator or old records.
-The student experience is deliberately small: open the link, enter a name and
-email, acknowledge the notice, write, and submit. A server receipt confirms
-submission. A browser draft or a pending request alone never does.
+An isolated examination service with a small professor workflow and a simple
+student experience. The professor uploads a question paper, checks the complete
+questions, creates a link and reads the responses. Students open that link,
+enter their name and email, write and submit. Only a server receipt confirms a
+final submission.
 
-## Routes
+This service has its own Worker and database, with configured private copies. It does not
+replace the public DueDiligence website, subscriber access, graders, Simulator
+or existing student records.
 
-The service has exactly two student routes, `/practice` and `/official`, and one
-private examiner dashboard at `/admin/exams`. These are route names, **not
-verified hosted URLs**. Use only the hostname actually returned by a successful
-deployment. Practice contains one approved question and lasts five minutes per
-student. Official starts empty, with `Test is not available`.
+## Professor workflow
 
-## Ordinary examiner setup
+1. Open the private `/admin/exams` page and sign in through Cloudflare Access.
+2. From **My exams**, choose **Create exam**. Upload a Word `.docx`, a PDF with
+   selectable text, or a plain text file. Pasting and manual question entry are
+   also available.
+3. Read every complete question and subquestion. The reader separates numbered
+   questions, keeps lettered subparts with their parent, and numbers the reviewed
+   questions consecutively. Edit, move, split, combine or remove items as needed.
+   Compare with the original extracted text when the document layout is unclear.
+4. Check the instructions, title and **Time allowed for each student**. Source
+   instructions are preserved, with short platform directions added. No legal
+   questions, answer keys or substantive examination rules are generated.
+5. Confirm the review and choose **Create exam link**. Each created examination
+   has its own `/exam/<slug>` link and immutable reviewed question set. Copy and
+   share the actual link shown in the page.
+6. Choose **Responses** to search students, read every numbered answer including
+   blank slots, and download one student's answers or the complete CSV. Receipts,
+   observed activity, recovered writing, independent-copy status and authorized
+   recovery controls are inside **Support & preservation details**.
 
-1. Sign in to the private examiner desk. Choose **Official Midterm**.
-2. In **Questions**, upload a CSV, paste numbered text, or add questions manually.
-   Preview every complete item and save the draft. Only CSV has a tested file
-   parser; DOCX/XLSX must first be exported to CSV or pasted. No AI rewriting.
-3. In **Exam schedule**, enter opening date/time and closing date/time or duration.
-   Every input and review is explicitly Philippine time.
-4. Review every question and exact dates, confirm, then **Save and Schedule**.
-5. Share the unchanged official route. It counts down immediately and opens
-   automatically. Every late entrant receives the remaining common time.
-6. **Examinees & responses** contains complete responses, blank question slots,
-   receipts, CSV downloads and readable per-student reports. **Activity** records
-   observations for human review. **Backups & controls** shows delivery failures
-   and retry controls. Never infer misconduct from a missed heartbeat.
+Newly created examinations are immediately available timed practice examinations.
+Their duration is 1–360 minutes from each student's first start. Returning to the
+same attempt never restarts its timer. Creating a new exam does not overwrite
+older questions, attempts or receipts. An unfinished professor draft is kept in
+that browser when storage is available; it is not a published examination.
 
-Owner-only admission link controls can explicitly rotate, revoke or re-enable
-new entries with a reason and confirmation. Rotation adds a new admission key;
-ordinary question uploads never change the link. Existing authenticated attempts
-continue saving and retrieving their original receipts after a rotation or
-revocation. The dashboard clearly distinguishes new entry from existing work.
+The public `/` page is the student workspace. A browser can remember its own
+examinations and return to an existing attempt. The seeded `/practice` route is
+five minutes. The legacy `/official` route and common-cutoff backend remain, but
+fixed opening/closing scheduling is not exposed by the rebuilt professor creation
+screen. Do not describe a practice link as a scheduled official examination.
 
-After an exam closes, **Create next official examination** preserves the old
-exam in read-only history and creates a new empty exam using the same current
-student route. It requires a title, reason and explicit confirmation. Normal
-question upload and scheduling require no source edits or deployment.
+These are application routes, not verified hosted addresses. Use only a hostname
+confirmed by an actual deployment and HTTPS smoke test.
 
-## Preservation and recovery
+## Document reading and limits
 
-| Copy | Location and recovery |
-| --- | --- |
-| Device drafts | IndexedDB `due-diligence-exam-drafts-v1`, `states` and `revisions`; immediate local journal when available. Reopen the same link/browser/profile. Do not clear site data. |
-| Authoritative server | Isolated D1 binding `EXAM_DB`: `answers`, append-only `answer_operations`, immutable `final_answers`, `submissions`, `recovered_drafts`, `events`, `admin_audit`. |
-| Independent snapshots | Private `EXAM_BACKUPS` R2 bucket, `snapshots/<exam>/<attempt>/<job>.json`; complete question/answer versions, hashes, times and receipt. |
-| Google mirror | Private dedicated spreadsheet; one idempotently replaced tab per attempt, long content in numbered continuation rows. Requires service-account authorization. |
-| Owner email | Complete final answers, blanks, identity, timestamps and checksums to `wallyesteban1993@gmail.com`; large copies split into numbered parts. Student receives a separate concise receipt. |
-| Durable delivery | D1 `outbox`, exclusive per-attempt/target lease, exponential retry, admin failure status and retry. Provider failure never revokes a submission. |
+Word is read by pinned Mammoth; PDFs by pinned Mozilla PDF.js and its matching
+worker. The readers run locally in the professor's browser, using self-hosted
+assets. Question files are not sent to an AI service or conversion website.
+The reviewed questions, instructions and private original extracted text are
+stored when the professor creates the examination. The original text is not
+returned in the student examination API.
 
-At cutoff, server writes are rejected immediately. Scheduled maintenance and
-lazy reads finalize the last accepted revisions even after a tab closes.
-Recovered offline writing is saved in `recovered_drafts` with upload time and
-untrusted client time; it never replaces the official timed answers. Only the
-examiner decides an accommodation. There is no automatic disciplinary verdict.
+- Supported: `.docx`, text PDFs, `.txt` and `.md`; pasted or manual questions.
+- Scanned or textless PDF pages are detected and the whole import is refused.
+  OCR is not included. Export readable text or paste the paper instead.
+- Older binary `.doc` must be saved as `.docx` first. Password-protected,
+  malformed and unsupported files receive an explicit fallback.
+- Files are limited to 20 MB, PDFs to 100 pages, and unpacked Word archives to
+  40 MB and 2,000 entries. Reading PDFs shows page progress and can be cancelled.
+- Ambiguous numbering needs professor review. Repeated main question numbers,
+  empty items, duplicate questions and apparent answer-key material are refused.
+  PDF reading order can differ from the printed page. Always read the preview.
+- Questions may contain at most 80,000 characters each; instructions at most
+  10,000. The private original text limit is 1,000,000 characters. The complete
+  creation request also has a 1.5 MB UTF-8 limit. Oversized work is rejected with
+  its draft retained; it is never silently shortened.
+- A failed, cancelled, incomplete or questionless import does not replace an
+  existing reviewed question draft. The original extracted copy remains
+  separate from subsequent boundary edits.
 
-For missing cookies/browser data, authorized staff verify identity and generate
-a one-use, ten-minute recovery code from the selected existing attempt. Recovery
-revokes the old session and preserves its original deadline. Practice reset is a
-separate, explicit troubleshooting action that preserves the old attempt and
-receipt; it cannot reset an official attempt.
+See [DOCUMENT-READERS.md](DOCUMENT-READERS.md) for parser versions, preserved
+licences and reproducible real-document fixtures. DOCX/PDF layout extraction is
+deterministic; it does not replace the professor's final review.
 
-For disaster recovery, first preserve a D1 export and the affected R2 objects.
-Restore D1 into a separate recovery database. Compare attempt/question IDs,
-revision, SHA-256, server times and final receipt checksums against the private
-snapshots, Sheet and owner mail. Reconcile in that separate database with an
-audited examiner decision; never overwrite a finalized official record in place.
-Do not delete any original evidence. No automatic deletion is enabled. The owner
-must establish retention/deletion rules and the privacy contact before live use.
+## Local start and verification
 
-## One-time infrastructure
+Node 24 is required for the real SQLite test adapter. Run these commands from
+the repository root:
 
-Use `wrangler.example.jsonc` as a template, not a deployable configuration: its
-D1 identifier is an explicit placeholder. `infrastructure.mjs provision` verifies
-or creates only the isolated D1 database and private R2 bucket, rejects public
-bucket domains, and writes ignored `.wrangler/deploy.json`. It neither changes
-the existing Worker nor grants admin access.
+```powershell
+npm ci --prefix exam-pilot --ignore-scripts --no-audit --no-fund
+npm run build:documents --prefix exam-pilot
+node exam-pilot/dev-server.mjs
+```
 
-- Cloudflare account credentials with permissions for the new Worker, D1 and R2.
-- Bind `EXAM_DB`, private `EXAM_BACKUPS` and static `ASSETS`; apply `schema.sql`
-  to the new database only. Keep its minute maintenance trigger enabled.
-- A Cloudflare Access application protecting `/admin*` and `/api/admin/*` on
-  the verified exam hostname. Configure the same application's issuer and
-  audience as `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD`. The Worker verifies the
-  RS256 signature, issuer, audience, expiry and staff email. The owner email is
-  the initial `ADMIN_EMAILS` entry. Unknown instructor email is never invented.
-  Configure `EXAMINER_EMAILS` separately for authenticated read-only reports;
-  examiner accounts cannot schedule, recover, reset, rotate links or modify data.
-- Authenticated mail provider secrets `RESEND_API_KEY`, verified
-  `EXAM_EMAIL_FROM`; explicitly enable `EMAIL_DELIVERY_ENABLED=true` only after
-  an authorized synthetic delivery rehearsal. This implementation does not
-  send live mail merely because tests ran.
-- `GOOGLE_SERVICE_ACCOUNT_JSON` secret and `GOOGLE_SPREADSHEET_ID`; share the
-  private spreadsheet only with the service account and authorized staff. Set
-  up no public link. Google credentials never enter browser files.
-- Actual official questions, opening/closing times, authorized examiner identity,
-  support/privacy contact, retention policy, and live independent delivery proof.
+Open `http://localhost:8797/admin/exams` for the professor desk and
+`http://localhost:8797/` for the student workspace. The server binds loopback,
+uses disposable in-memory SQLite and injects a synthetic examiner identity.
+Restarting it clears that synthetic database. Its `__qa` controls and
+administrator bypass are never imported by the deployed Worker. Local practice
+does not prove production authentication or provider delivery and sends no real
+email or Google data.
 
-The workflow `.github/workflows/exam-pilot.yml` runs isolated unit/SQL tests and
-can check available infrastructure. The manual `deploy-isolated` action applies
-only the new schema and publishes only the new Worker. A successful deployment
-must still be followed by actual HTTPS student and authenticated admin smoke
-tests and verified independent backup deliveries before official use.
-
-Current platform references: [Worker assets and routing](https://developers.cloudflare.com/workers/static-assets/binding/),
-[Access token verification](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/),
-[D1 transactions](https://developers.cloudflare.com/d1/worker-api/d1-database/),
-[atomic Sheets updates](https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets/request).
-
-## Local synthetic rehearsal
-
-Node 24 is required for the real SQLite test adapter.
+Build the private readers before starting an upload rehearsal; their generated
+`public/document-vendor/` files are ignored and intentionally absent from Git.
+`build:documents` uses pinned package versions, preserves dependency notices and
+fails if a required licence is missing. No external CDN is required at runtime.
 
 ```powershell
 node exam-pilot/run-tests.mjs
-node exam-pilot/dev-server.mjs
-node exam-pilot/test/student-browser.mjs http://localhost:8797
-node exam-pilot/test/visual-browser.mjs
+npm run test:documents --prefix exam-pilot
 ```
 
-Playwright is needed only for browser reviews. The local server binds loopback,
-uses synthetic memory SQLite, and injects a fake examiner for rehearsal. Its
-`/__qa/*` controls exist only in `dev-server.mjs`. Neither that module nor
-`test-support.mjs` is imported by the deployed Worker. No test sends actual mail
-or writes Google data. Browser screenshots/results go into ignored
-`exam-pilot/.wrangler/evidence/`.
+The first command discovers the complete isolated deterministic suite, including
+real SQLite, provider adapters, source preservation and real DOCX/PDF fixtures.
+The second runs only the document-reader subset. Fixture regeneration is
+available through `node exam-pilot/test/create-document-fixtures.mjs`.
 
-`test/browser-compatibility.mjs` checks Chromium, Firefox and WebKit. Set
-`DD_PLAYWRIGHT_MODULE` to select an installed Playwright module. WebKit needs
-HTTPS for the production-strength secure cookie. For a local self-signed HTTPS
-fixture, supply `EXAM_QA_TLS_KEY` and `EXAM_QA_TLS_CERT` to the local server and
-set `DD_ALLOW_SELF_SIGNED=true` only for the test runner. Never disable TLS
-verification in the deployed application. The CI workflow provisions its own
-synthetic local certificate and browsers and publishes review evidence without
-access to production credentials. `test/firefox-reload-diagnostic.mjs` separately
-tests generic service-worker reloads without starting an examination.
+The isolated CI workflow builds the readers, runs deterministic tests, and
+rehearses the workspace and real-file upload/review/link journey in Chromium,
+Firefox and WebKit. Browser runners use a disposable local server and synthetic
+data. `test/document-workflows-browser.mjs` calls the upload helper in
+`test/document-browser.mjs`; `test/workspace-browser.mjs` checks the student
+workspace. Browser evidence is written under ignored `.wrangler/evidence/`.
+Playwright is a review dependency, not a public application dependency.
 
-The public shell is installed atomically and versioned in `public/exam-sw.mjs`.
-Bump its cache version with every public shell release. Existing examination
-tabs keep their consistent shell until they close; APIs and authoritative
-questions, deadlines and receipts always use the server.
+For the synthetic HTTPS fixture, configure `EXAM_QA_TLS_KEY` and
+`EXAM_QA_TLS_CERT`. `DD_ALLOW_SELF_SIGNED=true` belongs only in that local test
+runner. Production must retain normal TLS verification. The service worker
+installs the public shell atomically; its cache version must be bumped whenever
+that shell changes.
 
-Local concurrency results are evidence of completeness and race handling, not a
-claim about hosted throughput or every physical device. Real mobile Safari,
-Android, school networks and live D1/provider capacity require a deployment
-rehearsal. Browsers cannot guarantee work survives cleared storage, hardware
-failure or simultaneous total loss of device storage and network access.
+## Persistence and recovery
+
+| Record | Purpose |
+| --- | --- |
+| Local IndexedDB draft journal | Saves writing on the device when browser storage works; reopen the same link in the same browser/profile. Never clear site data during an examination. |
+| Isolated D1 `EXAM_DB` | Authoritative question versions, accepted answer revisions, append-only operations, immutable final answers, receipts, recovered writing and audit records. |
+| Optional private R2 `EXAM_BACKUPS` | Additional complete question/answer snapshots with identity, hashes, timestamps and final receipt when a bucket is configured. Practice does not require an R2 subscription; new official examinations do require this extra copy. |
+| Private Google collection | Automatic provider adapter maintains one readable student tab per attempt, with full numbered answers and continuation rows for long text; requires configured service-account authorization. |
+| Owner answer email | Complete final packet to `wallyesteban1993@gmail.com`, including blank slots and checksums; large content uses numbered parts. Official attempts additionally queue a concise student receipt. |
+| Durable delivery outbox | Independent targets retry with leases and backoff; failures remain inspectable and retryable. A provider failure never invalidates a saved answer or final receipt. |
+
+Provider adapters are implemented, but a local/mock success or manually imported
+simulation workbook does not prove the automatic production adapters are
+configured. Verify each actual provider separately before using the service for
+a real examination.
+
+The default practice deployment uses Workers and D1 without adding R2 or asking
+for a Cloudflare payment method. Its durable queue retains Google snapshot/final
+copy jobs and owner final-answer email jobs. Those providers still need their
+own configuration. Binding `EXAM_BACKUPS` enables additional R2 snapshots for
+practice. Existing R2 jobs and evidence are never deleted when that binding is
+absent. New official scheduling or registration fails closed without R2;
+existing official attempts can still save to D1 and retrieve their receipt.
+
+At the server deadline, further official answer writes stop. Maintenance and
+lazy reads finalize the last accepted revisions, even after the student closes
+the tab. Offline writing uploaded later is preserved separately as recovered
+writing with upload time and untrusted client time; it never silently replaces
+the final timed answers. Any accommodation requires a human decision.
+
+For lost browser credentials, authorized staff must verify the student before
+issuing a one-use, ten-minute recovery link for the existing attempt. Recovery
+revokes the previous session and preserves the original deadline. An explicit
+practice reset preserves the old attempt and receipt; it is a troubleshooting
+operation, not a student timer reset. Read-only examiner identities cannot make
+these changes.
+
+Admission-link rotation/revocation applies to new registration. Existing
+authenticated attempts can continue saving and retrieving their receipts.
+Observed focus, connection or storage events are evidence for human review;
+they cannot establish misconduct by themselves.
+
+For disaster recovery, preserve a D1 export and the relevant private R2 objects
+first. Restore into a separate recovery database and reconcile question/attempt
+identity, revision, SHA-256, server times and receipt checksums. Never overwrite
+an immutable final record or delete original evidence to repair a display.
+No automatic retention deletion is enabled.
+
+## Cloudflare setup and database upgrades
+
+`wrangler.example.jsonc` is a template with an intentionally invalid placeholder
+D1 identifier. It is not a deployable configuration. Use the pinned local
+Wrangler dependency. Keep production infrastructure entirely separate from the
+main site's resources.
+
+1. Supply the scoped `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` for the
+   existing account. `access-setup.mjs check` and `infrastructure.mjs check`
+   inspect authorization without creating resources. The deployment-only
+   `access-setup.mjs setup` uses the already enabled Zero Trust organization to
+   create or verify a new isolated owner-only Access application. It records
+   the verified team domain and audience in ignored `.wrangler/access-env.json`.
+   This uses the existing Access login; no Google-owner login is introduced.
+2. `infrastructure.mjs provision` reads that verified Access file, or explicit
+   `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` environment values, and writes ignored
+   `.wrangler/deploy.json` for the isolated service. The default configuration
+   provisions only the isolated D1 database, with `EXAM_DB`, static `ASSETS` and
+   minute maintenance. It does not subscribe to R2 or add a bucket. If R2 is
+   explicitly configured later, keep it private with no public domain.
+3. For a **fresh examination database**, apply complete `schema.sql` once.
+   For a database created **before the multi-exam rebuild**, back it up and apply
+   `migrations/0002_practice_library.sql` once instead of assuming the schema
+   file upgrades it. That migration adds exam duration/instructions/private
+   source fields and browser-to-exam sessions. Inspect the actual schema and
+   migration record before running it: it must not run twice or against a fresh
+   database that already has these columns. `CREATE TABLE IF NOT EXISTS` alone
+   does not add missing columns. Never apply either file to the main site DB.
+4. Protect all private routes and assets with the same Access application:
+   `/admin*`, `/api/admin/*`, `/import.mjs`, `/document-import.mjs` and
+   `/document-vendor/*`. Keep student routes public. Configure matching
+   `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` and authorized owner `ADMIN_EMAILS`.
+   Optional `EXAMINER_EMAILS` grants read-only reports. The Worker independently
+   verifies the RS256 signature, issuer, audience, expiry and email for admin API
+   requests and private assets, including document readers. Missing setup fails
+   closed. An instructor's email must be supplied by the owner, not guessed.
+5. For automatic Google copies, set `GOOGLE_SERVICE_ACCOUNT_JSON` and
+   `GOOGLE_SPREADSHEET_ID`; share the private collection only with that service
+   account and approved staff. Never publish a collection link or place Google
+   credentials in browser assets.
+6. For automatic mail, set `RESEND_API_KEY` and verified `EXAM_EMAIL_FROM`.
+   Set `EMAIL_DELIVERY_ENABLED=true` only after an authorized synthetic rehearsal.
+   Mail is disabled by default. A Google/Gmail connector used for a manual demo
+   is separate from these deployed Worker provider credentials.
+7. Build the private readers, deploy only the isolated Worker, then perform real
+   hosted HTTPS student and authenticated admin checks. Confirm access denial
+   for anonymous users and all independent delivery copies by exact receipt and
+   checksum. Keep production secrets out of logs, source and public files.
+
+The manual workflow's connection check is read-only. Only `deploy-isolated`
+creates the isolated Access application/database and publishes the Worker. Its
+schema guard refuses an older unupgraded database rather than guessing whether
+the one-time migration ran. A successful code deployment alone is not a database
+upgrade or official-exam release approval.
+
+## Release status and remaining gates
+
+The rebuilt multi-exam flow has local document-reader tests and actual browser
+upload/review/unique-link rehearsals. A real synthetic student submission was
+reloaded and finalized. Its exact two questions, two complete answers, receipt
+and checksum were verified in a private native Google collection and manually
+sent owner email. The converted Sheet export was reimported and visually checked.
+This verifies the simulation collection, not automatic deployed Worker provider
+credentials or hosted operation.
+
+[RELEASE-REVIEW.md](RELEASE-REVIEW.md) records the earlier five-pass reliability
+review and clean CI run at revision `2e3ca325c6d6a24968197fad41483e260dbc0702`.
+Its earlier two-route dashboard descriptions predate this rebuild. That historic
+run must not be presented as certification of later interface/parser changes.
+Use the new revision's actual test and deployment evidence for release decisions.
+
+Before a real examination, verify hosted HTTPS and private examiner access,
+working D1 (and R2 when required), automatic private Google and owner-email copies plus retry,
+real iOS/Android devices and school networks, and expected hosted concurrency.
+The owner must provide the actual question paper, authorized examiner identities,
+privacy/support contact and retention policy. Scheduled official delivery also
+requires confirmed common opening and closing times through an authorized
+administration workflow. The rebuilt creation screen currently creates practice
+examinations, not scheduled official papers.
+
+Browser-engine tests and simulated phone widths do not certify every physical
+device. Local concurrency checks establish record completeness and race behavior,
+not hosted capacity. Cleared storage, hardware failure or simultaneous loss of
+both storage and connectivity can destroy unsynchronized writing. Student save
+status must continue to distinguish local drafts from server-confirmed saves.
 
 ## Rollback
 
-The pre-change repository baseline is `a375f3eb2d8d914948a38e1ba195098849aed10d`.
-An isolated service release never replaces the existing application or Pages
-artifact. To roll back this service, pause admission, preserve D1/R2 first, then
-roll back only this Worker's verified deployment version. Keep its database and
-bucket intact. A code rollback must never delete exam evidence. Never apply this
-schema to the website's database or roll back unrelated website deployments.
+The pre-change repository baseline is
+`a375f3eb2d8d914948a38e1ba195098849aed10d`. To roll back this isolated service,
+pause new admission, preserve D1/R2 and verify schema compatibility before
+selecting a previous Worker deployment. Keep the database and bucket intact.
+Never roll back the unrelated main site or delete exam evidence as part of a
+code rollback.

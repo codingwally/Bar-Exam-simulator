@@ -37,6 +37,7 @@ const env = {
           ".css": "text/css",
           ".mjs": "text/javascript",
           ".woff2": "font/woff2",
+          ".svg": "image/svg+xml",
           ".txt": "text/plain",
         };
         return new Response(await readFile(path), {

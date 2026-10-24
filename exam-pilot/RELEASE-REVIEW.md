@@ -1,4 +1,9 @@
-# Examination pilot release review — 24 October 2026, Philippine time
+# Initial examination pilot review — historical snapshot
+
+> This records the first pilot before the owner's Examplify-style rebuild request.
+> Its two-route UI, import limitations, test counts and authentication observations
+> are historical. Use `README.md`, `design-qa.md` and `REBUILD-REVIEW.md` for the
+> replacement practice platform and its current verification status.
 
 **Current classification: implemented and independently rehearsed in local and CI
 browsers; not approved for a

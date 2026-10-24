@@ -1,1332 +1,903 @@
+import { validateQuestions } from "./import.mjs";
 import {
-  questionsFromCSV,
-  questionsFromText,
-  validateQuestions,
-  scheduleFromInputs,
-  CSV_TEMPLATE,
-} from "./import.mjs";
-
-const $ = (id) => document.getElementById(id);
+  examFromText,
+  examDirections,
+  readExamFile,
+} from "./document-import.mjs";
+const $ = (id) => document.getElementById(id),
+  draftKey = "dd-exam-desk-draft-v2";
 const state = {
-  id: "official",
-  exam: null,
+  exams: [],
   questions: [],
-  version: 0,
+  source: "",
   dirty: false,
-  review: null,
-  attempts: [],
-  attemptCursor: null,
-  eventCursor: null,
-  selected: null,
+  exam: null,
   detail: null,
-  loadingAttempts: false,
-  serial: 0,
-  attemptSerial: 0,
-  eventSerial: 0,
+  cursor: null,
+  eventCursor: null,
+  backupCursor: null,
+  role: "owner",
 };
-const pht = new Intl.DateTimeFormat("en-PH", {
-  timeZone: "Asia/Manila",
-  dateStyle: "medium",
-  timeStyle: "medium",
-  hour12: false,
-});
-const formatTime = (value) => {
-  const timestamp = typeof value === "number" ? value : Date.parse(value);
-  return value != null && Number.isFinite(timestamp)
-    ? `${pht.format(new Date(timestamp))} PHT`
+const canManage = () => state.role !== "examiner";
+const time = (value) =>
+  value
+    ? new Intl.DateTimeFormat("en-PH", {
+        timeZone: "Asia/Manila",
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(new Date(value)) + " PHT"
     : "Not recorded";
+const node = (tag, text, cls) => {
+  const n = document.createElement(tag);
+  if (text !== undefined) n.textContent = String(text ?? "");
+  if (cls) n.className = cls;
+  return n;
 };
-const string = (value) => (value == null ? "" : String(value));
-const isPractice = () =>
-  state.exam?.kind === "practice" || state.id === "practice";
-const isArchived = () => state.exam?.archived === true;
-const canManage = () => !["examiner", "read_only"].includes(state.role);
-
-function node(tag, text, className) {
-  const element = document.createElement(tag);
-  if (text !== undefined) element.textContent = string(text);
-  if (className) element.className = className;
-  return element;
+function message(text, kind = "") {
+  $("message").textContent = text;
+  $("message").className = `message ${kind}`;
 }
-
-function notice(message, type = "") {
-  $("notice").textContent = message;
-  $("notice").className = `notice ${type}`;
-  $("notice").hidden = false;
+function view(name) {
+  for (const id of ["list", "create", "share", "responses"])
+    $(`${id}-view`).hidden = id !== name;
+  window.scrollTo(0, 0);
 }
-
-function loadedNotice(message, type = "") {
-  const warnings = state.loadWarnings || [];
-  notice(
-    warnings.length
-      ? `${message}\nSome sections could not load: ${warnings.join(" ")}`
-      : message,
-    warnings.length ? "error" : type,
-  );
-}
-
 async function api(path, options = {}) {
   const controller = new AbortController(),
     timer = setTimeout(() => controller.abort(), 20000);
   try {
     const response = await fetch(`/api/admin${path}`, {
       ...options,
-      signal: controller.signal,
       credentials: "same-origin",
       cache: "no-store",
+      signal: controller.signal,
       headers: {
         Accept: "application/json",
-        ...(options.body
-          ? {
-              "Content-Type": "application/json",
-              "X-Exam-Request": "examiner-dashboard",
-            }
-          : {}),
-        ...options.headers,
+        ...(options.body ? { "Content-Type": "application/json" } : {}),
       },
     });
-    let payload;
-    try {
-      payload = await response.json();
-    } catch (error) {
-      if (error.name === "AbortError") throw error;
+    const data = await response.json();
+    if (!response.ok)
       throw new Error(
-        "The server did not return an examiner response. Refresh and check that private access is configured.",
+        data.error?.message || "This could not be completed. Please try again.",
       );
-    }
-    if (!response.ok) {
-      const error = new Error(
-        payload.message ||
-          payload.error?.message ||
-          (typeof payload.error === "string" ? payload.error : "") ||
-          `The request could not be completed (${response.status}).`,
-      );
-      error.status = response.status;
-      throw error;
-    }
-    return payload;
+    return data;
   } catch (error) {
     if (error.name === "AbortError")
       throw new Error(
-        "The server response took too long. A save may have arrived; check the latest server state before repeating a scheduling or recovery action. Your current draft remains in this page.",
-      );
-    if (error instanceof TypeError)
-      throw new Error(
-        "The server could not be reached. Keep this page open and retry after your connection returns.",
+        "The response is taking too long. Your questions remain in this browser. Check My exams before creating another link, or retry the same request.",
       );
     throw error;
   } finally {
     clearTimeout(timer);
   }
 }
-
-async function action(button, work) {
+async function busy(button, work) {
   if (button.disabled) return;
   button.disabled = true;
-  state.busy = (state.busy || 0) + 1;
-  $("exam").disabled = true;
   button.setAttribute("aria-busy", "true");
   try {
     await work();
   } catch (error) {
-    notice(
-      `${error.message} Nothing is marked successful until the server confirms it.`,
+    message(
+      error.message || "Please check your connection and try again.",
       "error",
     );
   } finally {
-    button.removeAttribute("aria-busy");
     button.disabled = false;
-    state.busy--;
-    $("exam").disabled = state.busy > 0;
-    if (button.id === "schedule-save")
-      button.disabled = !$("schedule-confirm").checked;
+    button.removeAttribute("aria-busy");
   }
 }
-
-function download(text, filename, type = "text/plain;charset=utf-8") {
-  const url = URL.createObjectURL(new Blob([text], { type }));
-  const link = node("a");
-  link.href = url;
-  link.download = filename;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-function markDirty() {
-  state.dirty = true;
-  $("draft-state").textContent = "Unsaved draft changes";
-  $("schedule-review").hidden = true;
-  state.review = null;
-}
-
-function errorList(errors) {
-  const target = $("question-errors");
-  target.replaceChildren();
-  target.hidden = !errors.length;
-  if (errors.length) {
-    target.append(node("strong", "Check these questions before continuing."));
-    const list = node("ul");
-    errors.forEach((error) => list.append(node("li", error)));
-    target.append(list);
-  }
-}
-
-function field(labelText, value, options = {}) {
-  const wrap = node("div"),
-    label = node("label", labelText),
-    input = node(options.multiline ? "textarea" : "input");
-  input.id = options.id;
-  label.htmlFor = input.id;
-  if (options.multiline) input.rows = options.rows || 7;
-  else input.type = options.type || "text";
-  if (options.type === "number") {
-    input.min = "0";
-    input.step = "any";
-  }
-  input.value = string(value);
-  input.addEventListener("input", () => {
-    options.change(input.value);
-    markDirty();
-  });
-  wrap.append(label, input);
-  return wrap;
-}
-
-function questionPreview(container, questions) {
-  container.replaceChildren();
-  for (const q of questions) {
-    const article = node("article");
-    article.append(
-      node("h4", `Question ${q.number}`),
-      node("div", q.text, "question-text"),
+function saveLocal() {
+  try {
+    localStorage.setItem(
+      draftKey,
+      JSON.stringify({
+        questions: state.questions,
+        source: state.source,
+        originalSource: state.originalSource,
+        sourceName: state.sourceName,
+        sourceFormat: state.sourceFormat,
+        instructions: $("exam-instructions").value,
+        title: $("exam-title").value,
+        duration: $("exam-duration").value,
+        operation: state.operation,
+      }),
     );
-    if (q.instructions)
-      article.append(node("p", `Instructions: ${q.instructions}`, "small"));
-    if (q.points !== undefined && q.points !== null)
-      article.append(node("p", `${q.points} points`, "small"));
-    container.append(article);
+  } catch {
+    message(
+      "This browser could not keep an unfinished copy. Keep this page open until your exam link is created.",
+      "error",
+    );
   }
 }
-
+function persist() {
+  state.dirty = true;
+  state.operation = null;
+  $("review-confirm").checked = false;
+  saveLocal();
+}
+function renumber() {
+  state.questions.forEach((q, i) => (q.number = i + 1));
+}
+function grow(input) {
+  input.style.height = "auto";
+  input.style.height = `${input.scrollHeight + 3}px`;
+}
 function renderQuestions() {
-  const target = $("question-editor");
-  target.replaceChildren();
+  renumber();
   $("question-count").textContent =
-    `${state.questions.length} question${state.questions.length === 1 ? "" : "s"} · complete text shown below`;
-  $("empty-questions").hidden = !!state.questions.length;
-  const editable = canManage() && !isPractice() && !isArchived();
+    `${state.questions.length} question${state.questions.length === 1 ? "" : "s"} · numbered in the order students will see`;
+  $("question-list").replaceChildren();
+  $("review-panel").hidden = false;
   for (const [index, q] of state.questions.entries()) {
-    const item = node("li", undefined, "question-item"),
-      heading = node("div", undefined, "question-heading");
-    heading.append(node("h3", `Question ${q.number}`));
-    if (editable) {
-      const actions = node("div", undefined, "question-actions");
-      for (const [label, direction, disabled] of [
-        ["Move up", -1, index === 0],
-        ["Move down", 1, index === state.questions.length - 1],
-      ]) {
-        const button = node("button", label, "secondary");
-        button.type = "button";
-        button.disabled = disabled;
-        button.setAttribute("aria-label", `${label}: question ${q.number}`);
-        button.addEventListener("click", () => {
-          [state.questions[index], state.questions[index + direction]] = [
-            state.questions[index + direction],
-            state.questions[index],
-          ];
-          state.questions.forEach((question, i) => (question.number = i + 1));
-          markDirty();
-          renderQuestions();
-          $("question-editor")
-            .children[index + direction]?.querySelector("textarea")
-            ?.focus();
-        });
-        actions.append(button);
-      }
-      const remove = node("button", "Remove", "secondary");
-      remove.type = "button";
-      remove.setAttribute("aria-label", `Remove question ${q.number}`);
-      remove.addEventListener("click", () => {
-        if (
-          q.text.trim() &&
-          !confirm(
-            `Remove question ${q.number} from this draft? The scheduled version is preserved.`,
-          )
-        )
-          return;
-        state.questions.splice(index, 1);
-        state.questions.forEach((question, i) => (question.number = i + 1));
-        markDirty();
+    const li = node("li", undefined, "question"),
+      head = node("div", undefined, "section-heading"),
+      tools = node("div", undefined, "question-tools"),
+      text = node("textarea");
+    head.append(node("h3", `Question ${index + 1}`));
+    text.id = `question-${index}`;
+    text.value = q.text;
+    text.setAttribute("aria-label", `Question ${index + 1} text`);
+    text.addEventListener("input", () => {
+      q.text = text.value;
+      grow(text);
+      persist();
+    });
+    const tool = (label, fn, disabled = false) => {
+      const button = node("button", label);
+      button.type = "button";
+      button.disabled = disabled;
+      button.setAttribute("aria-label", `${label} question ${index + 1}`);
+      button.addEventListener("click", () => {
+        if (fn() === false) return;
+        renumber();
+        persist();
         renderQuestions();
       });
-      actions.append(remove);
-      heading.append(actions);
+      tools.append(button);
+    };
+    tool(
+      "Move up",
+      () => {
+        [state.questions[index - 1], state.questions[index]] = [
+          q,
+          state.questions[index - 1],
+        ];
+      },
+      index === 0,
+    );
+    tool(
+      "Move down",
+      () => {
+        [state.questions[index + 1], state.questions[index]] = [
+          q,
+          state.questions[index + 1],
+        ];
+      },
+      index === state.questions.length - 1,
+    );
+    tool("Split", () => {
+      const at = text.selectionStart;
+      if (at < 1 || at >= q.text.length) {
+        message(
+          "Place the text cursor where the next question should begin, then choose Split.",
+          "error",
+        );
+        return false;
+      }
+      const first = q.text.slice(0, at).trim(),
+        second = q.text.slice(at).trim();
+      if (!first || !second) return false;
+      q.text = first;
+      state.questions.splice(index + 1, 0, {
+        number: index + 2,
+        text: second,
+        instructions: "",
+      });
+    });
+    tool(
+      "Combine with next",
+      () => {
+        q.text += "\n\n" + state.questions[index + 1].text;
+        q.instructions = [
+          q.instructions,
+          state.questions[index + 1].instructions,
+        ]
+          .filter(Boolean)
+          .join("\n");
+        state.questions.splice(index + 1, 1);
+      },
+      index === state.questions.length - 1,
+    );
+    tool("Remove", () => {
+      if (q.text.trim() && !confirm(`Remove question ${index + 1}?`))
+        return false;
+      state.questions.splice(index, 1);
+    });
+    head.append(tools);
+    li.append(head, text);
+    if (q.instructions) {
+      const label = node("label", "Instructions for this question"),
+        instructions = node("textarea");
+      instructions.className = "sub-instructions";
+      instructions.value = q.instructions;
+      instructions.id = `instructions-${index}`;
+      label.htmlFor = instructions.id;
+      instructions.addEventListener("input", () => {
+        q.instructions = instructions.value;
+        persist();
+      });
+      li.append(label, instructions);
     }
-    item.append(heading);
-    if (editable) {
-      item.append(
-        field(`Complete question ${q.number} text`, q.text, {
-          multiline: true,
-          id: `question-${index}`,
-          change: (value) => (q.text = value),
-        }),
-      );
-      const extras = node("div", undefined, "question-extras");
-      extras.append(
-        field("Instructions (optional)", q.instructions, {
-          multiline: true,
-          rows: 2,
-          id: `instructions-${index}`,
-          change: (value) => (q.instructions = value),
-        }),
-        field("Points (optional)", q.points, {
-          type: "number",
-          id: `points-${index}`,
-          change: (value) => {
-            if (value === "") delete q.points;
-            else q.points = Number(value);
-          },
-        }),
-      );
-      item.append(extras);
-    } else {
-      item.append(node("div", q.text, "answer-text"));
-      if (q.instructions) item.append(node("p", q.instructions));
-    }
-    target.append(item);
+    $("question-list").append(li);
+    grow(text);
   }
-  errorList([]);
 }
-
-function replaceQuestions(questions) {
+function acceptExtracted(
+  result,
+  { keepOriginal = false, name = "Pasted text", format = "text" } = {},
+) {
+  if (!result.questions.length && state.questions.length) {
+    message(
+      "No numbered questions were found. Your current questions and instructions are unchanged.",
+      "error",
+    );
+    return;
+  }
+  if (!keepOriginal) {
+    state.originalSource = result.sourceText;
+    state.sourceName = name;
+    state.sourceFormat = format;
+  }
+  state.source = result.sourceText;
+  state.questions = result.questions;
+  $("original-text").value = state.source;
+  $("exam-instructions").value = examDirections(result.instructions);
+  $("import-note").hidden = !result.warnings?.length;
+  $("import-note").textContent = (result.warnings || []).join("\n");
+  if (!$("exam-title").value) {
+    const first = result.instructions?.split("\n").find((line) => line.trim());
+    if (
+      first &&
+      first.length <= 120 &&
+      !/^(?:instructions|directions|answer|write|read)\b/i.test(first) &&
+      !/[.!?]$/.test(first)
+    )
+      $("exam-title").value = first;
+  }
+  persist();
+  renderQuestions();
+  message(
+    result.questions.length
+      ? `Read ${result.questions.length} questions. Check the complete text below before creating your link.`
+      : "The text was read, but the question boundaries need your help. Add questions below or correct the numbering in the original text.",
+  );
+}
+async function readFile(file) {
+  if (!file) return;
   if (
     state.questions.length &&
     !confirm(
-      "Replace the questions currently in the draft editor? The preserved scheduled version will not change.",
+      "Replace the questions in this unfinished exam with this document?",
     )
   )
     return;
-  state.questions = questions;
-  markDirty();
-  renderQuestions();
-  notice(
-    `Imported ${questions.length} complete questions into the draft editor. Check every item below, then save the draft.`,
-  );
-  $("questions-heading").scrollIntoView({ block: "start", behavior: "smooth" });
-}
-
-async function saveDraft() {
-  const errors = validateQuestions(state.questions);
-  errorList(errors);
-  if (errors.length) {
-    $("question-errors").scrollIntoView({ block: "center" });
-    throw new Error("The draft has validation errors.");
-  }
-  const questions = structuredClone(state.questions),
-    serial = state.serial;
-  const examId = state.id;
-  let saved;
-  try {
-    saved = await api(`/exams/${encodeURIComponent(examId)}/draft`, {
-      method: "PUT",
-      body: JSON.stringify({ questions, expected_version: state.version }),
-    });
-  } catch (error) {
-    // A response can disappear after the server committed the draft. Verify
-    // its contents before treating a retry conflict as a failed save.
-    try {
-      const latest = await api(`/exams/${encodeURIComponent(examId)}`);
-      const canonical = (items) =>
-        JSON.stringify(
-          items.map((q) => ({
-            number: q.number,
-            text: q.text.trim(),
-            instructions: q.instructions || "",
-            points:
-              q.points == null || q.points === "" ? null : Number(q.points),
-          })),
-        );
-      if (canonical(latest.draft?.questions || []) !== canonical(questions))
-        throw error;
-      saved = latest;
-    } catch {
-      throw error;
-    }
-  }
-  if (serial !== state.serial) return;
-  state.version = saved.draft?.version ?? saved.version ?? state.version + 1;
-  // Typing during a slow save must remain visibly unsaved rather than be discarded.
-  const unchanged =
-    JSON.stringify(questions) === JSON.stringify(state.questions);
-  state.dirty = !unchanged;
-  $("draft-state").textContent = unchanged
-    ? `Draft version ${state.version} saved`
-    : `Draft version ${state.version} saved; newer edits unsaved`;
-  notice(
-    unchanged
-      ? "Draft saved. The examination opens only after you review and schedule it."
-      : "The server saved the earlier draft. Your newer edits remain in the editor; save again before scheduling.",
-    unchanged ? "success" : "",
-  );
-  if (!unchanged) throw new Error("Save the newer changes before scheduling.");
-}
-
-async function loadExam() {
-  const serial = ++state.serial;
-  $("desk").inert = true;
-  $("desk").setAttribute("aria-busy", "true");
-  try {
-    state.attemptSerial++;
-    state.eventSerial++;
-    state.detail = null;
-    state.selected = null;
-    state.review = null;
-    $("response").hidden = true;
-    $("schedule-review").hidden = true;
-    const result = await api(`/exams/${encodeURIComponent(state.id)}`);
-    if (serial !== state.serial) return;
-    state.exam = result.exam;
-    state.questions = structuredClone(
-      isPractice() || isArchived()
-        ? result.published?.questions || result.draft?.questions || []
-        : result.draft?.questions || [],
-    );
-    state.version = result.draft?.version ?? 0;
-    state.dirty = false;
-    const phase = state.exam.state || "UNCONFIGURED";
-    $("exam-status").textContent =
-      `${phase.replaceAll("_", " ")}${state.exam.starts_at ? ` · ${phase === "SCHEDULED" ? "Opens" : "Opened"} ${formatTime(state.exam.starts_at)}` : ""}`;
-    $("draft-state").textContent = isArchived()
-      ? "Preserved historical examination"
-      : isPractice()
-        ? "Fixed approved practice question"
-        : `Draft version ${state.version}`;
-    $("question-tools").hidden = !canManage() || isPractice() || isArchived();
-    $("schedule-form").hidden =
-      !canManage() ||
-      isPractice() ||
-      isArchived() ||
-      ["OPEN", "CLOSED", "CANCELLED"].includes(phase);
-    $("practice-schedule").hidden = !isPractice();
-    $("schedule-help").hidden = isPractice();
-    $("exceptional-controls").hidden = !canManage() || isArchived();
-    $("admission-controls").hidden = !canManage() || isArchived();
-    $("admission-status").textContent =
-      state.exam.admission_enabled === true
-        ? "New registrations are enabled while this examination is available."
-        : state.exam.admission_enabled === false
-          ? "New registrations are disabled. Existing attempts continue."
-          : "Current registration-link status is not supplied by this server.";
-    $("next-exam").hidden =
-      !canManage() ||
-      isPractice() ||
-      isArchived() ||
-      !["CLOSED", "CANCELLED", "UNCONFIGURED"].includes(phase);
-    $("current-schedule").hidden =
-      isPractice() || !state.exam.starts_at || !state.exam.ends_at;
-    $("current-schedule").textContent =
-      state.exam.starts_at && state.exam.ends_at
-        ? `Confirmed schedule: opens ${formatTime(state.exam.starts_at)}; closes ${formatTime(state.exam.ends_at)}. All official examinees share this closing time.`
-        : "";
-    $("published-note").hidden = !result.published;
-    $("published-note").textContent = result.published
-      ? `The scheduled version ${result.published.version ?? ""} is preserved. Editing this draft does not change it.${["OPEN", "CLOSED"].includes(phase) ? " This examination has started; its questions and official snapshots cannot be replaced here." : " Rescheduling a changed version requires a reason and fresh confirmation."}`
-      : "";
-    $("published-questions").hidden = !result.published?.questions?.length;
-    if (result.published?.questions)
-      questionPreview($("published-preview"), result.published.questions);
-    const link = state.exam.student_url;
-    $("student-link").replaceChildren(node("span", "Student link: "));
-    if (link) {
-      const url = new URL(link, location.origin);
-      if (url.protocol === "https:" || url.origin === location.origin) {
-        const anchor = node("a", url.href);
-        anchor.href = url.href;
-        $("student-link").append(
-          anchor,
-          node("span", " · unchanged when questions are saved or scheduled."),
-        );
-      }
-    } else
-      $("student-link").append(
-        node(
-          "span",
-          isArchived()
-            ? "This historical examination is retained privately. The official student link belongs to the current examination."
-            : "Available once the private deployment is configured.",
-        ),
-      );
-    // Official dates intentionally remain empty until the examiner supplies them.
-    for (const id of [
-      "start-date",
-      "start-time",
-      "end-date",
-      "end-time",
-      "duration",
-    ])
-      $(id).value = "";
-    renderQuestions();
-    const results = await Promise.allSettled([
-      loadAttempts(),
-      loadEvents(),
-      loadBackups(),
+  state.readController?.abort();
+  const controller = new AbortController();
+  state.readController = controller;
+  const draftSnapshot = () =>
+    JSON.stringify([
+      state.questions,
+      state.source,
+      $("exam-instructions").value,
+      $("exam-title").value,
+      $("exam-duration").value,
     ]);
-    state.loadWarnings = results
-      .filter((result) => result.status === "rejected")
-      .map((result) => result.reason.message);
+  const beforeReading = draftSnapshot();
+  $("reading-progress").hidden = false;
+  $("cancel-reading").hidden = false;
+  try {
+    const result = await readExamFile(file, {
+      signal: controller.signal,
+      onProgress: (text) => ($("reading-progress").textContent = text),
+    });
+    if (state.readController !== controller) return;
+    if (draftSnapshot() !== beforeReading) {
+      message(
+        "You edited this exam while the document was being read. Your edits are unchanged. Upload the document again when you are ready to replace them.",
+        "error",
+      );
+      return;
+    }
+    if (!result.questions.length && state.questions.length) {
+      message(
+        "No numbered questions were found in this document. Your existing questions and instructions are unchanged. Paste the new questions or add them manually.",
+        "error",
+      );
+      return;
+    }
+    acceptExtracted(result, { name: file.name, format: result.format });
+  } catch (error) {
+    if (error.name === "AbortError")
+      message("Reading cancelled. Your current questions are unchanged.");
+    else {
+      if (error.sourceText !== undefined && !state.questions.length) {
+        state.source = error.sourceText;
+        $("original-text").value = state.source;
+        $("review-panel").hidden = false;
+        $("original-panel").open = true;
+      }
+      message(
+        `${error.message}${state.questions.length ? " Your existing questions and instructions are unchanged." : ""}`,
+        "error",
+      );
+    }
   } finally {
-    if (serial === state.serial) {
-      $("desk").inert = false;
-      $("desk").setAttribute("aria-busy", "false");
+    if (state.readController === controller) {
+      $("reading-progress").hidden = true;
+      $("cancel-reading").hidden = true;
+      $("exam-file").value = "";
     }
   }
 }
-
-function countdown(target) {
-  const seconds = Math.max(
-      0,
-      Math.ceil((Date.parse(target) - Date.now()) / 1000),
-    ),
-    days = Math.floor(seconds / 86400);
-  const clock = [
-    Math.floor(seconds / 3600) % 24,
-    Math.floor(seconds / 60) % 60,
-    seconds % 60,
-  ]
-    .map((n) => String(n).padStart(2, "0"))
-    .join(":");
-  return `${days ? `${days} day${days === 1 ? "" : "s"} ` : ""}${clock}`;
-}
-
-function updateCountdownExample() {
-  if (!state.review) return;
-  const { starts_at, ends_at } = state.review;
-  const now = Date.now();
-  $("countdown-example").textContent =
-    now < Date.parse(starts_at)
-      ? `Student preview now: Test is not available yet — examination opens in ${countdown(starts_at)}. This is the full time remaining, even days before opening.`
-      : now < Date.parse(ends_at)
-        ? `Student preview now: Examination in progress — closes in ${countdown(ends_at)}.`
-        : "This schedule has already ended. Choose a future opening.";
-}
-
-async function reviewSchedule(event) {
-  event.preventDefault();
-  await action($("schedule-form").querySelector("button"), async () => {
-    const schedule = scheduleFromInputs({
-      startDate: $("start-date").value,
-      startTime: $("start-time").value,
-      endDate: $("end-date").value,
-      endTime: $("end-time").value,
-      durationMinutes: $("duration").value,
-      mode: document.querySelector("[name=end-mode]:checked").value,
-    });
-    if (Date.parse(schedule.starts_at) <= Date.now())
-      throw new Error("Choose a future opening time.");
-    if (state.dirty) await saveDraft();
-    const errors = validateQuestions(state.questions);
-    errorList(errors);
-    if (errors.length)
-      throw new Error("Complete and save the questions before scheduling.");
-    state.review = {
-      ...schedule,
-      version: state.version,
-      questions: JSON.stringify(state.questions),
-    };
-    const minutes =
-      (Date.parse(schedule.ends_at) - Date.parse(schedule.starts_at)) / 60000;
-    $("schedule-summary").textContent =
-      `${state.questions.length} questions. Opens ${formatTime(schedule.starts_at)}. Closes ${formatTime(schedule.ends_at)}. Common duration: ${minutes} minutes. Late arrivals receive only the remaining time.`;
-    questionPreview($("review-questions"), state.questions);
-    updateCountdownExample();
-    $("schedule-confirm").checked = false;
-    $("schedule-save").disabled = true;
-    $("schedule-review").hidden = false;
-    $("schedule-review").focus();
+function addQuestion() {
+  state.questions.push({
+    number: state.questions.length + 1,
+    text: "",
+    instructions: "",
   });
+  renderQuestions();
+  persist();
+  $(`question-${state.questions.length - 1}`).focus();
 }
-
-async function loadAttempts(append = false) {
-  const request = ++state.attemptSerial,
-    serial = state.serial;
-  const params = new URLSearchParams({ search: $("search").value.trim() });
-  if (append && state.attemptCursor) params.set("cursor", state.attemptCursor);
-  const result = await api(
-    `/exams/${encodeURIComponent(state.id)}/attempts?${params}`,
+function resumeDraft() {
+  try {
+    const draft = JSON.parse(localStorage.getItem(draftKey));
+    if (!draft) return false;
+    state.questions = draft.questions || [];
+    state.source = draft.source || "";
+    state.originalSource = draft.originalSource ?? state.source;
+    state.sourceName = draft.sourceName || "Pasted text";
+    state.sourceFormat = draft.sourceFormat || "text";
+    state.operation = draft.operation;
+    $("original-text").value = state.source;
+    $("exam-instructions").value = draft.instructions || examDirections("");
+    $("exam-title").value = draft.title || "";
+    $("exam-duration").value = draft.duration || 5;
+    view("create");
+    renderQuestions();
+    state.dirty = true;
+    message(
+      "Your unfinished exam is restored on this browser. Review it before creating a link.",
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+function startCreate() {
+  state.questions = [];
+  state.source = "";
+  state.originalSource = "";
+  state.sourceName = "";
+  state.sourceFormat = "text";
+  state.operation = null;
+  state.dirty = false;
+  $("exam-file").value = "";
+  $("paste-text").value = "";
+  $("original-text").value = "";
+  $("exam-title").value = "";
+  $("exam-duration").value = 5;
+  $("exam-instructions").value = examDirections("");
+  $("review-confirm").checked = false;
+  $("review-panel").hidden = true;
+  $("paste-panel").open = false;
+  view("create");
+  message("");
+}
+function fullLink(exam) {
+  if (!exam.student_url) return "";
+  const url = new URL(exam.student_url, location.origin);
+  return url.origin === location.origin ? url.href : "";
+}
+const examSummary = (exam) =>
+  `${exam.question_count || 0} question${exam.question_count === 1 ? "" : "s"} · ${exam.kind === "practice" ? `${exam.duration_minutes || 5} minutes per student` : "Scheduled examination"}`;
+function showShare(exam) {
+  state.exam = exam;
+  $("share-title").textContent = exam.label || exam.title;
+  $("share-summary").textContent = examSummary(exam);
+  $("share-link").value = fullLink(exam);
+  $("open-exam").href = fullLink(exam);
+  view("share");
+}
+async function copyLink(exam) {
+  const link = fullLink(exam);
+  if (!link) throw new Error("This exam does not have a student link.");
+  try {
+    await navigator.clipboard.writeText(link);
+    message(
+      "Exam link copied. You can paste it into your message to students.",
+      "success",
+    );
+  } catch {
+    showShare(exam);
+    $("share-link").select();
+    message("Select and copy the exam link shown below.");
+  }
+}
+function examRow(exam) {
+  const row = node("article", undefined, "exam-row"),
+    info = node("div"),
+    actions = node("div", undefined, "actions");
+  info.append(
+    node("h2", exam.label || exam.title),
+    node("p", `${examSummary(exam)}${exam.archived ? " · Past exam" : ""}`),
   );
-  if (request !== state.attemptSerial || serial !== state.serial) return;
-  state.attempts = append
-    ? [...state.attempts, ...(result.attempts || [])]
-    : result.attempts || [];
-  state.attemptCursor = result.next_cursor || null;
-  $("more-attempts").hidden = !state.attemptCursor;
-  $("attempt-update").textContent =
-    `${state.attempts.length} attempt${state.attempts.length === 1 ? "" : "s"} shown${state.attemptCursor ? " · more available below" : ""}. Updated ${formatTime(new Date().toISOString())}. Refreshes every 20 seconds when showing the first page.`;
-  const target = $("attempts");
-  target.replaceChildren();
-  if (!state.attempts.length) {
-    target.append(
-      node("p", "No registered attempts match this view.", "empty"),
-    );
-    return;
+  if (exam.student_url) {
+    const copy = node("button", "Copy link", "secondary");
+    copy.addEventListener("click", () => busy(copy, () => copyLink(exam)));
+    actions.append(copy);
   }
-  for (const attempt of state.attempts) {
-    const row = node("article", undefined, "attempt"),
-      identity = node("div"),
-      meta = node("dl");
-    identity.append(
-      node("h3", attempt.name),
-      node("p", attempt.email),
-      node("p", `Attempt ${attempt.id}`, "small"),
-    );
-    for (const [key, value] of [
-      ["Status", attempt.status],
-      ["Started", formatTime(attempt.started_at)],
-      [
-        "Answers",
-        `${attempt.answered_count ?? 0} / ${attempt.question_count ?? state.exam.question_count ?? "—"}`,
-      ],
-      ["Last server save", formatTime(attempt.last_saved_at)],
-      ["Last observed", formatTime(attempt.last_seen_at)],
-      ["Connection", "Unknown; review recorded observations"],
-      [
-        "Backup",
-        typeof attempt.backup_status === "object"
-          ? JSON.stringify(attempt.backup_status)
-          : attempt.backup_status || "Check backup queue",
-      ],
-    ])
-      meta.append(node("dt", key), node("dd", value));
-    const open = node("button", "View answers", "secondary");
-    open.type = "button";
-    open.setAttribute("aria-label", `View answers for ${attempt.name}`);
-    open.addEventListener("click", () =>
-      action(open, () => openAttempt(attempt.id)),
-    );
-    row.append(identity, meta, open);
-    target.append(row);
-  }
-}
-
-function answerFor(question, answers) {
-  return answers.find(
-    (a) =>
-      string(a.question_id) === string(question.id ?? question.number) ||
-      (a.question_number != null &&
-        Number(a.question_number) === Number(question.number)),
+  const responses = node("button", "Responses", "secondary");
+  responses.addEventListener("click", () =>
+    busy(responses, () => openResponses(exam)),
   );
+  actions.append(responses);
+  row.append(info, actions);
+  return row;
 }
-
-function receiptText(receipt) {
-  return typeof receipt === "string"
-    ? receipt
-    : JSON.stringify(receipt, null, 2);
-}
-
-function studentReport(detail) {
-  const {
-    attempt,
-    questions = [],
-    answers = [],
-    receipt,
-    recovered_drafts = [],
-  } = detail;
-  const lines = [
-    "DUE DILIGENCE — CONSTITUTIONAL LAW I",
-    state.exam?.label || state.id,
-    `Student: ${attempt.name}`,
-    `Email: ${attempt.email}`,
-    `Attempt: ${attempt.id}`,
-    `Status: ${attempt.status}`,
-    `Deadline: ${formatTime(attempt.deadline_at)}`,
-    "",
-    "OFFICIAL ANSWER SET",
-  ];
-  for (const q of questions) {
-    const answer = answerFor(q, answers);
-    lines.push(
-      "",
-      `QUESTION ${q.number}`,
-      q.text,
-      q.instructions || "",
-      `Revision: ${answer?.revision ?? "none"}; received: ${formatTime(answer?.saved_at)}; checksum: ${answer?.hash || "none"}`,
-      answer?.text?.trim() ? answer.text : "[BLANK]",
-    );
-  }
-  lines.push(
-    "",
-    "SERVER RECEIPT",
-    receipt ? receiptText(receipt) : "Not finalized / no server receipt yet.",
-  );
-  if (recovered_drafts.length) {
-    lines.push(
-      "",
-      "SEPARATE LATE / OFFLINE RECOVERED DRAFTS — FOR EXAMINER REVIEW",
-      "These do not replace the official on-time answer set.",
-    );
-    for (const draft of recovered_drafts)
-      lines.push("", JSON.stringify(draft, null, 2));
-  }
-  return lines.join("\n");
-}
-
-async function openAttempt(id) {
-  const serial = state.serial;
-  const result = await api(`/attempts/${encodeURIComponent(id)}`);
-  if (serial !== state.serial) return;
-  state.selected = id;
-  state.detail = result;
-  const {
-    attempt,
-    questions = [],
-    answers = [],
-    receipt,
-    recovered_drafts = [],
-  } = result;
-  $("response-title").textContent = attempt.name;
-  $("response-meta").textContent =
-    `${attempt.email} · Attempt ${attempt.id} · ${attempt.status} · Original deadline ${formatTime(attempt.deadline_at)}.`;
-  $("receipt").textContent = receipt
-    ? `Server receipt\n${receiptText(receipt)}`
-    : "No server-issued receipt yet. An active attempt is not a finalized submission.";
-  $("receipt-download").hidden = !receipt;
-  $("practice-readiness").hidden = !isPractice();
-  $("practice-reset-control").hidden =
-    !canManage() || !isPractice() || isArchived();
-  $("recover").closest(".recovery").hidden = !canManage() || isArchived();
-  $("readiness-checks").replaceChildren();
-  if (isPractice()) {
-    const labels = {
-      registered: "Registration",
-      typing: "Typing",
-      local_save: "On-device save",
-      server_save: "Server save",
-      disconnect: "Disconnect exercised",
-      reconnect: "Reconnect exercised",
-      finalized: "Server-confirmed finalization",
-    };
-    for (const [key, label] of Object.entries(labels))
-      $("readiness-checks").append(
-        node(
-          "li",
-          `${label}: ${result.readiness?.[key] === true ? "Observed" : "Not yet confirmed"}`,
-        ),
-      );
-  }
-  const target = $("answer-set");
-  target.replaceChildren();
-  if (!questions.length)
-    target.append(
+async function loadList() {
+  const data = await api("/exams");
+  state.exams = data.exams || [];
+  state.role = data.identity?.role || "owner";
+  $("new-exam").hidden = !canManage();
+  $("signed-in").textContent = canManage()
+    ? "Private examiner access"
+    : "Examiner · view responses";
+  $("exam-list").replaceChildren();
+  $("history-list").replaceChildren();
+  const current = state.exams.filter(
+      (exam) => !exam.archived && exam.question_count > 0,
+    ),
+    history = state.exams.filter((exam) => exam.archived);
+  if (!current.length)
+    $("exam-list").append(
       node(
         "p",
-        "No question set is attached yet. A waiting registration has no answers to disclose.",
+        "No exams yet. Create your first exam to get a link for your students.",
         "empty",
       ),
     );
-  for (const q of questions) {
-    const answer = answerFor(q, answers),
-      item = node("article", undefined, "answer");
-    item.append(
-      node("h4", `Question ${q.number}`),
-      node("div", q.text, "answer-text"),
+  current.forEach((exam) => $("exam-list").append(examRow(exam)));
+  history.forEach((exam) => $("history-list").append(examRow(exam)));
+  $("history").hidden = !history.length;
+  try {
+    $("resume-draft").hidden = !canManage() || !localStorage.getItem(draftKey);
+  } catch {
+    $("resume-draft").hidden = true;
+  }
+}
+async function createLink() {
+  if (!canManage()) throw new Error("Only the owner can create an exam.");
+  if (!$("reading-progress").hidden)
+    throw new Error(
+      "Wait for the document to finish reading, or cancel reading, before creating the exam link.",
     );
-    if (q.instructions) item.append(node("p", q.instructions, "small"));
-    item.append(
+  const errors = validateQuestions(state.questions);
+  if (errors.length) throw new Error(errors.join("\n"));
+  const title = $("exam-title").value.trim(),
+    duration = Number($("exam-duration").value);
+  if (!title) throw new Error("Give your exam a title.");
+  if (!Number.isInteger(duration) || duration < 1 || duration > 360)
+    throw new Error("Choose a whole number of minutes from 1 to 360.");
+  if (!$("review-confirm").checked)
+    throw new Error(
+      "Check the questions and time allowed, then tick the review confirmation.",
+    );
+  const payload = {
+      source_text: state.originalSource || state.source || "",
+      source_name: state.sourceName || "Manual entry",
+      source_format: state.sourceFormat || "text",
+      title,
+      kind: "practice",
+      duration_minutes: duration,
+      instructions: $("exam-instructions").value,
+      questions: state.questions.map((q) => ({
+        number: q.number,
+        text: q.text,
+        instructions: q.instructions || "",
+      })),
+    },
+    signature = JSON.stringify(payload);
+  if (state.operation?.signature !== signature)
+    state.operation = {
+      signature,
+      body: { ...payload, operation_id: crypto.randomUUID() },
+    };
+  saveLocal();
+  $("create-view").inert = true;
+  try {
+    const result = await api("/exams/create", {
+      method: "POST",
+      body: JSON.stringify(state.operation.body),
+    });
+    if (!result.exam?.student_url)
+      throw new Error(
+        "The exam link has not been confirmed. Check My exams before trying again.",
+      );
+    state.dirty = false;
+    try {
+      localStorage.removeItem(draftKey);
+    } catch {}
+    showShare(result.exam);
+    message(
+      "Your exam is ready. Copy the link and send it to your students.",
+      "success",
+    );
+  } finally {
+    $("create-view").inert = false;
+  }
+}
+async function openResponses(exam) {
+  state.exam = exam;
+  state.detail = null;
+  $("student-response").hidden = true;
+  $("responses-title").textContent = exam.label || exam.title;
+  $("responses-summary").textContent =
+    "All students who use this link are collected here. Blank answers are kept with each submission.";
+  $("student-search").value = "";
+  $("response-link").hidden = !exam.student_url;
+  $("recovery-controls").hidden = !canManage() || exam.archived;
+  $("support-exam-description").textContent =
+    `Record reference: ${exam.id}. Independent backups run after answers are saved and do not hold up students.`;
+  view("responses");
+  await loadStudents();
+  await loadBackups().catch((error) =>
+    message(
+      `Responses are available. Backup delivery could not be checked: ${error.message}`,
+      "error",
+    ),
+  );
+}
+async function loadStudents(append = false) {
+  const request = (state.studentListRequest =
+    (state.studentListRequest || 0) + 1);
+  const id = state.exam.id,
+    params = new URLSearchParams({ search: $("student-search").value });
+  if (append && state.cursor) params.set("cursor", state.cursor);
+  const data = await api(`/exams/${encodeURIComponent(id)}/attempts?${params}`);
+  if (id !== state.exam.id || request !== state.studentListRequest) return;
+  state.cursor = data.next_cursor;
+  $("more-students").hidden = !state.cursor;
+  if (!append) $("student-list").replaceChildren();
+  if (!data.attempts?.length && !append)
+    $("student-list").append(
       node(
         "p",
-        `Revision ${answer?.revision ?? "none"} · Received ${formatTime(answer?.saved_at)} · Checksum ${answer?.hash || "none"}`,
-        "small",
+        "No responses yet. Share the exam link with your students.",
+        "empty",
       ),
-      node("h4", "Received answer"),
+    );
+  for (const attempt of data.attempts || []) {
+    const row = node("article", undefined, "student-row"),
+      info = node("div"),
+      status =
+        attempt.status === "finalized"
+          ? "Submitted"
+          : attempt.status === "waiting"
+            ? "Waiting"
+            : "In progress";
+    info.append(
+      node("h3", attempt.name),
+      node("p", attempt.email),
+      node(
+        "p",
+        `${status} · ${attempt.answered_count || 0} of ${attempt.question_count || state.exam.question_count || 0} answered`,
+      ),
+    );
+    const button = node("button", "View answers", "secondary");
+    button.addEventListener("click", () =>
+      busy(button, () => openStudent(attempt.id)),
+    );
+    row.append(info, button);
+    $("student-list").append(row);
+  }
+}
+const answerFor = (question, answers) =>
+  answers.find(
+    (answer) =>
+      answer.question_id === (question.id ?? question.number) ||
+      answer.question_number === question.number,
+  );
+async function openStudent(id) {
+  const request = (state.studentRequest = (state.studentRequest || 0) + 1);
+  const examId = state.exam.id;
+  const data = await api(`/attempts/${encodeURIComponent(id)}`);
+  if (request !== state.studentRequest || examId !== state.exam.id) return;
+  state.detail = data;
+  state.eventCursor = null;
+  $("student-name").textContent = data.attempt.name;
+  $("student-info").textContent =
+    `${data.attempt.email} · ${data.receipt ? "Submitted " + time(data.receipt.serverTime) : "In progress — received answers shown below"}`;
+  $("student-answers").replaceChildren();
+  for (const question of data.questions || []) {
+    const article = node("section", undefined, "answer"),
+      answer = answerFor(question, data.answers || []);
+    article.append(
+      node("h3", `Question ${question.number}`),
+      node("div", question.text, "question-text"),
+    );
+    if (question.instructions)
+      article.append(node("p", question.instructions, "small"));
+    article.append(
+      node("h3", "Answer"),
       node(
         "div",
-        answer?.text?.trim() ? answer.text : "[BLANK]",
+        answer?.text?.trim() ? answer.text : "No answer submitted.",
         "answer-text",
       ),
     );
-    target.append(item);
+    $("student-answers").append(article);
   }
-  $("late-drafts").hidden = !recovered_drafts.length;
-  $("recovered-set").replaceChildren();
-  for (const draft of recovered_drafts)
-    $("recovered-set").append(node("pre", JSON.stringify(draft, null, 2)));
-  $("recovery-reason").value = "";
-  $("recovery-confirm").checked = false;
-  $("recovery-result").hidden = true;
-  $("response").hidden = false;
-  $("response").focus();
-  await loadEvents();
-}
-
-async function loadEvents(append = false) {
-  const request = ++state.eventSerial,
-    serial = state.serial;
-  const params = new URLSearchParams({
-    search: $("event-search").value.trim(),
-  });
-  if (state.selected) params.set("attempt_id", state.selected);
-  if (append && state.eventCursor) params.set("cursor", state.eventCursor);
-  const result = await api(
-    `/exams/${encodeURIComponent(state.id)}/events?${params}`,
-  );
-  if (request !== state.eventSerial || serial !== state.serial) return;
-  state.eventCursor = result.next_cursor || null;
-  $("more-events").hidden = !state.eventCursor;
-  $("events-scope").textContent = state.selected
-    ? `Showing attempt ${state.selected}. Client times are untrusted observations; received times come from the server.`
-    : "Showing all examinees. Client times are untrusted observations; received times come from the server.";
-  if (!append) $("events").replaceChildren();
-  if (!append && !result.events?.length)
-    $("events").append(
-      node("li", "No recorded events match this view.", "empty"),
+  $("support-receipt").textContent = data.receipt
+    ? JSON.stringify(data.receipt, null, 2)
+    : "No server-confirmed submission receipt yet.";
+  $("recovered-drafts").replaceChildren();
+  if (data.recovered_drafts?.length) {
+    $("recovered-drafts").append(
+      node("h3", "Separate late / offline recovered writing"),
+      node(
+        "p",
+        "This writing does not replace the official submitted answer. It is retained for examiner review.",
+      ),
     );
-  for (const event of result.events || []) {
+    for (const draft of data.recovered_drafts)
+      $("recovered-drafts").append(node("pre", JSON.stringify(draft, null, 2)));
+  }
+  $("support-drawer").open = false;
+  $("recovery-result").hidden = true;
+  $("recovery-confirm").checked = false;
+  $("recovery-reason").value = "";
+  $("student-response").hidden = false;
+  await loadEvents();
+  $("student-response").focus();
+  $("student-response").scrollIntoView({ block: "start" });
+}
+async function loadEvents(append = false) {
+  if (!state.detail) return;
+  const id = state.detail.attempt.id,
+    params = new URLSearchParams();
+  if (append && state.eventCursor) params.set("cursor", state.eventCursor);
+  const data = await api(
+    `/attempts/${encodeURIComponent(id)}/events?${params}`,
+  );
+  if (id !== state.detail?.attempt.id) return;
+  state.eventCursor = data.next_cursor;
+  $("more-events").hidden = !state.eventCursor;
+  if (!append) $("support-events").replaceChildren();
+  for (const event of data.events || []) {
     const li = node("li");
     li.append(
-      node("strong", string(event.type).replaceAll("_", " ")),
       node(
-        "p",
-        `Attempt ${event.attempt_id || state.selected || "—"}${event.question_id != null ? ` · Question ${event.question_id}` : ""}`,
+        "strong",
+        `${String(event.type).replaceAll("_", " ")} · ${time(event.received_at)}`,
       ),
-      node(
-        "p",
-        `Server received ${formatTime(event.received_at)} · Client observed ${formatTime(event.client_time)}`,
-        "small",
-      ),
+      node("pre", JSON.stringify(event.details || {}, null, 2)),
     );
-    if (event.details != null)
-      li.append(
-        node(
-          "pre",
-          typeof event.details === "string"
-            ? event.details
-            : JSON.stringify(event.details, null, 2),
-        ),
-      );
-    $("events").append(li);
+    $("support-events").append(li);
   }
 }
-
 async function loadBackups(append = false) {
-  const serial = state.serial,
-    request = (state.backupSerial = (state.backupSerial || 0) + 1);
-  const params = new URLSearchParams({ status: $("backup-filter").value });
+  const id = state.exam.id,
+    params = new URLSearchParams();
   if (append && state.backupCursor) params.set("cursor", state.backupCursor);
-  const result = await api(
-    `/exams/${encodeURIComponent(state.id)}/backups?${params}`,
-  );
-  if (serial !== state.serial || request !== state.backupSerial) return;
-  state.backupCursor = result.next_cursor || null;
-  state.backupJobs = append
-    ? [...(state.backupJobs || []), ...(result.jobs || [])]
-    : result.jobs || [];
+  const data = await api(`/exams/${encodeURIComponent(id)}/backups?${params}`);
+  if (id !== state.exam.id) return;
+  state.backupCursor = data.next_cursor;
   $("more-backups").hidden = !state.backupCursor;
-  $("backup-summary").textContent = result.summary
-    ? `All backup jobs: ${result.summary.sent || 0} sent / completed · ${result.summary.pending || 0} pending · ${result.summary.processing || 0} processing · ${result.summary.failed || 0} failed. ${state.backupJobs.length} jobs shown in this view${state.backupCursor ? "; more below" : ""}.`
-    : `${state.backupJobs.length} backup jobs shown. Status is confirmed by the delivery service.`;
-  const configuration = node("dl", undefined, "configuration");
-  for (const [key, value] of Object.entries(result.configuration || {})) {
-    const row = node("div");
-    row.append(
-      node("dt", key.replaceAll("_", " ")),
-      node(
-        "dd",
-        typeof value === "boolean"
-          ? value
-            ? "Configured"
-            : "Not configured — action required"
-          : typeof value === "object"
-            ? JSON.stringify(value)
-            : value,
-      ),
-    );
-    configuration.append(row);
-  }
-  $("backup-configuration").replaceChildren(configuration);
-  const target = $("backup-jobs");
-  target.replaceChildren();
-  if (!state.backupJobs.length)
-    target.append(
-      node(
-        "p",
-        "No backup jobs in this view. Configuration alone is not proof of delivered copies.",
-        "empty",
-      ),
-    );
-  for (const job of state.backupJobs) {
-    const row = node("div", undefined, "job"),
-      text = node("div");
-    text.append(
-      node("p", `${job.target} · ${job.status}`),
-      node(
-        "p",
-        `Attempt ${job.attempt_id || "—"} · ${job.attempts ?? 0} delivery attempts`,
-        "small",
-      ),
-    );
-    if (job.reference) {
-      const reference = node("p", undefined, "small");
-      try {
-        const url = new URL(job.reference);
-        if (
-          url.protocol === "https:" &&
-          url.hostname === "docs.google.com" &&
-          url.pathname.startsWith("/spreadsheets/")
-        ) {
-          const link = node("a", "Open private Google Sheet");
-          link.href = url.href;
-          link.target = "_blank";
-          link.rel = "noopener noreferrer";
-          reference.append(link);
-        } else reference.textContent = `Delivery reference: ${job.reference}`;
-      } catch {
-        reference.textContent = `Delivery reference: ${job.reference}`;
-      }
-      text.append(reference);
-    }
-    if (job.last_error)
-      text.append(node("p", `Last error: ${job.last_error}`, "small"));
-    if (job.next_attempt_at)
-      text.append(
-        node("p", `Next retry ${formatTime(job.next_attempt_at)}`, "small"),
-      );
-    row.append(text);
-    if (
-      canManage() &&
-      !["sent", "complete", "completed", "succeeded", "delivered"].includes(
-        job.status,
-      )
-    ) {
-      const retry = node("button", "Retry backup", "secondary");
-      retry.type = "button";
+  const counts = data.summary || {};
+  $("backup-status").replaceChildren(
+    node(
+      "p",
+      `${counts.sent || 0} completed · ${counts.pending || 0} pending · ${counts.failed || 0} need attention`,
+    ),
+    node("pre", JSON.stringify(data.configuration || {}, null, 2)),
+  );
+  if (!append) $("backup-list").replaceChildren();
+  for (const job of data.jobs || []) {
+    const item = node("div", undefined, "backup-job");
+    item.append(node("p", `${job.target} · ${job.status}`));
+    if (job.reference) item.append(node("p", `Reference: ${job.reference}`));
+    if (job.last_error) item.append(node("p", job.last_error));
+    if (canManage() && job.status !== "sent") {
+      const retry = node("button", "Retry delivery", "secondary");
       retry.addEventListener("click", () =>
-        action(retry, async () => {
+        busy(retry, async () => {
           await api(`/jobs/${encodeURIComponent(job.id)}/retry`, {
             method: "POST",
             body: "{}",
           });
-          notice(
-            "Retry queued. Delivery is confirmed only when its status changes to sent or complete.",
-          );
           await loadBackups();
+          message(
+            "Delivery retry requested. Its status will confirm when it is complete.",
+          );
         }),
       );
-      row.append(retry);
+      item.append(retry);
     }
-    target.append(row);
+    $("backup-list").append(item);
   }
 }
-
+function download(content, name, type = "text/plain;charset=utf-8") {
+  const url = URL.createObjectURL(new Blob([content], { type })),
+    a = node("a");
+  a.href = url;
+  a.download = name;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 function bind() {
-  $("exam").addEventListener("change", async () => {
-    if (
-      state.dirty &&
-      !confirm(
-        "Leave this unsaved draft? Save it first to keep the latest question edits.",
-      )
-    ) {
-      $("exam").value = state.id;
-      return;
-    }
-    const previousId = state.id;
-    state.id = $("exam").value;
-    try {
-      await loadExam();
-      loadedNotice(`${state.exam.label || "Examination"} records loaded.`);
-    } catch (error) {
-      state.id = previousId;
-      $("exam").value = previousId;
-      notice(error.message, "error");
-    }
-  });
-  $("add-question").addEventListener("click", () => {
-    state.questions.push({
-      number: state.questions.length + 1,
-      text: "",
-      instructions: "",
-    });
-    markDirty();
-    renderQuestions();
-    $(`question-${state.questions.length - 1}`).focus();
-  });
-  $("save-draft").addEventListener("click", () =>
-    action($("save-draft"), saveDraft),
-  );
-  $("download-draft").addEventListener("click", () =>
-    download(
-      JSON.stringify(
-        { label: state.exam.label, questions: state.questions },
-        null,
-        2,
-      ),
-      `private-question-draft-${state.id}.json`,
-      "application/json",
-    ),
-  );
-  $("parse").addEventListener("click", () => {
-    try {
-      replaceQuestions(questionsFromText($("paste").value));
-    } catch (error) {
-      errorList(error.message.split("\n"));
-    }
-  });
-  $("question-file").addEventListener("change", () =>
-    action($("parse"), async () => {
-      const file = $("question-file").files?.[0];
-      if (!file) return;
-      if (!/\.csv$/i.test(file.name))
-        throw new Error(
-          "Use a CSV file. DOCX and XLSX imports are not supported.",
-        );
-      if (file.size > 2 * 1024 * 1024)
-        throw new Error(
-          "CSV is larger than 2 MB. Split the file or use manual entry; no text will be truncated.",
-        );
-      replaceQuestions(questionsFromCSV(await file.text()));
-      $("question-file").value = "";
-    }),
-  );
-  $("template").addEventListener("click", () =>
-    download(
-      CSV_TEMPLATE,
-      "constitutional-law-questions-template.csv",
-      "text/csv;charset=utf-8",
-    ),
-  );
-  for (const input of document.querySelectorAll("[name=end-mode]"))
-    input.addEventListener("change", () => {
-      const duration = input.value === "duration" && input.checked;
-      $("end-fields").hidden = duration;
-      $("duration-field").hidden = !duration;
-      $("end-date").required = $("end-time").required = !duration;
-      $("duration").required = duration;
-      $("schedule-review").hidden = true;
-      state.review = null;
-    });
-  $("schedule-form").addEventListener("input", () => {
-    state.review = null;
-    $("schedule-review").hidden = true;
-  });
-  $("schedule-form").addEventListener("submit", reviewSchedule);
-  $("schedule-confirm").addEventListener("change", () => {
-    $("schedule-save").disabled = !$("schedule-confirm").checked;
-  });
-  $("schedule-back").addEventListener("click", () => {
-    state.review = null;
-    $("schedule-review").hidden = true;
-    $("start-date").focus();
-  });
-  $("schedule-save").addEventListener("click", () =>
-    action($("schedule-save"), async () => {
-      if (!state.review || !$("schedule-confirm").checked)
-        throw new Error(
-          "Review and confirm the questions and exact PHT times first.",
-        );
-      if (
-        state.dirty ||
-        state.review.version !== state.version ||
-        state.review.questions !== JSON.stringify(state.questions)
-      )
-        throw new Error(
-          "The questions changed. Review the current draft again before scheduling.",
-        );
-      if (Date.parse(state.review.starts_at) <= Date.now())
-        throw new Error(
-          "The opening time has passed. Choose a future opening and review the schedule again.",
-        );
-      const body = {
-        starts_at: state.review.starts_at,
-        ends_at: state.review.ends_at,
-        expected_draft_version: state.version,
-        confirmed: true,
-        reason: $("schedule-reason").value.trim(),
-      };
-      if (state.exam.starts_at && !body.reason)
-        throw new Error(
-          "Enter an examiner explanation for changing the scheduled examination.",
-        );
-      await api(`/exams/${encodeURIComponent(state.id)}/schedule`, {
-        method: "POST",
-        body: JSON.stringify(body),
+  $("new-exam").onclick = () => {
+    if (state.dirty && resumeDraft()) return;
+    startCreate();
+  };
+  $("resume-draft").onclick = resumeDraft;
+  for (const id of ["back-list", "share-back", "responses-back"])
+    $(id).onclick = () =>
+      busy($(id), async () => {
+        await loadList();
+        view("list");
+        message("");
       });
-      await loadExam();
-      loadedNotice(
-        "Scheduled. The confirmed questions open automatically at the exact opening time. Share the unchanged student link.",
-        "success",
-      );
-    }),
-  );
-  $("search-form").addEventListener("submit", (event) => {
+  $("exam-file").onchange = () => readFile($("exam-file").files[0]);
+  $("cancel-reading").onclick = () => state.readController?.abort();
+  const drop = $("upload-area");
+  drop.addEventListener("dragover", (event) => {
     event.preventDefault();
-    action($("search-form").querySelector("button"), () => loadAttempts());
+    drop.classList.add("dragover");
   });
-  $("refresh-attempts").addEventListener("click", () =>
-    action($("refresh-attempts"), () => loadAttempts()),
-  );
-  $("more-attempts").addEventListener("click", () =>
-    action($("more-attempts"), () => loadAttempts(true)),
-  );
-  $("response-close").addEventListener("click", () => {
-    $("response").hidden = true;
-    state.selected = null;
+  drop.addEventListener("dragleave", () => drop.classList.remove("dragover"));
+  drop.addEventListener("drop", (event) => {
+    event.preventDefault();
+    drop.classList.remove("dragover");
+    readFile(event.dataTransfer.files[0]);
+  });
+  $("read-paste").onclick = () =>
+    busy($("read-paste"), async () => {
+      acceptExtracted(examFromText($("paste-text").value));
+    });
+  $("read-original").onclick = () =>
+    busy($("read-original"), async () => {
+      acceptExtracted(examFromText($("original-text").value), {
+        keepOriginal: true,
+      });
+    });
+  $("original-text").oninput = () => {
+    state.source = $("original-text").value;
+    persist();
+  };
+  $("download-original").onclick = () =>
+    download(
+      state.originalSource || state.source,
+      "original-question-paper.txt",
+    );
+  $("manual-question").onclick = $("add-question").onclick = addQuestion;
+  for (const id of ["exam-title", "exam-duration", "exam-instructions"])
+    $(id).addEventListener("input", persist);
+  $("create-link").onclick = () => busy($("create-link"), createLink);
+  $("copy-link").onclick = () =>
+    busy($("copy-link"), () => copyLink(state.exam));
+  $("response-link").onclick = () =>
+    busy($("response-link"), () => copyLink(state.exam));
+  $("share-responses").onclick = () =>
+    busy($("share-responses"), () => openResponses(state.exam));
+  $("search-students").onclick = () =>
+    busy($("search-students"), () => loadStudents());
+  $("refresh-students").onclick = () =>
+    busy($("refresh-students"), () => loadStudents());
+  $("student-search").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") $("search-students").click();
+  });
+  $("more-students").onclick = () =>
+    busy($("more-students"), () => loadStudents(true));
+  $("close-response").onclick = () => {
+    $("student-response").hidden = true;
     state.detail = null;
-    loadEvents().catch((error) => notice(error.message, "error"));
-  });
-  $("student-report").addEventListener("click", () => {
-    if (state.detail)
-      download(
-        studentReport(state.detail),
-        `exam-response-${state.selected}.txt`,
-      );
-  });
-  $("receipt-download").addEventListener("click", () => {
-    if (state.detail?.receipt)
-      download(
-        receiptText(state.detail.receipt),
-        `exam-receipt-${state.selected}.json`,
-        "application/json",
-      );
-  });
-  $("recover").addEventListener("click", () =>
-    action($("recover"), async () => {
+  };
+  $("more-events").onclick = () =>
+    busy($("more-events"), () => loadEvents(true));
+  $("refresh-backups").onclick = () =>
+    busy($("refresh-backups"), () => loadBackups());
+  $("more-backups").onclick = () =>
+    busy($("more-backups"), () => loadBackups(true));
+  $("recover-student").onclick = () =>
+    busy($("recover-student"), async () => {
       const reason = $("recovery-reason").value.trim();
       if (!reason || !$("recovery-confirm").checked)
         throw new Error(
-          "Verify identity, enter the recovery reason and check the authorization box.",
+          "Verify identity, enter a reason and check the recovery confirmation.",
         );
       const result = await api(
-        `/attempts/${encodeURIComponent(state.selected)}/recovery`,
+        `/attempts/${encodeURIComponent(state.detail.attempt.id)}/recovery`,
         { method: "POST", body: JSON.stringify({ reason, confirmed: true }) },
       );
-      if (!result.recovery_url)
-        throw new Error("The server did not issue a recovery link.");
       $("recovery-result").hidden = false;
       $("recovery-result").textContent =
-        `Private, one-use recovery link (expires ${formatTime(result.expires_at)}):\n${result.recovery_url}\nThe original attempt deadline remains unchanged.`;
+        `Share this one-use link privately with the verified student only. Expires ${time(result.expires_at)}.\n${result.recovery_url}`;
       $("recovery-confirm").checked = false;
-      notice(
-        "Recovery authorization recorded. Share the one-use link privately only with the verified student.",
-      );
-    }),
-  );
-  $("practice-reset").addEventListener("click", () =>
-    action($("practice-reset"), async () => {
-      const reason = $("recovery-reason").value.trim();
-      if (!isPractice() || !reason || !$("recovery-confirm").checked)
-        throw new Error(
-          "Verify identity, enter a practice reset reason and check the authorization box.",
-        );
-      const result = await api(
-        `/attempts/${encodeURIComponent(state.selected)}/practice-reset`,
-        { method: "POST", body: JSON.stringify({ reason, confirmed: true }) },
-      );
-      if (result.reset !== true)
-        throw new Error("The server did not confirm a practice reset.");
-      $("recovery-confirm").checked = false;
-      notice(
-        "Practice reset authorized and recorded. The student may open the practice link again for a new five-minute attempt. This old record remains preserved.",
-        "success",
-      );
-      await loadAttempts();
-    }),
-  );
-  $("event-search-form").addEventListener("submit", (event) => {
-    event.preventDefault();
-    action($("event-search-form").querySelector("button"), () => loadEvents());
-  });
-  $("all-events").addEventListener("click", () => {
-    state.selected = null;
-    action($("all-events"), () => loadEvents());
-  });
-  $("more-events").addEventListener("click", () =>
-    action($("more-events"), () => loadEvents(true)),
-  );
-  $("refresh-backups").addEventListener("click", () =>
-    action($("refresh-backups"), loadBackups),
-  );
-  $("backup-filter").addEventListener("change", () => {
-    loadBackups().catch((error) => notice(error.message, "error"));
-  });
-  $("more-backups").addEventListener("click", () =>
-    action($("more-backups"), () => loadBackups(true)),
-  );
-  $("export").addEventListener("click", () =>
-    action($("export"), async () => {
+    });
+  $("download-all").onclick = () =>
+    busy($("download-all"), async () => {
       const response = await fetch(
-        `/api/admin/exams/${encodeURIComponent(state.id)}/export.csv`,
+        `/api/admin/exams/${encodeURIComponent(state.exam.id)}/export.csv`,
         { credentials: "same-origin", cache: "no-store" },
       );
-      if (!response.ok)
+      if (
+        !response.ok ||
+        !response.headers.get("Content-Type")?.includes("text/csv")
+      )
         throw new Error(
-          "The private export could not be downloaded. Check your examiner access and try again.",
-        );
-      if (!response.headers.get("Content-Type")?.includes("text/csv"))
-        throw new Error(
-          "The server did not return a CSV export. Nothing was downloaded.",
+          "The answer download could not be confirmed. Please try again.",
         );
       download(
         await response.text(),
-        `${state.id}-all-responses.csv`,
+        "exam-answers.csv",
         "text/csv;charset=utf-8",
       );
-    }),
-  );
-  $("control-save").addEventListener("click", () =>
-    action($("control-save"), async () => {
-      const actionName = $("control-action").value,
-        reason = $("control-reason").value.trim();
-      if (!actionName || !reason || !$("control-confirm").checked)
-        throw new Error(
-          "Choose an action, give an explanation and check the authorization box.",
-        );
-      await api(`/exams/${encodeURIComponent(state.id)}/control`, {
-        method: "POST",
-        body: JSON.stringify({ action: actionName, reason, confirmed: true }),
-      });
-      $("control-confirm").checked = false;
-      $("control-reason").value = "";
-      await loadExam();
-      loadedNotice(
-        "The examiner action was recorded. Existing answers and receipts remain preserved.",
+    });
+  $("download-student").onclick = () => {
+    const detail = state.detail,
+      lines = [
+        state.exam.label || state.exam.title,
+        detail.attempt.name,
+        detail.attempt.email,
+        detail.receipt
+          ? "Submitted " + time(detail.receipt.serverTime)
+          : "Received answers — not yet submitted",
+        "",
+      ];
+    for (const question of detail.questions || []) {
+      const answer = answerFor(question, detail.answers || []);
+      lines.push(
+        `QUESTION ${question.number}`,
+        question.text,
+        "",
+        answer?.text || "[BLANK]",
+        "",
       );
-    }),
-  );
-  $("admission-save").addEventListener("click", () =>
-    action($("admission-save"), async () => {
-      const actionName = $("admission-action").value,
-        reason = $("admission-reason").value.trim();
-      if (!actionName || !reason || !$("admission-confirm").checked)
-        throw new Error(
-          "Choose a student-link action, give an explanation and check the authorization box.",
-        );
-      const signature = JSON.stringify({ id: state.id, actionName, reason });
-      if (state.admissionRequest?.signature !== signature)
-        state.admissionRequest = {
-          signature,
-          body: {
-            action: actionName,
-            reason,
-            confirmed: true,
-            operation_id: crypto.randomUUID(),
-          },
-        };
-      await api(`/exams/${encodeURIComponent(state.id)}/access-link`, {
-        method: "POST",
-        body: JSON.stringify(state.admissionRequest.body),
-      });
-      state.admissionRequest = null;
-      $("admission-confirm").checked = false;
-      $("admission-reason").value = "";
-      await loadExam();
-      loadedNotice(
-        "Student-link action recorded. Use the current student link in Schedule. Existing attempts continue with their original answers and deadlines.",
+    }
+    if (detail.recovered_drafts?.length)
+      lines.push(
+        "SEPARATE LATE / OFFLINE RECOVERED WRITING",
+        JSON.stringify(detail.recovered_drafts, null, 2),
       );
-    }),
-  );
-  $("next-exam-create").addEventListener("click", () =>
-    action($("next-exam-create"), async () => {
-      const label = $("next-exam-label").value.trim(),
-        reason = $("next-exam-reason").value.trim();
-      if (!label || !reason || !$("next-exam-confirm").checked)
-        throw new Error(
-          "Enter the next examination title and archive reason, then check the authorization box.",
-        );
-      const signature = JSON.stringify({ label, reason, id: state.exam.id });
-      if (state.nextRequest?.signature !== signature)
-        state.nextRequest = {
-          signature,
-          body: {
-            label,
-            reason,
-            confirmed: true,
-            expected_current_exam_id: state.exam.id,
-            operation_id: crypto.randomUUID(),
-          },
-        };
-      const result = await api("/exams", {
-        method: "POST",
-        body: JSON.stringify(state.nextRequest.body),
-      });
-      if (!result.exam?.id)
-        throw new Error("The server did not confirm a new examination.");
-      const list = await api("/exams");
-      populateExams(list.exams || []);
-      state.id = result.exam.id;
-      $("exam").value = state.id;
-      state.nextRequest = null;
-      $("next-exam-confirm").checked = false;
-      $("next-exam-reason").value = "";
-      $("next-exam-label").value = "";
-      await loadExam();
-      loadedNotice(
-        "The prior examination is preserved in private history. The new official examination is empty and unavailable until you upload questions and schedule it. Its student link is unchanged.",
-        "success",
-      );
-    }),
-  );
+    download(lines.join("\n"), "student-answers.txt");
+  };
   window.addEventListener("beforeunload", (event) => {
     if (state.dirty) {
       event.preventDefault();
       event.returnValue = "";
     }
   });
-  setInterval(updateCountdownExample, 1000);
   setInterval(() => {
-    if (!document.hidden && !state.attemptCursor && $("desk").hidden === false)
-      loadAttempts().catch((error) =>
-        notice(
-          `Live refresh interrupted. ${error.message} Use Refresh to try again.`,
-          "error",
-        ),
-      );
+    if (!document.hidden && !$("responses-view").hidden && !state.cursor)
+      loadStudents().catch(() => {});
   }, 20000);
 }
-
-function populateExams(exams) {
-  if (!exams.length) return;
-  $("exam").replaceChildren();
-  for (const exam of exams) {
-    const option = node(
-      "option",
-      `${exam.label || exam.title || exam.id}${exam.archived ? " (Archived)" : ""}`,
-    );
-    option.value = exam.id;
-    $("exam").append(option);
-  }
-}
-
 async function init() {
   bind();
   try {
-    const result = await api("/exams");
-    state.role = result.identity?.role;
-    $("identity").textContent =
-      `${typeof result.identity === "object" ? result.identity.email || "Authorized examiner" : result.identity || "Authorized examiner"}${canManage() ? "" : " · Examiner · read only"}`;
-    const exams = result.exams || [];
-    if (exams.length) {
-      populateExams(exams);
-      state.id = (
-        exams.find((exam) => exam.kind === "official" && !exam.archived) ||
-        exams[0]
-      ).id;
-      $("exam").value = state.id;
-    }
-    await loadExam();
-    $("desk").hidden = false;
-    loadedNotice(
-      "Private access confirmed. Server saves and delivery statuses are shown below.",
-    );
+    await loadList();
+    view("list");
+    message("");
   } catch (error) {
-    $("desk").hidden = true;
-    notice(
-      error.status === 401 || error.status === 403
-        ? "Examiner sign-in is required. Open this private address through the configured staff sign-in and refresh. Student name or email never grants examiner access."
-        : `Examiner desk is not ready. ${error.message} Private access and the required server resources must be configured before use.`,
+    message(
+      `Your examiner desk is not available. ${error.message} Sign in through the private examiner address, or contact the site owner.`,
       "error",
     );
   }
 }
-
 init();

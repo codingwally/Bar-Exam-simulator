@@ -5,6 +5,7 @@ const DB_NOW = "CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)";
 const COOKIE_DAYS = 180;
 const MAX_ANSWER = 200000;
 const MAX_BODY = 1500000;
+const EMPTY_HASH = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 const EVENT_TYPES = new Set([
   "consent",
   "session_start",
@@ -46,7 +47,7 @@ const securityHeaders = {
   "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
   "X-Frame-Options": "DENY",
   "Content-Security-Policy":
-    "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+    "default-src 'self'; script-src 'self'; worker-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
   "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
 };
 class ApiError extends Error {
@@ -159,6 +160,7 @@ function sameOrigin(request) {
   }
 }
 const cookieName = (slug) => `__Host-dd_exam_${slug}`;
+const PLATFORM_COOKIE = "__Host-dd_exam_platform";
 function readCookie(request, name) {
   const pair = (request.headers.get("Cookie") || "")
     .split(";")
@@ -168,10 +170,46 @@ function readCookie(request, name) {
 }
 const setCookie = (slug, value) =>
   `${cookieName(slug)}=${value}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${COOKIE_DAYS * 86400}`;
+const legacyAlias = (slug) => ["practice", "official"].includes(slug);
+async function platformBrowser(db, request) {
+  const value = readCookie(request, PLATFORM_COOKIE);
+  if (!/^[a-f0-9]{64}$/.test(value)) return null;
+  return one(db, `SELECT token_hash FROM platform_browsers WHERE token_hash=? AND expires_at>${DB_NOW}`, await hash(value));
+}
+async function browserSession(request, env) {
+  if (request.method !== "POST") fail(405, "method_not_allowed", "Please open the examination page.");
+  // Client identifiers never select or recover a platform credential. Only an
+  // existing HttpOnly cookie can resume this server-random browser session.
+  await body(request);
+  if (await platformBrowser(env.EXAM_DB, request)) return json({ ready: true, serverTime: now() });
+  const time = now(), window = Math.floor(time / 60000) * 60000;
+  const key = await hash(`browser:${request.headers.get("CF-Connecting-IP") || "unidentified-network"}:${window}`);
+  await run(env.EXAM_DB, "INSERT INTO registration_windows(key_hash,window_start,requests) VALUES(?,?,1) ON CONFLICT(key_hash) DO UPDATE SET requests=requests+1", key, window);
+  const limit = Math.max(600, Math.min(10000, Number(env.REGISTRATION_BURST_LIMIT) || 600));
+  if ((await one(env.EXAM_DB, "SELECT requests FROM registration_windows WHERE key_hash=?", key)).requests > limit)
+    fail(429, "registration_rate_limited", "Many browsers connected from this network. Please wait one minute and retry.");
+  const raw = token();
+  await run(env.EXAM_DB, "INSERT INTO platform_browsers(token_hash,expires_at) VALUES(?,?)", await hash(raw), time + COOKIE_DAYS * 86400000);
+  return json({ ready: true, serverTime: time }, 201, {
+    "Set-Cookie": `${PLATFORM_COOKIE}=${raw}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${COOKIE_DAYS * 86400}`,
+  });
+}
+async function grantAttempt(db, browser, exam, attempt, rawCredential) {
+  if (!browser) return { "Set-Cookie": setCookie(exam.slug, rawCredential) };
+  // The scoped credential check and mapping change are one SQL statement. A
+  // revoked registration cannot race examiner recovery and reattach itself.
+  const result = await run(db, `INSERT INTO platform_exam_sessions(browser_token_hash,exam_id,attempt_id) SELECT ?,a.exam_id,a.id FROM attempts a JOIN sessions s ON s.attempt_id=a.id JOIN platform_browsers b ON b.token_hash=? WHERE a.id=? AND s.token_hash=? AND s.expires_at>${DB_NOW} AND b.expires_at>${DB_NOW} ON CONFLICT(browser_token_hash,exam_id) DO UPDATE SET attempt_id=excluded.attempt_id`, browser.token_hash, browser.token_hash, attempt.id, await hash(rawCredential));
+  if (!changes(result)) fail(401, "recovery_required", "This registration has been replaced or expired. Contact the examiner; your saved answers are preserved.");
+  return {};
+}
+const validStudentSlug = (value) => typeof value === "string" && /^[a-z0-9][a-z0-9-]{0,79}$/.test(value);
+const isArchived = (exam) => exam.archived_at != null;
+const studentPath = (exam) => isArchived(exam) ? null :
+  `${["practice", "official"].includes(exam.slug) ? `/${exam.slug}` : `/exam/${encodeURIComponent(exam.slug)}`}${exam.access_key ? `?access=${encodeURIComponent(exam.access_key)}` : ""}`;
 function examStatus(exam, time = now()) {
   if (exam.control === "cancelled") return "CANCELLED";
   if (exam.control === "paused") return "PAUSED";
-  if (exam.kind === "practice") return "OPEN";
+  if (exam.kind === "practice") return exam.published_version ? "OPEN" : "UNCONFIGURED";
   if (!exam.published_version || !exam.starts_at || !exam.ends_at)
     return "UNCONFIGURED";
   if (time < exam.starts_at) return "SCHEDULED";
@@ -182,31 +220,38 @@ const publicExam = (exam) => ({
   id: exam.id,
   slug: exam.slug,
   title: exam.title,
+  kind: exam.kind,
+  durationMinutes: exam.duration_minutes,
+  instructions: exam.instructions,
   status: examStatus(exam),
   startAt: exam.starts_at,
   endAt: exam.ends_at,
   questionCount: exam.question_count || 0,
 });
 async function getExam(db, identifier, bySlug = false) {
-  if (bySlug && !["practice", "official"].includes(identifier))
+  if (bySlug && !validStudentSlug(identifier))
     fail(404, "exam_not_found", "This examination link does not exist.");
   const exam = await one(
     db,
-    `SELECT e.*, (SELECT COUNT(*) FROM questions q WHERE q.exam_id=e.id AND q.version=e.published_version) question_count FROM exams e WHERE ${bySlug ? "slug" : "id"}=?`,
+    `SELECT e.*, (SELECT COUNT(*) FROM questions q WHERE q.exam_id=e.id AND q.version=e.published_version) question_count FROM exams e WHERE ${bySlug ? "slug=? AND archived_at IS NULL" : "id=?"}`,
     identifier,
   );
-  if (!exam)
+  if (!exam && bySlug && ["practice", "official"].includes(identifier))
     fail(
       503,
       "not_initialized",
       "The examination service is being prepared. Please contact the examiner.",
     );
+  if (!exam) fail(404, "exam_not_found", "This examination link does not exist or is no longer available.");
   return exam;
 }
 async function session(db, request, exam, required = false) {
-  const value = readCookie(request, cookieName(exam.slug));
+  const browser = await platformBrowser(db, request),
+    value = legacyAlias(exam.slug) ? readCookie(request, cookieName(exam.slug)) : "";
   let attempt = null;
-  if (value && /^[a-f0-9]{64}$/.test(value))
+  if (browser)
+    attempt = await one(db, "SELECT a.* FROM platform_exam_sessions s JOIN attempts a ON a.id=s.attempt_id WHERE s.browser_token_hash=? AND s.exam_id=? AND a.exam_id=s.exam_id", browser.token_hash, exam.id);
+  if (!attempt && value && /^[a-f0-9]{64}$/.test(value))
     attempt = await one(
       db,
       `SELECT a.* FROM sessions s JOIN attempts a ON a.id=s.attempt_id WHERE s.token_hash=? AND a.exam_id=? AND s.expires_at>${DB_NOW}`,
@@ -313,26 +358,15 @@ async function enqueue(db, attemptId, target, kind, dedupeKey) {
     kind,
   );
 }
-async function ensureFinalJobs(db, attempt) {
-  const exam = await one(
-    db,
-    "SELECT kind FROM exams WHERE id=?",
-    attempt.exam_id,
-  );
-  for (const target of [
-    "r2",
-    "sheets",
-    ...(exam.kind === "official" ? ["owner_email", "student_receipt"] : []),
-  ])
-    await enqueue(
-      db,
-      attempt.id,
-      target,
-      "final",
-      `final:${attempt.id}:${target}`,
-    );
+async function ensureFinalJobs(db, attempts, env) {
+  const jobs = (Array.isArray(attempts) ? attempts : [attempts]).flatMap(attempt =>
+    ["r2", "sheets", "owner_email", "student_receipt"].map(target => ({ id: id(), attemptId: attempt.id, target })));
+  if (!jobs.length) return;
+  // One statement keeps reconciliation inside the Free D1 invocation budget.
+  // R2 is optional for practice, while official papers retain the stricter copy.
+  await run(db, `INSERT OR IGNORE INTO outbox(id,target,attempt_id,dedupe_key,kind,next_attempt_at,created_at) SELECT json_extract(j.value,'$.id'),json_extract(j.value,'$.target'),a.id,'final:'||a.id||':'||json_extract(j.value,'$.target'),'final',${DB_NOW},${DB_NOW} FROM json_each(?) j JOIN attempts a ON a.id=json_extract(j.value,'$.attemptId') JOIN exams e ON e.id=a.exam_id WHERE a.status='finalized' AND (json_extract(j.value,'$.target')!='r2' OR e.kind='official' OR ?=1) AND (json_extract(j.value,'$.target')!='student_receipt' OR e.kind='official')`, JSON.stringify(jobs), env.EXAM_BACKUPS ? 1 : 0);
 }
-async function finish(db, attempt, kind = "deadline", editorId = null) {
+async function finish(db, attempt, kind = "deadline", editorId = null, env) {
   const receiptId = id();
   // D1 batches are transactions. Closing the attempt and copying every question slot
   // happen together, preventing a save from changing the official answer set afterward.
@@ -353,7 +387,7 @@ async function finish(db, attempt, kind = "deadline", editorId = null) {
     ),
     stmt(
       db,
-      `INSERT OR IGNORE INTO final_answers(attempt_id,question_id,revision,text,hash,saved_at) SELECT a.id,q.id,COALESCE(ans.revision,0),COALESCE(ans.text,''),COALESCE(ans.hash,''),ans.saved_at FROM attempts a JOIN questions q ON q.exam_id=a.exam_id AND q.version=a.version LEFT JOIN answers ans ON ans.attempt_id=a.id AND ans.question_id=q.id WHERE a.id=? AND a.status='finalized'`,
+      `INSERT OR IGNORE INTO final_answers(attempt_id,question_id,revision,text,hash,saved_at) SELECT a.id,q.id,COALESCE(ans.revision,0),COALESCE(ans.text,''),COALESCE(ans.hash,'${EMPTY_HASH}'),ans.saved_at FROM attempts a JOIN questions q ON q.exam_id=a.exam_id AND q.version=a.version LEFT JOIN answers ans ON ans.attempt_id=a.id AND ans.question_id=q.id WHERE a.id=? AND a.status='finalized'`,
       attempt.id,
     ),
   ]);
@@ -373,10 +407,31 @@ async function finish(db, attempt, kind = "deadline", editorId = null) {
     frozen.filter((x) => x.text.trim()).length,
     attempt.id,
   );
-  await ensureFinalJobs(db, attempt);
+  await ensureFinalJobs(db, attempt, env);
   return attempt;
 }
-async function refreshAttempt(db, attempt, exam) {
+async function finishMaintenanceBatch(db, attempts, env) {
+  if (!attempts.length) return;
+  const identifiers = JSON.stringify(attempts.map(attempt => ({ attemptId: attempt.id, receiptId: id() })));
+  // Freeze every due answer set in one transaction. The SQL clock, rather than
+  // a previously read browser or Worker clock, decides whether a paper is due.
+  await db.batch([
+    stmt(db, `UPDATE attempts SET status='finalized',finalized_at=${DB_NOW},finalization_type='deadline' WHERE id IN (SELECT json_extract(value,'$.attemptId') FROM json_each(?)) AND status IN ('active','waiting') AND deadline_at<=${DB_NOW}`, identifiers),
+    stmt(db, `INSERT OR IGNORE INTO submissions(attempt_id,receipt_id,created_at) SELECT a.id,json_extract(j.value,'$.receiptId'),${DB_NOW} FROM json_each(?) j JOIN attempts a ON a.id=json_extract(j.value,'$.attemptId') WHERE a.status='finalized'`, identifiers),
+    stmt(db, `INSERT OR IGNORE INTO final_answers(attempt_id,question_id,revision,text,hash,saved_at) SELECT a.id,q.id,COALESCE(ans.revision,0),COALESCE(ans.text,''),COALESCE(ans.hash,'${EMPTY_HASH}'),ans.saved_at FROM attempts a JOIN questions q ON q.exam_id=a.exam_id AND q.version=a.version LEFT JOIN answers ans ON ans.attempt_id=a.id AND ans.question_id=q.id WHERE a.id IN (SELECT json_extract(value,'$.attemptId') FROM json_each(?)) AND a.status='finalized'`, identifiers),
+  ]);
+  const frozen = await all(db, "SELECT f.attempt_id,f.question_id,f.revision,f.text,f.hash,f.saved_at FROM final_answers f JOIN questions q ON q.id=f.question_id WHERE f.attempt_id IN (SELECT json_extract(value,'$.attemptId') FROM json_each(?)) ORDER BY f.attempt_id,q.number", identifiers);
+  const groups = new Map();
+  for (const { attempt_id, ...answer } of frozen) {
+    if (!groups.has(attempt_id)) groups.set(attempt_id, []);
+    groups.get(attempt_id).push(answer);
+  }
+  const summaries = await Promise.all([...groups].map(async ([attemptId, answers]) => ({ attemptId, checksum: await hash(JSON.stringify(answers)), questionCount: answers.length, answeredCount: answers.filter(answer => answer.text.trim()).length })));
+  if (summaries.length)
+    await run(db, "WITH summaries AS (SELECT json_extract(value,'$.attemptId') attempt_id,json_extract(value,'$.checksum') checksum,json_extract(value,'$.questionCount') question_count,json_extract(value,'$.answeredCount') answered_count FROM json_each(?)) UPDATE submissions SET checksum=(SELECT s.checksum FROM summaries s WHERE s.attempt_id=submissions.attempt_id),question_count=(SELECT s.question_count FROM summaries s WHERE s.attempt_id=submissions.attempt_id),answered_count=(SELECT s.answered_count FROM summaries s WHERE s.attempt_id=submissions.attempt_id) WHERE checksum IS NULL AND attempt_id IN (SELECT attempt_id FROM summaries)", JSON.stringify(summaries));
+  await ensureFinalJobs(db, attempts, env);
+}
+async function refreshAttempt(db, attempt, exam, env) {
   if (!attempt) return null;
   if (attempt.status !== "finalized" && attempt.last_seen_at < now() - 45000) {
     await recordEvent(
@@ -393,7 +448,7 @@ async function refreshAttempt(db, attempt, exam) {
     );
   }
   if (attempt.status !== "finalized" && attempt.deadline_at <= now())
-    return finish(db, attempt, "deadline");
+    return finish(db, attempt, "deadline", null, env);
   if (attempt.status === "waiting" && examStatus(exam) === "OPEN") {
     await run(
       db,
@@ -404,8 +459,8 @@ async function refreshAttempt(db, attempt, exam) {
   }
   return attempt;
 }
-async function state(db, exam, attempt) {
-  attempt = await refreshAttempt(db, attempt, exam);
+async function state(db, exam, attempt, env) {
+  attempt = await refreshAttempt(db, attempt, exam, env);
   const result = { exam: publicExam(exam), serverTime: now(), attempt: null };
   if (!attempt) return result;
   const canSee =
@@ -498,7 +553,8 @@ async function requireQuestion(db, attempt, questionId) {
 }
 async function studentApi(request, env, slug, tail) {
   const db = env.EXAM_DB,
-    exam = await getExam(db, slug, true);
+    exam = await getExam(db, slug, true),
+    browser = await platformBrowser(db, request);
   let attempt = await session(db, request, exam);
   // Admission links authorize new enrollment only. Existing session credentials
   // and examiner-authorized recovery remain valid after link rotation/revocation.
@@ -507,10 +563,12 @@ async function studentApi(request, env, slug, tail) {
       ? await admissionAccess(exam, request)
       : null;
   if (request.method === "GET" && tail === "state")
-    return json(await state(db, exam, attempt));
+    return json(await state(db, exam, attempt, env));
   if (request.method === "POST" && tail === "attempt") {
     const data = await body(request);
-    if (attempt) return json(await state(db, exam, attempt));
+    if (attempt) return json(await state(db, exam, attempt, env));
+    if (!browser && !legacyAlias(slug))
+      fail(409, "browser_session_required", "Your browser session is being prepared. Please retry from the examination page.");
     if (!["OPEN", "SCHEDULED"].includes(examStatus(exam)))
       fail(
         409,
@@ -519,6 +577,8 @@ async function studentApi(request, env, slug, tail) {
           ? "Examination closed"
           : "Test is not available",
       );
+    if (exam.kind === "official" && !env.EXAM_BACKUPS)
+      fail(503, "official_backup_required", "Official examination registration is unavailable until its independent backup is configured. Practice examinations remain available.");
     const name = text(data.name, 160, "full name"),
       email = text(data.email, 254, "email address").toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
@@ -566,9 +626,8 @@ async function studentApi(request, env, slug, tail) {
           "recovery_required",
           "This browser registration has been replaced by examiner recovery. Contact the examiner.",
         );
-      return json(await state(db, exam, previous), 200, {
-        "Set-Cookie": setCookie(slug, restoredToken),
-      });
+      const headers = await grantAttempt(db, browser, exam, previous, restoredToken);
+      return json(await state(db, exam, previous, env), 200, headers);
     }
     // This is a per-minute abuse limit, never an enrollment or roster limit.
     // A large allowance accommodates a whole class behind one school network.
@@ -604,11 +663,11 @@ async function studentApi(request, env, slug, tail) {
       attemptId = id(),
       rawToken = await hash(`dd-exam-session:${attemptId}:${registrationId}`),
       time = now();
-    const deadline = exam.kind === "practice" ? time + 300000 : exam.ends_at;
+    const deadline = exam.kind === "practice" ? time + exam.duration_minutes * 60000 : exam.ends_at;
     await db.batch([
       stmt(
         db,
-        `INSERT OR IGNORE INTO attempts(id,exam_id,version,name,email,registration_hash,status,created_at,started_at,deadline_at,last_seen_at,lease_editor,lease_expires_at) SELECT ?,id,published_version,?,?,?,?, ?,?,?,?, ?,? FROM exams WHERE id=? AND control='normal' AND admission_enabled=1 AND (access_key_hash IS NULL OR access_key_hash=?) AND (kind='practice' OR (ends_at>${DB_NOW} AND published_version IS NOT NULL))`,
+        `INSERT OR IGNORE INTO attempts(id,exam_id,version,name,email,registration_hash,status,created_at,started_at,deadline_at,last_seen_at,lease_editor,lease_expires_at) SELECT ?,id,published_version,?,?,?,?, ?,?,?,?, ?,? FROM exams WHERE id=? AND archived_at IS NULL AND published_version IS NOT NULL AND control='normal' AND admission_enabled=1 AND (access_key_hash IS NULL OR access_key_hash=?) AND (kind='practice' OR ends_at>${DB_NOW})`,
         attemptId,
         name,
         email,
@@ -639,13 +698,11 @@ async function studentApi(request, env, slug, tail) {
         exam.id,
         registrationHash,
       );
-      if (concurrent)
-        return json(await state(db, exam, concurrent), 200, {
-          "Set-Cookie": setCookie(
-            slug,
-            await hash(`dd-exam-session:${concurrent.id}:${registrationId}`),
-          ),
-        });
+      if (concurrent) {
+        const headers = await grantAttempt(db, browser, exam, concurrent,
+          await hash(`dd-exam-session:${concurrent.id}:${registrationId}`));
+        return json(await state(db, exam, concurrent, env), 200, headers);
+      }
       await admissionAccess(await getExam(db, slug, true), request);
       fail(409, "exam_closed", "Examination closed");
     }
@@ -654,11 +711,12 @@ async function studentApi(request, env, slug, tail) {
       oneBrowser: true,
     });
     await recordEvent(db, attempt, "session_start", {});
-    return json(await state(db, exam, attempt), 201, {
-      "Set-Cookie": setCookie(slug, rawToken),
-    });
+    const headers = await grantAttempt(db, browser, exam, attempt, rawToken);
+    return json(await state(db, exam, attempt, env), 201, headers);
   }
   if (request.method === "POST" && tail === "recover") {
+    if (!browser && !legacyAlias(slug))
+      fail(409, "browser_session_required", "Your browser session is being prepared. Please retry the recovery link.");
     const data = await body(request),
       recoveryHash = await hash(text(data.token, 200, "recovery code"));
     const found = await one(
@@ -683,6 +741,7 @@ async function studentApi(request, env, slug, tail) {
     const rawToken = token();
     await db.batch([
       stmt(db, "DELETE FROM sessions WHERE attempt_id=?", found.attempt_id),
+      stmt(db, "DELETE FROM platform_exam_sessions WHERE attempt_id=?", found.attempt_id),
       stmt(
         db,
         "INSERT INTO sessions(token_hash,attempt_id,expires_at) VALUES(?,?,?)",
@@ -702,14 +761,14 @@ async function studentApi(request, env, slug, tail) {
       found.attempt_id,
     );
     await recordEvent(db, attempt, "admin_recovery", {});
-    return json(await state(db, exam, attempt), 200, {
-      "Set-Cookie": setCookie(slug, rawToken),
-    });
+    const headers = await grantAttempt(db, browser, exam, attempt, rawToken);
+    return json(await state(db, exam, attempt, env), 200, headers);
   }
   attempt = await refreshAttempt(
     db,
     await session(db, request, exam, true),
     exam,
+    env,
   );
   if (request.method === "POST" && tail === "lease") {
     const data = await body(request);
@@ -767,7 +826,7 @@ async function studentApi(request, env, slug, tail) {
         409,
         "exam_closed",
         "Official writing is closed. Your late or offline draft can be preserved separately.",
-        { attempt: await state(db, exam, attempt) },
+        { attempt: await state(db, exam, attempt, env) },
       );
     await db.batch([
       stmt(
@@ -798,11 +857,12 @@ async function studentApi(request, env, slug, tail) {
       ),
       stmt(
         db,
-        `INSERT OR IGNORE INTO outbox(id,target,attempt_id,dedupe_key,kind,next_attempt_at,created_at) SELECT ?,'r2',attempt_id,?,'snapshot',${DB_NOW},${DB_NOW} FROM answer_operations WHERE id=? AND attempt_id=?`,
+        `INSERT OR IGNORE INTO outbox(id,target,attempt_id,dedupe_key,kind,next_attempt_at,created_at) SELECT ?,'r2',attempt_id,?,'snapshot',${DB_NOW},${DB_NOW} FROM answer_operations WHERE id=? AND attempt_id=? AND ?=1`,
         id(),
         `save:${op}:r2`,
         op,
         attempt.id,
+        env.EXAM_BACKUPS || exam.kind === "official" ? 1 : 0,
       ),
       stmt(
         db,
@@ -824,6 +884,7 @@ async function studentApi(request, env, slug, tail) {
         db,
         await one(db, "SELECT * FROM attempts WHERE id=?", attempt.id),
         exam,
+        env,
       );
       if (attempt.status === "finalized")
         fail(
@@ -974,7 +1035,7 @@ async function studentApi(request, env, slug, tail) {
     const data = await body(request);
     operation(data.operationId);
     if (attempt.status === "finalized")
-      return json(await state(db, exam, attempt));
+      return json(await state(db, exam, attempt, env));
     if (examStatus(exam) !== "OPEN")
       fail(
         409,
@@ -982,7 +1043,7 @@ async function studentApi(request, env, slug, tail) {
         "The examination is not open for submission. Your answers remain preserved.",
       );
     await acquireLease(db, attempt, data.editorId, false);
-    attempt = await finish(db, attempt, "manual", data.editorId);
+    attempt = await finish(db, attempt, "manual", data.editorId, env);
     if (attempt.status !== "finalized")
       fail(
         423,
@@ -990,7 +1051,7 @@ async function studentApi(request, env, slug, tail) {
         "The editing session changed before submission. Your answers remain preserved. Please retry from the active tab.",
       );
     await recordEvent(db, attempt, "manual_submission", {});
-    return json(await state(db, exam, attempt));
+    return json(await state(db, exam, attempt, env));
   }
   if (request.method === "POST" && tail === "recovery") {
     const data = await body(request);
@@ -1149,15 +1210,18 @@ const adminExam = (exam) => ({
   id: exam.id,
   label: exam.title,
   kind: exam.kind,
-  archived: !["practice", "official"].includes(exam.slug),
+  title: exam.title,
+  slug: exam.slug,
+  archived: isArchived(exam),
+  duration_minutes: exam.duration_minutes,
+  instructions: exam.instructions,
+  published_version: exam.published_version,
   state: examStatus(exam),
   admission_enabled: !!exam.admission_enabled,
   question_count: exam.question_count || 0,
   starts_at: iso(exam.starts_at),
   ends_at: iso(exam.ends_at),
-  student_url: ["practice", "official"].includes(exam.slug)
-    ? `/${exam.slug}${exam.access_key ? `?access=${encodeURIComponent(exam.access_key)}` : ""}`
-    : null,
+  student_url: studentPath(exam),
 });
 function questionsInput(value) {
   if (!Array.isArray(value) || !value.length || value.length > 300)
@@ -1168,6 +1232,8 @@ function questionsInput(value) {
     );
   const seen = new Set();
   return value.map((q, i) => {
+    if (!q || typeof q !== "object" || Array.isArray(q))
+      fail(400, "invalid_questions", `Question ${i + 1} must contain complete text.`);
     if (q.number !== i + 1)
       fail(
         400,
@@ -1237,6 +1303,11 @@ async function detailExam(db, exam) {
     : null;
   return {
     exam: adminExam(exam),
+    source_text: exam.source_text,
+    source_name: exam.source_name,
+    source_format: exam.source_format,
+    source_filename: exam.source_name,
+    source_type: exam.source_format,
     draft: {
       version: exam.draft_version,
       questions: parseJson(exam.draft_json),
@@ -1292,6 +1363,56 @@ async function eventPage(db, examId, attemptId, search, cursor) {
       "Browser observations require examiner review. Heartbeat gaps do not establish cause or misconduct.",
   };
 }
+async function createPracticeExam(request, db, identity) {
+  const data = await body(request), op = operation(data.operation_id);
+  if (data.kind !== "practice")
+    fail(400, "invalid_exam_kind", "Choose a practice examination.");
+  const title = text(data.title, 180, "examination title");
+  const duration = data.duration_minutes === undefined ? 5 : data.duration_minutes;
+  if (!Number.isInteger(duration) || duration < 1 || duration > 360)
+    fail(400, "invalid_duration", "Choose a practice duration between 1 and 360 minutes.");
+  const instructions = data.instructions === undefined ? "" : data.instructions;
+  if (typeof instructions !== "string" || instructions.length > 20000)
+    fail(400, "invalid_instructions", "Examination instructions must contain no more than 20,000 characters. No content was saved.");
+  if (/^\s*(?:answer\s*key|suggested\s+answer|model\s+answer|correct\s+answer)\s*[:—-]?/im.test(instructions))
+    fail(400, "answer_key_detected", "The instructions appear to contain an answer key. Remove instructor-only material before creating the examination.");
+  const questions = questionsInput(data.questions);
+  const sourceText = data.source_text ?? "", sourceName = data.source_name ?? data.source_filename ?? "", sourceFormat = data.source_format ?? data.source_type ?? "";
+  if (typeof sourceText !== "string" || sourceText.length > 1000000 || typeof sourceName !== "string" || sourceName.length > 255 || !["", "docx", "pdf", "text"].includes(sourceFormat))
+    fail(400, "invalid_source", "The original document text or file details are too large or invalid. Your local source remains available.");
+  const digest = await hash(JSON.stringify({ kind: "practice", title, duration, instructions, questions, sourceText, sourceName, sourceFormat }));
+  const prior = await one(db, "SELECT * FROM admin_operations WHERE id=?", op);
+  if (prior) {
+    if (prior.kind !== "create_practice_exam" || prior.payload_hash !== digest)
+      fail(409, "operation_conflict", "This request identifier was already used for a different examination.");
+    const exam = await getExam(db, prior.result_exam_id);
+    return json({ exam: adminExam(exam), questions: (await detailExam(db, exam)).published.questions });
+  }
+  const examId = id(), slug = `p-${token()}`;
+  const statements = [
+    stmt(db, `INSERT OR IGNORE INTO admin_operations(id,kind,result_exam_id,payload_hash,created_at) VALUES(?,'create_practice_exam',?,?,${DB_NOW})`, op, examId, digest),
+    stmt(db, `INSERT INTO exams(id,slug,title,kind,duration_minutes,instructions,source_text,source_name,source_format,draft_version,draft_json,published_version,created_at,updated_at) SELECT ?,?,?,'practice',?,?,?,?,?,1,?,1,${DB_NOW},${DB_NOW} FROM admin_operations WHERE id=? AND result_exam_id=?`, examId, slug, title, duration, instructions, sourceText, sourceName, sourceFormat, JSON.stringify(questions), op, examId),
+    stmt(db, `INSERT INTO question_versions(exam_id,version,approved_at,approved_by) SELECT ?,1,${DB_NOW},? FROM admin_operations WHERE id=? AND result_exam_id=?`, examId, identity.email, op, examId),
+  ];
+  // Twelve rows use 96 parameters, within D1's 100-parameter limit. Batching
+  // also keeps even a 300-question creation below the free plan query budget.
+  for (let offset = 0; offset < questions.length; offset += 12) {
+    const group = questions.slice(offset, offset + 12), values = [];
+    const sql = group.map(q => {
+      values.push(`${examId}-v1-q${q.number}`, examId, q.number, q.text, q.instructions, q.points, op, examId);
+      return "SELECT ?,?,1,?,?,?,? WHERE EXISTS(SELECT 1 FROM admin_operations WHERE id=? AND result_exam_id=?)";
+    }).join(" UNION ALL ");
+    statements.push(stmt(db, `INSERT INTO questions(id,exam_id,version,number,text,instructions,points) ${sql}`, ...values));
+  }
+  await db.batch(statements);
+  const completed = await one(db, "SELECT * FROM admin_operations WHERE id=?", op);
+  if (!completed || completed.kind !== "create_practice_exam" || completed.payload_hash !== digest)
+    fail(409, "operation_conflict", "This request identifier was already used for a different examination.");
+  const created = await getExam(db, completed.result_exam_id);
+  if (completed.result_exam_id === examId)
+    await audit(db, identity.email, "practice_exam_created", examId, null, { questionCount: questions.length, durationMinutes: duration, publishedVersion: 1 });
+  return json({ exam: adminExam(created), questions: (await detailExam(db, created)).published.questions }, completed.result_exam_id === examId ? 201 : 200);
+}
 async function adminApi(request, env, tail, identity) {
   const db = env.EXAM_DB,
     url = new URL(request.url),
@@ -1305,10 +1426,12 @@ async function adminApi(request, env, tail, identity) {
   if (request.method === "GET" && tail === "exams") {
     const exams = await all(
       db,
-      "SELECT e.*,(SELECT COUNT(*) FROM questions q WHERE q.exam_id=e.id AND q.version=e.published_version) question_count FROM exams e ORDER BY kind",
+      "SELECT e.id,e.slug,e.title,e.kind,e.duration_minutes,e.published_version,e.control,e.admission_enabled,e.access_key,e.archived_at,e.starts_at,e.ends_at,(SELECT COUNT(*) FROM questions q WHERE q.exam_id=e.id AND q.version=e.published_version) question_count FROM exams e ORDER BY e.created_at DESC,e.id",
     );
     return json({ exams: exams.map(adminExam), identity });
   }
+  if (request.method === "POST" && tail === "exams/create")
+    return createPracticeExam(request, db, identity);
   if (request.method === "POST" && tail === "exams") {
     const data = await body(request),
       op = operation(data.operation_id),
@@ -1383,7 +1506,8 @@ async function adminApi(request, env, tail, identity) {
       ),
       stmt(
         db,
-        "UPDATE exams SET slug='archived-'||id,updated_at=? WHERE id=? AND slug='official' AND EXISTS(SELECT 1 FROM admin_operations o WHERE o.id=? AND o.result_exam_id=?)",
+        "UPDATE exams SET slug='archived-'||id,updated_at=?,archived_at=? WHERE id=? AND slug='official' AND EXISTS(SELECT 1 FROM admin_operations o WHERE o.id=? AND o.result_exam_id=?)",
+        time,
         time,
         current.id,
         op,
@@ -1428,7 +1552,7 @@ async function adminApi(request, env, tail, identity) {
     const exam = await getExam(db, parts[1]),
       action = parts[2];
     if (
-      !["practice", "official"].includes(exam.slug) &&
+      isArchived(exam) &&
       request.method !== "GET"
     )
       fail(
@@ -1477,7 +1601,7 @@ async function adminApi(request, env, tail, identity) {
       await db.batch([
         stmt(
           db,
-          `INSERT OR IGNORE INTO admin_operations(id,kind,result_exam_id,payload_hash,created_at) SELECT ?,?,?,?,${DB_NOW} FROM exams WHERE id=? AND slug IN ('practice','official')`,
+          `INSERT OR IGNORE INTO admin_operations(id,kind,result_exam_id,payload_hash,created_at) SELECT ?,?,?,?,${DB_NOW} FROM exams WHERE id=? AND archived_at IS NULL`,
           op,
           claim,
           exam.id,
@@ -1486,7 +1610,7 @@ async function adminApi(request, env, tail, identity) {
         ),
         stmt(
           db,
-          `UPDATE exams SET admission_enabled=?,access_key=CASE WHEN ?='rotate' THEN ? ELSE access_key END,access_key_hash=CASE WHEN ?='rotate' THEN ? ELSE access_key_hash END,updated_at=${DB_NOW} WHERE id=? AND slug IN ('practice','official') AND EXISTS(SELECT 1 FROM admin_operations o WHERE o.id=? AND o.kind=?)`,
+          `UPDATE exams SET admission_enabled=?,access_key=CASE WHEN ?='rotate' THEN ? ELSE access_key END,access_key_hash=CASE WHEN ?='rotate' THEN ? ELSE access_key_hash END,updated_at=${DB_NOW} WHERE id=? AND archived_at IS NULL AND EXISTS(SELECT 1 FROM admin_operations o WHERE o.id=? AND o.kind=?)`,
           data.action === "revoke" ? 0 : 1,
           data.action,
           key,
@@ -1520,7 +1644,7 @@ async function adminApi(request, env, tail, identity) {
     }
     if (request.method === "PUT" && action === "draft") {
       if (exam.kind !== "official")
-        fail(403, "practice_fixed", "The approved practice question is fixed.");
+        fail(403, "practice_fixed", "Practice questions are published snapshots. Create a new practice examination to change them.");
       const data = await body(request),
         questions = questionsInput(data.questions);
       if (data.expected_version !== exam.draft_version)
@@ -1549,6 +1673,8 @@ async function adminApi(request, env, tail, identity) {
       return json(await detailExam(db, await getExam(db, exam.id)));
     }
     if (request.method === "POST" && action === "schedule") {
+      if (!env.EXAM_BACKUPS)
+        fail(503, "official_backup_required", "Configure the private official-examination backup before scheduling an official paper. Practice examinations remain available.");
       const data = await body(request),
         start = Date.parse(data.starts_at),
         end = Date.parse(data.ends_at);
@@ -1702,7 +1828,7 @@ async function adminApi(request, env, tail, identity) {
         );
       const result = await run(
         db,
-        "UPDATE exams SET control=?,updated_at=? WHERE id=? AND slug IN ('practice','official')",
+        "UPDATE exams SET control=?,updated_at=? WHERE id=? AND archived_at IS NULL",
         control,
         now(),
         exam.id,
@@ -1874,7 +2000,7 @@ async function adminApi(request, env, tail, identity) {
     if (!attempt)
       fail(404, "attempt_not_found", "This attempt does not exist.");
     const exam = await getExam(db, attempt.exam_id);
-    attempt = await refreshAttempt(db, attempt, exam);
+    attempt = await refreshAttempt(db, attempt, exam, env);
     if (request.method === "GET" && !parts[2]) {
       await audit(db, identity.email, "attempt_read", exam.id, attempt.id);
       const observed = await all(
@@ -1939,7 +2065,7 @@ async function adminApi(request, env, tail, identity) {
       );
     }
     if (request.method === "POST" && parts[2] === "recovery") {
-      if (!["practice", "official"].includes(exam.slug))
+      if (isArchived(exam))
         fail(
           403,
           "archived_read_only",
@@ -1999,6 +2125,7 @@ async function adminApi(request, env, tail, identity) {
       const reason = text(data.reason, 2000, "reset reason");
       await db.batch([
         stmt(db, "DELETE FROM sessions WHERE attempt_id=?", attempt.id),
+        stmt(db, "DELETE FROM platform_exam_sessions WHERE attempt_id=?", attempt.id),
         stmt(
           db,
           "UPDATE recovery_tokens SET consumed_at=? WHERE attempt_id=? AND consumed_at IS NULL",
@@ -2080,13 +2207,14 @@ export async function buildDeliveryPayload(db, job) {
         questionId: q.id,
         revision: 0,
         text: "",
-        hash: "",
+        hash: EMPTY_HASH,
         savedAt: null,
       },
   );
   return {
     schemaVersion: 1,
-    exam: { id: exam.id, slug: exam.slug, title: exam.title },
+    exam: { id: exam.id, slug: exam.slug, title: exam.title, kind: exam.kind, instructions: exam.instructions, durationMinutes: exam.duration_minutes },
+    source: { text: exam.source_text, filename: exam.source_name, type: exam.source_format },
     attempt: {
       id: attempt.id,
       name: attempt.name,
@@ -2155,41 +2283,23 @@ export async function maintenance(env) {
     "DELETE FROM registration_windows WHERE window_start<?",
     now() - 600000,
   );
-  const gaps = await all(
-    db,
-    `SELECT * FROM attempts WHERE status IN ('waiting','active') AND last_seen_at<${DB_NOW}-45000 LIMIT 200`,
-  );
-  for (const attempt of gaps)
-    await recordEvent(
-      db,
-      attempt,
-      "heartbeat_missing",
-      {
-        lastServerContactAt: attempt.last_seen_at,
-        gapDetectedAt: now(),
-        cause: "unknown",
-        assessment: "Connection/heartbeat uncertain; examiner review only",
-      },
-      `heartbeat-gap-${attempt.id}-${attempt.last_seen_at}`,
-    );
-  const expired = await all(
-    db,
-    `SELECT * FROM attempts WHERE status IN ('waiting','active') AND deadline_at<=${DB_NOW} LIMIT 200`,
-  );
-  for (const attempt of expired) await finish(db, attempt, "deadline");
-  const incomplete = await all(
-    db,
-    "SELECT a.* FROM attempts a JOIN submissions s ON s.attempt_id=a.id JOIN exams e ON e.id=a.exam_id WHERE a.status='finalized' AND (s.checksum IS NULL OR (SELECT COUNT(*) FROM outbox o WHERE o.attempt_id=a.id AND o.kind='final')<CASE WHEN e.kind='official' THEN 4 ELSE 2 END) LIMIT 200",
-  );
-  for (const attempt of incomplete)
-    await finish(db, attempt, attempt.finalization_type || "deadline");
+  // Remove expired access mappings, never the underlying exam or student work.
+  await db.batch([
+    stmt(db, `DELETE FROM platform_exam_sessions WHERE browser_token_hash IN (SELECT token_hash FROM platform_browsers WHERE expires_at<=${DB_NOW})`),
+    stmt(db, `DELETE FROM platform_browsers WHERE expires_at<=${DB_NOW}`),
+  ]);
+  // A disconnected class costs one query, rather than one query per student.
+  // The deterministic identifier also deduplicates gaps observed by a GET.
+  await run(db, `INSERT OR IGNORE INTO events(id,attempt_id,exam_id,question_id,type,client_time,received_at,provenance,details_json) SELECT 'heartbeat-gap-'||a.id||'-'||a.last_seen_at,a.id,a.exam_id,NULL,'heartbeat_missing',NULL,${DB_NOW},'server-observed',json_object('lastServerContactAt',a.last_seen_at,'gapDetectedAt',${DB_NOW},'cause','unknown','assessment','Connection/heartbeat uncertain; examiner review only') FROM attempts a WHERE a.status IN ('waiting','active') AND a.last_seen_at<${DB_NOW}-45000 AND NOT EXISTS(SELECT 1 FROM events v WHERE v.id='heartbeat-gap-'||a.id||'-'||a.last_seen_at) ORDER BY a.last_seen_at,a.id LIMIT 200`);
+  const due = await all(db, `SELECT a.* FROM attempts a JOIN exams e ON e.id=a.exam_id LEFT JOIN submissions s ON s.attempt_id=a.id WHERE (a.status IN ('waiting','active') AND a.deadline_at<=${DB_NOW}) OR (a.status='finalized' AND (s.checksum IS NULL OR NOT EXISTS(SELECT 1 FROM outbox o WHERE o.attempt_id=a.id AND o.kind='final' AND o.target='sheets') OR NOT EXISTS(SELECT 1 FROM outbox o WHERE o.attempt_id=a.id AND o.kind='final' AND o.target='owner_email') OR ((e.kind='official' OR ?=1) AND NOT EXISTS(SELECT 1 FROM outbox o WHERE o.attempt_id=a.id AND o.kind='final' AND o.target='r2')) OR (e.kind='official' AND NOT EXISTS(SELECT 1 FROM outbox o WHERE o.attempt_id=a.id AND o.kind='final' AND o.target='student_receipt')))) ORDER BY COALESCE(a.finalized_at,a.deadline_at),a.id LIMIT 10`, env.EXAM_BACKUPS ? 1 : 0);
+  await finishMaintenanceBatch(db, due, env);
   // Reconcile the small crash window between a committed answer and enqueueing backups.
   const unmirrored = await all(
     db,
-    "SELECT a.* FROM attempts a WHERE a.last_saved_at IS NOT NULL AND NOT EXISTS(SELECT 1 FROM outbox o WHERE o.attempt_id=a.id) LIMIT 100",
+    "SELECT a.*,e.kind FROM attempts a JOIN exams e ON e.id=a.exam_id WHERE a.last_saved_at IS NOT NULL AND NOT EXISTS(SELECT 1 FROM outbox o WHERE o.attempt_id=a.id) ORDER BY a.last_saved_at,a.id LIMIT 1",
   );
   for (const attempt of unmirrored)
-    for (const target of ["r2", "sheets"])
+    for (const target of [...(env.EXAM_BACKUPS || attempt.kind === "official" ? ["r2"] : []), "sheets"])
       await enqueue(
         db,
         attempt.id,
@@ -2197,7 +2307,9 @@ export async function maintenance(env) {
         "snapshot",
         `reconcile:${attempt.id}:${attempt.last_saved_at}:${target}`,
       );
-  await drainOutbox(env);
+  // Leave room for each provider's bounded HTTP calls as well as D1 statements.
+  // Further jobs remain durable for later ticks; no work is discarded.
+  await drainOutbox(env, 2);
 }
 export function createApp(options = {}) {
   const adminAuthenticator =
@@ -2208,8 +2320,10 @@ export function createApp(options = {}) {
     async fetch(request, env, ctx) {
       try {
         sameOrigin(request);
-        const url = new URL(request.url),
-          path = url.pathname;
+        const url = new URL(request.url);
+        let path;
+        try { path = decodeURIComponent(url.pathname); }
+        catch { fail(400, "invalid_address", "This address could not be read."); }
         if (path === "/api/health")
           return json({
             service: "constitutional-exam",
@@ -2228,16 +2342,17 @@ export function createApp(options = {}) {
             const identity = await adminAuthenticator(request, env);
             return await adminApi(request, env, path.slice(11), identity);
           }
+          if (path === "/api/browser/session") return await browserSession(request, env);
           const match = path.match(/^\/api\/exams\/([^/]+)\/(.+)$/);
           if (match) {
             const response = await studentApi(request, env, match[1], match[2]);
             if (match[2] === "submit" && response.ok && ctx?.waitUntil)
-              ctx.waitUntil(drainOutbox(env, 8));
+              ctx.waitUntil(drainOutbox(env, 2));
             return response;
           }
           fail(404, "route_not_found", "This address does not exist.");
         }
-        if (path.startsWith("/admin")) {
+        if (path.startsWith("/admin") || ["/import.mjs", "/document-import.mjs"].includes(path) || path.startsWith("/document-vendor/")) {
           await adminAuthenticator(request, env);
           if (
             ![
@@ -2245,7 +2360,9 @@ export function createApp(options = {}) {
               "/admin.html",
               "/admin.mjs",
               "/admin.css",
-            ].includes(path)
+              "/document-import.mjs",
+              "/import.mjs",
+            ].includes(path) && !/^\/document-vendor\/(?:licenses\/)?[a-zA-Z0-9._-]+$/.test(path)
           )
             fail(404, "route_not_found", "This address does not exist.");
         }
@@ -2259,7 +2376,12 @@ export function createApp(options = {}) {
             },
             503,
           );
-        const assetPath = ["/practice", "/official"].includes(path)
+        const dynamicExam = path.match(/^\/exam\/([a-z0-9][a-z0-9-]{0,79})\/?$/);
+        const publicAsset = ["/", "/index.html", "/student.mjs", "/student.css", "/local-drafts.mjs", "/exam-sw.mjs", "/favicon.ico", "/practice", "/official"].includes(path)
+          || /^\/fonts\/[a-zA-Z0-9._-]+$/.test(path) || /^\/icons\/[a-zA-Z0-9_-]+\.svg$/.test(path);
+        if (!publicAsset && !dynamicExam && !path.startsWith("/admin") && !["/import.mjs", "/document-import.mjs"].includes(path) && !path.startsWith("/document-vendor/"))
+          fail(404, "route_not_found", "This address does not exist.");
+        const assetPath = ["/practice", "/official"].includes(path) || dynamicExam
           ? "/index.html"
           : path === "/admin/exams"
             ? "/admin.html"

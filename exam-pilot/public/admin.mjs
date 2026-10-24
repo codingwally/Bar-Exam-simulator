@@ -57,6 +57,24 @@ async function api(path, options = {}) {
       },
     });
     const data = await response.json();
+    if (
+      response.status === 401 &&
+      (state.authMode === "builtin" ||
+        data.auth_mode === "builtin" ||
+        data.error?.auth_mode === "builtin")
+    ) {
+      if (state.dirty && !saveLocal()) {
+        $("sign-in-again").hidden = false;
+        throw new Error(
+          "Your sign-in expired. Keep this page open. Choose Sign in again to use another tab, then return here and retry.",
+        );
+      }
+      state.dirty = false;
+      location.assign("/admin/login");
+      throw new Error(
+        "Please sign in again. Your unfinished exam remains in this browser.",
+      );
+    }
     if (!response.ok)
       throw new Error(
         data.error?.message || "This could not be completed. Please try again.",
@@ -104,11 +122,13 @@ function saveLocal() {
         operation: state.operation,
       }),
     );
+    return true;
   } catch {
     message(
       "This browser could not keep an unfinished copy. Keep this page open until your exam link is created.",
       "error",
     );
+    return false;
   }
 }
 function persist() {
@@ -451,6 +471,9 @@ async function loadList() {
   const data = await api("/exams");
   state.exams = data.exams || [];
   state.role = data.identity?.role || "owner";
+  state.authMode = data.identity?.auth_mode;
+  $("sign-out").hidden = state.authMode !== "builtin";
+  $("sign-in-again").hidden = true;
   $("new-exam").hidden = !canManage();
   $("signed-in").textContent = canManage()
     ? "Private examiner access"
@@ -740,6 +763,21 @@ function download(content, name, type = "text/plain;charset=utf-8") {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 function bind() {
+  $("sign-out").onclick = () =>
+    busy($("sign-out"), async () => {
+      if (state.dirty) {
+        const saved = saveLocal();
+        const prompt = saved
+          ? "Your unfinished exam is saved on this browser. Sign out now?"
+          : "This browser could not keep your unfinished exam. Copy your questions before signing out. Sign out anyway?";
+        if (!confirm(prompt)) return;
+      }
+      const result = await api("/logout", { method: "POST", body: "{}" });
+      if (!result.signed_out)
+        throw new Error("Sign-out could not be confirmed. Please try again.");
+      state.dirty = false;
+      location.assign("/admin/login");
+    });
   $("new-exam").onclick = () => {
     if (state.dirty && resumeDraft()) return;
     startCreate();

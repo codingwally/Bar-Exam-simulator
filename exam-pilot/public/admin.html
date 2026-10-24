@@ -13,7 +13,21 @@
     <header>
       <a class="brand" href="/admin/exams"
         >Due Diligence<span>Examination room</span></a
-      ><span id="signed-in">Private examiner access</span>
+      >
+      <div class="account">
+        <span id="signed-in">Private examiner access</span
+        ><button id="sign-out" class="secondary" type="button" hidden>
+          Sign out</button
+        ><a
+          id="sign-in-again"
+          class="button secondary"
+          href="/admin/login"
+          target="_blank"
+          rel="noopener"
+          hidden
+          >Sign in again</a
+        >
+      </div>
     </header>
     <main id="main" tabindex="-1">
       <p id="message" class="message" role="status" aria-live="polite">

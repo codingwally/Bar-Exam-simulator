@@ -24,12 +24,16 @@ if (mode === "provision") {
 const accessDomain =
   process.env.ACCESS_TEAM_DOMAIN || access.ACCESS_TEAM_DOMAIN;
 const accessAudience = process.env.ACCESS_AUD || access.ACCESS_AUD;
+const authMode = process.env.ADMIN_AUTH_MODE || "access";
+if (!["access", "password"].includes(authMode))
+  throw new Error("Choose access or password for ADMIN_AUTH_MODE");
 if (mode === "provision") {
   if (
-    !/^https:\/\/[a-zA-Z0-9-]+\.cloudflareaccess\.com\/?$/.test(
+    authMode === "access" &&
+    (!/^https:\/\/[a-zA-Z0-9-]+\.cloudflareaccess\.com\/?$/.test(
       accessDomain || "",
     ) ||
-    !/^[a-zA-Z0-9_-]{16,200}$/.test(accessAudience || "")
+      !/^[a-zA-Z0-9_-]{16,200}$/.test(accessAudience || ""))
   ) {
     throw new Error(
       "Configure a verified Cloudflare Access HTTPS team domain and application audience before provisioning a deployable service",
@@ -63,6 +67,11 @@ if (mode === "provision") {
   config.assets.directory = fileURLToPath(new URL("./public", import.meta.url));
   config.vars.ACCESS_TEAM_DOMAIN = accessDomain;
   config.vars.ACCESS_AUD = accessAudience;
+  config.vars.ADMIN_AUTH_MODE = authMode;
+  if (authMode === "password") {
+    config.vars.ACCESS_TEAM_DOMAIN = "";
+    config.vars.ACCESS_AUD = "";
+  }
 }
 const base = `https://api.cloudflare.com/client/v4/accounts/${account}`;
 async function api(path, method = "GET", body) {
@@ -85,10 +94,16 @@ async function api(path, method = "GET", body) {
 }
 const checks = await Promise.allSettled([
   api("/d1/database?per_page=100"),
-  api("/access/organizations"),
+  authMode === "access" ? api("/access/organizations") : Promise.resolve(null),
   api("/workers/subdomain"),
 ]);
-const names = ["D1", "Access organization", "Worker subdomain"];
+const names = [
+  "D1",
+  authMode === "access"
+    ? "Access organization"
+    : "Built-in professor sign-in (no Zero Trust subscription)",
+  "Worker subdomain",
+];
 checks.forEach((check, index) =>
   console.log(
     `${names[index]}: ${check.status === "fulfilled" ? "available" : check.reason.message}`,
@@ -98,6 +113,10 @@ if (mode === "check")
   process.exit(checks.every((check) => check.status === "fulfilled") ? 0 : 1);
 if (checks[0].status !== "fulfilled")
   throw new Error("D1 permissions are required before provisioning");
+if (checks[2].status !== "fulfilled" || !checks[2].value?.subdomain)
+  throw new Error(
+    "An existing Worker subdomain is required before provisioning",
+  );
 const name = "duediligence-constitutional-exam";
 let database = checks[0].value.find((item) => item.name === name);
 if (!database) database = await api("/d1/database", "POST", { name });

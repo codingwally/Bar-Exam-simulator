@@ -5,6 +5,7 @@ import { loadPlaywright } from "./playwright-runtime.mjs";
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { syntheticBrowserOptions } from "./synthetic-browser-options.mjs";
 const runtime = loadPlaywright();
 const base = process.argv[2] || "http://localhost:8797";
 const engines = (process.env.DD_BROWSER_ENGINES || "chromium").split(",");
@@ -22,6 +23,7 @@ for (const engine of engines) {
     pageErrors: [],
     consoleErrors: [],
     failedRequests: [],
+    limitations: [],
   };
   results.push(result);
   let browser,
@@ -29,12 +31,14 @@ for (const engine of engines) {
     page,
     stage = "browser-launch",
     offline = false;
+  const navigationEvents = new Map();
   const capture = async (name) => {
     const filename = `workspace-${engine}-${name}.png`;
     await page.screenshot({
       path: fileURLToPath(new URL(filename, evidence)),
       fullPage: false,
       timeout: 6000,
+      caret: "initial",
     });
     result.screenshots.push(filename);
   };
@@ -43,7 +47,9 @@ for (const engine of engines) {
     console.log(`${engine}: PASS ${name}`);
   };
   try {
-    browser = await runtime[engine].launch({ headless: true });
+    browser = await runtime[engine].launch(
+      await syntheticBrowserOptions(engine, base),
+    );
     result.version = browser.version();
     context = await browser.newContext({
       viewport: { width: 1440, height: 900 },
@@ -87,6 +93,24 @@ for (const engine of engines) {
     page.setDefaultTimeout(20000);
     page.setDefaultNavigationTimeout(20000);
     page.on("pageerror", (error) => result.pageErrors.push(error.message));
+    page.on("request", (request) => {
+      if (
+        request.method() !== "POST" ||
+        !new URL(request.url()).pathname.endsWith("/events")
+      )
+        return;
+      try {
+        for (const event of JSON.parse(request.postData() || "{}").events || [])
+          if (event.type === "pagehide")
+            navigationEvents.set(event.id, {
+              id: event.id,
+              type: event.type,
+              clientTime: event.clientTime,
+            });
+      } catch {
+        /* Unreadable transport cannot serve as delivery proof. */
+      }
+    });
     page.on("console", (message) => {
       if (message.type() === "error") result.consoleErrors.push(message.text());
     });
@@ -197,7 +221,15 @@ for (const engine of engines) {
       await Promise.race([
         page.evaluate(() => navigator.serviceWorker.ready.then(() => true)),
         new Promise((_, reject) => {
-          serviceWorkerTimer = setTimeout(() => reject(new Error("Service worker was not ready within 30 seconds; offline readiness could not be verified.")), 30000);
+          serviceWorkerTimer = setTimeout(
+            () =>
+              reject(
+                new Error(
+                  "Service worker was not ready within 30 seconds; offline readiness could not be verified.",
+                ),
+              ),
+            30000,
+          );
         }),
       ]);
     } finally {
@@ -353,7 +385,63 @@ for (const engine of engines) {
       .getByText(final.attempt.receipt.checksum, { exact: true })
       .waitFor();
     await capture("receipt-details");
-    assert.deepEqual(result.pageErrors, []);
+    const unloadErrors = result.pageErrors.filter(
+      (message) =>
+        engine === "webkit" &&
+        message.endsWith(
+          `/api/exams/${exam.slug}/events due to access control checks.`,
+        ),
+    );
+    assert.deepEqual(
+      result.pageErrors.filter((message) => !unloadErrors.includes(message)),
+      [],
+    );
+    if (unloadErrors.length) {
+      stage = "verify-durable-unload-event-retry";
+      const expected = [...navigationEvents.values()];
+      assert.ok(
+        expected.length,
+        "A rejected unload transport needs known event IDs and client timestamps for delivery proof",
+      );
+      let observed = [];
+      for (let retry = 0; retry < 20; retry++) {
+        const response = await context.request.get(
+          `${base}/api/admin/exams/${exam.slug}/events?attempt_id=${encodeURIComponent(originalAttempt)}`,
+        );
+        assert.equal(
+          response.ok(),
+          true,
+          "Synthetic admin event verification must be available",
+        );
+        observed = (await response.json()).events || [];
+        if (
+          expected.every((event) =>
+            observed.some(
+              (row) =>
+                row.id === event.id &&
+                row.type === event.type &&
+                row.client_time === event.clientTime,
+            ),
+          )
+        )
+          break;
+        await page.waitForTimeout(250);
+      }
+      for (const event of expected)
+        assert.ok(
+          observed.some(
+            (row) =>
+              row.id === event.id &&
+              row.type === event.type &&
+              row.client_time === event.clientTime,
+          ),
+          `Unload event ${event.id} was not durably retried with its exact client timestamp`,
+        );
+      result.unloadRetry = { verified: true, events: expected };
+      result.limitations.push(
+        "WebKit rejected an unload event transport in the self-signed fixture; each observed pagehide event ID and original client timestamp was verified on the server after durable retry.",
+      );
+    }
     result.receipt = {
       answeredCount: final.attempt.receipt.answeredCount,
       questionCount: final.attempt.receipt.questionCount,

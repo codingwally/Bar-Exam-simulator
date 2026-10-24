@@ -12,7 +12,10 @@ or existing student records.
 
 ## Professor workflow
 
-1. Open the private `/admin/exams` page and sign in through Cloudflare Access.
+1. Open the private `/admin/exams` page and sign in with the professor
+   passphrase. The free deployment does not require Zero Trust activation or a
+   Cloudflare payment method. An existing Access organization remains supported
+   as an alternative deployment mode.
 2. From **My exams**, choose **Create exam**. Upload a Word `.docx`, a PDF with
    selectable text, or a plain text file. Pasting and manual question entry are
    also available.
@@ -91,6 +94,8 @@ node exam-pilot/dev-server.mjs
 Open `http://localhost:8797/admin/exams` for the professor desk and
 `http://localhost:8797/` for the student workspace. The server binds loopback,
 uses disposable in-memory SQLite and injects a synthetic examiner identity.
+Set `EXAM_QA_ADMIN_SECRET` to a disposable 64-character hexadecimal secret to
+exercise the actual built-in professor authentication instead of that bypass.
 Restarting it clears that synthetic database. Its `__qa` controls and
 administrator bypass are never imported by the deployed Worker. Local practice
 does not prove production authentication or provider delivery and sends no real
@@ -181,13 +186,26 @@ Wrangler dependency. Keep production infrastructure entirely separate from the
 main site's resources.
 
 1. Supply the scoped `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` for the
-   existing account. `access-setup.mjs check` and `infrastructure.mjs check`
+   existing account. For the no-card deployment set `ADMIN_AUTH_MODE=password`.
+   `infrastructure.mjs check` then checks only Workers and D1. Create a random
+   32-byte professor passphrase and store it only as the Worker secret
+   `ADMIN_LOGIN_SECRET` and in the owner's private credential store. Never put it
+   in the deployment JSON, source, URL or browser storage. The built-in session
+   uses a one-hour, host-only, Secure, HttpOnly, SameSite=Strict cookie backed by
+   D1; logout revokes it and secret rotation invalidates existing sessions.
+   Incorrect guesses have bounded per-address and global counters. The Worker
+   fails closed when the secret or owner configuration is missing.
+
+   Alternatively choose `ADMIN_AUTH_MODE=access` when an Access organization is
+   already activated. `access-setup.mjs check` and `infrastructure.mjs check`
    inspect authorization without creating resources. The deployment-only
    `access-setup.mjs setup` uses the already enabled Zero Trust organization to
    create or verify a new isolated owner-only Access application. It records
    the verified team domain and audience in ignored `.wrangler/access-env.json`.
-   This uses the existing Access login; no Google-owner login is introduced.
-2. `infrastructure.mjs provision` reads that verified Access file, or explicit
+   This uses the existing Access login.
+2. `infrastructure.mjs provision` in password mode provisions without requesting
+   an Access organization or R2 subscription. In Access mode it reads the
+   verified Access file, or explicit
    `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` environment values, and writes ignored
    `.wrangler/deploy.json` for the isolated service. The default configuration
    provisions only the isolated D1 database, with `EXAM_DB`, static `ASSETS` and
@@ -201,14 +219,19 @@ main site's resources.
    migration record before running it: it must not run twice or against a fresh
    database that already has these columns. `CREATE TABLE IF NOT EXISTS` alone
    does not add missing columns. Never apply either file to the main site DB.
-4. Protect all private routes and assets with the same Access application:
+   The added built-in authentication tables can be created safely with
+   `migrations/0003_admin_login.sql` on an existing rebuilt database; it contains
+   only `CREATE TABLE/INDEX IF NOT EXISTS` statements.
+4. In Access mode, protect all private routes and assets with the same Access application:
    `/admin*`, `/api/admin/*`, `/import.mjs`, `/document-import.mjs` and
    `/document-vendor/*`. Keep student routes public. Configure matching
    `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` and authorized owner `ADMIN_EMAILS`.
    Optional `EXAMINER_EMAILS` grants read-only reports. The Worker independently
    verifies the RS256 signature, issuer, audience, expiry and email for admin API
    requests and private assets, including document readers. Missing setup fails
-   closed. An instructor's email must be supplied by the owner, not guessed.
+   closed. In password mode the Worker gates those same private assets and APIs
+   with the professor session; only the dedicated sign-in shell is public.
+   An instructor's email must be supplied by the owner, not guessed.
 5. For automatic Google copies, set `GOOGLE_SERVICE_ACCOUNT_JSON` and
    `GOOGLE_SPREADSHEET_ID`; share the private collection only with that service
    account and approved staff. Never publish a collection link or place Google
@@ -223,7 +246,8 @@ main site's resources.
    checksum. Keep production secrets out of logs, source and public files.
 
 The manual workflow's connection check is read-only. Only `deploy-isolated`
-creates the isolated Access application/database and publishes the Worker. Its
+creates the isolated database and publishes the Worker. Password mode does not
+create or activate Zero Trust. Its
 schema guard refuses an older unupgraded database rather than guessing whether
 the one-time migration ran. A successful code deployment alone is not a database
 upgrade or official-exam release approval.

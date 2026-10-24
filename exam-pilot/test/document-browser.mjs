@@ -178,6 +178,7 @@ export async function runDocumentReview(
       await page.screenshot({
         path: `${evidenceDir}/new-exam-review.png`,
         fullPage: true,
+        caret: "initial",
       });
     await page
       .getByRole("button", { name: "Create exam link", exact: true })
@@ -213,6 +214,7 @@ export async function runDocumentReview(
       if (evidenceDir && [1440, 390].includes(width))
         await page.screenshot({
           path: `${evidenceDir}/new-exam-link-${width}.png`,
+          caret: "initial",
         });
     }
     assert.deepEqual(errors, []);
@@ -224,6 +226,7 @@ export async function runDocumentReview(
         .screenshot({
           path: `${evidenceDir}/document-failure.png`,
           fullPage: true,
+          caret: "initial",
         })
         .catch(() => {});
       await writeFile(

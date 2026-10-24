@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <meta name="referrer" content="same-origin" />
+    <title>Professor sign in · Due Diligence</title>
+    <link rel="stylesheet" href="/admin-login.css" />
+    <script type="module" src="/admin-login.mjs"></script>
+  </head>
+  <body>
+    <a class="skip" href="#main" tabindex="0">Skip to sign in</a>
+    <header>
+      <a class="brand" href="/">Due Diligence<span>Examination room</span></a>
+    </header>
+    <main id="main" tabindex="-1">
+      <p class="eyebrow">Professor desk</p>
+      <h1>Sign in</h1>
+      <p class="intro">
+        Prepare examinations and read your students’ responses.
+      </p>
+      <form id="professor-login" action="/api/admin/login" method="post">
+        <label for="professor-passphrase">Professor passphrase</label>
+        <input
+          id="professor-passphrase"
+          name="secret"
+          type="password"
+          autocomplete="current-password"
+          autocapitalize="none"
+          spellcheck="false"
+          maxlength="4096"
+          required
+          aria-describedby="passphrase-help login-message"
+        />
+        <p id="passphrase-help" class="help">
+          Use the private passphrase provided by the site owner.
+        </p>
+        <p id="login-message" class="message" role="alert" hidden></p>
+        <button id="sign-in" type="submit" disabled>Sign in</button>
+      </form>
+      <noscript
+        ><p class="message">
+          Enable JavaScript to sign in, then reload this page.
+        </p></noscript
+      >
+      <p class="student-note">
+        Taking an exam? Open the examination link your professor shared.
+      </p>
+    </main>
+    <footer>Due Diligence · Private professor access</footer>
+  </body>
+</html>

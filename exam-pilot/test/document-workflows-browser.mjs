@@ -3,6 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { loadPlaywright } from "./playwright-runtime.mjs";
 import { runDocumentReview } from "./document-browser.mjs";
+import { syntheticBrowserOptions } from "./synthetic-browser-options.mjs";
 const base = process.argv[2] || "http://localhost:8797";
 if (!["localhost", "127.0.0.1", "[::1]"].includes(new URL(base).hostname))
   throw Error("A disposable loopback server is required.");
@@ -10,7 +11,9 @@ const engines = (process.env.DD_BROWSER_ENGINES || "chromium").split(",");
 const runtime = loadPlaywright(),
   results = [];
 for (const engine of engines) {
-  const browser = await runtime[engine].launch({ headless: true });
+  const browser = await runtime[engine].launch(
+    await syntheticBrowserOptions(engine, base),
+  );
   const evidenceDir = fileURLToPath(
     new URL(`../.wrangler/evidence/documents-${engine}/`, import.meta.url),
   );

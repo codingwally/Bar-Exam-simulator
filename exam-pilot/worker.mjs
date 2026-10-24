@@ -111,7 +111,7 @@ function revision(value) {
     fail(400, "invalid_revision", "The answer revision is invalid.");
   return value;
 }
-async function body(request) {
+async function body(request, maxBytes = MAX_BODY) {
   if (
     !request.headers
       .get("content-type")
@@ -119,7 +119,7 @@ async function body(request) {
       .startsWith("application/json")
   )
     fail(415, "json_required", "Please retry from the examination page.");
-  if (Number(request.headers.get("content-length") || 0) > MAX_BODY)
+  if (Number(request.headers.get("content-length") || 0) > maxBytes)
     fail(413, "request_too_large", "This request is too large.");
   const reader = request.body?.getReader(),
     decoder = new TextDecoder(),
@@ -130,7 +130,7 @@ async function body(request) {
       const chunk = await reader.read();
       if (chunk.done) break;
       size += chunk.value.byteLength;
-      if (size > MAX_BODY) {
+      if (size > maxBytes) {
         reader.cancel().catch(() => {});
         fail(413, "request_too_large", "This request is too large.");
       }
@@ -1100,11 +1100,94 @@ async function studentApi(request, env, slug, tail) {
 // Validate Cloudflare Access cryptographically. Merely trusting an email header
 // would let a caller bypass authentication on the workers.dev origin.
 let accessKeys = { issuer: null, expires: 0, keys: [] };
+const ADMIN_COOKIE = "__Host-dd_exam_admin";
+const ADMIN_SESSION_MS = 3600000;
+const ADMIN_WINDOW_MS = 600000;
+function adminMode(env) {
+  const mode = env.ADMIN_AUTH_MODE || "access";
+  if (!["access", "password"].includes(mode))
+    fail(503, "admin_setup_required", "Private examiner sign-in has not been configured.");
+  return mode;
+}
+function builtinSettings(env) {
+  const secret = env.ADMIN_LOGIN_SECRET;
+  const email = String(env.ADMIN_EMAILS || "").split(",")[0].trim().toLowerCase();
+  // Provision a cryptographically generated 32-byte (or longer) key, encoded
+  // as 64 hex characters or unpadded base64url. This is not a human password.
+  if (typeof secret !== "string" || !/^[a-zA-Z0-9_-]{43,128}$/.test(secret) || new Set(secret).size < 8 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !env.EXAM_DB)
+    fail(503, "admin_setup_required", "Private examiner sign-in has not been configured. Contact the site owner.", { auth_mode: "builtin" });
+  return { secret, email };
+}
+const adminCookie = (value, maxAge = 3600) => `${ADMIN_COOKIE}=${value}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${maxAge}`;
+async function builtinIdentity(request, env) {
+  const settings = builtinSettings(env), raw = readCookie(request, ADMIN_COOKIE);
+  let session;
+  if (/^[a-f0-9]{64}$/.test(raw))
+    session = await one(env.EXAM_DB, `SELECT email,expires_at FROM admin_sessions WHERE token_hash=? AND secret_version=? AND email=? AND revoked_at IS NULL AND expires_at>${DB_NOW}`, await hash(raw), await hash(settings.secret), settings.email);
+  if (!session)
+    fail(401, "admin_sign_in_required", "Sign in to your private examiner account.", { auth_mode: "builtin" });
+  return { email: session.email, role: "owner", auth_mode: "builtin", session_expires_at: iso(session.expires_at) };
+}
+async function builtinSignIn(request, env) {
+  if (request.method !== "POST") fail(405, "method_not_allowed", "Use the private sign-in page.", { auth_mode: "builtin" });
+  if (adminMode(env) !== "password")
+    fail(409, "protected_sign_in_required", "Use the protected examiner address to sign in.", { auth_mode: "access" });
+  const settings = builtinSettings(env), data = await body(request, 4096);
+  const candidate = typeof data.secret === "string" && data.secret.length >= 1 && data.secret.length <= 128 ? data.secret : "0".repeat(64);
+  // Web Crypto performs the signature comparison. Avoid a timing-sensitive
+  // JavaScript comparison or a slow password KDF on the Free Worker CPU budget.
+  const algorithm = { name: "HMAC", hash: "SHA-256" }, challenge = new TextEncoder().encode("due-diligence-private-admin-login-v1");
+  const candidateKey = await crypto.subtle.importKey("raw", new TextEncoder().encode(candidate), algorithm, false, ["sign"]);
+  const configuredKey = await crypto.subtle.importKey("raw", new TextEncoder().encode(settings.secret), algorithm, false, ["verify"]);
+  const valid = await crypto.subtle.verify("HMAC", configuredKey, await crypto.subtle.sign("HMAC", candidateKey, challenge), challenge);
+  if (!valid) {
+    const window = Math.floor(now() / ADMIN_WINDOW_MS) * ADMIN_WINDOW_MS;
+    const globalKey = await hash(`admin-login-global:${window}`);
+    const networkKey = await hash(`admin-login-ip:${request.headers.get("CF-Connecting-IP") || "unidentified-network"}:${window}`);
+    // Cap both counters and the number of new per-network rows after a global
+    // burst. A valid random key bypasses failed-guess lockouts, avoiding a global
+    // guessing attack that could otherwise deny the owner's legitimate login.
+    await env.EXAM_DB.batch([
+      stmt(env.EXAM_DB, "INSERT INTO admin_login_windows(key_hash,window_start,failures) VALUES(?,?,1) ON CONFLICT(key_hash) DO UPDATE SET failures=failures+1 WHERE failures<101", globalKey, window),
+      stmt(env.EXAM_DB, "INSERT INTO admin_login_windows(key_hash,window_start,failures) SELECT ?,?,1 WHERE (SELECT failures FROM admin_login_windows WHERE key_hash=?)<=100 ON CONFLICT(key_hash) DO UPDATE SET failures=failures+1 WHERE failures<11", networkKey, window, globalKey),
+    ]);
+    const counters = await all(env.EXAM_DB, "SELECT key_hash,failures FROM admin_login_windows WHERE key_hash IN (?,?)", globalKey, networkKey);
+    if (counters.some(counter => counter.failures > (counter.key_hash === globalKey ? 100 : 10)))
+      fail(429, "admin_sign_in_limited", "Too many sign-in attempts. Wait ten minutes before trying again.", { auth_mode: "builtin", retry_after_seconds: 600 });
+    fail(401, "admin_sign_in_failed", "Sign-in could not be verified. Check your private sign-in key and try again.", { auth_mode: "builtin" });
+  }
+  const raw = token(), digest = await hash(raw), time = now(), expires = time + ADMIN_SESSION_MS;
+  const previous = readCookie(request, ADMIN_COOKIE);
+  const previousHash = /^[a-f0-9]{64}$/.test(previous) ? await hash(previous) : "";
+  await env.EXAM_DB.batch([
+    stmt(env.EXAM_DB, `UPDATE admin_sessions SET revoked_at=${DB_NOW} WHERE token_hash=? AND revoked_at IS NULL`, previousHash),
+    stmt(env.EXAM_DB, "INSERT INTO admin_sessions(token_hash,email,secret_version,created_at,expires_at) VALUES(?,?,?,?,?)", digest, settings.email, await hash(settings.secret), time, expires),
+    stmt(env.EXAM_DB, "INSERT INTO admin_audit(id,identity,action,received_at,details_json) VALUES(?,?,'admin_signed_in',?,?)", id(), settings.email, time, JSON.stringify({ authMode: "builtin" })),
+  ]);
+  return json({ identity: { email: settings.email, role: "owner", auth_mode: "builtin" }, expires_at: iso(expires) }, 200, { "Set-Cookie": adminCookie(raw) });
+}
+async function builtinSignOut(request, env) {
+  if (request.method !== "POST") fail(405, "method_not_allowed", "Use the examiner sign-out button.");
+  if (adminMode(env) !== "password")
+    fail(409, "protected_sign_out_required", "Sign out through the protected examiner service.", { auth_mode: "access" });
+  const settings = builtinSettings(env);
+  await body(request, 4096);
+  const raw = readCookie(request, ADMIN_COOKIE);
+  if (/^[a-f0-9]{64}$/.test(raw)) {
+    const digest = await hash(raw), version = await hash(settings.secret);
+    await env.EXAM_DB.batch([
+      stmt(env.EXAM_DB, `INSERT INTO admin_audit(id,identity,action,received_at,details_json) SELECT ?,email,'admin_signed_out',${DB_NOW},? FROM admin_sessions WHERE token_hash=? AND secret_version=? AND revoked_at IS NULL AND expires_at>${DB_NOW}`, id(), JSON.stringify({ authMode: "builtin" }), digest, version),
+      stmt(env.EXAM_DB, `UPDATE admin_sessions SET revoked_at=${DB_NOW} WHERE token_hash=? AND secret_version=? AND revoked_at IS NULL`, digest, version),
+    ]);
+  }
+  return json({ signed_out: true }, 200, { "Set-Cookie": adminCookie("", 0) });
+}
 function decode64(value) {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
   return Uint8Array.from(atob(normalized), (c) => c.charCodeAt(0));
 }
 export async function authenticateAdmin(request, env) {
+  if (adminMode(env) === "password") return builtinIdentity(request, env);
   const team = env.ACCESS_TEAM_DOMAIN?.replace(/\/$/, "");
   const issuer = team?.startsWith("https://") ? team : `https://${team || ""}`;
   const owners = (env.ADMIN_EMAILS || "")
@@ -1197,6 +1280,7 @@ export async function authenticateAdmin(request, env) {
       email,
       subject: claims.sub,
       role: owners.includes(email) ? "owner" : "examiner",
+      auth_mode: "access",
     };
   } catch {
     fail(
@@ -2286,6 +2370,10 @@ export async function maintenance(env) {
     "DELETE FROM registration_windows WHERE window_start<?",
     now() - 600000,
   );
+  await db.batch([
+    stmt(db, "DELETE FROM admin_login_windows WHERE window_start<?", now() - 2 * ADMIN_WINDOW_MS),
+    stmt(db, `DELETE FROM admin_sessions WHERE expires_at<=${DB_NOW} OR revoked_at IS NOT NULL`),
+  ]);
   // Remove expired access mappings, never the underlying exam or student work.
   await db.batch([
     stmt(db, `DELETE FROM platform_exam_sessions WHERE browser_token_hash IN (SELECT token_hash FROM platform_browsers WHERE expires_at<=${DB_NOW})`),
@@ -2327,6 +2415,11 @@ export function createApp(options = {}) {
         let path;
         try { path = decodeURIComponent(url.pathname); }
         catch { fail(400, "invalid_address", "This address could not be read."); }
+        if (env.ADMIN_AUTH_MODE === "password" && (path.startsWith("/admin") || path.startsWith("/api/admin/")) && url.protocol !== "https:" && !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)) {
+          if (request.method === "GET" && !path.startsWith("/api/"))
+            return new Response(null, { status: 303, headers: { ...securityHeaders, Location: `https://${url.host}/admin/login` } });
+          fail(403, "secure_sign_in_required", "Open the secure HTTPS examiner address to sign in.", { auth_mode: "builtin" });
+        }
         if (path === "/api/health")
           return json({
             service: "constitutional-exam",
@@ -2341,8 +2434,12 @@ export function createApp(options = {}) {
               "database_unavailable",
               "The examination service is unavailable. Writing saved in this browser is preserved; retry shortly.",
             );
+          if (path === "/api/admin/login") return await builtinSignIn(request, env);
+          if (path === "/api/admin/logout") return await builtinSignOut(request, env);
           if (path.startsWith("/api/admin/")) {
             const identity = await adminAuthenticator(request, env);
+            if (path === "/api/admin/session" && request.method === "GET")
+              return json({ identity, expires_at: identity.session_expires_at || null });
             return await adminApi(request, env, path.slice(11), identity);
           }
           if (path === "/api/browser/session") return await browserSession(request, env);
@@ -2355,8 +2452,23 @@ export function createApp(options = {}) {
           }
           fail(404, "route_not_found", "This address does not exist.");
         }
-        if (path.startsWith("/admin") || ["/import.mjs", "/document-import.mjs"].includes(path) || path.startsWith("/document-vendor/")) {
-          await adminAuthenticator(request, env);
+        const loginAsset = ["/admin/login", "/admin-login.html", "/admin-login.mjs", "/admin-login.css"].includes(path);
+        if (loginAsset && ["/admin/login", "/admin-login.html"].includes(path) && adminMode(env) === "password" && readCookie(request, ADMIN_COOKIE)) {
+          try {
+            await adminAuthenticator(request, env);
+            return new Response(null, { status: 303, headers: { ...securityHeaders, Location: "/admin/exams" } });
+          } catch (error) {
+            if (!(error instanceof ApiError) || ![401, 503].includes(error.status)) throw error;
+          }
+        }
+        if (!loginAsset && (path.startsWith("/admin") || ["/import.mjs", "/document-import.mjs"].includes(path) || path.startsWith("/document-vendor/"))) {
+          try {
+            await adminAuthenticator(request, env);
+          } catch (error) {
+            if (error instanceof ApiError && error.status === 401 && adminMode(env) === "password" && request.method === "GET" && ["/admin/exams", "/admin.html"].includes(path))
+              return new Response(null, { status: 303, headers: { ...securityHeaders, Location: "/admin/login" } });
+            throw error;
+          }
           if (
             ![
               "/admin/exams",
@@ -2380,7 +2492,7 @@ export function createApp(options = {}) {
             503,
           );
         const dynamicExam = path.match(/^\/exam\/([a-z0-9][a-z0-9-]{0,79})\/?$/);
-        const publicAsset = ["/", "/index.html", "/student.mjs", "/student.css", "/local-drafts.mjs", "/exam-sw.mjs", "/favicon.ico", "/practice", "/official"].includes(path)
+        const publicAsset = loginAsset || ["/", "/index.html", "/student.mjs", "/student.css", "/local-drafts.mjs", "/exam-sw.mjs", "/favicon.ico", "/practice", "/official"].includes(path)
           || /^\/fonts\/[a-zA-Z0-9._-]+$/.test(path) || /^\/icons\/[a-zA-Z0-9_-]+\.svg$/.test(path);
         if (!publicAsset && !dynamicExam && !path.startsWith("/admin") && !["/import.mjs", "/document-import.mjs"].includes(path) && !path.startsWith("/document-vendor/"))
           fail(404, "route_not_found", "This address does not exist.");
@@ -2388,6 +2500,8 @@ export function createApp(options = {}) {
           ? "/index.html"
           : path === "/admin/exams"
             ? "/admin.html"
+            : path === "/admin/login"
+              ? "/admin-login.html"
             : path;
         const assetRequest = new Request(new URL(assetPath, url), request),
           response = await env.ASSETS.fetch(assetRequest);
@@ -2410,6 +2524,9 @@ export function createApp(options = {}) {
               serverTime: now(),
             },
             error.status,
+            error.status === 429 && Number.isSafeInteger(error.extra?.retry_after_seconds) && error.extra.retry_after_seconds > 0
+              ? { "Retry-After": String(error.extra.retry_after_seconds) }
+              : {},
           );
         // Never expose SQL diagnostics, tokens, student writing, or provider responses.
         return json(

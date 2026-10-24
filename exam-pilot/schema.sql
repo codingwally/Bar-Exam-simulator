@@ -39,6 +39,13 @@ CREATE TABLE IF NOT EXISTS platform_exam_sessions (
  PRIMARY KEY(browser_token_hash,exam_id)
 );
 CREATE INDEX IF NOT EXISTS platform_sessions_attempt ON platform_exam_sessions(attempt_id);
+CREATE TABLE IF NOT EXISTS admin_sessions (
+ token_hash TEXT PRIMARY KEY, email TEXT NOT NULL, secret_version TEXT NOT NULL,
+ created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, revoked_at INTEGER
+);
+CREATE TABLE IF NOT EXISTS admin_login_windows (
+ key_hash TEXT PRIMARY KEY, window_start INTEGER NOT NULL, failures INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS answer_operations (
  id TEXT PRIMARY KEY, attempt_id TEXT NOT NULL REFERENCES attempts(id), question_id TEXT NOT NULL REFERENCES questions(id),
  revision INTEGER NOT NULL, text TEXT NOT NULL, hash TEXT NOT NULL, saved_at INTEGER NOT NULL,

@@ -20,6 +20,7 @@
   ],
   "triggers": { "crons": ["* * * * *"] },
   "vars": {
+    "ADMIN_AUTH_MODE": "password",
     "ADMIN_EMAILS": "wallyesteban1993@gmail.com",
     "EXAMINER_EMAILS": "",
     "ACCESS_TEAM_DOMAIN": "",

@@ -17,7 +17,12 @@ const source = await readFile(
 
 async function provisionFixture(
   configText,
-  { columns = [], existing = false, publicBucket = false } = {},
+  {
+    columns = [],
+    existing = false,
+    publicBucket = false,
+    authMode = "access",
+  } = {},
 ) {
   const directory = await mkdtemp(join(tmpdir(), "dd-exam-provision-"));
   const trace = join(directory, "fetches.json");
@@ -40,6 +45,7 @@ async function provisionFixture(
       else if (path.endsWith("/r2/buckets")) result = { buckets: [] };
       else if (path.endsWith("/domains/managed")) result = { enabled: ${JSON.stringify(publicBucket)} };
       else if (path.endsWith("/domains/custom")) result = { domains: [] };
+      else if (path.endsWith("/workers/subdomain")) result = { subdomain: "synthetic" };
       return Response.json({ success: true, result });
     };
   `,
@@ -61,6 +67,7 @@ async function provisionFixture(
         CLOUDFLARE_API_TOKEN: "synthetic-not-a-real-credential",
         ACCESS_TEAM_DOMAIN: "https://synthetic.cloudflareaccess.com",
         ACCESS_AUD: "synthetic-application-audience",
+        ADMIN_AUTH_MODE: authMode,
         EXAM_TEST_TRACE: trace,
       },
     },
@@ -134,6 +141,31 @@ test("valid deployment preflight produces the isolated config through mocked API
       fixture.calls.some((call) => call.path.includes("/r2/")),
       false,
     );
+  } finally {
+    await cleanup(fixture.directory);
+  }
+});
+
+test("built-in sign-in deployment requires no Zero Trust or R2 subscription", async () => {
+  const fixture = await provisionFixture(templateText, {
+    authMode: "password",
+  });
+  try {
+    assert.equal(fixture.result.status, 0, fixture.result.stderr);
+    const config = JSON.parse(
+      await readFile(
+        join(fixture.directory, ".wrangler", "deploy.json"),
+        "utf8",
+      ),
+    );
+    assert.equal(config.vars.ADMIN_AUTH_MODE, "password");
+    assert.equal(config.vars.ACCESS_TEAM_DOMAIN, "");
+    assert.equal(config.vars.ACCESS_AUD, "");
+    assert.equal(
+      fixture.calls.some((call) => /\/access\/|\/r2\//.test(call.path)),
+      false,
+    );
+    assert.equal(JSON.stringify(config).includes("ADMIN_LOGIN_SECRET"), false);
   } finally {
     await cleanup(fixture.directory);
   }

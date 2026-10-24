@@ -51,7 +51,15 @@ const env = {
     },
   },
 };
-const app = createApp({
+// Optional local-only rehearsal of the real built-in login boundary. The key
+// must be synthetic; this setting is never read by the deployed Worker.
+const realAdminLogin = process.env.EXAM_QA_ADMIN_SECRET;
+if (realAdminLogin) {
+  env.ADMIN_AUTH_MODE = "password";
+  env.ADMIN_LOGIN_SECRET = realAdminLogin;
+  env.ADMIN_EMAILS = "qa-examiner@example.invalid";
+}
+const app = createApp(realAdminLogin ? {} : {
   adminAuthenticator: async (request) => {
     if (request.headers.get("x-qa-anonymous") === "true")
       throw new Error("Synthetic anonymous access denied");

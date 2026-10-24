@@ -76,6 +76,24 @@ jobs:
         run: |
           node exam-pilot/test/workspace-browser.mjs https://localhost:8802
           node exam-pilot/test/document-workflows-browser.mjs https://localhost:8802
+      - name: Start the disposable professor authentication rehearsal
+        shell: bash
+        env:
+          EXAM_QA_ADMIN_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+        run: |
+          EXAM_QA_PORT=8806 EXAM_QA_TLS_KEY=exam-pilot/.wrangler/tls/local-key.pem EXAM_QA_TLS_CERT=exam-pilot/.wrangler/tls/local-cert.pem node exam-pilot/dev-server.mjs > exam-pilot/.wrangler/professor-auth-server.log 2>&1 &
+          for attempt in $(seq 1 20); do
+            if curl --insecure --silent --fail https://localhost:8806/api/health > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Review private professor sign-in, sign-out and expired-session draft preservation
+        env:
+          EXAM_QA_ADMIN_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          DD_ALLOW_SELF_SIGNED: "true"
+          DD_BROWSER_ENGINES: chromium,firefox,webkit
+          DD_PLAYWRIGHT_MODULE: ${{ github.workspace }}/exam-pilot/.wrangler/test-deps/node_modules/playwright
+        run: node exam-pilot/test/professor-login-review.mjs https://localhost:8806
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -83,6 +101,7 @@ jobs:
           path: |
             exam-pilot/.wrangler/evidence/
             exam-pilot/.wrangler/server.log
+            exam-pilot/.wrangler/professor-auth-server.log
           retention-days: 30
   connection:
     if: github.event_name == 'workflow_dispatch' && inputs.action != 'verify'
@@ -96,7 +115,8 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.EXAM_PILOT_CLOUDFLARE_API_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: node exam-pilot/access-setup.mjs check
+          ADMIN_AUTH_MODE: password
+        run: node exam-pilot/infrastructure.mjs check
   infrastructure:
     needs: [verify, browsers, connection]
     if: github.event_name == 'workflow_dispatch' && inputs.action != 'verify'
@@ -115,13 +135,8 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.EXAM_PILOT_CLOUDFLARE_API_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ADMIN_AUTH_MODE: password
         run: node exam-pilot/infrastructure.mjs check
-      - name: Protect the professor desk using existing Zero Trust
-        if: inputs.action == 'deploy-isolated'
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.EXAM_PILOT_CLOUDFLARE_API_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: node exam-pilot/access-setup.mjs setup
       - name: Provision the free isolated practice database
         if: inputs.action == 'deploy-isolated'
         env:
@@ -129,6 +144,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           ACCESS_TEAM_DOMAIN: ${{ vars.EXAM_PILOT_ACCESS_TEAM_DOMAIN }}
           ACCESS_AUD: ${{ vars.EXAM_PILOT_ACCESS_AUD }}
+          ADMIN_AUTH_MODE: password
         run: node exam-pilot/infrastructure.mjs provision
       - name: Apply only the new isolated exam schema
         if: inputs.action == 'deploy-isolated'
@@ -142,3 +158,12 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.EXAM_PILOT_CLOUDFLARE_API_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx --yes wrangler@4.152.0 deploy --config exam-pilot/.wrangler/deploy.json
+      - name: Activate the private professor sign-in
+        if: inputs.action == 'deploy-isolated'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.EXAM_PILOT_CLOUDFLARE_API_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          EXAM_ADMIN_LOGIN_SECRET: ${{ secrets.EXAM_PILOT_ADMIN_LOGIN_SECRET }}
+        run: |
+          test -n "$EXAM_ADMIN_LOGIN_SECRET"
+          printf '%s' "$EXAM_ADMIN_LOGIN_SECRET" | npx --yes wrangler@4.152.0 secret put ADMIN_LOGIN_SECRET --config exam-pilot/.wrangler/deploy.json

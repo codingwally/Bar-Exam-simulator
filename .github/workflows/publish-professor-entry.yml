@@ -1,0 +1,238 @@
+name: Publish isolated professor entry
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-professor-entry.yml'
+      - '.github/workflows/validate-mandatory-early-access.yml'
+      - 'scripts/professor-entry-release.mjs'
+      - 'scripts/test-professor-entry-release.mjs'
+      - 'release/professor-entry-20261024.json'
+      - 'assets/phase2-experience.js'
+      - 'index.html'
+      - 'service-worker.js'
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Preview the validated open PR, or publish its merged exact tree
+        type: choice
+        options: [preview, publish]
+        default: preview
+        required: true
+      expected_source_sha:
+        description: Exact reviewed source commit (PR head for preview; current main for publish)
+        type: string
+        required: true
+      validation_run_id:
+        description: Successful mandatory pull-request validation covering this exact tree
+        type: string
+        required: true
+      confirm_production:
+        description: Publish only the approved Professor door entry after checking its preview
+        type: boolean
+        default: false
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+
+concurrency:
+  group: examination-room-production-cutover
+  cancel-in-progress: false
+
+env:
+  EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha }}
+  VALIDATION_RUN_ID: ${{ inputs.validation_run_id }}
+  RELEASE_OPERATION: ${{ inputs.operation }}
+  CONFIRM_PRODUCTION: ${{ inputs.confirm_production }}
+
+jobs:
+  checks:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Fetch the immutable live entry baseline for unit verification
+        run: git fetch --no-tags --depth=1 origin 8ed2a21d3fa33d065fdf1c3f69f631210ca08e25
+      - name: Verify current main entry and fail-closed release guards
+        run: |
+          node scripts/test-onboarding-flow.mjs
+          node scripts/test-examination-room-door-menu.mjs
+          node scripts/test-auth-session-persistence.mjs
+          node scripts/test-phase2-contract.mjs
+          node --test scripts/test-professor-entry-release.mjs
+
+  build:
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'codingwally/Bar-Exam-simulator'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: reviewed
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          ref: 8ed2a21d3fa33d065fdf1c3f69f631210ca08e25
+          path: baseline
+      - uses: actions/checkout@v4
+        with:
+          ref: 8ed2a21d3fa33d065fdf1c3f69f631210ca08e25
+          path: runtime
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Require owner, exact source, mandatory PR validation and narrow reviewed scope
+        working-directory: reviewed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/professor-entry-release.mjs provenance
+      - name: Run fail-closed release tests
+        working-directory: reviewed
+        run: |
+          git fetch --no-tags --depth=1 origin 8ed2a21d3fa33d065fdf1c3f69f631210ca08e25
+          node --test scripts/test-professor-entry-release.mjs
+      - name: Derive only the three hash-pinned entry assets from the actual live baseline
+        run: node reviewed/scripts/professor-entry-release.mjs prepare reviewed baseline runtime "$GITHUB_SHA"
+      - name: Install the unchanged baseline's locked build dependencies
+        run: |
+          npm ci --prefix baseline/worker --ignore-scripts --no-audit --no-fund
+          npm ci --prefix runtime/worker --ignore-scripts --no-audit --no-fund
+      - name: Build the exact rollback and candidate public artifacts
+        run: |
+          (cd baseline && GITHUB_SHA=8ed2a21d3fa33d065fdf1c3f69f631210ca08e25 node scripts/test-pages-artifact.mjs)
+          (cd runtime && GITHUB_SHA="$GITHUB_SHA" node scripts/test-pages-artifact.mjs)
+          node reviewed/scripts/test-examination-room-door-menu.mjs runtime
+          node reviewed/scripts/test-examination-result-identity.mjs runtime
+          node reviewed/scripts/test-bar-simulation-submitted-answer.mjs runtime
+          node reviewed/scripts/test-bar-simulation-cumulative-score.mjs runtime
+      - name: Compare every live file and permit only the reviewed entry assets and marker
+        working-directory: reviewed
+        run: node scripts/professor-entry-release.mjs before ../baseline/.pages-dist ../runtime/.pages-dist "$GITHUB_SHA" .wrangler/professor-entry/evidence
+      - name: Preserve exact live rollback artifact for ninety days
+        uses: actions/upload-artifact@v4
+        with:
+          name: professor-entry-rollback-8ed2a21
+          path: baseline/.pages-dist
+          include-hidden-files: true
+          retention-days: 90
+      - uses: actions/upload-artifact@v4
+        with:
+          name: professor-entry-candidate-${{ github.sha }}
+          path: runtime/.pages-dist
+          include-hidden-files: true
+          retention-days: 90
+      - uses: actions/upload-artifact@v4
+        with:
+          name: professor-entry-baseline-evidence-${{ github.sha }}
+          path: reviewed/.wrangler/professor-entry/evidence
+          retention-days: 90
+
+  preview:
+    needs: build
+    if: inputs.operation == 'preview'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: professor-entry-rollback-8ed2a21
+          path: .wrangler/professor-entry/baseline
+      - uses: actions/download-artifact@v4
+        with:
+          name: professor-entry-candidate-${{ github.sha }}
+          path: .wrangler/professor-entry/candidate
+      - name: Recheck exact validated open PR before touching only its static preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node scripts/professor-entry-release.mjs provenance
+          node scripts/professor-entry-release.mjs before .wrangler/professor-entry/baseline .wrangler/professor-entry/candidate "$GITHUB_SHA"
+      - name: Install the exact preview CLI version
+        run: npm install --prefix .wrangler/professor-entry/tooling --ignore-scripts --no-save --package-lock=false --no-audit --no-fund wrangler@4.152.0
+      - name: Deploy the isolated static-only preview; no routes or data bindings
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          node scripts/professor-entry-release.mjs preview-config .wrangler/professor-entry/candidate .wrangler/professor-entry/wrangler.json
+          node .wrangler/professor-entry/tooling/node_modules/wrangler/bin/wrangler.js deploy --config .wrangler/professor-entry/wrangler.json --dry-run
+          node .wrangler/professor-entry/tooling/node_modules/wrangler/bin/wrangler.js deploy --config .wrangler/professor-entry/wrangler.json
+      - name: Verify every staged byte and the real private professor destination
+        run: |
+          for attempt in $(seq 1 6); do
+            if node scripts/professor-entry-release.mjs staged .wrangler/professor-entry/baseline .wrangler/professor-entry/candidate "$GITHUB_SHA" .wrangler/professor-entry/evidence; then exit 0; fi
+            sleep 5
+          done
+          exit 1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: professor-entry-preview-evidence-${{ github.sha }}
+          path: .wrangler/professor-entry/evidence
+          if-no-files-found: warn
+          retention-days: 90
+
+  publish:
+    needs: build
+    if: inputs.operation == 'publish' && inputs.confirm_production
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: https://duediligence.ph
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: professor-entry-rollback-8ed2a21
+          path: .wrangler/professor-entry/baseline
+      - uses: actions/download-artifact@v4
+        with:
+          name: professor-entry-candidate-${{ github.sha }}
+          path: .wrangler/professor-entry/candidate
+      - name: Recheck merged current main, mandatory validation, every baseline and preview byte, and private destination
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node scripts/professor-entry-release.mjs provenance
+          node scripts/professor-entry-release.mjs staged .wrangler/professor-entry/baseline .wrangler/professor-entry/candidate "$GITHUB_SHA" .wrangler/professor-entry/evidence
+      - uses: actions/configure-pages@v4
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .wrangler/professor-entry/candidate
+      - uses: actions/deploy-pages@v4
+      - name: Verify all published bytes
+        run: |
+          for attempt in $(seq 1 12); do
+            if node scripts/professor-entry-release.mjs after .wrangler/professor-entry/baseline .wrangler/professor-entry/candidate "$GITHUB_SHA" .wrangler/professor-entry/evidence; then exit 0; fi
+            sleep 5
+          done
+          exit 1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: professor-entry-production-evidence-${{ github.sha }}
+          path: .wrangler/professor-entry/evidence
+          if-no-files-found: warn
+          retention-days: 90

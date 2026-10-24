@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "base_sha": "8ed2a21d3fa33d065fdf1c3f69f631210ca08e25",
+  "dashboard": "https://duediligence-constitutional-exam.wallyesteban1993.workers.dev/admin/exams",
+  "version": "professor-desk-20261024-1",
+  "reviewed_entry_sha256": [
+    "b3f4bd448a66503cd65ee029208f32bea58613fcaafddbbca7841f53389663cd",
+    "a93aa003542f51eb679149a78dad6e6dafa55d104c1a8eb24c8e0876e2569134",
+    "5b6e4b30ea83882ae9733d40125dc0aff3931382493d91b17c78183b3510967a"
+  ],
+  "assets": {
+    "assets/phase2-experience.js": {
+      "baseline_sha256": "63e45f91ec1fab4293d9297540ab84645685875287349d68585fba4349a69f96",
+      "candidate_sha256": "9908a0f64acfd255049c88a1003e64433a66b64e46c8634a5f85deb4dcdc0b42"
+    },
+    "index.html": {
+      "baseline_sha256": "bb19af9a34af5ff7c59aeb537b10c735e919f6fc83cb0a3c7f6c63d58b82f76d",
+      "candidate_sha256": "8fcce4c3e876c4f588612bb0e32f80bba36514fd74cafec3a4df8045a14a0fa8"
+    },
+    "service-worker.js": {
+      "baseline_sha256": "659273f2082b8de96d0e2c8283b363da43cb13c004be495f4e8942c57262dde0",
+      "candidate_sha256": "2c8da047cd129fcca56b96f9618fc26dbc228f5ad0ade783856ce84803a2d517"
+    }
+  }
+}

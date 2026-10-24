@@ -65,11 +65,24 @@ assert.match(
   /function restoreAuthDestination\(\)[\s\S]*if \(!state\.authReturnPending\) return;[\s\S]*const storedReturn = safeSessionRead\(authReturnStorageKey\);[\s\S]*const returnHash = safeReturnHash\(storedReturn\) \|\| '#quorum';[\s\S]*dueDiligenceRoute:\s*returnHash\.slice\(1\)[\s\S]*PopStateEvent\('popstate'/,
   'OAuth return must restore a validated requested destination while routine session recovery preserves the active route and Quorum remains the fallback.',
 );
-assert.match(
-  phase2,
-  /showEntry\(\{ allowDismiss: true, returnHash: '#examination-room' \}\)/,
-  'The Professor door must preserve Examination Room as the post-sign-in destination.',
-);
+{
+  // The professor desk authenticates independently. Opening its door must never
+  // require or forward the main site's session or student identity.
+  const doorSource = phase2.slice(phase2.indexOf('  function professorDoorDestination('), phase2.indexOf('  async function recordCurrentTermsAcceptance('));
+  const elements = new Map(['dd2-professor-door','dd2-professor-door-retry','dd2-examination-room-status','dd2-professor-door-badge'].map(id => [id,{dataset:{},setAttribute(){}}]));
+  const destinations = [];
+  const sandbox = {document:{getElementById:id=>elements.get(id)},location:{assign:url=>destinations.push(url)}};
+  Object.defineProperty(sandbox,'state',{get(){throw new Error('Professor entry must not access the main-site session.');}});
+  vm.runInNewContext(`${doorSource}\ncheckProfessorDoor(); activateProfessorDoor();`,sandbox);
+  assert.equal(destinations.length,1);
+  const target = new URL(destinations[0]);
+  assert.equal(target.protocol,'https:');
+  assert.equal(target.pathname,'/admin/exams');
+  assert.notEqual(target.origin,'https://duediligence.ph');
+  assert.equal(target.username,'');assert.equal(target.password,'');assert.equal(target.search,'');assert.equal(target.hash,'');
+  assert.equal(elements.get('dd2-professor-door').disabled,false);
+  assert.match(elements.get('dd2-examination-room-status').textContent,/upload your paper/);
+}
 assert.match(
   html,
   /function showSubjectSelection\(\) \{[\s\S]*window\.scrollTo\(\{ top: 0, behavior: 'auto' \}\);[\s\S]*close\?\.focus\(\{ preventScroll: true \}\);[\s\S]*\}/,

@@ -123,8 +123,13 @@ export async function runProfessorLoginReview(
       .click();
     await page
       .locator("#message")
-      .filter({ hasText: "Keep this page open" })
+      // The earlier blocked-storage warning also says "Keep this page open".
+      // Wait for the actual expired-session response before asserting its UI.
+      .filter({ hasText: "Your sign-in expired." })
       .waitFor();
+    await page
+      .getByRole("link", { name: "Sign in again", exact: true })
+      .waitFor({ state: "visible" });
     assert.equal(
       await page.locator("#question-0").inputValue(),
       "This complete synthetic question must survive session expiry.",
@@ -171,6 +176,7 @@ export async function runProfessorLoginReview(
         JSON.stringify(
           {
             error: error.message,
+            stack: error.stack,
             completed: outcomes,
             pageErrors: errors,
             pageText: (

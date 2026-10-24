@@ -1,0 +1,5296 @@
+{
+  "schemaVersion": 1,
+  "scope": "PUBLIC_DIALOG_DISMISSAL_ISOLATED_BROWSER",
+  "runId": "40084596471",
+  "runUrl": "https://github.com/codingwally/Bar-Exam-simulator/actions/runs/40084596471",
+  "pullRequest": "https://github.com/codingwally/Bar-Exam-simulator/pull/417",
+  "candidate": "b8d30511823ac67716e8a3278cbea46ddfb58cde",
+  "testedSource": "0a71ae7d9541dfb904b5a7f72aed56ecca4f95f3",
+  "candidateTree": "5d392ef899eba8f1802825dc4c6905589cd618bd",
+  "testedTree": "5d392ef899eba8f1802825dc4c6905589cd618bd",
+  "rawReportSha256": "cd950ec19254b6d128b29a4b057d88fff7c68e39e8fb415e6c8fde5f828b18ca",
+  "artifact": {
+    "id": 12556970830,
+    "name": "home-display-component-evidence",
+    "uploadedArchiveSha256": "e6f641325f2c27d760fcfcab1b94a0dd4407b253c5d7b30ee8a18e88678bcfb4",
+    "retentionDays": 14
+  },
+  "independentVerification": {
+    "verifiedAt": "2026-10-24T10:08:24.499Z",
+    "runId": "40084596471",
+    "candidate": "b8d30511823ac67716e8a3278cbea46ddfb58cde",
+    "testedSource": "0a71ae7d9541dfb904b5a7f72aed56ecca4f95f3",
+    "candidateTree": "5d392ef899eba8f1802825dc4c6905589cd618bd",
+    "testedTree": "5d392ef899eba8f1802825dc4c6905589cd618bd",
+    "reportSha256": "cd950ec19254b6d128b29a4b057d88fff7c68e39e8fb415e6c8fde5f828b18ca",
+    "status": "PASS_LOCAL_PUBLIC_NATIVE_BROWSER",
+    "summary": {
+      "expectedCases": 28,
+      "cases": 28,
+      "passed": 28,
+      "failed": 0,
+      "checks": 248,
+      "servedFiles": 43
+    },
+    "declaredComparisons": 13,
+    "servedComparisons": 43,
+    "screenshotComparisons": 16,
+    "screenshotReviewPerformedByThisScript": false,
+    "caseFailures": [],
+    "consoleErrorCategories": [
+      "EXPECTED_CSP_BLOCK"
+    ],
+    "pageErrorCount": 0,
+    "network": {
+      "localGetRequests": 2276,
+      "externalRequestsBlocked": 0,
+      "localNonGetRequestsBlocked": 0,
+      "navigationRequestsBlocked": 0,
+      "websocketRequestsBlocked": 0,
+      "serverNonGetRequestsRejected": 0,
+      "serverMissingPaths": [],
+      "serverErrors": 0
+    },
+    "deploymentPerformed": false,
+    "fullWebsiteAcceptance": false
+  },
+  "visualReview": {
+    "reviewedScreenshots": [
+      {
+        "file": "direct-terms-close-390x844-open.png",
+        "sha256": "fc75ae235e87b7a447cb3369738a539bcf43d750f0473adbe233e85d6c23ecfe",
+        "inspectedInRun": "40084119925",
+        "identicalInThisRun": true
+      },
+      {
+        "file": "direct-privacy-close-390x844-open.png",
+        "sha256": "65d140feead982c6c28f405b1bd2b7a9e3031265fba8b505fbd83fef998b684e",
+        "inspectedInRun": "40084119925",
+        "identicalInThisRun": true
+      },
+      {
+        "file": "direct-support-close-390x844-open.png",
+        "sha256": "32ce3438a0eb4ba596fc35cebc442f4f1d04b77b78a158f3556ee45948d88a5f",
+        "inspectedInRun": "40084119925",
+        "identicalInThisRun": true
+      },
+      {
+        "file": "direct-partnership-close-390x844-open.png",
+        "sha256": "31964f8166392f395e6e1821c3f83dcef644fa3885d400decd2269bcd7db83a1",
+        "inspectedInRun": "40084119925",
+        "identicalInThisRun": true
+      },
+      {
+        "file": "direct-support-close-1280x720-open.png",
+        "sha256": "5674339680f8d364b4ba7b2fc8949eb0695b972ad662c322b0692e9a9561764e",
+        "inspectedInRun": "40084119925",
+        "identicalInThisRun": true
+      }
+    ],
+    "observed": "Bounded card crops show readable text, clear Close controls and aligned Support/Partnership actions in the captured regions.",
+    "limitations": "External fonts were blocked. Card crops are not a complete page, production visual approval, every keyboard state, or the broader responsive audit."
+  },
+  "earlierFailures": [
+    {
+      "runId": "40083862251",
+      "testedSource": "f8098bf25553dd0539bf0c4cd733611fd192ec23",
+      "reportSha256": "bdb002b43fb9cac2d79c5992ecda2053e23f2a4b061e286e6c1d60e2725d646b",
+      "passedCases": 0,
+      "checks": 7,
+      "reason": "Screenshot selector targeted the intentionally hidden public footer after seven passing Terms Close/reload checks."
+    },
+    {
+      "runId": "40084119925",
+      "candidate": "10a88faaf6695abd866c9331c077c9f75094071c",
+      "testedSource": "027cdd95a014c1b24dadef823c4a9c9ed4955a45",
+      "reportSha256": "e2d4d238f6428e5db77f092df4413d2163bfe428986c63b0104529e7c58806f7",
+      "passedCases": 27,
+      "checks": 242,
+      "reason": "Last mobile Privacy Escape/focus wait raised a runner error. Snapshot showed correct root/focus/closed overlays and that case alone recorded a blocked script evaluation. Exact error cause remains unproven; DOM locator waits replaced predicate polling without relaxing CSP."
+    }
+  ],
+  "deploymentPerformed": false,
+  "fullHostedRehearsal": false,
+  "fullWebsiteAcceptance": false,
+  "nativeReport": {
+    "schemaVersion": 1,
+    "status": "PASS_LOCAL_PUBLIC_NATIVE_BROWSER",
+    "phase": "complete",
+    "startedAt": "2026-10-24T10:06:56.398Z",
+    "sourceSha": "0a71ae7d9541dfb904b5a7f72aed56ecca4f95f3",
+    "scope": "ACTUAL_SIGNED_OUT_FRONTEND_DIRECT_NATIVE_ROUTES_AND_ENTRY_LEGAL_HISTORY_ON_LOOPBACK",
+    "testSha256": "ef2557888d19e90eb935758c5b2b5c561965d7b8a723b7795b5a67463677caba",
+    "inputHashes": {
+      "scripts/test-native-view-browser.mjs": "ef2557888d19e90eb935758c5b2b5c561965d7b8a723b7795b5a67463677caba",
+      ".github/workflows/validate-home-display.yml": "db058e48dbc672680a651ac4c39751f4614412793ba0ef4fa6728ca573042d0e",
+      "index.html": "acb7c2a66ea7fd04cccebe63be9d970cdaf8553c4e40271b40799315650c811f",
+      "manifest.webmanifest": "f7a3adc662d28c10ec5c163fa84dc61bbd1ad3c069387823660029f2b63e9d80",
+      "assets/phase2-experience.js": "95f2d0a328ba7fe33eefe6613b06c8da33044d2686c574fbea9e9b27c8505455",
+      "assets/phase2.css": "daa402e9e2cc6142f38a024f50b410a7e04396547288c5d6ebdefd9ff0b5a965",
+      "assets/phase2-config.js": "6ac37e57756468da4b20e5982b82490c437b92f8b0b5a91c19bf07416fef2357",
+      "assets/private-beta-landing.js": "d8c9be18fcd8c68e5391657e05636155cb17e6686775d22bd0a87e63d8e72dd1",
+      "assets/private-beta-landing.css": "2ceae9ff9ca8831abe5abc617ba61fd7b6f9736d0dd1f97fc7897657fee5eeaf",
+      "assets/private-beta-session.js": "68062a3ab71a2beb336ed5f11256fd9e86cf000701efb814a31a7097da5ddbf4",
+      "assets/quorum-first-shell.css": "62bc5e58f55978fa38c0f565581c6263d64eb245efd90e0119d79a677c6b0b23",
+      "assets/quorum-first-shell.js": "a0cebd12cb983cd28861a410ad527811325ab34f0398c4a9575ff1aa6f8d1590",
+      "service-worker.js": "4b516efb359ae60ae8ccec14c953bf24928661b2b637f393789891aca4ea17d1"
+    },
+    "servedInputHashes": {
+      "index.html": "acb7c2a66ea7fd04cccebe63be9d970cdaf8553c4e40271b40799315650c811f",
+      "assets/phase2.css": "daa402e9e2cc6142f38a024f50b410a7e04396547288c5d6ebdefd9ff0b5a965",
+      "assets/pricing-renderer.css": "295ff1f3b7c0eb91e6bc6e8088a58c83d6fb97d18c99b6427adf72a05bda6708",
+      "assets/private-beta-landing.css": "2ceae9ff9ca8831abe5abc617ba61fd7b6f9736d0dd1f97fc7897657fee5eeaf",
+      "assets/due-diligence-controls.css": "c1a7b4f84ccfe833dd34cc66d98a4bb060a744b5d4890c9bf39ef75558e60faf",
+      "assets/bar-forecast.css": "ac42c12d7f728b77d16556c89a151d509ab93b07a48653a3596f9c9707f66190",
+      "assets/subscription-cta.css": "5e65aa82dba657b335941f99475a695184c1ccbe4d03fc4c6a919ffe0e776664",
+      "assets/quorum-first-shell.css": "62bc5e58f55978fa38c0f565581c6263d64eb245efd90e0119d79a677c6b0b23",
+      "assets/study-room-preview.css": "31716c4a5af8400dfdc6555dba20452958299a0c2ebd75667414f02c4d002e9d",
+      "assets/auxiliary-writing-diagnostics.css": "30cf0f9213478f67df56df527c57d4cdcbf4c93ed4ee58dc5c7702b7ee716944",
+      "assets/exam-session-controller.js": "62310c0a29dd15004ad2f3d7a6d9a36b83c1ac3535f53d213b236b95a3c9443b",
+      "assets/vendor/supabase-2.49.8.umd.js": "522e844a8554c84631063fa630d0b824b8042f346a0222da04460f81d942dcf8",
+      "assets/phase2-config.js": "6ac37e57756468da4b20e5982b82490c437b92f8b0b5a91c19bf07416fef2357",
+      "assets/auth-session-storage.js": "3bc609e69a20738c1d2caaa1e236b68c79f92e5f75cb33125db1b10358bb7c69",
+      "assets/private-beta-session.js": "68062a3ab71a2beb336ed5f11256fd9e86cf000701efb814a31a7097da5ddbf4",
+      "assets/profile-photo.js": "d99a308e93bb4fbe5c0fe958c0bf2e5f022040cd081c0617ae92bf317e1c0fcf",
+      "assets/pricing-renderer.js": "81153621c2b4ac401dcf4c8d8f6f3fb35040a06ecf64efc5a730f30a7dbcb746",
+      "assets/pricing-checkout-safety.js": "d0df8ffd104f9ca6500abcddd5c35d04889ae940957949465035e1f8110a6832",
+      "assets/phase2-experience.js": "95f2d0a328ba7fe33eefe6613b06c8da33044d2686c574fbea9e9b27c8505455",
+      "assets/phase4-experience.js": "6d9b7a019fe5e45dc91ea4188be5823fb238ecc346ea28d18399751f35809057",
+      "assets/subscription-cta.js": "c3e4e79c932c46fa8379354aada8a12fbc00f2a3dd140a25d39b0b8a255ca074",
+      "assets/study-room-preview.js": "00477d0c99c0df301beed26eeea970facdc9094766984f3deefad716eb3d9a7d",
+      "assets/auxiliary-writing-diagnostics.js": "e20fdfa38a3d408b2209e9586d9a67a35d36c8ce31214645a6c16c737982c3bf",
+      "assets/phase3-analytics.js": "c3beaa90ee972267a2fd770574b6db8f970a3aaa9b9960e12f5e4c59c099c7a1",
+      "assets/private-workspace.js": "e9536ccf547187e9ebb9e86f0ca7e731b93603000cbace4ec5eba45ee39e73ad",
+      "assets/feature-loader.js": "7a757081d7b57dde275287c5abca83d5eeb46e3712b13dfe16a8b4ae3a74c225",
+      "assets/quorum-first-shell.js": "a0cebd12cb983cd28861a410ad527811325ab34f0398c4a9575ff1aa6f8d1590",
+      "assets/private-beta-landing.js": "d8c9be18fcd8c68e5391657e05636155cb17e6686775d22bd0a87e63d8e72dd1",
+      "assets/pedro-navigation.js": "e9bfd85131ae2e202f038f9c3f4f9379c33706360a0d06c7448b20d8dd92d9c6",
+      "assets/brand/icon-192.png": "a0c7bb70b8b47a8203bede68eb6b496cd862cbe6e2f050cda04ce8df2fbe048a",
+      "assets/icons/community/caret-right.svg": "da96a0362670cf8fc16b2e94ba4db4862852469570b586c428e897781ecc10a5",
+      "assets/icons/navigation/door-open.svg": "9eadd1566c1fa5dcc3b9d0e49fd4b4146c15ab1ac2849f90d60c5d19f148f666",
+      "assets/icons/community/camera.svg": "d9eac900f8205a3ffd6f8c05a90fef46fde18e7b8a56681de217425860bc7b0a",
+      "assets/icons/navigation/tag.svg": "351af231ea52cb9448089f53cecd708d4eaf617ea7c975c76c6e2a9945cefd47",
+      "assets/icons/community/x.svg": "e3e5283d0e96f9c50888e13c4ce91cd55780c6f7bb3e57efde07bdce801af2e9",
+      "assets/icons/navigation/users.svg": "4c83ba70b1856811c81670d74f2c529326131ef119b877e91a7b075914f252b7",
+      "assets/icons/navigation/headphones.svg": "a518b603b604804706e562df3e0eebe3397a30bd18480faa854884fdf93a971e",
+      "assets/icons/navigation/timer.svg": "32977a6e5f064098461908c7795d5178ec2c9f814d305144f28a14bb720b2eac",
+      "assets/icons/community/eye-slash.svg": "015e46cb75a6ec546c1aaa0166942366aba5e964030f77ee68303b95d2e9647f",
+      "assets/debate-entry.js": "6281fa6c65c4161f1027ee1184f7d005867c2ebc60b71fc05f63972fe501e0b0",
+      "assets/brand/icon-512.png": "d0318db4b5c7c8fa956b4528c263acbdd2ff200def89c40c830b31117ac7c64d",
+      "assets/brand/favicon-32.png": "7c28bac52e123c525734281338d57bf7d9fd56a89aa5ef3f72703a1cd1b9106d",
+      "assets/brand/logo1-master.png": "6d284c91ce34d208252f5311a4cd3397fc00251e6968bfa620182138a1206cf5"
+    },
+    "cases": [
+      {
+        "id": "direct-terms-close-1280x720",
+        "kind": "direct",
+        "view": "terms",
+        "control": "close",
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "status": "PASS",
+        "stage": "real-reload",
+        "checks": [
+          {
+            "name": "Direct public route is signed out and has no owned dialog entry",
+            "passed": true
+          },
+          {
+            "name": "First dismissal returns to canonical public Home",
+            "passed": true
+          },
+          {
+            "name": "Dismissal preserves unrelated state without a new history entry",
+            "passed": true
+          },
+          {
+            "name": "Dismissal does not open a sign-in overlay",
+            "passed": true
+          },
+          {
+            "name": "Exactly one trusted dismissal action was delivered",
+            "passed": true
+          },
+          {
+            "name": "Real reload remains on public Home with the dialog closed",
+            "passed": true
+          },
+          {
+            "name": "Real reload retains unrelated history state",
+            "passed": true
+          },
+          {
+            "name": "No uncaught page error in this case",
+            "passed": true
+          },
+          {
+            "name": "No off-origin or non-GET navigation attempted",
+            "passed": true
+          }
+        ],
+        "actions": [
+          {
+            "action": "close",
+            "attempts": 1
+          }
+        ],
+        "startedAt": "2026-10-24T10:06:56.844Z",
+        "before": {
+          "pathname": "/",
+          "search": "",
+          "hash": "#terms",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-terms-close-1280x720",
+          "nativeOpen": true,
+          "nativeAriaHidden": "false",
+          "nativeView": "terms",
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": "dd2-native-close",
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "screenshotAttempts": [
+          {
+            "stage": "screenshot-open",
+            "previousStage": "initial-load-and-readiness",
+            "selector": "#dd2-native-view .dd2-native-card",
+            "file": "direct-terms-close-1280x720-open.png",
+            "status": "PASS"
+          },
+          {
+            "stage": "screenshot-after-reload",
+            "previousStage": "real-reload",
+            "selector": ".quorum-entry-legal",
+            "file": "direct-terms-close-1280x720-after-reload.png",
+            "status": "PASS"
+          }
+        ],
+        "afterAction": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-terms-close-1280x720",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "observedActions": [
+          {
+            "type": "click",
+            "id": "dd2-native-close",
+            "legal": null,
+            "trusted": true
+          }
+        ],
+        "afterReload": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-terms-close-1280x720",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "finishedAt": "2026-10-24T10:06:58.617Z",
+        "cspViolations": [
+          {
+            "key": "style-src-elem|https://fonts.googleapis.com",
+            "count": 2
+          },
+          {
+            "key": "script-src-elem|https://pagead2.googlesyndication.com",
+            "count": 2
+          },
+          {
+            "key": "connect-src|https://duediligence-api.wallyesteban1993.workers.dev",
+            "count": 3
+          }
+        ],
+        "requestsBlockedBeforeNetwork": []
+      },
+      {
+        "id": "direct-terms-back-1280x720",
+        "kind": "direct",
+        "view": "terms",
+        "control": "back",
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "status": "PASS",
+        "stage": "real-reload",
+        "checks": [
+          {
+            "name": "Direct public route is signed out and has no owned dialog entry",
+            "passed": true
+          },
+          {
+            "name": "First dismissal returns to canonical public Home",
+            "passed": true
+          },
+          {
+            "name": "Dismissal preserves unrelated state without a new history entry",
+            "passed": true
+          },
+          {
+            "name": "Dismissal does not open a sign-in overlay",
+            "passed": true
+          },
+          {
+            "name": "Exactly one trusted dismissal action was delivered",
+            "passed": true
+          },
+          {
+            "name": "Real reload remains on public Home with the dialog closed",
+            "passed": true
+          },
+          {
+            "name": "Real reload retains unrelated history state",
+            "passed": true
+          },
+          {
+            "name": "No uncaught page error in this case",
+            "passed": true
+          },
+          {
+            "name": "No off-origin or non-GET navigation attempted",
+            "passed": true
+          }
+        ],
+        "actions": [
+          {
+            "action": "back",
+            "attempts": 1
+          }
+        ],
+        "startedAt": "2026-10-24T10:06:58.631Z",
+        "before": {
+          "pathname": "/",
+          "search": "",
+          "hash": "#terms",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-terms-back-1280x720",
+          "nativeOpen": true,
+          "nativeAriaHidden": "false",
+          "nativeView": "terms",
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": "dd2-native-close",
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "afterAction": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-terms-back-1280x720",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "observedActions": [
+          {
+            "type": "click",
+            "id": "dd2-native-back",
+            "legal": null,
+            "trusted": true
+          }
+        ],
+        "afterReload": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-terms-back-1280x720",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "finishedAt": "2026-10-24T10:06:59.634Z",
+        "cspViolations": [
+          {
+            "key": "style-src-elem|https://fonts.googleapis.com",
+            "count": 2
+          },
+          {
+            "key": "script-src-elem|https://pagead2.googlesyndication.com",
+            "count": 2
+          },
+          {
+            "key": "connect-src|https://duediligence-api.wallyesteban1993.workers.dev",
+            "count": 2
+          }
+        ],
+        "requestsBlockedBeforeNetwork": []
+      },
+      {
+        "id": "direct-terms-escape-1280x720",
+        "kind": "direct",
+        "view": "terms",
+        "control": "escape",
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "status": "PASS",
+        "stage": "real-reload",
+        "checks": [
+          {
+            "name": "Direct public route is signed out and has no owned dialog entry",
+            "passed": true
+          },
+          {
+            "name": "First dismissal returns to canonical public Home",
+            "passed": true
+          },
+          {
+            "name": "Dismissal preserves unrelated state without a new history entry",
+            "passed": true
+          },
+          {
+            "name": "Dismissal does not open a sign-in overlay",
+            "passed": true
+          },
+          {
+            "name": "Exactly one trusted dismissal action was delivered",
+            "passed": true
+          },
+          {
+            "name": "Real reload remains on public Home with the dialog closed",
+            "passed": true
+          },
+          {
+            "name": "Real reload retains unrelated history state",
+            "passed": true
+          },
+          {
+            "name": "No uncaught page error in this case",
+            "passed": true
+          },
+          {
+            "name": "No off-origin or non-GET navigation attempted",
+            "passed": true
+          }
+        ],
+        "actions": [
+          {
+            "action": "escape",
+            "attempts": 1
+          }
+        ],
+        "startedAt": "2026-10-24T10:06:59.640Z",
+        "before": {
+          "pathname": "/",
+          "search": "",
+          "hash": "#terms",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-terms-escape-1280x720",
+          "nativeOpen": true,
+          "nativeAriaHidden": "false",
+          "nativeView": "terms",
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": "dd2-native-close",
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "afterAction": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-terms-escape-1280x720",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "observedActions": [
+          {
+            "type": "escape",
+            "trusted": true
+          }
+        ],
+        "afterReload": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-terms-escape-1280x720",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "finishedAt": "2026-10-24T10:07:00.447Z",
+        "cspViolations": [
+          {
+            "key": "style-src-elem|https://fonts.googleapis.com",
+            "count": 2
+          },
+          {
+            "key": "script-src-elem|https://pagead2.googlesyndication.com",
+            "count": 2
+          },
+          {
+            "key": "connect-src|https://duediligence-api.wallyesteban1993.workers.dev",
+            "count": 2
+          }
+        ],
+        "requestsBlockedBeforeNetwork": []
+      },
+      {
+        "id": "direct-privacy-close-1280x720",
+        "kind": "direct",
+        "view": "privacy",
+        "control": "close",
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "status": "PASS",
+        "stage": "real-reload",
+        "checks": [
+          {
+            "name": "Direct public route is signed out and has no owned dialog entry",
+            "passed": true
+          },
+          {
+            "name": "First dismissal returns to canonical public Home",
+            "passed": true
+          },
+          {
+            "name": "Dismissal preserves unrelated state without a new history entry",
+            "passed": true
+          },
+          {
+            "name": "Dismissal does not open a sign-in overlay",
+            "passed": true
+          },
+          {
+            "name": "Exactly one trusted dismissal action was delivered",
+            "passed": true
+          },
+          {
+            "name": "Real reload remains on public Home with the dialog closed",
+            "passed": true
+          },
+          {
+            "name": "Real reload retains unrelated history state",
+            "passed": true
+          },
+          {
+            "name": "No uncaught page error in this case",
+            "passed": true
+          },
+          {
+            "name": "No off-origin or non-GET navigation attempted",
+            "passed": true
+          }
+        ],
+        "actions": [
+          {
+            "action": "close",
+            "attempts": 1
+          }
+        ],
+        "startedAt": "2026-10-24T10:07:00.455Z",
+        "before": {
+          "pathname": "/",
+          "search": "",
+          "hash": "#privacy",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-privacy-close-1280x720",
+          "nativeOpen": true,
+          "nativeAriaHidden": "false",
+          "nativeView": "privacy",
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": "dd2-native-close",
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "screenshotAttempts": [
+          {
+            "stage": "screenshot-open",
+            "previousStage": "initial-load-and-readiness",
+            "selector": "#dd2-native-view .dd2-native-card",
+            "file": "direct-privacy-close-1280x720-open.png",
+            "status": "PASS"
+          },
+          {
+            "stage": "screenshot-after-reload",
+            "previousStage": "real-reload",
+            "selector": ".quorum-entry-legal",
+            "file": "direct-privacy-close-1280x720-after-reload.png",
+            "status": "PASS"
+          }
+        ],
+        "afterAction": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-privacy-close-1280x720",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "observedActions": [
+          {
+            "type": "click",
+            "id": "dd2-native-close",
+            "legal": null,
+            "trusted": true
+          }
+        ],
+        "afterReload": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-privacy-close-1280x720",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "finishedAt": "2026-10-24T10:07:01.566Z",
+        "cspViolations": [
+          {
+            "key": "style-src-elem|https://fonts.googleapis.com",
+            "count": 2
+          },
+          {
+            "key": "script-src-elem|https://pagead2.googlesyndication.com",
+            "count": 2
+          },
+          {
+            "key": "connect-src|https://duediligence-api.wallyesteban1993.workers.dev",
+            "count": 2
+          }
+        ],
+        "requestsBlockedBeforeNetwork": []
+      },
+      {
+        "id": "direct-privacy-back-1280x720",
+        "kind": "direct",
+        "view": "privacy",
+        "control": "back",
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "status": "PASS",
+        "stage": "real-reload",
+        "checks": [
+          {
+            "name": "Direct public route is signed out and has no owned dialog entry",
+            "passed": true
+          },
+          {
+            "name": "First dismissal returns to canonical public Home",
+            "passed": true
+          },
+          {
+            "name": "Dismissal preserves unrelated state without a new history entry",
+            "passed": true
+          },
+          {
+            "name": "Dismissal does not open a sign-in overlay",
+            "passed": true
+          },
+          {
+            "name": "Exactly one trusted dismissal action was delivered",
+            "passed": true
+          },
+          {
+            "name": "Real reload remains on public Home with the dialog closed",
+            "passed": true
+          },
+          {
+            "name": "Real reload retains unrelated history state",
+            "passed": true
+          },
+          {
+            "name": "No uncaught page error in this case",
+            "passed": true
+          },
+          {
+            "name": "No off-origin or non-GET navigation attempted",
+            "passed": true
+          }
+        ],
+        "actions": [
+          {
+            "action": "back",
+            "attempts": 1
+          }
+        ],
+        "startedAt": "2026-10-24T10:07:01.573Z",
+        "before": {
+          "pathname": "/",
+          "search": "",
+          "hash": "#privacy",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-privacy-back-1280x720",
+          "nativeOpen": true,
+          "nativeAriaHidden": "false",
+          "nativeView": "privacy",
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": "dd2-native-close",
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "afterAction": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-privacy-back-1280x720",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "observedActions": [
+          {
+            "type": "click",
+            "id": "dd2-native-back",
+            "legal": null,
+            "trusted": true
+          }
+        ],
+        "afterReload": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-privacy-back-1280x720",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "finishedAt": "2026-10-24T10:07:02.378Z",
+        "cspViolations": [
+          {
+            "key": "style-src-elem|https://fonts.googleapis.com",
+            "count": 2
+          },
+          {
+            "key": "script-src-elem|https://pagead2.googlesyndication.com",
+            "count": 2
+          },
+          {
+            "key": "connect-src|https://duediligence-api.wallyesteban1993.workers.dev",
+            "count": 2
+          }
+        ],
+        "requestsBlockedBeforeNetwork": []
+      },
+      {
+        "id": "direct-privacy-escape-1280x720",
+        "kind": "direct",
+        "view": "privacy",
+        "control": "escape",
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "status": "PASS",
+        "stage": "real-reload",
+        "checks": [
+          {
+            "name": "Direct public route is signed out and has no owned dialog entry",
+            "passed": true
+          },
+          {
+            "name": "First dismissal returns to canonical public Home",
+            "passed": true
+          },
+          {
+            "name": "Dismissal preserves unrelated state without a new history entry",
+            "passed": true
+          },
+          {
+            "name": "Dismissal does not open a sign-in overlay",
+            "passed": true
+          },
+          {
+            "name": "Exactly one trusted dismissal action was delivered",
+            "passed": true
+          },
+          {
+            "name": "Real reload remains on public Home with the dialog closed",
+            "passed": true
+          },
+          {
+            "name": "Real reload retains unrelated history state",
+            "passed": true
+          },
+          {
+            "name": "No uncaught page error in this case",
+            "passed": true
+          },
+          {
+            "name": "No off-origin or non-GET navigation attempted",
+            "passed": true
+          }
+        ],
+        "actions": [
+          {
+            "action": "escape",
+            "attempts": 1
+          }
+        ],
+        "startedAt": "2026-10-24T10:07:02.385Z",
+        "before": {
+          "pathname": "/",
+          "search": "",
+          "hash": "#privacy",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-privacy-escape-1280x720",
+          "nativeOpen": true,
+          "nativeAriaHidden": "false",
+          "nativeView": "privacy",
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": "dd2-native-close",
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "afterAction": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-privacy-escape-1280x720",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "observedActions": [
+          {
+            "type": "escape",
+            "trusted": true
+          }
+        ],
+        "afterReload": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-privacy-escape-1280x720",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "finishedAt": "2026-10-24T10:07:03.201Z",
+        "cspViolations": [
+          {
+            "key": "style-src-elem|https://fonts.googleapis.com",
+            "count": 2
+          },
+          {
+            "key": "script-src-elem|https://pagead2.googlesyndication.com",
+            "count": 2
+          },
+          {
+            "key": "connect-src|https://duediligence-api.wallyesteban1993.workers.dev",
+            "count": 2
+          }
+        ],
+        "requestsBlockedBeforeNetwork": []
+      },
+      {
+        "id": "direct-support-close-1280x720",
+        "kind": "direct",
+        "view": "support",
+        "control": "close",
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "status": "PASS",
+        "stage": "real-reload",
+        "checks": [
+          {
+            "name": "Direct public route is signed out and has no owned dialog entry",
+            "passed": true
+          },
+          {
+            "name": "First dismissal returns to canonical public Home",
+            "passed": true
+          },
+          {
+            "name": "Dismissal preserves unrelated state without a new history entry",
+            "passed": true
+          },
+          {
+            "name": "Dismissal does not open a sign-in overlay",
+            "passed": true
+          },
+          {
+            "name": "Exactly one trusted dismissal action was delivered",
+            "passed": true
+          },
+          {
+            "name": "Real reload remains on public Home with the dialog closed",
+            "passed": true
+          },
+          {
+            "name": "Real reload retains unrelated history state",
+            "passed": true
+          },
+          {
+            "name": "No uncaught page error in this case",
+            "passed": true
+          },
+          {
+            "name": "No off-origin or non-GET navigation attempted",
+            "passed": true
+          }
+        ],
+        "actions": [
+          {
+            "action": "close",
+            "attempts": 1
+          }
+        ],
+        "startedAt": "2026-10-24T10:07:03.207Z",
+        "before": {
+          "pathname": "/",
+          "search": "",
+          "hash": "#support",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-support-close-1280x720",
+          "nativeOpen": true,
+          "nativeAriaHidden": "false",
+          "nativeView": "support",
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": "dd2-native-close",
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "screenshotAttempts": [
+          {
+            "stage": "screenshot-open",
+            "previousStage": "initial-load-and-readiness",
+            "selector": "#dd2-native-view .dd2-native-card",
+            "file": "direct-support-close-1280x720-open.png",
+            "status": "PASS"
+          },
+          {
+            "stage": "screenshot-after-reload",
+            "previousStage": "real-reload",
+            "selector": ".quorum-entry-legal",
+            "file": "direct-support-close-1280x720-after-reload.png",
+            "status": "PASS"
+          }
+        ],
+        "afterAction": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-support-close-1280x720",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "observedActions": [
+          {
+            "type": "click",
+            "id": "dd2-native-close",
+            "legal": null,
+            "trusted": true
+          }
+        ],
+        "afterReload": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-support-close-1280x720",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "finishedAt": "2026-10-24T10:07:04.366Z",
+        "cspViolations": [
+          {
+            "key": "style-src-elem|https://fonts.googleapis.com",
+            "count": 2
+          },
+          {
+            "key": "script-src-elem|https://pagead2.googlesyndication.com",
+            "count": 2
+          },
+          {
+            "key": "connect-src|https://duediligence-api.wallyesteban1993.workers.dev",
+            "count": 3
+          }
+        ],
+        "requestsBlockedBeforeNetwork": []
+      },
+      {
+        "id": "direct-support-back-1280x720",
+        "kind": "direct",
+        "view": "support",
+        "control": "back",
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "status": "PASS",
+        "stage": "real-reload",
+        "checks": [
+          {
+            "name": "Direct public route is signed out and has no owned dialog entry",
+            "passed": true
+          },
+          {
+            "name": "First dismissal returns to canonical public Home",
+            "passed": true
+          },
+          {
+            "name": "Dismissal preserves unrelated state without a new history entry",
+            "passed": true
+          },
+          {
+            "name": "Dismissal does not open a sign-in overlay",
+            "passed": true
+          },
+          {
+            "name": "Exactly one trusted dismissal action was delivered",
+            "passed": true
+          },
+          {
+            "name": "Real reload remains on public Home with the dialog closed",
+            "passed": true
+          },
+          {
+            "name": "Real reload retains unrelated history state",
+            "passed": true
+          },
+          {
+            "name": "No uncaught page error in this case",
+            "passed": true
+          },
+          {
+            "name": "No off-origin or non-GET navigation attempted",
+            "passed": true
+          }
+        ],
+        "actions": [
+          {
+            "action": "back",
+            "attempts": 1
+          }
+        ],
+        "startedAt": "2026-10-24T10:07:04.373Z",
+        "before": {
+          "pathname": "/",
+          "search": "",
+          "hash": "#support",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-support-back-1280x720",
+          "nativeOpen": true,
+          "nativeAriaHidden": "false",
+          "nativeView": "support",
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": "dd2-native-close",
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "afterAction": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-support-back-1280x720",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "observedActions": [
+          {
+            "type": "click",
+            "id": "dd2-native-back",
+            "legal": null,
+            "trusted": true
+          }
+        ],
+        "afterReload": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-support-back-1280x720",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "finishedAt": "2026-10-24T10:07:05.200Z",
+        "cspViolations": [
+          {
+            "key": "style-src-elem|https://fonts.googleapis.com",
+            "count": 2
+          },
+          {
+            "key": "script-src-elem|https://pagead2.googlesyndication.com",
+            "count": 2
+          },
+          {
+            "key": "connect-src|https://duediligence-api.wallyesteban1993.workers.dev",
+            "count": 2
+          }
+        ],
+        "requestsBlockedBeforeNetwork": []
+      },
+      {
+        "id": "direct-support-escape-1280x720",
+        "kind": "direct",
+        "view": "support",
+        "control": "escape",
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "status": "PASS",
+        "stage": "real-reload",
+        "checks": [
+          {
+            "name": "Direct public route is signed out and has no owned dialog entry",
+            "passed": true
+          },
+          {
+            "name": "First dismissal returns to canonical public Home",
+            "passed": true
+          },
+          {
+            "name": "Dismissal preserves unrelated state without a new history entry",
+            "passed": true
+          },
+          {
+            "name": "Dismissal does not open a sign-in overlay",
+            "passed": true
+          },
+          {
+            "name": "Exactly one trusted dismissal action was delivered",
+            "passed": true
+          },
+          {
+            "name": "Real reload remains on public Home with the dialog closed",
+            "passed": true
+          },
+          {
+            "name": "Real reload retains unrelated history state",
+            "passed": true
+          },
+          {
+            "name": "No uncaught page error in this case",
+            "passed": true
+          },
+          {
+            "name": "No off-origin or non-GET navigation attempted",
+            "passed": true
+          }
+        ],
+        "actions": [
+          {
+            "action": "escape",
+            "attempts": 1
+          }
+        ],
+        "startedAt": "2026-10-24T10:07:05.207Z",
+        "before": {
+          "pathname": "/",
+          "search": "",
+          "hash": "#support",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-support-escape-1280x720",
+          "nativeOpen": true,
+          "nativeAriaHidden": "false",
+          "nativeView": "support",
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": "dd2-native-close",
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "afterAction": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-support-escape-1280x720",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "observedActions": [
+          {
+            "type": "escape",
+            "trusted": true
+          }
+        ],
+        "afterReload": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-support-escape-1280x720",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "finishedAt": "2026-10-24T10:07:05.995Z",
+        "cspViolations": [
+          {
+            "key": "style-src-elem|https://fonts.googleapis.com",
+            "count": 2
+          },
+          {
+            "key": "script-src-elem|https://pagead2.googlesyndication.com",
+            "count": 2
+          },
+          {
+            "key": "connect-src|https://duediligence-api.wallyesteban1993.workers.dev",
+            "count": 2
+          }
+        ],
+        "requestsBlockedBeforeNetwork": []
+      },
+      {
+        "id": "direct-partnership-close-1280x720",
+        "kind": "direct",
+        "view": "partnership",
+        "control": "close",
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "status": "PASS",
+        "stage": "real-reload",
+        "checks": [
+          {
+            "name": "Direct public route is signed out and has no owned dialog entry",
+            "passed": true
+          },
+          {
+            "name": "First dismissal returns to canonical public Home",
+            "passed": true
+          },
+          {
+            "name": "Dismissal preserves unrelated state without a new history entry",
+            "passed": true
+          },
+          {
+            "name": "Dismissal does not open a sign-in overlay",
+            "passed": true
+          },
+          {
+            "name": "Exactly one trusted dismissal action was delivered",
+            "passed": true
+          },
+          {
+            "name": "Real reload remains on public Home with the dialog closed",
+            "passed": true
+          },
+          {
+            "name": "Real reload retains unrelated history state",
+            "passed": true
+          },
+          {
+            "name": "No uncaught page error in this case",
+            "passed": true
+          },
+          {
+            "name": "No off-origin or non-GET navigation attempted",
+            "passed": true
+          }
+        ],
+        "actions": [
+          {
+            "action": "close",
+            "attempts": 1
+          }
+        ],
+        "startedAt": "2026-10-24T10:07:06.003Z",
+        "before": {
+          "pathname": "/",
+          "search": "",
+          "hash": "#partnership",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-partnership-close-1280x720",
+          "nativeOpen": true,
+          "nativeAriaHidden": "false",
+          "nativeView": "partnership",
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": "dd2-native-close",
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "screenshotAttempts": [
+          {
+            "stage": "screenshot-open",
+            "previousStage": "initial-load-and-readiness",
+            "selector": "#dd2-native-view .dd2-native-card",
+            "file": "direct-partnership-close-1280x720-open.png",
+            "status": "PASS"
+          },
+          {
+            "stage": "screenshot-after-reload",
+            "previousStage": "real-reload",
+            "selector": ".quorum-entry-legal",
+            "file": "direct-partnership-close-1280x720-after-reload.png",
+            "status": "PASS"
+          }
+        ],
+        "afterAction": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-partnership-close-1280x720",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "observedActions": [
+          {
+            "type": "click",
+            "id": "dd2-native-close",
+            "legal": null,
+            "trusted": true
+          }
+        ],
+        "afterReload": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-partnership-close-1280x720",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "finishedAt": "2026-10-24T10:07:07.116Z",
+        "cspViolations": [
+          {
+            "key": "style-src-elem|https://fonts.googleapis.com",
+            "count": 2
+          },
+          {
+            "key": "script-src-elem|https://pagead2.googlesyndication.com",
+            "count": 2
+          },
+          {
+            "key": "connect-src|https://duediligence-api.wallyesteban1993.workers.dev",
+            "count": 2
+          }
+        ],
+        "requestsBlockedBeforeNetwork": []
+      },
+      {
+        "id": "direct-partnership-back-1280x720",
+        "kind": "direct",
+        "view": "partnership",
+        "control": "back",
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "status": "PASS",
+        "stage": "real-reload",
+        "checks": [
+          {
+            "name": "Direct public route is signed out and has no owned dialog entry",
+            "passed": true
+          },
+          {
+            "name": "First dismissal returns to canonical public Home",
+            "passed": true
+          },
+          {
+            "name": "Dismissal preserves unrelated state without a new history entry",
+            "passed": true
+          },
+          {
+            "name": "Dismissal does not open a sign-in overlay",
+            "passed": true
+          },
+          {
+            "name": "Exactly one trusted dismissal action was delivered",
+            "passed": true
+          },
+          {
+            "name": "Real reload remains on public Home with the dialog closed",
+            "passed": true
+          },
+          {
+            "name": "Real reload retains unrelated history state",
+            "passed": true
+          },
+          {
+            "name": "No uncaught page error in this case",
+            "passed": true
+          },
+          {
+            "name": "No off-origin or non-GET navigation attempted",
+            "passed": true
+          }
+        ],
+        "actions": [
+          {
+            "action": "back",
+            "attempts": 1
+          }
+        ],
+        "startedAt": "2026-10-24T10:07:07.123Z",
+        "before": {
+          "pathname": "/",
+          "search": "",
+          "hash": "#partnership",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-partnership-back-1280x720",
+          "nativeOpen": true,
+          "nativeAriaHidden": "false",
+          "nativeView": "partnership",
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": "dd2-native-close",
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "afterAction": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-partnership-back-1280x720",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "observedActions": [
+          {
+            "type": "click",
+            "id": "dd2-native-back",
+            "legal": null,
+            "trusted": true
+          }
+        ],
+        "afterReload": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-partnership-back-1280x720",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "finishedAt": "2026-10-24T10:07:08.001Z",
+        "cspViolations": [
+          {
+            "key": "style-src-elem|https://fonts.googleapis.com",
+            "count": 2
+          },
+          {
+            "key": "script-src-elem|https://pagead2.googlesyndication.com",
+            "count": 2
+          },
+          {
+            "key": "connect-src|https://duediligence-api.wallyesteban1993.workers.dev",
+            "count": 2
+          }
+        ],
+        "requestsBlockedBeforeNetwork": []
+      },
+      {
+        "id": "direct-partnership-escape-1280x720",
+        "kind": "direct",
+        "view": "partnership",
+        "control": "escape",
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "status": "PASS",
+        "stage": "real-reload",
+        "checks": [
+          {
+            "name": "Direct public route is signed out and has no owned dialog entry",
+            "passed": true
+          },
+          {
+            "name": "First dismissal returns to canonical public Home",
+            "passed": true
+          },
+          {
+            "name": "Dismissal preserves unrelated state without a new history entry",
+            "passed": true
+          },
+          {
+            "name": "Dismissal does not open a sign-in overlay",
+            "passed": true
+          },
+          {
+            "name": "Exactly one trusted dismissal action was delivered",
+            "passed": true
+          },
+          {
+            "name": "Real reload remains on public Home with the dialog closed",
+            "passed": true
+          },
+          {
+            "name": "Real reload retains unrelated history state",
+            "passed": true
+          },
+          {
+            "name": "No uncaught page error in this case",
+            "passed": true
+          },
+          {
+            "name": "No off-origin or non-GET navigation attempted",
+            "passed": true
+          }
+        ],
+        "actions": [
+          {
+            "action": "escape",
+            "attempts": 1
+          }
+        ],
+        "startedAt": "2026-10-24T10:07:08.007Z",
+        "before": {
+          "pathname": "/",
+          "search": "",
+          "hash": "#partnership",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-partnership-escape-1280x720",
+          "nativeOpen": true,
+          "nativeAriaHidden": "false",
+          "nativeView": "partnership",
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": "dd2-native-close",
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "afterAction": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-partnership-escape-1280x720",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "observedActions": [
+          {
+            "type": "escape",
+            "trusted": true
+          }
+        ],
+        "afterReload": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-partnership-escape-1280x720",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "finishedAt": "2026-10-24T10:07:08.833Z",
+        "cspViolations": [
+          {
+            "key": "style-src-elem|https://fonts.googleapis.com",
+            "count": 2
+          },
+          {
+            "key": "script-src-elem|https://pagead2.googlesyndication.com",
+            "count": 2
+          },
+          {
+            "key": "connect-src|https://duediligence-api.wallyesteban1993.workers.dev",
+            "count": 2
+          }
+        ],
+        "requestsBlockedBeforeNetwork": []
+      },
+      {
+        "id": "entry-legal-terms-1280x720",
+        "kind": "entry-legal-history",
+        "view": "terms",
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "status": "PASS",
+        "stage": "browser-back-and-focus-return",
+        "checks": [
+          {
+            "name": "Entry legal links start signed out without sign-in overlay",
+            "passed": true
+          },
+          {
+            "name": "Entry legal link creates one owned native-view history entry",
+            "passed": true
+          },
+          {
+            "name": "Escape restores public origin, focus and unrelated state without sign-in",
+            "passed": true
+          },
+          {
+            "name": "Browser Forward restores the owned legal dialog",
+            "passed": true
+          },
+          {
+            "name": "Browser Back restores public origin and legal-link focus",
+            "passed": true
+          },
+          {
+            "name": "One trusted entry legal click and one Escape were delivered without retries",
+            "passed": true
+          },
+          {
+            "name": "No uncaught page error in this case",
+            "passed": true
+          },
+          {
+            "name": "No off-origin or non-GET navigation attempted",
+            "passed": true
+          }
+        ],
+        "actions": [
+          {
+            "action": "entry-legal-terms",
+            "attempts": 1
+          },
+          {
+            "action": "escape",
+            "attempts": 1
+          },
+          {
+            "action": "browser-forward",
+            "attempts": 1
+          },
+          {
+            "action": "browser-back",
+            "attempts": 1
+          }
+        ],
+        "startedAt": "2026-10-24T10:07:08.840Z",
+        "before": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "entry-legal-terms-1280x720",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "afterOpen": {
+          "pathname": "/",
+          "search": "",
+          "hash": "#terms",
+          "historyLength": 3,
+          "dd2View": "terms",
+          "sentinel": null,
+          "nativeOpen": true,
+          "nativeAriaHidden": "false",
+          "nativeView": "terms",
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": "dd2-native-close",
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "afterEscape": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 3,
+          "dd2View": null,
+          "sentinel": "entry-legal-terms-1280x720",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": "terms",
+          "focusInert": false
+        },
+        "afterForward": {
+          "pathname": "/",
+          "search": "",
+          "hash": "#terms",
+          "historyLength": 3,
+          "dd2View": "terms",
+          "sentinel": null,
+          "nativeOpen": true,
+          "nativeAriaHidden": "false",
+          "nativeView": "terms",
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "afterBack": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 3,
+          "dd2View": null,
+          "sentinel": "entry-legal-terms-1280x720",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": "terms",
+          "focusInert": false
+        },
+        "observedActions": [
+          {
+            "type": "click",
+            "id": null,
+            "legal": "terms",
+            "trusted": true
+          },
+          {
+            "type": "escape",
+            "trusted": true
+          }
+        ],
+        "finishedAt": "2026-10-24T10:07:09.583Z",
+        "cspViolations": [
+          {
+            "key": "style-src-elem|https://fonts.googleapis.com",
+            "count": 1
+          },
+          {
+            "key": "script-src-elem|https://pagead2.googlesyndication.com",
+            "count": 1
+          },
+          {
+            "key": "connect-src|https://duediligence-api.wallyesteban1993.workers.dev",
+            "count": 1
+          }
+        ],
+        "requestsBlockedBeforeNetwork": []
+      },
+      {
+        "id": "entry-legal-privacy-1280x720",
+        "kind": "entry-legal-history",
+        "view": "privacy",
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "status": "PASS",
+        "stage": "browser-back-and-focus-return",
+        "checks": [
+          {
+            "name": "Entry legal links start signed out without sign-in overlay",
+            "passed": true
+          },
+          {
+            "name": "Entry legal link creates one owned native-view history entry",
+            "passed": true
+          },
+          {
+            "name": "Escape restores public origin, focus and unrelated state without sign-in",
+            "passed": true
+          },
+          {
+            "name": "Browser Forward restores the owned legal dialog",
+            "passed": true
+          },
+          {
+            "name": "Browser Back restores public origin and legal-link focus",
+            "passed": true
+          },
+          {
+            "name": "One trusted entry legal click and one Escape were delivered without retries",
+            "passed": true
+          },
+          {
+            "name": "No uncaught page error in this case",
+            "passed": true
+          },
+          {
+            "name": "No off-origin or non-GET navigation attempted",
+            "passed": true
+          }
+        ],
+        "actions": [
+          {
+            "action": "entry-legal-privacy",
+            "attempts": 1
+          },
+          {
+            "action": "escape",
+            "attempts": 1
+          },
+          {
+            "action": "browser-forward",
+            "attempts": 1
+          },
+          {
+            "action": "browser-back",
+            "attempts": 1
+          }
+        ],
+        "startedAt": "2026-10-24T10:07:09.589Z",
+        "before": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "entry-legal-privacy-1280x720",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "afterOpen": {
+          "pathname": "/",
+          "search": "",
+          "hash": "#privacy",
+          "historyLength": 3,
+          "dd2View": "privacy",
+          "sentinel": null,
+          "nativeOpen": true,
+          "nativeAriaHidden": "false",
+          "nativeView": "privacy",
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": "dd2-native-close",
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "afterEscape": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 3,
+          "dd2View": null,
+          "sentinel": "entry-legal-privacy-1280x720",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": "privacy",
+          "focusInert": false
+        },
+        "afterForward": {
+          "pathname": "/",
+          "search": "",
+          "hash": "#privacy",
+          "historyLength": 3,
+          "dd2View": "privacy",
+          "sentinel": null,
+          "nativeOpen": true,
+          "nativeAriaHidden": "false",
+          "nativeView": "privacy",
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "afterBack": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 3,
+          "dd2View": null,
+          "sentinel": "entry-legal-privacy-1280x720",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": "privacy",
+          "focusInert": false
+        },
+        "observedActions": [
+          {
+            "type": "click",
+            "id": null,
+            "legal": "privacy",
+            "trusted": true
+          },
+          {
+            "type": "escape",
+            "trusted": true
+          }
+        ],
+        "finishedAt": "2026-10-24T10:07:10.303Z",
+        "cspViolations": [
+          {
+            "key": "style-src-elem|https://fonts.googleapis.com",
+            "count": 1
+          },
+          {
+            "key": "script-src-elem|https://pagead2.googlesyndication.com",
+            "count": 1
+          },
+          {
+            "key": "connect-src|https://duediligence-api.wallyesteban1993.workers.dev",
+            "count": 1
+          }
+        ],
+        "requestsBlockedBeforeNetwork": []
+      },
+      {
+        "id": "direct-terms-close-390x844",
+        "kind": "direct",
+        "view": "terms",
+        "control": "close",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "status": "PASS",
+        "stage": "real-reload",
+        "checks": [
+          {
+            "name": "Direct public route is signed out and has no owned dialog entry",
+            "passed": true
+          },
+          {
+            "name": "First dismissal returns to canonical public Home",
+            "passed": true
+          },
+          {
+            "name": "Dismissal preserves unrelated state without a new history entry",
+            "passed": true
+          },
+          {
+            "name": "Dismissal does not open a sign-in overlay",
+            "passed": true
+          },
+          {
+            "name": "Exactly one trusted dismissal action was delivered",
+            "passed": true
+          },
+          {
+            "name": "Real reload remains on public Home with the dialog closed",
+            "passed": true
+          },
+          {
+            "name": "Real reload retains unrelated history state",
+            "passed": true
+          },
+          {
+            "name": "No uncaught page error in this case",
+            "passed": true
+          },
+          {
+            "name": "No off-origin or non-GET navigation attempted",
+            "passed": true
+          }
+        ],
+        "actions": [
+          {
+            "action": "close",
+            "attempts": 1
+          }
+        ],
+        "startedAt": "2026-10-24T10:07:10.313Z",
+        "before": {
+          "pathname": "/",
+          "search": "",
+          "hash": "#terms",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-terms-close-390x844",
+          "nativeOpen": true,
+          "nativeAriaHidden": "false",
+          "nativeView": "terms",
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": "dd2-native-close",
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "screenshotAttempts": [
+          {
+            "stage": "screenshot-open",
+            "previousStage": "initial-load-and-readiness",
+            "selector": "#dd2-native-view .dd2-native-card",
+            "file": "direct-terms-close-390x844-open.png",
+            "status": "PASS"
+          },
+          {
+            "stage": "screenshot-after-reload",
+            "previousStage": "real-reload",
+            "selector": ".quorum-entry-legal",
+            "file": "direct-terms-close-390x844-after-reload.png",
+            "status": "PASS"
+          }
+        ],
+        "afterAction": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-terms-close-390x844",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "observedActions": [
+          {
+            "type": "click",
+            "id": "dd2-native-close",
+            "legal": null,
+            "trusted": true
+          }
+        ],
+        "afterReload": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-terms-close-390x844",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "finishedAt": "2026-10-24T10:07:11.350Z",
+        "cspViolations": [
+          {
+            "key": "style-src-elem|https://fonts.googleapis.com",
+            "count": 2
+          },
+          {
+            "key": "script-src-elem|https://pagead2.googlesyndication.com",
+            "count": 2
+          },
+          {
+            "key": "connect-src|https://duediligence-api.wallyesteban1993.workers.dev",
+            "count": 2
+          }
+        ],
+        "requestsBlockedBeforeNetwork": []
+      },
+      {
+        "id": "direct-terms-back-390x844",
+        "kind": "direct",
+        "view": "terms",
+        "control": "back",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "status": "PASS",
+        "stage": "real-reload",
+        "checks": [
+          {
+            "name": "Direct public route is signed out and has no owned dialog entry",
+            "passed": true
+          },
+          {
+            "name": "First dismissal returns to canonical public Home",
+            "passed": true
+          },
+          {
+            "name": "Dismissal preserves unrelated state without a new history entry",
+            "passed": true
+          },
+          {
+            "name": "Dismissal does not open a sign-in overlay",
+            "passed": true
+          },
+          {
+            "name": "Exactly one trusted dismissal action was delivered",
+            "passed": true
+          },
+          {
+            "name": "Real reload remains on public Home with the dialog closed",
+            "passed": true
+          },
+          {
+            "name": "Real reload retains unrelated history state",
+            "passed": true
+          },
+          {
+            "name": "No uncaught page error in this case",
+            "passed": true
+          },
+          {
+            "name": "No off-origin or non-GET navigation attempted",
+            "passed": true
+          }
+        ],
+        "actions": [
+          {
+            "action": "back",
+            "attempts": 1
+          }
+        ],
+        "startedAt": "2026-10-24T10:07:11.356Z",
+        "before": {
+          "pathname": "/",
+          "search": "",
+          "hash": "#terms",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-terms-back-390x844",
+          "nativeOpen": true,
+          "nativeAriaHidden": "false",
+          "nativeView": "terms",
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": "dd2-native-close",
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "afterAction": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-terms-back-390x844",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "observedActions": [
+          {
+            "type": "click",
+            "id": "dd2-native-back",
+            "legal": null,
+            "trusted": true
+          }
+        ],
+        "afterReload": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-terms-back-390x844",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "finishedAt": "2026-10-24T10:07:12.100Z",
+        "cspViolations": [
+          {
+            "key": "style-src-elem|https://fonts.googleapis.com",
+            "count": 2
+          },
+          {
+            "key": "script-src-elem|https://pagead2.googlesyndication.com",
+            "count": 2
+          },
+          {
+            "key": "connect-src|https://duediligence-api.wallyesteban1993.workers.dev",
+            "count": 2
+          }
+        ],
+        "requestsBlockedBeforeNetwork": []
+      },
+      {
+        "id": "direct-terms-escape-390x844",
+        "kind": "direct",
+        "view": "terms",
+        "control": "escape",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "status": "PASS",
+        "stage": "real-reload",
+        "checks": [
+          {
+            "name": "Direct public route is signed out and has no owned dialog entry",
+            "passed": true
+          },
+          {
+            "name": "First dismissal returns to canonical public Home",
+            "passed": true
+          },
+          {
+            "name": "Dismissal preserves unrelated state without a new history entry",
+            "passed": true
+          },
+          {
+            "name": "Dismissal does not open a sign-in overlay",
+            "passed": true
+          },
+          {
+            "name": "Exactly one trusted dismissal action was delivered",
+            "passed": true
+          },
+          {
+            "name": "Real reload remains on public Home with the dialog closed",
+            "passed": true
+          },
+          {
+            "name": "Real reload retains unrelated history state",
+            "passed": true
+          },
+          {
+            "name": "No uncaught page error in this case",
+            "passed": true
+          },
+          {
+            "name": "No off-origin or non-GET navigation attempted",
+            "passed": true
+          }
+        ],
+        "actions": [
+          {
+            "action": "escape",
+            "attempts": 1
+          }
+        ],
+        "startedAt": "2026-10-24T10:07:12.106Z",
+        "before": {
+          "pathname": "/",
+          "search": "",
+          "hash": "#terms",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-terms-escape-390x844",
+          "nativeOpen": true,
+          "nativeAriaHidden": "false",
+          "nativeView": "terms",
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": "dd2-native-close",
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "afterAction": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-terms-escape-390x844",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "observedActions": [
+          {
+            "type": "escape",
+            "trusted": true
+          }
+        ],
+        "afterReload": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-terms-escape-390x844",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "finishedAt": "2026-10-24T10:07:12.883Z",
+        "cspViolations": [
+          {
+            "key": "style-src-elem|https://fonts.googleapis.com",
+            "count": 2
+          },
+          {
+            "key": "script-src-elem|https://pagead2.googlesyndication.com",
+            "count": 2
+          },
+          {
+            "key": "connect-src|https://duediligence-api.wallyesteban1993.workers.dev",
+            "count": 2
+          }
+        ],
+        "requestsBlockedBeforeNetwork": []
+      },
+      {
+        "id": "direct-privacy-close-390x844",
+        "kind": "direct",
+        "view": "privacy",
+        "control": "close",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "status": "PASS",
+        "stage": "real-reload",
+        "checks": [
+          {
+            "name": "Direct public route is signed out and has no owned dialog entry",
+            "passed": true
+          },
+          {
+            "name": "First dismissal returns to canonical public Home",
+            "passed": true
+          },
+          {
+            "name": "Dismissal preserves unrelated state without a new history entry",
+            "passed": true
+          },
+          {
+            "name": "Dismissal does not open a sign-in overlay",
+            "passed": true
+          },
+          {
+            "name": "Exactly one trusted dismissal action was delivered",
+            "passed": true
+          },
+          {
+            "name": "Real reload remains on public Home with the dialog closed",
+            "passed": true
+          },
+          {
+            "name": "Real reload retains unrelated history state",
+            "passed": true
+          },
+          {
+            "name": "No uncaught page error in this case",
+            "passed": true
+          },
+          {
+            "name": "No off-origin or non-GET navigation attempted",
+            "passed": true
+          }
+        ],
+        "actions": [
+          {
+            "action": "close",
+            "attempts": 1
+          }
+        ],
+        "startedAt": "2026-10-24T10:07:12.891Z",
+        "before": {
+          "pathname": "/",
+          "search": "",
+          "hash": "#privacy",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-privacy-close-390x844",
+          "nativeOpen": true,
+          "nativeAriaHidden": "false",
+          "nativeView": "privacy",
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": "dd2-native-close",
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "screenshotAttempts": [
+          {
+            "stage": "screenshot-open",
+            "previousStage": "initial-load-and-readiness",
+            "selector": "#dd2-native-view .dd2-native-card",
+            "file": "direct-privacy-close-390x844-open.png",
+            "status": "PASS"
+          },
+          {
+            "stage": "screenshot-after-reload",
+            "previousStage": "real-reload",
+            "selector": ".quorum-entry-legal",
+            "file": "direct-privacy-close-390x844-after-reload.png",
+            "status": "PASS"
+          }
+        ],
+        "afterAction": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-privacy-close-390x844",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "observedActions": [
+          {
+            "type": "click",
+            "id": "dd2-native-close",
+            "legal": null,
+            "trusted": true
+          }
+        ],
+        "afterReload": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-privacy-close-390x844",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "finishedAt": "2026-10-24T10:07:13.899Z",
+        "cspViolations": [
+          {
+            "key": "style-src-elem|https://fonts.googleapis.com",
+            "count": 2
+          },
+          {
+            "key": "script-src-elem|https://pagead2.googlesyndication.com",
+            "count": 2
+          },
+          {
+            "key": "connect-src|https://duediligence-api.wallyesteban1993.workers.dev",
+            "count": 2
+          }
+        ],
+        "requestsBlockedBeforeNetwork": []
+      },
+      {
+        "id": "direct-privacy-back-390x844",
+        "kind": "direct",
+        "view": "privacy",
+        "control": "back",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "status": "PASS",
+        "stage": "real-reload",
+        "checks": [
+          {
+            "name": "Direct public route is signed out and has no owned dialog entry",
+            "passed": true
+          },
+          {
+            "name": "First dismissal returns to canonical public Home",
+            "passed": true
+          },
+          {
+            "name": "Dismissal preserves unrelated state without a new history entry",
+            "passed": true
+          },
+          {
+            "name": "Dismissal does not open a sign-in overlay",
+            "passed": true
+          },
+          {
+            "name": "Exactly one trusted dismissal action was delivered",
+            "passed": true
+          },
+          {
+            "name": "Real reload remains on public Home with the dialog closed",
+            "passed": true
+          },
+          {
+            "name": "Real reload retains unrelated history state",
+            "passed": true
+          },
+          {
+            "name": "No uncaught page error in this case",
+            "passed": true
+          },
+          {
+            "name": "No off-origin or non-GET navigation attempted",
+            "passed": true
+          }
+        ],
+        "actions": [
+          {
+            "action": "back",
+            "attempts": 1
+          }
+        ],
+        "startedAt": "2026-10-24T10:07:13.906Z",
+        "before": {
+          "pathname": "/",
+          "search": "",
+          "hash": "#privacy",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-privacy-back-390x844",
+          "nativeOpen": true,
+          "nativeAriaHidden": "false",
+          "nativeView": "privacy",
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": "dd2-native-close",
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "afterAction": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-privacy-back-390x844",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "observedActions": [
+          {
+            "type": "click",
+            "id": "dd2-native-back",
+            "legal": null,
+            "trusted": true
+          }
+        ],
+        "afterReload": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-privacy-back-390x844",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "finishedAt": "2026-10-24T10:07:14.700Z",
+        "cspViolations": [
+          {
+            "key": "style-src-elem|https://fonts.googleapis.com",
+            "count": 2
+          },
+          {
+            "key": "script-src-elem|https://pagead2.googlesyndication.com",
+            "count": 2
+          },
+          {
+            "key": "connect-src|https://duediligence-api.wallyesteban1993.workers.dev",
+            "count": 2
+          }
+        ],
+        "requestsBlockedBeforeNetwork": []
+      },
+      {
+        "id": "direct-privacy-escape-390x844",
+        "kind": "direct",
+        "view": "privacy",
+        "control": "escape",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "status": "PASS",
+        "stage": "real-reload",
+        "checks": [
+          {
+            "name": "Direct public route is signed out and has no owned dialog entry",
+            "passed": true
+          },
+          {
+            "name": "First dismissal returns to canonical public Home",
+            "passed": true
+          },
+          {
+            "name": "Dismissal preserves unrelated state without a new history entry",
+            "passed": true
+          },
+          {
+            "name": "Dismissal does not open a sign-in overlay",
+            "passed": true
+          },
+          {
+            "name": "Exactly one trusted dismissal action was delivered",
+            "passed": true
+          },
+          {
+            "name": "Real reload remains on public Home with the dialog closed",
+            "passed": true
+          },
+          {
+            "name": "Real reload retains unrelated history state",
+            "passed": true
+          },
+          {
+            "name": "No uncaught page error in this case",
+            "passed": true
+          },
+          {
+            "name": "No off-origin or non-GET navigation attempted",
+            "passed": true
+          }
+        ],
+        "actions": [
+          {
+            "action": "escape",
+            "attempts": 1
+          }
+        ],
+        "startedAt": "2026-10-24T10:07:14.706Z",
+        "before": {
+          "pathname": "/",
+          "search": "",
+          "hash": "#privacy",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-privacy-escape-390x844",
+          "nativeOpen": true,
+          "nativeAriaHidden": "false",
+          "nativeView": "privacy",
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": "dd2-native-close",
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "afterAction": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-privacy-escape-390x844",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "observedActions": [
+          {
+            "type": "escape",
+            "trusted": true
+          }
+        ],
+        "afterReload": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-privacy-escape-390x844",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "finishedAt": "2026-10-24T10:07:15.453Z",
+        "cspViolations": [
+          {
+            "key": "style-src-elem|https://fonts.googleapis.com",
+            "count": 2
+          },
+          {
+            "key": "script-src-elem|https://pagead2.googlesyndication.com",
+            "count": 2
+          },
+          {
+            "key": "connect-src|https://duediligence-api.wallyesteban1993.workers.dev",
+            "count": 2
+          }
+        ],
+        "requestsBlockedBeforeNetwork": []
+      },
+      {
+        "id": "direct-support-close-390x844",
+        "kind": "direct",
+        "view": "support",
+        "control": "close",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "status": "PASS",
+        "stage": "real-reload",
+        "checks": [
+          {
+            "name": "Direct public route is signed out and has no owned dialog entry",
+            "passed": true
+          },
+          {
+            "name": "First dismissal returns to canonical public Home",
+            "passed": true
+          },
+          {
+            "name": "Dismissal preserves unrelated state without a new history entry",
+            "passed": true
+          },
+          {
+            "name": "Dismissal does not open a sign-in overlay",
+            "passed": true
+          },
+          {
+            "name": "Exactly one trusted dismissal action was delivered",
+            "passed": true
+          },
+          {
+            "name": "Real reload remains on public Home with the dialog closed",
+            "passed": true
+          },
+          {
+            "name": "Real reload retains unrelated history state",
+            "passed": true
+          },
+          {
+            "name": "No uncaught page error in this case",
+            "passed": true
+          },
+          {
+            "name": "No off-origin or non-GET navigation attempted",
+            "passed": true
+          }
+        ],
+        "actions": [
+          {
+            "action": "close",
+            "attempts": 1
+          }
+        ],
+        "startedAt": "2026-10-24T10:07:15.460Z",
+        "before": {
+          "pathname": "/",
+          "search": "",
+          "hash": "#support",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-support-close-390x844",
+          "nativeOpen": true,
+          "nativeAriaHidden": "false",
+          "nativeView": "support",
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": "dd2-native-close",
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "screenshotAttempts": [
+          {
+            "stage": "screenshot-open",
+            "previousStage": "initial-load-and-readiness",
+            "selector": "#dd2-native-view .dd2-native-card",
+            "file": "direct-support-close-390x844-open.png",
+            "status": "PASS"
+          },
+          {
+            "stage": "screenshot-after-reload",
+            "previousStage": "real-reload",
+            "selector": ".quorum-entry-legal",
+            "file": "direct-support-close-390x844-after-reload.png",
+            "status": "PASS"
+          }
+        ],
+        "afterAction": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-support-close-390x844",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "observedActions": [
+          {
+            "type": "click",
+            "id": "dd2-native-close",
+            "legal": null,
+            "trusted": true
+          }
+        ],
+        "afterReload": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-support-close-390x844",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "finishedAt": "2026-10-24T10:07:16.449Z",
+        "cspViolations": [
+          {
+            "key": "style-src-elem|https://fonts.googleapis.com",
+            "count": 2
+          },
+          {
+            "key": "script-src-elem|https://pagead2.googlesyndication.com",
+            "count": 2
+          },
+          {
+            "key": "connect-src|https://duediligence-api.wallyesteban1993.workers.dev",
+            "count": 2
+          }
+        ],
+        "requestsBlockedBeforeNetwork": []
+      },
+      {
+        "id": "direct-support-back-390x844",
+        "kind": "direct",
+        "view": "support",
+        "control": "back",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "status": "PASS",
+        "stage": "real-reload",
+        "checks": [
+          {
+            "name": "Direct public route is signed out and has no owned dialog entry",
+            "passed": true
+          },
+          {
+            "name": "First dismissal returns to canonical public Home",
+            "passed": true
+          },
+          {
+            "name": "Dismissal preserves unrelated state without a new history entry",
+            "passed": true
+          },
+          {
+            "name": "Dismissal does not open a sign-in overlay",
+            "passed": true
+          },
+          {
+            "name": "Exactly one trusted dismissal action was delivered",
+            "passed": true
+          },
+          {
+            "name": "Real reload remains on public Home with the dialog closed",
+            "passed": true
+          },
+          {
+            "name": "Real reload retains unrelated history state",
+            "passed": true
+          },
+          {
+            "name": "No uncaught page error in this case",
+            "passed": true
+          },
+          {
+            "name": "No off-origin or non-GET navigation attempted",
+            "passed": true
+          }
+        ],
+        "actions": [
+          {
+            "action": "back",
+            "attempts": 1
+          }
+        ],
+        "startedAt": "2026-10-24T10:07:16.456Z",
+        "before": {
+          "pathname": "/",
+          "search": "",
+          "hash": "#support",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-support-back-390x844",
+          "nativeOpen": true,
+          "nativeAriaHidden": "false",
+          "nativeView": "support",
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": "dd2-native-close",
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "afterAction": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-support-back-390x844",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "observedActions": [
+          {
+            "type": "click",
+            "id": "dd2-native-back",
+            "legal": null,
+            "trusted": true
+          }
+        ],
+        "afterReload": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-support-back-390x844",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "finishedAt": "2026-10-24T10:07:17.231Z",
+        "cspViolations": [
+          {
+            "key": "style-src-elem|https://fonts.googleapis.com",
+            "count": 2
+          },
+          {
+            "key": "script-src-elem|https://pagead2.googlesyndication.com",
+            "count": 2
+          },
+          {
+            "key": "connect-src|https://duediligence-api.wallyesteban1993.workers.dev",
+            "count": 2
+          }
+        ],
+        "requestsBlockedBeforeNetwork": []
+      },
+      {
+        "id": "direct-support-escape-390x844",
+        "kind": "direct",
+        "view": "support",
+        "control": "escape",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "status": "PASS",
+        "stage": "real-reload",
+        "checks": [
+          {
+            "name": "Direct public route is signed out and has no owned dialog entry",
+            "passed": true
+          },
+          {
+            "name": "First dismissal returns to canonical public Home",
+            "passed": true
+          },
+          {
+            "name": "Dismissal preserves unrelated state without a new history entry",
+            "passed": true
+          },
+          {
+            "name": "Dismissal does not open a sign-in overlay",
+            "passed": true
+          },
+          {
+            "name": "Exactly one trusted dismissal action was delivered",
+            "passed": true
+          },
+          {
+            "name": "Real reload remains on public Home with the dialog closed",
+            "passed": true
+          },
+          {
+            "name": "Real reload retains unrelated history state",
+            "passed": true
+          },
+          {
+            "name": "No uncaught page error in this case",
+            "passed": true
+          },
+          {
+            "name": "No off-origin or non-GET navigation attempted",
+            "passed": true
+          }
+        ],
+        "actions": [
+          {
+            "action": "escape",
+            "attempts": 1
+          }
+        ],
+        "startedAt": "2026-10-24T10:07:17.237Z",
+        "before": {
+          "pathname": "/",
+          "search": "",
+          "hash": "#support",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-support-escape-390x844",
+          "nativeOpen": true,
+          "nativeAriaHidden": "false",
+          "nativeView": "support",
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": "dd2-native-close",
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "afterAction": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-support-escape-390x844",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "observedActions": [
+          {
+            "type": "escape",
+            "trusted": true
+          }
+        ],
+        "afterReload": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-support-escape-390x844",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "finishedAt": "2026-10-24T10:07:18.001Z",
+        "cspViolations": [
+          {
+            "key": "style-src-elem|https://fonts.googleapis.com",
+            "count": 2
+          },
+          {
+            "key": "script-src-elem|https://pagead2.googlesyndication.com",
+            "count": 2
+          },
+          {
+            "key": "connect-src|https://duediligence-api.wallyesteban1993.workers.dev",
+            "count": 2
+          }
+        ],
+        "requestsBlockedBeforeNetwork": []
+      },
+      {
+        "id": "direct-partnership-close-390x844",
+        "kind": "direct",
+        "view": "partnership",
+        "control": "close",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "status": "PASS",
+        "stage": "real-reload",
+        "checks": [
+          {
+            "name": "Direct public route is signed out and has no owned dialog entry",
+            "passed": true
+          },
+          {
+            "name": "First dismissal returns to canonical public Home",
+            "passed": true
+          },
+          {
+            "name": "Dismissal preserves unrelated state without a new history entry",
+            "passed": true
+          },
+          {
+            "name": "Dismissal does not open a sign-in overlay",
+            "passed": true
+          },
+          {
+            "name": "Exactly one trusted dismissal action was delivered",
+            "passed": true
+          },
+          {
+            "name": "Real reload remains on public Home with the dialog closed",
+            "passed": true
+          },
+          {
+            "name": "Real reload retains unrelated history state",
+            "passed": true
+          },
+          {
+            "name": "No uncaught page error in this case",
+            "passed": true
+          },
+          {
+            "name": "No off-origin or non-GET navigation attempted",
+            "passed": true
+          }
+        ],
+        "actions": [
+          {
+            "action": "close",
+            "attempts": 1
+          }
+        ],
+        "startedAt": "2026-10-24T10:07:18.007Z",
+        "before": {
+          "pathname": "/",
+          "search": "",
+          "hash": "#partnership",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-partnership-close-390x844",
+          "nativeOpen": true,
+          "nativeAriaHidden": "false",
+          "nativeView": "partnership",
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": "dd2-native-close",
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "screenshotAttempts": [
+          {
+            "stage": "screenshot-open",
+            "previousStage": "initial-load-and-readiness",
+            "selector": "#dd2-native-view .dd2-native-card",
+            "file": "direct-partnership-close-390x844-open.png",
+            "status": "PASS"
+          },
+          {
+            "stage": "screenshot-after-reload",
+            "previousStage": "real-reload",
+            "selector": ".quorum-entry-legal",
+            "file": "direct-partnership-close-390x844-after-reload.png",
+            "status": "PASS"
+          }
+        ],
+        "afterAction": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-partnership-close-390x844",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "observedActions": [
+          {
+            "type": "click",
+            "id": "dd2-native-close",
+            "legal": null,
+            "trusted": true
+          }
+        ],
+        "afterReload": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-partnership-close-390x844",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "finishedAt": "2026-10-24T10:07:19.032Z",
+        "cspViolations": [
+          {
+            "key": "style-src-elem|https://fonts.googleapis.com",
+            "count": 2
+          },
+          {
+            "key": "script-src-elem|https://pagead2.googlesyndication.com",
+            "count": 2
+          },
+          {
+            "key": "connect-src|https://duediligence-api.wallyesteban1993.workers.dev",
+            "count": 2
+          }
+        ],
+        "requestsBlockedBeforeNetwork": []
+      },
+      {
+        "id": "direct-partnership-back-390x844",
+        "kind": "direct",
+        "view": "partnership",
+        "control": "back",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "status": "PASS",
+        "stage": "real-reload",
+        "checks": [
+          {
+            "name": "Direct public route is signed out and has no owned dialog entry",
+            "passed": true
+          },
+          {
+            "name": "First dismissal returns to canonical public Home",
+            "passed": true
+          },
+          {
+            "name": "Dismissal preserves unrelated state without a new history entry",
+            "passed": true
+          },
+          {
+            "name": "Dismissal does not open a sign-in overlay",
+            "passed": true
+          },
+          {
+            "name": "Exactly one trusted dismissal action was delivered",
+            "passed": true
+          },
+          {
+            "name": "Real reload remains on public Home with the dialog closed",
+            "passed": true
+          },
+          {
+            "name": "Real reload retains unrelated history state",
+            "passed": true
+          },
+          {
+            "name": "No uncaught page error in this case",
+            "passed": true
+          },
+          {
+            "name": "No off-origin or non-GET navigation attempted",
+            "passed": true
+          }
+        ],
+        "actions": [
+          {
+            "action": "back",
+            "attempts": 1
+          }
+        ],
+        "startedAt": "2026-10-24T10:07:19.039Z",
+        "before": {
+          "pathname": "/",
+          "search": "",
+          "hash": "#partnership",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-partnership-back-390x844",
+          "nativeOpen": true,
+          "nativeAriaHidden": "false",
+          "nativeView": "partnership",
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": "dd2-native-close",
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "afterAction": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-partnership-back-390x844",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "observedActions": [
+          {
+            "type": "click",
+            "id": "dd2-native-back",
+            "legal": null,
+            "trusted": true
+          }
+        ],
+        "afterReload": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-partnership-back-390x844",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "finishedAt": "2026-10-24T10:07:19.801Z",
+        "cspViolations": [
+          {
+            "key": "style-src-elem|https://fonts.googleapis.com",
+            "count": 2
+          },
+          {
+            "key": "script-src-elem|https://pagead2.googlesyndication.com",
+            "count": 2
+          },
+          {
+            "key": "connect-src|https://duediligence-api.wallyesteban1993.workers.dev",
+            "count": 2
+          }
+        ],
+        "requestsBlockedBeforeNetwork": []
+      },
+      {
+        "id": "direct-partnership-escape-390x844",
+        "kind": "direct",
+        "view": "partnership",
+        "control": "escape",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "status": "PASS",
+        "stage": "real-reload",
+        "checks": [
+          {
+            "name": "Direct public route is signed out and has no owned dialog entry",
+            "passed": true
+          },
+          {
+            "name": "First dismissal returns to canonical public Home",
+            "passed": true
+          },
+          {
+            "name": "Dismissal preserves unrelated state without a new history entry",
+            "passed": true
+          },
+          {
+            "name": "Dismissal does not open a sign-in overlay",
+            "passed": true
+          },
+          {
+            "name": "Exactly one trusted dismissal action was delivered",
+            "passed": true
+          },
+          {
+            "name": "Real reload remains on public Home with the dialog closed",
+            "passed": true
+          },
+          {
+            "name": "Real reload retains unrelated history state",
+            "passed": true
+          },
+          {
+            "name": "No uncaught page error in this case",
+            "passed": true
+          },
+          {
+            "name": "No off-origin or non-GET navigation attempted",
+            "passed": true
+          }
+        ],
+        "actions": [
+          {
+            "action": "escape",
+            "attempts": 1
+          }
+        ],
+        "startedAt": "2026-10-24T10:07:19.808Z",
+        "before": {
+          "pathname": "/",
+          "search": "",
+          "hash": "#partnership",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-partnership-escape-390x844",
+          "nativeOpen": true,
+          "nativeAriaHidden": "false",
+          "nativeView": "partnership",
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": "dd2-native-close",
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "afterAction": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-partnership-escape-390x844",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "observedActions": [
+          {
+            "type": "escape",
+            "trusted": true
+          }
+        ],
+        "afterReload": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "direct-partnership-escape-390x844",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "finishedAt": "2026-10-24T10:07:20.550Z",
+        "cspViolations": [
+          {
+            "key": "style-src-elem|https://fonts.googleapis.com",
+            "count": 2
+          },
+          {
+            "key": "script-src-elem|https://pagead2.googlesyndication.com",
+            "count": 2
+          },
+          {
+            "key": "connect-src|https://duediligence-api.wallyesteban1993.workers.dev",
+            "count": 2
+          }
+        ],
+        "requestsBlockedBeforeNetwork": []
+      },
+      {
+        "id": "entry-legal-terms-390x844",
+        "kind": "entry-legal-history",
+        "view": "terms",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "status": "PASS",
+        "stage": "browser-back-and-focus-return",
+        "checks": [
+          {
+            "name": "Entry legal links start signed out without sign-in overlay",
+            "passed": true
+          },
+          {
+            "name": "Entry legal link creates one owned native-view history entry",
+            "passed": true
+          },
+          {
+            "name": "Escape restores public origin, focus and unrelated state without sign-in",
+            "passed": true
+          },
+          {
+            "name": "Browser Forward restores the owned legal dialog",
+            "passed": true
+          },
+          {
+            "name": "Browser Back restores public origin and legal-link focus",
+            "passed": true
+          },
+          {
+            "name": "One trusted entry legal click and one Escape were delivered without retries",
+            "passed": true
+          },
+          {
+            "name": "No uncaught page error in this case",
+            "passed": true
+          },
+          {
+            "name": "No off-origin or non-GET navigation attempted",
+            "passed": true
+          }
+        ],
+        "actions": [
+          {
+            "action": "entry-legal-terms",
+            "attempts": 1
+          },
+          {
+            "action": "escape",
+            "attempts": 1
+          },
+          {
+            "action": "browser-forward",
+            "attempts": 1
+          },
+          {
+            "action": "browser-back",
+            "attempts": 1
+          }
+        ],
+        "startedAt": "2026-10-24T10:07:20.556Z",
+        "before": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "entry-legal-terms-390x844",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "afterOpen": {
+          "pathname": "/",
+          "search": "",
+          "hash": "#terms",
+          "historyLength": 3,
+          "dd2View": "terms",
+          "sentinel": null,
+          "nativeOpen": true,
+          "nativeAriaHidden": "false",
+          "nativeView": "terms",
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": "dd2-native-close",
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "afterEscape": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 3,
+          "dd2View": null,
+          "sentinel": "entry-legal-terms-390x844",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": "terms",
+          "focusInert": false
+        },
+        "afterForward": {
+          "pathname": "/",
+          "search": "",
+          "hash": "#terms",
+          "historyLength": 3,
+          "dd2View": "terms",
+          "sentinel": null,
+          "nativeOpen": true,
+          "nativeAriaHidden": "false",
+          "nativeView": "terms",
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": "dd2-native-close",
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "afterBack": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 3,
+          "dd2View": null,
+          "sentinel": "entry-legal-terms-390x844",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": "terms",
+          "focusInert": false
+        },
+        "observedActions": [
+          {
+            "type": "click",
+            "id": null,
+            "legal": "terms",
+            "trusted": true
+          },
+          {
+            "type": "escape",
+            "trusted": true
+          }
+        ],
+        "finishedAt": "2026-10-24T10:07:21.233Z",
+        "cspViolations": [
+          {
+            "key": "style-src-elem|https://fonts.googleapis.com",
+            "count": 1
+          },
+          {
+            "key": "script-src-elem|https://pagead2.googlesyndication.com",
+            "count": 1
+          },
+          {
+            "key": "connect-src|https://duediligence-api.wallyesteban1993.workers.dev",
+            "count": 1
+          }
+        ],
+        "requestsBlockedBeforeNetwork": []
+      },
+      {
+        "id": "entry-legal-privacy-390x844",
+        "kind": "entry-legal-history",
+        "view": "privacy",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "status": "PASS",
+        "stage": "browser-back-and-focus-return",
+        "checks": [
+          {
+            "name": "Entry legal links start signed out without sign-in overlay",
+            "passed": true
+          },
+          {
+            "name": "Entry legal link creates one owned native-view history entry",
+            "passed": true
+          },
+          {
+            "name": "Escape restores public origin, focus and unrelated state without sign-in",
+            "passed": true
+          },
+          {
+            "name": "Browser Forward restores the owned legal dialog",
+            "passed": true
+          },
+          {
+            "name": "Browser Back restores public origin and legal-link focus",
+            "passed": true
+          },
+          {
+            "name": "One trusted entry legal click and one Escape were delivered without retries",
+            "passed": true
+          },
+          {
+            "name": "No uncaught page error in this case",
+            "passed": true
+          },
+          {
+            "name": "No off-origin or non-GET navigation attempted",
+            "passed": true
+          }
+        ],
+        "actions": [
+          {
+            "action": "entry-legal-privacy",
+            "attempts": 1
+          },
+          {
+            "action": "escape",
+            "attempts": 1
+          },
+          {
+            "action": "browser-forward",
+            "attempts": 1
+          },
+          {
+            "action": "browser-back",
+            "attempts": 1
+          }
+        ],
+        "startedAt": "2026-10-24T10:07:21.240Z",
+        "before": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 2,
+          "dd2View": null,
+          "sentinel": "entry-legal-privacy-390x844",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "afterOpen": {
+          "pathname": "/",
+          "search": "",
+          "hash": "#privacy",
+          "historyLength": 3,
+          "dd2View": "privacy",
+          "sentinel": null,
+          "nativeOpen": true,
+          "nativeAriaHidden": "false",
+          "nativeView": "privacy",
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": "dd2-native-close",
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "afterEscape": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 3,
+          "dd2View": null,
+          "sentinel": "entry-legal-privacy-390x844",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": "privacy",
+          "focusInert": false
+        },
+        "afterForward": {
+          "pathname": "/",
+          "search": "",
+          "hash": "#privacy",
+          "historyLength": 3,
+          "dd2View": "privacy",
+          "sentinel": null,
+          "nativeOpen": true,
+          "nativeAriaHidden": "false",
+          "nativeView": "privacy",
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": "dd2-native-close",
+          "focusedLegalView": null,
+          "focusInert": false
+        },
+        "afterBack": {
+          "pathname": "/",
+          "search": "",
+          "hash": "",
+          "historyLength": 3,
+          "dd2View": null,
+          "sentinel": "entry-legal-privacy-390x844",
+          "nativeOpen": false,
+          "nativeAriaHidden": "true",
+          "nativeView": null,
+          "signInOpen": false,
+          "signedIn": false,
+          "focusedId": null,
+          "focusedLegalView": "privacy",
+          "focusInert": false
+        },
+        "observedActions": [
+          {
+            "type": "click",
+            "id": null,
+            "legal": "privacy",
+            "trusted": true
+          },
+          {
+            "type": "escape",
+            "trusted": true
+          }
+        ],
+        "finishedAt": "2026-10-24T10:07:21.877Z",
+        "cspViolations": [
+          {
+            "key": "style-src-elem|https://fonts.googleapis.com",
+            "count": 1
+          },
+          {
+            "key": "script-src-elem|https://pagead2.googlesyndication.com",
+            "count": 1
+          },
+          {
+            "key": "connect-src|https://duediligence-api.wallyesteban1993.workers.dev",
+            "count": 1
+          }
+        ],
+        "requestsBlockedBeforeNetwork": []
+      }
+    ],
+    "screenshots": [
+      {
+        "caseId": "direct-terms-close-1280x720",
+        "stage": "open",
+        "file": "direct-terms-close-1280x720-open.png",
+        "sha256": "58e4980ccffc6d86129e1403c091ce1e1f4f7388112516ef5d09580233cbe3f5"
+      },
+      {
+        "caseId": "direct-terms-close-1280x720",
+        "stage": "after-reload",
+        "file": "direct-terms-close-1280x720-after-reload.png",
+        "sha256": "e9b4855c90bab433415fff0ce6498a7208cac82b28d72e21b84b65aef2d247e9"
+      },
+      {
+        "caseId": "direct-privacy-close-1280x720",
+        "stage": "open",
+        "file": "direct-privacy-close-1280x720-open.png",
+        "sha256": "5e65abf4d98f8d7f8df7e431a90483bbda7282ddc34f8a10a584f442fb27a808"
+      },
+      {
+        "caseId": "direct-privacy-close-1280x720",
+        "stage": "after-reload",
+        "file": "direct-privacy-close-1280x720-after-reload.png",
+        "sha256": "e9b4855c90bab433415fff0ce6498a7208cac82b28d72e21b84b65aef2d247e9"
+      },
+      {
+        "caseId": "direct-support-close-1280x720",
+        "stage": "open",
+        "file": "direct-support-close-1280x720-open.png",
+        "sha256": "5674339680f8d364b4ba7b2fc8949eb0695b972ad662c322b0692e9a9561764e"
+      },
+      {
+        "caseId": "direct-support-close-1280x720",
+        "stage": "after-reload",
+        "file": "direct-support-close-1280x720-after-reload.png",
+        "sha256": "e9b4855c90bab433415fff0ce6498a7208cac82b28d72e21b84b65aef2d247e9"
+      },
+      {
+        "caseId": "direct-partnership-close-1280x720",
+        "stage": "open",
+        "file": "direct-partnership-close-1280x720-open.png",
+        "sha256": "8aa77fb8622ef1ddc6968a35571aa3d8e59ab945d3e28527b00a030dbcea9197"
+      },
+      {
+        "caseId": "direct-partnership-close-1280x720",
+        "stage": "after-reload",
+        "file": "direct-partnership-close-1280x720-after-reload.png",
+        "sha256": "e9b4855c90bab433415fff0ce6498a7208cac82b28d72e21b84b65aef2d247e9"
+      },
+      {
+        "caseId": "direct-terms-close-390x844",
+        "stage": "open",
+        "file": "direct-terms-close-390x844-open.png",
+        "sha256": "fc75ae235e87b7a447cb3369738a539bcf43d750f0473adbe233e85d6c23ecfe"
+      },
+      {
+        "caseId": "direct-terms-close-390x844",
+        "stage": "after-reload",
+        "file": "direct-terms-close-390x844-after-reload.png",
+        "sha256": "995201940f2258b736b6c8704bbf2db6420b97f6a42efae6fb8a08dbc4b375d0"
+      },
+      {
+        "caseId": "direct-privacy-close-390x844",
+        "stage": "open",
+        "file": "direct-privacy-close-390x844-open.png",
+        "sha256": "65d140feead982c6c28f405b1bd2b7a9e3031265fba8b505fbd83fef998b684e"
+      },
+      {
+        "caseId": "direct-privacy-close-390x844",
+        "stage": "after-reload",
+        "file": "direct-privacy-close-390x844-after-reload.png",
+        "sha256": "995201940f2258b736b6c8704bbf2db6420b97f6a42efae6fb8a08dbc4b375d0"
+      },
+      {
+        "caseId": "direct-support-close-390x844",
+        "stage": "open",
+        "file": "direct-support-close-390x844-open.png",
+        "sha256": "32ce3438a0eb4ba596fc35cebc442f4f1d04b77b78a158f3556ee45948d88a5f"
+      },
+      {
+        "caseId": "direct-support-close-390x844",
+        "stage": "after-reload",
+        "file": "direct-support-close-390x844-after-reload.png",
+        "sha256": "995201940f2258b736b6c8704bbf2db6420b97f6a42efae6fb8a08dbc4b375d0"
+      },
+      {
+        "caseId": "direct-partnership-close-390x844",
+        "stage": "open",
+        "file": "direct-partnership-close-390x844-open.png",
+        "sha256": "31964f8166392f395e6e1821c3f83dcef644fa3885d400decd2269bcd7db83a1"
+      },
+      {
+        "caseId": "direct-partnership-close-390x844",
+        "stage": "after-reload",
+        "file": "direct-partnership-close-390x844-after-reload.png",
+        "sha256": "995201940f2258b736b6c8704bbf2db6420b97f6a42efae6fb8a08dbc4b375d0"
+      }
+    ],
+    "isolation": {
+      "actualIndexAndAssets": true,
+      "applicationSourceModified": false,
+      "freshContextPerCase": true,
+      "authenticatedSessionInjected": false,
+      "browserEnvironmentAllowlist": [
+        "PATH",
+        "HOME",
+        "TMPDIR",
+        "LANG",
+        "LC_ALL"
+      ],
+      "csp": "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; media-src 'self'; manifest-src 'self'; connect-src 'none'; worker-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'",
+      "serviceWorkers": "block",
+      "hostedTargetAllowed": false,
+      "origin": "http://127.0.0.1:42021"
+    },
+    "network": {
+      "localGetRequests": 2276,
+      "externalRequestsBlocked": 0,
+      "localNonGetRequestsBlocked": 0,
+      "navigationRequestsBlocked": 0,
+      "websocketRequestsBlocked": 0,
+      "serverNonGetRequestsRejected": 0,
+      "serverMissingPaths": [],
+      "serverErrors": 0
+    },
+    "pageErrors": [],
+    "consoleErrors": [
+      {
+        "caseId": "direct-terms-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-terms-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-terms-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-terms-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-terms-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-terms-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-terms-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-terms-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-terms-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-terms-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-terms-back-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-terms-back-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-terms-back-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-terms-back-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-terms-back-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-terms-back-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-terms-back-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-terms-back-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-terms-escape-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-terms-escape-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-terms-escape-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-terms-escape-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-terms-escape-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-terms-escape-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-terms-escape-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-terms-escape-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-privacy-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-privacy-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-privacy-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-privacy-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-privacy-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-privacy-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-privacy-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-privacy-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-privacy-back-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-privacy-back-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-privacy-back-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-privacy-back-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-privacy-back-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-privacy-back-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-privacy-back-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-privacy-back-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-privacy-escape-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-privacy-escape-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-privacy-escape-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-privacy-escape-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-privacy-escape-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-privacy-escape-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-privacy-escape-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-privacy-escape-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-support-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-support-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-support-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-support-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-support-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-support-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-support-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-support-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-support-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-support-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-support-back-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-support-back-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-support-back-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-support-back-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-support-back-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-support-back-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-support-back-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-support-back-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-support-escape-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-support-escape-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-support-escape-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-support-escape-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-support-escape-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-support-escape-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-support-escape-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-support-escape-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-partnership-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-partnership-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-partnership-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-partnership-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-partnership-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-partnership-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-partnership-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-partnership-close-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-partnership-back-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-partnership-back-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-partnership-back-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-partnership-back-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-partnership-back-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-partnership-back-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-partnership-back-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-partnership-back-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-partnership-escape-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-partnership-escape-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-partnership-escape-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-partnership-escape-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-partnership-escape-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-partnership-escape-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-partnership-escape-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-partnership-escape-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "entry-legal-terms-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "entry-legal-terms-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "entry-legal-terms-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "entry-legal-terms-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "entry-legal-privacy-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "entry-legal-privacy-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "entry-legal-privacy-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "entry-legal-privacy-1280x720",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-terms-close-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-terms-close-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-terms-close-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-terms-close-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-terms-close-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-terms-close-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-terms-close-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-terms-close-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-terms-back-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-terms-back-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-terms-back-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-terms-back-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-terms-back-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-terms-back-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-terms-back-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-terms-back-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-terms-escape-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-terms-escape-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-terms-escape-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-terms-escape-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-terms-escape-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-terms-escape-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-terms-escape-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-terms-escape-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-privacy-close-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-privacy-close-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-privacy-close-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-privacy-close-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-privacy-close-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-privacy-close-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-privacy-close-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-privacy-close-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-privacy-back-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-privacy-back-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-privacy-back-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-privacy-back-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-privacy-back-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-privacy-back-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-privacy-back-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-privacy-back-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-privacy-escape-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-privacy-escape-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-privacy-escape-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-privacy-escape-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-privacy-escape-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-privacy-escape-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-privacy-escape-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-privacy-escape-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-support-close-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-support-close-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-support-close-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-support-close-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-support-close-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-support-close-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-support-close-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-support-close-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-support-back-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-support-back-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-support-back-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-support-back-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-support-back-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-support-back-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-support-back-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-support-back-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-support-escape-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-support-escape-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-support-escape-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-support-escape-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-support-escape-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-support-escape-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-support-escape-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-support-escape-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-partnership-close-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-partnership-close-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-partnership-close-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-partnership-close-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-partnership-close-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-partnership-close-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-partnership-close-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-partnership-close-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-partnership-back-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-partnership-back-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-partnership-back-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-partnership-back-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-partnership-back-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-partnership-back-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-partnership-back-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-partnership-back-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-partnership-escape-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-partnership-escape-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-partnership-escape-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-partnership-escape-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "direct-partnership-escape-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "direct-partnership-escape-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "direct-partnership-escape-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "direct-partnership-escape-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "entry-legal-terms-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "entry-legal-terms-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "entry-legal-terms-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "entry-legal-terms-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      },
+      {
+        "caseId": "entry-legal-privacy-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "71f113facf4bae54098cca04dbdadef3c20ebdbfacf402ccbd68d0a92c5a97b9"
+      },
+      {
+        "caseId": "entry-legal-privacy-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "61347e07fea9b8a427c5fdb8d00a6cdbaec1a42d16db24da76676f425d1bcf55"
+      },
+      {
+        "caseId": "entry-legal-privacy-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "94ab00116527e6f8425ab3cd67c9bb0017196aadb017e87d448d770c08b1f0c9"
+      },
+      {
+        "caseId": "entry-legal-privacy-390x844",
+        "category": "EXPECTED_CSP_BLOCK",
+        "messageSha256": "38936a3a15f86ffae2e9abdaf620d16d51bca4d2b80f6423560e61340f55805f"
+      }
+    ],
+    "fullWebsiteAcceptance": false,
+    "actualHostedAuth": false,
+    "customerDataStored": false,
+    "deploymentPerformed": false,
+    "emailsSent": false,
+    "paymentsInitiated": false,
+    "limitations": [
+      "External fonts, advertising, services, connections and forms are intentionally blocked.",
+      "Signed-in, paid-access, backend, inbox, payment and production behavior are outside this check.",
+      "Screenshots document the local blocked-network presentation, not production visual acceptance.",
+      "No ineffective action is retried; the first action must produce the asserted result."
+    ],
+    "browser": {
+      "playwrightVersion": "1.54.2",
+      "version": "155.0.8059.39",
+      "channel": "chrome"
+    },
+    "finishedAt": "2026-10-24T10:07:21.955Z",
+    "summary": {
+      "expectedCases": 28,
+      "cases": 28,
+      "passed": 28,
+      "failed": 0,
+      "checks": 248,
+      "servedFiles": 43
+    }
+  }
+}

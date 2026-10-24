@@ -164,3 +164,14 @@ The [new application-envelope verification](staging-application-envelope-2026102
 | SITE-029 / SITE-035 | Exact staging procedure defaults refuse; valid synthetic binding applies/repeats/reverses/repeats; catalog, schema, all 28 counts/digests and synthetic external sentinels preserved | SCOPED_LOCAL_PASS | Enforced hosted pause/drain, fresh cutover state, supported executor identity/deadline, applicable authorization and actual creator/admin journeys |
 | SITE-X06 / SITE-X09 | Two actual overlapping connection locks reject safely; 21 expected SQL refusals include identity/target, partial state, schema/data/function drift, expired windows and inverse after resumed writes; late failures roll back | SCOPED_LOCAL_PASS | Hosted invocation drain, actual Auth/role memberships, multi-browser races and all other route concurrency |
 | SITE-X11 | 29 exact source/input hashes and equal candidate/tested trees; both failed attempts retained separately from pass | SCOPED_LOCAL_PASS | No application or publication established; hosted rehearsal and current production readback remain open |
+
+## Execution results — 23–24 October 2026
+
+The [direct-link navigation audit](public-navigation-audit-20261024.md) reproduces a public defect and records the separate local correction. No hosted account, form submission, email, payment, provider call or deployment was used. Temporary browser tabs were closed and viewport overrides reset; the local review server was stopped.
+
+| ID | Scenario / actual result | Status | Remaining gap |
+| --- | --- | --- | --- |
+| SITE-004 / SITE-005 / SITE-006 | Signed-out public Support/Partnership Back hid the view without clearing its URL; reload reopened Partnerships | REPRODUCED_PUBLIC_DEFECT | Corrected production release and readback |
+| SITE-004 / SITE-X02 | Public Terms Escape restored link focus; Privacy backward/forward Tab remained in the dialog. Exact candidate `b8d3051` passed 28 actual-frontend desktop/mobile cases and 248 checks, covering 24 direct dismissal/reload combinations and four legal-link focus/Back/Forward journeys without unexpected sign-in | OBSERVED_PUBLIC_LIMITED / SCOPED_LOCAL_PASS | Full keyboard/role matrix, signed-in flows and production readback; early manual timing anomaly remains unclassified |
+| SITE-X06 | 22 actual-function navigation cases pass, including direct route controls, changed routes, ownership cleanup and existing paid-action/delayed-Back behavior | SCOPED_LOCAL_PASS | Actual signed-in/paid flows and all-route races |
+| SITE-X11 | Cache URLs agree across homepage, shell and current student registration; 17 student-client checks and Pages artifact validation pass. Run40084596471 matched 13 declared inputs, 43 served files, 16 screenshot hashes and equal candidate/tested trees; both failed attempts are retained | SCOPED_LOCAL_PASS | Final release selection and production asset readback; no deployment established |

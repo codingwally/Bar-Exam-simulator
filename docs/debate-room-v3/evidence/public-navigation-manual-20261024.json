@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-24",
+  "scope": "BOUNDED_SIGNED_OUT_MANUAL_BROWSER_OBSERVATIONS",
+  "evidenceType": "Coordinator transcript-derived observations; not a machine-generated browser run report",
+  "publicObservation": {
+    "origin": "https://duediligence.ph",
+    "exactDeployedCommitVerified": false,
+    "observations": [
+      "Terms Escape returned to the public root and restored focus to the Terms link.",
+      "Privacy Shift+Tab from Close reached Back; Tab returned to Close.",
+      "At measured 390x844, Privacy had no horizontal overflow; Close was 44x44 and Back was 46 pixels high. Clipped screenshot capture failed.",
+      "Direct Support Back hid the view but retained #support.",
+      "Direct Partnerships Back hid the view but retained #partnership; a later read still found aria-hidden=true and display=none at that URL. A real reload reopened the view."
+    ]
+  },
+  "finalLocalObservation": {
+    "origin": "http://127.0.0.1:55852",
+    "serverStartedAt": "2026-10-24T05:24:12.946Z",
+    "servedPhase2WorktreeSha256": "6328aff9afd10cadd241230acac0bf429c589c8146ff05f114d597eb30b2d630",
+    "hashQualification": "Windows worktree bytes; not a normalized Git blob or deployed commit assertion",
+    "actualFrontend": true,
+    "externalConnectionsAllowed": false,
+    "serviceWorkersAllowed": false,
+    "formSubmissionAllowed": false,
+    "observations": [
+      "Fresh direct Support Back returned to the public root without a hash.",
+      "A real reload stayed on the root with native and sign-in overlays hidden.",
+      "The visible entry-page Terms link opened #terms; Escape returned to the root, restored focus to Terms of Use and left the sign-in overlay hidden."
+    ],
+    "temporaryTabsClosed": true,
+    "viewportOverrideReset": true,
+    "localServerStopped": true
+  },
+  "earlierAttempts": [
+    "The intermediate #quorum fallback passed initial close/reload but opened sign-in when the next legal view was dismissed. The final correction uses the public root.",
+    "One early manual same-document Terms Back action left the view open. A later indexed native click and fresh direct Terms entry succeeded. This first-action/timing anomaly remains unclassified; no retry is counted as a first-action pass.",
+    "An initial viewport override affected a different selected tab; the mistaken desktop measurement is not mobile evidence. A subsequent Privacy measurement confirmed 390x844."
+  ],
+  "automatedMatrixStatusAtRecording": "PENDING",
+  "hostedAccountsUsed": false,
+  "emailsSent": false,
+  "paymentsInitiated": false,
+  "deploymentPerformed": false,
+  "fullWebsiteAcceptance": false,
+  "limitations": [
+    "No exact current public revision or production repair readback.",
+    "Manual final-source scope is Support dismissal/reload and subsequent Terms Escape; it is not all route/control/viewport combinations.",
+    "No signed-in, paid/admin, network performance, inbox, full hosted Debate rehearsal or complete mobile visual acceptance."
+  ]
+}

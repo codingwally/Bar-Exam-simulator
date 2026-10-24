@@ -60,7 +60,7 @@ function harness({ hash = '#quorum', historyState = {} } = {}) {
     replaceState(value, title, url) { entries[index] = entry(value, url); location.hash = entries[index].hash; },
     back() { backCalls++; if (index > 0) traversals.push(index - 1); } };
   const context = vm.createContext({ state, document, global, history, location, requestAnimationFrame: callback => frames.push(callback),
-    clearCommercialPricingRefresh() {}, nativeDefinition: view => ['privacy', 'terms', 'account', 'pricing'].includes(view) ? ['View', view, () => `<p>${view}</p>`] : null,
+    clearCommercialPricingRefresh() {}, nativeDefinition: view => ['privacy', 'terms', 'support', 'partnership', 'account', 'pricing'].includes(view) ? ['View', view, () => `<p>${view}</p>`] : null,
     unlimitedFeatureActionContext: () => null, bindNativeViewHandlers() {}, syncEntryWithHistoryRoute() {}, trapOverlayFocus() {},
     showEntry() { assert.fail('No authentication operation is expected'); } });
   vm.runInContext(functions + '\n' + closeListeners + '\n' + routeListeners + '\nbindNavigation();', context);
@@ -110,15 +110,63 @@ test('repeated Close, Back and Escape queue one traversal and later independent 
   assert.equal(h.entries.length, 2, 'Replacing a forward dialog does not add extra history pops or entries');
 });
 
-test('settled route dismissal restores the existing origin hash and preserves direct-link dismissal', () => {
+test('settled route dismissal restores the existing origin hash and direct-link dismissal returns Home', () => {
   const h = harness({ hash: '#forecast', historyState: { existingRoute: 'forecast' } });
   h.renderNativeView('privacy'); h.flushFrames(); h.closeNativeView(); h.settleBack();
   assert.equal(h.location.hash, '#forecast'); assert.deepEqual(h.history.state, { existingRoute: 'forecast' });
   h.element('btn-signin').click(); assert.equal(h.state.nativeView, 'account'); assert.equal(h.location.hash, '#account');
   const direct = harness({ hash: '#privacy', historyState: { unrelated: true } });
   direct.renderNativeView('privacy', { push: false }); direct.flushFrames(); direct.closeNativeView(); direct.flushFrames();
-  assert.equal(direct.backCalls, 0); assert.equal(direct.state.nativeView, null); assert.equal(direct.location.hash, '#privacy');
+  assert.equal(direct.backCalls, 0); assert.equal(direct.state.nativeView, null); assert.equal(direct.location.hash, '');
   assert.deepEqual(direct.history.state, { unrelated: true }); assert.equal(direct.document.activeElement.id, 'btn-signin');
+});
+
+for (const view of ['terms', 'privacy', 'support', 'partnership']) {
+  for (const control of ['close', 'back', 'escape']) {
+    test(`direct ${view} ${control} dismissal stays closed when its URL is reconciled again`, () => {
+      const h = harness({ hash: `#${view}`, historyState: { existingNavigation: 'preserved' } });
+      h.syncNativeViewWithHash(); h.flushFrames();
+      assert.equal(h.state.nativeView, view);
+      if (control === 'escape') h.escape();
+      else h.element(`dd2-native-${control}`).click();
+      h.flushFrames();
+      assert.equal(h.state.nativeView, null); assert.equal(h.location.hash, '');
+      assert.equal(h.backCalls, 0, 'A direct link must not leave the site through browser Back');
+      assert.equal(h.entries.length, 1, 'Dismissal must not add an extra history entry');
+      assert.equal(h.homeShows, 0, 'Dismissal must not start another asynchronous Home navigation');
+      assert.deepEqual(h.history.state, { existingNavigation: 'preserved' });
+      h.syncNativeViewWithHash(); h.flushFrames();
+      assert.equal(h.state.nativeView, null, 'Reload/hash reconciliation must not reopen the dismissed view');
+      assert.equal(h.state.answerDraft, 'The learner’s existing answer.');
+    });
+  }
+}
+
+test('stale native-view metadata cannot rewind a different direct route', () => {
+  const h = harness({ hash: '#support', historyState: { dd2View: 'privacy', unrelated: true } });
+  h.renderNativeView('support', { push: false }); h.flushFrames(); h.closeNativeView(); h.flushFrames();
+  assert.equal(h.backCalls, 0); assert.equal(h.state.nativeView, null); assert.equal(h.location.hash, '');
+  assert.deepEqual(h.history.state, { unrelated: true });
+});
+
+test('closing an old route dialog preserves a newer route and removes only its stale ownership marker', () => {
+  const h = harness(); h.renderNativeView('privacy'); h.flushFrames();
+  h.history.replaceState({ dd2View: 'privacy', otherRoute: 'forecast' }, '', '#forecast');
+  h.closeNativeView(); h.flushFrames();
+  assert.equal(h.backCalls, 0); assert.equal(h.location.hash, '#forecast'); assert.equal(h.state.nativeView, null);
+  assert.deepEqual(h.history.state, { otherRoute: 'forecast' });
+  h.renderNativeView('terms'); h.flushFrames();
+  assert.equal(h.entries.length, 3, 'The next dialog must push rather than replace the newer route');
+  h.closeNativeView(); h.settleBack();
+  assert.equal(h.location.hash, '#forecast'); assert.deepEqual(h.history.state, { otherRoute: 'forecast' });
+});
+
+test('closing an old overlay preserves ownership metadata for a different newly selected native route', () => {
+  const h = harness(); h.renderNativeView('privacy'); h.flushFrames();
+  h.history.replaceState({ dd2View: 'terms', unrelated: true }, '', '#terms');
+  h.closeNativeView(); h.flushFrames();
+  assert.equal(h.backCalls, 0); assert.equal(h.location.hash, '#terms'); assert.equal(h.state.nativeView, null);
+  assert.deepEqual(h.history.state, { dd2View: 'terms', unrelated: true });
 });
 
 test('explicit Home-return dismissal remains immediate and never traverses history', () => {
@@ -152,7 +200,7 @@ test('the changed native-view script has a fresh document URL and matching servi
   const html = await readFile(new URL('../index.html', import.meta.url), 'utf8'), sw = await readFile(new URL('../service-worker.js', import.meta.url), 'utf8');
   const raw = html.match(/<script src="(assets\/phase2-experience\.js[^\"]+)"/)[1].replaceAll('&amp;', '&');
   const url = new URL(raw, 'https://duediligence.ph/');
-  assert.equal(url.searchParams.get('navigation'), 'native-close-20261016-1');
+  assert.equal(url.searchParams.get('navigation'), 'native-close-20261023-1');
   assert.equal(url.searchParams.get('display'), 'home-readable-20260910-1');
   assert.equal(url.searchParams.get('asset-recovery'), 'bootstrap-20260909-1');
   assert.ok(sw.includes(`'${url.pathname}${url.search}'`));

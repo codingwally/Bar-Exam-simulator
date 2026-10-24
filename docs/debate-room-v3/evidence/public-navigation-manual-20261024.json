@@ -26,7 +26,7 @@
     "observations": [
       "Fresh direct Support Back returned to the public root without a hash.",
       "A real reload stayed on the root with native and sign-in overlays hidden.",
-      "The footer Terms link opened #terms; Escape returned to the root, restored focus to Terms of Use and left the sign-in overlay hidden."
+      "The visible entry-page Terms link opened #terms; Escape returned to the root, restored focus to Terms of Use and left the sign-in overlay hidden."
     ],
     "temporaryTabsClosed": true,
     "viewportOverrideReset": true,

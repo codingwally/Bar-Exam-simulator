@@ -18,7 +18,7 @@ const viewports = [{ width: 1280, height: 720 }, { width: 390, height: 844 }];
 const controls = ['close', 'back', 'escape'];
 const policy = "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; media-src 'self'; manifest-src 'self'; connect-src 'none'; worker-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
 const mimeTypes = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf', '.mp4': 'video/mp4' };
-const declaredInputs = ['scripts/test-native-view-browser.mjs', '.github/workflows/validate-home-display.yml', 'index.html', 'manifest.webmanifest', 'assets/phase2-experience.js', 'assets/phase2.css', 'assets/phase2-config.js', 'assets/private-beta-landing.js', 'assets/private-beta-landing.css', 'assets/private-beta-session.js', 'service-worker.js'];
+const declaredInputs = ['scripts/test-native-view-browser.mjs', '.github/workflows/validate-home-display.yml', 'index.html', 'manifest.webmanifest', 'assets/phase2-experience.js', 'assets/phase2.css', 'assets/phase2-config.js', 'assets/private-beta-landing.js', 'assets/private-beta-landing.css', 'assets/private-beta-session.js', 'assets/quorum-first-shell.css', 'assets/quorum-first-shell.js', 'service-worker.js'];
 
 function safeError(error) {
   return { name: String(error?.name || 'Error').slice(0, 80), messageSha256: digest(String(error?.message || error)) };
@@ -37,7 +37,7 @@ export async function runNativeViewBrowser() {
   assert.match(sourceSha, /^[0-9a-f]{40}$/);
   const report = {
     schemaVersion: 1, status: 'RUNNING', phase: 'input-capture', startedAt: new Date().toISOString(), sourceSha,
-    scope: 'ACTUAL_SIGNED_OUT_FRONTEND_DIRECT_NATIVE_ROUTES_AND_FOOTER_LEGAL_HISTORY_ON_LOOPBACK',
+    scope: 'ACTUAL_SIGNED_OUT_FRONTEND_DIRECT_NATIVE_ROUTES_AND_ENTRY_LEGAL_HISTORY_ON_LOOPBACK',
     testSha256: digest(await readFile(runnerPath)), inputHashes: {}, servedInputHashes: {}, cases: [], screenshots: [],
     isolation: { actualIndexAndAssets: true, applicationSourceModified: false, freshContextPerCase: true, authenticatedSessionInjected: false, browserEnvironmentAllowlist: Object.keys(childEnv), csp: policy, serviceWorkers: 'block', hostedTargetAllowed: false },
     network: { localGetRequests: 0, externalRequestsBlocked: 0, localNonGetRequestsBlocked: 0, navigationRequestsBlocked: 0, websocketRequestsBlocked: 0, serverNonGetRequestsRejected: 0, serverMissingPaths: [], serverErrors: 0 },
@@ -87,10 +87,21 @@ export async function runNativeViewBrowser() {
     return element?.getAttribute('aria-hidden') === 'true' && !element.classList.contains('is-open');
   }, null, { timeout: 5_000 });
   const screenshot = async (page, item, stage, selector) => {
+    const previousStage = item.stage;
+    item.stage = `screenshot-${stage}`;
     const filename = `${item.id}-${stage}.png`;
-    if (selector) await page.locator(selector).screenshot({ path: path.join(output, filename), timeout: 4_000, animations: 'disabled' });
-    else await page.screenshot({ path: path.join(output, filename), fullPage: false, timeout: 4_000, animations: 'disabled' });
-    report.screenshots.push({ caseId: item.id, stage, file: filename, sha256: digest(await readFile(path.join(output, filename))) });
+    const attempt = { stage: item.stage, previousStage, selector: selector || null, file: filename, status: 'RUNNING' };
+    (item.screenshotAttempts ||= []).push(attempt);
+    try {
+      if (selector) await page.locator(selector).screenshot({ path: path.join(output, filename), timeout: 4_000, animations: 'disabled' });
+      else await page.screenshot({ path: path.join(output, filename), fullPage: false, timeout: 4_000, animations: 'disabled' });
+      report.screenshots.push({ caseId: item.id, stage, file: filename, sha256: digest(await readFile(path.join(output, filename))) });
+      attempt.status = 'PASS';
+      item.stage = previousStage;
+    } catch (error) {
+      attempt.status = 'FAIL'; attempt.failure = safeError(error);
+      throw error;
+    }
   };
   const withCase = async (item, work) => {
     assert.equal(expired, false, 'Suite deadline exceeded.');
@@ -109,7 +120,7 @@ export async function runNativeViewBrowser() {
         void window.__nativeBrowserPolicyViolation({ directive: event.effectiveDirective, blockedURI: event.blockedURI });
       });
       document.addEventListener('click', event => {
-        const control = event.target?.closest?.('#dd2-native-close, #dd2-native-back, .pb-public-footer [data-pb-legal]');
+        const control = event.target?.closest?.('#dd2-native-close, #dd2-native-back, .quorum-entry-legal [data-pb-legal]');
         if (control) window.__nativeBrowserActions.push({ type: 'click', id: control.id || null, legal: control.getAttribute('data-pb-legal'), trusted: event.isTrusted });
       }, true);
       document.addEventListener('keydown', event => {
@@ -193,21 +204,21 @@ export async function runNativeViewBrowser() {
           item.afterReload = await snapshot(page);
           check(item, 'Real reload remains on public Home with the dialog closed', page.url() === `${origin}/` && !item.afterReload.nativeOpen && item.afterReload.nativeAriaHidden === 'true' && !item.afterReload.signInOpen && !item.afterReload.signedIn);
           check(item, 'Real reload retains unrelated history state', item.afterReload.sentinel === item.id);
-          if (control === 'close') await screenshot(page, item, 'after-reload', '.pb-public-footer');
+          if (control === 'close') await screenshot(page, item, 'after-reload', '.quorum-entry-legal');
         });
       }
       for (const view of ['terms', 'privacy']) {
-        await withCase({ id: `footer-${view}-${viewport.width}x${viewport.height}`, kind: 'footer-history', view, viewport }, async (page, item) => {
+        await withCase({ id: `entry-legal-${view}-${viewport.width}x${viewport.height}`, kind: 'entry-legal-history', view, viewport }, async (page, item) => {
           item.stage = 'initial-load-and-readiness';
           await page.goto(`${origin}/`, { waitUntil: 'load' }); await ready(page); await waitClosed(page);
           await page.evaluate(id => history.replaceState({ ...(history.state || {}), nativeViewBrowserSentinel: id }, '', location.href), item.id);
           item.before = await snapshot(page);
-          const selector = `.pb-public-footer [data-pb-legal="${view}"]`, link = page.locator(selector);
-          check(item, 'Footer starts signed out without sign-in overlay', !item.before.signedIn && !item.before.signInOpen);
-          item.stage = 'first-footer-click';
-          item.actions.push({ action: `footer-${view}`, attempts: 1 }); await link.click(); await waitOpen(page, view);
+          const selector = `.quorum-entry-legal [data-pb-legal="${view}"]`, link = page.locator(selector);
+          check(item, 'Entry legal links start signed out without sign-in overlay', !item.before.signedIn && !item.before.signInOpen);
+          item.stage = 'first-entry-legal-click';
+          item.actions.push({ action: `entry-legal-${view}`, attempts: 1 }); await link.click(); await waitOpen(page, view);
           item.afterOpen = await snapshot(page);
-          check(item, 'Footer creates one owned native-view history entry', item.afterOpen.dd2View === view && item.afterOpen.hash === `#${view}` && item.afterOpen.historyLength === item.before.historyLength + 1);
+          check(item, 'Entry legal link creates one owned native-view history entry', item.afterOpen.dd2View === view && item.afterOpen.hash === `#${view}` && item.afterOpen.historyLength === item.before.historyLength + 1);
           item.stage = 'first-escape-and-focus-return';
           item.actions.push({ action: 'escape', attempts: 1 }); await page.keyboard.press('Escape'); await waitClosed(page);
           await page.waitForFunction(expected => document.activeElement?.matches(expected), selector, { timeout: 5_000 });
@@ -223,7 +234,7 @@ export async function runNativeViewBrowser() {
           item.afterBack = await snapshot(page);
           check(item, 'Browser Back restores public origin and legal-link focus', page.url() === `${origin}/` && item.afterBack.sentinel === item.id && item.afterBack.focusedLegalView === view && !item.afterBack.focusInert && !item.afterBack.signInOpen);
           item.observedActions = await page.evaluate(() => window.__nativeBrowserActions);
-          check(item, 'One trusted footer click and one Escape were delivered without retries', item.observedActions.length === 2 && item.observedActions.every(action => action.trusted === true) && item.observedActions[0].legal === view && item.observedActions[1].type === 'escape');
+          check(item, 'One trusted entry legal click and one Escape were delivered without retries', item.observedActions.length === 2 && item.observedActions.every(action => action.trusted === true) && item.observedActions[0].legal === view && item.observedActions[1].type === 'escape');
         });
       }
     }

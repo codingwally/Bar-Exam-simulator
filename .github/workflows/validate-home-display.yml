@@ -6,6 +6,7 @@ on:
       - 'assets/lex-forum.js'
       - 'assets/lex-forum.css'
       - 'assets/quorum-first-shell.css'
+      - 'assets/quorum-first-shell.js'
       - 'assets/phase2-experience.js'
       - 'assets/phase2-config.js'
       - 'assets/phase2.css'

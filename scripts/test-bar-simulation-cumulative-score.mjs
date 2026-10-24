@@ -80,7 +80,7 @@ await test('rendering does not mutate saved scores or the verdict payload', () =
 });
 function verdictContext(f, track='bar_feels') {
   const root={innerHTML:'',querySelector:()=>null}; const calls=[];
-  const context=vm.createContext({console,root,global:{},state:{track,active:null},
+  const context=vm.createContext({console,root,global:{},state:{track,active:null,history:[]},
     pageRoot:()=>root,showTrackPage:()=>{},api:async(route,body)=>{calls.push({route,body});return f;},
     escapeHtml:escape,escapeAttribute:escape,focusRendered:()=>{},isStaleIdentityError:()=>false,
     clearRecovery:()=>{},restoreRevealedSubjectReview:()=>{},subjectMatterResultMarkup:()=>'<section>Existing syllabus result</section>',

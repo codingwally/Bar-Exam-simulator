@@ -9,20 +9,20 @@
     "directory": "./public",
     "binding": "ASSETS",
     "run_worker_first": true,
-    "html_handling": "none",
+    "html_handling": "none"
   },
   "d1_databases": [
     {
       "binding": "EXAM_DB",
       "database_name": "duediligence-constitutional-exam",
-      "database_id": "REPLACE_WITH_VERIFIED_D1_ID",
-    },
+      "database_id": "REPLACE_WITH_VERIFIED_D1_ID"
+    }
   ],
   "r2_buckets": [
     {
       "binding": "EXAM_BACKUPS",
-      "bucket_name": "duediligence-constitutional-exam-private",
-    },
+      "bucket_name": "duediligence-constitutional-exam-private"
+    }
   ],
   "triggers": { "crons": ["* * * * *"] },
   "vars": {
@@ -30,7 +30,7 @@
     "EXAMINER_EMAILS": "",
     "ACCESS_TEAM_DOMAIN": "",
     "ACCESS_AUD": "",
-    "EMAIL_DELIVERY_ENABLED": "false",
+    "EMAIL_DELIVERY_ENABLED": "false"
   },
-  "observability": { "enabled": false },
+  "observability": { "enabled": false }
 }

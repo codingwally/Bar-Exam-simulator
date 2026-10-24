@@ -20,6 +20,23 @@ if (mode === "provision") {
     );
   }
 }
+// Validate the local deployment template before any remote request can create
+// resources. Keep the .jsonc template within the strict JSON subset.
+const config = mode === "provision" ? JSON.parse(
+  await readFile(new URL("./wrangler.example.jsonc", import.meta.url), "utf8"),
+) : null;
+if (mode === "provision") {
+  if (
+    config?.assets?.binding !== "ASSETS" ||
+    config.d1_databases?.[0]?.binding !== "EXAM_DB" ||
+    config.r2_buckets?.[0]?.binding !== "EXAM_BACKUPS" ||
+    !config.vars || typeof config.vars !== "object" || Array.isArray(config.vars)
+  ) throw new Error("The isolated examination deployment template is incomplete");
+  config.main = fileURLToPath(new URL("./worker.mjs", import.meta.url));
+  config.assets.directory = fileURLToPath(new URL("./public", import.meta.url));
+  config.vars.ACCESS_TEAM_DOMAIN = process.env.ACCESS_TEAM_DOMAIN;
+  config.vars.ACCESS_AUD = process.env.ACCESS_AUD;
+}
 const base = `https://api.cloudflare.com/client/v4/accounts/${account}`;
 async function api(path, method = "GET", body) {
   const response = await fetch(`${base}${path}`, {
@@ -85,15 +102,7 @@ if (customAccess.domains.length)
   throw new Error(
     "Exam backup bucket has a custom public domain; refusing release",
   );
-const config = JSON.parse(
-  await readFile(new URL("./wrangler.example.jsonc", import.meta.url), "utf8"),
-);
-config.main = fileURLToPath(new URL("./worker.mjs", import.meta.url));
-config.assets.directory = fileURLToPath(new URL("./public", import.meta.url));
 config.d1_databases[0].database_id = database.uuid;
-if (process.env.ACCESS_TEAM_DOMAIN)
-  config.vars.ACCESS_TEAM_DOMAIN = process.env.ACCESS_TEAM_DOMAIN;
-if (process.env.ACCESS_AUD) config.vars.ACCESS_AUD = process.env.ACCESS_AUD;
 await mkdir(new URL("./.wrangler", import.meta.url), { recursive: true });
 await writeFile(
   new URL("./.wrangler/deploy.json", import.meta.url),

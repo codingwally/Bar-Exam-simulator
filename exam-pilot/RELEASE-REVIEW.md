@@ -10,7 +10,11 @@ simple professional examination prioritizing preservation. Three task agents
 implemented and independently reviewed the backend, student journey and private
 examiner desk. The existing website and its data were not changed.
 
-The current deterministic suite passes **102 tests**. The clean, credential-free
+The current deterministic suite passes **106 tests**, including four deployment
+preflight regressions added during setup review. Invalid or incomplete local
+configuration fails before any Cloudflare network request or resource creation.
+The template intentionally uses the strict JSON subset of JSONC.
+The clean, credential-free
 [CI rehearsal](https://github.com/codingwally/Bar-Exam-simulator/actions/runs/40081239013)
 passed at implementation revision `2e3ca325c6d6a24968197fad41483e260dbc0702`:
 Chromium 156.0.8078.4, Firefox 157.0 and WebKit 27.2 completed registration,

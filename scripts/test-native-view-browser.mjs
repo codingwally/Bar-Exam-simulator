@@ -21,7 +21,17 @@ const mimeTypes = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript
 const declaredInputs = ['scripts/test-native-view-browser.mjs', '.github/workflows/validate-home-display.yml', 'index.html', 'manifest.webmanifest', 'assets/phase2-experience.js', 'assets/phase2.css', 'assets/phase2-config.js', 'assets/private-beta-landing.js', 'assets/private-beta-landing.css', 'assets/private-beta-session.js', 'assets/quorum-first-shell.css', 'assets/quorum-first-shell.js', 'service-worker.js'];
 
 function safeError(error) {
-  return { name: String(error?.name || 'Error').slice(0, 80), messageSha256: digest(String(error?.message || error)) };
+  const name = String(error?.name || 'Error').slice(0, 80);
+  const message = String(error?.message || error);
+  const mentionsCsp = /Content[- ]Security[- ]Policy|unsafe-eval|violates.*script-src/i.test(message);
+  // Classify the actual error text, never infer a cause from nearby CSP events.
+  const classification = mentionsCsp && /eval|JavaScript/i.test(message) ? 'CSP_EVALUATION_ERROR'
+    : mentionsCsp ? 'CSP_RELATED_ERROR'
+      : name === 'TimeoutError' || /(?:timeout|deadline).*exceeded|exceeded.*seconds/i.test(message) ? 'BOUNDED_WAIT_TIMEOUT'
+        : name === 'AssertionError' ? 'ASSERTION_FAILURE'
+          : /Target.*closed|browser.*closed|context.*closed/i.test(message) ? 'BROWSER_TARGET_CLOSED'
+            : 'UNCLASSIFIED_BROWSER_RUNNER_ERROR';
+  return { name, classification, messageSha256: digest(message) };
 }
 
 export async function runNativeViewBrowser() {
@@ -71,21 +81,24 @@ export async function runNativeViewBrowser() {
   });
   const settledFrames = page => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   const ready = async page => {
-    await page.waitForFunction(() => document.readyState === 'complete' && typeof window.DueDiligencePhase2?.whenAuthReady === 'function', null, { timeout: 10_000 });
-    await page.evaluate(() => Promise.race([
-      window.DueDiligencePhase2.whenAuthReady(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Public frontend auth readiness deadline exceeded')), 8_000)),
-    ]));
+    await page.waitForLoadState('load', { timeout: 10_000 });
+    await page.locator('#dd2-native-view').waitFor({ state: 'attached', timeout: 10_000 });
+    await page.evaluate(() => {
+      if (typeof window.DueDiligencePhase2?.whenAuthReady !== 'function') throw new Error('Public frontend auth readiness API is missing after load');
+      return Promise.race([
+        window.DueDiligencePhase2.whenAuthReady(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Public frontend auth readiness deadline exceeded')), 8_000)),
+      ]);
+    });
     await settledFrames(page);
   };
-  const waitOpen = (page, view) => page.waitForFunction(expected => {
-    const element = document.getElementById('dd2-native-view');
-    return element?.classList.contains('is-open') && element.dataset.nativeView === expected && element.getAttribute('aria-hidden') === 'false';
-  }, view, { timeout: 5_000 });
-  const waitClosed = page => page.waitForFunction(() => {
-    const element = document.getElementById('dd2-native-view');
-    return element?.getAttribute('aria-hidden') === 'true' && !element.classList.contains('is-open');
-  }, null, { timeout: 5_000 });
+  // Locator waits avoid predicate-string evaluation without relaxing the page CSP.
+  const waitOpen = (page, view) => {
+    assert.ok(views.includes(view), 'Expected a declared public native view');
+    return page.locator(`#dd2-native-view.is-open[data-native-view="${view}"][aria-hidden="false"]`).waitFor({ state: 'visible', timeout: 5_000 });
+  };
+  // "attached" requires the closed-state selector to match; "hidden" could pass when it does not exist.
+  const waitClosed = page => page.locator('#dd2-native-view:not(.is-open)[aria-hidden="true"]').waitFor({ state: 'attached', timeout: 5_000 });
   const screenshot = async (page, item, stage, selector) => {
     const previousStage = item.stage;
     item.stage = `screenshot-${stage}`;
@@ -221,7 +234,7 @@ export async function runNativeViewBrowser() {
           check(item, 'Entry legal link creates one owned native-view history entry', item.afterOpen.dd2View === view && item.afterOpen.hash === `#${view}` && item.afterOpen.historyLength === item.before.historyLength + 1);
           item.stage = 'first-escape-and-focus-return';
           item.actions.push({ action: 'escape', attempts: 1 }); await page.keyboard.press('Escape'); await waitClosed(page);
-          await page.waitForFunction(expected => document.activeElement?.matches(expected), selector, { timeout: 5_000 });
+          await page.locator(`${selector}:focus`).waitFor({ state: 'visible', timeout: 5_000 });
           item.afterEscape = await snapshot(page);
           check(item, 'Escape restores public origin, focus and unrelated state without sign-in', page.url() === `${origin}/` && item.afterEscape.sentinel === item.id && item.afterEscape.focusedLegalView === view && !item.afterEscape.focusInert && !item.afterEscape.signInOpen);
           item.stage = 'browser-forward';
@@ -230,7 +243,7 @@ export async function runNativeViewBrowser() {
           check(item, 'Browser Forward restores the owned legal dialog', item.afterForward.dd2View === view && item.afterForward.hash === `#${view}` && !item.afterForward.signInOpen);
           item.stage = 'browser-back-and-focus-return';
           item.actions.push({ action: 'browser-back', attempts: 1 }); await page.goBack(); await waitClosed(page);
-          await page.waitForFunction(expected => document.activeElement?.matches(expected), selector, { timeout: 5_000 });
+          await page.locator(`${selector}:focus`).waitFor({ state: 'visible', timeout: 5_000 });
           item.afterBack = await snapshot(page);
           check(item, 'Browser Back restores public origin and legal-link focus', page.url() === `${origin}/` && item.afterBack.sentinel === item.id && item.afterBack.focusedLegalView === view && !item.afterBack.focusInert && !item.afterBack.signInOpen);
           item.observedActions = await page.evaluate(() => window.__nativeBrowserActions);

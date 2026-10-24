@@ -99,6 +99,7 @@
     requestGeneration: 0,
     requestControllers: new Set(),
     verdictGeneration: 0,
+    verdict: null,
     simulationAccessRevoked: false,
   };
 
@@ -188,6 +189,7 @@
   }
 
   function invalidateExaminationRequests() {
+    state.verdict = null;
     state.requestGeneration = (state.requestGeneration || 0) + 1;
     state.verdictGeneration = (state.verdictGeneration || 0) + 1;
     for (const controller of state.requestControllers || []) controller.abort();
@@ -402,6 +404,7 @@
 
   function showTrackPage(track) {
     state.verdictGeneration = (state.verdictGeneration || 0) + 1;
+    state.verdict = null;
     state.track = track;
     const page = track === 'bar_feels' ? 'bar-feels' : 'midterms';
     global.showPage?.(page, null);
@@ -2869,8 +2872,13 @@
   }
 
   function subjectReviewPanelIsCurrent(panel) {
-    return Boolean(panel?.isConnected
-      && state.active?.attempt?.attemptId === panel.dataset.attemptId
+    if (!panel?.isConnected) return false;
+    if (state.screen === 'verdict') {
+      return state.verdict?.track === 'per_subject'
+        && state.verdict.attempt.attemptId === panel.dataset.attemptId
+        && state.verdict.results.some((result) => result.questionId === panel.dataset.questionId);
+    }
+    return Boolean(state.active?.attempt?.attemptId === panel.dataset.attemptId
       && currentQuestion()?.questionId === panel.dataset.questionId
       && state.active?.examination?.track === 'per_subject');
   }
@@ -3265,7 +3273,7 @@
     const panel = button?.closest('[data-subject-review-panel]');
     const attemptId = panel?.dataset.attemptId || '';
     const questionId = panel?.dataset.questionId || '';
-    if (!attemptId || !questionId) return;
+    if (!attemptId || !questionId || !subjectReviewPanelIsCurrent(panel)) return;
     if (state.active?.attempt?.attemptId === attemptId && !subjectAttemptSubmitted()
         && subjectAnswerLocked()) {
       setStatus('Confirming your submission. Reveal Answer will be available after its status is known.');
@@ -3282,7 +3290,7 @@
       state.reviewMaterialRequests.delete(key);
     }
     const cached = state.reviewMaterialCache.get(key);
-    if (cached) {
+    if (cached?.attemptId === attemptId && cached.questionId === questionId) {
       if (state.active?.attempt?.attemptId === attemptId) {
         state.active.attempt.reviewConfirmationPending = false;
       }
@@ -3351,7 +3359,7 @@
         state.active.attempt.reviewMaterialRevealedAt = material.reviewMaterialRevealedAt || null;
         state.active.attempt.reviewConfirmationPending = false;
       }
-      if (!document.body.contains(panel)) return;
+      if (!subjectReviewPanelIsCurrent(panel)) return;
       updateCompleteSubjectReviewPanels(attemptId, questionId, material, {
         focus: !automatic,
         openSection,
@@ -3378,22 +3386,26 @@
   }
 
   function restoreRevealedSubjectReview(root) {
-    if (!state.active?.attempt?.reviewMaterialRevealedAt) return;
     const button = root?.querySelector('[data-subject-review-reveal]');
-    if (button) loadCompleteSubjectReview(button, { automatic: true });
+    const attemptId = button?.closest('[data-subject-review-panel]')?.dataset.attemptId;
+    const attempt = state.verdict?.attempt?.attemptId === attemptId ? state.verdict.attempt
+      : state.active?.attempt?.attemptId === attemptId ? state.active.attempt : null;
+    if (attempt?.reviewMaterialRevealedAt) loadCompleteSubjectReview(button, { automatic: true });
   }
 
   function subjectMatterResultMarkup(result, attemptId = '') {
     result = sanitizeSubjectReviewValue(result);
+    const resolvedAttemptId = attemptId || result?.attemptId || '';
+    const active = state.active?.attempt?.attemptId === resolvedAttemptId ? state.active : null;
+    const attempt = state.verdict?.attempt?.attemptId === resolvedAttemptId
+      ? state.verdict.attempt : active?.attempt;
     const course = result?.subject
-      || state.active?.examination?.subject
-      || state.selectedSubject
+      || active?.examination?.subject
       || 'Selected course';
     const answerText = String(result?.answerText || '').trim();
     const questionId = result?.questionId || result?.id || '';
-    const resolvedAttemptId = attemptId || result?.attemptId || state.active?.attempt?.attemptId || '';
     const assisted = result?.assisted === true
-      || state.active?.attempt?.assisted === true;
+      || attempt?.assisted === true;
     return `<div class="dd-subject-editorial is-result">
       <header class="dd-subject-editorial-header">
         <div>
@@ -3656,7 +3668,10 @@
   }
 
   async function openVerdict(attemptId) {
-    const track = state.active?.examination?.track || state.track;
+    // A saved result belongs to the selected attempt, not a previously open draft.
+    const selected = state.history.find((item) => item.attemptId === attemptId);
+    const active = state.active?.attempt?.attemptId === attemptId ? state.active : null;
+    const track = selected?.track || active?.examination?.track || state.track;
     state.screen = 'verdict';
     showTrackPage(track);
     const verdictGeneration = state.verdictGeneration;
@@ -3676,12 +3691,25 @@
         offset: 0,
       });
       if (!verdictIsCurrent()) return;
-      if (verdict?.attempt && state.active?.attempt) {
+      if (verdict?.attempt?.attemptId !== attemptId || !Array.isArray(verdict.results)
+          || (verdict.attempt.track && verdict.attempt.track !== track)) {
+        throw new Error('The assessment does not match the selected attempt. Please retry.');
+      }
+      const questionIds = new Set();
+      for (const result of verdict.results) {
+        if (!result?.questionId || questionIds.has(result.questionId)
+            || (result.attemptId && result.attemptId !== attemptId)) {
+          throw new Error('The assessment contains mismatched question records. Please retry.');
+        }
+        questionIds.add(result.questionId);
+      }
+      state.verdict = { attempt: verdict.attempt, results: verdict.results, track };
+      if (state.active?.attempt?.attemptId === attemptId) {
         Object.assign(state.active.attempt, verdict.attempt);
       }
       if (track === 'per_subject') {
         const result = Array.isArray(verdict.results) ? verdict.results[0] : null;
-        if (result) clearRecovery();
+        if (result && active) clearRecovery();
         root.innerHTML = result
           ? subjectMatterResultMarkup(result, attemptId)
           : `<div class="dd-subject-editorial"><section class="dd-subject-result-unavailable">
@@ -3718,7 +3746,7 @@
           ${assessmentCard(result, { track })}
         </div>`).join('')}
         <div class="dd-exam-actions" style="margin-top:24px">
-          ${state.active?.examination?.track === 'per_subject' ? `
+          ${track === 'per_subject' ? `
             <button class="dd-control dd-exam-button is-primary" type="button" data-subject-next>Next question</button>
             <button class="dd-control dd-exam-button" type="button" data-subject-change-timer>Timer settings</button>
             <button class="dd-control dd-exam-button" type="button"

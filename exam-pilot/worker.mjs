@@ -1981,14 +1981,15 @@ async function adminApi(request, env, tail, identity) {
         configuration: {
           r2: !!env.EXAM_BACKUPS,
           sheets: !!(
-            env.GOOGLE_SERVICE_ACCOUNT_JSON && env.GOOGLE_SPREADSHEET_ID
+            (env.EXAM_RELAY_URL && env.EXAM_RELAY_SECRET) ||
+            (env.GOOGLE_SERVICE_ACCOUNT_JSON && env.GOOGLE_SPREADSHEET_ID)
           ),
           email: !!(
             env.EMAIL_DELIVERY_ENABLED === "true" &&
-            env.RESEND_API_KEY &&
-            env.EXAM_EMAIL_FROM
+            ((env.EXAM_RELAY_URL && env.EXAM_RELAY_SECRET) ||
+              (env.RESEND_API_KEY && env.EXAM_EMAIL_FROM))
           ),
-          privateAdmin: !!env.ACCESS_AUD,
+          privateAdmin: adminMode(env) === "password" ? !!env.ADMIN_LOGIN_SECRET : !!env.ACCESS_AUD,
         },
       });
     }

@@ -137,7 +137,7 @@ that shell changes.
 | Local IndexedDB draft journal | Saves writing on the device when browser storage works; reopen the same link in the same browser/profile. Never clear site data during an examination. |
 | Isolated D1 `EXAM_DB` | Authoritative question versions, accepted answer revisions, append-only operations, immutable final answers, receipts, recovered writing and audit records. |
 | Optional private R2 `EXAM_BACKUPS` | Additional complete question/answer snapshots with identity, hashes, timestamps and final receipt when a bucket is configured. Practice does not require an R2 subscription; new official examinations do require this extra copy. |
-| Private Google collection | Automatic provider adapter maintains one readable student tab per attempt, with full numbered answers and continuation rows for long text; requires configured service-account authorization. |
+| Private Google collection | The owner-run signed Google relay maintains one readable student tab per attempt, with full numbered answers and continuation rows for long text. It refuses copies unless the Sheet has only the owner's permission; no service-account sharing is needed. |
 | Owner answer email | Complete final packet to `wallyesteban1993@gmail.com`, including blank slots and checksums; large content uses numbered parts. Official attempts additionally queue a concise student receipt. |
 | Durable delivery outbox | Independent targets retry with leases and backoff; failures remain inspectable and retryable. A provider failure never invalidates a saved answer or final receipt. |
 
@@ -232,11 +232,19 @@ main site's resources.
    closed. In password mode the Worker gates those same private assets and APIs
    with the professor session; only the dedicated sign-in shell is public.
    An instructor's email must be supplied by the owner, not guessed.
-5. For automatic Google copies, set `GOOGLE_SERVICE_ACCOUNT_JSON` and
-   `GOOGLE_SPREADSHEET_ID`; share the private collection only with that service
-   account and approved staff. Never publish a collection link or place Google
-   credentials in browser assets.
-6. For automatic mail, set `RESEND_API_KEY` and verified `EXAM_EMAIL_FROM`.
+5. For the free owner-only Google copies, follow
+   [google-relay/README.md](google-relay/README.md). The reviewed script runs as
+   the owner, checks every Sheet permission before each copy, verifies the
+   complete literal text after writing, and signs acknowledgements. Store only
+   its URL and private signing key as Worker secrets `EXAM_RELAY_URL` and
+   `EXAM_RELAY_SECRET`. Keep the Sheet restricted to the owner. The alternative
+   service-account adapter remains supported when separately configured, but
+   is not used for the owner's private deployment.
+6. The same owner-run relay sends complete numbered raw answers in email bodies
+   and matching text attachments to the owner only. Daily quota delays retain
+   journalled parts and retry later; an ambiguous send requires owner review
+   before resending. It never reports complete until every part is accepted.
+   The alternative mail adapter uses `RESEND_API_KEY` and verified `EXAM_EMAIL_FROM`.
    Set `EMAIL_DELIVERY_ENABLED=true` only after an authorized synthetic rehearsal.
    Mail is disabled by default. A Google/Gmail connector used for a manual demo
    is separate from these deployed Worker provider credentials.

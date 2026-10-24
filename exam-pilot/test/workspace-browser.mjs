@@ -405,15 +405,21 @@ for (const engine of engines) {
       );
       let observed = [];
       for (let retry = 0; retry < 20; retry++) {
-        const response = await context.request.get(
-          `${base}/api/admin/exams/${exam.slug}/events?attempt_id=${encodeURIComponent(originalAttempt)}`,
-        );
-        assert.equal(
-          response.ok(),
-          true,
-          "Synthetic admin event verification must be available",
-        );
-        observed = (await response.json()).events || [];
+        observed = [];
+        let cursor = "";
+        do {
+          const response = await context.request.get(
+            `${base}/api/admin/exams/${exam.id}/events?attempt_id=${encodeURIComponent(originalAttempt)}&cursor=${encodeURIComponent(cursor)}`,
+          );
+          assert.equal(
+            response.ok(),
+            true,
+            `Synthetic admin event verification must be available (HTTP ${response.status()})`,
+          );
+          const eventPage = await response.json();
+          observed.push(...(eventPage.events || []));
+          cursor = eventPage.next_cursor || "";
+        } while (cursor);
         if (
           expected.every((event) =>
             observed.some(

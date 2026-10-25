@@ -154,7 +154,8 @@ that shell changes.
 | Isolated D1 `EXAM_DB` | Authoritative question versions, accepted answer revisions, append-only operations, immutable final answers, receipts, recovered writing and audit records. |
 | Optional private R2 `EXAM_BACKUPS` | Additional complete question/answer snapshots with identity, hashes, timestamps and final receipt when a bucket is configured. Practice does not require an R2 subscription; new official examinations do require this extra copy. |
 | Private Google collection | The owner-run signed Google relay maintains one readable student tab per attempt, with full numbered answers and continuation rows for long text. It refuses copies unless the Sheet has only the owner's permission; no service-account sharing is needed. |
-| Owner answer email | Complete final packet to `wallyesteban1993@gmail.com`, including blank slots and checksums; large content uses numbered parts. Official attempts additionally queue a concise student receipt. |
+| Owner answer email | Branded HTML owner copy to `wallyesteban1993@gmail.com`, with the private collection link and complete final packet, including blank slots and checksums; large content uses numbered parts. |
+| Exam-taker confirmation | Branded HTML confirmation after every finalized practice or official attempt, followed by that person's numbered frozen answers. No collection link, original question paper, other students or private source is included. |
 | Durable delivery outbox | Independent targets retry with leases and backoff; failures remain inspectable and retryable. A provider failure never invalidates a saved answer or final receipt. |
 
 Provider adapters are implemented, but a local/mock success or manually imported

@@ -232,7 +232,7 @@ test("question IDs, saves, receipts and recovered drafts remain isolated between
   assert.equal(JSON.stringify((await f.state(first, cookie)).data).includes("Private original"), false);
 }));
 
-test("practice finals queue one owner email and Sheets job, retry provider failures without changing their receipt", use(async f => {
+test("practice finals queue one owner email, student confirmation and Sheets job, retrying provider failures without changing their receipt", use(async f => {
   const cookie = (await f.bootstrap()).cookie;
   const exam = (await f.create({ instructions: "Use complete explanations." })).data.exam;
   const attempt = (await f.register(exam, cookie)).data.attempt;
@@ -243,7 +243,7 @@ test("practice finals queue one owner email and Sheets job, retry provider failu
   assert.equal(finalized.status, 200);
   assert.equal((await submit()).data.attempt.receipt.id, receipt.id);
   const jobs = f.db.sqlite.prepare("SELECT * FROM outbox WHERE attempt_id=? AND kind='final' ORDER BY target").all(attempt.id);
-  assert.deepEqual(jobs.map(job => job.target), ["owner_email", "sheets"]);
+  assert.deepEqual(jobs.map(job => job.target), ["owner_email", "sheets", "student_receipt"]);
   const ownerJob = jobs.find(job => job.target === "owner_email");
   const packet = await buildDeliveryPayload(f.db, ownerJob);
   assert.equal(packet.exam.kind, "practice");
@@ -258,7 +258,7 @@ test("practice finals queue one owner email and Sheets job, retry provider failu
   f.db.sqlite.prepare("DELETE FROM outbox WHERE id=?").run(ownerJob.id);
   await maintenance(f.env); // Reconciliation repairs a missing owner delivery once.
   assert.equal(f.db.sqlite.prepare("SELECT COUNT(*) n FROM outbox WHERE attempt_id=? AND target='owner_email' AND kind='final'").get(attempt.id).n, 1);
-  assert.equal(f.db.sqlite.prepare("SELECT COUNT(*) n FROM outbox WHERE target='student_receipt'").get().n, 0);
+  assert.equal(f.db.sqlite.prepare("SELECT COUNT(*) n FROM outbox WHERE attempt_id=? AND target='student_receipt' AND kind='final'").get(attempt.id).n, 1);
   assert.equal(f.db.sqlite.prepare("SELECT COUNT(*) n FROM outbox WHERE target='r2'").get().n, 0);
   assert.deepEqual((await f.state(exam, cookie)).data.attempt.receipt, receipt);
 }));

@@ -367,7 +367,7 @@ async function ensureFinalJobs(db, attempts, env) {
   if (!jobs.length) return;
   // One statement keeps reconciliation inside the Free D1 invocation budget.
   // R2 is optional for practice, while official papers retain the stricter copy.
-  await run(db, `INSERT OR IGNORE INTO outbox(id,target,attempt_id,dedupe_key,kind,next_attempt_at,created_at) SELECT json_extract(j.value,'$.id'),json_extract(j.value,'$.target'),a.id,'final:'||a.id||':'||json_extract(j.value,'$.target'),'final',${DB_NOW},${DB_NOW} FROM json_each(?) j JOIN attempts a ON a.id=json_extract(j.value,'$.attemptId') JOIN exams e ON e.id=a.exam_id WHERE a.status='finalized' AND (json_extract(j.value,'$.target')!='r2' OR e.kind='official' OR ?=1) AND (json_extract(j.value,'$.target')!='student_receipt' OR e.kind='official')`, JSON.stringify(jobs), env.EXAM_BACKUPS ? 1 : 0);
+  await run(db, `INSERT OR IGNORE INTO outbox(id,target,attempt_id,dedupe_key,kind,next_attempt_at,created_at) SELECT json_extract(j.value,'$.id'),json_extract(j.value,'$.target'),a.id,'final:'||a.id||':'||json_extract(j.value,'$.target'),'final',${DB_NOW},${DB_NOW} FROM json_each(?) j JOIN attempts a ON a.id=json_extract(j.value,'$.attemptId') JOIN exams e ON e.id=a.exam_id WHERE a.status='finalized' AND (json_extract(j.value,'$.target')!='r2' OR e.kind='official' OR ?=1)`, JSON.stringify(jobs), env.EXAM_BACKUPS ? 1 : 0);
 }
 async function finish(db, attempt, kind = "deadline", editorId = null, env) {
   const receiptId = id();
@@ -1999,13 +1999,13 @@ async function adminApi(request, env, tail, identity) {
         summary = { pending: 0, processing: 0, sent: 0, failed: 0 };
       for (const row of counts) summary[row.status] = row.count;
       return json({
-        jobs: jobs.slice(0, 100),
+        jobs: jobs.slice(0, 100).map(job => identity.role !== "owner" && job.target === "sheets" ? { ...job, reference: null } : job),
         next_cursor:
           jobs.length > 100 ? `${jobs[99].created_at}:${jobs[99].id}` : null,
         summary,
         configuration: {
           r2: !!env.EXAM_BACKUPS,
-          spreadsheetUrl: /^[A-Za-z0-9_-]{20,200}$/.test(env.GOOGLE_SPREADSHEET_ID || "")
+          spreadsheetUrl: identity.role === "owner" && /^[A-Za-z0-9_-]{20,200}$/.test(env.GOOGLE_SPREADSHEET_ID || "")
             ? `https://docs.google.com/spreadsheets/d/${env.GOOGLE_SPREADSHEET_ID}/edit`
             : null,
           sheets: !!(
@@ -2019,7 +2019,8 @@ async function adminApi(request, env, tail, identity) {
           ),
           studentReceipt: !!(
             env.EMAIL_DELIVERY_ENABLED === "true" &&
-            env.RESEND_API_KEY && env.EXAM_EMAIL_FROM
+            ((env.EXAM_RELAY_URL && env.EXAM_RELAY_SECRET) ||
+              (env.RESEND_API_KEY && env.EXAM_EMAIL_FROM))
           ),
           privateAdmin: adminMode(env) === "password" ? !!env.ADMIN_LOGIN_SECRET : !!env.ACCESS_AUD,
         },
@@ -2162,11 +2163,11 @@ async function adminApi(request, env, tail, identity) {
           attempt.id,
         ),
         receipt: await receipt(db, attempt),
-        backups: await all(
+        backups: (await all(
           db,
           "SELECT id,target,status,attempts,last_error,next_attempt_at,reference FROM outbox WHERE attempt_id=? ORDER BY created_at DESC LIMIT 100",
           attempt.id,
-        ),
+        )).map(job => identity.role !== "owner" && job.target === "sheets" ? { ...job, reference: null } : job),
       });
     }
     if (request.method === "GET" && parts[2] === "events") {
@@ -2330,8 +2331,8 @@ export async function buildDeliveryPayload(db, job) {
   );
   return {
     schemaVersion: 1,
-    exam: { id: exam.id, slug: exam.slug, title: exam.title, kind: exam.kind, instructions: exam.instructions, durationMinutes: exam.duration_minutes },
-    source: { text: exam.source_text, filename: exam.source_name, type: exam.source_format },
+    exam: { id: exam.id, slug: exam.slug, title: exam.title, kind: exam.kind, ...(job.target !== "student_receipt" ? { instructions: exam.instructions, durationMinutes: exam.duration_minutes } : {}) },
+    ...(job.target !== "student_receipt" ? { source: { text: exam.source_text, filename: exam.source_name, type: exam.source_format } } : {}),
     attempt: {
       id: attempt.id,
       name: attempt.name,
@@ -2341,7 +2342,7 @@ export async function buildDeliveryPayload(db, job) {
       status: attempt.status,
       finalizedAt: attempt.finalized_at,
     },
-    questions,
+    questions: job.target === "student_receipt" ? questions.map(({ id, number }) => ({ id, number })) : questions,
     answers,
     receipt: await receipt(db, attempt),
   };
@@ -2415,7 +2416,7 @@ export async function maintenance(env) {
   // A disconnected class costs one query, rather than one query per student.
   // The deterministic identifier also deduplicates gaps observed by a GET.
   await run(db, `INSERT OR IGNORE INTO events(id,attempt_id,exam_id,question_id,type,client_time,received_at,provenance,details_json) SELECT 'heartbeat-gap-'||a.id||'-'||a.last_seen_at,a.id,a.exam_id,NULL,'heartbeat_missing',NULL,${DB_NOW},'server-observed',json_object('lastServerContactAt',a.last_seen_at,'gapDetectedAt',${DB_NOW},'cause','unknown','assessment','Connection/heartbeat uncertain; examiner review only') FROM attempts a WHERE a.status IN ('waiting','active') AND a.last_seen_at<${DB_NOW}-45000 AND NOT EXISTS(SELECT 1 FROM events v WHERE v.id='heartbeat-gap-'||a.id||'-'||a.last_seen_at) ORDER BY a.last_seen_at,a.id LIMIT 200`);
-  const due = await all(db, `SELECT a.* FROM attempts a JOIN exams e ON e.id=a.exam_id LEFT JOIN submissions s ON s.attempt_id=a.id WHERE (a.status IN ('waiting','active') AND a.deadline_at<=${DB_NOW}) OR (a.status='finalized' AND (s.checksum IS NULL OR NOT EXISTS(SELECT 1 FROM outbox o WHERE o.attempt_id=a.id AND o.kind='final' AND o.target='sheets') OR NOT EXISTS(SELECT 1 FROM outbox o WHERE o.attempt_id=a.id AND o.kind='final' AND o.target='owner_email') OR ((e.kind='official' OR ?=1) AND NOT EXISTS(SELECT 1 FROM outbox o WHERE o.attempt_id=a.id AND o.kind='final' AND o.target='r2')) OR (e.kind='official' AND NOT EXISTS(SELECT 1 FROM outbox o WHERE o.attempt_id=a.id AND o.kind='final' AND o.target='student_receipt')))) ORDER BY COALESCE(a.finalized_at,a.deadline_at),a.id LIMIT 10`, env.EXAM_BACKUPS ? 1 : 0);
+  const due = await all(db, `SELECT a.* FROM attempts a JOIN exams e ON e.id=a.exam_id LEFT JOIN submissions s ON s.attempt_id=a.id WHERE (a.status IN ('waiting','active') AND a.deadline_at<=${DB_NOW}) OR (a.status='finalized' AND (s.checksum IS NULL OR NOT EXISTS(SELECT 1 FROM outbox o WHERE o.attempt_id=a.id AND o.kind='final' AND o.target='sheets') OR NOT EXISTS(SELECT 1 FROM outbox o WHERE o.attempt_id=a.id AND o.kind='final' AND o.target='owner_email') OR ((e.kind='official' OR ?=1) AND NOT EXISTS(SELECT 1 FROM outbox o WHERE o.attempt_id=a.id AND o.kind='final' AND o.target='r2')) OR NOT EXISTS(SELECT 1 FROM outbox o WHERE o.attempt_id=a.id AND o.kind='final' AND o.target='student_receipt'))) ORDER BY COALESCE(a.finalized_at,a.deadline_at),a.id LIMIT 10`, env.EXAM_BACKUPS ? 1 : 0);
   await finishMaintenanceBatch(db, due, env);
   // Reconcile the small crash window between a committed answer and enqueueing backups.
   const unmirrored = await all(

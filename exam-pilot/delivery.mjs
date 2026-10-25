@@ -1,4 +1,5 @@
 // Independent copies are asynchronous. A failed provider never changes a receipt.
+import { buildSubmissionEmails } from "./email-template.mjs";
 const OWNER_EMAIL = "wallyesteban1993@gmail.com";
 const GOOGLE_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
 const encoder = new TextEncoder();
@@ -187,6 +188,31 @@ async function sha256(value) {
     ),
   );
 }
+
+function receiptRecipient(payload, target) {
+  const email = payload.attempt?.email;
+  if (typeof email !== "string" || email.length > 254 || !/^[^\s<>@,;"\\]+@[^\s<>@,;"\\]+\.[^\s<>@,;"\\]+$/.test(email))
+    throw new Error("The submitted email address is invalid");
+  return target === "owner_email" ? OWNER_EMAIL : email;
+}
+
+export async function submissionEmailData(payload, target, env = {}) {
+  if (!["owner_email", "student_receipt"].includes(target)) throw new Error("Unknown submission email target");
+  const recipient = receiptRecipient(payload, target);
+  const owner = target === "owner_email";
+  const spreadsheet = env.GOOGLE_SPREADSHEET_ID;
+  if (owner && spreadsheet && !/^[A-Za-z0-9_-]{20,200}$/.test(spreadsheet))
+    throw new Error("The private collection identifier is invalid");
+  const rendered = buildSubmissionEmails(payload, {
+    audience: owner ? "owner" : "student",
+    ...(owner ? {
+      spreadsheetUrl: spreadsheet ? `https://docs.google.com/spreadsheets/d/${spreadsheet}/edit` : "",
+      ownerPacket: answerPacket(payload),
+    } : {}),
+  });
+  const data = { recipient, attemptEmail: payload.attempt.email, subject: rendered.subject, parts: rendered.parts };
+  return { ...data, contentHash: await sha256(JSON.stringify(data)) };
+}
 async function relaySignature(secret, value) {
   const key = await crypto.subtle.importKey(
     "raw",
@@ -219,17 +245,21 @@ export async function deliverRelay(job, env, fetcher) {
   if (secret.length < 32)
     throw new Error("The backup relay secret is too short");
   if (
-    job.target === "owner_email" &&
+    ["owner_email", "student_receipt"].includes(job.target) &&
     (env.EMAIL_DELIVERY_ENABLED !== "true" || !job.payload.receipt)
   )
-    throw new Error("Final owner email delivery is not enabled");
-  if (!["sheets", "owner_email"].includes(job.target))
+    throw new Error("Final email delivery is not enabled");
+  if (!["sheets", "owner_email", "student_receipt"].includes(job.target))
     throw new Error("Unsupported relay target");
-  const values = sheetMirrorValues(job.payload).map((row) =>
+  const student = job.target === "student_receipt";
+  const values = student ? undefined : sheetMirrorValues(job.payload).map((row) =>
     Array.from({ length: 6 }, (_, i) => String(row[i] ?? "")),
   );
   const packet =
     job.target === "owner_email" ? answerPacket(job.payload) : undefined;
+  const email = ["owner_email", "student_receipt"].includes(job.target)
+    ? await submissionEmailData(job.payload, job.target, env)
+    : undefined;
   // An official exam's routing alias changes when archived. That is not a
   // change to its frozen questions, answers or receipt and must not block retry.
   const { slug: _routingAlias, ...stableExam } = job.payload.exam;
@@ -238,22 +268,21 @@ export async function deliverRelay(job, env, fetcher) {
     target: job.target,
     attemptId: job.payload.attempt.id,
     tabTitle: await studentTabTitle(job.payload.attempt),
-    payloadHash: await sha256(
-      JSON.stringify({ ...job.payload, exam: stableExam }),
-    ),
+    payloadHash: await sha256(JSON.stringify(student
+      ? { attemptId: job.payload.attempt.id, receiptId: job.payload.receipt.id, email }
+      : { ...job.payload, exam: stableExam })),
     receiptId: job.payload.receipt?.id || null,
     receiptChecksum: job.payload.receipt?.checksum || null,
-    revisions: job.payload.questions.map((question) => {
+    ...(!student ? { revisions: job.payload.questions.map((question) => {
       const answer = job.payload.answers.find(
         (item) => item.questionId === question.id,
       );
       return [question.id, answer?.revision ?? 0, answer?.hash || ""];
-    }),
-    values,
-    contentHash: await sha256(JSON.stringify(values)),
+    }), values, contentHash: await sha256(JSON.stringify(values)) } : {}),
     ...(packet !== undefined
       ? { packet, packetHash: await sha256(packet) }
       : {}),
+    ...(email ? { email } : {}),
   };
   const body = JSON.stringify(data),
     issuedAt = Date.now(),
@@ -403,7 +432,7 @@ export async function deliverJob(job, env, fetcher = fetch) {
     });
   };
   const payload = job.payload;
-  if (env.EXAM_RELAY_URL && ["sheets", "owner_email"].includes(job.target))
+  if (env.EXAM_RELAY_URL && ["sheets", "owner_email", "student_receipt"].includes(job.target))
     return deliverRelay(job, env, fetcher);
   if (job.target === "r2") {
     const bucket = required(env, "EXAM_BACKUPS");
@@ -431,20 +460,9 @@ export async function deliverJob(job, env, fetcher = fetch) {
     const sender = required(env, "EXAM_EMAIL_FROM");
     if (!payload.receipt)
       throw new Error("A final receipt is required before email delivery");
-    const owner = job.target === "owner_email";
-    const recipient = owner ? OWNER_EMAIL : payload.attempt.email;
-    const text = owner
-      ? answerPacket(payload)
-      : [
-          payload.exam.title,
-          "Your examination was received.",
-          `Receipt: ${payload.receipt.id}`,
-          `Received (UTC): ${timestamp(payload.receipt.serverTime)}`,
-          `Answered: ${payload.receipt.answeredCount} of ${payload.receipt.questionCount}`,
-          `Checksum: ${payload.receipt.checksum}`,
-        ].join("\n");
+    const email = await submissionEmailData(payload, job.target, env);
     // Resend's 24-hour idempotency window is supplemented by the durable outbox.
-    const parts = textParts(text, 300000);
+    const parts = email.parts;
     const references = [];
     for (let index = 0; index < parts.length; index++) {
       const multipart = parts.length > 1;
@@ -460,13 +478,10 @@ export async function deliverJob(job, env, fetcher = fetch) {
           },
           body: JSON.stringify({
             from: sender,
-            to: [recipient],
-            subject: owner
-              ? `Examination answer backup — ${payload.receipt.id}${multipart ? ` (${index + 1}/${parts.length})` : ""}`
-              : "Your examination receipt",
-            text: multipart
-              ? `Answer backup part ${index + 1} of ${parts.length}. Preserve every part. Receipt ${payload.receipt.id}.\n\n${parts[index]}`
-              : parts[index],
+            to: [email.recipient],
+            subject: email.subject + (multipart ? ` (Part ${index + 1} of ${parts.length})` : ""),
+            text: parts[index].text,
+            html: parts[index].html,
           }),
         },
         "Email provider",

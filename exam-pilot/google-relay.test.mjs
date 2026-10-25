@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
-import { createHash, createHmac } from "node:crypto";
+import { createHash, createHmac, randomUUID } from "node:crypto";
 import { answerPacket, deliverJob } from "./delivery.mjs";
 
 const source = await readFile(
@@ -76,9 +76,10 @@ const job = (target = "sheets", value = payload, id = "synthetic-job") => ({
 const unsigned = (value) => JSON.parse(JSON.stringify(value));
 
 function fixture(options = {}) {
+  const spreadsheet = options.spreadsheetId || "synthetic-sheet";
   const props = new Map([
     ["EXAM_RELAY_SECRET", secret],
-    ["GOOGLE_SPREADSHEET_ID", "synthetic-sheet"],
+    ["GOOGLE_SPREADSHEET_ID", spreadsheet],
   ]);
   const sheets = [],
     mail = [],
@@ -138,7 +139,7 @@ function fixture(options = {}) {
     DriveApp: {
       Access: { PRIVATE: "PRIVATE" },
       getFileById: (id) => {
-        assert.equal(id, "synthetic-sheet");
+        assert.equal(id, spreadsheet);
         return {
           getOwner: () => ({ getEmail: () => state.fileOwner || owner }),
           getSharingAccess: () => state.sharing || "PRIVATE",
@@ -199,7 +200,7 @@ function fixture(options = {}) {
         assert.equal(options.headers.Authorization, "Bearer synthetic-oauth");
         if (!url.pathname.includes("/values/") && options.method === "get")
           return textResponse({
-            spreadsheetId: "synthetic-sheet",
+            spreadsheetId: spreadsheet,
             sheets: sheets.map((sheet) => ({ properties: sheet.properties })),
           });
         if (url.pathname.includes("/values/")) {
@@ -287,6 +288,109 @@ function fixture(options = {}) {
   };
   return { ctx, state, props, sheets, mail, batches, fetcher };
 }
+
+function emailHash(email) {
+  return createHash("sha256").update(JSON.stringify({recipient: email.recipient, attemptEmail: email.attemptEmail, subject: email.subject, parts: email.parts})).digest("base64url");
+}
+function invokeSigned(f, data) {
+  const envelope = {version: 1, issuedAt: Date.now(), requestId: randomUUID(), body: JSON.stringify(data)};
+  envelope.signature = createHmac("sha256", secret).update(`1\n${envelope.issuedAt}\n${envelope.requestId}\n${envelope.body}`).digest("base64url");
+  const response = JSON.parse(f.ctx.doPost({postData: {contents: JSON.stringify(envelope)}}).text);
+  return response.body ? JSON.parse(response.body) : response;
+}
+
+test("student HTML proof is independent of the Sheet mirror, contains only their numbered answers, and retries once", async () => {
+  const f = fixture();
+  await deliverJob(job("student_receipt"), env, f.fetcher);
+  assert.equal(f.mail.length, 1);
+  assert.equal(f.mail[0].to, payload.attempt.email);
+  assert.equal(f.mail[0].attachments, undefined);
+  assert.match(f.mail[0].htmlBody, /You successfully submitted your answers\./);
+  assert.match(f.mail[0].htmlBody, /ANSWER 1/);
+  assert.match(f.mail[0].htmlBody, /ANSWER 2/);
+  assert.ok(f.mail[0].body.includes(payload.answers[0].text));
+  assert.ok(f.mail[0].body.includes("[BLANK ANSWER]"));
+  for (const privateValue of ["synthetic-sheet", "docs.google.com/spreadsheets", payload.questions[0].text, payload.questions[0].instructions, payload.exam.instructions]) {
+    assert.equal(f.mail[0].htmlBody.includes(privateValue), false);
+    assert.equal(f.mail[0].body.includes(privateValue), false);
+  }
+  const request = JSON.parse(f.state.lastEnvelope.body);
+  for (const field of ["values", "contentHash", "revisions", "packet", "packetHash"])
+    assert.equal(Object.hasOwn(request, field), false);
+  assert.equal(f.sheets[0].cells[0]?.[0], undefined, "Mail does not write private Sheet answer cells");
+  assert.equal(f.sheets[0].cells[0]?.[7], undefined, "Mail does not fabricate mirror proof");
+  assert.equal(JSON.parse(f.sheets[0].cells[2][7]).target, "student_receipt");
+  await deliverJob(job("student_receipt", payload, "another-student-job"), env, f.fetcher);
+  assert.equal(f.mail.length, 1);
+  await deliverJob(job("sheets"), env, f.fetcher);
+  assert.equal(JSON.parse(f.sheets[0].cells[2][7]).parts[0].status, "accepted", "Later Sheet copy preserves student mail journal");
+  assert.equal(JSON.parse(f.sheets[0].cells[0][7]).receiptId, payload.receipt.id);
+});
+
+test("owner and student HTML copies have separate journals even when their address is identical", async () => {
+  const spreadsheet = "synthetic_private_spreadsheet_12345";
+  const f = fixture({spreadsheetId: spreadsheet}), same = structuredClone(payload);
+  same.attempt.email = owner;
+  const configured = {...env, GOOGLE_SPREADSHEET_ID: spreadsheet};
+  await deliverJob(job("student_receipt", same, "same-student"), configured, f.fetcher);
+  await deliverJob(job("owner_email", same, "same-owner"), configured, f.fetcher);
+  assert.equal(f.mail.length, 2);
+  assert.ok(f.mail.every(message => message.to === owner));
+  assert.equal(f.mail[0].htmlBody.includes(spreadsheet), false);
+  assert.ok(f.mail[1].htmlBody.includes(`https://docs.google.com/spreadsheets/d/${spreadsheet}/edit`));
+  assert.equal(f.mail[0].attachments, undefined);
+  assert.equal(f.mail[1].attachments[0].content, answerPacket(same));
+  assert.equal(JSON.parse(f.sheets[0].cells[1][7]).target, "owner_email");
+  assert.equal(JSON.parse(f.sheets[0].cells[2][7]).target, "student_receipt");
+  await deliverJob(job("owner_email", same, "repeat-owner"), configured, f.fetcher);
+  await deliverJob(job("student_receipt", same, "repeat-student"), configured, f.fetcher);
+  assert.equal(f.mail.length, 2, "Each target sends exactly once");
+});
+
+test("relay rejects recipient substitution, student private data, private links and altered HTML integrity before sending", async () => {
+  const seed = fixture();
+  await deliverJob(job("student_receipt"), env, seed.fetcher);
+  const baseline = JSON.parse(seed.state.lastEnvelope.body);
+  const cases = [
+    [data => {data.email.recipient = "other@example.invalid";}, "relay_email_invalid"],
+    [data => {data.values = [];}, "student_email_private_payload"],
+    [data => {data.packet = "private paper";}, "student_email_private_payload"],
+    [data => {data.email.parts[0].html += "<!-- synthetic-sheet -->";}, "student_email_private_destination"],
+    [data => {data.email.parts[0].html += "<script>bad()</script>";}, "relay_email_invalid"],
+  ];
+  for (const [mutate, code] of cases) {
+    const f = fixture(), data = structuredClone(baseline);
+    mutate(data); data.email.contentHash = emailHash(data.email);
+    const result = invokeSigned(f, data);
+    assert.equal(result.ok, false);
+    assert.equal(result.code, code);
+    assert.equal(f.mail.length, 0);
+    assert.equal(f.state.calls, 0);
+  }
+  const f = fixture(), data = structuredClone(baseline);
+  data.email.parts[0].html += "changed without the matching content hash";
+  assert.equal(invokeSigned(f, data).code, "relay_email_invalid");
+  assert.equal(f.mail.length, 0);
+});
+
+test("ambiguous student HTML sends need student-target resolution and never disturb owner mail", async () => {
+  const f = fixture({failMailAfterAccept: true});
+  await assert.rejects(deliverJob(job("student_receipt"), env, f.fetcher));
+  f.state.failMailAfterAccept = false;
+  await assert.rejects(deliverJob(job("student_receipt"), env, f.fetcher), error => error.code === "email_confirmation_required");
+  assert.equal(f.mail.length, 1);
+  await deliverJob(job("owner_email"), env, f.fetcher);
+  assert.equal(f.mail.length, 2);
+  f.props.set("EXAM_MAIL_RESOLVE_TAB", f.sheets[0].properties.title);
+  f.props.set("EXAM_MAIL_RESOLVE_PART", "1");
+  f.props.set("EXAM_MAIL_RESOLVE_ACTION", "confirm");
+  f.props.set("EXAM_MAIL_RESOLVE_TARGET", "student_receipt");
+  assert.equal(f.ctx.resolvePendingOwnerEmail().target, "student_receipt");
+  await deliverJob(job("student_receipt"), env, f.fetcher);
+  assert.equal(f.mail.length, 2);
+  assert.equal(JSON.parse(f.sheets[0].cells[1][7]).parts[0].status, "accepted");
+  assert.equal(f.props.has("EXAM_MAIL_RESOLVE_TARGET"), false);
+});
 
 test("signed relay preserves complete giant Unicode/formula text with RAW cells and verifies readback", async () => {
   const f = fixture(),
@@ -471,13 +575,10 @@ test("owner email contains complete packet, sends only to owner, and duplicate j
   assert.equal(f.mail.length, 1);
   assert.equal(f.mail[0].to, owner);
   assert.equal(f.mail[0].attachments[0].content, answerPacket(payload));
-  assert.equal(
-    f.mail[0].body.split("--- COMPLETE RAW PACKET PART ---\n")[1],
-    answerPacket(payload),
-  );
-  assert.ok(
-    f.mail[0].body.includes("inbox arrival is not independently confirmed"),
-  );
+  const rendered = JSON.parse(f.state.lastEnvelope.body).email.parts[0];
+  assert.equal(f.mail[0].body, rendered.text);
+  assert.equal(f.mail[0].htmlBody, rendered.html);
+  assert.match(f.mail[0].htmlBody, /<table/i);
   assert.equal(JSON.parse(f.sheets[0].cells[1][7]).parts[0].status, "accepted");
   const parts = f.ctx.relayUtf8Parts("ñ🤝abc".repeat(101), 19);
   assert.equal(parts.join(""), "ñ🤝abc".repeat(101));
@@ -493,15 +594,9 @@ test("long email body parts reconstruct every numbered raw answer and resume ove
   const f = fixture();
   await deliverJob(job("owner_email", large), env, f.fetcher);
   assert.ok(f.mail.length > 1);
-  assert.equal(
-    f.mail
-      .map(
-        (message) =>
-          message.body.split("--- COMPLETE RAW PACKET PART ---\n")[1],
-      )
-      .join(""),
-    answerPacket(large),
-  );
+  const rendered = JSON.parse(f.state.lastEnvelope.body).email.parts;
+  assert.deepEqual(f.mail.map(message => message.body), rendered.map(part => part.text));
+  assert.deepEqual(f.mail.map(message => message.htmlBody), rendered.map(part => part.html));
   assert.equal(
     f.mail.map((message) => message.attachments[0].content).join(""),
     answerPacket(large),
@@ -510,7 +605,7 @@ test("long email body parts reconstruct every numbered raw answer and resume ove
     f.mail.every(
       (message) =>
         message.to === owner &&
-        Buffer.byteLength(message.body, "utf8") < 150000,
+        Buffer.byteLength(message.body, "utf8") + Buffer.byteLength(message.htmlBody, "utf8") <= 150000,
     ),
   );
   const quota = fixture({ quota: 1 });
@@ -531,12 +626,7 @@ test("long email body parts reconstruct every numbered raw answer and resume ove
     "Do not resend the previously accepted part",
   );
   assert.equal(
-    quota.mail
-      .map(
-        (message) =>
-          message.body.split("--- COMPLETE RAW PACKET PART ---\n")[1],
-      )
-      .join(""),
+    quota.mail.map(message => message.attachments[0].content).join(""),
     answerPacket(large),
   );
 });

@@ -97,7 +97,7 @@ test("unconfigured deliveries fail honestly without external requests", async ()
   }
   assert.equal(calls, 0);
 });
-test("email copy goes only to owner and concise student receipt has no full answers", async () => {
+test("owner email stays private and student HTML receipt contains only their numbered answers", async () => {
   const env = {
     EMAIL_DELIVERY_ENABLED: "true",
     RESEND_API_KEY: "synthetic-key",
@@ -117,6 +117,7 @@ test("email copy goes only to owner and concise student receipt has no full answ
   assert.deepEqual(owner.to, ["wallyesteban1993@gmail.com"]);
   assert.ok(owner.text.includes("[BLANK ANSWER]"));
   assert.ok(owner.text.includes("Complete multiline\nanswer"));
+  assert.ok(owner.html.includes("Due Diligence"));
   assert.equal(requests[0].headers["Idempotency-Key"], "exam-owner-job");
   await deliverJob(
     { id: "student-job", target: "student_receipt", payload },
@@ -125,7 +126,12 @@ test("email copy goes only to owner and concise student receipt has no full answ
   );
   const student = JSON.parse(requests[1].body);
   assert.deepEqual(student.to, ["synthetic@example.invalid"]);
-  assert.ok(!student.text.includes("Complete multiline"));
+  assert.ok(student.text.includes("Complete multiline\nanswer"));
+  assert.ok(student.text.includes("You successfully submitted your answers."));
+  assert.ok(student.html.includes("You successfully submitted your answers."));
+  assert.ok(!student.html.includes("Synthetic question one"));
+  assert.ok(!student.html.includes("receipt-checksum"));
+  assert.ok(!student.html.includes("docs.google.com"));
 });
 test("provider failures do not disclose private response contents or mark success", async () => {
   await assert.rejects(

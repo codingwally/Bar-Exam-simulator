@@ -1,6 +1,6 @@
 /* Due Diligence private backup relay. No student/browser calls and no secrets in source.
  * Deploy as owner. Script Properties: EXAM_RELAY_SECRET, GOOGLE_SPREADSHEET_ID.
- * H1/H2 in each attempt tab are private integrity/mail journals. Do not edit them.
+ * H1/H2/H3 are private mirror/owner-mail/student-mail journals. Do not edit them.
  */
 var EXAM_OWNER = "wallyesteban1993@gmail.com";
 var EXAM_RELAY_VERSION = 1;
@@ -141,10 +141,10 @@ function relayParse(value) {
     relayError("mirror_journal_invalid");
   }
 }
-function relayValidate(data) {
+function relayValidate(data, spreadsheet) {
   if (
     !data ||
-    !["sheets", "owner_email"].includes(data.target) ||
+    !["sheets", "owner_email", "student_receipt"].includes(data.target) ||
     typeof data.jobId !== "string" ||
     !data.jobId ||
     data.jobId.length > 120 ||
@@ -155,7 +155,24 @@ function relayValidate(data) {
     !data.tabTitle ||
     data.tabTitle.length > 100 ||
     /[:\\/?*\[\]\u0000-\u001f]/.test(data.tabTitle) ||
-    !/^[A-Za-z0-9_-]{43}$/.test(data.payloadHash) ||
+    !/^[A-Za-z0-9_-]{43}$/.test(data.payloadHash)
+  )
+    relayError("relay_payload_invalid");
+  if (Boolean(data.receiptId) !== Boolean(data.receiptChecksum))
+    relayError("relay_payload_invalid");
+  if (data.receiptId && (typeof data.receiptId !== "string" || !/^[A-Za-z0-9_-]{1,120}$/.test(data.receiptId) ||
+      typeof data.receiptChecksum !== "string" || !/^[A-Za-z0-9_-]{1,200}$/.test(data.receiptChecksum)))
+    relayError("relay_payload_invalid");
+  if (data.target !== "sheets") relayValidateEmail(data, spreadsheet);
+  if (data.target === "student_receipt") {
+    // The student-mail request contains only the student's own frozen proof.
+    // Private Sheet data and question/source copies have no role in this target.
+    if (["values", "contentHash", "revisions", "packet", "packetHash"].some(function (field) {
+      return Object.prototype.hasOwnProperty.call(data, field);
+    })) relayError("student_email_private_payload");
+    return;
+  }
+  if (
     !/^[A-Za-z0-9_-]{43}$/.test(data.contentHash) ||
     !Array.isArray(data.values) ||
     data.values.length < 18 ||
@@ -190,8 +207,6 @@ function relayValidate(data) {
       relayError("relay_payload_invalid");
     ids[row[0]] = true;
   });
-  if (Boolean(data.receiptId) !== Boolean(data.receiptChecksum))
-    relayError("relay_payload_invalid");
   if (
     data.target === "owner_email" &&
     (!data.receiptId ||
@@ -199,6 +214,39 @@ function relayValidate(data) {
       relayHash(data.packet) !== data.packetHash)
   )
     relayError("final_email_required");
+}
+function relayByteLength(value) {
+  var bytes = 0;
+  for (var i = 0; i < value.length;) {
+    var code = value.codePointAt(i);
+    bytes += code <= 127 ? 1 : code <= 2047 ? 2 : code <= 65535 ? 3 : 4;
+    i += code > 65535 ? 2 : 1;
+  }
+  return bytes;
+}
+function relayValidateEmail(data, spreadsheet) {
+  var email = data.email;
+  if (!data.receiptId || !data.receiptChecksum || !email ||
+    typeof email.recipient !== "string" ||
+    typeof email.attemptEmail !== "string" ||
+    !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email.attemptEmail) ||
+    email.recipient !== (data.target === "owner_email" ? EXAM_OWNER : email.attemptEmail) ||
+    typeof email.subject !== "string" || !email.subject || email.subject.length > 220 || /[\r\n]/.test(email.subject) ||
+    !Array.isArray(email.parts) || !email.parts.length || email.parts.length > 300 ||
+    email.parts.some(function (part) {
+      return !part || typeof part.text !== "string" || typeof part.html !== "string" || !part.text || !part.html ||
+        relayByteLength(part.text) + relayByteLength(part.html) > 150000 ||
+        !/<(?:!doctype|html|table)\b/i.test(part.html) ||
+        /<(?:script|iframe|object|embed|form|input|button|base)\b/i.test(part.html);
+    }) ||
+    relayHash(JSON.stringify({recipient: email.recipient, attemptEmail: email.attemptEmail, subject: email.subject, parts: email.parts})) !== email.contentHash)
+    relayError("relay_email_invalid");
+  if (data.target === "student_receipt" &&
+    [email.subject].concat(email.parts.flatMap(function (part) { return [part.text, part.html]; })).some(function (value) {
+      return spreadsheet && value.includes(spreadsheet);
+    })) relayError("student_email_private_destination");
+  if (data.target === "owner_email" && email.attemptEmail !== data.values?.[2]?.[1])
+    relayError("relay_email_identity_conflict");
 }
 function relayFindSheet(spreadsheet, data) {
   var metadata = relayGoogle(
@@ -221,7 +269,7 @@ function relayFindSheet(spreadsheet, data) {
             properties: {
               title: data.tabTitle,
               gridProperties: {
-                rowCount: Math.max(100, data.values.length),
+                rowCount: Math.max(100, data.values ? data.values.length : 0),
                 columnCount: 8,
               },
             },
@@ -298,6 +346,8 @@ function relayCell(value) {
   return { userEnteredValue: { stringValue: String(value) } };
 }
 function relaySetJournal(spreadsheet, properties, row, value) {
+  if (JSON.stringify(value).length > 40000)
+    relayError("mirror_journal_too_large");
   relayGoogle(
     ":batchUpdate",
     "post",
@@ -507,30 +557,59 @@ function relayUtf8Parts(value, limit) {
 }
 function relayMail(spreadsheet, data, mirror) {
   if (mirror.disposition === "superseded") relayError("final_email_conflict");
-  // Complete numbered raw answers are visible in ordinary message bodies. Keep
-  // each UTF-8 part well below the consumer MailApp 200 KB body limit.
-  var parts = relayUtf8Parts(data.packet, 140000),
-    saved = relayRead(spreadsheet, data.tabTitle, "H2"),
+  var owner = data.target === "owner_email",
+    email = data.email,
+    parts = email.parts,
+    journalRow = owner ? 1 : 2,
+    saved = relayRead(spreadsheet, data.tabTitle, "H" + (journalRow + 1)),
     journal = relayParse(saved[0] && saved[0][0]);
+  var attachments = [];
+  if (owner) {
+    // Partition the full raw packet across the rendered messages without losing
+    // a Unicode code point. Attachments are for the owner alone, not students.
+    var start = 0;
+    for (var index = 0; index < parts.length; index++) {
+      var end = Math.ceil(data.packet.length * (index + 1) / parts.length);
+      if (end < data.packet.length && /[\uD800-\uDBFF]/.test(data.packet[end - 1])) end--;
+      var piece = data.packet.slice(start, end);
+      if (relayByteLength(piece) > 20 * 1024 * 1024)
+        relayError("email_attachment_too_large");
+      attachments.push(piece);
+      start = end;
+    }
+  }
+  var hashes = parts.map(function (part, index) {
+    return relayHash(JSON.stringify({text: part.text, html: part.html, attachment: owner ? attachments[index] : null}));
+  });
   if (
     journal &&
-    (journal.attemptId !== data.attemptId ||
+    (journal.v !== 2 ||
+      journal.target !== data.target ||
+      journal.recipient !== email.recipient ||
+      journal.attemptId !== data.attemptId ||
       journal.receiptId !== data.receiptId ||
-      journal.packetHash !== data.packetHash ||
+      journal.contentHash !== email.contentHash ||
+      journal.packetHash !== (data.packetHash || null) ||
+      !Array.isArray(journal.parts) ||
       journal.parts.length !== parts.length)
   )
     relayError("immutable_email_conflict");
   if (!journal)
     journal = {
-      v: 1,
+      v: 2,
+      target: data.target,
+      recipient: email.recipient,
       attemptId: data.attemptId,
       receiptId: data.receiptId,
-      packetHash: data.packetHash,
+      contentHash: email.contentHash,
+      packetHash: data.packetHash || null,
       jobId: data.jobId,
-      parts: parts.map(function (part) {
-        return { hash: relayHash(part), status: "ready" };
+      parts: hashes.map(function (hash) {
+        return { hash: hash, status: "ready" };
       }),
     };
+  if (JSON.stringify(journal).length > 40000)
+    relayError("email_journal_too_large");
   if (
     journal.parts.some(function (part) {
       return part.status === "pending";
@@ -543,7 +622,7 @@ function relayMail(spreadsheet, data, mirror) {
   var quota = MailApp.getRemainingDailyQuota();
   if (remaining && quota < 1) relayError("email_daily_quota_exhausted");
   for (var i = 0; i < parts.length; i++) {
-    if (journal.parts[i].hash !== relayHash(parts[i]))
+    if (journal.parts[i].hash !== hashes[i])
       relayError("immutable_email_conflict");
     if (journal.parts[i].status === "accepted") continue;
     // A packet larger than one day's free quota resumes over later days. The
@@ -554,45 +633,29 @@ function relayMail(spreadsheet, data, mirror) {
     // sending. An interrupted send requires owner confirmation, never blind resend.
     journal.parts[i].status = "pending";
     journal.parts[i].pendingAt = Date.now();
-    relaySetJournal(spreadsheet, mirror.properties, 1, journal);
+    relaySetJournal(spreadsheet, mirror.properties, journalRow, journal);
     MailApp.sendEmail({
-      to: EXAM_OWNER,
-      subject:
-        "Examination answer backup — " +
-        data.receiptId +
-        (parts.length > 1 ? " (" + (i + 1) + "/" + parts.length + ")" : ""),
-      body:
-        "Private examination answer backup. Preserve every part.\nReceipt: " +
-        data.receiptId +
-        "\nComplete packet SHA-256 (base64url): " +
-        data.packetHash +
-        "\nPart: " +
-        (i + 1) +
-        " of " +
-        parts.length +
-        "\nPart SHA-256: " +
-        journal.parts[i].hash +
-        "\nVerified Sheet: " +
-        mirror.reference +
-        "\nGoogle accepted this message for sending; inbox arrival is not independently confirmed.\n\n--- COMPLETE RAW PACKET PART ---\n" +
-        parts[i],
-      attachments: [
+      to: email.recipient,
+      subject: email.subject + (parts.length > 1 ? " (" + (i + 1) + "/" + parts.length + ")" : ""),
+      body: parts[i].text,
+      htmlBody: parts[i].html,
+      ...(owner ? {attachments: [
         Utilities.newBlob(
-          parts[i],
+          attachments[i],
           "text/plain",
           "answers-" + (i + 1) + "-of-" + parts.length + ".txt",
         ),
-      ],
-      name: "Due Diligence examination backups",
+      ]} : {}),
+      name: "Due Diligence",
     });
     journal.parts[i].status = "accepted";
     journal.parts[i].acceptedAt = Date.now();
-    relaySetJournal(spreadsheet, mirror.properties, 1, journal);
+    relaySetJournal(spreadsheet, mirror.properties, journalRow, journal);
     quota--;
   }
   return {
     disposition: remaining ? "accepted" : "already_accepted",
-    reference: "mailapp:" + data.receiptId + ":" + data.packetHash,
+    reference: "mailapp:" + data.target + ":" + data.receiptId + ":" + email.contentHash,
   };
 }
 function doPost(e) {
@@ -629,14 +692,19 @@ function doPost(e) {
       relayError("relay_authentication_failed");
     bodyHash = relayHash(envelope.body);
     data = JSON.parse(envelope.body);
-    relayValidate(data);
+    relayValidate(data, config.spreadsheet);
     var lock = LockService.getScriptLock();
     if (!lock.tryLock(3000)) relayError("relay_busy");
     try {
       relayPrivateFile(config.spreadsheet);
-      var mirror = relayMirror(config.spreadsheet, data);
+      // A student's proof does not wait for the independent Sheet backup. The
+      // otherwise blank tab stores only its private mail journal until a mirror
+      // job fills A:F and H1. Existing sheet data is never cleared by this target.
+      var mirror = data.target === "student_receipt"
+        ? {properties: relayFindSheet(config.spreadsheet, data), disposition: "verified"}
+        : relayMirror(config.spreadsheet, data);
       result =
-        data.target === "owner_email"
+        data.target === "owner_email" || data.target === "student_receipt"
           ? relayMail(config.spreadsheet, data, mirror)
           : mirror;
       result = {
@@ -698,21 +766,24 @@ function verifyRelaySetup() {
     remainingEmailRecipients: MailApp.getRemainingDailyQuota(),
   };
 }
-// Owner-only recovery after checking Sent mail/attachment hash. Set three Script
+// Owner-only recovery after checking Sent mail/attachment hash. Set Script
 // Properties and run this function in the editor, then remove the properties:
 // EXAM_MAIL_RESOLVE_TAB=<exact attempt tab title>, EXAM_MAIL_RESOLVE_PART=<1-based>,
 // EXAM_MAIL_RESOLVE_ACTION=confirm (observed sent) OR retry (explicit duplicate risk).
+// EXAM_MAIL_RESOLVE_TARGET=owner_email (default) OR student_receipt.
 function resolvePendingOwnerEmail() {
   var config = relayProperties(),
     props = PropertiesService.getScriptProperties();
   var tab = props.getProperty("EXAM_MAIL_RESOLVE_TAB"),
     part = Number(props.getProperty("EXAM_MAIL_RESOLVE_PART")),
-    action = props.getProperty("EXAM_MAIL_RESOLVE_ACTION");
+    action = props.getProperty("EXAM_MAIL_RESOLVE_ACTION"),
+    target = props.getProperty("EXAM_MAIL_RESOLVE_TARGET") || "owner_email";
   if (
     !tab ||
     !Number.isSafeInteger(part) ||
     part < 1 ||
-    !["confirm", "retry"].includes(action)
+    !["confirm", "retry"].includes(action) ||
+    !["owner_email", "student_receipt"].includes(target)
   )
     relayError("email_resolution_invalid");
   var lock = LockService.getScriptLock();
@@ -729,10 +800,12 @@ function resolvePendingOwnerEmail() {
         return item.properties.title === tab;
       });
     if (!sheet) relayError("email_resolution_invalid");
-    var rows = relayRead(config.spreadsheet, tab, "H2"),
+    var journalRow = target === "owner_email" ? 1 : 2;
+    var rows = relayRead(config.spreadsheet, tab, "H" + (journalRow + 1)),
       journal = relayParse(rows[0] && rows[0][0]);
     if (
       !journal ||
+      (journal.target && journal.target !== target) ||
       !journal.parts[part - 1] ||
       journal.parts[part - 1].status !== "pending"
     )
@@ -741,15 +814,16 @@ function resolvePendingOwnerEmail() {
       action === "confirm" ? "accepted" : "ready";
     journal.parts[part - 1].ownerResolvedAt = Date.now();
     journal.parts[part - 1].ownerResolution = action;
-    relaySetJournal(config.spreadsheet, sheet.properties, 1, journal);
+    relaySetJournal(config.spreadsheet, sheet.properties, journalRow, journal);
     [
       "EXAM_MAIL_RESOLVE_TAB",
       "EXAM_MAIL_RESOLVE_PART",
       "EXAM_MAIL_RESOLVE_ACTION",
+      "EXAM_MAIL_RESOLVE_TARGET",
     ].forEach(function (key) {
       props.deleteProperty(key);
     });
-    return { resolved: true, action: action, part: part };
+    return { resolved: true, action: action, target: target, part: part };
   } finally {
     lock.releaseLock();
   }

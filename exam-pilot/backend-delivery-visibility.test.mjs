@@ -39,7 +39,7 @@ function fixture(extra = {}) {
   return { db, env, request, login, configuration };
 }
 
-test("private workbook destination is readable only by an authenticated examiner and reveals no credentials", async () => {
+test("private workbook destination is readable by the authenticated owner and reveals no credentials", async () => {
   const f = fixture({ GOOGLE_SPREADSHEET_ID: spreadsheet, EXAM_RELAY_SECRET: "private-relay-credential" });
   try {
     const anonymous = await f.request("/api/admin/exams/practice/backups");
@@ -73,7 +73,7 @@ test("invalid spreadsheet identifiers never become clickable workbook destinatio
   } finally { f.db.close(); }
 });
 
-test("owner relay capability and official student email capability remain distinct", async () => {
+test("relay and complete Resend configuration support student confirmation while missing or disabled providers do not", async () => {
   const f = fixture({
     EMAIL_DELIVERY_ENABLED: "true",
     EXAM_RELAY_URL: "https://script.google.com/macros/s/synthetic/exec",
@@ -84,11 +84,18 @@ test("owner relay capability and official student email capability remain distin
     let config = await f.configuration(login.cookie);
     assert.equal(config.sheets, true);
     assert.equal(config.email, true);
+    assert.equal(config.studentReceipt, true);
+    delete f.env.EXAM_RELAY_SECRET;
+    config = await f.configuration(login.cookie);
+    assert.equal(config.sheets, false);
+    assert.equal(config.email, false);
     assert.equal(config.studentReceipt, false);
+    delete f.env.EXAM_RELAY_URL;
     f.env.RESEND_API_KEY = "synthetic-email-provider-key";
     assert.equal((await f.configuration(login.cookie)).studentReceipt, false);
     f.env.EXAM_EMAIL_FROM = "owner@example.invalid";
     config = await f.configuration(login.cookie);
+    assert.equal(config.email, true);
     assert.equal(config.studentReceipt, true);
     assert.equal(JSON.stringify(config).includes(f.env.RESEND_API_KEY), false);
     f.env.EMAIL_DELIVERY_ENABLED = "false";

@@ -86,3 +86,72 @@ test("professor PDF distinguishes received in-progress server answers from a sub
   assert.equal(result.questions[0].answer, detail.answers[0].text);
   assert.equal(result.questions[1].answer, "");
 });
+
+function downloadFixture(paper) {
+  let releasePaper;
+  const pendingPaper = new Promise(resolve => { releasePaper = resolve; }),
+    { document } = parseHTML(html),
+    requests = [], outputs = [], blobs = [];
+  class DownloadURL extends URL {
+    static createObjectURL(blob) { blobs.push(blob); return "blob:synthetic-pdf"; }
+    static revokeObjectURL() {}
+  }
+  const catalogExam = { ...exam };
+  delete catalogExam.instructions;
+  const context = vm.createContext({
+    document, URL: DownloadURL, Intl, Date, Blob, AbortController,
+    catalogExam, selectedDetail: detail,
+    window: { addEventListener() {} },
+    setTimeout: () => 1, clearTimeout() {}, setInterval() {},
+    fetch: async path => {
+      requests.push(path);
+      await pendingPaper;
+      return Response.json({ exam: paper });
+    },
+    // Exercise the real click/API/conversion/download path with a deterministic
+    // encoder at the lazy import boundary. The actual PDF converter is retained.
+    loadPdf: async () => ({
+      examinationPdfData,
+      createExaminationPdf: async data => {
+        outputs.push(data);
+        return new TextEncoder().encode("%PDF-synthetic-encoder");
+      },
+    }),
+  });
+  vm.runInContext(source.replace('await import("./answer-pdf.mjs")', "await loadPdf()"), context);
+  vm.runInContext("bind(); state.exam = catalogExam; state.detail = selectedDetail;", context);
+  return {
+    document, requests, outputs, blobs,
+    click: () => document.getElementById("download-student").onclick(),
+    release: releasePaper,
+    changeSelection: () => vm.runInContext("state.exam = { id: 'another-exam', title: 'Other examination' }; state.detail = { attempt: { id: 'another-student', name: 'Other student' }, questions: [], answers: [] };", context),
+  };
+}
+
+test("professor download fetches missing catalog instructions and retains the clicked exam and student while the screen changes", async () => {
+  const f = downloadFixture(exam), pending = f.click();
+  assert.equal(f.document.getElementById("download-student").disabled, true);
+  assert.deepEqual(f.requests, ["/api/admin/exams/synthetic-exam"]);
+  f.changeSelection();
+  f.release();
+  await pending;
+  assert.equal(f.outputs.length, 1);
+  assert.equal(f.outputs[0].instructions, exam.instructions);
+  assert.equal(f.outputs[0].examId, exam.id);
+  assert.equal(f.outputs[0].attemptId, detail.attempt.id);
+  assert.equal(f.outputs[0].name, detail.attempt.name);
+  assert.equal(f.outputs[0].questions[0].answer, detail.answers[0].text);
+  assert.equal(f.blobs.length, 1);
+  assert.equal(f.blobs[0].type, "application/pdf");
+  assert.equal(f.document.getElementById("download-student").disabled, false);
+});
+
+test("professor download refuses an unconfirmed examination detail instead of silently omitting its instructions", async () => {
+  const f = downloadFixture({ ...exam, id: "wrong-exam" }), pending = f.click();
+  f.release();
+  await pending;
+  assert.equal(f.outputs.length, 0);
+  assert.equal(f.blobs.length, 0);
+  assert.match(f.document.getElementById("message").textContent, /PDF could not be prepared/);
+  assert.equal(f.document.getElementById("download-student").disabled, false);
+});

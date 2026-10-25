@@ -996,8 +996,11 @@ function bind() {
       if (!detail) throw new Error("Open a student's answers before downloading the PDF.");
       message("Preparing the student's PDF…");
       try {
+        const paper = await api(`/exams/${encodeURIComponent(exam.id)}`);
+        if (paper.exam?.id !== exam.id)
+          throw new Error("The complete examination could not be confirmed.");
         const { examinationPdfData, createExaminationPdf } = await import("./answer-pdf.mjs"),
-          data = studentPdfData(exam, detail, examinationPdfData),
+          data = studentPdfData(paper.exam, detail, examinationPdfData),
           bytes = await createExaminationPdf(data);
         download(bytes, "DueDiligence-Student-Answers.pdf", "application/pdf");
         message("The student PDF is ready. It contains the complete questions and received answers.", "success");

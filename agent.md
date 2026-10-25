@@ -29,6 +29,22 @@ If a proposed solution does not improve the product, do not implement it.
 
 # Examination Room Blank-Slate Boundary
 
+The owner began a new Constitutional Law I pilot on 2026-10-24. Its approved
+brief and current request govern the isolated implementation in `exam-pilot/`.
+It uses its own Worker, database and private backup bucket. The existing site,
+Simulator, legacy Examination Room runtime and historical records are unchanged.
+The owner superseded the initial pilot presentation on 2026-10-24 with an
+Examplify-style practice examination workspace under Due Diligence branding.
+The current scope includes a plain-language professor desk, reviewed local
+Word/PDF extraction and a unique student URL for each new practice exam. The
+earlier two-route-only presentation is superseded by this explicit request;
+the existing practice and official aliases may remain for compatibility.
+Published question versions, responses, receipts and recovery evidence must
+remain preserved during this rebuild. Do not copy proprietary ExamSoft branding
+or claim browser-based operating-system lockdown.
+This authorization does not permit restoring retired code or deploying an
+unverified official examination.
+
 The former Examination Room is intentionally decommissioned. It is not an
 existing feature to repair, renovate, preserve, or improve. This section
 overrides **Repository First**, renovation references, and compatibility

@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>My exams · Due Diligence</title>
+    <link rel="stylesheet" href="/admin.css" />
+    <script type="module" src="/admin.mjs"></script>
+  </head>
+  <body>
+    <a class="skip" href="#main" tabindex="0">Skip to content</a>
+    <header>
+      <a class="brand" href="/admin/exams"
+        >Due Diligence<span>Examination room</span></a
+      >
+      <div class="account">
+        <span id="signed-in">Private examiner access</span
+        ><button id="sign-out" class="secondary" type="button" hidden>
+          Sign out</button
+        ><a
+          id="sign-in-again"
+          class="button secondary"
+          href="/admin/login"
+          target="_blank"
+          rel="noopener"
+          hidden
+          >Sign in again</a
+        >
+      </div>
+    </header>
+    <main id="main" tabindex="-1">
+      <p id="message" class="message" role="status" aria-live="polite">
+        Checking your examiner access…
+      </p>
+      <noscript
+        >Enable JavaScript to prepare and review an examination.</noscript
+      >
+      <section id="list-view" hidden>
+        <div class="page-heading">
+          <div>
+            <p class="eyebrow">Examiner desk</p>
+            <h1>My exams</h1>
+            <p>
+              Prepare a question paper, share its link, and collect the answers
+              here.
+            </p>
+          </div>
+          <button id="new-exam">
+            <img src="/icons/plus.svg" alt="" />Create exam
+          </button>
+        </div>
+        <button id="resume-draft" class="secondary" hidden>
+          Continue unfinished exam
+        </button>
+        <div id="exam-list"></div>
+        <details id="history" hidden>
+          <summary>Past exams</summary>
+          <div id="history-list"></div>
+        </details>
+      </section>
+      <section id="create-view" hidden>
+        <button class="text" id="back-list">
+          <img src="/icons/arrow-left.svg" alt="" />My exams
+        </button>
+        <div class="page-heading">
+          <div>
+            <p class="eyebrow">New examination</p>
+            <h1>Create an exam</h1>
+            <p>
+              Upload the question paper, check the questions, then create a
+              link.
+            </p>
+          </div>
+        </div>
+        <div id="upload-area" class="upload-area">
+          <img src="/icons/upload.svg" alt="" /><label for="exam-file"
+            >Choose your question paper</label
+          >
+          <p>
+            Word (.docx), PDF or plain text. Reading happens privately in this
+            browser.
+          </p>
+          <input id="exam-file" type="file" accept=".docx,.pdf,.txt,.md" />
+          <p class="small">
+            You can also drop a file here. Older Word .doc files must be saved
+            as .docx first.
+          </p>
+          <p id="reading-progress" role="status" hidden></p>
+          <button id="cancel-reading" class="secondary" hidden>
+            Cancel reading
+          </button>
+        </div>
+        <details id="paste-panel">
+          <summary>Paste the question paper instead</summary>
+          <label for="paste-text">Instructions and numbered questions</label
+          ><textarea
+            id="paste-text"
+            rows="9"
+            placeholder="Instructions for students…&#10;&#10;1. First question…&#10;&#10;2. Second question…"
+          ></textarea
+          ><button id="read-paste" class="secondary">
+            Read pasted questions
+          </button>
+        </details>
+        <div class="actions">
+          <button id="manual-question" class="text">
+            Add a question manually
+          </button>
+        </div>
+        <div id="review-panel" hidden>
+          <div class="section-heading">
+            <div>
+              <h2>Review your questions</h2>
+              <p id="question-count"></p>
+            </div>
+            <button id="add-question" class="secondary">Add question</button>
+          </div>
+          <p>
+            Check every question and subquestion. You can edit, move, split or
+            combine items below.
+          </p>
+          <p id="import-note" class="message" hidden></p>
+          <label for="exam-instructions">Instructions for students</label
+          ><textarea id="exam-instructions" rows="5"></textarea>
+          <ol id="question-list"></ol>
+          <details id="original-panel">
+            <summary>Compare with the original extracted text</summary>
+            <p class="small">
+              Nothing below is rewritten by AI. If a boundary is wrong, edit the
+              numbering here and read it again, or split and combine questions
+              above. The first extracted copy is kept separately.
+            </p>
+            <label for="original-text"
+              >Working text for question boundaries</label
+            ><textarea id="original-text" rows="12"></textarea>
+            <div class="actions">
+              <button id="read-original" class="secondary">
+                Read questions again</button
+              ><button id="download-original" class="secondary">
+                Download original text
+              </button>
+            </div>
+          </details>
+          <div class="finish">
+            <h2>Give the exam a title</h2>
+            <label for="exam-title">Exam title</label
+            ><input
+              id="exam-title"
+              maxlength="160"
+              placeholder="For example, Constitutional Law I — Practice"
+            />
+            <div class="duration">
+              <label for="exam-duration">Time allowed for each student</label>
+              <div>
+                <input
+                  id="exam-duration"
+                  type="number"
+                  inputmode="numeric"
+                  min="1"
+                  max="360"
+                  value="5"
+                /><span>minutes</span>
+              </div>
+            </div>
+            <p class="small">
+              Each student’s time begins when they start. The link is ready to
+              use as soon as you create it.
+            </p>
+            <label class="check"
+              ><input id="review-confirm" type="checkbox" /><span
+                >I checked the instructions, every question, and the time
+                allowed.</span
+              ></label
+            ><button id="create-link">Create exam link</button>
+          </div>
+        </div>
+      </section>
+      <section id="share-view" hidden>
+        <button class="text" id="share-back">
+          <img src="/icons/arrow-left.svg" alt="" />My exams
+        </button>
+        <p class="eyebrow">Ready to share</p>
+        <h1 id="share-title"></h1>
+        <p id="share-summary"></p>
+        <label for="share-link">Exam link</label>
+        <div class="copy-row">
+          <input id="share-link" readonly /><button id="copy-link">
+            <img src="/icons/copy.svg" alt="" />Copy link
+          </button>
+        </div>
+        <p>
+          Send this link to your students. They enter their name and email, take
+          the exam, and submit. Their answers appear in Responses.
+        </p>
+        <div class="actions">
+          <a
+            id="open-exam"
+            class="button secondary"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Open exam</a
+          ><button id="share-responses" class="secondary">
+            View responses
+          </button>
+        </div>
+      </section>
+      <section id="responses-view" hidden>
+        <button class="text" id="responses-back">
+          <img src="/icons/arrow-left.svg" alt="" />My exams
+        </button>
+        <div class="page-heading">
+          <div>
+            <p class="eyebrow">Responses</p>
+            <h1 id="responses-title"></h1>
+            <p id="responses-summary"></p>
+          </div>
+          <button id="response-link" class="secondary">Copy exam link</button>
+        </div>
+        <div class="response-tools">
+          <label for="student-search"
+            >Find a student<input
+              id="student-search"
+              type="search"
+              placeholder="Name or email" /></label
+          ><button id="search-students" class="secondary">Search</button
+          ><button id="refresh-students" class="secondary">Refresh</button
+          ><button id="download-all" class="secondary">
+            Download all answers
+          </button>
+        </div>
+        <div id="student-list"></div>
+        <button id="more-students" class="secondary" hidden>
+          Show more students
+        </button>
+        <article id="student-response" hidden tabindex="-1">
+          <div class="section-heading">
+            <div>
+              <h2 id="student-name"></h2>
+              <p id="student-info"></p>
+            </div>
+            <button id="close-response" class="text">Close</button>
+          </div>
+          <button id="download-student" class="secondary">
+            Download student PDF
+          </button>
+          <div id="student-answers"></div>
+          <details id="support-drawer">
+            <summary>Support & preservation details</summary>
+            <p>
+              These details help an authorized examiner check receipts,
+              connection observations and independent backups. Observations
+              never determine misconduct.
+            </p>
+            <h3>Submission receipt</h3>
+            <pre id="support-receipt"></pre>
+            <div id="recovered-drafts"></div>
+            <h3>Activity observations</h3>
+            <ol id="support-events"></ol>
+            <button id="more-events" class="secondary" hidden>
+              Show more observations
+            </button>
+            <div id="recovery-controls">
+              <h3>Help this student return to their work</h3>
+              <p>
+                Verify the student’s identity first. This restores the same
+                attempt and original time limit.
+              </p>
+              <label for="recovery-reason">Reason and identity check</label
+              ><textarea id="recovery-reason" rows="2"></textarea
+              ><label class="check"
+                ><input id="recovery-confirm" type="checkbox" /><span
+                  >I verified identity and authorize this recovery.</span
+                ></label
+              ><button id="recover-student" class="secondary">
+                Create private recovery link
+              </button>
+              <p id="recovery-result" class="message" hidden></p>
+            </div>
+          </details>
+        </article>
+        <details id="exam-support">
+          <summary>Exam support & backup delivery</summary>
+          <p id="support-exam-description"></p>
+          <div id="backup-status"></div>
+          <div id="backup-list"></div>
+          <button id="more-backups" class="secondary" hidden>
+            Show more backup jobs</button
+          ><button id="refresh-backups" class="secondary">
+            Refresh backup delivery
+          </button>
+        </details>
+      </section>
+    </main>
+    <footer>
+      Due Diligence · Private examination records<span
+        >Share student work only with authorized examiners.</span
+      >
+    </footer>
+  </body>
+</html>

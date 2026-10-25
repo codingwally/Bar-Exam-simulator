@@ -1,0 +1,16 @@
+{
+  "passed": true,
+  "outcomes": [
+    "Unconfigured official route displays exact unavailable message; no answer inputs or questions.",
+    "Immediate full countdown 172800s early: 2 days 00:00:00; no question disclosure.",
+    "Immediate full countdown 7200s early: 02:00:00; no question disclosure.",
+    "Immediate full countdown 1200s early: 00:20:00; no question disclosure.",
+    "Immediate full countdown 360s early: 00:06:00; no question disclosure.",
+    "Immediate full countdown 240s early: 00:04:00; no question disclosure.",
+    "Immediate full countdown 30s early: 00:00:30; no question disclosure.",
+    "Waiting registration automatically unlocks all20 at scheduled start without reloading.",
+    "Unlisted late entrant accepted with the same absolute cutoff.",
+    "Offline across cutoff: server freezes last on-time text, issues deadline receipt and separately preserves later offline text.",
+    "After common cutoff, new registrants cannot start; closed-tab attempt retrieves a timed receipt."
+  ]
+}

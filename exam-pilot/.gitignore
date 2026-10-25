@@ -1,3 +1,4 @@
 node_modules/
 .wrangler/
 public/document-vendor/
+public/pdf-vendor/

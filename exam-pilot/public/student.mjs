@@ -375,6 +375,11 @@ export class ExamApp {
         );
       } else this.renderConnectionError();
     }
+    this.startTimers();
+    this.tick();
+  }
+  startTimers() {
+    if (this.state?.attempt?.receipt) return;
     this.timer = setInterval(() => this.tick(), 250);
     this.poller = setInterval(
       () =>
@@ -389,7 +394,40 @@ export class ExamApp {
       this.flushEvents();
     }, 30000);
     this.leaseTimer = setInterval(() => this.acquireLease(false), 10000);
-    this.tick();
+  }
+  stopExamTimers() {
+    for (const name of ["timer", "poller", "heartbeat", "leaseTimer"]) {
+      clearInterval(this[name]);
+      this[name] = null;
+    }
+    clearTimeout(this.syncTimer);
+    this.syncTimer = null;
+    this.leaseHeld = false;
+    this.releaseDeviceLock?.();
+    this.releaseDeviceLock = null;
+    this.deviceLock = false;
+  }
+  scheduleFinalPreservation() {
+    if (!this.state?.attempt?.receipt || !this.store) return;
+    const pending = this.store.state.events.length || this.store.pending().some(
+      answer => !this.recovered.has(answer.mutationId),
+    );
+    if (!pending) {
+      clearTimeout(this.finalRetryTimer);
+      this.finalRetryTimer = null;
+      this.finalRetryDelay = 30000;
+      return;
+    }
+    if (!this.online || this.finalRetryTimer) return;
+    const wait = this.finalRetryDelay || 30000;
+    this.finalRetryTimer = setTimeout(() => {
+      this.finalRetryTimer = null;
+      this.finalRetryDelay = Math.min(wait * 2, 300000);
+      // Retry only existing evidence/recovered writing. Never create a heartbeat
+      // or poll the immutable receipt merely because its tab remains open.
+      this.recoverLateDrafts();
+      this.flushEvents();
+    }, wait);
   }
   bindEvents() {
     window.addEventListener("resize", () => this.updateToolsExpanded());
@@ -469,13 +507,14 @@ export class ExamApp {
       if (event.persisted && this.state?.attempt)
         this.store
           .open()
-          .then(() => this.acquireDeviceLock())
-          .then(() => this.acquireLease())
+          .then(() => this.state.attempt.receipt ? undefined : this.acquireDeviceLock())
+          .then(() => this.state.attempt.receipt ? undefined : this.acquireLease())
           .then(() => this.refresh())
           .catch(() => this.updateSave());
     });
   }
   record(category, detail = {}) {
+    if (this.state?.attempt?.receipt && !["pagehide", "save_success", "save_failure"].includes(category)) return;
     if (this.store)
       for (const part of activityDetails(category, detail))
         this.store.event(category, part, this.question()?.id || null);
@@ -572,6 +611,11 @@ export class ExamApp {
     }
   }
   async refresh(initial = false) {
+    if (this.state?.attempt?.receipt) {
+      this.recoverLateDrafts();
+      this.flushEvents();
+      return;
+    }
     if (this.refreshing) return;
     this.refreshing = true;
     try {
@@ -700,6 +744,7 @@ export class ExamApp {
       this.updateSave();
       this.updateWritable();
     }
+    if (data.attempt?.receipt) this.stopExamTimers();
     this.tick();
     if (this.isFinalized()) this.recoverLateDrafts();
     else if (this.store && this.leaseHeld) {
@@ -731,6 +776,11 @@ export class ExamApp {
         body: { editorId: this.editorId, takeover },
         timeout: 5000,
       });
+      if (data.receipt) {
+        this.leaseHeld = false;
+        await this.refresh();
+        return;
+      }
       if (this.localLeaseKey)
         this.storage?.setItem(
           this.localLeaseKey,
@@ -1455,7 +1505,7 @@ export class ExamApp {
       tabs,
       panels,
       el("div", { class: "tool-actions" }, [
-        button("Download my answers", () => this.downloadDraft(), "secondary"),
+        button("Download answers PDF", () => this.downloadDraft(), "secondary"),
         button("Hide exam", () => this.hideExam(), "secondary"),
       ]),
     );
@@ -1813,6 +1863,7 @@ export class ExamApp {
     }
     if (accepted && this.store.state.events.length)
       setTimeout(() => this.flushEvents(), 0);
+    this.scheduleFinalPreservation();
   }
   review() {
     const questions = this.state.attempt.questions,
@@ -1938,7 +1989,7 @@ export class ExamApp {
     }
   }
   tick() {
-    if (!this.state) return;
+    if (!this.state || this.state.attempt?.receipt) return;
     const now = this.clock.now(),
       waiting = this.state.exam.status === "SCHEDULED";
     const target = waiting
@@ -2019,6 +2070,7 @@ export class ExamApp {
       );
     } finally {
       this.recovering = false;
+      this.scheduleFinalPreservation();
     }
   }
   renderReceipt() {
@@ -2073,15 +2125,9 @@ export class ExamApp {
         section.append(p("Submitted automatically when time ended.", "subtle"));
       section.append(
         el("div", { class: "actions" }, [
-          button("Download receipt", () =>
-            this.download(
-              "examination-receipt.json",
-              JSON.stringify(receipt, null, 2),
-              "application/json",
-            ),
-          ),
+          button("Download receipt PDF", () => this.downloadPdf(true)),
           button(
-            "Download my answers",
+            "Download answers PDF",
             () => this.downloadDraft(),
             "secondary",
           ),
@@ -2153,40 +2199,23 @@ export class ExamApp {
     heading.focus({ preventScroll: true });
   }
   downloadDraft() {
-    const lines = [
-      this.examTitle(),
-      `Attempt: ${this.state.attempt.id}`,
-      `Student: ${this.state.attempt.name} <${this.state.attempt.email}>`,
-      `Exported: ${formatClock(this.clock.now())} PHT`,
-      "This device copy is not proof of on-time server submission.",
-      "",
-    ];
-    for (const question of this.state.attempt.questions || []) {
-      const local = this.store.state.answers[question.id],
-        official = this.state.attempt.answers?.find(
-          (item) => item.questionId === question.id,
-        );
-      lines.push(
-        `QUESTION ${question.number}`,
-        question.text,
-        "",
-        this.isFinalized() ? "OFFICIAL SERVER ANSWER" : "LATEST DEVICE ANSWER",
-        (this.isFinalized() ? official?.text : local?.text) || "[Blank]",
-        "",
-      );
-      if (
-        this.isFinalized() &&
-        local &&
-        !local.acknowledged &&
-        local.text !== official?.text
-      )
-        lines.push(
-          "SEPARATE LATE/OFFLINE DEVICE DRAFT — EXAMINER REVIEW REQUIRED",
-          local.text || "[Blank]",
-          "",
-        );
+    return this.downloadPdf(false);
+  }
+  async downloadPdf(receiptOnly = false) {
+    if (this.exportingPdf) return;
+    this.exportingPdf = true;
+    this.message("Preparing your PDF...");
+    try {
+      const { examinationPdfData, createExaminationPdf } = await import("./answer-pdf.mjs");
+      const data = examinationPdfData(this.state, this.store?.state, { receiptOnly, exportedAt: this.clock.now() });
+      const bytes = await createExaminationPdf(data);
+      this.download(receiptOnly ? "DueDiligence-Examination-Receipt.pdf" : "DueDiligence-Examination-Answers.pdf", bytes, "application/pdf");
+      this.message("Your PDF is ready. Keep it for your records.");
+    } catch {
+      this.message("Your PDF could not be prepared. Your answers remain saved. Please try again in this browser.");
+    } finally {
+      this.exportingPdf = false;
     }
-    this.download("my-examination-answers.txt", lines.join("\n"));
   }
   download(filename, contents, type = "text/plain;charset=utf-8") {
     const url = URL.createObjectURL(new Blob([contents], { type }));

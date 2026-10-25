@@ -3,14 +3,18 @@
  * browser draft store and is never shared between users through a CDN cache. */
 // Bump this release version whenever a public shell asset changes. An active
 // examination keeps a consistent shell until all its old tabs have closed.
-const CACHE = "dd-exam-platform-shell-v7";
+const CACHE = "dd-exam-platform-shell-v8";
 const SHELL = [
   "/index.html",
   "/student.css",
   "/student.mjs",
   "/local-drafts.mjs",
+  "/answer-pdf.mjs",
+  "/pdf-vendor/pdf.mjs",
   "/fonts/inter.woff2",
   "/fonts/fraunces.woff2",
+  "/fonts/inter-pdf.ttf",
+  "/fonts/fraunces-pdf.ttf",
   ...[
     "menu",
     "x",

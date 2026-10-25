@@ -22,6 +22,7 @@ async function provisionFixture(
     existing = false,
     publicBucket = false,
     authMode = "access",
+    deliveryEnv = {},
   } = {},
 ) {
   const directory = await mkdtemp(join(tmpdir(), "dd-exam-provision-"));
@@ -69,6 +70,7 @@ async function provisionFixture(
         ACCESS_AUD: "synthetic-application-audience",
         ADMIN_AUTH_MODE: authMode,
         EXAM_TEST_TRACE: trace,
+        ...deliveryEnv,
       },
     },
   );
@@ -93,6 +95,25 @@ test("deployment template uses strict JSON accepted by the provisioning parser",
     undefined,
     "default free deployment must not require an R2 subscription",
   );
+});
+
+test("deployment preserves explicitly configured private collection and email activation", async () => {
+  const spreadsheet = "synthetic_private_spreadsheet_12345";
+  const fixture = await provisionFixture(templateText, {authMode: "password", deliveryEnv: {GOOGLE_SPREADSHEET_ID: spreadsheet, EMAIL_DELIVERY_ENABLED: "true"}});
+  try {
+    assert.equal(fixture.result.status, 0, fixture.result.stderr);
+    const config = JSON.parse(await readFile(join(fixture.directory, ".wrangler", "deploy.json"), "utf8"));
+    assert.equal(config.vars.GOOGLE_SPREADSHEET_ID, spreadsheet);
+    assert.equal(config.vars.EMAIL_DELIVERY_ENABLED, "true");
+  } finally { await cleanup(fixture.directory); }
+});
+
+test("invalid collection identifiers and email activation fail before remote requests", async () => {
+  for (const deliveryEnv of [{GOOGLE_SPREADSHEET_ID: "https://unexpected.invalid/private"}, {EMAIL_DELIVERY_ENABLED: "yes"}]) {
+    const fixture = await provisionFixture(templateText, {authMode: "password", deliveryEnv});
+    try { assert.notEqual(fixture.result.status, 0); assert.deepEqual(fixture.calls, []); }
+    finally { await cleanup(fixture.directory); }
+  }
 });
 
 test("invalid deployment JSON fails before any fetch or resource creation", async () => {

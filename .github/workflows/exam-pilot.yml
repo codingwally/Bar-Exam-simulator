@@ -145,6 +145,8 @@ jobs:
           ACCESS_TEAM_DOMAIN: ${{ vars.EXAM_PILOT_ACCESS_TEAM_DOMAIN }}
           ACCESS_AUD: ${{ vars.EXAM_PILOT_ACCESS_AUD }}
           ADMIN_AUTH_MODE: password
+          GOOGLE_SPREADSHEET_ID: ${{ vars.EXAM_PILOT_GOOGLE_SPREADSHEET_ID }}
+          EMAIL_DELIVERY_ENABLED: ${{ vars.EXAM_PILOT_EMAIL_DELIVERY_ENABLED || 'false' }}
         run: node exam-pilot/infrastructure.mjs provision
       - name: Apply only the new isolated exam schema
         if: inputs.action == 'deploy-isolated'

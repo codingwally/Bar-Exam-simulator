@@ -6,6 +6,22 @@ questions, creates a link and reads the responses. Students open that link,
 enter their name and email, write and submit. Only a server receipt confirms a
 final submission.
 
+Student receipt and answer downloads, and the professor's individual student
+download, are branded PDF documents. They include readable numbered questions
+and answers, Philippine times, identity and receipt details. Submitted answers
+come from the immutable server record; separate late/offline writing is clearly
+labeled. In-progress copies explicitly say they do not confirm submission.
+The self-hosted exporter and brand fonts are included in the versioned offline
+shell; `build:documents` also builds the PDF exporter. Bulk professor CSV exports
+and original uploaded-paper downloads retain their existing formats.
+
+The professor response view includes **Answer copies**, a direct private
+collection-workbook link, and separate connection states for Google Sheets,
+owner email and official student receipts. An existing workbook or a manually
+recovered copy does not imply automatic delivery is connected. Deployment uses
+`GOOGLE_SPREADSHEET_ID` and `EMAIL_DELIVERY_ENABLED`; the signed Google relay
+still needs its owner Google authorization and Worker secrets.
+
 This service has its own Worker and database, with configured private copies. It does not
 replace the public DueDiligence website, subscriber access, graders, Simulator
 or existing student records.

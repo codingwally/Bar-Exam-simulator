@@ -6,6 +6,19 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { syntheticBrowserOptions } from "./synthetic-browser-options.mjs";
+import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
+async function inspectPdf(path) {
+  const bytes = await readFile(path);
+  assert.equal(bytes.subarray(0, 5).toString(), "%PDF-");
+  const task = getDocument({ data: new Uint8Array(bytes) });
+  const document = await task.promise;
+  let text = "";
+  for (let index = 1; index <= document.numPages; index++) text += (await (await document.getPage(index)).getTextContent()).items.map(item => item.str).join(" ");
+  const record = new TextDecoder().decode(await document.getAttachmentContent("complete-examination-record.txt"));
+  const pages = document.numPages;
+  await task.destroy();
+  return { text, record, pages };
+}
 const runtime = loadPlaywright();
 const base = process.argv[2] || "http://localhost:8797";
 const engines = (process.env.DD_BROWSER_ENGINES || "chromium").split(",");
@@ -371,15 +384,35 @@ for (const engine of engines) {
     await capture("receipt-desktop");
     const downloadEvent = page.waitForEvent("download");
     await page
-      .getByRole("button", { name: "Download receipt", exact: true })
+      .getByRole("button", { name: "Download receipt PDF", exact: true })
       .click();
     const download = await downloadEvent;
-    const receiptFile = new URL(`workspace-${engine}-receipt.json`, evidence);
+    assert.match(download.suggestedFilename(), /\.pdf$/);
+    const receiptFile = new URL(`workspace-${engine}-receipt.pdf`, evidence);
     await download.saveAs(fileURLToPath(receiptFile));
-    assert.deepEqual(
-      JSON.parse(await readFile(receiptFile, "utf8")),
-      final.attempt.receipt,
-    );
+    const receiptPdf = await inspectPdf(receiptFile);
+    assert.ok(receiptPdf.text.includes("Submission receipt"));
+    assert.ok(receiptPdf.text.includes("SUBMISSION CONFIRMED"));
+    assert.ok(receiptPdf.record.includes(final.attempt.receipt.id));
+    assert.ok(receiptPdf.record.includes(final.attempt.receipt.checksum));
+    assert.ok(receiptPdf.record.includes(final.attempt.name));
+    pass("Downloaded branded PDF receipt with exact identity and server checksum");
+    offline = true;
+    await context.setOffline(true);
+    const answersDownloadEvent = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Download answers PDF", exact: true }).click();
+    const answersDownload = await answersDownloadEvent;
+    assert.match(answersDownload.suggestedFilename(), /\.pdf$/);
+    const answersFile = new URL(`workspace-${engine}-answers.pdf`, evidence);
+    await answersDownload.saveAs(fileURLToPath(answersFile));
+    const answersPdf = await inspectPdf(answersFile);
+    assert.ok(answersPdf.text.includes("Examination answers"));
+    for (const question of final.attempt.questions) assert.ok(answersPdf.record.includes(question.text));
+    for (const answer of final.attempt.answers) assert.ok(answersPdf.record.includes(answer.text));
+    assert.ok(answersPdf.record.includes("[Blank answer]"));
+    await context.setOffline(false);
+    offline = false;
+    pass("Downloaded complete numbered answers PDF offline without losing blank answers");
     await page.getByText("Receipt details", { exact: true }).click();
     await page
       .getByText(final.attempt.receipt.checksum, { exact: true })

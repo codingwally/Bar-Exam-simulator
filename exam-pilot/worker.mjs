@@ -313,9 +313,11 @@ async function recordEvent(
   questionId = null,
   provenance = "server",
 ) {
-  await run(
+  return run(
     db,
-    "INSERT OR IGNORE INTO events(id,attempt_id,exam_id,question_id,type,client_time,received_at,provenance,details_json) VALUES(?,?,?,?,?,?,?,?,?)",
+    type === "heartbeat"
+      ? "INSERT OR IGNORE INTO events(id,attempt_id,exam_id,question_id,type,client_time,received_at,provenance,details_json) SELECT ?,?,?,?,?,?,?,?,? FROM attempts WHERE id=? AND status IN ('waiting','active')"
+      : "INSERT OR IGNORE INTO events(id,attempt_id,exam_id,question_id,type,client_time,received_at,provenance,details_json) VALUES(?,?,?,?,?,?,?,?,?)",
     eventId,
     attempt.id,
     attempt.exam_id,
@@ -325,6 +327,7 @@ async function recordEvent(
     now(),
     provenance,
     JSON.stringify(details),
+    ...(type === "heartbeat" ? [attempt.id] : []),
   );
 }
 async function receipt(db, attempt) {
@@ -502,11 +505,12 @@ async function state(db, exam, attempt, env) {
   return result;
 }
 async function acquireLease(db, attempt, editorId, takeover = false) {
+  if (attempt.status === "finalized") return null;
   editorId = text(editorId, 100, "editor identifier");
   const old = attempt.lease_editor;
   await run(
     db,
-    `UPDATE attempts SET lease_editor=?,lease_expires_at=${DB_NOW}+25000,last_seen_at=${DB_NOW} WHERE id=? AND (lease_editor=? OR lease_expires_at<=${DB_NOW} OR ?=1)`,
+    `UPDATE attempts SET lease_editor=?,lease_expires_at=${DB_NOW}+25000,last_seen_at=${DB_NOW} WHERE id=? AND status IN ('waiting','active') AND (lease_editor=? OR lease_expires_at<=${DB_NOW} OR ?=1)`,
     editorId,
     attempt.id,
     editorId,
@@ -517,6 +521,7 @@ async function acquireLease(db, attempt, editorId, takeover = false) {
     "SELECT * FROM attempts WHERE id=?",
     attempt.id,
   );
+  if (updated.status === "finalized") return null;
   if (updated.lease_editor !== editorId)
     fail(
       423,
@@ -772,13 +777,13 @@ async function studentApi(request, env, slug, tail) {
   );
   if (request.method === "POST" && tail === "lease") {
     const data = await body(request);
+    const lease = await acquireLease(db, attempt, data.editorId, data.takeover === true);
+    if (lease === null) {
+      attempt = await one(db, "SELECT * FROM attempts WHERE id=?", attempt.id);
+      return json({ lease: null, status: "finalized", receipt: await receipt(db, attempt), serverTime: now() });
+    }
     return json({
-      lease: await acquireLease(
-        db,
-        attempt,
-        data.editorId,
-        data.takeover === true,
-      ),
+      lease,
       serverTime: now(),
     });
   }
@@ -972,6 +977,13 @@ async function studentApi(request, env, slug, tail) {
         event.details && typeof event.details === "object" ? event.details : {};
       if (JSON.stringify(details).length > 220000)
         fail(413, "event_too_large", "An activity record is too large.");
+      // Old cached clients may keep their periodic loop alive on a receipt page.
+      // Acknowledge these IDs so their local queue drains, without changing any
+      // submitted record. Other queued activity remains part of the audit trail.
+      if (attempt.status === "finalized" && event.type === "heartbeat") {
+        accepted.push(eventId);
+        continue;
+      }
       const existing = await one(
         db,
         "SELECT * FROM events WHERE id=?",
@@ -1009,6 +1021,14 @@ async function studentApi(request, env, slug, tail) {
         "SELECT * FROM events WHERE id=?",
         eventId,
       );
+      if (!committed && event.type === "heartbeat") {
+        const current = await one(db, "SELECT * FROM attempts WHERE id=?", attempt.id);
+        if (current.status === "finalized") {
+          attempt = current;
+          accepted.push(eventId);
+          continue;
+        }
+      }
       if (
         committed.attempt_id !== attempt.id ||
         committed.type !== event.type ||
@@ -1023,13 +1043,18 @@ async function studentApi(request, env, slug, tail) {
         );
       accepted.push(eventId);
     }
-    await run(
-      db,
-      "UPDATE attempts SET last_seen_at=? WHERE id=?",
-      now(),
-      attempt.id,
-    );
-    return json({ accepted, serverTime: now() });
+    if (attempt.status !== "finalized" && data.events.length)
+      await run(
+        db,
+        "UPDATE attempts SET last_seen_at=? WHERE id=? AND status IN ('waiting','active')",
+        now(),
+        attempt.id,
+      );
+    return json({
+      accepted,
+      ...(attempt.status === "finalized" ? { status: "finalized", receipt: await receipt(db, attempt) } : {}),
+      serverTime: now(),
+    });
   }
   if (request.method === "POST" && tail === "submit") {
     const data = await body(request);
@@ -1980,6 +2005,9 @@ async function adminApi(request, env, tail, identity) {
         summary,
         configuration: {
           r2: !!env.EXAM_BACKUPS,
+          spreadsheetUrl: /^[A-Za-z0-9_-]{20,200}$/.test(env.GOOGLE_SPREADSHEET_ID || "")
+            ? `https://docs.google.com/spreadsheets/d/${env.GOOGLE_SPREADSHEET_ID}/edit`
+            : null,
           sheets: !!(
             (env.EXAM_RELAY_URL && env.EXAM_RELAY_SECRET) ||
             (env.GOOGLE_SERVICE_ACCOUNT_JSON && env.GOOGLE_SPREADSHEET_ID)
@@ -1988,6 +2016,10 @@ async function adminApi(request, env, tail, identity) {
             env.EMAIL_DELIVERY_ENABLED === "true" &&
             ((env.EXAM_RELAY_URL && env.EXAM_RELAY_SECRET) ||
               (env.RESEND_API_KEY && env.EXAM_EMAIL_FROM))
+          ),
+          studentReceipt: !!(
+            env.EMAIL_DELIVERY_ENABLED === "true" &&
+            env.RESEND_API_KEY && env.EXAM_EMAIL_FROM
           ),
           privateAdmin: adminMode(env) === "password" ? !!env.ADMIN_LOGIN_SECRET : !!env.ACCESS_AUD,
         },
@@ -2493,7 +2525,8 @@ export function createApp(options = {}) {
             503,
           );
         const dynamicExam = path.match(/^\/exam\/([a-z0-9][a-z0-9-]{0,79})\/?$/);
-        const publicAsset = loginAsset || ["/", "/index.html", "/student.mjs", "/student.css", "/local-drafts.mjs", "/exam-sw.mjs", "/favicon.ico", "/practice", "/official"].includes(path)
+        const publicAsset = loginAsset || ["/", "/index.html", "/student.mjs", "/student.css", "/local-drafts.mjs", "/answer-pdf.mjs", "/exam-sw.mjs", "/favicon.ico", "/practice", "/official"].includes(path)
+          || /^\/pdf-vendor\/[a-zA-Z0-9._-]+$/.test(path)
           || /^\/fonts\/[a-zA-Z0-9._-]+$/.test(path) || /^\/icons\/[a-zA-Z0-9_-]+\.svg$/.test(path);
         if (!publicAsset && !dynamicExam && !path.startsWith("/admin") && !["/import.mjs", "/document-import.mjs"].includes(path) && !path.startsWith("/document-vendor/"))
           fail(404, "route_not_found", "This address does not exist.");

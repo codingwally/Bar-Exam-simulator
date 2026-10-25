@@ -633,6 +633,135 @@ test(
   }),
 );
 test(
+  "old receipt-page heartbeat, lease and state loops perform zero SQLite row writes",
+  withFixture(async (f) => {
+    const registered = await f.register();
+    await f.save(registered.cookie, 1, "Preserved final answer.\nExact Unicode ñ 🤝");
+    const submitted = await f.request("/api/exams/practice/submit", {
+      method: "POST", cookie: registered.cookie,
+      data: { operationId: crypto.randomUUID(), editorId: "editor-one" },
+    });
+    assert.equal(submitted.status, 200);
+    const receipt = submitted.data.attempt.receipt;
+    const preserved = () => JSON.stringify([
+      "attempts", "answers", "answer_operations", "final_answers", "submissions",
+      "sessions", "events", "admin_audit", "outbox",
+    ].map(table => f.db.sqlite.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all()));
+    const before = preserved(), writes = f.db.sqlite.prepare("SELECT total_changes() n").get().n;
+    for (let i = 0; i < 100; i++) {
+      const heartbeat = { id: crypto.randomUUID(), type: "heartbeat", clientTime: new Date().toISOString(), details: { visible: "visible" } };
+      const response = await f.request("/api/exams/practice/events", {
+        method: "POST", cookie: registered.cookie, data: { events: [heartbeat] },
+      });
+      assert.equal(response.status, 200);
+      assert.deepEqual(response.data.accepted, [heartbeat.id]);
+      assert.equal(response.data.status, "finalized");
+      assert.deepEqual(response.data.receipt, receipt);
+      if (i % 4 === 0) {
+        const lease = await f.request("/api/exams/practice/lease", {
+          method: "POST", cookie: registered.cookie,
+          data: { editorId: "stale-other-tab", takeover: true },
+        });
+        assert.equal(lease.status, 200);
+        assert.equal(lease.data.lease, null);
+        assert.equal(lease.data.status, "finalized");
+        assert.deepEqual(lease.data.receipt, receipt);
+      }
+      if (i % 5 === 0)
+        assert.deepEqual((await f.request("/api/exams/practice/state", { cookie: registered.cookie })).data.attempt.receipt, receipt);
+    }
+    assert.equal(f.db.sqlite.prepare("SELECT total_changes() n").get().n, writes);
+    assert.equal(preserved(), before);
+  }),
+);
+
+test(
+  "queued pre-submission activity is preserved after finalization without changing the receipt or last contact",
+  withFixture(async (f) => {
+    const registered = await f.register();
+    await f.save(registered.cookie, 1, "Immutable submitted writing");
+    const clientTime = new Date(Date.now() - 60000).toISOString();
+    const queued = ["paste", "offline", "page_hidden"].map(type => ({
+      id: crypto.randomUUID(), type, clientTime, questionId: "practice-v1-q1",
+      details: { text: "Exact queued activity.\nñ 🤝" },
+    }));
+    queued.push({ id: crypto.randomUUID(), type: "heartbeat", clientTime, details: {} });
+    const submitted = await f.request("/api/exams/practice/submit", {
+      method: "POST", cookie: registered.cookie,
+      data: { operationId: crypto.randomUUID(), editorId: "editor-one" },
+    });
+    const receipt = submitted.data.attempt.receipt;
+    const before = f.db.sqlite.prepare("SELECT * FROM attempts").get();
+    const writes = f.db.sqlite.prepare("SELECT total_changes() n").get().n;
+    const post = () => f.request("/api/exams/practice/events", {
+      method: "POST", cookie: registered.cookie, data: { events: queued },
+    });
+    const response = await post();
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.data.accepted, queued.map(event => event.id));
+    assert.deepEqual(response.data.receipt, receipt);
+    for (const event of queued.slice(0, 3)) {
+      const saved = f.db.sqlite.prepare("SELECT * FROM events WHERE id=?").get(event.id);
+      assert.equal(saved.client_time, clientTime);
+      assert.equal(saved.details_json, JSON.stringify(event.details));
+      assert.equal(saved.provenance, "client-observed; time untrusted");
+    }
+    assert.equal(f.db.sqlite.prepare("SELECT * FROM events WHERE id=?").get(queued[3].id), undefined);
+    assert.deepEqual(f.db.sqlite.prepare("SELECT * FROM attempts").get(), before);
+    assert.equal(f.db.sqlite.prepare("SELECT total_changes() n").get().n, writes + 3);
+    assert.equal((await post()).status, 200);
+    assert.equal(f.db.sqlite.prepare("SELECT total_changes() n").get().n, writes + 3);
+    assert.deepEqual((await f.request("/api/exams/practice/state", { cookie: registered.cookie })).data.attempt.receipt, receipt);
+  }),
+);
+
+test(
+  "a stale active session read cannot renew leases or insert heartbeats after another request finalized it",
+  withFixture(async (f) => {
+    const registered = await f.register();
+    const submitted = await f.request("/api/exams/practice/submit", {
+      method: "POST", cookie: registered.cookie,
+      data: { operationId: crypto.randomUUID(), editorId: "editor-one" },
+    });
+    const receipt = submitted.data.attempt.receipt;
+    const originalPrepare = f.db.prepare;
+    f.db.prepare = sql => {
+      const statement = originalPrepare(sql);
+      // Simulate the authorized session snapshot read just before another
+      // request commits finalization. SQL must still see the final database row.
+      if (sql.startsWith("SELECT a.* FROM sessions s")) {
+        const bind = statement.bind;
+        statement.bind = (...values) => {
+          const bound = bind.call(statement, ...values), first = bound.first;
+          bound.first = async (...args) => {
+            const result = await first.call(bound, ...args);
+            return result ? { ...result, status: "active" } : result;
+          };
+          return bound;
+        };
+      }
+      return statement;
+    };
+    const writes = f.db.sqlite.prepare("SELECT total_changes() n").get().n;
+    const heartbeat = await f.request("/api/exams/practice/events", {
+      method: "POST", cookie: registered.cookie,
+      data: { events: [{ id: crypto.randomUUID(), type: "heartbeat", details: {} }] },
+    });
+    assert.equal(heartbeat.status, 200);
+    assert.equal(heartbeat.data.status, "finalized");
+    assert.deepEqual(heartbeat.data.receipt, receipt);
+    const lease = await f.request("/api/exams/practice/lease", {
+      method: "POST", cookie: registered.cookie,
+      data: { editorId: "old-active-snapshot", takeover: true },
+    });
+    assert.equal(lease.status, 200);
+    assert.equal(lease.data.lease, null);
+    assert.deepEqual(lease.data.receipt, receipt);
+    assert.equal(f.db.sqlite.prepare("SELECT total_changes() n").get().n, writes);
+  }),
+);
+
+test(
   "chronological activity pagination includes every event exactly once",
   withFixture(async (f) => {
     const a = await f.register();

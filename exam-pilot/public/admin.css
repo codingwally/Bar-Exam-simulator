@@ -459,6 +459,39 @@ details details {
   flex-wrap: wrap;
   margin: 28px 0;
 }
+.delivery-overview {
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 24px 0 8px;
+  margin: 0 0 28px;
+}
+.delivery-overview h2 {
+  font-size: 22px;
+  margin-bottom: 20px;
+}
+.delivery-connections {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+.delivery-connection {
+  min-width: 0;
+}
+.delivery-connection h3 {
+  font-size: 16px;
+  letter-spacing: -0.01em;
+  margin: 0 0 8px;
+}
+.delivery-connection p {
+  font-size: 14px;
+  margin: 0 0 14px;
+}
+.delivery-connection .button {
+  margin: 0 0 14px;
+}
+.delivery-unavailable {
+  color: #712e25;
+}
 .response-tools label {
   flex: 1;
   min-width: 200px;
@@ -626,6 +659,10 @@ main:focus,
   }
   .response-tools {
     align-items: stretch;
+  }
+  .delivery-connections {
+    grid-template-columns: 1fr;
+    gap: 12px;
   }
   .response-tools label {
     flex-basis: 100%;

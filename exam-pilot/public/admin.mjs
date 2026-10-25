@@ -573,15 +573,23 @@ async function openResponses(exam) {
   $("response-link").hidden = !exam.student_url;
   $("recovery-controls").hidden = !canManage() || exam.archived;
   $("support-exam-description").textContent =
-    `Record reference: ${exam.id}. Independent backups run after answers are saved and do not hold up students.`;
+    `Record reference: ${exam.id}. Answers and submission receipts are kept here. Check each delivery below for the status of additional copies.`;
+  deliveryOverview().replaceChildren(
+    node("h2", "Answer copies"),
+    node("p", "Checking automatic Google Sheet and email delivery…"),
+  );
   view("responses");
   await loadStudents();
-  await loadBackups().catch((error) =>
+  await loadBackups().catch((error) => {
+    deliveryOverview().replaceChildren(
+      node("h2", "Answer copies"),
+      node("p", "Delivery status could not be checked. Student answers remain available in this desk."),
+    );
     message(
       `Responses are available. Backup delivery could not be checked: ${error.message}`,
       "error",
-    ),
-  );
+    );
+  });
 }
 async function loadStudents(append = false) {
   const request = (state.studentListRequest =
@@ -711,6 +719,68 @@ async function loadEvents(append = false) {
     $("support-events").append(li);
   }
 }
+function deliveryOverview() {
+  let overview = $("delivery-overview");
+  if (!overview) {
+    overview = node("section", undefined, "delivery-overview");
+    overview.id = "delivery-overview";
+    overview.setAttribute("aria-label", "Answer copies");
+    $("responses-view").insertBefore(
+      overview,
+      $("responses-view").querySelector(".response-tools"),
+    );
+  }
+  return overview;
+}
+function spreadsheetLink(value) {
+  try {
+    const url = new URL(value);
+    if (
+      url.origin !== "https://docs.google.com" ||
+      url.username ||
+      url.password ||
+      !/^\/spreadsheets\/d\/[A-Za-z0-9_-]+(?:\/edit)?\/?$/.test(url.pathname)
+    )
+      return null;
+    const link = node("a", "Open answer collection", "button secondary");
+    link.href = url.href;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    return link;
+  } catch {
+    return null;
+  }
+}
+function renderDeliveryStatus(data) {
+  const configuration = data.configuration || {},
+    counts = data.summary || {},
+    overview = deliveryOverview(),
+    connections = node("div", undefined, "delivery-connections");
+  overview.replaceChildren(node("h2", "Answer copies"));
+  for (const [key, title, connected, disconnected] of [
+    ["sheets", "Google Sheet", "Connected for automatic copies. Check the delivery jobs below for each student's result.", "Not connected. Automatic answer copies are not being sent to the Sheet."],
+    ["email", "Email to your account", "Connected for automatic sending. A completed delivery job confirms acceptance for sending; check your inbox for arrival.", "Not connected. Submission emails are not being sent automatically."],
+  ]) {
+    const connection = node("div", undefined, "delivery-connection");
+    connection.append(node("h3", title));
+    connection.append(
+      node("p", configuration[key] === true ? connected : disconnected,
+        configuration[key] === true ? "small" : "delivery-unavailable"),
+    );
+    if (key === "sheets") {
+      const link = spreadsheetLink(configuration.spreadsheetUrl);
+      if (link) connection.append(link);
+      if (link && configuration.sheets !== true)
+        connection.append(node("p", "This existing workbook can be opened, but automatic copying still needs to be connected.", "small"));
+    }
+    connections.append(connection);
+  }
+  overview.append(connections);
+  overview.append(node("p", "Student answers and confirmed submission receipts remain available in this desk even when an additional copy has not been delivered.", "small"));
+  $("backup-status").replaceChildren(
+    node("p", `${counts.sent || 0} completed delivery jobs · ${counts.pending || 0} waiting · ${counts.processing || 0} processing · ${counts.failed || 0} need attention`),
+  );
+}
 async function loadBackups(append = false) {
   const id = state.exam.id,
     params = new URLSearchParams();
@@ -719,21 +789,20 @@ async function loadBackups(append = false) {
   if (id !== state.exam.id) return;
   state.backupCursor = data.next_cursor;
   $("more-backups").hidden = !state.backupCursor;
-  const counts = data.summary || {};
-  $("backup-status").replaceChildren(
-    node(
-      "p",
-      `${counts.sent || 0} completed · ${counts.pending || 0} pending · ${counts.failed || 0} need attention`,
-    ),
-    node("pre", JSON.stringify(data.configuration || {}, null, 2)),
-  );
+  renderDeliveryStatus(data);
   if (!append) $("backup-list").replaceChildren();
   for (const job of data.jobs || []) {
     const item = node("div", undefined, "backup-job");
-    item.append(node("p", `${job.target} · ${job.status}`));
+    const title = { sheets: "Google Sheet", owner_email: "Owner email", student_receipt: "Student receipt email", r2: "Private archive" }[job.target] || "Additional answer copy",
+      key = job.target === "student_receipt" ? "studentReceipt" : job.target === "owner_email" ? "email" : job.target,
+      connected = data.configuration?.[key] === true,
+      status = job.status === "sent" ? "Completed" : !connected ? "Not connected" : { pending: "Waiting", processing: "Processing", failed: "Needs attention" }[job.status] || "Awaiting confirmation";
+    item.append(node("p", `${title} · ${status}`));
     if (job.reference) item.append(node("p", `Reference: ${job.reference}`));
-    if (job.last_error) item.append(node("p", job.last_error));
-    if (canManage() && job.status !== "sent") {
+    if (job.status !== "sent" && !connected)
+      item.append(node("p", "Automatic delivery is not connected. This student's saved answers remain available in the responses above."));
+    else if (job.last_error) item.append(node("p", job.last_error));
+    if (canManage() && job.status !== "sent" && connected) {
       const retry = node("button", "Retry delivery", "secondary");
       retry.addEventListener("click", () =>
         busy(retry, async () => {
@@ -761,6 +830,41 @@ function download(content, name, type = "text/plain;charset=utf-8") {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function studentPdfData(exam, detail, makePdfData) {
+  const data = makePdfData({
+    exam: {
+      ...exam,
+      title: exam.label || exam.title,
+      questionCount: detail.questions?.length ?? exam.question_count,
+    },
+    attempt: {
+      ...detail.attempt,
+      startAt: detail.attempt.started_at,
+      questions: detail.questions || [],
+      answers: (detail.answers || []).map(answer => ({
+        ...answer,
+        questionId: answer.question_id,
+      })),
+      recoveredDrafts: (detail.recovered_drafts || []).map(draft => ({
+        ...draft,
+        questionId: draft.question_id,
+        receivedAt: draft.received_at,
+        clientTime: draft.client_time,
+      })),
+      receipt: detail.receipt,
+    },
+  });
+  if (!detail.receipt) {
+    if (detail.attempt.status === "finalized") {
+      data.notice = "This professor copy contains the finalized answer record. Its submission receipt has not yet been confirmed. Any separately recovered late or offline writing is marked for examiner review.";
+    } else {
+      data.status = "SAVED ANSWERS - NOT SUBMITTED";
+      data.notice = "This professor copy contains answers received by the examination service. It does not confirm final submission. Any separately recovered late or offline writing is marked for examiner review.";
+      for (const question of data.questions) question.answerLabel = "Received answer";
+    }
+  }
+  return data;
 }
 function bind() {
   $("sign-out").onclick = () =>
@@ -886,34 +990,21 @@ function bind() {
         "text/csv;charset=utf-8",
       );
     });
-  $("download-student").onclick = () => {
-    const detail = state.detail,
-      lines = [
-        state.exam.label || state.exam.title,
-        detail.attempt.name,
-        detail.attempt.email,
-        detail.receipt
-          ? "Submitted " + time(detail.receipt.serverTime)
-          : "Received answers — not yet submitted",
-        "",
-      ];
-    for (const question of detail.questions || []) {
-      const answer = answerFor(question, detail.answers || []);
-      lines.push(
-        `QUESTION ${question.number}`,
-        question.text,
-        "",
-        answer?.text || "[BLANK]",
-        "",
-      );
-    }
-    if (detail.recovered_drafts?.length)
-      lines.push(
-        "SEPARATE LATE / OFFLINE RECOVERED WRITING",
-        JSON.stringify(detail.recovered_drafts, null, 2),
-      );
-    download(lines.join("\n"), "student-answers.txt");
-  };
+  $("download-student").onclick = () =>
+    busy($("download-student"), async () => {
+      const detail = state.detail, exam = state.exam;
+      if (!detail) throw new Error("Open a student's answers before downloading the PDF.");
+      message("Preparing the student's PDF…");
+      try {
+        const { examinationPdfData, createExaminationPdf } = await import("./answer-pdf.mjs"),
+          data = studentPdfData(exam, detail, examinationPdfData),
+          bytes = await createExaminationPdf(data);
+        download(bytes, "DueDiligence-Student-Answers.pdf", "application/pdf");
+        message("The student PDF is ready. It contains the complete questions and received answers.", "success");
+      } catch {
+        throw new Error("The student PDF could not be prepared. The saved answers remain available here. Please try again.");
+      }
+    });
   window.addEventListener("beforeunload", (event) => {
     if (state.dirty) {
       event.preventDefault();

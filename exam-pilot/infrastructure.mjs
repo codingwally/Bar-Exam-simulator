@@ -72,6 +72,14 @@ if (mode === "provision") {
     config.vars.ACCESS_TEAM_DOMAIN = "";
     config.vars.ACCESS_AUD = "";
   }
+  const spreadsheet = process.env.GOOGLE_SPREADSHEET_ID || config.vars.GOOGLE_SPREADSHEET_ID || "";
+  if (spreadsheet && !/^[A-Za-z0-9_-]{20,200}$/.test(spreadsheet))
+    throw new Error("Configure a valid private Google spreadsheet identifier");
+  config.vars.GOOGLE_SPREADSHEET_ID = spreadsheet;
+  const emailEnabled = process.env.EMAIL_DELIVERY_ENABLED ?? config.vars.EMAIL_DELIVERY_ENABLED ?? "false";
+  if (!["true", "false"].includes(emailEnabled))
+    throw new Error("EMAIL_DELIVERY_ENABLED must be true or false");
+  config.vars.EMAIL_DELIVERY_ENABLED = emailEnabled;
 }
 const base = `https://api.cloudflare.com/client/v4/accounts/${account}`;
 async function api(path, method = "GET", body) {

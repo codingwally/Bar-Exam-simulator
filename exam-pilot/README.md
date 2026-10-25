@@ -19,8 +19,9 @@ The professor response view includes **Answer copies**, a direct private
 collection-workbook link, and separate connection states for Google Sheets,
 owner email and official student receipts. An existing workbook or a manually
 recovered copy does not imply automatic delivery is connected. Deployment uses
-`GOOGLE_SPREADSHEET_ID` and `EMAIL_DELIVERY_ENABLED`; the signed Google relay
-still needs its owner Google authorization and Worker secrets.
+`GOOGLE_SPREADSHEET_ID`, `EMAIL_DELIVERY_ENABLED` and private relay secrets.
+The owner authorization and automatic hosted delivery were completed and
+verified on 25 October 2026; see [HTML-EMAIL-REVIEW.md](HTML-EMAIL-REVIEW.md).
 
 This service has its own Worker and database, with configured private copies. It does not
 replace the public DueDiligence website, subscriber access, graders, Simulator
@@ -165,8 +166,10 @@ a real examination.
 
 The default practice deployment uses Workers and D1 without adding R2 or asking
 for a Cloudflare payment method. Its durable queue retains Google snapshot/final
-copy jobs and owner final-answer email jobs. Those providers still need their
-own configuration. Binding `EXAM_BACKUPS` enables additional R2 snapshots for
+copy jobs and owner/exam-taker final-answer email jobs. The Google relay was
+configured and its fresh automatic delivery verified on 25 October 2026; later
+provider or deployment changes still require readback verification. Binding
+`EXAM_BACKUPS` enables additional R2 snapshots for
 practice. Existing R2 jobs and evidence are never deleted when that binding is
 absent. New official scheduling or registration fails closed without R2;
 existing official attempts can still save to D1 and retrieve their receipt.
@@ -279,13 +282,21 @@ upgrade or official-exam release approval.
 
 ## Release status and remaining gates
 
-The rebuilt multi-exam flow has local document-reader tests and actual browser
+On 25 October 2026, the owner-authorized Google relay was activated and a fresh
+hosted synthetic submission completed both Sheet jobs, the owner HTML email and
+the exam-taker HTML confirmation once each. Independent Gmail readbacks matched
+the exact expected HTML; the exam-taker copy contained no collection link and
+Drive permissions remained owner-only. See [HTML-EMAIL-REVIEW.md](HTML-EMAIL-REVIEW.md)
+for the dated activation evidence and its limits. This verifies that automatic
+rehearsal, not official-class capacity or physical-device readiness.
+
+The earlier rebuilt multi-exam flow had local document-reader tests and actual browser
 upload/review/unique-link rehearsals. A real synthetic student submission was
 reloaded and finalized. Its exact two questions, two complete answers, receipt
 and checksum were verified in a private native Google collection and manually
 sent owner email. The converted Sheet export was reimported and visually checked.
-This verifies the simulation collection, not automatic deployed Worker provider
-credentials or hosted operation.
+That earlier manual workflow verified only the simulation collection; it remains
+separate provenance from the subsequently verified automatic hosted delivery.
 
 [RELEASE-REVIEW.md](RELEASE-REVIEW.md) records the earlier five-pass reliability
 review and clean CI run at revision `2e3ca325c6d6a24968197fad41483e260dbc0702`.

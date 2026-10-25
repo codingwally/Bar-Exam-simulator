@@ -1,5 +1,10 @@
 # PDF downloads and answer-copy repair — 25 October 2026
 
+> Subsequent status, 25 October 2026 PHT: Google authorization and automatic
+> hosted Sheet/HTML-email delivery were completed and verified. See
+> [HTML-EMAIL-REVIEW.md](HTML-EMAIL-REVIEW.md). The provider paragraph below
+> preserves the earlier manual-recovery stage of this review.
+
 Student receipts previously downloaded as JSON, and answer copies as plain text.
 They now download as actual, locally generated Due Diligence PDFs using the
 existing Inter and Fraunces brand fonts, navy, ivory and restrained antique gold.

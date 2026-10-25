@@ -1,5 +1,10 @@
 # Practice platform rebuild review
 
+> Historical rebuild snapshot. The initial hosting/provider statements below
+> describe that setup stage. Google authorization and automatic hosted
+> Sheet/HTML-email delivery were subsequently verified on 25 October 2026 PHT;
+> see [HTML-EMAIL-REVIEW.md](HTML-EMAIL-REVIEW.md) for the dated activation evidence.
+
 The owner superseded the first pilot UI on 2026-10-24. The current implementation provides a Due Diligence examination workspace based on Examplify's structure and a professor workflow of document upload, question review, unique link, and collected responses. This report supersedes the presentation claims in the initial release review.
 
 ## Five review passes

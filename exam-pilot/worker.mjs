@@ -2468,8 +2468,16 @@ export function createApp(options = {}) {
               "database_unavailable",
               "The examination service is unavailable. Writing saved in this browser is preserved; retry shortly.",
             );
-          if (path === "/api/admin/login") return await builtinSignIn(request, env);
-          if (path === "/api/admin/logout") return await builtinSignOut(request, env);
+          if (path === "/api/admin/login") {
+            if (adminMode(env) === "access")
+              fail(404, "route_not_found", "This sign-in route is no longer available.");
+            return await builtinSignIn(request, env);
+          }
+          if (path === "/api/admin/logout") {
+            if (adminMode(env) === "access")
+              fail(404, "route_not_found", "This sign-out route is no longer available.");
+            return await builtinSignOut(request, env);
+          }
           if (path.startsWith("/api/admin/")) {
             const identity = await adminAuthenticator(request, env);
             if (path === "/api/admin/session" && request.method === "GET")
@@ -2486,7 +2494,13 @@ export function createApp(options = {}) {
           }
           fail(404, "route_not_found", "This address does not exist.");
         }
-        const loginAsset = ["/admin/login", "/admin-login.html", "/admin-login.mjs", "/admin-login.css"].includes(path);
+        const legacyLoginAsset = ["/admin/login", "/admin-login.html", "/admin-login.mjs", "/admin-login.css"].includes(path);
+        if (legacyLoginAsset && adminMode(env) === "access") {
+          if (["/admin/login", "/admin-login.html"].includes(path))
+            return new Response(null, { status: 303, headers: { ...securityHeaders, Location: "/admin/exams" } });
+          fail(404, "route_not_found", "The professor passphrase page has been retired.");
+        }
+        const loginAsset = legacyLoginAsset && adminMode(env) === "password";
         if (loginAsset && ["/admin/login", "/admin-login.html"].includes(path) && adminMode(env) === "password" && readCookie(request, ADMIN_COOKIE)) {
           try {
             await adminAuthenticator(request, env);

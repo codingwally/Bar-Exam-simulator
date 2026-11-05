@@ -110,3 +110,16 @@ await access(new URL(
 ));
 
 console.log('Retired feature runtime is absent and Simulator boundaries remain intact.');
+
+// The owner's 2026-10-24 replacement is a separate service. Its entry point may
+// depend only on new pilot modules and must not reconnect a retired subsystem.
+const pilotWorker = await readFile(new URL('exam-pilot/worker.mjs', root), 'utf8');
+const pilotSchema = await readFile(new URL('exam-pilot/schema.sql', root), 'utf8');
+for (const file of ['exam-pilot/public/index.html', 'exam-pilot/public/admin.html',
+  'exam-pilot/public/student.mjs', 'exam-pilot/public/local-drafts.mjs',
+  'exam-pilot/delivery.mjs', 'exam-pilot/backend.test.mjs']) await access(new URL(file, root));
+assert.doesNotMatch(pilotWorker, /from\s+['"](?:\.\.\/|.*examination-room)/);
+assert.doesNotMatch(pilotSchema, /(?:DROP\s+TABLE|public\.examination_room|auth\.users)/i);
+assert.match(pilotWorker, /EXAM_DB/);
+assert.match(pilotWorker, /createApp/);
+console.log('Approved Constitutional Law pilot remains isolated from existing runtime and records.');

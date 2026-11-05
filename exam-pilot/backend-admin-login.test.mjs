@@ -85,6 +85,32 @@ test("only dedicated login assets are public; private modules, imports and docum
   assert.equal((await f.request("/admin-login.mjs/private-secret")).status, 401);
 }));
 
+test("Cloudflare Access mode retires the professor passphrase page and built-in login APIs", async () => {
+  const f = fixture({
+    ADMIN_AUTH_MODE: "access",
+    ACCESS_TEAM_DOMAIN: "https://team.example.cloudflareaccess.com",
+    ACCESS_AUD: "synthetic-access-audience",
+  });
+  try {
+    for (const path of ["/admin/login", "/admin-login.html"]) {
+      const response = await f.request(path);
+      assert.equal(response.status, 303, path);
+      assert.equal(response.response.headers.get("Location"), "/admin/exams", path);
+    }
+    for (const path of ["/admin-login.mjs", "/admin-login.css"]) {
+      assert.equal((await f.request(path)).status, 404, path);
+    }
+    for (const path of ["/api/admin/login", "/api/admin/logout"]) {
+      const response = await f.request(path, { method: "POST", data: { secret: SECRET } });
+      assert.equal(response.status, 404, path);
+    }
+    assert.equal((await f.request("/admin/exams")).status, 401);
+    assert.equal(f.db.sqlite.prepare("SELECT COUNT(*) n FROM admin_sessions").get().n, 0);
+  } finally {
+    f.db.close();
+  }
+});
+
 test("expiry and secret rotation invalidate an old cookie without extending sessions on reads", use(async f => {
   const login = await f.login();
   const before = f.db.sqlite.prepare("SELECT expires_at FROM admin_sessions").get().expires_at;

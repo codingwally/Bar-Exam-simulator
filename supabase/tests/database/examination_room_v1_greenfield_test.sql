@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, pg_catalog;
 
-select plan(151);
+select plan(154);
 
 select has_schema(
   'examination_room_v1',
@@ -2072,6 +2072,39 @@ select ok(
   (select i.backup_attempts = 1 and not i.backup_finished and i.backup_due_at > clock_timestamp()
     from examination_room_v1.submission_intake i where i.request_hash = repeat('a', 64)),
   'failed mail remains independently retryable'
+);
+
+-- A prolonged provider outage must not silently abandon the professor backup.
+-- Fast-forward only the synthetic job's retry count; the full answer payload
+-- remains preserved and official finalization still proceeds independently.
+update examination_room_v1.submission_intake
+set backup_attempts = 7, backup_due_at = clock_timestamp()
+where request_hash = repeat('a', 64);
+
+select ok(
+  (public.examination_room_v1_submission_intake('claim_backup') ->> 'lease') is not null,
+  'exhausted backup retry simulation can claim the preserved mail job'
+);
+
+select is(
+  public.examination_room_v1_submission_intake(
+    'finish_backup',
+    (select i.session_id from examination_room_v1.submission_intake i where i.request_hash = repeat('a', 64)),
+    p_payload => (
+      select jsonb_build_object('lease', i.backup_lease, 'status', 'failed', 'safeErrorCode', 'provider_unavailable')
+      from examination_room_v1.submission_intake i where i.request_hash = repeat('a', 64)
+    )
+  )->>'recorded',
+  'true',
+  'another failed delivery is durably recorded even after seven attempts'
+);
+
+select ok(
+  (select i.backup_attempts = 8 and not i.backup_finished
+      and i.backup_due_at >= clock_timestamp() + interval '55 minutes'
+      and i.backup_due_at <= clock_timestamp() + interval '61 minutes'
+    from examination_room_v1.submission_intake i where i.request_hash = repeat('a', 64)),
+  'prolonged mail outage retains a retryable job on bounded hourly backoff'
 );
 
 create function pg_temp.interrupt_exam_submission()

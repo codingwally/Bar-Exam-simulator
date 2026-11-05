@@ -29,10 +29,11 @@ or existing student records.
 
 ## Professor workflow
 
-1. Open the private `/admin/exams` page and sign in with the professor
-   passphrase. The free deployment does not require Zero Trust activation or a
-   Cloudflare payment method. An existing Access organization remains supported
-   as an alternative deployment mode.
+1. Open the private `/admin/exams` page. Cloudflare Access sends a one-time
+   PIN to the owner's authorized email address
+   (`wallyesteban1993@gmail.com`). There is no professor passphrase. The
+   existing Cloudflare Zero Trust organization is used for owner-only access;
+   students continue to use their separate exam links without signing in.
 2. From **My exams**, choose **Create exam**. Upload a Word `.docx`, a PDF with
    selectable text, or a plain text file. Pasting and manual question entry are
    also available.
@@ -205,32 +206,22 @@ D1 identifier. It is not a deployable configuration. Use the pinned local
 Wrangler dependency. Keep production infrastructure entirely separate from the
 main site's resources.
 
-1. Supply the scoped `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` for the
-   existing account. For the no-card deployment set `ADMIN_AUTH_MODE=password`.
-   `infrastructure.mjs check` then checks only Workers and D1. Create a random
-   32-byte professor passphrase and store it only as the Worker secret
-   `ADMIN_LOGIN_SECRET` and in the owner's private credential store. Never put it
-   in the deployment JSON, source, URL or browser storage. The built-in session
-   uses a one-hour, host-only, Secure, HttpOnly, SameSite=Strict cookie backed by
-   D1; logout revokes it and secret rotation invalidates existing sessions.
-   Incorrect guesses have bounded per-address and global counters. The Worker
-   fails closed when the secret or owner configuration is missing.
-
-   Alternatively choose `ADMIN_AUTH_MODE=access` when an Access organization is
-   already activated. `access-setup.mjs check` and `infrastructure.mjs check`
-   inspect authorization without creating resources. The deployment-only
-   `access-setup.mjs setup` uses the already enabled Zero Trust organization to
-   create or verify a new isolated owner-only Access application. It records
-   the verified team domain and audience in ignored `.wrangler/access-env.json`.
-   This uses the existing Access login.
-2. `infrastructure.mjs provision` in password mode provisions without requesting
-   an Access organization or R2 subscription. In Access mode it reads the
-   verified Access file, or explicit
-   `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` environment values, and writes ignored
-   `.wrangler/deploy.json` for the isolated service. The default configuration
-   provisions only the isolated D1 database, with `EXAM_DB`, static `ASSETS` and
-   minute maintenance. It does not subscribe to R2 or add a bucket. If R2 is
-   explicitly configured later, keep it private with no public domain.
+1. Supply the scoped `CLOUDFLARE_API_TOKEN` and
+   `CLOUDFLARE_ACCOUNT_ID` for the existing account. This deployment uses
+   `ADMIN_AUTH_MODE=access`; it does not use or install a professor passphrase.
+   `infrastructure.mjs check` verifies the existing Workers/D1 resources and
+   Cloudflare Access organization without creating resources.
+2. During the deployment workflow, `access-setup.mjs setup` creates or verifies
+   an isolated Cloudflare Access application with the one-time PIN identity
+   provider. Its only allowed email is the owner address
+   `wallyesteban1993@gmail.com`. It verifies the app and policy before saving
+   the team domain and audience in ignored
+   `.wrangler/access-env.json`. `infrastructure.mjs provision` reads that
+   verified configuration and writes ignored `.wrangler/deploy.json`. The
+   default configuration provisions only the isolated D1 database, with
+   `EXAM_DB`, static `ASSETS` and minute maintenance. It does not subscribe
+   to R2 or add a bucket. If R2 is explicitly configured later, keep it private
+   with no public domain.
 3. For a **fresh examination database**, apply complete `schema.sql` once.
    For a database created **before the multi-exam rebuild**, back it up and apply
    `migrations/0002_practice_library.sql` once instead of assuming the schema
@@ -242,16 +233,15 @@ main site's resources.
    The added built-in authentication tables can be created safely with
    `migrations/0003_admin_login.sql` on an existing rebuilt database; it contains
    only `CREATE TABLE/INDEX IF NOT EXISTS` statements.
-4. In Access mode, protect all private routes and assets with the same Access application:
-   `/admin*`, `/api/admin/*`, `/import.mjs`, `/document-import.mjs` and
-   `/document-vendor/*`. Keep student routes public. Configure matching
-   `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` and authorized owner `ADMIN_EMAILS`.
-   Optional `EXAMINER_EMAILS` grants read-only reports. The Worker independently
-   verifies the RS256 signature, issuer, audience, expiry and email for admin API
-   requests and private assets, including document readers. Missing setup fails
-   closed. In password mode the Worker gates those same private assets and APIs
-   with the professor session; only the dedicated sign-in shell is public.
-   An instructor's email must be supplied by the owner, not guessed.
+4. The Access application protects the private routes and assets:
+   `/admin*`, `/api/admin*`, `/import.mjs`, `/document-import.mjs` and
+   `/document-vendor/*`. Student routes remain public. The Worker independently
+   verifies the RS256 signature, issuer, audience, expiry and email for admin
+   API requests and private assets, including document readers. Missing setup
+   fails closed. The legacy professor passphrase page and login API return
+   redirects/not-found responses in Access mode; the Worker passphrase secret
+   is deleted after deployment. Optional `EXAMINER_EMAILS` grants read-only
+   reports. Only the owner email is allowed to receive the one-time PIN.
 5. For the free owner-only Google copies, follow
    [google-relay/README.md](google-relay/README.md). The reviewed script runs as
    the owner, checks every Sheet permission before each copy, verifies the

@@ -12,9 +12,9 @@
   <script defer src="../assets/phase2-config.js?v=provider-neutral-release2-20260827-1"></script>
   <script defer src="../assets/private-beta-session.js?v=beta-all-access-20260802-1"></script>
   <script defer src="view-models.js?v=greenfield-v1-20260826-1"></script>
-  <script defer src="api.js?v=classroom-preflight-20260925-1"></script>
+  <script defer src="api.js?v=classroom-preflight-20260925-1-answer-sync-20261105-1"></script>
   <script defer src="media-capture.js?v=reliability-20260828-1"></script>
-  <script defer src="student.js?v=focus-fullscreen-20260926-1-native-close-20261023-1"></script>
+  <script defer src="student.js?v=focus-fullscreen-20260926-1-native-close-20261023-1-answer-sync-20261105-1"></script>
 </head>
 <body>
   <a class="skip-link" href="#main-content">Skip to examination content</a>
@@ -304,6 +304,10 @@
           <button id="retrySubmissionButton" class="button button-primary" type="button" hidden>
             <i class="ph ph-arrow-clockwise" aria-hidden="true"></i>
             <span>Retry submission now</span>
+          </button>
+          <button id="downloadAnswerBackupButton" class="button button-secondary" type="button" hidden>
+            <i class="ph ph-download-simple" aria-hidden="true"></i>
+            <span>Download answer backup (.txt)</span>
           </button>
           <button id="printReceiptButton" class="button button-secondary" type="button" hidden>
             <i class="ph ph-printer" aria-hidden="true"></i>

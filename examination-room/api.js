@@ -1896,7 +1896,7 @@
           sessionId: attemptId,
           sessionToken,
           questionId: payload.questionId,
-          answer: payload.answer === undefined ? null : payload.answer,
+          answer: operation.kind === 'question.flag_changed' ? payload.answer : (payload.answer ?? null),
           flagged: Boolean(payload.flagged),
           clientSequence: operation.sequence,
           occurredAt: operation.occurredAt,

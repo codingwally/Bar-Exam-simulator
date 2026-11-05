@@ -67,7 +67,9 @@ function clientExam(overrides = {}) {
   };
 }
 
-function publicationFixture(integrityTier = 'standard') {
+function publicationFixture(integrityTier = 'standard', questions = [
+  { type: 'essay', prompt: 'Explain separation of powers.', points: 20, wordLimit: 800 },
+]) {
   return buildPublicationVersion({
     examinationId: IDS.exam,
     version: 1,
@@ -80,7 +82,7 @@ function publicationFixture(integrityTier = 'standard') {
       identityMode: 'real_names',
       integrityTier,
       privacyNoticeVersion: 'exam-room-v1',
-      questions: [{ type: 'essay', prompt: 'Explain separation of powers.', points: 20, wordLimit: 800 }],
+      questions,
     },
   }).manifest;
 }
@@ -1382,6 +1384,37 @@ test('answer saves are core-validated, append-only commands with hashed credenti
   assert.doesNotMatch(JSON.stringify(saveCall), new RegExp(REQUEST_KEY, 'u'));
 });
 
+test('multiple choice autosave and legacy flag changes preserve the selected answer', async () => {
+  const publicationManifest = publicationFixture('standard', [{
+    type: 'multiple-choice', prompt: 'Choose an answer.', points: 1,
+    choices: ['First', 'Second'], correctOptionIndex: 1,
+  }]);
+  const { handlers, calls } = dependencyFixture({
+    rpc: async (_env, parameters) => parameters.operation === 'session_context' ? {
+      ok: true,
+      publicationManifest,
+      publicationHash: 'a'.repeat(64),
+      answerRevisions: [{ questionKey: 'q001', answer: 1 }],
+      nextRevisionByQuestion: { q001: 2 },
+    } : { ok: true, revision: { revision: 2 } },
+  });
+  for (const [index, answer] of ['option-2', undefined, null].entries()) {
+    const response = await handlers.studentCommand(
+      makeRequest('/examination-room/v1/student/command', {
+        operation: 'save_answer',
+        payload: {
+          sessionId: IDS.session, sessionToken: SESSION_TOKEN,
+          questionId: 'q001', answer, flagged: true,
+        },
+        idempotencyKey: REQUEST_KEY + ':' + index,
+      }, null), ENV, ORIGIN, ORIGIN,
+    );
+    assert.equal(response.status, 200);
+  }
+  assert.deepEqual(calls.filter((entry) => entry.operation === 'save_answer')
+    .map((entry) => entry.payload.answerRevision.answer), [1, 1, null]);
+});
+
 test('submission freezes latest revisions into a manifest and keeps retries idempotent by hash', async () => {
   const publication = publicationFixture();
   const { handlers, calls } = dependencyFixture({
@@ -2078,7 +2111,7 @@ test('student submission retry reuses an identical saved revision instead of cre
 });
 
 
-test('accepted submit hands the roster-bound email and answers to the post-submit hook', async () => {
+test('accepted submit hands only the session reference and request hash to the post-submit hook', async () => {
   const publication = publicationFixture();
   const handoffs = [];
   const { handlers } = dependencyFixture({
@@ -2119,12 +2152,7 @@ test('accepted submit hands the roster-bound email and answers to the post-submi
 
   assert.equal(response.status, 201);
   assert.equal(handoffs.length, 1);
-  assert.equal(handoffs[0].submissionEmailDetails.recipient, 'student@example.edu.ph');
+  assert.deepEqual(Object.keys(handoffs[0].submissionEmailDetails).sort(), ['idempotencyHash', 'sessionId']);
+  assert.equal(handoffs[0].submissionEmailDetails.sessionId, IDS.session);
   assert.match(handoffs[0].submissionEmailDetails.idempotencyHash, /^[0-9a-f]{64}$/u);
-  assert.equal(handoffs[0].submissionEmailDetails.answers.length, publication.questions.length);
-  assert.equal(handoffs[0].submissionEmailDetails.answers[0].questionNumber, 1);
-  assert.equal(
-    handoffs[0].submissionEmailDetails.answers[0].answer,
-    answerRevisionFixture(publication).answer,
-  );
 });

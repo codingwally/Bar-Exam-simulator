@@ -191,6 +191,14 @@ function requestKey(value) {
   return normalized;
 }
 
+function legacyAnswerValue(value, question) {
+  if (question.type === 'multiple-choice' && typeof value === 'string') {
+    const choice = /^option-(\d+)$/iu.exec(value.trim());
+    if (choice) return Number(choice[1]) - 1;
+  }
+  return value;
+}
+
 function positiveInteger(value, field, minimum, maximum, fallback = undefined) {
   const candidate = value === undefined || value === null || value === '' ? fallback : Number(value);
   if (!Number.isSafeInteger(candidate) || candidate < minimum || candidate > maximum) {
@@ -1582,6 +1590,7 @@ export function createExaminationRoomV1Handlers(dependencies) {
             || entry.number === clientQuestionNumber
           ));
           if (!question) fail('EXAM_ROOM_V1_QUESTION_NOT_FOUND', 'That question is not part of this examination version.', 409, 'Refresh the examination. Your other saved answers remain available.');
+          const savedAnswer = sessionContext.answerRevisions?.find((entry) => entry.questionKey === question.key);
           const revision = normalizeAnswerRevision({
             attemptId: credential.sessionId,
             questionNumber: question.number,
@@ -1593,7 +1602,7 @@ export function createExaminationRoomV1Handlers(dependencies) {
               1,
             ),
             idempotencyKey: info.rawRequestKey,
-            answer: payload.answer,
+            answer: legacyAnswerValue(payload.answer === undefined ? savedAnswer?.answer : payload.answer, question),
           }, { versionManifest: publicationManifest, publicationHash });
           const answerPayload = { ...revision };
           delete answerPayload.idempotencyKey;
@@ -1665,11 +1674,7 @@ export function createExaminationRoomV1Handlers(dependencies) {
               // A blank response is still a final response. Persist a null
               // revision so students may intentionally leave a question
               // unanswered and the signed receipt can cover every question.
-              let submittedValue = submittedAnswer.answer ?? null;
-              if (question.type === 'multiple-choice' && typeof submittedValue === 'string') {
-                const legacyChoice = /^option-(\d+)$/iu.exec(submittedValue.trim());
-                if (legacyChoice) submittedValue = Number(legacyChoice[1]) - 1;
-              }
+              let submittedValue = legacyAnswerValue(submittedAnswer.answer ?? null, question);
 
               // Freeze unanswered questions too. A null revision is a valid
               // final answer state and lets the receipt cover every published
@@ -1773,15 +1778,7 @@ export function createExaminationRoomV1Handlers(dependencies) {
           };
           submissionEmailDetails = {
             sessionId: credential.sessionId,
-            recipient: String(sessionContext.studentEmail || '').trim().toLowerCase(),
             idempotencyHash: info.requestHash,
-            examTitle: submission.manifest.title,
-            answers: submission.manifest.questions.map((question) => ({
-              questionNumber: question.questionNumber,
-              type: question.type,
-              choices: [...question.choices],
-              answer: question.answer,
-            })),
           };
         }
       }

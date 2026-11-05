@@ -1687,13 +1687,10 @@ export function createExaminationRoomV1Handlers(dependencies) {
                   && revision?.questionKey === question.key
                 ))
                 : null;
-              if (existingRevision && existingRevision.answer === submittedValue) {
-                continue;
-              }
-
+              const answerKey = `${info.rawRequestKey}:answer:${question.number}`;
               const answerRequest = await requestContext(
                 env,
-                `${info.rawRequestKey}:answer:${question.number}`,
+                answerKey.length <= 128 ? answerKey : `${info.requestHash}:answer:${question.number}`,
               );
               const answerRevision = normalizeAnswerRevision({
                 attemptId: credential.sessionId,
@@ -1708,6 +1705,10 @@ export function createExaminationRoomV1Handlers(dependencies) {
                 idempotencyKey: answerRequest.rawRequestKey,
                 answer: submittedValue,
               }, { versionManifest: publicationManifest, publicationHash });
+              if (existingRevision && existingRevision.answer === answerRevision.answer) {
+                continue;
+              }
+
               const answerPayload = { ...answerRevision };
               delete answerPayload.idempotencyKey;
               delete answerPayload.idempotencyInput;

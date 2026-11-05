@@ -325,7 +325,8 @@ const pgTapCompatibilityHarness = `
 
 const modulePath = resolvePgliteModule();
 const { PGlite } = await import(pathToFileURL(modulePath).href);
-const database = new PGlite();
+const { pgcrypto } = await import(pathToFileURL(join(dirname(modulePath), 'contrib', 'pgcrypto.js')).href);
+const database = new PGlite({ extensions: { pgcrypto } });
 await database.waitReady;
 
 try {
@@ -861,6 +862,14 @@ try {
     /^create extension if not exists pgtap with schema extensions;\s*$/imu,
     '-- Local PGlite validation uses the compatibility harness installed above.',
   );
+  await database.exec('create extension pgcrypto with schema extensions');
+  for (const migration of [
+    '20260922113200_examination_room_submission_intent_retry.sql',
+    '20260922132200_examination_room_submit_replay_receipt_time.sql',
+    '20260925173700_examination_room_submit_audit_hash_v2.sql',
+  ]) {
+    await database.exec(readFileSync(join(repositoryRoot, 'supabase', 'migrations', migration), 'utf8'));
+  }
   await database.exec(runnablePgTapSql);
   await database.exec(readFileSync(migrationPaths[6], 'utf8'));
 
@@ -2334,7 +2343,7 @@ try {
   assert.equal(restoredDraft.status, 'draft');
 
   console.log(
-    `Examination Room database validation passed: all eight additive migrations, ${plannedAssertions}-assertion database suite, plus immediate Admin key activation, date-free approval, rolling scheduled-key compatibility, community creator, roster-free publication, 100-approval idempotency, open admission, allowlist, revoked/closed/expired denial, lifecycle recovery, encrypted media, exact-owner, platform-owner, and upgrade checks.`,
+    `Examination Room database validation passed: ${plannedAssertions}-assertion database suite, plus immediate Admin key activation, date-free approval, rolling scheduled-key compatibility, community creator, roster-free publication, 100-approval idempotency, open admission, allowlist, revoked/closed/expired denial, lifecycle recovery, encrypted media, exact-owner, platform-owner, and upgrade checks.`,
   );
 } finally {
   await database.close();

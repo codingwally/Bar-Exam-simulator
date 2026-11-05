@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, pg_catalog;
 
-select plan(139);
+select plan(140);
 
 select has_schema(
   'examination_room_v1',
@@ -1923,6 +1923,24 @@ select is(
   )->>'ok',
   'true',
   'record_event appends a reviewable browser signal without treating it as proof'
+);
+
+select is(
+  examination_room_v1.api_student(
+    'submission_intent',
+    jsonb_build_object(
+      'sessionId', (
+        select id from examination_room_v1.student_sessions
+        where consent_request_hash = repeat('6', 64)
+      ),
+      'sessionTokenHash', repeat('c4', 32),
+      'requestHash', repeat('a', 64),
+      'clientEventId', '10000000-0000-4000-8000-000000000017',
+      'clientCompletedAt', clock_timestamp()
+    )
+  )->>'ok',
+  'true',
+  'submission intent preserves the same request key used to finalize and replay'
 );
 
 select is(

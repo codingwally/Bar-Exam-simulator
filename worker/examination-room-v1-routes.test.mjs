@@ -2009,7 +2009,7 @@ test('student submit persists blank answers and still produces a receipt', async
         sessionToken: SESSION_TOKEN,
         answers: [{ questionId: 'q001', answer: null, flagged: false }],
       },
-      idempotencyKey: REQUEST_KEY,
+      idempotencyKey: 'a'.repeat(128),
     }, null), ENV, ORIGIN, ORIGIN,
   );
 
@@ -2023,7 +2023,13 @@ test('student submit persists blank answers and still produces a receipt', async
 
 test('student submission retry reuses an identical saved revision instead of creating a conflict', async () => {
   const publication = publicationFixture();
-  const savedRevision = answerRevisionFixture(publication);
+  const savedRevision = normalizeAnswerRevision({
+    attemptId: IDS.session,
+    questionNumber: 1,
+    revision: 1,
+    idempotencyKey: REQUEST_KEY,
+    answer: 'Café\nSecond line',
+  }, { versionManifest: publication, publicationHash: 'a'.repeat(64) });
   const { handlers, calls } = dependencyFixture({
     rpc: async (_env, parameters) => {
       if (parameters.operation === 'session_context') {
@@ -2058,7 +2064,7 @@ test('student submission retry reuses an identical saved revision instead of cre
         sessionToken: SESSION_TOKEN,
         answers: [{
           questionId: 'q001',
-          answer: savedRevision.answer,
+          answer: 'Cafe\u0301\r\nSecond line',
           flagged: false,
         }],
       },

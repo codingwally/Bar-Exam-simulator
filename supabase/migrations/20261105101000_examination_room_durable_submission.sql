@@ -124,10 +124,17 @@ begin
     set backup_attempts = i.backup_attempts + 1,
         backup_lease = null,
         backup_lease_until = null,
-        backup_finished = coalesce(delivery_status in ('sent', 'suppressed'), false) or i.backup_attempts >= 7,
+        -- Never silently discard a failed professor backup after a retry limit.
+        -- Keep failed jobs claimable with a bounded hourly backoff, so an
+        -- external provider outage cannot permanently strand answer delivery.
+        -- 'suppressed' is an intentional terminal state for ineligible mail.
+        backup_finished = coalesce(delivery_status in ('sent', 'suppressed'), false),
         backup_provider_id = left(p_payload ->> 'providerId', 240),
         backup_error_code = left(p_payload ->> 'safeErrorCode', 80),
-        backup_due_at = clock_timestamp() + make_interval(secs => least(900, 30 * power(2, least(i.backup_attempts, 6))))
+        backup_due_at = clock_timestamp() + make_interval(
+          secs => case when i.backup_attempts >= 7 then 3600
+                       else least(900, 30 * power(2, least(i.backup_attempts, 6))) end
+        )
     where i.session_id = p_session_id
       and i.backup_lease::text = p_payload ->> 'lease'
       and i.backup_lease_until > clock_timestamp();

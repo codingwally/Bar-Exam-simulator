@@ -10,6 +10,7 @@ import {
   deliverExaminationRoomPublicationRequestEmail,
   deliverExaminationRoomResultReleaseEmails,
   deliverExaminationRoomSubmissionAnswersEmail,
+  deliverExaminationRoomIntakeBackup,
   escapeExaminationRoomEmailHtml,
   examinationRoomEmailBrand,
 } from './examination-room-email.mjs';
@@ -301,4 +302,45 @@ test('submission answer email delivery uses the examination recipient and retry-
   assert.equal(calls[0].headers['Idempotency-Key'], `exam-room-submitted-answers-${'f'.repeat(64)}`);
   assert.equal(calls[0].headers['Idempotency-Key'], calls[1].headers['Idempotency-Key']);
   assert.doesNotMatch(calls[0].body.text, /question prompt|score|grade|feedback/iu);
+});
+
+test('intake backup sends a bounded UTF-8 TXT to the selected owner using a stable provider key', async () => {
+  const calls = [];
+  const job = {
+    recipient: 'owner@example.invalid',
+    requestHash: 'a'.repeat(64),
+    manifestHash: 'b'.repeat(64),
+    manifest: {
+      title: 'Test Examination', studentIdentity: { realName: 'Test Student' },
+      submissionId: 'submission-test', examinationId: 'exam-test', examinationVersion: 2,
+      submittedAt: '2026-11-05T10:00:00Z',
+      questions: [
+        { questionNumber: 1, questionKey: 'q001', type: 'essay', answer: 'Café — line one\nLine two' },
+        { questionNumber: 2, questionKey: 'q002', type: 'essay', answer: null },
+      ],
+    },
+  };
+  const env = {
+    EXAMINATION_ROOM_EMAIL_MODE: 'enabled', RESEND_API_KEY: 'test',
+    EXAMINATION_ROOM_EMAIL_FROM: 'Due Diligence <test@example.invalid>',
+  };
+  const transport = async (_url, options) => {
+    calls.push(options);
+    return Response.json({ id: 'test-provider-id' });
+  };
+  assert.deepEqual(await deliverExaminationRoomIntakeBackup(env, job, transport), {
+    status: 'sent', providerId: 'test-provider-id',
+  });
+  await deliverExaminationRoomIntakeBackup(env, job, transport);
+  assert.equal(calls[0].headers['Idempotency-Key'], calls[1].headers['Idempotency-Key']);
+  assert.ok(calls[0].signal instanceof AbortSignal);
+  const body = JSON.parse(calls[0].body);
+  assert.deepEqual(body.to, [job.recipient]);
+  assert.equal(body.attachments[0].filename, 'exam-backup-submission-test.txt');
+  const content = Buffer.from(body.attachments[0].content, 'base64').toString('utf8');
+  assert.match(content, /Café — line one\nLine two/);
+  assert.match(content, /Question 2 \(q002\)\nUnanswered/);
+  assert.deepEqual(await deliverExaminationRoomIntakeBackup(env, job, async () => {
+    throw new Error('provider unavailable');
+  }), { status: 'failed', safeErrorCode: 'provider_unavailable' });
 });

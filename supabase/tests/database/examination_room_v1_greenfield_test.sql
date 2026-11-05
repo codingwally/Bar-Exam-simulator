@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, pg_catalog;
 
-select plan(140);
+select plan(151);
 
 select has_schema(
   'examination_room_v1',
@@ -38,6 +38,7 @@ select tables_are(
     'student_identities',
     'student_sessions',
     'submission_answers',
+    'submission_intake',
     'submission_receipts',
     'submissions'
   ],
@@ -189,6 +190,7 @@ select is(
     join pg_catalog.pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'examination_room_v1'
       and c.relkind in ('r', 'p')
+      and c.relname <> 'submission_intake'
       and not (
         has_table_privilege('service_role', c.oid, 'SELECT')
         and has_table_privilege('service_role', c.oid, 'INSERT')
@@ -1943,12 +1945,16 @@ select is(
   'submission intent preserves the same request key used to finalize and replay'
 );
 
+update auth.users u set email_confirmed_at = clock_timestamp()
+where u.id = (select e.owner_user_id from examination_room_v1.exams e
+              where e.id = '10000000-0000-4000-8000-000000000004');
+
 select is(
-  public.examination_room_v1_api(
-    'student',
-    'submit',
-    null,
-    null,
+  public.examination_room_v1_submission_intake(
+    'stage',
+    (select id from examination_room_v1.student_sessions where consent_request_hash = repeat('6', 64)),
+    repeat('a', 64),
+    repeat('c4', 32),
     jsonb_build_object(
       'sessionId', (
         select id from examination_room_v1.student_sessions
@@ -2017,10 +2023,107 @@ select is(
         'questionKey', 'q001',
         'revision', 1
       ))
+    ),
+    p_backup_email => (select u.email from auth.users u join examination_room_v1.exams e
+                       on e.owner_user_id = u.id where e.id = '10000000-0000-4000-8000-000000000004')
+  ) ->> 'intake',
+  'pending',
+  'complete submission payload is preserved before an official receipt exists'
+);
+
+select ok(
+  not has_function_privilege('authenticated', 'public.examination_room_v1_submission_intake(text,uuid,text,text,jsonb,integer,text)', 'EXECUTE')
+    and not has_table_privilege('service_role', 'examination_room_v1.submission_intake', 'SELECT'),
+  'the private intake payload can only be accessed by its restricted service RPC'
+);
+
+select is(
+  (select count(*) from examination_room_v1.submissions where id = '10000000-0000-4000-8000-000000000020'),
+  0::bigint,
+  'stage does not finalize the submission'
+);
+
+select is(
+  public.examination_room_v1_submission_intake('drain')->>'processed',
+  '0',
+  'official submission waits for the first authorized backup attempt'
+);
+
+select ok(
+  (public.examination_room_v1_submission_intake('claim_backup') #>> '{manifest,questions,0,answer}')
+    = 'Checks and balances preserve the separation of powers.',
+  'the verified exam owner backup gets the preserved answer snapshot'
+);
+
+select is(
+  public.examination_room_v1_submission_intake(
+    'finish_backup',
+    (select i.session_id from examination_room_v1.submission_intake i where i.request_hash = repeat('a', 64)),
+    p_payload => (
+      select jsonb_build_object('lease', i.backup_lease, 'status', 'failed', 'safeErrorCode', 'provider_unavailable')
+      from examination_room_v1.submission_intake i where i.request_hash = repeat('a', 64)
     )
+  )->>'recorded',
+  'true',
+  'failed mail is recorded before finalization and releases the gate'
+);
+
+select ok(
+  (select i.backup_attempts = 1 and not i.backup_finished and i.backup_due_at > clock_timestamp()
+    from examination_room_v1.submission_intake i where i.request_hash = repeat('a', 64)),
+  'failed mail remains independently retryable'
+);
+
+create function pg_temp.interrupt_exam_submission()
+returns trigger language plpgsql as $$
+begin
+  raise exception 'Simulated persistence interruption';
+end;
+$$;
+create trigger local_exam_submission_interruption
+  before insert on examination_room_v1.submissions
+  for each row execute function pg_temp.interrupt_exam_submission();
+
+select is(
+  public.examination_room_v1_submission_intake('drain')->>'processed',
+  '0',
+  'a persistence interruption does not report a successful submission'
+);
+
+select ok(
+  (select i.finalization_payload #>> '{submissionManifest,questions,0,answer}' =
+          'Checks and balances preserve the separation of powers.'
+          and i.official_result is null and i.attempt_count = 1
+   from examination_room_v1.submission_intake i where i.request_hash = repeat('a', 64)),
+  'failed finalization retains all staged evidence and schedules a retry'
+);
+
+drop trigger local_exam_submission_interruption on examination_room_v1.submissions;
+update examination_room_v1.submission_intake set next_attempt_at = clock_timestamp()
+where request_hash = repeat('a', 64);
+
+select is(
+  public.examination_room_v1_submission_intake('drain')->>'processed',
+  '1',
+  'scheduled recovery completes the interrupted submission without the browser'
+);
+
+select is(
+  public.examination_room_v1_submission_intake(
+    'read', (select id from examination_room_v1.student_sessions where consent_request_hash = repeat('6', 64)),
+    repeat('a', 64), repeat('c4', 32)
   ) #>> '{submission,status}',
   'accepted',
-  'submit freezes the selected answer set and issues the receipt last'
+  'reopening the same request returns its verified official receipt'
+);
+
+select is(
+  public.examination_room_v1_submission_intake(
+    'read', (select id from examination_room_v1.student_sessions where consent_request_hash = repeat('6', 64)),
+    repeat('a', 64), repeat('c5', 32)
+  ) #>> '{error,code}',
+  'SESSION_INVALID',
+  'the intake receipt cannot be read with a different session token'
 );
 
 select is(

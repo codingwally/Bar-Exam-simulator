@@ -256,6 +256,7 @@ function dependencyFixture(options = {}) {
       deliveries.push(structuredClone(message));
       return { status: 'sent' };
     },
+    ...(options.submissionIntake ? { submissionIntake: options.submissionIntake } : {}),
     ...(typeof options.afterStudentCommand === 'function'
       ? { afterStudentCommand: options.afterStudentCommand }
       : {}),
@@ -2155,4 +2156,65 @@ test('accepted submit hands only the session reference and request hash to the p
   assert.deepEqual(Object.keys(handoffs[0].submissionEmailDetails).sort(), ['idempotencyHash', 'sessionId']);
   assert.equal(handoffs[0].submissionEmailDetails.sessionId, IDS.session);
   assert.match(handoffs[0].submissionEmailDetails.idempotencyHash, /^[0-9a-f]{64}$/u);
+});
+
+test('durable submission stages the frozen answers before processing and retries without rebuilding', async () => {
+  const publication = publicationFixture();
+  const revision = answerRevisionFixture(publication);
+  const steps = [];
+  const accepted = { ok: true, submission: { id: IDS.submission, status: 'accepted', receiptId: IDS.submission } };
+  let savedPayload = null;
+  let official = null;
+  let postSubmitCount = 0;
+  const { handlers } = dependencyFixture({
+    afterStudentCommand: () => { postSubmitCount += 1; },
+    submissionIntake: async (_env, operation, payload) => {
+      steps.push(operation);
+      if (operation === 'read') return official || { ok: true, intake: savedPayload ? 'pending' : 'missing' };
+      if (operation === 'stage') {
+        assert.equal(savedPayload, null);
+        savedPayload = structuredClone(payload);
+        return { ok: true, intake: 'pending' };
+      }
+      return { ok: true, intake: 'pending' };
+    },
+    rpc: async (_env, { operation }) => {
+      steps.push(operation);
+      if (operation === 'submission_intent') return { ok: true };
+      assert.equal(operation, 'session_context', 'the route must never finalize outside the intake');
+      return {
+        ok: true, publicationManifest: publication, publicationHash: 'a'.repeat(64),
+        studentIdentity: identityFixture(), answerRevisions: [revision],
+        privacyConsent: {
+          noticeVersion: 'exam-room-v1', accepted: true,
+          acceptedAt: '2026-08-26T01:55:00.000Z', recordingAccepted: false,
+        },
+      };
+    },
+  });
+  const request = (answer) => makeRequest('/examination-room/v1/student/command', {
+    operation: 'submit',
+    payload: {
+      sessionId: IDS.session, sessionToken: SESSION_TOKEN,
+      answers: [{ questionId: 'q001', answer }],
+    },
+    idempotencyKey: REQUEST_KEY,
+  }, null);
+
+  const initial = await handlers.studentCommand(request(revision.answer), ENV, ORIGIN, ORIGIN);
+  assert.equal(initial.status, 503);
+  assert.equal((await initial.json()).error.code, 'EXAM_ROOM_V1_SUBMISSION_PENDING');
+  assert.deepEqual(steps, ['read', 'session_context', 'submission_intent', 'session_context', 'stage', 'drain']);
+  assert.equal(savedPayload.submissionManifest.questions[0].answer, revision.answer);
+  assert.equal(savedPayload.answerSelections[0].revision, 1);
+  assert.doesNotMatch(JSON.stringify(savedPayload), new RegExp(SESSION_TOKEN, 'u'));
+  assert.equal(postSubmitCount, 0);
+
+  official = accepted; // The scheduled worker has finalized the first payload.
+  steps.length = 0;
+  const retry = await handlers.studentCommand(request('Different browser contents.'), ENV, ORIGIN, ORIGIN);
+  assert.equal(retry.status, 201);
+  assert.equal((await retry.json()).submission.receiptId, IDS.submission);
+  assert.deepEqual(steps, ['read']);
+  assert.equal(postSubmitCount, 1);
 });

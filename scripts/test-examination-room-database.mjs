@@ -369,6 +369,7 @@ try {
       aud text,
       role text,
       email text unique,
+      email_confirmed_at timestamptz,
       raw_app_meta_data jsonb not null default '{}'::jsonb,
       raw_user_meta_data jsonb not null default '{}'::jsonb,
       created_at timestamptz not null default now(),
@@ -867,6 +868,7 @@ try {
     '20260922113200_examination_room_submission_intent_retry.sql',
     '20260922132200_examination_room_submit_replay_receipt_time.sql',
     '20260925173700_examination_room_submit_audit_hash_v2.sql',
+    '20261105101000_examination_room_durable_submission.sql',
   ]) {
     await database.exec(readFileSync(join(repositoryRoot, 'supabase', 'migrations', migration), 'utf8'));
   }

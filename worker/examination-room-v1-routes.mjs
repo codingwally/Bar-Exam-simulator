@@ -1506,6 +1506,26 @@ export function createExaminationRoomV1Handlers(dependencies) {
     }, origin, allowedOrigin);
   }
 
+  async function respondToPreservedSubmission(intake, env, identity, context) {
+    const { requestHash, sessionId } = identity;
+    const result = intake.submission
+      ? intake
+      : ensureStoreResult(await deps.submissionIntake(env, 'drain', identity));
+    if (result.submission?.status !== 'accepted' || !result.submission.receiptId) {
+      fail(
+        'EXAM_ROOM_V1_SUBMISSION_PENDING',
+        'Your complete answers are preserved and awaiting official submission.',
+        503,
+        'The server will retry automatically. Keep your local backup and check again for the official receipt.',
+      );
+    }
+    deps.afterStudentCommand?.({
+      operation: 'submit', result, env, executionContext: context.executionContext, requestHash,
+      submissionEmailDetails: { sessionId, idempotencyHash: requestHash },
+    });
+    return deps.respond({ ok: true, ...result }, 201, context.origin, context.allowedOrigin);
+  }
+
   async function studentCommand(request, env, origin, allowedOrigin, executionContext = null) {
     return respondWithErrors(async () => {
       const body = plainRecord(await deps.parseJson(request, 140_000));
@@ -1524,6 +1544,15 @@ export function createExaminationRoomV1Handlers(dependencies) {
         clientEventId: info.clientEventId,
       };
       let submissionEmailDetails = null;
+      const durableSubmission = operation === 'submit'
+        && typeof deps.submissionIntake === 'function'
+        && deps.submissionIntakeEnabled?.(env) !== false;
+      if (durableSubmission) {
+        const intake = ensureStoreResult(await deps.submissionIntake(env, 'read', safePayload));
+        if (intake.intake !== 'missing') {
+          return respondToPreservedSubmission(intake, env, safePayload, { executionContext, origin, allowedOrigin });
+        }
+      }
 
       if (operation === 'heartbeat') {
         safePayload = {
@@ -1781,6 +1810,11 @@ export function createExaminationRoomV1Handlers(dependencies) {
             idempotencyHash: info.requestHash,
           };
         }
+      }
+
+      if (durableSubmission) {
+        const intake = ensureStoreResult(await deps.submissionIntake(env, 'stage', safePayload));
+        return respondToPreservedSubmission(intake, env, safePayload, { executionContext, origin, allowedOrigin });
       }
 
       const result = await callRpc(env, {

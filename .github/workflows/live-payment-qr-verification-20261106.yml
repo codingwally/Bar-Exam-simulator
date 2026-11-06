@@ -23,14 +23,14 @@ jobs:
           import {runInNewContext} from 'node:vm';
           const site='https://duediligence.ph';
           const api='https://duediligence-api.wallyesteban1993.workers.dev';
-          const request=async(url)=>{
-            const response=await fetch(url,{redirect:'error',cache:'no-store',headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(25000)});
+          const request=async(url,options={})=>{
+            const response=await fetch(url,{...options,redirect:'error',cache:'no-store',headers:{'Cache-Control':'no-cache',...(options.headers||{})},signal:AbortSignal.timeout(25000)});
             assert.equal(response.status,200,'Public GET failed: '+url+' got '+response.status);
             return response;
           };
           const [qr,plansResponse,rendererResponse,markerResponse]=await Promise.all([
             request(site+'/assets/payments/bpi-instapay-199-qr.png?verified=20261106'),
-            request(api+'/plans?verified=20261106'),
+            request(api+'/plans?verified=20261106',{method:'POST',headers:{'Origin':site,'Content-Type':'application/json','X-Request-ID':'public-qr-smoke-20261106'},body:'{}'}),
             request(site+'/assets/pricing-renderer.js?verified=20261106'),
             request(site+'/.well-known/duediligence-qr-release.txt?verified=20261106')
           ]);

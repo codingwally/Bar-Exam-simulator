@@ -7,6 +7,8 @@ import {
   buildExaminationRoomPublicationRequestEmail,
   buildExaminationRoomResultEmail,
   buildExaminationRoomSubmissionAnswersEmail,
+  buildExaminationRoomSubmissionReceiptEmail,
+  deliverExaminationRoomSubmissionReceiptEmail,
   deliverExaminationRoomPublicationRequestEmail,
   deliverExaminationRoomResultReleaseEmails,
   deliverExaminationRoomSubmissionAnswersEmail,
@@ -347,4 +349,55 @@ test('intake backup sends a bounded UTF-8 TXT to the selected owner using a stab
     assert.deepEqual(await deliverExaminationRoomIntakeBackup(env, { ...job, manifest }, transport),
       { status: 'failed', safeErrorCode: 'backup_snapshot_invalid' });
   }
+});
+
+test('submission receipt email never reveals question prompts, answers, grades, or room key', () => {
+  const email = buildExaminationRoomSubmissionReceiptEmail({}, {
+    examTitle: 'Midterm <script>alert(1)</script>',
+    studentName: 'Student <img src=x>',
+    receiptCode: 'RECEIPT-789',
+    submittedAt: '2026-11-06T09:10:00.000Z',
+    answer: 'SECRET_ANSWER',
+    roomKey: 'SECRET_PASSKEY',
+  });
+  assert.match(email.subject, /^Examination submission receipt/u);
+  assert.match(email.text, /RECEIPT-789/u);
+  assert.match(email.text, /Philippine time/u);
+  assert.doesNotMatch(email.text + email.html, /SECRET_ANSWER|SECRET_PASSKEY|<script>|<img src=x>/u);
+  assert.match(email.html, /Midterm &lt;script&gt;/u);
+});
+
+test('student receipt delivery uses an independent idempotency key and never attaches answers', async () => {
+  const sent = [];
+  const transport = async (url, options) => {
+    sent.push({ url, options });
+    return { ok: true, status: 200, json: async () => ({ id: 'resend-student-receipt-1' }) };
+  };
+  const env = {
+    EXAMINATION_ROOM_EMAIL_MODE: 'enabled',
+    EXAMINATION_ROOM_EMAIL_FROM: 'Due Diligence <support@duediligence.ph>',
+    RESEND_API_KEY: 'test-only-key',
+  };
+  const message = {
+    recipient: 'student@example.com',
+    studentName: 'Student',
+    examTitle: 'Midterms',
+    receiptCode: 'R-1',
+    submittedAt: '2026-11-06T09:10:00.000Z',
+    idempotencyHash: 'a'.repeat(64),
+  };
+  const result = await deliverExaminationRoomSubmissionReceiptEmail(env, message, transport);
+  assert.equal(result.status, 'sent');
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].url, 'https://api.resend.com/emails');
+  assert.equal(sent[0].options.headers['Idempotency-Key'],
+    'exam-room-student-receipt-' + 'a'.repeat(64));
+  const body = JSON.parse(sent[0].options.body);
+  assert.deepEqual(body.to, ['student@example.com']);
+  assert.equal(body.attachments, undefined);
+  assert.equal(body.tags[1].value, 'student-receipt');
+  assert.equal((await deliverExaminationRoomSubmissionReceiptEmail({
+    ...env, EXAMINATION_ROOM_EMAIL_MODE: 'suppressed',
+  }, message, transport)).status, 'suppressed');
+  assert.equal(sent.length, 1);
 });

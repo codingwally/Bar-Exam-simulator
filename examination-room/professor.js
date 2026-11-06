@@ -2380,7 +2380,7 @@
         : isSubmitted ? 'submitted' : session.connected ? 'in_progress' : 'disconnected';
       const latestIncident = [...(data.incidents || [])].reverse().find((incident) => incident.sessionId === session.id);
       const canRevoke = !isSubmitted && !['revoked', 'blocked'].includes(sessionStatus);
-      return `<tr data-monitor-session="${escapeHtml(session.id)}"><td><strong>${escapeHtml(session.fullName)}</strong>${session.email ? `<small>${escapeHtml(session.email)}</small>` : ''}</td><td>${escapeHtml(session.studentNumber)}</td><td><span class="status-label ${sessionStatus}"><i aria-hidden="true"></i>${escapeHtml(sessionStatus.replace('_', ' '))}</span></td><td>${escapeHtml(String(session.currentQuestion || '—'))}</td><td>${escapeHtml(timeAgo(session.lastSeenAt))}</td><td>${latestIncident ? escapeHtml(integrityEventLabel(latestIncident)) : 'Clear'}</td><td><div class="session-actions"><button class="table-action" type="button" data-view-student="${escapeHtml(session.id)}">Event logs</button>${canRevoke ? `<button class="table-action warning" type="button" data-revoke-session="${escapeHtml(session.id)}" data-revoke-mode="kick">Kick</button><button class="table-action danger" type="button" data-revoke-session="${escapeHtml(session.id)}" data-revoke-mode="block">Block</button>` : ''}</div></td></tr>`;
+      return `<tr data-monitor-session="${escapeHtml(session.id)}"><td><strong>${escapeHtml(session.fullName)}</strong>${session.email ? `<small>${escapeHtml(session.email)}</small>` : ''}</td><td>${escapeHtml(session.studentNumber)}</td><td><span class="status-label ${sessionStatus}"><i aria-hidden="true"></i>${escapeHtml(sessionStatus.replace('_', ' '))}</span></td><td>${escapeHtml(String(session.currentQuestion || '—'))}</td><td>${escapeHtml(timeAgo(session.lastSeenAt))}</td><td>${latestIncident ? escapeHtml(integrityEventLabel(latestIncident)) : 'Clear'}</td><td><div class="session-actions">${isSubmitted ? `<button class="table-action" type="button" data-view-answers="${escapeHtml(session.id)}">View answers</button>` : ''}<button class="table-action" type="button" data-view-student="${escapeHtml(session.id)}">Event logs</button>${canRevoke ? `<button class="table-action warning" type="button" data-revoke-session="${escapeHtml(session.id)}" data-revoke-mode="kick">Kick</button><button class="table-action danger" type="button" data-revoke-session="${escapeHtml(session.id)}" data-revoke-mode="block">Block</button>` : ''}</div></td></tr>`;
     }).join('') : '<tr><td colspan="7"><div class="empty-feed">No students have entered yet. Share the active student key; this page updates automatically.</div></td></tr>';
     const incidents = [...(data.incidents || [])].reverse();
     $('#incident-feed').innerHTML = incidents.length ? incidents.map((incident) => {
@@ -2507,6 +2507,62 @@
     <section class="student-event-log"><h3>Examination event log</h3><p class="legal-note">This records browser signals such as tab/window focus changes, fullscreen changes, connectivity, and copy/paste actions. Clipboard contents are never stored.</p><div class="incident-feed">${eventLog}</div></section>
     <p class="legal-note">Events are context for human review. They do not establish misconduct and do not alter the student’s grade automatically.</p>`;
     openDialog('student-detail-dialog');
+  }
+
+
+  async function showMonitorSubmittedAnswers(sessionId) {
+    const examId = safeText(state.exam?.id, 80);
+    const session = (state.monitor?.sessions || []).find((entry) => entry.id === sessionId);
+    const submitted = (state.monitor?.submissions || []).some((entry) => entry.sessionId === sessionId);
+    if (!examId || !session || !submitted) return;
+
+    showStudentDetail(sessionId);
+    $('#student-detail-title').textContent = session.fullName + ' · Submitted answers';
+    const section = document.createElement('section');
+    section.className = 'student-submitted-answers';
+    section.dataset.submissionSession = sessionId;
+    section.innerHTML = '<h3>Submitted answers</h3><p role="status">Loading official submitted answers from the server…</p>';
+    $('#student-detail-content').prepend(section);
+
+    try {
+      // This endpoint already enforces professor ownership or Admin access,
+      // and returns only the immutable answers attached to accepted receipts.
+      const grading = await api.professorQuery('grading', { examId });
+      if (state.exam?.id !== examId || !section.isConnected
+          || !$('#student-detail-dialog').open
+          || section.dataset.submissionSession !== sessionId) return;
+      const matchingSubmission = (grading.submissions || []).find((item) => item.sessionId === sessionId);
+      if (!matchingSubmission) throw new Error('Official submitted answers are not yet available to the professor.');
+      const revisions = (grading.answerRevisions || []).filter((item) => item.sessionId === sessionId);
+      const questions = state.questions.length ? state.questions : [...revisions]
+        .sort((a, b) => Number(a.questionNumber || 0) - Number(b.questionNumber || 0))
+        .filter((item, index, items) => items.findIndex((other) => other.questionNumber === item.questionNumber) === index)
+        .map((item) => ({ id: item.questionId, number: item.questionNumber, prompt: '', type: 'essay' }));
+      if (!revisions.length && Number(matchingSubmission.answerCount) > 0) {
+        throw new Error('This submission has a receipt, but its answers could not be loaded. Refresh and retry.');
+      }
+      const answeredCount = questions.filter((question, index) => {
+        const answer = submittedAnswerRevision(revisions, question, index)?.answer;
+        return answer != null && answer !== '' && (!Array.isArray(answer) || answer.length > 0);
+      }).length;
+      section.innerHTML = '<h3>Official submitted answers</h3>'
+        + '<p class="legal-note">Receipt: ' + escapeHtml(matchingSubmission.receiptCode || 'Recorded')
+        + ' · ' + answeredCount + ' of ' + questions.length + ' questions with responses. Read-only server copy.</p>'
+        + (questions.map((question, index) => {
+          const response = submittedAnswerRevision(revisions, question, index)?.answer;
+          return '<article class="grade-question"><header><h3>Question ' + (index + 1)
+            + '</h3></header>'
+            + (question.prompt ? '<div class="grading-question-prompt">' + escapeHtml(question.prompt) + '</div>' : '')
+            + '<div class="student-answer"><span class="grading-content-label">Student answer</span>'
+            + '<div>' + escapeHtml(gradingAnswerText(question, response)) + '</div></div></article>';
+        }).join('') || '<p>No submitted questions are available.</p>');
+    } catch (error) {
+      if (section.isConnected && $('#student-detail-dialog').open) {
+        section.innerHTML = '<h3>Submitted answers</h3><p role="alert">'
+          + escapeHtml(error?.message || 'The professor answer view could not be loaded.')
+          + ' The original submission and receipt remain saved. Close this window and choose View answers again.</p>';
+      }
+    }
   }
 
   function downloadBlob(filename, blob) {
@@ -2706,7 +2762,7 @@
       composer.newPage();
       const identity = gradingDisplayIdentity(session, studentIndex);
       const submission = submissionsBySession.get(session.id) || {};
-      const answers = latestBy((data.answerRevisions || []).filter((revision) => revision.sessionId === session.id), (revision) => revision.questionId);
+      const submittedRevisions = (data.answerRevisions || []).filter((revision) => revision.sessionId === session.id);
       const grades = latestBy((data.gradeRevisions || []).filter((revision) => revision.sessionId === session.id), (revision) => revision.questionId);
       const earned = state.questions.reduce((total, question) => total + (savedGradePoints(grades.get(question.id)) ?? 0), 0);
       const possible = state.questions.reduce((total, question) => total + Number(question.points || 0), 0);
@@ -2718,7 +2774,7 @@
       if (includeGrades) composer.addText(`TOTAL GRADE: ${earned} / ${possible} POINTS | ${complete ? 'FULLY GRADED' : 'GRADING INCOMPLETE'}`, { size: 12, bold: true, spaceAfter: 8 });
       composer.addRule();
       state.questions.forEach((question, questionIndex) => {
-        const answerText = gradingAnswerText(question, answers.get(question.id)?.answer);
+        const answerText = gradingAnswerText(question, submittedAnswerRevision(submittedRevisions, question, questionIndex)?.answer);
         composer.addText(`QUESTION ${questionIndex + 1} - ${Number(question.points || 0)} POINT${Number(question.points) === 1 ? '' : 'S'}`, { size: 11, bold: true, spaceBefore: 7, spaceAfter: 4 });
         composer.addText(question.prompt || question.text || 'Question prompt not available.', { size: 10, spaceAfter: 5 });
         composer.addText('SUBMITTED ANSWER', { size: 9, bold: true, spaceAfter: 3 });
@@ -2824,6 +2880,20 @@
     return map;
   }
 
+  // The professor editor may still have its original UUID question IDs,
+  // whereas the immutable published version uses q001, q002, and so on.
+  // Always match the submitted answer by its canonical question number when
+  // these IDs differ. This is read-only; the submission remains immutable.
+  function submittedAnswerRevision(revisions, question, index) {
+    const expectedId = safeText(question?.questionKey || question?.id, 128);
+    const expectedNumber = Number(question?.questionNumber || question?.number || index + 1);
+    const exact = (revisions || []).filter((revision) => revision.questionId === expectedId);
+    const candidates = exact.length ? exact : (revisions || []).filter(
+      (revision) => Number(revision.questionNumber) === expectedNumber,
+    );
+    return [...candidates].sort((left, right) => Number(left.revision || 0) - Number(right.revision || 0)).at(-1) || null;
+  }
+
   function gradingDisplayIdentity(session, index) {
     return {
       realName: safeText(session?.realFullName || session?.fullName, 160) || `Student ${index + 1}`,
@@ -2865,11 +2935,11 @@
     const studentIndex = (data.sessions || []).filter((entry) => (data.submissions || []).some((submission) => submission.sessionId === entry.id)).findIndex((entry) => entry.id === session.id);
     const identity = gradingDisplayIdentity(session, studentIndex);
     const displayName = state.anonymousGrading ? identity.alias : identity.realName;
-    const answers = latestBy((data.answerRevisions || []).filter((revision) => revision.sessionId === session.id), (revision) => revision.questionId);
+    const submittedRevisions = (data.answerRevisions || []).filter((revision) => revision.sessionId === session.id);
     const grades = latestBy((data.gradeRevisions || []).filter((revision) => revision.sessionId === session.id), (revision) => revision.questionId);
     $('#grading-sheet').innerHTML = `<header class="grading-student-head"><div><p class="section-kicker">Individual response</p><h2>${escapeHtml(displayName)}</h2><p>${escapeHtml(state.anonymousGrading ? 'The professor may reveal the real roster at any time.' : `${identity.realStudentNumber} · ${session.yearLevel}`)}</p></div><div class="grading-student-actions"><button class="button secondary compact" type="button" data-download-student-answers><i class="ph ph-file-pdf" aria-hidden="true"></i>Answers PDF</button><button class="button secondary compact" type="button" data-download-student-grades><i class="ph ph-file-pdf" aria-hidden="true"></i>Answers + grades PDF</button><span class="grade-save-state"><i class="ph ph-check-circle" aria-hidden="true"></i> Enter all scores, then save this student once</span></div></header>
       ${state.questions.map((question, index) => {
-        const answer = answers.get(question.id)?.answer;
+        const answer = submittedAnswerRevision(submittedRevisions, question, index)?.answer;
         const grade = grades.get(question.id) || {};
         const answerText = viewModels?.professorAnswerLabel
           ? viewModels.professorAnswerLabel(question, answer)
@@ -3746,6 +3816,11 @@
     });
     $('#monitor-search').addEventListener('input', renderMonitor);
     $('#monitor-table-body').addEventListener('click', (event) => {
+      const viewAnswers = event.target.closest('[data-view-answers]');
+      if (viewAnswers) {
+        showMonitorSubmittedAnswers(viewAnswers.dataset.viewAnswers);
+        return;
+      }
       const revoke = event.target.closest('[data-revoke-session]');
       if (revoke) {
         revokeStudentSession(revoke.dataset.revokeSession, revoke.dataset.revokeMode || 'kick', revoke);

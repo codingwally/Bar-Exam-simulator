@@ -1,6 +1,9 @@
 name: Deploy approved frontend-only release to Pages
 
 on:
+  pull_request:
+    paths:
+      - '.github/workflows/deploy-pages-only.yml'
   push:
     branches: [main]
     paths:
@@ -45,6 +48,29 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  baseline_probe:
+    name: Read actual public Pages source before any deployment
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Inspect the live release marker and ancestry without mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          baseline="$(curl -fsSL --retry 2 --max-time 20 "https://duediligence.ph/.well-known/duediligence-release.txt?read_only_probe=$GITHUB_SHA" | tr -d '\r\n')"
+          echo "LIVE_PAGES_SOURCE=$baseline"
+          [[ "$baseline" =~ ^[a-f0-9]{40}$ ]]
+          git cat-file -e "$baseline^{commit}"
+          if git merge-base --is-ancestor "$baseline" HEAD; then
+            echo 'LIVE_BASELINE_IS_ANCESTOR=true'
+          else
+            echo 'LIVE_BASELINE_IS_ANCESTOR=false'
+            echo 'A guarded selective overlay or specially reviewed recovery release is needed; ordinary Pages dispatch must not be forced.'
+          fi
   recovery_preflight:
     name: Stage QR repair and dispatch existing protected production release
     if: github.event_name == 'push' && github.repository == 'codingwally/Bar-Exam-simulator' && github.ref == 'refs/heads/main'

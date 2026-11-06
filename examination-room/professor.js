@@ -1659,7 +1659,7 @@
     const totalPoints = exam.questions.reduce((sum, question) => sum + Number(question.points || 0), 0);
     $('#publish-summary').innerHTML = `<div class="publish-grid">
       <div class="publish-item"><small>Examination</small><strong>${escapeHtml(exam.title)}</strong></div>
-      <div class="publish-item"><small>Duration</small><strong>${exam.durationMinutes} minutes · no fixed date or start time</strong></div>
+      <div class="publish-item"><small>Duration</small><strong>${Number(exam.durationMinutes) === 1440 ? "No Time Limit" : `${exam.durationMinutes} minutes`} · no fixed date or start time</strong></div>
       <div class="publish-item"><small>Questions and points</small><strong>${exam.questions.length} questions · ${totalPoints} points</strong></div>
       <div class="publish-item"><small>Student admission</small><strong>${exam.admissionMode === 'email_allowlist' ? `${exam.allowedEmails.length} allowed email address${exam.allowedEmails.length === 1 ? '' : 'es'}` : 'Anyone with the student key'}</strong></div>
       <div class="publish-item"><small>Grading</small><strong>${exam.gradingIdentity === 'real_names' ? 'Real names' : 'Anonymous grading (optional)'}</strong></div>
@@ -1699,7 +1699,7 @@
     $('#preview-sheet').innerHTML = `<article class="preview-document">
       <p class="section-kicker">${escapeHtml(exam.subject || 'Law examination')}</p>
       <h1>${escapeHtml(exam.title || 'Untitled examination')}</h1>
-      <p class="preview-meta">${exam.durationMinutes} minutes · opens with the student key · ${escapeHtml(exam.jurisdiction || '')}</p>
+      <p class="preview-meta">${Number(exam.durationMinutes) === 1440 ? "No Time Limit" : `${exam.durationMinutes} minutes`} · opens with the student key · ${escapeHtml(exam.jurisdiction || '')}</p>
       <p>${escapeHtml(exam.instructions || 'No instructions have been added.')}</p>
       ${exam.questions.map((question, index) => `<section class="preview-question"><h3>${index + 1}. ${escapeHtml(question.prompt || 'Question prompt missing')} <small>(${question.points} points)</small></h3>${question.type === 'multiple_choice' ? `<ol type="A">${(question.options || []).map((option) => `<li>${escapeHtml(option)}</li>`).join('')}</ol>` : '<div class="preview-answer-area" aria-label="Student answer area"></div>'}</section>`).join('')}
     </article>`;

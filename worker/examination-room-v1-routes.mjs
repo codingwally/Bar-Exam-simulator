@@ -1332,8 +1332,29 @@ export function createExaminationRoomV1Handlers(dependencies) {
 
   async function previewWithVerifiedKey(env, payload) {
     const rawRoomKey = normalizeRoomKey(payload.roomKey);
-    const identity = studentIdentityFromPayload(payload);
     const roomKeyHash = await pepperedHmac(env, 'room-key', rawRoomKey);
+    const source = isPlainRecord(payload.student) ? payload.student
+      : isPlainRecord(payload.identity) ? payload.identity : payload;
+    const fullName = cleanText(source.realName ?? source.fullName, 240, 'student name', { required: true });
+    // The browser-generated device identity is stable on that device. No extra
+    // field is requested of a key-only student; do not use names alone as a
+    // substitute for unique attempt identity.
+    const guestSeed = cleanText(source.guestIdentityId ?? payload.guestIdentityId, 90, 'guest device identity')
+      || 'legacy-device';
+    const guestDigest = await pepperedHmac(
+      env, 'key-only-student-identity',
+      roomKeyHash + ':' + fullName.toLocaleLowerCase('en-US') + ':' + guestSeed,
+    );
+    const identity = studentIdentityFromPayload({
+      identity: {
+        ...source,
+        realName: fullName,
+        studentNumber: source.studentNumber || ('GUEST-' + guestDigest.slice(0, 18).toUpperCase()),
+        subject: source.subject || 'Auto-detected',
+        yearLevel: source.yearLevel || 'Auto-detected',
+        email: source.email || ('guest-' + guestDigest.slice(0, 24) + '@student.invalid'),
+      },
+    });
     const result = await callRpc(env, {
       scope: 'student', operation: 'preview', actorUserId: null, institutionId: null,
       payload: { roomKeyHash, identity },

@@ -1245,7 +1245,10 @@ export function validatePrivacyConsent(input, context) {
     noticeVersion,
     accepted: true,
     acceptedAt,
-    recordingAccepted: integrityTier === INTEGRITY_TIERS.RECORDED_PROCTORING,
+    // Preserve the exact server-recorded flag. Camera/microphone-enabled
+    // examinations may require recording even when the integrity tier is
+    // 'standard'; clearing a true value corrupts the signed consent binding.
+    recordingAccepted: input.recordingAccepted === true,
   });
 }
 

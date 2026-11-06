@@ -420,7 +420,9 @@ export async function deliverExaminationRoomSubmissionReceiptEmail(
   const from = String(env?.EXAMINATION_ROOM_EMAIL_FROM || env?.SUPPORT_NOTIFICATION_EMAIL_FROM || '').trim();
   const recipient = String(message.recipient || '').trim().toLowerCase();
   const hash = String(message.idempotencyHash || '').trim().toLowerCase();
-  if (!EMAIL_PATTERN.test(recipient) || recipient.length > 320) {
+  // Key-only students may enter without an email. The private, deterministic
+  // .invalid address is an identity handle, never an outbound mail recipient.
+  if (!EMAIL_PATTERN.test(recipient) || recipient.length > 320 || recipient.endsWith('.invalid')) {
     return { status: 'skipped', safeErrorCode: 'recipient_missing' };
   }
   if (mode === 'suppressed') return { status: 'suppressed', safeErrorCode: 'email_suppressed' };

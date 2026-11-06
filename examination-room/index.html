@@ -193,7 +193,7 @@
                 <div><p class="section-kicker">Exam settings</p><h2 id="exam-settings-title">Timing, navigation, and grading</h2><p>No date or start time is required. The room becomes available when Admin issues the student key.</p></div>
               </header>
               <div class="settings-grid">
-                <label class="field"><span>Duration</span><select id="duration-control"><option value="60">1 hour</option><option value="90">1 hour 30 minutes</option><option value="120" selected>2 hours</option><option value="180">3 hours</option><option value="240">4 hours</option></select><small>The timer starts separately for each student when their attempt begins.</small></label>
+                <label class="field"><span>Duration</span><select id="duration-control"><option value="60">1 hour</option><option value="90">1 hour 30 minutes</option><option value="120" selected>2 hours</option><option value="180">3 hours</option><option value="240">4 hours</option><option value="1440">No Time Limit</option></select><small>No Time Limit hides the countdown; the room remains subject to its key validity and professor closure. Time-limited attempts use the selected duration.</small></label>
                 <label class="field"><span>Late submissions</span><select id="late-control"><option value="not_allowed">Not allowed after time expires</option><option value="professor_review">Allow for professor review</option></select><small>You can still review an interrupted attempt from Monitor.</small></label>
                 <label class="field"><span>Navigation</span><select id="navigation-control"><option value="free">Students can navigate freely</option><option value="sequential">Forward only</option></select><small>Forward only prevents returning to earlier questions.</small></label>
               </div>
@@ -206,7 +206,7 @@
 
             <section class="editor-section students-section" id="students" aria-labelledby="students-title">
               <header class="section-heading">
-                <div><p class="section-kicker">Student entry</p><h2 id="students-title">Who may use the student key?</h2><p>The simplest option is selected by default. Every student enters their real name, student number, subject, and year level.</p></div>
+                <div><p class="section-kicker">Student entry</p><h2 id="students-title">Who may use the student key?</h2><p>The simplest option is selected by default. Only the room key and real full name are required for key-only admission. Email, student number, subject, and year level are optional; the examination supplies its own course details.</p></div>
               </header>
               <fieldset class="admission-options">
                 <legend class="sr-only">Student admission mode</legend>
@@ -357,8 +357,8 @@
   <script src="../assets/auth-session-storage.js?v=auth-persistence-20260812-1"></script>
   <script src="../assets/private-beta-session.js?v=beta-all-access-20260802-1"></script>
   <script src="view-models.js?v=greenfield-v1-20260826-1"></script>
-  <script src="api.js?v=reliability-20260828-1&release=midterm-durable-20261106-1"></script>
+  <script src="api.js?v=reliability-20260828-1&release=midterm-testfix-20261106-2"></script>
   <script src="offline-grading-core.js?v=greenfield-v1-20260826-3"></script>
-  <script src="professor.js?v=grading-prompts-key-status-20260926-1"></script>
+  <script src="professor.js?v=grading-prompts-key-status-20260926-1&release=midterm-testfix-20261106-2"></script>
 </body>
 </html>

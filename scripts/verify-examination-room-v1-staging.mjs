@@ -55,7 +55,7 @@ export async function verifyExaminationRoomV1Staging({ adminToken, runId }) {
       instructions: 'Synthetic staging test only. Do not administer to real students.',
       durationMinutes: 120, startsAt: null,
       gradingIdentity: 'real_names', integrityTier: 'standard',
-      cameraRequired: false, microphoneRequired: false,
+      cameraRequired: true, microphoneRequired: false,
       privacyNoticeVersion: 'exam-room-v1',
       admissionMode: 'key_only', allowedEmails: [], roster: [],
       questions: [{ id: 'q-1', type: 'essay', points: 20, wordLimit: 800,
@@ -81,11 +81,11 @@ export async function verifyExaminationRoomV1Staging({ adminToken, runId }) {
     results.push('student_key_approved');
 
     await professorCommand('open_room', { examId });
+    // Only the key and real name are required for a key-only room.
+    // The fixed Worker supplies scoped guest identity and canonical course data.
     const identity = {
-      fullName: 'Synthetic Staging Candidate', realName: 'Synthetic Staging Candidate',
-      email: `candidate-${runId}@example.com`,
-      studentNumber: `STAGE-${runId}`,
-      subject: exam.subject, yearLevel: exam.yearLevel,
+      fullName: 'Synthetic Staging Candidate',
+      guestIdentityId: 'student-device-' + runId,
     };
     const preview = await call('/examination-room/v1/student/preview', {
       roomKey, identity,

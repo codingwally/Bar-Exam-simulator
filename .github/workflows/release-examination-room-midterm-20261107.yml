@@ -18,8 +18,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  STAGED_EXAMINATION_SHA: e1932fea6b9d8a39b91c95b07ec042548b275a7a
-  STAGING_E2E_RUN_ID: '42190841939'
+  STAGED_EXAMINATION_SHA: 74b3c09f6855c9b579daf39cd186958d9da483be
+  STAGING_E2E_RUN_ID: '42200934527'
   SITE_URL: https://duediligence.ph
 
 jobs:
@@ -52,7 +52,7 @@ jobs:
           test "$(jq -r '.event' <<<"$run")" = push
           test "$(jq -r '.path' <<<"$run")" = '.github/workflows/examination-room-midterm-staging.yml'
           test "$(jq -r '.head_sha' <<<"$run")" = "$STAGED_EXAMINATION_SHA"
-          for f in worker/index.mjs worker/examination-room-email.mjs worker/examination-room-v1-routes.mjs examination-room/student.js examination-room/api.js examination-room/student.html examination-room/index.html service-worker.js; do
+          for f in worker/index.mjs worker/examination-room-email.mjs worker/examination-room-v1-routes.mjs worker/examination-room-v1-core.mjs examination-room/student.js examination-room/professor.js examination-room/api.js examination-room/student.html examination-room/index.html service-worker.js scripts/verify-examination-room-v1-staging.mjs; do
             test "$(git rev-parse "$STAGED_EXAMINATION_SHA:$f")" = "$(git rev-parse "HEAD:$f")" || {
               echo "Staged examination file differs from production candidate: $f" >&2
               exit 1

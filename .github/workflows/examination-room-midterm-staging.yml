@@ -76,6 +76,14 @@ jobs:
         env:
           STAGING_EXAMINATION_ROOM_URL: https://duediligence-examinations-staging.wallyesteban1993.workers.dev
         run: node scripts/test-examination-room-v1-staging-smoke.mjs
+      - name: Verify hosted V1 professor-to-student submission and monitoring
+        env:
+          STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+          EXAMINATION_ROOM_V1_ONLY: 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/test-examinations-staging.mjs
       - name: Test synthetic professor, student answers, submission and monitor on staging
         env:
           STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}

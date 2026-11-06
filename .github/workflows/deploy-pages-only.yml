@@ -72,12 +72,14 @@ jobs:
             echo 'A guarded selective overlay or specially reviewed recovery release is needed; ordinary Pages dispatch must not be forced.'
           fi
   recovery_preflight:
-    name: Stage QR repair and dispatch existing protected production release
+    name: Stage exact live site with new payment QR only
     if: github.event_name == 'push' && github.repository == 'codingwally/Bar-Exam-simulator' && github.ref == 'refs/heads/main'
     environment:
       name: staging-e2e
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    outputs:
+      baseline_sha: ${{ steps.base.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -85,42 +87,53 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Verify exact merged PR and mandatory validation
-        id: provenance
+      - name: Prove merged PR tree and mandatory validation
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           test "$(git diff --name-only HEAD^ HEAD | grep -Ev '^(\.github/workflows/deploy-pages-only\.yml|scripts/test-september-pricing-ui-contract\.mjs|scripts/test-pricing-checkout-safety\.mjs)$' || true)" = ""
           pr="$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --jq ".[] | select(.merged_at != null and .base.ref == \"main\" and .merge_commit_sha == \"$GITHUB_SHA\") | .number" | head -n 1)"
-          [[ "$pr" =~ ^[0-9]+$ ]]
-          source="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$pr" --jq .head.sha)"
+          [[ "$pr" =~ ^[1-9][0-9]*$ ]]
+          head_sha="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$pr" --jq .head.sha)"
           git fetch --no-tags origin "pull/$pr/head:refs/remotes/origin/payment-qr-reviewed"
           test "$(git rev-parse "refs/remotes/origin/payment-qr-reviewed^{tree}")" = "$(git rev-parse HEAD^{tree})"
-          run="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/validate-mandatory-early-access.yml/runs?head_sha=$source&per_page=30" --jq '.workflow_runs[] | select(.event == "pull_request" and .status == "completed" and .conclusion == "success") | .id' | head -n 1)"
-          [[ "$run" =~ ^[1-9][0-9]*$ ]]
+          validated="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/validate-mandatory-early-access.yml/runs?head_sha=$head_sha&per_page=30" --jq '.workflow_runs[] | select(.event=="pull_request" and .status=="completed" and .conclusion=="success") | .id' | head -n 1)"
+          [[ "$validated" =~ ^[1-9][0-9]*$ ]]
           test "$(git rev-parse HEAD:assets/payments/bpi-instapay-199-qr.png)" = 8a8e3caad3e0abfbdb8f94ee68097a0552265890
-          echo "run_id=$run" >> "$GITHUB_OUTPUT"
-      - name: Build exact Pages and check uploaded QR
+          echo "Merged PR $pr has exact tree validated by run $validated"
+      - name: Require precisely the known live production source
+        id: base
         run: |
           set -euo pipefail
-          npm ci --prefix worker --ignore-scripts --no-audit --no-fund
-          node scripts/test-september-pricing-ui-contract.mjs
-          node scripts/test-pricing-checkout-safety.mjs
-          node scripts/test-pages-artifact.mjs
-          test "$(sha256sum .pages-dist/assets/payments/bpi-instapay-199-qr.png | cut -d' ' -f1)" = 84959f96cfa8cbe9ff9c9a342d95c443c0ff670d6b1ae0d82efc151430861175
-          test "$(tr -d '\r\n' < .pages-dist/.well-known/duediligence-release.txt)" = "$GITHUB_SHA"
-      - name: Verify currently deployed source marker before release
-        id: baseline
+          sha="$(curl -fsSL --retry 2 --max-time 30 "https://duediligence.ph/.well-known/duediligence-release.txt?qr=$GITHUB_SHA" | tr -d '\r\n')"
+          test "$sha" = 8ed2a21d3fa33d065fdf1c3f69f631210ca08e25
+          git cat-file -e "$sha^{commit}"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - name: Build the actually deployed baseline, replacing only QR and release marker
+        env:
+          BASELINE_SHA: ${{ steps.base.outputs.sha }}
         run: |
           set -euo pipefail
-          baseline="$(curl -fsSL --max-time 30 "https://duediligence.ph/.well-known/duediligence-release.txt?release=$GITHUB_SHA" | tr -d '\r\n')"
-          [[ "$baseline" =~ ^[a-f0-9]{40}$ ]]
-          git cat-file -e "$baseline^{commit}"
-          git merge-base --is-ancestor "$baseline" "$GITHUB_SHA"
-          echo "sha=$baseline" >> "$GITHUB_OUTPUT"
-          echo "Production baseline $baseline"
-      - name: Deploy existing isolated Cloudflare static preview
+          git worktree add --detach "$RUNNER_TEMP/qr-live-baseline" "$BASELINE_SHA"
+          npm ci --prefix "$RUNNER_TEMP/qr-live-baseline/worker" --ignore-scripts --no-audit --no-fund
+          (cd "$RUNNER_TEMP/qr-live-baseline" && GITHUB_SHA="$BASELINE_SHA" node scripts/test-pages-artifact.mjs)
+          cp -a "$RUNNER_TEMP/qr-live-baseline/.pages-dist" "$GITHUB_WORKSPACE/.qr-release-dist"
+          git show "$GITHUB_SHA:assets/payments/bpi-instapay-199-qr.png" > .qr-release-dist/assets/payments/bpi-instapay-199-qr.png
+          printf '%s\n' "$GITHUB_SHA" > .qr-release-dist/.well-known/duediligence-release.txt
+          test "$(sha256sum .qr-release-dist/assets/payments/bpi-instapay-199-qr.png | cut -d' ' -f1)" = 84959f96cfa8cbe9ff9c9a342d95c443c0ff670d6b1ae0d82efc151430861175
+          diff -qr "$RUNNER_TEMP/qr-live-baseline/.pages-dist" .qr-release-dist | sort > "$RUNNER_TEMP/qr-changes.txt" || true
+          test "$(wc -l < "$RUNNER_TEMP/qr-changes.txt")" -eq 2
+          grep -Fq '.well-known/duediligence-release.txt' "$RUNNER_TEMP/qr-changes.txt"
+          grep -Fq 'assets/payments/bpi-instapay-199-qr.png' "$RUNNER_TEMP/qr-changes.txt"
+          for file in index.html assets/phase2-experience.js assets/pricing-renderer.js service-worker.js assets/payments/bpi-instapay-199-qr.png; do
+            route="$file"
+            if test "$file" = index.html; then route=""; fi
+            expected="$(sha256sum "$RUNNER_TEMP/qr-live-baseline/.pages-dist/$file" | cut -d' ' -f1)"
+            actual="$(curl -fsSL --retry 2 --max-time 30 "https://duediligence.ph/$route?qr-baseline=$GITHUB_SHA" | sha256sum | cut -d' ' -f1)"
+            test "$actual" = "$expected"
+          done
+      - name: Deploy only the QR overlay to existing Cloudflare isolated preview
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -128,42 +141,99 @@ jobs:
           set -euo pipefail
           test -n "$CLOUDFLARE_API_TOKEN"
           test -n "$CLOUDFLARE_ACCOUNT_ID"
-          printf '{"name":"duediligence-asset-recovery-preview","compatibility_date":"2026-10-01","workers_dev":true,"assets":{"directory":"%s/.pages-dist","html_handling":"auto-trailing-slash"}}\n' "$GITHUB_WORKSPACE" > "$RUNNER_TEMP/payment-qr-preview.jsonc"
-          npx --yes wrangler@4.114.0 deploy --config "$RUNNER_TEMP/payment-qr-preview.jsonc"
-      - name: Verify public preview exact bytes and release marker
+          printf '{"name":"duediligence-asset-recovery-preview","compatibility_date":"2026-10-01","workers_dev":true,"assets":{"directory":"%s/.qr-release-dist","html_handling":"auto-trailing-slash"}}\n' "$GITHUB_WORKSPACE" > "$RUNNER_TEMP/qr-preview.jsonc"
+          npx --yes wrangler@4.114.0 deploy --config "$RUNNER_TEMP/qr-preview.jsonc"
+      - name: Verify all critical preview bytes including the new QR
         run: |
           set -euo pipefail
           preview=https://duediligence-asset-recovery-preview.wallyesteban1993.workers.dev
-          verified=false
+          ok=false
           for attempt in $(seq 1 20); do
-            if test "$(curl -fsSL --max-time 20 "$preview/.well-known/duediligence-release.txt?release=$GITHUB_SHA" | tr -d '\r\n')" = "$GITHUB_SHA"; then
-              matched=true
-              for file in assets/payments/bpi-instapay-199-qr.png assets/phase2-experience.js assets/pricing-renderer.js index.html admin/index.html examination-room/index.html; do
+            marker="$(curl -fsSL --max-time 20 "$preview/.well-known/duediligence-release.txt?qr=$GITHUB_SHA" | tr -d '\r\n' || true)"
+            if test "$marker" = "$GITHUB_SHA"; then
+              matching=true
+              for file in index.html admin/index.html examination-room/index.html service-worker.js assets/phase2-experience.js assets/pricing-renderer.js assets/payments/bpi-instapay-199-qr.png; do
                 route="$file"
                 case "$file" in index.html) route="" ;; */index.html) route="${file%index.html}" ;; esac
-                expected="$(sha256sum ".pages-dist/$file" | cut -d' ' -f1)"
-                actual="$(curl -fsSL --max-time 20 "$preview/$route?release=$GITHUB_SHA" | sha256sum | cut -d' ' -f1)"
-                if test "$actual" != "$expected"; then matched=false; break; fi
+                expected="$(sha256sum ".qr-release-dist/$file" | cut -d' ' -f1)"
+                actual="$(curl -fsSL --max-time 20 "$preview/$route?qr=$GITHUB_SHA" | sha256sum | cut -d' ' -f1 || true)"
+                if test "$actual" != "$expected"; then matching=false; break; fi
               done
-              if test "$matched" = true; then verified=true; break; fi
+              if test "$matching" = true; then ok=true; break; fi
+            fi
+            sleep 5
+          done
+          test "$ok" = true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qr-only-reviewed-pages
+          path: .qr-release-dist
+          include-hidden-files: true
+          retention-days: 30
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qr-only-rollback-pages
+          path: ${{ runner.temp }}/qr-live-baseline/.pages-dist
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: error
+
+  recovery_overlay:
+    name: Protected Pages deployment of unchanged site plus new QR
+    if: github.event_name == 'push' && github.repository == 'codingwally/Bar-Exam-simulator' && github.ref == 'refs/heads/main'
+    needs: recovery_preflight
+    environment:
+      name: github-pages
+      url: https://duediligence.ph
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: qr-only-reviewed-pages
+          path: .qr-release-dist
+      - name: Verify unchanged baseline still live and exact new QR before publish
+        env:
+          BASELINE_SHA: ${{ needs.recovery_preflight.outputs.baseline_sha }}
+        run: |
+          set -euo pipefail
+          test "$BASELINE_SHA" = 8ed2a21d3fa33d065fdf1c3f69f631210ca08e25
+          test "$(curl -fsSL --max-time 30 "https://duediligence.ph/.well-known/duediligence-release.txt?qr-publish=$GITHUB_SHA" | tr -d '\r\n')" = "$BASELINE_SHA"
+          test "$(tr -d '\r\n' < .qr-release-dist/.well-known/duediligence-release.txt)" = "$GITHUB_SHA"
+          test "$(sha256sum .qr-release-dist/assets/payments/bpi-instapay-199-qr.png | cut -d' ' -f1)" = 84959f96cfa8cbe9ff9c9a342d95c443c0ff670d6b1ae0d82efc151430861175
+      - uses: actions/configure-pages@v4
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .qr-release-dist
+      - name: Deploy exact QR-only overlay to production
+        id: deployment
+        uses: actions/deploy-pages@v4
+      - name: Prove new QR and unchanged checkout, home, and service worker live
+        run: |
+          set -euo pipefail
+          verified=false
+          for attempt in $(seq 1 24); do
+            marker="$(curl -fsSL --max-time 20 "https://duediligence.ph/.well-known/duediligence-release.txt?qr-verify=$GITHUB_SHA" | tr -d '\r\n' || true)"
+            if test "$marker" = "$GITHUB_SHA"; then
+              matching=true
+              for file in index.html assets/phase2-experience.js assets/pricing-renderer.js service-worker.js assets/payments/bpi-instapay-199-qr.png; do
+                route="$file"
+                if test "$file" = index.html; then route=""; fi
+                expected="$(sha256sum ".qr-release-dist/$file" | cut -d' ' -f1)"
+                actual="$(curl -fsSL --max-time 20 "https://duediligence.ph/$route?qr-verify=$GITHUB_SHA" | sha256sum | cut -d' ' -f1 || true)"
+                if test "$actual" != "$expected"; then matching=false; break; fi
+              done
+              if test "$matching" = true; then verified=true; break; fi
             fi
             sleep 5
           done
           test "$verified" = true
-      - name: Dispatch existing guarded github-pages deployment
-        env:
-          GH_TOKEN: ${{ github.token }}
-          EXPECTED_BASE: ${{ steps.baseline.outputs.sha }}
-          VALIDATION_RUN: ${{ steps.provenance.outputs.run_id }}
-        run: |
-          set -euo pipefail
-          gh workflow run deploy-pages-only.yml --ref main \
-            -f confirm_production=true \
-            -f approval_reference=owner-2026-11-06-urgent-qr-checkout-repair \
-            -f expected_base_sha="$EXPECTED_BASE" \
-            -f expected_source_sha="$GITHUB_SHA" \
-            -f validation_run_id="$VALIDATION_RUN" \
-            -f staging_preview_url=https://duediligence-asset-recovery-preview.wallyesteban1993.workers.dev
+          echo "NEW_CUSTOMER_QR_SHA256=84959f96cfa8cbe9ff9c9a342d95c443c0ff670d6b1ae0d82efc151430861175"
+          echo 'Only the payment QR and release marker changed; all other checked live files match the prior baseline.'
   deploy_pages:
     if: github.event_name == 'workflow_dispatch'
     name: Verify and deploy the isolated Pages artifact

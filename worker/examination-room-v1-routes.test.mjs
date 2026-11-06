@@ -67,7 +67,9 @@ function clientExam(overrides = {}) {
   };
 }
 
-function publicationFixture(integrityTier = 'standard') {
+function publicationFixture(integrityTier = 'standard', questions = [
+  { type: 'essay', prompt: 'Explain separation of powers.', points: 20, wordLimit: 800 },
+]) {
   return buildPublicationVersion({
     examinationId: IDS.exam,
     version: 1,
@@ -80,7 +82,7 @@ function publicationFixture(integrityTier = 'standard') {
       identityMode: 'real_names',
       integrityTier,
       privacyNoticeVersion: 'exam-room-v1',
-      questions: [{ type: 'essay', prompt: 'Explain separation of powers.', points: 20, wordLimit: 800 }],
+      questions,
     },
   }).manifest;
 }
@@ -254,6 +256,7 @@ function dependencyFixture(options = {}) {
       deliveries.push(structuredClone(message));
       return { status: 'sent' };
     },
+    ...(options.submissionIntake ? { submissionIntake: options.submissionIntake } : {}),
     ...(typeof options.afterStudentCommand === 'function'
       ? { afterStudentCommand: options.afterStudentCommand }
       : {}),
@@ -1382,6 +1385,37 @@ test('answer saves are core-validated, append-only commands with hashed credenti
   assert.doesNotMatch(JSON.stringify(saveCall), new RegExp(REQUEST_KEY, 'u'));
 });
 
+test('multiple choice autosave and legacy flag changes preserve the selected answer', async () => {
+  const publicationManifest = publicationFixture('standard', [{
+    type: 'multiple-choice', prompt: 'Choose an answer.', points: 1,
+    choices: ['First', 'Second'], correctOptionIndex: 1,
+  }]);
+  const { handlers, calls } = dependencyFixture({
+    rpc: async (_env, parameters) => parameters.operation === 'session_context' ? {
+      ok: true,
+      publicationManifest,
+      publicationHash: 'a'.repeat(64),
+      answerRevisions: [{ questionKey: 'q001', answer: 1 }],
+      nextRevisionByQuestion: { q001: 2 },
+    } : { ok: true, revision: { revision: 2 } },
+  });
+  for (const [index, answer] of ['option-2', undefined, null].entries()) {
+    const response = await handlers.studentCommand(
+      makeRequest('/examination-room/v1/student/command', {
+        operation: 'save_answer',
+        payload: {
+          sessionId: IDS.session, sessionToken: SESSION_TOKEN,
+          questionId: 'q001', answer, flagged: true,
+        },
+        idempotencyKey: REQUEST_KEY + ':' + index,
+      }, null), ENV, ORIGIN, ORIGIN,
+    );
+    assert.equal(response.status, 200);
+  }
+  assert.deepEqual(calls.filter((entry) => entry.operation === 'save_answer')
+    .map((entry) => entry.payload.answerRevision.answer), [1, 1, null]);
+});
+
 test('submission freezes latest revisions into a manifest and keeps retries idempotent by hash', async () => {
   const publication = publicationFixture();
   const { handlers, calls } = dependencyFixture({
@@ -2009,7 +2043,7 @@ test('student submit persists blank answers and still produces a receipt', async
         sessionToken: SESSION_TOKEN,
         answers: [{ questionId: 'q001', answer: null, flagged: false }],
       },
-      idempotencyKey: REQUEST_KEY,
+      idempotencyKey: 'a'.repeat(128),
     }, null), ENV, ORIGIN, ORIGIN,
   );
 
@@ -2023,7 +2057,13 @@ test('student submit persists blank answers and still produces a receipt', async
 
 test('student submission retry reuses an identical saved revision instead of creating a conflict', async () => {
   const publication = publicationFixture();
-  const savedRevision = answerRevisionFixture(publication);
+  const savedRevision = normalizeAnswerRevision({
+    attemptId: IDS.session,
+    questionNumber: 1,
+    revision: 1,
+    idempotencyKey: REQUEST_KEY,
+    answer: 'Café\nSecond line',
+  }, { versionManifest: publication, publicationHash: 'a'.repeat(64) });
   const { handlers, calls } = dependencyFixture({
     rpc: async (_env, parameters) => {
       if (parameters.operation === 'session_context') {
@@ -2058,7 +2098,7 @@ test('student submission retry reuses an identical saved revision instead of cre
         sessionToken: SESSION_TOKEN,
         answers: [{
           questionId: 'q001',
-          answer: savedRevision.answer,
+          answer: 'Cafe\u0301\r\nSecond line',
           flagged: false,
         }],
       },
@@ -2072,7 +2112,7 @@ test('student submission retry reuses an identical saved revision instead of cre
 });
 
 
-test('accepted submit hands the roster-bound email and answers to the post-submit hook', async () => {
+test('accepted submit hands only the session reference and request hash to the post-submit hook', async () => {
   const publication = publicationFixture();
   const handoffs = [];
   const { handlers } = dependencyFixture({
@@ -2113,12 +2153,70 @@ test('accepted submit hands the roster-bound email and answers to the post-submi
 
   assert.equal(response.status, 201);
   assert.equal(handoffs.length, 1);
-  assert.equal(handoffs[0].submissionEmailDetails.recipient, 'student@example.edu.ph');
+  assert.deepEqual(Object.keys(handoffs[0].submissionEmailDetails).sort(), ['idempotencyHash', 'sessionId']);
+  assert.equal(handoffs[0].submissionEmailDetails.sessionId, IDS.session);
   assert.match(handoffs[0].submissionEmailDetails.idempotencyHash, /^[0-9a-f]{64}$/u);
-  assert.equal(handoffs[0].submissionEmailDetails.answers.length, publication.questions.length);
-  assert.equal(handoffs[0].submissionEmailDetails.answers[0].questionNumber, 1);
-  assert.equal(
-    handoffs[0].submissionEmailDetails.answers[0].answer,
-    answerRevisionFixture(publication).answer,
-  );
+});
+
+test('durable submission stages the frozen answers before processing and retries without rebuilding', async () => {
+  const publication = publicationFixture();
+  const revision = answerRevisionFixture(publication);
+  const steps = [];
+  const accepted = { ok: true, submission: { id: IDS.submission, status: 'accepted', receiptId: IDS.submission } };
+  let savedPayload = null;
+  let official = null;
+  let postSubmitCount = 0;
+  const { handlers } = dependencyFixture({
+    afterStudentCommand: () => { postSubmitCount += 1; },
+    submissionIntake: async (_env, operation, payload) => {
+      steps.push(operation);
+      if (operation === 'read') return official || { ok: true, intake: savedPayload ? 'pending' : 'missing' };
+      if (operation === 'stage') {
+        assert.equal(savedPayload, null);
+        savedPayload = structuredClone(payload);
+        return { ok: true, intake: 'pending' };
+      }
+      return { ok: true, intake: 'pending' };
+    },
+    rpc: async (_env, { operation }) => {
+      steps.push(operation);
+      if (operation === 'submission_intent') return { ok: true };
+      assert.equal(operation, 'session_context', 'the route must never finalize outside the intake');
+      return {
+        ok: true, publicationManifest: publication, publicationHash: 'a'.repeat(64),
+        studentIdentity: identityFixture(), answerRevisions: [revision],
+        privacyConsent: {
+          noticeVersion: 'exam-room-v1', accepted: true,
+          acceptedAt: '2026-08-26T01:55:00.000Z', recordingAccepted: false,
+        },
+      };
+    },
+  });
+  const request = (answer) => makeRequest('/examination-room/v1/student/command', {
+    operation: 'submit',
+    payload: {
+      sessionId: IDS.session, sessionToken: SESSION_TOKEN,
+      answers: [{ questionId: 'q001', answer }],
+    },
+    idempotencyKey: REQUEST_KEY,
+  }, null);
+
+  const initial = await handlers.studentCommand(request('Latest answer not yet autosaved.'), ENV, ORIGIN, ORIGIN);
+  assert.equal(initial.status, 503);
+  assert.equal((await initial.json()).error.code, 'EXAM_ROOM_V1_SUBMISSION_PENDING');
+  assert.deepEqual(steps, ['read', 'session_context', 'submission_intent', 'stage', 'drain']);
+  assert.equal(savedPayload.submissionManifest.questions[0].answer, 'Latest answer not yet autosaved.');
+  assert.equal(savedPayload.pendingAnswerWrites.length, 1);
+  assert.equal(savedPayload.pendingAnswerWrites[0].answerRevision.answer, 'Latest answer not yet autosaved.');
+  assert.equal(savedPayload.answerSelections[0].revision, 1);
+  assert.doesNotMatch(JSON.stringify(savedPayload), new RegExp(SESSION_TOKEN, 'u'));
+  assert.equal(postSubmitCount, 0);
+
+  official = accepted; // The scheduled worker has finalized the first payload.
+  steps.length = 0;
+  const retry = await handlers.studentCommand(request('Different browser contents.'), ENV, ORIGIN, ORIGIN);
+  assert.equal(retry.status, 201);
+  assert.equal((await retry.json()).submission.receiptId, IDS.submission);
+  assert.deepEqual(steps, ['read']);
+  assert.equal(postSubmitCount, 1);
 });

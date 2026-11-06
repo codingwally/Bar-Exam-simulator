@@ -1,0 +1,179 @@
+name: Release verified Examination Room midterm to production
+
+# Owner-authorized, single-purpose release. Does not run on unrelated commits.
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/release-examination-room-midterm-20261107.yml
+
+permissions:
+  contents: read
+  actions: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: examination-room-production-cutover
+  cancel-in-progress: false
+
+env:
+  STAGED_EXAMINATION_SHA: e1932fea6b9d8a39b91c95b07ec042548b275a7a
+  STAGING_E2E_RUN_ID: '42190841939'
+  SITE_URL: https://duediligence.ph
+
+jobs:
+  authorize:
+    name: Match protected staging evidence and exact examination product files
+    if: >-
+      github.repository == 'codingwally/Bar-Exam-simulator' &&
+      startsWith(github.event.head_commit.message, 'release: deploy verified Examination Room midterm')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Require successful protected staging evidence and reviewed merge
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          git merge-base --is-ancestor "$STAGED_EXAMINATION_SHA" HEAD
+          run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$STAGING_E2E_RUN_ID")"
+          test "$(jq -r '.status' <<<"$run")" = completed
+          test "$(jq -r '.conclusion' <<<"$run")" = success
+          test "$(jq -r '.event' <<<"$run")" = push
+          test "$(jq -r '.path' <<<"$run")" = '.github/workflows/examination-room-midterm-staging.yml'
+          test "$(jq -r '.head_sha' <<<"$run")" = "$STAGED_EXAMINATION_SHA"
+          for f in worker/index.mjs worker/examination-room-email.mjs worker/examination-room-v1-routes.mjs worker/wrangler.toml examination-room/student.js examination-room/api.js examination-room/student.html examination-room/index.html service-worker.js; do
+            test "$(git rev-parse "$STAGED_EXAMINATION_SHA:$f")" = "$(git rev-parse "HEAD:$f")" || {
+              echo "Staged examination file differs from production candidate: $f" >&2
+              exit 1
+            }
+          done
+          git diff --quiet HEAD^1 HEAD -- assets/payments pricing
+          echo "Exact staging-proven examination files, current main checkout baseline, and approval confirmed."
+      - name: Run full examination contracts and verify production intake configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+          node --check worker/index.mjs
+          node --check worker/examination-room-v1-routes.mjs
+          node --check examination-room/student.js
+          node --test examination-room/*.test.cjs admin/examination-room-admin.test.cjs worker/*.test.mjs
+          node scripts/test-examination-room-database.mjs
+          node scripts/test-examination-room-release-workflows.mjs
+          node scripts/build-pages-artifact.mjs
+          node scripts/test-pages-artifact.mjs
+          grep -Fq 'EXAMINATION_ROOM_DURABLE_INTAKE = "true"' worker/wrangler.toml
+          grep -Fq 'EXAMINATION_ROOM_BACKUP_EMAIL = "wallyesteban1993@gmail.com"' worker/wrangler.toml
+          grep -Fq 'EXAMINATION_ROOM_EMAIL_MODE = "enabled"' worker/wrangler.toml
+          git diff --check
+
+  deploy_worker:
+    name: Deploy exact approved Worker and public API alias
+    needs: authorize
+    runs-on: ubuntu-latest
+    environment: production-worker
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Confirm existing Worker secrets are present
+        shell: bash
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.114.0 secret list --format json --name duediligence-gemini-examiner |
+            node -e "let s='';process.stdin.on('data',x=>s+=x);process.stdin.on('end',()=>{const a=new Set(JSON.parse(s).map(x=>x.name));for(const n of ['SUPABASE_SERVICE_ROLE_KEY','SUPABASE_URL','EXAMINATION_ROOM_KEY_PEPPER','RESEND_API_KEY','EXAMINATION_ROOM_BACKUP_MASTER_KEY_V1'])if(!a.has(n))throw Error('Missing production Worker secret '+n);console.log('Required Worker secrets exist')})"
+      - name: Deploy current production Worker with existing Cloudflare credentials
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          wranglerVersion: '4.114.0'
+          command: deploy
+      - name: Deploy existing provider-neutral API alias
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          wranglerVersion: '4.114.0'
+          command: deploy --config wrangler.public-api.toml
+      - name: Verify live authenticated professor and invalid student-key boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          for n in 1 2 3 4 5 6 7 8; do
+            professor="$(curl -fsS --max-time 20 -X POST 'https://duediligence-api.wallyesteban1993.workers.dev/examination-room/v1/professor/query' -H 'Origin: https://duediligence.ph' -H 'Content-Type: application/json' -d '{"operation":"session","payload":{}}' || true)"
+            if jq -e '.error.code=="EXAM_ROOM_V1_PROFESSOR_SIGN_IN_REQUIRED"' >/dev/null 2>&1 <<<"$professor"; then
+              echo "Production examination professor authentication boundary is serving."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Production Examination Room Worker did not pass its authentication boundary." >&2
+          exit 1
+
+  deploy_pages:
+    name: Publish exact reviewed examination static assets and preserve checkout
+    needs: deploy_worker
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build and verify complete current-main Pages artifact
+        run: |
+          npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+          node scripts/build-pages-artifact.mjs
+          node scripts/test-pages-artifact.mjs
+          test "$(cat .pages-dist/.well-known/duediligence-release.txt)" = "$GITHUB_SHA"
+      - uses: actions/configure-pages@v4
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .pages-dist
+      - name: Deploy production Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+      - name: Verify served release marker and exact student script
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(sha256sum .pages-dist/examination-room/student.js | cut -d' ' -f1)"
+          for n in $(seq 1 12); do
+            actual="$(curl -fLsS --max-time 15 -H 'Cache-Control: no-cache' "$SITE_URL/.well-known/duediligence-release.txt?midterm=$GITHUB_SHA" || true)"
+            curl -fLsS --max-time 15 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/student.js?midterm=$GITHUB_SHA" -o /tmp/midterm-student.js || true
+            served="$(sha256sum /tmp/midterm-student.js 2>/dev/null | cut -d' ' -f1 || true)"
+            if [[ "$actual" == "$GITHUB_SHA" && "$served" == "$expected" ]]; then
+              echo "Production Pages serves the exact reviewed examination asset and release SHA."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Production static artifact or release marker does not match." >&2
+          exit 1

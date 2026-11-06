@@ -325,7 +325,8 @@ const pgTapCompatibilityHarness = `
 
 const modulePath = resolvePgliteModule();
 const { PGlite } = await import(pathToFileURL(modulePath).href);
-const database = new PGlite();
+const { pgcrypto } = await import(pathToFileURL(join(dirname(modulePath), 'contrib', 'pgcrypto.js')).href);
+const database = new PGlite({ extensions: { pgcrypto } });
 await database.waitReady;
 
 try {
@@ -368,6 +369,7 @@ try {
       aud text,
       role text,
       email text unique,
+      email_confirmed_at timestamptz,
       raw_app_meta_data jsonb not null default '{}'::jsonb,
       raw_user_meta_data jsonb not null default '{}'::jsonb,
       created_at timestamptz not null default now(),
@@ -861,7 +863,32 @@ try {
     /^create extension if not exists pgtap with schema extensions;\s*$/imu,
     '-- Local PGlite validation uses the compatibility harness installed above.',
   );
+  await database.exec('create extension pgcrypto with schema extensions');
+  for (const migration of [
+    '20260922113200_examination_room_submission_intent_retry.sql',
+    '20260922132200_examination_room_submit_replay_receipt_time.sql',
+    '20260925173700_examination_room_submit_audit_hash_v2.sql',
+  ]) {
+    await database.exec(readFileSync(join(repositoryRoot, 'supabase', 'migrations', migration), 'utf8'));
+  }
+  // Test the release against deployed function bodies when a read-only export
+  // is supplied. Historical patch migrations must run before this baseline.
+  const repositoryStudentApi = await scalar(database,
+    "select pg_get_functiondef('examination_room_v1.api_student(text,jsonb)'::regprocedure)");
+  if (process.env.EXAMINATION_ROOM_DATABASE_BASELINE_SQL) {
+    await database.exec(readFileSync(resolve(process.env.EXAMINATION_ROOM_DATABASE_BASELINE_SQL), 'utf8'));
+  }
+  await database.exec(readFileSync(join(repositoryRoot, 'supabase', 'migrations',
+    '20261105101000_examination_room_durable_submission.sql'), 'utf8'));
+  await database.exec(readFileSync(join(repositoryRoot, 'supabase', 'migrations',
+    '20261106011130_examination_room_snapshot_before_reconciliation.sql'), 'utf8'));
   await database.exec(runnablePgTapSql);
+  if (process.env.EXAMINATION_ROOM_DATABASE_BASELINE_SQL) {
+    console.log(`Deployed student API passed ${plannedAssertions} database assertions.`);
+    // The remaining tests exercise historical upgrades from the repository's
+    // original admission contract, independently of the deployed API probe.
+    await database.exec(repositoryStudentApi);
+  }
   await database.exec(readFileSync(migrationPaths[6], 'utf8'));
 
   // Upgrade fixtures prove that the additive migration opens only usable,
@@ -2334,7 +2361,7 @@ try {
   assert.equal(restoredDraft.status, 'draft');
 
   console.log(
-    `Examination Room database validation passed: all eight additive migrations, ${plannedAssertions}-assertion database suite, plus immediate Admin key activation, date-free approval, rolling scheduled-key compatibility, community creator, roster-free publication, 100-approval idempotency, open admission, allowlist, revoked/closed/expired denial, lifecycle recovery, encrypted media, exact-owner, platform-owner, and upgrade checks.`,
+    `Examination Room database validation passed: ${plannedAssertions}-assertion database suite, plus immediate Admin key activation, date-free approval, rolling scheduled-key compatibility, community creator, roster-free publication, 100-approval idempotency, open admission, allowlist, revoked/closed/expired denial, lifecycle recovery, encrypted media, exact-owner, platform-owner, and upgrade checks.`,
   );
 } finally {
   await database.close();

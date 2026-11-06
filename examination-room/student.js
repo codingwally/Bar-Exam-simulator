@@ -55,12 +55,11 @@
     answers: {},
     flags: {},
     currentIndex: 0,
-    syncing: false,
+    syncLanes: { answers: {}, events: {} },
     submitting: false,
     timerId: null,
     timerThresholdsAnnounced: {},
     timeExpiryHandled: false,
-    syncTimer: null,
     heartbeatTimer: null,
     heartbeatInFlight: false,
     answerTimers: new Map(),
@@ -123,7 +122,7 @@
   function registerExaminationRoomServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
 
-    navigator.serviceWorker.register('/service-worker.js?v=focus-fullscreen-20260926-1-native-close-20261023-1')
+    navigator.serviceWorker.register('/service-worker.js?v=focus-fullscreen-20260926-1-native-close-20261023-1-answer-sync-20261105-1&release=midterm-durable-20261106-1')
       .catch(function () {
         // Registration failure must never block a student who still has a
         // working network connection. The exam UI already reports offline
@@ -150,7 +149,7 @@
       'pendingSubmissionNote', 'receiptDetails', 'receiptReference',
       'receiptSubmittedAt', 'receiptExamVersion', 'receiptAnswerCount',
       'receiptSignature', 'receiptError', 'retrySubmissionButton',
-      'printReceiptButton', 'resultPanel', 'resultStatusIcon', 'resultTitle',
+      'printReceiptButton', 'downloadAnswerBackupButton', 'resultPanel', 'resultStatusIcon', 'resultTitle',
       'resultMessage', 'resultCheckedAt', 'resultRefreshButton',
       'resultSummary', 'resultTotalScore', 'resultTotalPossible',
       'resultReleasedAt', 'resultQuestionList', 'resultError',
@@ -180,7 +179,10 @@
     elements.confirmSubmitButton.addEventListener('click', function () {
       startSubmission(false);
     });
-    elements.retrySubmissionButton.addEventListener('click', retryPendingSubmission);
+    elements.retrySubmissionButton.addEventListener('click', retrySubmissionManually);
+    elements.downloadAnswerBackupButton.addEventListener('click', function () {
+      if (!downloadAnswerBackup()) showToast('The answer backup could not be downloaded. Try again.', 'ph-warning');
+    });
     elements.printReceiptButton.addEventListener('click', function () {
       window.print();
     });
@@ -898,6 +900,7 @@
 
     textarea.addEventListener('input', function () {
       state.answers[question.id] = textarea.value;
+      persistAttempt().catch(handleLocalSaveFailure);
       if (count) {
         updateWordCount(count, textarea.value, question.maxWords);
       }
@@ -973,6 +976,7 @@
     await persistAttempt();
     await enqueueOperation('question.flag_changed', {
       questionId: question.id,
+      answer: state.answers[question.id] === undefined ? null : state.answers[question.id],
       flagged: Boolean(state.flags[question.id])
     });
     renderQuestion(state.currentIndex, false);
@@ -1034,57 +1038,79 @@
       appVersion: APP_VERSION
     };
     await databasePut('operations', operation);
-    await persistAttempt();
-    scheduleQueueSync(180);
+    var lane = operationLane(operation);
+    if (lane === 'answers') await persistAttempt();
+    scheduleQueueSync(180, lane);
   }
 
-  function scheduleQueueSync(delay) {
-    if (state.syncTimer) {
-      window.clearTimeout(state.syncTimer);
+  function operationLane(operation) {
+    return operation.kind === 'integrity.event' ? 'events' : 'answers';
+  }
+
+  function scheduleQueueSync(delay, laneName) {
+    if (!laneName) {
+      scheduleQueueSync(delay, 'answers');
+      scheduleQueueSync(delay, 'events');
+      return;
     }
-    state.syncTimer = window.setTimeout(function () {
-      state.syncTimer = null;
-      flushOperationQueue();
+    var lane = state.syncLanes[laneName];
+    if (lane.timer) return;
+    lane.timer = window.setTimeout(function () {
+      lane.timer = null;
+      flushOperationQueue(laneName);
     }, delay || 0);
   }
 
-  async function flushOperationQueue() {
-    if (state.syncing || !state.attempt || !state.api || !navigator.onLine || state.attempt.status === 'submitted') {
-      if (state.attempt && !navigator.onLine) {
-        updateSaveStatus('local');
-      }
-      return false;
+  async function flushOperationQueue(laneName) {
+    var lane = state.syncLanes[laneName];
+    var attempt = state.attempt;
+    if (lane.active || !attempt || !state.api || !navigator.onLine || attempt.status !== 'in_progress') {
+      return;
     }
 
-    var operations = await getOperationsForAttempt(state.attempt.attemptId);
-    if (!operations.length) {
-      updateSaveStatus('saved');
-      return true;
-    }
-
-    state.syncing = true;
-    updateSaveStatus('saving');
+    var isAnswerLane = laneName === 'answers';
+    var remaining = false;
+    var retryDelay = 180;
+    lane.active = true;
     try {
-      operations.sort(function (a, b) { return a.sequence - b.sequence; });
-      var result = await state.api.syncOperations({
-        attemptId: state.attempt.attemptId,
-        sessionToken: state.attempt.sessionToken,
-        operations: operations.map(copyObject)
+      var operations = (await getOperationsForAttempt(attempt.attemptId)).filter(function (operation) {
+        return operationLane(operation) === laneName;
       });
-      if (!result || !Array.isArray(result.acknowledgedOperationIds)) {
-        throw createAppError('SYNC_UNCONFIRMED');
+      if (operations.length && state.attempt === attempt && attempt.status === 'in_progress') {
+        remaining = true;
+        if (isAnswerLane) updateSaveStatus('saving');
+        operations.sort(function (a, b) { return a.sequence - b.sequence; });
+        var result = await state.api.syncOperations({
+          attemptId: attempt.attemptId,
+          sessionToken: attempt.sessionToken,
+          operations: operations.map(copyObject)
+        });
+        if (!result || !Array.isArray(result.acknowledgedOperationIds)) {
+          throw createAppError('SYNC_UNCONFIRMED');
+        }
+        await deleteOperations(result.acknowledgedOperationIds);
+        if (isAnswerLane && state.attempt === attempt && attempt.status === 'in_progress') {
+          attempt.serverRevision = result.serverRevision || attempt.serverRevision;
+          await persistAttempt();
+        }
+        remaining = (await getOperationsForAttempt(attempt.attemptId)).some(function (operation) {
+          return operationLane(operation) === laneName;
+        });
       }
-      await deleteOperations(result.acknowledgedOperationIds);
-      state.attempt.serverRevision = result.serverRevision || state.attempt.serverRevision;
-      await persistAttempt();
-      var remaining = await getOperationsForAttempt(state.attempt.attemptId);
-      updateSaveStatus(remaining.length ? 'local' : 'saved');
-      return remaining.length === 0;
+      lane.failures = 0;
+      if (isAnswerLane && state.attempt === attempt && attempt.status === 'in_progress') {
+        updateSaveStatus(remaining ? 'local' : 'saved');
+      }
     } catch (error) {
-      updateSaveStatus('local');
-      return false;
+      remaining = true;
+      lane.failures = (lane.failures || 0) + 1;
+      retryDelay = Math.min(15000, 1000 * Math.pow(2, Math.min(lane.failures - 1, 4)));
+      if (isAnswerLane && state.attempt === attempt && attempt.status === 'in_progress') updateSaveStatus('local');
     } finally {
-      state.syncing = false;
+      lane.active = false;
+      if (state.attempt?.status === 'in_progress' && navigator.onLine && (remaining || state.attempt !== attempt)) {
+        scheduleQueueSync(state.attempt === attempt ? retryDelay : 180, laneName);
+      }
     }
   }
 
@@ -1183,7 +1209,7 @@
         fullscreen: Boolean(document.fullscreenElement)
       });
     } catch (error) {
-      handleLocalSaveFailure(error);
+      // Monitoring failures have no effect on the answer save state.
     }
   }
 
@@ -1331,6 +1357,53 @@
     }
   }
 
+  function buildAnswerBackup(attempt, questions) {
+    var student = attempt.student || {};
+    var lines = [
+      'Due Diligence Examination Room — answer backup',
+      'Examination: ' + (attempt.metadata?.title || attempt.metadata?.examTitle || attempt.examId),
+      'Exam version: ' + attempt.examVersion,
+      'Student: ' + (student.fullName || ''),
+      'Account email: ' + (student.email || ''),
+      'Attempt: ' + attempt.attemptId,
+      'Backup reference: ' + attempt.idempotencyKey,
+      'Captured at: ' + attempt.clientCompletedAt,
+      'This file is a local backup. The official submission receipt is issued separately.',
+      ''
+    ];
+    questions.forEach(function (question) {
+      var answer = attempt.answers[question.id];
+      var choice = question.options?.find(function (option) { return option.id === answer; });
+      lines.push('Question ' + question.number + ' (' + question.id + ')' + (attempt.flags?.[question.id] ? ' [flagged]' : ''));
+      lines.push(choice?.label || choice?.text || (answer == null || answer === '' ? '[Unanswered]' : String(answer)));
+      lines.push('');
+    });
+    return lines.join('\n');
+  }
+
+  function downloadAnswerBackup() {
+    var attempt = state.attempt;
+    if (!attempt?.idempotencyKey || !attempt.answers || !state.questions.length
+      || state.questions.length !== Number(state.metadata?.questionCount)) return false;
+    try {
+      var text = buildAnswerBackup(attempt, state.questions);
+      var url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+      var link = document.createElement('a');
+      link.href = url;
+      link.download = 'examination-answers-' + String(attempt.attemptId).replace(/[^a-zA-Z0-9_-]/g, '') + '.txt';
+      document.body.appendChild(link);
+      try {
+        link.click();
+      } finally {
+        link.remove();
+        window.setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+      }
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
   async function startSubmission(automatic) {
     if (!state.attempt || state.attempt.status === 'submitted' || state.submitting) {
       return;
@@ -1348,6 +1421,7 @@
       state.attempt.automaticSubmission = Boolean(automatic || state.attempt.automaticSubmission);
       state.attempt.answers = copyObject(state.answers);
       state.attempt.flags = copyObject(state.flags);
+      if (!automatic) downloadAnswerBackup();
       state.attempt.submissionRetryStartedAt = state.attempt.submissionRetryStartedAt || new Date().toISOString();
       state.attempt.submissionRetryCount = Number(state.attempt.submissionRetryCount || 0);
       await persistAttempt();
@@ -1388,6 +1462,7 @@
     elements.resultPanel.hidden = true;
     elements.retrySubmissionButton.hidden = true;
     elements.printReceiptButton.hidden = true;
+    elements.downloadAnswerBackupButton.hidden = !state.attempt?.idempotencyKey;
     clearError(elements.receiptError);
     window.scrollTo({ top: 0, behavior: 'auto' });
   }
@@ -1413,6 +1488,15 @@
     elements.receiptTitle.textContent = 'Please wait — your answers are being uploaded.';
     elements.receiptMessage.textContent = 'Do not close this window. We will keep trying automatically for up to ' + minutes + ' more minute' + (minutes === 1 ? '' : 's') + ' until the server returns a receipt.';
     setButtonBusy(elements.retrySubmissionButton, true, 'Uploading attempt ' + attemptNumber);
+  }
+
+  function retrySubmissionManually() {
+    if (!state.attempt || state.attempt.status !== 'pending_submit' || state.submitting) return;
+    var startedAt = Date.parse(state.attempt.submissionRetryStartedAt || '');
+    if (Date.now() - startedAt >= SUBMISSION_RETRY_WINDOW_MS) {
+      state.attempt.submissionRetryStartedAt = new Date().toISOString();
+    }
+    return retryPendingSubmission();
   }
 
   async function retryPendingSubmission() {
@@ -1503,7 +1587,7 @@
         userMessage: 'The server has not confirmed your submission after repeated attempts.',
         workEffect: 'Your complete answer snapshot remains locked on this device and has not been deleted.',
         cause: lastError
-      }, retryPendingSubmission);
+      }, retrySubmissionManually);
     } finally {
       state.submitting = false;
       setButtonBusy(elements.retrySubmissionButton, false);
@@ -1526,19 +1610,15 @@
     elements.receiptTitle.textContent = receipt.isDemo
       ? 'Your demonstration examination was submitted.'
       : 'Your answers were successfully uploaded for professor grading.';
-    var submissionEmail = state.attempt && state.attempt.student
-      ? normaliseEmail(state.attempt.student.email)
-      : '';
     elements.receiptMessage.textContent = receipt.isDemo
       ? 'This is a local demonstration receipt. No school record was created.'
-      : submissionEmail
-        ? 'A copy containing only your submitted answers will be emailed to ' + submissionEmail + '. Keep this receipt until your professor releases the result.'
-        : 'Your answers are stored for professor grading. Keep this receipt until your professor releases the result.';
+      : 'Your answers are stored for professor grading. Keep this receipt until your professor releases the result.';
     elements.pendingSubmissionNote.hidden = true;
     elements.receiptDetails.hidden = false;
     elements.resultPanel.hidden = false;
     elements.retrySubmissionButton.hidden = true;
     elements.printReceiptButton.hidden = false;
+    elements.downloadAnswerBackupButton.hidden = !state.attempt?.idempotencyKey;
     setText(elements.receiptReference, receipt.receiptId);
     setText(elements.receiptSubmittedAt, formatDateTime(receipt.submittedAt));
     setText(elements.receiptExamVersion, receipt.examVersion);

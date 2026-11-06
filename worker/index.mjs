@@ -240,8 +240,9 @@ import {
   buildExaminationRoomKeyEmail,
   deliverExaminationRoomPublicationRequestEmail,
   deliverExaminationRoomResultReleaseEmails,
-  deliverExaminationRoomSubmissionAnswersEmail,
   deliverExaminationRoomProfessorSubmissionEmail,
+  deliverExaminationRoomSubmissionReceiptEmail,
+  deliverExaminationRoomIntakeBackup,
 } from './examination-room-email.mjs';
 import {
   bytesToBase64 as examinationRoomSubmissionBytesToBase64,
@@ -851,6 +852,7 @@ async function examinationRoomV1ServiceRpc(env, functionName, body) {
     'examination_room_v1_claim_result_email_deliveries',
     'examination_room_v1_complete_result_email_deliveries',
     'examination_room_v1_submission_delivery_context',
+    'examination_room_v1_submission_intake',
     'examination_room_v1_professor_submission_artifact_context',
   ]);
   if (!allowedFunctions.has(functionName)) {
@@ -954,6 +956,51 @@ async function examinationRoomV1Rpc(env, request) {
     p_payload: request.payload || {},
   });
   return examinationRoomV1Result(result);
+}
+
+function examinationRoomDurableIntakeEnabled(env) {
+  return String(env.EXAMINATION_ROOM_DURABLE_INTAKE ?? '').trim().toLowerCase() === 'true';
+}
+
+async function examinationRoomIntakeRpc(env, operation, params = {}) {
+  const result = await examinationRoomV1ServiceRpc(env, 'examination_room_v1_submission_intake', {
+    p_operation: operation,
+    ...params,
+  });
+  return examinationRoomV1Result(result);
+}
+
+async function deliverDueExaminationRoomBackup(env, sessionId) {
+  const job = await examinationRoomIntakeRpc(env, 'claim_backup', { p_session_id: sessionId });
+  if (!job?.lease) return;
+  const outcome = await deliverExaminationRoomIntakeBackup(env, job);
+  await examinationRoomIntakeRpc(env, 'finish_backup', {
+    p_session_id: job.sessionId,
+    p_payload: { lease: job.lease, ...outcome },
+  });
+}
+
+async function examinationRoomSubmissionIntake(env, operation, payload = null) {
+  const sessionId = payload?.sessionId ?? null;
+  if (operation === 'drain') {
+    const backupAttempts = sessionId ? 1 : 4;
+    const outcomes = await Promise.allSettled(Array.from(
+      { length: backupAttempts },
+      () => deliverDueExaminationRoomBackup(env, sessionId),
+    ));
+    if (outcomes.some((result) => result.status === 'rejected')) {
+      console.error('Examination Room backup queue temporarily unavailable');
+    }
+  }
+  return examinationRoomIntakeRpc(env, operation, {
+    p_session_id: sessionId,
+    p_request_hash: payload?.requestHash ?? null,
+    p_token_hash: payload?.sessionTokenHash ?? null,
+    ...(operation === 'stage' ? {
+      p_payload: payload,
+      p_backup_email: env.EXAMINATION_ROOM_BACKUP_EMAIL ?? null,
+    } : {}),
+  });
 }
 
 async function examinationRoomV1ManageStaff(env, request) {
@@ -10392,6 +10439,7 @@ async function examinationRoomSubmissionDeliveryContext(env, sessionId) {
   return examinationRoomV1Result(await examinationRoomV1ServiceRpc(
     env,
     'examination_room_v1_submission_delivery_context',
+    'examination_room_v1_submission_intake',
     { p_session_id: sessionId },
   ));
 }
@@ -10421,12 +10469,31 @@ async function examinationRoomProfessorSubmissionPdf(env, context) {
   };
 }
 
-async function deliverExaminationRoomProfessorSubmissionPackage(env, details) {
+async function deliverExaminationRoomProfessorSubmissionPackage(env, details, { receiptOnly = false } = {}) {
   const context = await examinationRoomSubmissionDeliveryContext(env, details.sessionId);
-  const artifact = await ensureExaminationRoomSubmissionPdf(env, context);
   const manifest = context?.submissionManifest && typeof context.submissionManifest === 'object'
     ? context.submissionManifest
     : {};
+  // Deliver the receipt independently of PDF artifact generation: a slow PDF
+  // or an unavailable storage provider must not suppress the student receipt.
+  const studentReceipt = await deliverExaminationRoomSubmissionReceiptEmail(env, {
+    recipient: context.studentEmail,
+    studentName: context.studentName,
+    examTitle: manifest.title,
+    submittedAt: context.submittedAt,
+    receiptCode: context.receiptCode,
+    idempotencyHash: details.idempotencyHash,
+  });
+  if (!['sent', 'suppressed', 'skipped'].includes(String(studentReceipt?.status || ''))) {
+    console.error('Examination Room student receipt email was not delivered', {
+      status: String(studentReceipt?.status || 'failed').slice(0, 40),
+      safeErrorCode: String(studentReceipt?.safeErrorCode || 'unknown').slice(0, 80),
+    });
+  }
+  // Durable intake already manages the professor's retryable TXT answer backup.
+  // Always send the student's separate receipt, even when PDF work is disabled.
+  if (receiptOnly) return { studentReceipt };
+  const artifact = await ensureExaminationRoomSubmissionPdf(env, context);
   const delivery = await deliverExaminationRoomProfessorSubmissionEmail(env, {
     professorRecipient: context.professorEmail,
     professorName: context.professorName,
@@ -10449,7 +10516,7 @@ async function deliverExaminationRoomProfessorSubmissionPackage(env, details) {
       safeErrorCode: String(delivery?.safeErrorCode || 'unknown').slice(0, 80),
     });
   }
-  return { artifact, delivery };
+  return { artifact, delivery, studentReceipt };
 }
 
 const examinationRoomV1Handlers = createExaminationRoomV1Handlers({
@@ -10509,6 +10576,8 @@ const examinationRoomV1Handlers = createExaminationRoomV1Handlers({
   examLifecycleCommand: examinationRoomV1LifecycleCommandRpc,
   examLifecycleGuard: examinationRoomV1LifecycleGuardRpc,
   rpc: examinationRoomV1Rpc,
+  submissionIntake: examinationRoomSubmissionIntake,
+  submissionIntakeEnabled: examinationRoomDurableIntakeEnabled,
   manageStaff: examinationRoomV1ManageStaff,
   professorAccess: examinationRoomV1ProfessorAccess,
   importGrades: ({
@@ -10554,6 +10623,7 @@ const examinationRoomV1Handlers = createExaminationRoomV1Handlers({
   submissionPdf: examinationRoomProfessorSubmissionPdf,
   afterStudentCommand: ({
     operation,
+    result,
     env,
     executionContext,
     submissionEmailDetails,
@@ -10565,32 +10635,13 @@ const examinationRoomV1Handlers = createExaminationRoomV1Handlers({
         const professorPackageWork = deliverExaminationRoomProfessorSubmissionPackage(
           env,
           submissionEmailDetails,
+          { receiptOnly: result?.backupManaged === true },
         ).catch((error) => {
           console.error('Examination Room professor submission package failed', {
             message: String(error?.message || 'unknown').slice(0, 160),
           });
         });
         if (executionContext?.waitUntil) executionContext.waitUntil(professorPackageWork);
-      }
-
-      if (submissionEmailDetails?.recipient) {
-        const emailWork = deliverExaminationRoomSubmissionAnswersEmail(
-          env,
-          submissionEmailDetails,
-        ).then((delivery) => {
-          if (!['sent', 'suppressed'].includes(String(delivery?.status || ''))) {
-            console.error('Examination Room submitted-answer email was not delivered', {
-              status: String(delivery?.status || 'failed').slice(0, 40),
-              safeErrorCode: String(delivery?.safeErrorCode || 'unknown').slice(0, 80),
-            });
-          }
-          return delivery;
-        }).catch((error) => {
-          console.error('Examination Room submitted-answer email failed', {
-            message: String(error?.message || 'unknown').slice(0, 160),
-          });
-        });
-        if (executionContext?.waitUntil) executionContext.waitUntil(emailWork);
       }
     }
   },
@@ -11090,7 +11141,14 @@ export default {
       });
       return { status: 'failed' };
     });
-    const maintenance = Promise.all([recovery, avatarCleanup, adminPulse, forecast])
+    const submissions = (examinationRoomDurableIntakeEnabled(runtimeEnv)
+      ? examinationRoomSubmissionIntake(runtimeEnv, 'drain')
+      : Promise.resolve()).catch((error) => {
+      console.error('Scheduled Examination Room submission recovery failed', {
+        code: String(error?.code || 'EXAM_ROOM_V1_SUBMISSION_RECOVERY_FAILED').slice(0, 80),
+      });
+    });
+    const maintenance = Promise.all([recovery, avatarCleanup, adminPulse, forecast, submissions])
       .then(([recoveryResult]) => recoveryResult);
     if (typeof ctx?.waitUntil === 'function') {
       ctx.waitUntil(maintenance);

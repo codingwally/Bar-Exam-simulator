@@ -1,4 +1,4 @@
-const allowedSuiteLocation = /(?:^|[\\/])((?:test-(?:complete-beta|commercial-launch|current-payment-proof|duediligence-2026|examinations)-staging|staging-current-payment-proof(?:-cleanup)?|test-examinations-staging-ui|verify-examinations-staging-ui|run-staging-e2e-suite|staging-commercial-user)\.mjs):(\d+):(\d+)/i;
+const allowedSuiteLocation = /(?:^|[\\/])((?:test-(?:complete-beta|commercial-launch|current-payment-proof|duediligence-2026|examinations)-staging|staging-current-payment-proof(?:-cleanup)?|test-examinations-staging-ui|verify-examinations-staging-ui|run-staging-e2e-suite|staging-commercial-user|verify-examination-room-v1-staging)\.mjs):(\d+):(\d+)/i;
 
 function safeAssertionPrimitive(source, label, secret = '') {
   const pattern = new RegExp(

@@ -22,6 +22,8 @@ PHASE4_ACCESS_ENFORCEMENT = "true"
 PHASE4_MODEL_QUALITY_ENFORCEMENT = "true"
 REQUIRE_AUTHENTICATED_SUBMISSIONS = "true"
 EXAMINATION_ROOM_ENABLED = "true"
+# Staging has the reviewed additive durable-intake schema; all mail remains suppressed.
+EXAMINATION_ROOM_DURABLE_INTAKE = "true"
 EXAMINATION_ROOM_EMAIL_MODE = "suppressed"
 EXAMINATION_ROOM_RECOVERY_MODE = "supabase_storage"
 OUTBOUND_EMAIL_MODE = "suppressed"

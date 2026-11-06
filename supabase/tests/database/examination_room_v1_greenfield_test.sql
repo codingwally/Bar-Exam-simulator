@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, pg_catalog;
 
-select plan(139);
+select plan(157);
 
 select has_schema(
   'examination_room_v1',
@@ -38,9 +38,11 @@ select tables_are(
     'student_identities',
     'student_sessions',
     'submission_answers',
+    'submission_intake',
     'submission_receipts',
     'submissions'
-  ],
+  ] || case when to_regclass('examination_room_v1.media_upload_intents') is not null
+       then array['media_upload_intents'] else array[]::text[] end,
   'only the expected normalized v1 tables exist in the schema'
 );
 
@@ -189,6 +191,7 @@ select is(
     join pg_catalog.pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'examination_room_v1'
       and c.relkind in ('r', 'p')
+      and c.relname not in ('submission_intake', 'media_upload_intents')
       and not (
         has_table_privilege('service_role', c.oid, 'SELECT')
         and has_table_privilege('service_role', c.oid, 'INSERT')
@@ -207,9 +210,10 @@ select is(
     join pg_catalog.pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'examination_room_v1'
       and p.prosecdef
+      and p.proname <> 'recover_existing_student_session'
   ),
   0::bigint,
-  'the v1 schema contains no SECURITY DEFINER functions'
+  'only the private deployed session-recovery helper may use SECURITY DEFINER'
 );
 
 select is(
@@ -1499,7 +1503,7 @@ select is(
       'activationId', (
         select id from examination_room_v1.room_activations
         where exam_id = '10000000-0000-4000-8000-000000000004'
-          and activation_status = 'scheduled'
+          and activation_status in ('scheduled', 'open')
         order by created_at desc limit 1
       ),
       'algorithm', 'aes-256-gcm-v1',
@@ -1545,7 +1549,7 @@ select is(
       'activationId', (
         select id from examination_room_v1.room_activations
         where exam_id = '10000000-0000-4000-8000-000000000004'
-          and activation_status = 'scheduled'
+          and activation_status in ('scheduled', 'open')
         order by created_at desc limit 1
       ),
       'requestHash', repeat('1d', 32),
@@ -1571,7 +1575,7 @@ select is(
       'activationId', (
         select id from examination_room_v1.room_activations
         where exam_id = '10000000-0000-4000-8000-000000000004'
-          and activation_status = 'scheduled'
+          and activation_status in ('scheduled', 'open')
         order by created_at desc limit 1
       ),
       'requestHash', repeat('1d', 32),
@@ -1597,7 +1601,7 @@ select is(
       'activationId', (
         select id from examination_room_v1.room_activations
         where exam_id = '10000000-0000-4000-8000-000000000004'
-          and activation_status = 'scheduled'
+          and activation_status in ('scheduled', 'open')
         order by created_at desc limit 1
       ),
       'requestHash', repeat('1d', 32),
@@ -1664,6 +1668,7 @@ select is(
       'roomKeyHash', repeat('b2', 32),
       'identity', jsonb_build_object(
         'realName', 'Maria Theresa Dela Cruz',
+        'email', 'maria.functional@example.edu.ph',
         'studentNumber', '2024-10001',
         'subject', 'Constitutional Law',
         'yearLevel', 'Second year'
@@ -1684,6 +1689,7 @@ select is(
       'roomKeyHash', repeat('b2', 32),
       'identity', jsonb_build_object(
         'realName', 'Maria Theresa Dela Cruz',
+        'email', 'maria.functional@example.edu.ph',
         'studentNumber', '2024-10001',
         'subject', 'Constitutional Law',
         'yearLevel', 'Second year'
@@ -1714,6 +1720,7 @@ select is(
       'roomKeyHash', repeat('b2', 32),
       'identity', jsonb_build_object(
         'realName', 'Maria Theresa Dela Cruz',
+        'email', 'maria.functional@example.edu.ph',
         'studentNumber', '2024-10001',
         'subject', 'Constitutional Law',
         'yearLevel', 'Second year'
@@ -1744,6 +1751,7 @@ select is(
       'roomKeyHash', repeat('b2', 32),
       'identity', jsonb_build_object(
         'realName', 'Maria Theresa Dela Cruz',
+        'email', 'maria.functional@example.edu.ph',
         'studentNumber', '2024-10001',
         'subject', 'Constitutional Law',
         'yearLevel', 'Second year'
@@ -1926,11 +1934,33 @@ select is(
 );
 
 select is(
-  public.examination_room_v1_api(
-    'student',
-    'submit',
-    null,
-    null,
+  examination_room_v1.api_student(
+    'submission_intent',
+    jsonb_build_object(
+      'sessionId', (
+        select id from examination_room_v1.student_sessions
+        where consent_request_hash = repeat('6', 64)
+      ),
+      'sessionTokenHash', repeat('c4', 32),
+      'requestHash', repeat('a', 64),
+      'clientEventId', '10000000-0000-4000-8000-000000000017',
+      'clientCompletedAt', clock_timestamp()
+    )
+  )->>'ok',
+  'true',
+  'submission intent preserves the same request key used to finalize and replay'
+);
+
+update auth.users u set email_confirmed_at = clock_timestamp()
+where u.id = (select e.owner_user_id from examination_room_v1.exams e
+              where e.id = '10000000-0000-4000-8000-000000000004');
+
+select is(
+  public.examination_room_v1_submission_intake(
+    'stage',
+    (select id from examination_room_v1.student_sessions where consent_request_hash = repeat('6', 64)),
+    repeat('a', 64),
+    repeat('c4', 32),
     jsonb_build_object(
       'sessionId', (
         select id from examination_room_v1.student_sessions
@@ -1999,10 +2029,177 @@ select is(
         'questionKey', 'q001',
         'revision', 1
       ))
+    ),
+    p_backup_email => (select u.email from auth.users u join examination_room_v1.exams e
+                       on e.owner_user_id = u.id where e.id = '10000000-0000-4000-8000-000000000004')
+  ) ->> 'intake',
+  'pending',
+  'complete submission payload is preserved before an official receipt exists'
+);
+
+select ok(
+  not has_function_privilege('authenticated', 'public.examination_room_v1_submission_intake(text,uuid,text,text,jsonb,integer,text)', 'EXECUTE')
+    and not has_table_privilege('service_role', 'examination_room_v1.submission_intake', 'SELECT'),
+  'the private intake payload can only be accessed by its restricted service RPC'
+);
+
+select is(
+  (select count(*) from examination_room_v1.submissions where id = '10000000-0000-4000-8000-000000000020'),
+  0::bigint,
+  'stage does not finalize the submission'
+);
+
+select is(
+  public.examination_room_v1_submission_intake('drain')->>'processed',
+  '0',
+  'official submission waits for the first authorized backup attempt'
+);
+
+select ok(
+  (public.examination_room_v1_submission_intake('claim_backup') #>> '{manifest,questions,0,answer}')
+    = 'Checks and balances preserve the separation of powers.',
+  'the verified exam owner backup gets the preserved answer snapshot'
+);
+
+select is(
+  public.examination_room_v1_submission_intake(
+    'finish_backup',
+    (select i.session_id from examination_room_v1.submission_intake i where i.request_hash = repeat('a', 64)),
+    p_payload => (
+      select jsonb_build_object('lease', i.backup_lease, 'status', 'failed', 'safeErrorCode', 'provider_unavailable')
+      from examination_room_v1.submission_intake i where i.request_hash = repeat('a', 64)
     )
+  )->>'recorded',
+  'true',
+  'failed mail is recorded before finalization and releases the gate'
+);
+
+select ok(
+  (select i.backup_attempts = 1 and not i.backup_finished and i.backup_due_at > clock_timestamp()
+    from examination_room_v1.submission_intake i where i.request_hash = repeat('a', 64)),
+  'failed mail remains independently retryable'
+);
+
+-- A prolonged provider outage must not silently abandon the professor backup.
+-- Fast-forward only the synthetic job's retry count; the full answer payload
+-- remains preserved and official finalization still proceeds independently.
+update examination_room_v1.submission_intake
+set backup_attempts = 7, backup_due_at = clock_timestamp()
+where request_hash = repeat('a', 64);
+
+select ok(
+  (public.examination_room_v1_submission_intake('claim_backup') ->> 'lease') is not null,
+  'exhausted backup retry simulation can claim the preserved mail job'
+);
+
+select is(
+  public.examination_room_v1_submission_intake(
+    'finish_backup',
+    (select i.session_id from examination_room_v1.submission_intake i where i.request_hash = repeat('a', 64)),
+    p_payload => (
+      select jsonb_build_object('lease', i.backup_lease, 'status', 'failed', 'safeErrorCode', 'provider_unavailable')
+      from examination_room_v1.submission_intake i where i.request_hash = repeat('a', 64)
+    )
+  )->>'recorded',
+  'true',
+  'another failed delivery is durably recorded even after seven attempts'
+);
+
+select ok(
+  (select i.backup_attempts = 8 and not i.backup_finished
+      and i.backup_due_at >= clock_timestamp() + interval '55 minutes'
+      and i.backup_due_at <= clock_timestamp() + interval '61 minutes'
+    from examination_room_v1.submission_intake i where i.request_hash = repeat('a', 64)),
+  'prolonged mail outage retains a retryable job on bounded hourly backoff'
+);
+
+-- A final local edit was not autosaved. Only its complete intake is durable.
+update examination_room_v1.submission_intake i
+set finalization_payload = jsonb_set(jsonb_set(i.finalization_payload,
+  '{submissionManifest,questions,0,revision}', '2'::jsonb),
+  '{answerSelections,0,revision}', '2'::jsonb) || jsonb_build_object(
+    'pendingAnswerWrites', jsonb_build_array(jsonb_build_object(
+      'sessionId', i.session_id, 'sessionTokenHash', repeat('c4', 32),
+      'requestHash', repeat('b7', 32),
+      'clientEventId', '10000000-0000-4000-8000-000000000099',
+      'submissionRequestHash', i.request_hash,
+      'answerRevision', jsonb_build_object(
+        'schemaVersion', 'examination-room/answer-revision/v1',
+        'attemptId', i.session_id,
+        'examinationId', '10000000-0000-4000-8000-000000000004',
+        'examinationVersion', 1,
+        'publicationHash', i.finalization_payload #>> '{submissionManifest,publicationHash}',
+        'questionNumber', 1, 'questionKey', 'q001', 'questionType', 'essay',
+        'revision', 2, 'answer', 'Checks and balances preserve the separation of powers.'
+      ),
+      'answerHash', repeat('b8', 32), 'flagged', false,
+      'source', 'submission', 'savedAt', clock_timestamp()
+    ))
+  )
+where i.request_hash = repeat('a', 64);
+
+select is((select count(*) from examination_room_v1.answer_revisions
+  where idempotency_key_hash = repeat('b7', 32)), 0::bigint,
+  'the complete intake exists before the pending answer write');
+
+create function pg_temp.interrupt_exam_submission()
+returns trigger language plpgsql as $$
+begin
+  raise exception 'Simulated persistence interruption';
+end;
+$$;
+create trigger local_exam_submission_interruption
+  before insert on examination_room_v1.submissions
+  for each row execute function pg_temp.interrupt_exam_submission();
+
+select is(
+  public.examination_room_v1_submission_intake('drain')->>'processed',
+  '0',
+  'a persistence interruption does not report a successful submission'
+);
+
+select ok(
+  (select i.finalization_payload #>> '{submissionManifest,questions,0,answer}' =
+          'Checks and balances preserve the separation of powers.'
+          and i.official_result is null and i.attempt_count = 1
+   from examination_room_v1.submission_intake i where i.request_hash = repeat('a', 64)),
+  'failed finalization retains all staged evidence and schedules a retry'
+);
+
+select is((select count(*) from examination_room_v1.answer_revisions
+  where idempotency_key_hash = repeat('b7', 32)), 0::bigint,
+  'failed finalization rolls back answer reconciliation while retaining intake');
+
+drop trigger local_exam_submission_interruption on examination_room_v1.submissions;
+update examination_room_v1.submission_intake set next_attempt_at = clock_timestamp()
+where request_hash = repeat('a', 64);
+
+select is(
+  public.examination_room_v1_submission_intake('drain')->>'processed',
+  '1',
+  'scheduled recovery completes the interrupted submission without the browser'
+);
+
+select is((select count(*) from examination_room_v1.answer_revisions
+  where idempotency_key_hash = repeat('b7', 32)), 1::bigint,
+  'server recovery writes the preserved answer exactly once');
+
+select is(
+  public.examination_room_v1_submission_intake(
+    'read', (select id from examination_room_v1.student_sessions where consent_request_hash = repeat('6', 64)),
+    repeat('a', 64), repeat('c4', 32)
   ) #>> '{submission,status}',
   'accepted',
-  'submit freezes the selected answer set and issues the receipt last'
+  'reopening the same request returns its verified official receipt'
+);
+
+select is(
+  public.examination_room_v1_submission_intake(
+    'read', (select id from examination_room_v1.student_sessions where consent_request_hash = repeat('6', 64)),
+    repeat('a', 64), repeat('c5', 32)
+  ) #>> '{error,code}',
+  'SESSION_INVALID',
+  'the intake receipt cannot be read with a different session token'
 );
 
 select is(

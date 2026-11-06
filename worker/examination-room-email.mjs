@@ -374,6 +374,158 @@ export async function deliverExaminationRoomSubmissionAnswersEmail(
 }
 
 
+export function buildExaminationRoomSubmissionReceiptEmail(env, message = {}) {
+  const brand = examinationRoomEmailBrand(env);
+  const title = cleanSingleLine(message.examTitle, 200, 'Examination');
+  const student = cleanSingleLine(message.studentName, 160, 'Student');
+  const receipt = cleanSingleLine(message.receiptCode, 120, 'Not available');
+  const rawSubmittedAt = String(message.submittedAt || '');
+  const submittedAt = Number.isFinite(Date.parse(rawSubmittedAt))
+    ? new Intl.DateTimeFormat('en-PH', {
+      timeZone: 'Asia/Manila', dateStyle: 'long', timeStyle: 'short',
+    }).format(new Date(rawSubmittedAt))
+    : 'Submission time is recorded on your examination receipt';
+  const url = brand.studentResultUrl;
+  const subject = `Examination submission receipt — ${title}`.slice(0, 200);
+  const text = [
+    `Hello ${student},`,
+    '',
+    `Your examination submission for ${title} has been received.`,
+    `Official receipt reference: ${receipt}`,
+    `Recorded (Philippine time): ${submittedAt}`,
+    '',
+    'This email confirms receipt only. It does not contain your answers, grades, or examination passkey.',
+    `View your protected examination receipt: ${url}`,
+  ].join('\n');
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Examination submission receipt</title></head>
+<body style="font-family:Arial,sans-serif;background:#f4f0e6;color:#171717;padding:24px">
+<main style="max-width:620px;margin:auto;background:#fff;padding:32px;border:1px solid #d8d1c5">
+<h1 style="font-size:24px">Submission received</h1>
+<p>Hello ${escapeExaminationRoomEmailHtml(student)},</p>
+<p>Your examination submission for <strong>${escapeExaminationRoomEmailHtml(title)}</strong> has been received.</p>
+<p><strong>Official receipt reference:</strong> ${escapeExaminationRoomEmailHtml(receipt)}</p>
+<p><strong>Recorded (Philippine time):</strong> ${escapeExaminationRoomEmailHtml(submittedAt)}</p>
+<p>This is a receipt only. It contains no answers, grades, or examination passkey.</p>
+<p><a href="${escapeExaminationRoomEmailHtml(url)}">Open your protected examination receipt</a></p>
+</main></body></html>`;
+  return Object.freeze({ subject, text, html });
+}
+
+export async function deliverExaminationRoomSubmissionReceiptEmail(
+  env, message = {}, transport = globalThis.fetch,
+) {
+  const mode = String(env?.EXAMINATION_ROOM_EMAIL_MODE || '').trim().toLowerCase();
+  const from = String(env?.EXAMINATION_ROOM_EMAIL_FROM || env?.SUPPORT_NOTIFICATION_EMAIL_FROM || '').trim();
+  const recipient = String(message.recipient || '').trim().toLowerCase();
+  const hash = String(message.idempotencyHash || '').trim().toLowerCase();
+  if (!EMAIL_PATTERN.test(recipient) || recipient.length > 320) {
+    return { status: 'skipped', safeErrorCode: 'recipient_missing' };
+  }
+  if (mode === 'suppressed') return { status: 'suppressed', safeErrorCode: 'email_suppressed' };
+  if (mode !== 'enabled' || !env.RESEND_API_KEY || !from || !SHA256_PATTERN.test(hash)) {
+    return { status: 'failed', safeErrorCode: 'receipt_email_not_configured' };
+  }
+  try {
+    const email = buildExaminationRoomSubmissionReceiptEmail(env, message);
+    const response = await transport('https://api.resend.com/emails', {
+      method: 'POST',
+      signal: AbortSignal.timeout(12000),
+      headers: {
+        Authorization: `Bearer ${env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+        'Idempotency-Key': `exam-room-student-receipt-${hash}`,
+      },
+      body: JSON.stringify({
+        from, to: [recipient], subject: email.subject,
+        text: email.text, html: email.html,
+        tags: [
+          { name: 'product', value: 'examination-room' },
+          { name: 'message_type', value: 'student-receipt' },
+        ],
+      }),
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data?.id) {
+      return { status: 'failed', safeErrorCode: response.ok
+        ? 'provider_unconfirmed' : `provider_${response.status}` };
+    }
+    return { status: 'sent', providerId: String(data.id).slice(0, 240) };
+  } catch {
+    return { status: 'failed', safeErrorCode: 'provider_unavailable' };
+  }
+}
+
+
+export async function deliverExaminationRoomIntakeBackup(env, job, transport = globalThis.fetch) {
+  const mode = String(env.EXAMINATION_ROOM_EMAIL_MODE || '').trim().toLowerCase();
+  const from = String(env.EXAMINATION_ROOM_EMAIL_FROM || env.SUPPORT_NOTIFICATION_EMAIL_FROM || '').trim();
+  if (mode === 'suppressed') return { status: 'suppressed', safeErrorCode: 'email_suppressed' };
+  if (mode !== 'enabled' || !env.RESEND_API_KEY || !from || !EMAIL_PATTERN.test(job.recipient)
+    || !SHA256_PATTERN.test(job.requestHash) || !SHA256_PATTERN.test(job.manifestHash)) {
+    return { status: 'failed', safeErrorCode: 'backup_not_configured' };
+  }
+  const manifest = job.manifest;
+  if (!manifest || !Array.isArray(manifest.questions)
+    || manifest.questions.some((question) => !question || typeof question !== 'object')) {
+    return { status: 'failed', safeErrorCode: 'backup_snapshot_invalid' };
+  }
+  const name = cleanSingleLine(manifest.studentIdentity?.realName, 160, 'Student');
+  const title = cleanSingleLine(manifest.title, 180, 'Examination');
+  const reference = cleanSingleLine(manifest.submissionId, 64);
+  const content = [
+    'Due Diligence Examination Room — preserved answer backup',
+    'Exam: ' + title,
+    'Exam version: ' + manifest.examinationVersion,
+    'Exam ID: ' + manifest.examinationId,
+    'Student: ' + name,
+    'Submission reference: ' + reference,
+    'Submitted at: ' + manifest.submittedAt,
+    'Snapshot checksum: ' + job.manifestHash,
+    'This backup is separate from the official submission receipt.',
+    '',
+    ...manifest.questions.flatMap((question) => [
+      'Question ' + question.questionNumber + ' (' + question.questionKey + ')',
+      submissionAnswerDisplay(question),
+      '',
+    ]),
+  ].join('\n');
+  const bytes = new TextEncoder().encode(content);
+  let attachment = '';
+  for (let start = 0; start < bytes.length; start += 0x8000) {
+    attachment += String.fromCharCode(...bytes.subarray(start, start + 0x8000));
+  }
+
+  try {
+    const response = await transport('https://api.resend.com/emails', {
+      method: 'POST',
+      // Allow the provider enough time for large answer TXT attachments.
+      // A failed send stays in the durable retry outbox.
+      signal: AbortSignal.timeout(12000),
+      headers: {
+        Authorization: `Bearer ${env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+        'Idempotency-Key': `exam-room-intake-${job.requestHash}`,
+      },
+      body: JSON.stringify({
+        from,
+        to: [job.recipient],
+        subject: cleanSingleLine(`Exam backup — ${title} — ${name}`, 180) + ` — ${reference}`,
+        text: 'The preserved examination answers are attached. The official receipt is issued separately.',
+        attachments: [{ filename: `exam-backup-${reference}.txt`, content: btoa(attachment) }],
+      }),
+    });
+    const result = await response.json().catch(() => null);
+    if (!response.ok || !result?.id) {
+      return { status: 'failed', safeErrorCode: response.ok ? 'provider_unconfirmed' : `provider_${response.status}` };
+    }
+    return { status: 'sent', providerId: String(result.id).slice(0, 240) };
+  } catch {
+    return { status: 'failed', safeErrorCode: 'provider_unavailable' };
+  }
+}
+
 export function buildExaminationRoomProfessorSubmissionEmail(env, message = {}) {
   const brand = examinationRoomEmailBrand(env);
   const examTitle = cleanSingleLine(message.examTitle, 300, 'Examination');

@@ -25,6 +25,10 @@ PHASE4_ACCESS_ENFORCEMENT = "true"
 PHASE4_MODEL_QUALITY_ENFORCEMENT = "true"
 REQUIRE_AUTHENTICATED_SUBMISSIONS = "true"
 EXAMINATION_ROOM_ENABLED = "true"
+# Deploy only after additive submission migrations and protected staging proof.
+EXAMINATION_ROOM_DURABLE_INTAKE = "true"
+# Owner-confirmed fail-safe recipient for the server-persisted answer TXT backup.
+EXAMINATION_ROOM_BACKUP_EMAIL = "wallyesteban1993@gmail.com"
 EXAMINATION_ROOM_EMAIL_MODE = "enabled"
 EXAMINATION_ROOM_RECOVERY_MODE = "supabase_storage"
 OUTBOUND_EMAIL_MODE = "suppressed"

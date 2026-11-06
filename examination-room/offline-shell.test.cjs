@@ -32,14 +32,17 @@ test('student registers the Examination Room service worker without blocking sta
   const registrationUrl = new URL(registration[1], origin);
   assert.equal(registrationUrl.origin, origin);
   assert.equal(registrationUrl.pathname, '/service-worker.js');
-  assert.deepEqual([...registrationUrl.searchParams.keys()], ['v']);
+  assert.deepEqual([...registrationUrl.searchParams.keys()], ['v', 'release']);
   const version = registrationUrl.searchParams.get('v');
+  const release = registrationUrl.searchParams.get('release');
   assert.ok(version, 'registration has a cache-busting version');
-  assert.equal(CACHE_VERSION, `duediligence-shell-${version}`);
+  assert.equal(release, 'midterm-durable-20261106-1');
+  assert.equal(CACHE_VERSION, `duediligence-shell-${version}-release-${release}`);
   const studentAsset = localAssets(studentHtml, '/examination-room/student.html')
     .find((url) => url.pathname === '/examination-room/student.js');
   assert.ok(studentAsset, 'the student entry script is loaded by its page');
   assert.equal(studentAsset.searchParams.get('v'), version);
+  assert.equal(studentAsset.searchParams.get('release'), release);
 });
 
 test('service worker precaches the complete local student examination shell', () => {

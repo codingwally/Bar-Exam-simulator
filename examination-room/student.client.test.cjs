@@ -17,7 +17,7 @@ const studentApiRuntime = [
   apiSource.slice(apiSource.indexOf('// Compatibility surface used by the resilient student client'), apiSource.indexOf('async function loadExam')),
 ].join('\n');
 
-function loadStudentStorageHooks(indexedDB) {
+function loadStudentStorageHooks(indexedDB, syncTestDependencies) {
   const timers = new Map();
   let nextTimer = 0;
   const document = { hidden: false };
@@ -34,10 +34,59 @@ function loadStudentStorageHooks(indexedDB) {
   };
   const exposedSource = studentSource
     .replace("  document.addEventListener('DOMContentLoaded', initialise);", '')
-    .replace(/\n\}\(\)\);\s*$/, '\n  window.__studentStorageTestHooks = { openDatabase, resultPollDelay, scheduleResultCheck, stopResultWatch, resetResultPollingWindow, state };\n}());');
-  vm.runInNewContext(exposedSource, { window, document, URLSearchParams }, { filename: 'student.js' });
+    .replace(/\n\}\(\)\);\s*$/, `
+  if (syncTestDependencies) {
+    ({ getOperationsForAttempt, deleteOperations, persistAttempt, updateSaveStatus } = syncTestDependencies);
+  }
+  window.__studentStorageTestHooks = {
+    openDatabase, resultPollDelay, scheduleResultCheck, stopResultWatch,
+    resetResultPollingWindow, flushOperationQueue, buildAnswerBackup, state
+  };
+}());`);
+  vm.runInNewContext(exposedSource, { window, document, URLSearchParams, syncTestDependencies, navigator: { onLine: true } }, { filename: 'student.js' });
   return { ...window.__studentStorageTestHooks, timers, document };
 }
+
+test('a stuck monitoring upload leaves the answer queue independent and retryable', async () => {
+  const operations = new Map([
+    ['event', { id: 'event', sequence: 1, kind: 'integrity.event' }],
+    ['answer', { id: 'answer', sequence: 2, kind: 'answer.changed' }],
+  ]);
+  let rejectEvent;
+  let eventStarted;
+  const eventStartedPromise = new Promise((resolve) => { eventStarted = resolve; });
+  const statuses = [];
+  const { state, flushOperationQueue, timers } = loadStudentStorageHooks(null, {
+    getOperationsForAttempt: async () => Array.from(operations.values()),
+    deleteOperations: async (ids) => ids.forEach((id) => operations.delete(id)),
+    persistAttempt: async () => {},
+    updateSaveStatus: (status) => statuses.push(status),
+  });
+  state.attempt = { attemptId: 'test-attempt', status: 'in_progress' };
+  state.api = {
+    syncOperations: async ({ operations: batch }) => {
+      assert.equal(batch.length, 1);
+      if (batch[0].id === 'event') {
+        eventStarted();
+        return new Promise((_resolve, reject) => { rejectEvent = reject; });
+      }
+      return { acknowledgedOperationIds: ['answer'], serverRevision: 2 };
+    },
+  };
+
+  const eventSync = flushOperationQueue('events');
+  await eventStartedPromise;
+  await flushOperationQueue('answers');
+  assert.equal(state.attempt.serverRevision, 2);
+  assert.deepEqual(statuses, ['saving', 'saved']);
+  assert.deepEqual([...operations.keys()], ['event']);
+
+  rejectEvent(new Error('Monitoring service timed out'));
+  await eventSync;
+  assert.deepEqual(statuses, ['saving', 'saved']);
+  assert.deepEqual([...operations.keys()], ['event']);
+  assert.ok([...timers.values()].some((timer) => timer.delay === 1000));
+});
 
 test('the student enters directly after preview with no custom policy-gating payload or label', () => {
   assert.doesNotMatch(studentHtml, /privacyTitle|privacyDialog|I understand — begin exam/);
@@ -128,7 +177,7 @@ test('the final-question action remains enabled and opens review instead of trap
   assert.match(studentSource, /state\.currentIndex === state\.questions\.length - 1 \? 'Review and submit'/);
   assert.match(studentSource, /navigateToQuestion\(state\.currentIndex \+ 1\)/);
   assert.match(studentSource, /if \(index >= state\.questions\.length\) \{[\s\S]*openSubmitDialog\(\)/);
-  assert.match(studentHtml, /student\.js\?v=focus-fullscreen-20260926-1-native-close-20261023-1"/);
+  assert.match(studentHtml, /student\.js\?v=focus-fullscreen-20260926-1-native-close-20261023-1-answer-sync-20261105-1&release=midterm-durable-20261106-1"/);
 });
 
 test('student storage open fails safely when IndexedDB is blocked or never settles', async () => {
@@ -203,11 +252,29 @@ test('final submit sends the frozen complete answer snapshot and original comple
 });
 
 
-test('successful receipt tells the student that answers reached professor grading and an answer-only email will follow', () => {
+test('successful receipt confirms professor grading and offers a local answer backup', () => {
   assert.match(studentSource, /Your answers were successfully uploaded for professor grading\./);
-  assert.match(studentSource, /A copy containing only your submitted answers will be emailed to/);
+  assert.doesNotMatch(studentSource, /submitted answers will be emailed/);
+  assert.match(studentHtml, /id="downloadAnswerBackupButton"/);
+  const { buildAnswerBackup } = loadStudentStorageHooks(null);
+  const text = buildAnswerBackup({
+    student: { fullName: 'Test Student', email: 'test@example.invalid' },
+    metadata: { examTitle: 'Test Exam' }, examVersion: 2, attemptId: 'attempt-1',
+    idempotencyKey: 'backup-1', clientCompletedAt: '2026-11-05T10:00:00Z',
+    sessionToken: 'private-token',
+    answers: { q1: 'Café\nLine 2', q2: 'option-1' },
+    flags: { q1: true },
+  }, [
+    { id: 'q1', number: 1 },
+    { id: 'q2', number: 2, options: [{ id: 'option-1', text: 'First choice' }] },
+    { id: 'q3', number: 3 },
+  ]);
+  assert.match(text, /Question 1 \(q1\) \[flagged\]\nCafé\nLine 2/);
+  assert.match(text, /Question 2 \(q2\)\nFirst choice/);
+  assert.match(text, /Question 3 \(q3\)\n\[Unanswered\]/);
+  assert.doesNotMatch(text, /private-token/);
   assert.match(studentSource, /Answers successfully uploaded for professor grading/);
-  assert.match(studentHtml, /student\.js\?v=focus-fullscreen-20260926-1-native-close-20261023-1"/);
+  assert.match(studentHtml, /student\.js\?v=focus-fullscreen-20260926-1-native-close-20261023-1-answer-sync-20261105-1&release=midterm-durable-20261106-1"/);
 });
 
 

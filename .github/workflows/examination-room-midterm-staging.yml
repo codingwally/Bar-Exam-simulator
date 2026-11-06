@@ -9,6 +9,12 @@ on:
       - scripts/verify-examination-room-v1-staging.mjs
       - scripts/test-examinations-staging.mjs
       - worker/wrangler.staging.toml
+      - worker/examination-room-email.mjs
+      - worker/examination-room-email.test.mjs
+      - worker/index.mjs
+      - worker/examination-room-v1-routes.mjs
+      - examination-room/student.js
+      - examination-room/api.js
   workflow_dispatch:
 
 permissions:

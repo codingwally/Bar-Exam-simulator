@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'duediligence-shell-focus-fullscreen-20260926-1-native-close-20261023-1-answer-sync-20261105-1&release=midterm-durable-20261106-1';
+const CACHE_VERSION = 'duediligence-shell-focus-fullscreen-20260926-1-native-close-20261023-1-answer-sync-20261105-1-release-midterm-durable-20261106-1';
 const EXAMINATION_STUDENT_SHELL = '/examination-room/student.html';
 const EXAMINATION_OFFLINE_GRADER = '/examination-room/offline-grading.html';
 const SHELL = Object.freeze([

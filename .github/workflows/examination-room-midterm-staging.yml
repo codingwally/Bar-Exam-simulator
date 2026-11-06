@@ -15,6 +15,11 @@ on:
       - worker/examination-room-v1-routes.mjs
       - examination-room/student.js
       - examination-room/api.js
+      - examination-room/student.html
+      - examination-room/index.html
+      - examination-room/offline-shell.test.cjs
+      - examination-room/student.client.test.cjs
+      - service-worker.js
   workflow_dispatch:
 
 permissions:

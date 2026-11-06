@@ -122,7 +122,7 @@
   function registerExaminationRoomServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
 
-    navigator.serviceWorker.register('/service-worker.js?v=focus-fullscreen-20260926-1-native-close-20261023-1-answer-sync-20261105-1&release=midterm-key-name-only-20261106-3')
+    navigator.serviceWorker.register('/service-worker.js?v=focus-fullscreen-20260926-1-native-close-20261023-1-answer-sync-20261105-1&release=midterm-pht-clock-only-20261106-4')
       .catch(function () {
         // Registration failure must never block a student who still has a
         // working network connection. The exam UI already reports offline

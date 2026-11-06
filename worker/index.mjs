@@ -10469,7 +10469,7 @@ async function examinationRoomProfessorSubmissionPdf(env, context) {
   };
 }
 
-async function deliverExaminationRoomProfessorSubmissionPackage(env, details) {
+async function deliverExaminationRoomProfessorSubmissionPackage(env, details, { receiptOnly = false } = {}) {
   const context = await examinationRoomSubmissionDeliveryContext(env, details.sessionId);
   const manifest = context?.submissionManifest && typeof context.submissionManifest === 'object'
     ? context.submissionManifest
@@ -10490,6 +10490,9 @@ async function deliverExaminationRoomProfessorSubmissionPackage(env, details) {
       safeErrorCode: String(studentReceipt?.safeErrorCode || 'unknown').slice(0, 80),
     });
   }
+  // Durable intake already manages the professor's retryable TXT answer backup.
+  // Always send the student's separate receipt, even when PDF work is disabled.
+  if (receiptOnly) return { studentReceipt };
   const artifact = await ensureExaminationRoomSubmissionPdf(env, context);
   const delivery = await deliverExaminationRoomProfessorSubmissionEmail(env, {
     professorRecipient: context.professorEmail,
@@ -10628,10 +10631,11 @@ const examinationRoomV1Handlers = createExaminationRoomV1Handlers({
     if (operation === 'submit') {
       scheduleExaminationRoomRecoveryDrain(env, executionContext);
 
-      if (!result?.backupManaged && submissionEmailDetails?.sessionId && submissionEmailDetails?.idempotencyHash) {
+      if (submissionEmailDetails?.sessionId && submissionEmailDetails?.idempotencyHash) {
         const professorPackageWork = deliverExaminationRoomProfessorSubmissionPackage(
           env,
           submissionEmailDetails,
+          { receiptOnly: result?.backupManaged === true },
         ).catch((error) => {
           console.error('Examination Room professor submission package failed', {
             message: String(error?.message || 'unknown').slice(0, 160),

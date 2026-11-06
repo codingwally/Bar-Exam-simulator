@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { provisionMandatoryCommercialChoice } from './staging-commercial-user.mjs';
 import { createExaminationFixtureLifecycle } from './staging-examination-fixtures.mjs';
+import { verifyExaminationRoomV1Staging } from './verify-examination-room-v1-staging.mjs';
 
 const SUPABASE_URL = String(process.env.STAGING_SUPABASE_URL || '').replace(/\/+$/, '');
 const SERVICE_ROLE_KEY = String(process.env.STAGING_SUPABASE_SERVICE_ROLE_KEY || '');
@@ -789,6 +790,7 @@ try {
   const firstStudent = await createUser('student-a');
   const secondStudent = await createUser('student-b');
   await grantSyntheticSuperAdmin(admin.id);
+  await verifyExaminationRoomV1Staging({ adminToken: admin.token, runId });
   const directDashboard = await serviceRpc('examination_admin', {
     p_actor_user_id: admin.id,
     p_operation: 'dashboard',

@@ -1,0 +1,77 @@
+name: Verify live customer checkout QR
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/live-payment-qr-verification-20261106.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify_public_checkout:
+    name: Check public pricing, rendered checkout, and new QR
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test live website from a clean unauthenticated client (no payments)
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {createHash} from 'node:crypto';
+          import {runInNewContext} from 'node:vm';
+          const site='https://duediligence.ph';
+          const api='https://duediligence-api.wallyesteban1993.workers.dev';
+          const request=async(url)=>{
+            const response=await fetch(url,{redirect:'error',cache:'no-store',headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(25000)});
+            assert.equal(response.status,200,'Public GET failed: '+url+' got '+response.status);
+            return response;
+          };
+          const [qr,plansResponse,rendererResponse,markerResponse]=await Promise.all([
+            request(site+'/assets/payments/bpi-instapay-199-qr.png?verified=20261106'),
+            request(api+'/plans?verified=20261106'),
+            request(site+'/assets/pricing-renderer.js?verified=20261106'),
+            request(site+'/.well-known/duediligence-qr-release.txt?verified=20261106')
+          ]);
+          const qrHash=createHash('sha256').update(Buffer.from(await qr.arrayBuffer())).digest('hex');
+          assert.equal(qrHash,'84959f96cfa8cbe9ff9c9a342d95c443c0ff670d6b1ae0d82efc151430861175','New QR not served from production');
+          const marker=(await markerResponse.text()).trim();
+          assert.equal(marker,'647d905cfb3e8414f27b49e6b423af8720c9ca51','Wrong Pages release marker');
+          const data=await plansResponse.json();
+          assert.equal(data.ok,true);
+          const pricing=data.pricing;
+          assert.ok(pricing && pricing.config,'Live /plans missing published configuration');
+          const plan=pricing.plans.find(p=>p.planCode==='bar_access_30d');
+          assert.ok(plan,'No published 30-day plan');
+          assert.equal(plan.priceCentavos,19900);
+          assert.equal(plan.durationDays,30);
+          assert.equal(plan.checkoutEnabled,true);
+          assert.equal(plan.checkoutOpen,true);
+          const method=pricing.paymentMethods.find(m=>m.channelCode==='bpi_instapay');
+          assert.ok(method,'Live BPI payment method unavailable');
+          assert.equal(method.enabled,true);
+          assert.equal(method.visible,true);
+          assert.equal(method.qrAmountCentavos,19900);
+          assert.equal(method.qrUrl,'/assets/payments/bpi-instapay-199-qr.png');
+          const renderSource=await rendererResponse.text();
+          const Element=class {innerHTML='';querySelectorAll(){return []}};
+          const sandbox={window:{},Element,Date,Intl};
+          runInNewContext(renderSource,sandbox,{filename:'live-pricing-renderer.js'});
+          const host=new Element();
+          sandbox.window.DueDiligencePricingRenderer.render(host,pricing.config,{
+            mode:'public',serverNow:pricing.serverNow
+          });
+          assert.match(host.innerHTML,/dd-pricing-regular/,'Customer did not receive regular checkout');
+          assert.match(host.innerHTML,/Pay exactly ₱199\.00/,'Checkout price wrong');
+          assert.match(host.innerHTML,/src="\/assets\/payments\/bpi-instapay-199-qr\.png"/,'Customer does not see newly deployed QR');
+          assert.match(host.innerHTML,/dd2-regular-proof-host/,'Receipt-only payment area missing');
+          console.log('LIVE_CHECKOUT_VERIFIED=true');
+          console.log('PUBLIC_CHECKOUT_OPEN=true');
+          console.log('PRICE_PHP=199.00');
+          console.log('TERM_DAYS=30');
+          console.log('QR_SHA256='+qrHash);
+          console.log('QR_SRC='+method.qrUrl);
+          console.log('RELEASE_MARKER='+marker);
+          console.log('Authenticated receipt submission was NOT performed; this was a safe unauthenticated customer-view test.');
+          NODE

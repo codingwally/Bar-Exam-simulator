@@ -18,8 +18,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  STAGED_EXAMINATION_SHA: 74b3c09f6855c9b579daf39cd186958d9da483be
-  STAGING_E2E_RUN_ID: '42200934527'
+  STAGED_EXAMINATION_SHA: 6155b785e43312b969701328a3decfac2496bf49
+  STAGING_E2E_RUN_ID: '42203523036'
   SITE_URL: https://duediligence.ph
 
 jobs:
@@ -166,20 +166,24 @@ jobs:
       - name: Deploy production Pages
         id: deployment
         uses: actions/deploy-pages@v4
-      - name: Verify served release marker and exact student script
+      - name: Verify live release, exact student script, and exactly two visible student entry fields
         shell: bash
         run: |
           set -euo pipefail
           expected="$(sha256sum .pages-dist/examination-room/student.js | cut -d' ' -f1)"
+          expected_html="$(sha256sum .pages-dist/examination-room/student.html | cut -d' ' -f1)"
           for n in $(seq 1 12); do
             actual="$(curl -fLsS --max-time 15 -H 'Cache-Control: no-cache' "$SITE_URL/.well-known/duediligence-release.txt?midterm=$GITHUB_SHA" || true)"
             curl -fLsS --max-time 15 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/student.js?midterm=$GITHUB_SHA" -o /tmp/midterm-student.js || true
+            curl -fLsS --max-time 15 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/student.html?midterm=$GITHUB_SHA" -o /tmp/midterm-student.html || true
             served="$(sha256sum /tmp/midterm-student.js 2>/dev/null | cut -d' ' -f1 || true)"
-            if [[ "$actual" == "$GITHUB_SHA" && "$served" == "$expected" ]]; then
-              echo "Production Pages serves the exact reviewed examination asset and release SHA."
+            served_html="$(sha256sum /tmp/midterm-student.html 2>/dev/null | cut -d' ' -f1 || true)"
+            if [[ "$actual" == "$GITHUB_SHA" && "$served" == "$expected" && "$served_html" == "$expected_html" ]]; then
+              node -e 'const fs=require("node:fs");const h=fs.readFileSync("/tmp/midterm-student.html","utf8");const form=h.split("<form id=\"roomEntryForm\"")[1]?.split("</form>")[0]||"";const fields=[...form.matchAll(/<(input|select|textarea)\\b[^>]*>/g)].map(m=>m[0].match(/\\bid="([^"]+)"/)?.[1]);if(fields.join(",")!=="roomKey,fullName")throw Error("Live entry form must have only roomKey and fullName; got "+fields.join(","));'
+              echo "Production Pages verified: exact release SHA, exact student script/HTML, and exactly two entry inputs."
               exit 0
             fi
             sleep 5
           done
-          echo "Production static artifact or release marker does not match." >&2
+          echo "Production static student form, script or release marker does not match." >&2
           exit 1

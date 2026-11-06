@@ -41,7 +41,7 @@ jobs:
           const data=await plansResponse.json();
           assert.equal(data.ok,true);
           const pricing=data.pricing;
-          assert.ok(pricing && pricing.config,'Live /plans missing published configuration');
+          assert.ok(pricing && Array.isArray(pricing.plans) && Array.isArray(pricing.paymentMethods),'Live /plans missing published offer');
           const plan=pricing.plans.find(p=>p.planCode==='bar_access_30d');
           assert.ok(plan,'No published 30-day plan');
           assert.equal(plan.priceCentavos,19900);
@@ -59,7 +59,7 @@ jobs:
           const sandbox={window:{},Element,Date,Intl};
           runInNewContext(renderSource,sandbox,{filename:'live-pricing-renderer.js'});
           const host=new Element();
-          sandbox.window.DueDiligencePricingRenderer.render(host,pricing.config,{
+          sandbox.window.DueDiligencePricingRenderer.render(host,pricing.config || pricing,{
             mode:'public',serverNow:pricing.serverNow
           });
           assert.match(host.innerHTML,/dd-pricing-regular/,'Customer did not receive regular checkout');

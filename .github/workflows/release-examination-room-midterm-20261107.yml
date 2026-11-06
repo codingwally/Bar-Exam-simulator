@@ -172,16 +172,19 @@ jobs:
           set -euo pipefail
           expected="$(sha256sum .pages-dist/examination-room/student.js | cut -d' ' -f1)"
           expected_html="$(sha256sum .pages-dist/examination-room/student.html | cut -d' ' -f1)"
+          expected_professor_script="$(sha256sum .pages-dist/examination-room/professor.js | cut -d' ' -f1)"
           expected_professor_html="$(sha256sum .pages-dist/examination-room/index.html | cut -d' ' -f1)"
           for n in $(seq 1 12); do
             actual="$(curl -fLsS --max-time 15 -H 'Cache-Control: no-cache' "$SITE_URL/.well-known/duediligence-release.txt?midterm=$GITHUB_SHA" || true)"
             curl -fLsS --max-time 15 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/student.js?midterm=$GITHUB_SHA" -o /tmp/midterm-student.js || true
             curl -fLsS --max-time 15 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/student.html?midterm=$GITHUB_SHA" -o /tmp/midterm-student.html || true
             curl -fLsS --max-time 15 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/?midterm=$GITHUB_SHA" -o /tmp/midterm-professor.html || true
+            curl -fLsS --max-time 15 -H 'Cache-Control: no-cache' "$SITE_URL/examination-room/professor.js?midterm=$GITHUB_SHA" -o /tmp/midterm-professor.js || true
             served="$(sha256sum /tmp/midterm-student.js 2>/dev/null | cut -d' ' -f1 || true)"
             served_html="$(sha256sum /tmp/midterm-student.html 2>/dev/null | cut -d' ' -f1 || true)"
+            served_professor_script="$(sha256sum /tmp/midterm-professor.js 2>/dev/null | cut -d' ' -f1 || true)"
             served_professor_html="$(sha256sum /tmp/midterm-professor.html 2>/dev/null | cut -d' ' -f1 || true)"
-            if [[ "$actual" == "$GITHUB_SHA" && "$served" == "$expected" && "$served_html" == "$expected_html" && "$served_professor_html" == "$expected_professor_html" ]]; then
+            if [[ "$actual" == "$GITHUB_SHA" && "$served" == "$expected" && "$served_html" == "$expected_html" && "$served_professor_html" == "$expected_professor_html" && "$served_professor_script" == "$expected_professor_script" ]]; then
               node -e 'const fs=require("node:fs");const h=fs.readFileSync("/tmp/midterm-student.html","utf8");const form=h.split("<form id=\"roomEntryForm\"")[1]?.split("</form>")[0]||"";const fields=[...form.matchAll(/<(input|select|textarea)\b[^>]*>/g)].map(m=>m[0].match(/\bid="([^"]+)"/)?.[1]);if(fields.join(",")!=="roomKey,fullName")throw Error("Live entry form must have only roomKey and fullName; got "+fields.join(","));'
               node -e 'const fs=require("node:fs"),h=fs.readFileSync("/tmp/midterm-student.html","utf8"),p=fs.readFileSync("/tmp/midterm-professor.html","utf8");if(!h.includes("Current Philippine Time (PHT)")||h.includes("id=\"timerBox\"")||h.includes("id=\"timerValue\""))throw Error("Live student page must show PHT only, without countdown");if(!p.includes("<option value=\"1440\">No Time Limit</option>"))throw Error("Live professor page lacks No Time Limit");'
               echo "Production Pages verified: release SHA, both exact examination pages, two entry inputs, PHT-only clock, No Time Limit."

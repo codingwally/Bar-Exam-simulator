@@ -53,7 +53,7 @@ export async function verifyExaminationRoomV1Staging({ adminToken, runId }) {
       id: randomUUID(), versionId: randomUUID(), status: 'draft',
       title: marker, subject: 'Constitutional Law', yearLevel: 'Second year',
       instructions: 'Synthetic staging test only. Do not administer to real students.',
-      durationMinutes: 120, startsAt: null,
+      durationMinutes: 1440, startsAt: null,
       gradingIdentity: 'real_names', integrityTier: 'standard',
       cameraRequired: true, microphoneRequired: false,
       privacyNoticeVersion: 'exam-room-v1',
@@ -91,6 +91,7 @@ export async function verifyExaminationRoomV1Staging({ adminToken, runId }) {
       roomKey, identity,
     });
     assert.equal(preview.metadata?.questionCount, 1);
+    assert.equal(preview.metadata?.durationMinutes, 1440, 'No Time Limit must survive publication');
     results.push('student_preview');
 
     const started = await call('/examination-room/v1/student/begin', {
@@ -103,7 +104,15 @@ export async function verifyExaminationRoomV1Staging({ adminToken, runId }) {
     const sessionToken = String(started.sessionToken || '');
     assert.match(sessionId, /^[a-f0-9-]{36}$/i);
     assert.match(sessionToken, /^ers1_[a-f0-9]{64}$/);
+    // Verify that No Time Limit is not treated as a 24-hour student timer.
+    // Untimed sessions remain valid until the separate room closes.
+    const openMonitor = await professorQuery('monitor', { examId });
+    const roomClosesAt = Date.parse(openMonitor.activation?.closesAt || openMonitor.activation?.expiresAt || '');
+    const leaseExpiresAt = Date.parse(started.session?.leaseExpiresAt || '');
+    assert.ok(Number.isFinite(roomClosesAt) && Number.isFinite(leaseExpiresAt));
+    assert.equal(leaseExpiresAt, roomClosesAt, 'No Time Limit session lease must equal room closure');
     results.push('student_begin');
+    results.push('no_time_limit_room_bound');
 
     const savedAnswer = await studentCommand('save_answer', {
       sessionId, sessionToken, questionId: 'q-1',

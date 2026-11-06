@@ -167,6 +167,16 @@ test('key-only student entry requires only the room key and real name, with stab
   assert.match(studentSource, /student: \{[\s\S]*fullName: state\.entry\.fullName,[\s\S]*guestIdentityId: state\.entry\.guestIdentityId/);
 });
 
+test('examination shows only server-adjusted Philippine Standard Time and never a countdown', () => {
+  assert.match(studentHtml, /id="philippineClock"/);
+  assert.match(studentHtml, /Current Philippine Time \(PHT\)/);
+  assert.doesNotMatch(studentHtml, /id="timerValue"|id="timerBox"|Time remaining/);
+  assert.match(studentSource, /timeZone: 'Asia\/Manila'/);
+  assert.match(studentSource, /Date\.now\(\) \+ Number\(state\.attempt\.clockOffsetMs \|\| 0\)/);
+  assert.doesNotMatch(studentSource, /elements\.timerValue|elements\.timerBox/);
+  assert.match(studentSource, /durationMinutes\) === 1440\) return/);
+});
+
 test('email-limited rooms give a self-resolving missing or unlisted email message', () => {
   assert.match(studentSource, /EMAIL_REQUIRED:[\s\S]*Enter the same email address/);
   assert.match(studentSource, /EMAIL_NOT_ALLOWED:[\s\S]*ask the examination creator to add the correct address/);
@@ -190,7 +200,7 @@ test('the final-question action remains enabled and opens review instead of trap
   assert.match(studentSource, /state\.currentIndex === state\.questions\.length - 1 \? 'Review and submit'/);
   assert.match(studentSource, /navigateToQuestion\(state\.currentIndex \+ 1\)/);
   assert.match(studentSource, /if \(index >= state\.questions\.length\) \{[\s\S]*openSubmitDialog\(\)/);
-  assert.match(studentHtml, /student\.js\?v=focus-fullscreen-20260926-1-native-close-20261023-1-answer-sync-20261105-1&release=midterm-key-name-only-20261106-3"/);
+  assert.match(studentHtml, /student\.js\?v=focus-fullscreen-20260926-1-native-close-20261023-1-answer-sync-20261105-1&release=midterm-pht-clock-only-20261106-4"/);
 });
 
 test('student storage open fails safely when IndexedDB is blocked or never settles', async () => {
@@ -287,7 +297,7 @@ test('successful receipt confirms professor grading and offers a local answer ba
   assert.match(text, /Question 3 \(q3\)\n\[Unanswered\]/);
   assert.doesNotMatch(text, /private-token/);
   assert.match(studentSource, /Answers successfully uploaded for professor grading/);
-  assert.match(studentHtml, /student\.js\?v=focus-fullscreen-20260926-1-native-close-20261023-1-answer-sync-20261105-1&release=midterm-key-name-only-20261106-3"/);
+  assert.match(studentHtml, /student\.js\?v=focus-fullscreen-20260926-1-native-close-20261023-1-answer-sync-20261105-1&release=midterm-pht-clock-only-20261106-4"/);
 });
 
 

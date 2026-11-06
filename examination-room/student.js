@@ -122,7 +122,7 @@
   function registerExaminationRoomServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
 
-    navigator.serviceWorker.register('/service-worker.js?v=focus-fullscreen-20260926-1-native-close-20261023-1-answer-sync-20261105-1&release=midterm-key-name-only-20261106-3')
+    navigator.serviceWorker.register('/service-worker.js?v=focus-fullscreen-20260926-1-native-close-20261023-1-answer-sync-20261105-1&release=midterm-pht-clock-only-20261106-4')
       .catch(function () {
         // Registration failure must never block a student who still has a
         // working network connection. The exam UI already reports offline
@@ -138,8 +138,8 @@
       'previewExamTitle', 'previewSubject', 'previewProfessor',
       'previewDuration', 'previewQuestionCount', 'previewAvailability',
       'previewSafeguards', 'changeDetailsButton', 'beginButton',
-      'examView', 'examTitle', 'examSubjectLine', 'mediaStatus', 'saveStatus', 'timerBox',
-      'timerValue', 'philippineClock', 'fullscreenButton', 'offlineNotice', 'examError',
+      'examView', 'examTitle', 'examSubjectLine', 'mediaStatus', 'saveStatus',
+      'philippineClock', 'fullscreenButton', 'offlineNotice', 'examError',
       'progressText', 'answerProgress', 'questionList', 'submitOpenButton',
       'questionPosition', 'questionType', 'flagButton', 'questionContent',
       'previousButton', 'nextButton', 'submitDialog', 'submitAnswered',
@@ -1335,22 +1335,16 @@
       hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
     }).format(new Date(now)) + ' PHT';
     // The 1440-minute sentinel represents a professor-selected untimed exam.
-    // Keep the key validity/room closure guard, but never auto-submit for time.
-    if (Number(state.attempt.metadata && state.attempt.metadata.durationMinutes) === 1440) {
-      elements.timerBox.querySelector('span').textContent = 'Exam time limit';
-      elements.timerValue.textContent = 'No Time Limit';
-      elements.timerValue.setAttribute('aria-label', 'No time limit');
-      elements.timerBox.classList.remove('is-urgent');
-      return;
-    }
+    // Keep key/room access rules, but never apply a per-student countdown
+    // or automatically submit an untimed examination.
+    if (Number(state.attempt.metadata && state.attempt.metadata.durationMinutes) === 1440) return;
     const allottedDuration = Number(state.attempt.metadata && state.attempt.metadata.durationMinutes);
     const timedDeadline = Number.isFinite(allottedDuration) && allottedDuration > 0
       ? Date.parse(state.attempt.startedAt) + allottedDuration * 60000
       : Date.parse(state.attempt.expiresAt);
     var remaining = Math.max(0, Math.min(Date.parse(state.attempt.expiresAt), timedDeadline) - now);
-    elements.timerValue.textContent = formatClock(remaining);
-    elements.timerValue.setAttribute('aria-label', formatClockAccessible(remaining));
-    elements.timerBox.classList.toggle('is-urgent', remaining <= 5 * 60 * 1000);
+    // Display only the live PHT clock. Timed examinations still enforce
+    // the professor's selected duration and warn before automatic submission.
 
     [10, 5, 1].forEach(function (minutes) {
       var threshold = minutes * 60 * 1000;

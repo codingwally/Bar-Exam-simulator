@@ -115,6 +115,34 @@ rendererSandbox.window.DueDiligencePricingRenderer.render(uploadedHost, {
 assert.match(uploadedHost.innerHTML, /dd-pricing-regular/u);
 assert.ok(uploadedHost.innerHTML.includes(`src="${uploadedQrUrl}"`), 'Uploaded QR must load from the Worker origin.');
 
+const paymentQrVersion = '84959f96cfa8cbe9';
+const publishedQrPath = '/assets/payments/bpi-instapay-199-qr.png';
+const publishedQr = `${publishedQrPath}?payment-qr=${paymentQrVersion}`;
+const staticHost = new MockElement();
+rendererSandbox.window.DueDiligencePricingRenderer.render(staticHost, {
+  plans: [{
+    planCode: 'bar_access_30d', name: 'Regular Subscription', priceCentavos: 19900,
+    durationDays: 30, entitlementMode: 'rolling_days', visible: true,
+    checkoutEnabled: true, checkoutOpen: true, displayOpen: true,
+  }],
+  paymentMethods: [{
+    versionId: 'dc45a274-4c3e-4e61-a3ab-990bc8f567f6',
+    planCode: 'bar_access_30d', channelCode: 'bpi_instapay', label: 'BPI InstaPay',
+    qrUrl: publishedQrPath, qrAmountMode: 'exact', qrAmountCentavos: 19900,
+    enabled: true, visible: true,
+  }],
+}, {mode: 'public', serverNow: '2026-11-06T04:00:00.000Z'});
+assert.ok(staticHost.innerHTML.includes(`src="${publishedQr}"`), 'Published static checkout must use a fresh QR URL.');
+assert.ok(experience.includes("qrUrl === '" + publishedQrPath + "' ? qrUrl + '?payment-qr=" + paymentQrVersion + "' : qrUrl"),
+  'Legacy checkout QR must use the same versioned static image without altering uploaded-asset URLs.');
+assert.ok(index.includes('assets/pricing-renderer.js?v=regular-checkout-r2&amp;payment-qr=' + paymentQrVersion),
+  'Fresh checkout renderer must bypass prior JS caches.');
+assert.ok(index.includes('navigation=native-close-20261023-1&amp;payment-qr=' + paymentQrVersion),
+  'Fresh checkout controller must bypass prior JS caches.');
+assert.equal(serviceWorker.includes('payment-qr=' + paymentQrVersion), false,
+  'Do not cache the updated checkout scripts under the old offline-shell revision.');
+
+
 assert.doesNotMatch(renderer, /Gilmar|GILMAR/u);
 
 const embedded = experience.slice(

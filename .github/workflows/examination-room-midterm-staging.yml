@@ -7,6 +7,7 @@ on:
       - hotfix/examination-room-nov07-user-test
       - hotfix/examination-room-two-input-only-20261106
       - hotfix/examination-room-ph-clock-no-timer-20261106
+      - hotfix/examination-monitor-submitted-answers-20261106
     paths:
       - .github/workflows/examination-room-midterm-staging.yml
       - scripts/verify-examination-room-v1-staging.mjs
@@ -17,6 +18,8 @@ on:
       - worker/index.mjs
       - worker/examination-room-v1-routes.mjs
       - examination-room/student.js
+      - examination-room/professor.js
+      - examination-room/professor.client.test.cjs
       - examination-room/api.js
       - examination-room/student.html
       - examination-room/index.html
@@ -37,7 +40,7 @@ jobs:
     name: Deploy reviewed examination to isolated staging and test real browser submission
     if: >-
       github.repository == 'codingwally/Bar-Exam-simulator' &&
-      github.ref == 'refs/heads/hotfix/examination-room-ph-clock-no-timer-20261106'
+      github.ref == 'refs/heads/hotfix/examination-monitor-submitted-answers-20261106'
     runs-on: ubuntu-latest
     environment: staging-e2e
     timeout-minutes: 65
@@ -54,7 +57,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "${GITHUB_REF_NAME}" = 'hotfix/examination-room-ph-clock-no-timer-20261106'
+          test "${GITHUB_REF_NAME}" = 'hotfix/examination-monitor-submitted-answers-20261106'
           grep -Fq 'EXAMINATION_ROOM_DURABLE_INTAKE = "true"' worker/wrangler.staging.toml
           grep -Fq 'EXAMINATION_ROOM_EMAIL_MODE = "suppressed"' worker/wrangler.staging.toml
           test -f supabase/migrations/20261105101000_examination_room_durable_submission.sql
@@ -108,7 +111,7 @@ jobs:
           mkdir -p artifacts/staging-e2e
           # The previous hosted test must have exited successfully; only then
           # is an immutable exact-SHA release evidence artifact generated.
-          node --input-type=module -e "import{writeFileSync}from'node:fs';writeFileSync('artifacts/staging-e2e/examination-room-v1.json',JSON.stringify({kind:'midterm-examination-room-v1',status:'PASS',target:'isolated-staging',sha:process.env.GITHUB_SHA,runId:process.env.GITHUB_RUN_ID,verification:['professor_save','professor_publish','student_key_approved','student_preview','student_begin','no_time_limit_room_bound','student_autosave','official_submission','professor_monitor','synthetic_exam_cleaned']},null,2)+'\\n')"
+          node --input-type=module -e "import{writeFileSync}from'node:fs';writeFileSync('artifacts/staging-e2e/examination-room-v1.json',JSON.stringify({kind:'midterm-examination-room-v1',status:'PASS',target:'isolated-staging',sha:process.env.GITHUB_SHA,runId:process.env.GITHUB_RUN_ID,verification:['professor_save','professor_publish','student_key_approved','student_preview','student_begin','no_time_limit_room_bound','student_autosave','official_submission','professor_monitor','professor_submitted_answers','synthetic_exam_cleaned']},null,2)+'\\n')"
       - name: Preserve sanitized staging release evidence
         if: always()
         uses: actions/upload-artifact@v4

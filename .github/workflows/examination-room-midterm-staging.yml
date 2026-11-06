@@ -26,6 +26,7 @@ on:
       - examination-room/index.html
       - examination-room/offline-shell.test.cjs
       - examination-room/student.client.test.cjs
+      - examination-room/api.demo.test.cjs
       - service-worker.js
   workflow_dispatch:
 

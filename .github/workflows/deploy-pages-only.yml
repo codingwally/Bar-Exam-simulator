@@ -124,13 +124,15 @@ jobs:
           test "$(sha256sum .qr-release-dist/assets/payments/bpi-instapay-199-qr.png | cut -d' ' -f1)" = 84959f96cfa8cbe9ff9c9a342d95c443c0ff670d6b1ae0d82efc151430861175
           diff -qr "$RUNNER_TEMP/qr-live-baseline/.pages-dist" .qr-release-dist | sort > "$RUNNER_TEMP/qr-changes.txt" || true
           test "$(wc -l < "$RUNNER_TEMP/qr-changes.txt")" -eq 2
-          grep -Fq '.well-known/duediligence-qr-release.txt' "$RUNNER_TEMP/qr-changes.txt"
+          cat "$RUNNER_TEMP/qr-changes.txt"
+          grep -Fq 'duediligence-qr-release.txt' "$RUNNER_TEMP/qr-changes.txt"
           grep -Fq 'assets/payments/bpi-instapay-199-qr.png' "$RUNNER_TEMP/qr-changes.txt"
           for file in index.html assets/phase2-experience.js assets/pricing-renderer.js service-worker.js assets/payments/bpi-instapay-199-qr.png; do
             route="$file"
             if test "$file" = index.html; then route=""; fi
             expected="$(sha256sum "$RUNNER_TEMP/qr-live-baseline/.pages-dist/$file" | cut -d' ' -f1)"
             actual="$(curl -fsSL --retry 2 --max-time 30 "https://duediligence.ph/$route?qr-baseline=$GITHUB_SHA" | sha256sum | cut -d' ' -f1)"
+            echo "Baseline check: $file expected=$expected served=$actual"
             test "$actual" = "$expected"
           done
       - name: Deploy only the QR overlay to existing Cloudflare isolated preview

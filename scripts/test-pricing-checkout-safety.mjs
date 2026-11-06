@@ -184,6 +184,7 @@ test('refresh failure invokes the production pause path and inactive views recei
 
 test('QR readiness and timer cleanup are fail-closed', () => {
   assert.equal(safety.imageReady({ complete: true, naturalWidth: 496 }), true);
+  assert.equal(safety.imageReady({ complete: true, naturalWidth: 507 }), true, 'Founder-uploaded QR must enable proof only after complete image load.');
   assert.equal(safety.imageReady({ complete: true, naturalWidth: 0 }), false);
   assert.equal(safety.imageReady({ complete: false, naturalWidth: 496 }), false);
   const cleared = [];

@@ -93,6 +93,7 @@ assert.equal(rejectedArbitraryQr.paymentMethods[0].qrUrl, null);
 
 assert.match(renderer, /channelCode === 'bpi_instapay'[\s\S]*qrUrl === '\/assets\/payments\/bpi-instapay-199-qr\.png'[\s\S]*qrAmountMode === 'exact'/u);
 assert.match(renderer, /data-payment-method-version-id=/u);
+assert.match(experience, /method\.qrAsset\?\.assetId/u, 'Uploaded QR must remain accepted by checkout logic.');
 // A founder-uploaded, verified QR must render in the regular ₱199 checkout.
 const uploadedAssetId = '0d15b0d7-f342-4141-8aea-14d342b6edb1';
 const uploadedHost = new MockElement();

@@ -1,0 +1,171 @@
+name: Release verified BPI QR cache correction to Pages
+
+# One-time frontend-only checkout correction. No payment RPC, database,
+# production Worker, pricing revisions, or examination assets are modified.
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/release-bpi-qr-cache-20261106.yml
+
+permissions:
+  contents: read
+  actions: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: examination-room-production-cutover
+  cancel-in-progress: false
+
+env:
+  BASELINE_SHA: e4f96748504a1d4b4d4e7b3b9aca1434c1a3531e
+  STAGED_CHECKOUT_SHA: f538638bfcf73aacedfccba5b5f4a7eb468046c3
+  STAGING_RUN_ID: '42223656638'
+  QR_SHA256: 84959f96cfa8cbe9ff9c9a342d95c443c0ff670d6b1ae0d82efc151430861175
+  QR_CACHE_VERSION: 84959f96cfa8cbe9
+  SITE_URL: https://duediligence.ph
+
+jobs:
+  verify:
+    name: Match successful checkout preview and unchanged live assets
+    if: >-
+      github.repository == 'codingwally/Bar-Exam-simulator' &&
+      startsWith(github.event.head_commit.message, 'release: verified BPI QR cache fix')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Require successful isolated preview of exact checkout source
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          git merge-base --is-ancestor "$BASELINE_SHA" HEAD
+          git merge-base --is-ancestor "$STAGED_CHECKOUT_SHA" HEAD
+          run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$STAGING_RUN_ID")"
+          test "$(jq -r '.status' <<<"$run")" = completed
+          test "$(jq -r '.conclusion' <<<"$run")" = success
+          test "$(jq -r '.event' <<<"$run")" = push
+          test "$(jq -r '.head_sha' <<<"$run")" = "$STAGED_CHECKOUT_SHA"
+          test "$(jq -r '.path' <<<"$run")" = '.github/workflows/pricing-qr-cache-staging-20261106.yml'
+          for file in index.html assets/pricing-renderer.js assets/phase2-experience.js scripts/test-september-pricing-ui-contract.mjs; do
+            test "$(git rev-parse "$STAGED_CHECKOUT_SHA:$file")" = "$(git rev-parse "HEAD:$file")"
+          done
+      - name: Reject changes outside checkout cache URLs and their tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only "$BASELINE_SHA" HEAD)"
+          while IFS= read -r file; do
+            case "$file" in
+              .github/workflows/pricing-qr-cache-staging-20261106.yml | \
+              .github/workflows/release-bpi-qr-cache-20261106.yml | \
+              index.html | \
+              assets/pricing-renderer.js | \
+              assets/phase2-experience.js | \
+              scripts/test-september-pricing-ui-contract.mjs) ;;
+              *) echo "Unexpected changed file: $file" >&2; exit 1 ;;
+            esac
+          done <<< "$changed"
+          test "$(printf '%s\n' "$changed" | wc -l)" -eq 6
+          git diff --quiet "$BASELINE_SHA" HEAD -- assets/payments pricing worker supabase examination-room service-worker.js admin/index.html
+          git diff --check "$BASELINE_SHA" HEAD
+          test "$(sha256sum assets/payments/bpi-instapay-199-qr.png | cut -d' ' -f1)" = "$QR_SHA256"
+      - name: Require the exact original live site before any publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          live="$(curl -fsSL --max-time 25 -H 'Cache-Control: no-cache' "$SITE_URL/.well-known/duediligence-release.txt?qr-preflight=$GITHUB_SHA" | tr -d '\r\n')"
+          test "$live" = "$BASELINE_SHA" || { echo "Live site changed; refuse checkout release" >&2; exit 1; }
+          actual="$(curl -fsSL --max-time 25 "$SITE_URL/assets/payments/bpi-instapay-199-qr.png?payment-qr=$QR_CACHE_VERSION" | sha256sum | cut -d' ' -f1)"
+          test "$actual" = "$QR_SHA256"
+      - name: Re-run checkout and examination safety tests and build Pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+          node --check assets/pricing-renderer.js
+          node --check assets/phase2-experience.js
+          node scripts/test-september-pricing-ui-contract.mjs
+          node --test scripts/test-pricing-checkout-safety.mjs
+          node --test examination-room/*.test.cjs admin/examination-room-admin.test.cjs
+          node scripts/test-examination-room-release-workflows.mjs
+          node scripts/build-pages-artifact.mjs
+          node scripts/test-pages-artifact.mjs
+          test "$(cat .pages-dist/.well-known/duediligence-release.txt)" = "$GITHUB_SHA"
+
+  deploy_pages:
+    name: Publish cache-corrected checkout and prove live customer assets
+    needs: verify
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build current verified Pages, without deploying production Workers
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+          node scripts/build-pages-artifact.mjs
+          node scripts/test-pages-artifact.mjs
+          test "$(cat .pages-dist/.well-known/duediligence-release.txt)" = "$GITHUB_SHA"
+          grep -Fq 'payment-qr=84959f96cfa8cbe9' .pages-dist/index.html
+      - name: Re-check baseline immediately before publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          live="$(curl -fsSL --max-time 25 "$SITE_URL/.well-known/duediligence-release.txt?qr-cutover=$GITHUB_SHA" | tr -d '\r\n')"
+          test "$live" = "$BASELINE_SHA" || { echo "Live source changed; stopping before publish." >&2; exit 1; }
+      - uses: actions/configure-pages@v4
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .pages-dist
+      - name: Deploy verified static frontend to production Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+      - name: Verify live QR image, checkout scripts, and unchanged examination
+        shell: bash
+        run: |
+          set -euo pipefail
+          for try in $(seq 1 12); do
+            marker="$(curl -fsSL --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/.well-known/duediligence-release.txt?qr-verify=$GITHUB_SHA" | tr -d '\r\n' || true)"
+            if test "$marker" = "$GITHUB_SHA"; then
+              matching=true
+              for file in index.html assets/pricing-renderer.js assets/phase2-experience.js assets/payments/bpi-instapay-199-qr.png examination-room/student.html examination-room/student.js examination-room/index.html examination-room/professor.js service-worker.js; do
+                route="$file"
+                case "$file" in
+                  index.html) route="" ;;
+                  examination-room/index.html) route="examination-room/" ;;
+                esac
+                expected="$(sha256sum ".pages-dist/$file" | cut -d' ' -f1)"
+                actual="$(curl -fsSL --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/$route?payment-qr=$QR_CACHE_VERSION&verify=$GITHUB_SHA" | sha256sum | cut -d' ' -f1 || true)"
+                if test "$actual" != "$expected"; then matching=false; echo "Awaiting $file"; break; fi
+              done
+              if test "$matching" = true; then
+                liveqr="$(curl -fsSL --max-time 20 "$SITE_URL/assets/payments/bpi-instapay-199-qr.png?payment-qr=$QR_CACHE_VERSION" | sha256sum | cut -d' ' -f1)"
+                test "$liveqr" = "$QR_SHA256"
+                echo "SUCCESS: live customer homepage, versioned checkout, verified QR, student/professor exam, and service worker match exact reviewed assets."
+                exit 0
+              fi
+            fi
+            sleep 5
+          done
+          echo "Live customer QR or an existing critical page did not match the approved release." >&2
+          exit 1

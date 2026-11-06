@@ -1126,6 +1126,27 @@ test('individual Answers PDF prefers the server-stored submission artifact', () 
 });
 
 
+test('submitted grading matches immutable question numbers when draft IDs differ', () => {
+  const { submittedAnswerRevision } = loadProfessorStartupHooks();
+  const question = { id: 'draft-uuid-1', number: 1 };
+  const submitted = [
+    { questionId: 'q001', questionNumber: 1, revision: 2, answer: 'Final saved response' },
+    { questionId: 'q001', questionNumber: 1, revision: 1, answer: 'Earlier saved response' },
+    { questionId: 'q002', questionNumber: 2, revision: 1, answer: 'Another response' }
+  ];
+  assert.equal(submittedAnswerRevision(submitted, question, 0)?.answer, 'Final saved response');
+  assert.equal(submittedAnswerRevision(submitted, { id: 'q002' }, 1)?.answer, 'Another response');
+  assert.equal(submittedAnswerRevision([], question, 0), null);
+});
+
+test('Live Monitor exposes submitted answers through the professor grading endpoint', () => {
+  assert.ok(professorSource.includes('data-view-answers'));
+  assert.ok(professorSource.includes("api.professorQuery('grading', { examId })"));
+  assert.ok(professorSource.includes('showMonitorSubmittedAnswers(viewAnswers.dataset.viewAnswers)'));
+  assert.ok(professorSource.includes('escapeHtml(gradingAnswerText(question, response))'));
+  assert.ok(professorHtml.includes('View answers'));
+});
+
 test('grading sheet renders the full question prompt above the student answer', () => {
   assert.match(professorSource, /const questionPrompt = safeText\(question\.prompt \|\| question\.text, 20_000\)/);
   assert.match(professorSource, /class="grading-question-prompt"[\s\S]*\$\{escapeHtml\(questionPrompt\)\}/);

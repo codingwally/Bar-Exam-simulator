@@ -128,7 +128,7 @@ jobs:
         run: |
           set -euo pipefail
           for n in 1 2 3 4 5 6 7 8; do
-            professor="$(curl -fsS --max-time 20 -X POST 'https://duediligence-api.wallyesteban1993.workers.dev/examination-room/v1/professor/query' -H 'Origin: https://duediligence.ph' -H 'Content-Type: application/json' -d '{"operation":"session","payload":{}}' || true)"
+            professor="$(curl -sS --max-time 20 -X POST 'https://duediligence-api.wallyesteban1993.workers.dev/examination-room/v1/professor/query' -H 'Origin: https://duediligence.ph' -H 'Content-Type: application/json' -d '{"operation":"session","payload":{}}' || true)"
             if jq -e '.error.code=="EXAM_ROOM_V1_PROFESSOR_SIGN_IN_REQUIRED"' >/dev/null 2>&1 <<<"$professor"; then
               echo "Production examination professor authentication boundary is serving."
               exit 0

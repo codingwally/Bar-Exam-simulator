@@ -18,11 +18,11 @@ const studentApiRuntime = [
 ].join('\n');
 
 test('slow-data student page starts without waiting for third-party scripts', () => {
-  assert.doesNotMatch(studentHtml, /pagead2\\.googlesyndication\\.com/);
-  const decorativeIconScript = studentHtml.match(/<script[^>]*src="https:\/\/unpkg\\.com\/@phosphor-icons\/web@2\\.1\\.1"[^>]*><\/script>/);
+  assert.doesNotMatch(studentHtml, /pagead2\.googlesyndication\.com/);
+  const decorativeIconScript = studentHtml.match(/<script[^>]*src="https:\/\/unpkg\.com\/@phosphor-icons\/web@2\.1\.1"[^>]*><\/script>/);
   assert.ok(decorativeIconScript, 'decorative icons may still load independently');
-  assert.match(decorativeIconScript[0], /\\basync\\b/);
-  assert.doesNotMatch(decorativeIconScript[0], /\\bdefer\\b/);
+  assert.match(decorativeIconScript[0], /\basync\b/);
+  assert.doesNotMatch(decorativeIconScript[0], /\bdefer\b/);
   assert.ok(studentHtml.indexOf('student.js?v=') < studentHtml.indexOf(decorativeIconScript[0]),
     'entry scripts must be listed before the optional icon CDN');
 });
@@ -32,11 +32,11 @@ test('weak mobile data has longer, narrowly scoped admission timeouts', () => {
   const begin = apiSource.slice(apiSource.indexOf('async function studentBegin('), apiSource.indexOf('async function studentQuery('));
   const query = apiSource.slice(apiSource.indexOf('async function studentQuery('), apiSource.indexOf('async function studentCommand('));
   const answerUpload = apiSource.slice(apiSource.indexOf('async function studentCommand('), apiSource.indexOf('async function adminQuery('));
-  assert.match(preview, /requestOptionsWithDefault\\(requestOptions, 60_000\\)/);
-  assert.match(begin, /requestOptionsWithDefault\\(requestOptions, 60_000\\)/);
-  assert.match(query, /operation === 'resume' \\? requestOptionsWithDefault\\(requestOptions, 60_000\\) : requestOptions/);
+  assert.match(preview, /requestOptionsWithDefault\(requestOptions, 60_000\)/);
+  assert.match(begin, /requestOptionsWithDefault\(requestOptions, 60_000\)/);
+  assert.match(query, /operation === 'resume' \? requestOptionsWithDefault\(requestOptions, 60_000\) : requestOptions/);
   assert.doesNotMatch(answerUpload, /60_000/);
-  assert.match(studentHtml, /api\\.js\\?v=[^"]*&entry=low-data-20261106-1/);
+  assert.match(studentHtml, /api\.js\?v=[^"]*&entry=low-data-20261106-1/);
 });
 
 function loadStudentStorageHooks(indexedDB, syncTestDependencies) {

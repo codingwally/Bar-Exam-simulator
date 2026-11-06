@@ -120,11 +120,11 @@ jobs:
           (cd "$RUNNER_TEMP/qr-live-baseline" && GITHUB_SHA="$BASELINE_SHA" node scripts/test-pages-artifact.mjs)
           cp -a "$RUNNER_TEMP/qr-live-baseline/.pages-dist" "$GITHUB_WORKSPACE/.qr-release-dist"
           git show "$GITHUB_SHA:assets/payments/bpi-instapay-199-qr.png" > .qr-release-dist/assets/payments/bpi-instapay-199-qr.png
-          printf '%s\n' "$GITHUB_SHA" > .qr-release-dist/.well-known/duediligence-release.txt
+          printf '%s\n' "$GITHUB_SHA" > .qr-release-dist/.well-known/duediligence-qr-release.txt
           test "$(sha256sum .qr-release-dist/assets/payments/bpi-instapay-199-qr.png | cut -d' ' -f1)" = 84959f96cfa8cbe9ff9c9a342d95c443c0ff670d6b1ae0d82efc151430861175
           diff -qr "$RUNNER_TEMP/qr-live-baseline/.pages-dist" .qr-release-dist | sort > "$RUNNER_TEMP/qr-changes.txt" || true
           test "$(wc -l < "$RUNNER_TEMP/qr-changes.txt")" -eq 2
-          grep -Fq '.well-known/duediligence-release.txt' "$RUNNER_TEMP/qr-changes.txt"
+          grep -Fq '.well-known/duediligence-qr-release.txt' "$RUNNER_TEMP/qr-changes.txt"
           grep -Fq 'assets/payments/bpi-instapay-199-qr.png' "$RUNNER_TEMP/qr-changes.txt"
           for file in index.html assets/phase2-experience.js assets/pricing-renderer.js service-worker.js assets/payments/bpi-instapay-199-qr.png; do
             route="$file"
@@ -149,7 +149,7 @@ jobs:
           preview=https://duediligence-asset-recovery-preview.wallyesteban1993.workers.dev
           ok=false
           for attempt in $(seq 1 20); do
-            marker="$(curl -fsSL --max-time 20 "$preview/.well-known/duediligence-release.txt?qr=$GITHUB_SHA" | tr -d '\r\n' || true)"
+            marker="$(curl -fsSL --max-time 20 "$preview/.well-known/duediligence-qr-release.txt?qr=$GITHUB_SHA" | tr -d '\r\n' || true)"
             if test "$marker" = "$GITHUB_SHA"; then
               matching=true
               for file in index.html admin/index.html examination-room/index.html service-worker.js assets/phase2-experience.js assets/pricing-renderer.js assets/payments/bpi-instapay-199-qr.png; do
@@ -203,7 +203,7 @@ jobs:
           set -euo pipefail
           test "$BASELINE_SHA" = 8ed2a21d3fa33d065fdf1c3f69f631210ca08e25
           test "$(curl -fsSL --max-time 30 "https://duediligence.ph/.well-known/duediligence-release.txt?qr-publish=$GITHUB_SHA" | tr -d '\r\n')" = "$BASELINE_SHA"
-          test "$(tr -d '\r\n' < .qr-release-dist/.well-known/duediligence-release.txt)" = "$GITHUB_SHA"
+          test "$(tr -d '\r\n' < .qr-release-dist/.well-known/duediligence-qr-release.txt)" = "$GITHUB_SHA"
           test "$(sha256sum .qr-release-dist/assets/payments/bpi-instapay-199-qr.png | cut -d' ' -f1)" = 84959f96cfa8cbe9ff9c9a342d95c443c0ff670d6b1ae0d82efc151430861175
       - uses: actions/configure-pages@v4
       - uses: actions/upload-pages-artifact@v3
@@ -217,7 +217,7 @@ jobs:
           set -euo pipefail
           verified=false
           for attempt in $(seq 1 24); do
-            marker="$(curl -fsSL --max-time 20 "https://duediligence.ph/.well-known/duediligence-release.txt?qr-verify=$GITHUB_SHA" | tr -d '\r\n' || true)"
+            marker="$(curl -fsSL --max-time 20 "https://duediligence.ph/.well-known/duediligence-qr-release.txt?qr-verify=$GITHUB_SHA" | tr -d '\r\n' || true)"
             if test "$marker" = "$GITHUB_SHA"; then
               matching=true
               for file in index.html assets/phase2-experience.js assets/pricing-renderer.js service-worker.js assets/payments/bpi-instapay-199-qr.png; do
@@ -232,6 +232,7 @@ jobs:
             sleep 5
           done
           test "$verified" = true
+          test "$(curl -fsSL --max-time 30 "https://duediligence.ph/.well-known/duediligence-release.txt?canonical-baseline=$GITHUB_SHA" | tr -d '\r\n')" = 8ed2a21d3fa33d065fdf1c3f69f631210ca08e25
           echo "NEW_CUSTOMER_QR_SHA256=84959f96cfa8cbe9ff9c9a342d95c443c0ff670d6b1ae0d82efc151430861175"
           echo 'Only the payment QR and release marker changed; all other checked live files match the prior baseline.'
   deploy_pages:

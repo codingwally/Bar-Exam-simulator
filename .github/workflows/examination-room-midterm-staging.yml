@@ -111,7 +111,7 @@ jobs:
           mkdir -p artifacts/staging-e2e
           # The previous hosted test must have exited successfully; only then
           # is an immutable exact-SHA release evidence artifact generated.
-          node --input-type=module -e "import{writeFileSync}from'node:fs';writeFileSync('artifacts/staging-e2e/examination-room-v1.json',JSON.stringify({kind:'midterm-examination-room-v1',status:'PASS',target:'isolated-staging',sha:process.env.GITHUB_SHA,runId:process.env.GITHUB_RUN_ID,verification:['professor_save','professor_publish','student_key_approved','student_preview','student_begin','no_time_limit_room_bound','student_autosave','official_submission','professor_monitor','professor_submitted_answers','synthetic_exam_cleaned']},null,2)+'\\n')"
+          node --input-type=module -e "import{writeFileSync}from'node:fs';writeFileSync('artifacts/staging-e2e/examination-room-v1.json',JSON.stringify({kind:'midterm-examination-room-v1',status:'PASS',target:'isolated-staging',sha:process.env.GITHUB_SHA,runId:process.env.GITHUB_RUN_ID,verification:['professor_save','professor_publish','student_key_approved','student_preview','student_begin','no_time_limit_room_bound','student_autosave','official_submission','professor_monitor','professor_submitted_answers','professor_grade_save','synthetic_exam_cleaned']},null,2)+'\\n')"
       - name: Preserve sanitized staging release evidence
         if: always()
         uses: actions/upload-artifact@v4

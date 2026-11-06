@@ -63,7 +63,7 @@ jobs:
           diff -u \
             <(git show "$STAGED_EXAMINATION_SHA:worker/wrangler.toml" |
                 sed '/^AI_PREPARED_BETA_BADGE = "false"$/d; /^CONTENT_HUMAN_REVIEW_REQUIRED = "false"$/d') \
-            <(sed '/^# Keep default-false optional UI flags absent so the Worker remains within Cloudflare Free/d' worker/wrangler.toml)
+            <(cat worker/wrangler.toml)
           git diff --quiet HEAD^1 HEAD -- assets/payments pricing
           echo "Exact staging-proven examination files, current main checkout baseline, and approval confirmed."
       - name: Run full examination contracts and verify production intake configuration

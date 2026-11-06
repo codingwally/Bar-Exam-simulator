@@ -1,0 +1,85 @@
+name: Stage published BPI QR cache correction
+
+on:
+  push:
+    branches:
+      - hotfix/qr-checkout-cache-20261106
+    paths:
+      - .github/workflows/pricing-qr-cache-staging-20261106.yml
+      - assets/pricing-renderer.js
+      - assets/phase2-experience.js
+      - index.html
+      - scripts/test-september-pricing-ui-contract.mjs
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-qr-preview:
+    if: github.repository == 'codingwally/Bar-Exam-simulator'
+    runs-on: ubuntu-latest
+    environment: staging-e2e
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate exact QR and isolated source change
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(sha256sum assets/payments/bpi-instapay-199-qr.png | cut -d' ' -f1)"
+          test "$actual" = 84959f96cfa8cbe9ff9c9a342d95c443c0ff670d6b1ae0d82efc151430861175
+          grep -Fq '&amp;payment-qr=84959f96cfa8cbe9' index.html
+          git diff --check
+          node --check assets/pricing-renderer.js
+          node --check assets/phase2-experience.js
+          npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+          node scripts/test-september-pricing-ui-contract.mjs
+          node --test scripts/test-pricing-checkout-safety.mjs
+          node --test examination-room/*.test.cjs admin/examination-room-admin.test.cjs
+          node scripts/build-pages-artifact.mjs
+          node scripts/test-pages-artifact.mjs
+          test "$(cat .pages-dist/.well-known/duediligence-release.txt)" = "$GITHUB_SHA"
+      - name: Verify live published QR and protect existing Pages baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          baseline="$(curl -fsSL --retry 2 --max-time 25 -H 'Cache-Control: no-cache' "https://duediligence.ph/.well-known/duediligence-release.txt?qr-readonly=$GITHUB_SHA" | tr -d '\r\n')"
+          test "$baseline" = e4f96748504a1d4b4d4e7b3b9aca1434c1a3531e
+          live_hash="$(curl -fsSL --retry 2 --max-time 25 -H 'Cache-Control: no-cache' 'https://duediligence.ph/assets/payments/bpi-instapay-199-qr.png?payment-qr=84959f96cfa8cbe9' | sha256sum | cut -d' ' -f1)"
+          test "$live_hash" = 84959f96cfa8cbe9ff9c9a342d95c443c0ff670d6b1ae0d82efc151430861175
+          echo "Original Pages baseline and corrected QR image are already present and match by live SHA-256."
+      - name: Deploy isolated checkout static preview (never production)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: '4.114.0'
+          command: deploy --config ./qr-preview.jsonc
+        env:
+          CI: 'true'
+      - name: Verify exact isolated preview QR and checkout scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          preview='https://duediligence-qr-cache-20261106-preview.wallyesteban1993.workers.dev'
+          for n in $(seq 1 12); do
+            ok=true
+            for path in index.html assets/pricing-renderer.js assets/phase2-experience.js assets/payments/bpi-instapay-199-qr.png; do
+              route="$path"
+              if test "$path" = index.html; then route=""; fi
+              expected="$(sha256sum ".pages-dist/$path" | cut -d' ' -f1)"
+              actual="$(curl -fsSL --max-time 20 "$preview/$route?qr=$GITHUB_SHA" | sha256sum | cut -d' ' -f1 || true)"
+              if test "$actual" != "$expected"; then ok=false; break; fi
+            done
+            if test "$ok" = true; then
+              echo "Isolated preview serves the exact new checkout source and unchanged published QR."
+              exit 0
+            fi
+            sleep 5
+          done
+          exit 1

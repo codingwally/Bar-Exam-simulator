@@ -80,6 +80,8 @@ jobs:
         env:
           STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
           EXAMINATION_ROOM_V1_ONLY: 'true'
+          STAGING_SUPABASE_URL: https://hlzqmreeoghbldnhlybr.supabase.co
+          STAGING_EXAMINATION_WORKER_URL: https://duediligence-examinations-staging.wallyesteban1993.workers.dev
         shell: bash
         run: |
           set -euo pipefail

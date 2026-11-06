@@ -500,7 +500,9 @@ export async function deliverExaminationRoomIntakeBackup(env, job, transport = g
   try {
     const response = await transport('https://api.resend.com/emails', {
       method: 'POST',
-      signal: AbortSignal.timeout(2500),
+      // Allow the provider enough time for large answer TXT attachments.
+      // A failed send stays in the durable retry outbox.
+      signal: AbortSignal.timeout(12000),
       headers: {
         Authorization: `Bearer ${env.RESEND_API_KEY}`,
         'Content-Type': 'application/json',

@@ -241,6 +241,7 @@ import {
   deliverExaminationRoomPublicationRequestEmail,
   deliverExaminationRoomResultReleaseEmails,
   deliverExaminationRoomProfessorSubmissionEmail,
+  deliverExaminationRoomSubmissionReceiptEmail,
   deliverExaminationRoomIntakeBackup,
 } from './examination-room-email.mjs';
 import {
@@ -10496,7 +10497,24 @@ async function deliverExaminationRoomProfessorSubmissionPackage(env, details) {
       safeErrorCode: String(delivery?.safeErrorCode || 'unknown').slice(0, 80),
     });
   }
-  return { artifact, delivery };
+  // Only the server-confirmed receipt is emailed to the student. Never include
+  // answers or passkeys in this notification. Provider calls use a distinct
+  // stable idempotency key from the professor's PDF and owner TXT backups.
+  const studentReceipt = await deliverExaminationRoomSubmissionReceiptEmail(env, {
+    recipient: context.studentEmail,
+    studentName: context.studentName,
+    examTitle: manifest.title,
+    submittedAt: context.submittedAt,
+    receiptCode: context.receiptCode,
+    idempotencyHash: details.idempotencyHash,
+  });
+  if (!['sent', 'suppressed', 'skipped'].includes(String(studentReceipt?.status || ''))) {
+    console.error('Examination Room student receipt email was not delivered', {
+      status: String(studentReceipt?.status || 'failed').slice(0, 40),
+      safeErrorCode: String(studentReceipt?.safeErrorCode || 'unknown').slice(0, 80),
+    });
+  }
+  return { artifact, delivery, studentReceipt };
 }
 
 const examinationRoomV1Handlers = createExaminationRoomV1Handlers({

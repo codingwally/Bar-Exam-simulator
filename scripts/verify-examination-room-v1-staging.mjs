@@ -162,7 +162,7 @@ export async function verifyExaminationRoomV1Staging({ adminToken, runId }) {
     const grading = await professorQuery('grading', { examId });
     const submittedAnswers = Array.isArray(grading.answerRevisions) ? grading.answerRevisions : [];
     const savedForStudent = submittedAnswers.find((revision) => (
-      revision.sessionId === sessionId && revision.questionId === 'q-1'
+      revision.sessionId === sessionId && Number(revision.questionNumber) === 1
     ));
     assert.ok(savedForStudent, 'Professor grading endpoint omitted the submitted answer');
     assert.equal(savedForStudent.answer, finalAnswer,

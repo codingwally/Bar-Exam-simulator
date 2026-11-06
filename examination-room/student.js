@@ -139,7 +139,7 @@
       'previewDuration', 'previewQuestionCount', 'previewAvailability',
       'previewSafeguards', 'changeDetailsButton', 'beginButton',
       'examView', 'examTitle', 'examSubjectLine', 'mediaStatus', 'saveStatus', 'timerBox',
-      'timerValue', 'fullscreenButton', 'offlineNotice', 'examError',
+      'timerValue', 'philippineClock', 'fullscreenButton', 'offlineNotice', 'examError',
       'progressText', 'answerProgress', 'questionList', 'submitOpenButton',
       'questionPosition', 'questionType', 'flagButton', 'questionContent',
       'previousButton', 'nextButton', 'submitDialog', 'submitAnswered',
@@ -331,10 +331,26 @@
     }
   }
 
+  function studentGuestIdentityId() {
+    const key = 'duediligence.examination-room.student-device-id.v1';
+    try {
+      let value = window.localStorage.getItem(key) || '';
+      if (!/^student-device-[a-z0-9-]{12,72}$/i.test(value)) {
+        value = 'student-device-' + ((window.crypto && window.crypto.randomUUID && window.crypto.randomUUID()) || randomId('student'));
+        window.localStorage.setItem(key, value);
+      }
+      return value;
+    } catch (error) {
+      state.guestIdentityId = state.guestIdentityId || 'student-device-' + randomId('student');
+      return state.guestIdentityId;
+    }
+  }
+
   function readEntryForm() {
     return {
       roomKey: normaliseRoomKey(elements.roomKey.value),
       fullName: normaliseHumanText(elements.fullName.value),
+      guestIdentityId: studentGuestIdentityId(),
       email: normaliseEmail(elements.email.value),
       studentNumber: normaliseHumanText(elements.studentNumber.value),
       subject: normaliseHumanText(elements.subject.value),
@@ -344,7 +360,7 @@
 
   async function buildEntryContext(entry) {
     var roomKeyHash = await digestText(entry.roomKey);
-    var emailIdentity = entry.email.toLocaleLowerCase();
+    var emailIdentity = entry.email.toLocaleLowerCase() || (entry.guestIdentityId + ":" + entry.fullName.toLocaleLowerCase());
     var studentHash = await digestText(emailIdentity);
     var identityMaterial = [
       roomKeyHash,
@@ -448,7 +464,8 @@
           email: state.entry.email,
           studentNumber: state.entry.studentNumber,
           subject: state.entry.subject,
-          yearLevel: state.entry.yearLevel
+          yearLevel: state.entry.yearLevel,
+          guestIdentityId: state.entry.guestIdentityId
         },
         attemptBindingId: state.attemptBindingId,
         client: {
@@ -488,8 +505,8 @@
           fullName: state.entry.fullName,
           email: state.entry.email,
           studentNumber: state.entry.studentNumber,
-          subject: state.entry.subject,
-          yearLevel: state.entry.yearLevel
+          subject: state.entry.subject || state.metadata.subject,
+          yearLevel: state.entry.yearLevel || state.metadata.yearLevel
         },
         metadata: state.metadata,
         questions: questions,
@@ -661,9 +678,9 @@
     elements.receiptView.hidden = true;
     elements.examView.hidden = false;
     elements.studentIdentity.hidden = false;
-    elements.studentIdentity.textContent = state.attempt.student.fullName + ' · ' + state.attempt.student.studentNumber;
+    elements.studentIdentity.textContent = state.attempt.student.fullName + (state.attempt.student.studentNumber ? ' · ' + state.attempt.student.studentNumber : '');
     elements.examTitle.textContent = state.attempt.metadata.title;
-    elements.examSubjectLine.textContent = state.attempt.metadata.subject + ' · ' + state.attempt.student.yearLevel;
+    elements.examSubjectLine.textContent = state.attempt.metadata.subject + ' · ' + (state.attempt.student.yearLevel || state.attempt.metadata.yearLevel);
     document.title = state.attempt.metadata.title + ' | Examination Room';
     state.timeExpiryHandled = false;
     state.timerThresholdsAnnounced = {};
@@ -1311,7 +1328,24 @@
       return;
     }
     var now = Date.now() + Number(state.attempt.clockOffsetMs || 0);
-    var remaining = Math.max(0, Date.parse(state.attempt.expiresAt) - now);
+    elements.philippineClock.textContent = new Intl.DateTimeFormat('en-PH', {
+      timeZone: 'Asia/Manila', year: 'numeric', month: 'short', day: 'numeric',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
+    }).format(new Date(now)) + ' PHT';
+    // The 1440-minute sentinel represents a professor-selected untimed exam.
+    // Keep the key validity/room closure guard, but never auto-submit for time.
+    if (Number(state.attempt.metadata && state.attempt.metadata.durationMinutes) === 1440) {
+      elements.timerBox.querySelector('span').textContent = 'Exam time limit';
+      elements.timerValue.textContent = 'No Time Limit';
+      elements.timerValue.setAttribute('aria-label', 'No time limit');
+      elements.timerBox.classList.remove('is-urgent');
+      return;
+    }
+    const allottedDuration = Number(state.attempt.metadata && state.attempt.metadata.durationMinutes);
+    const timedDeadline = Number.isFinite(allottedDuration) && allottedDuration > 0
+      ? Date.parse(state.attempt.startedAt) + allottedDuration * 60000
+      : Date.parse(state.attempt.expiresAt);
+    var remaining = Math.max(0, Math.min(Date.parse(state.attempt.expiresAt), timedDeadline) - now);
     elements.timerValue.textContent = formatClock(remaining);
     elements.timerValue.setAttribute('aria-label', formatClockAccessible(remaining));
     elements.timerBox.classList.toggle('is-urgent', remaining <= 5 * 60 * 1000);
@@ -2221,6 +2255,7 @@
 
   function formatDuration(minutes) {
     var total = Number(minutes);
+    if (total === 1440) return "No Time Limit";
     if (total >= 60 && total % 60 === 0) {
       var hours = total / 60;
       return hours + (hours === 1 ? ' hour' : ' hours');
@@ -2237,10 +2272,11 @@
     if (Number.isNaN(date.getTime())) {
       return String(value || 'Not available');
     }
-    return new Intl.DateTimeFormat(undefined, {
+    return new Intl.DateTimeFormat('en-PH', {
+      timeZone: 'Asia/Manila',
       dateStyle: 'medium',
       timeStyle: 'short'
-    }).format(date);
+    }).format(date) + ' PHT';
   }
 
   function formatClock(milliseconds) {

@@ -145,13 +145,18 @@ test('camera and microphone permission starts only after entry and cannot block 
   assert.doesNotMatch(studentSource, /await state\.media\.start/);
 });
 
-test('student email is required and is the stable examination identity', () => {
-  assert.match(studentHtml, /id="email"[^>]*type="email"[^>]*required/);
-  assert.match(studentHtml, /This email identifies your examination attempt/);
-  assert.match(studentSource, /email: normaliseEmail\(elements\.email\.value\)/);
-  assert.match(studentSource, /var emailIdentity = entry\.email\.toLocaleLowerCase\(\)/);
+test('key-only student entry requires only the room key and real name, with stable guest identity', () => {
+  assert.match(studentHtml, /id="roomKey"[^>]*required/);
+  assert.match(studentHtml, /id="fullName"[^>]*required/);
+  for (const field of ['email', 'studentNumber', 'yearLevel', 'subject']) {
+    const tag = studentHtml.match(new RegExp('<(?:input|select) id="' + field + '"[^>]*>'))?.[0];
+    assert.ok(tag && !/\\srequired(?:\\s|>)/.test(tag), field + ' is optional');
+  }
+  assert.match(studentSource, /guestIdentityId: studentGuestIdentityId\(\)/);
+  assert.match(studentSource, /student-device-/);
+  assert.match(studentSource, /var emailIdentity = entry\.email\.toLocaleLowerCase\(\) \|\|/);
   assert.match(studentSource, /studentHash = await digestText\(emailIdentity\)/);
-  assert.match(studentSource, /student: \{[\s\S]*fullName: state\.entry\.fullName,[\s\S]*email: state\.entry\.email,[\s\S]*studentNumber:/);
+  assert.match(studentSource, /student: \{[\s\S]*fullName: state\.entry\.fullName,[\s\S]*guestIdentityId: state\.entry\.guestIdentityId/);
 });
 
 test('email-limited rooms give a self-resolving missing or unlisted email message', () => {

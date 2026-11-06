@@ -1,0 +1,150 @@
+name: Release verified Examination Room low-data entry to Pages
+
+# One-time, frontend-only cutover. The production Worker, database,
+# student answer handling, professor grading, and payment logic are unchanged.
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/release-examination-room-low-data-entry-20261106.yml
+
+permissions:
+  contents: read
+  actions: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: examination-room-production-cutover
+  cancel-in-progress: false
+
+env:
+  BASELINE_SHA: f7b621ff517b1bbc0eeca8e66b95ce70fe3ef13e
+  STAGED_EXAMINATION_SHA: 21f7c36b016f27ed534eca35d8b565f1c64cc627
+  STAGING_E2E_RUN_ID: '42214253587'
+  SITE_URL: https://duediligence.ph
+
+jobs:
+  verify:
+    name: Verify exact staging evidence and frontend-only source boundaries
+    if: >-
+      github.repository == 'codingwally/Bar-Exam-simulator' &&
+      startsWith(github.event.head_commit.message, 'release: deploy verified Examination Room low-data entry')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify successful isolated staging at exact source commit
+        shell: bash
+        env:
+          GH_TOKEN: \${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          git merge-base --is-ancestor "$BASELINE_SHA" HEAD
+          git merge-base --is-ancestor "$STAGED_EXAMINATION_SHA" HEAD
+          run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$STAGING_E2E_RUN_ID")"
+          test "$(jq -r '.status' <<<"$run")" = completed
+          test "$(jq -r '.conclusion' <<<"$run")" = success
+          test "$(jq -r '.event' <<<"$run")" = push
+          test "$(jq -r '.head_sha' <<<"$run")" = "$STAGED_EXAMINATION_SHA"
+          test "$(jq -r '.path' <<<"$run")" = '.github/workflows/examination-room-midterm-staging.yml'
+          for file in examination-room/student.html examination-room/api.js examination-room/student.client.test.cjs examination-room/api.demo.test.cjs service-worker.js; do
+            test "$(git rev-parse "$STAGED_EXAMINATION_SHA:$file")" = "$(git rev-parse "HEAD:$file")"
+          done
+      - name: Refuse any change outside the examined frontend and tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only "$BASELINE_SHA" HEAD)"
+          while IFS= read -r file; do
+            case "$file" in
+              .github/workflows/examination-room-midterm-staging.yml | \
+              .github/workflows/release-examination-room-low-data-entry-20261106.yml | \
+              examination-room/student.html | \
+              examination-room/api.js | \
+              examination-room/student.client.test.cjs | \
+              examination-room/api.demo.test.cjs | \
+              service-worker.js) ;;
+              *) echo "Unexpected source modification: $file" >&2; exit 1 ;;
+            esac
+          done <<< "$changed"
+          test "$(printf '%s\n' "$changed" | wc -l)" -eq 7
+          git diff --quiet "$BASELINE_SHA" HEAD -- worker supabase examination-room/student.js examination-room/professor.js examination-room/index.html assets/payments pricing index.html
+          git diff --check "$BASELINE_SHA" HEAD
+          echo "Only reviewed entry assets, cache URL and tests have changed; all examination server and payment files are untouched."
+      - name: Re-run examination regression checks and build the normal Pages artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+          node --check examination-room/api.js
+          node --check examination-room/student.js
+          node --test examination-room/*.test.cjs admin/examination-room-admin.test.cjs worker/*.test.mjs
+          node scripts/test-examination-room-database.mjs
+          node scripts/test-examination-room-release-workflows.mjs
+          node scripts/build-pages-artifact.mjs
+          node scripts/test-pages-artifact.mjs
+          test "$(cat .pages-dist/.well-known/duediligence-release.txt)" = "$GITHUB_SHA"
+
+  deploy_pages:
+    name: Deploy frontend-only Examination Room entry and verify production
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: github-pages
+      url: \${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build the reviewed full-site Pages artifact without redeploying Workers
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+          node scripts/build-pages-artifact.mjs
+          node scripts/test-pages-artifact.mjs
+          test "$(cat .pages-dist/.well-known/duediligence-release.txt)" = "$GITHUB_SHA"
+      - uses: actions/configure-pages@v4
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .pages-dist
+      - name: Publish production Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+      - name: Verify exact live files and preservation of existing examination and payment UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          verified=false
+          for attempt in $(seq 1 12); do
+            marker="$(curl -fsSL --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/.well-known/duediligence-release.txt?lowdata=$GITHUB_SHA" | tr -d '\r\n' || true)"
+            if test "$marker" = "$GITHUB_SHA"; then
+              matches=true
+              for file in examination-room/student.html examination-room/api.js examination-room/student.js examination-room/professor.js examination-room/index.html service-worker.js assets/payments/bpi-instapay-199-qr.png; do
+                expected="$(sha256sum ".pages-dist/$file" | cut -d' ' -f1)"
+                route="$file"
+                if test "$file" = "examination-room/index.html"; then route="examination-room/"; fi
+                actual="$(curl -fsSL --max-time 20 -H 'Cache-Control: no-cache' "$SITE_URL/$route?lowdata=$GITHUB_SHA" | sha256sum | cut -d' ' -f1 || true)"
+                if test "$expected" != "$actual"; then matches=false; echo "Awaiting exact $file"; break; fi
+              done
+              if test "$matches" = true; then verified=true; break; fi
+            fi
+            sleep 5
+          done
+          test "$verified" = true
+          grep -Fq '&entry=low-data-20261106-1' .pages-dist/examination-room/student.html
+          grep -Fq 'requestOptionsWithDefault(requestOptions, 60_000)' .pages-dist/examination-room/api.js
+          ! grep -Fq 'pagead2.googlesyndication.com' .pages-dist/examination-room/student.html
+          echo "Live verification passed: low-data student entry and byte-identical current student/professor scripts and payment QR."

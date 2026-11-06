@@ -8,6 +8,7 @@ export async function verifyExaminationRoomV1Staging({ adminToken, runId }) {
   assert.match(runId, /^[a-z0-9-]{8,40}$/i);
   const marker = `[SYNTHETIC ${runId}] V1 submission verification`;
   let examId = null;
+  let publishedReady = false;
   const results = [];
   async function call(endpoint, body, token = null, statusCodes = [200]) {
     const response = await fetch(BASE + endpoint, {
@@ -58,12 +59,15 @@ export async function verifyExaminationRoomV1Staging({ adminToken, runId }) {
         prompt: 'Explain separation of powers in Philippine law.' }],
     };
     const saved = await professorCommand('save_draft', { exam });
-    examId = String(saved.exam?.id || saved.exam?.examId || exam.id);
-    assert.ok(saved.exam);
+    examId = String(saved.examId || '');
+    assert.equal(examId, exam.id, 'Professor draft was stored under an unexpected exam id');
+    assert.match(String(saved.versionId || ''), /^[a-f0-9-]{36}$/i);
     results.push('professor_save');
 
-    const published = await professorCommand('publish', { exam: saved.exam });
-    assert.ok(published.exam);
+    const published = await professorCommand('publish', { exam: { ...exam, id: examId, versionId: saved.versionId } });
+    assert.equal(published.examId, examId);
+    assert.equal(published.status, 'published');
+    publishedReady = true;
     results.push('professor_publish');
 
     const approved = await adminCommand('activate_exam', { examId });
@@ -140,9 +144,10 @@ export async function verifyExaminationRoomV1Staging({ adminToken, runId }) {
     console.log('EXAMINATION_ROOM_V1_STAGING: PASS ' + results.join(','));
   } finally {
     if (examId) {
-      const archived = await professorCommand('archive_exam', { examId });
-      assert.equal(archived.ok, true);
-      console.log('EXAMINATION_ROOM_V1_STAGING: synthetic_exam_archived=true');
+      const cleanupOperation = publishedReady ? 'archive_exam' : 'delete_draft';
+      const cleaned = await professorCommand(cleanupOperation, { examId });
+      assert.equal(cleaned.ok, true);
+      console.log('EXAMINATION_ROOM_V1_STAGING: synthetic_exam_cleaned=true');
     }
   }
 }

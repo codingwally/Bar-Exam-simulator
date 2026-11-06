@@ -92,7 +92,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          test "$(git diff --name-only HEAD^ HEAD | grep -Ev '^(\.github/workflows/deploy-pages-only\.yml|scripts/test-september-pricing-ui-contract\.mjs|scripts/test-pricing-checkout-safety\.mjs)$' || true)" = ""
+          test "$(git diff --name-only HEAD^ HEAD | grep -Ev '^(\.github/workflows/deploy-pages-only\.yml|scripts/test-september-pricing-ui-contract\.mjs|scripts/test-pricing-checkout-safety\.mjs|scripts/prepare-payment-qr-browser-cache-recovery\.mjs|scripts/test-pricing-qr-cache-busting\.mjs)$' || true)" = ""
           pr="$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --jq ".[] | select(.merged_at != null and .base.ref == \"main\" and .merge_commit_sha == \"$GITHUB_SHA\") | .number" | head -n 1)"
           [[ "$pr" =~ ^[1-9][0-9]*$ ]]
           head_sha="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$pr" --jq .head.sha)"
@@ -120,14 +120,21 @@ jobs:
           (cd "$RUNNER_TEMP/qr-live-baseline" && GITHUB_SHA="$BASELINE_SHA" node scripts/test-pages-artifact.mjs)
           cp -a "$RUNNER_TEMP/qr-live-baseline/.pages-dist" "$GITHUB_WORKSPACE/.qr-release-dist"
           git show "$GITHUB_SHA:assets/payments/bpi-instapay-199-qr.png" > .qr-release-dist/assets/payments/bpi-instapay-199-qr.png
+          node scripts/test-pricing-qr-cache-busting.mjs
+          node scripts/prepare-payment-qr-browser-cache-recovery.mjs .qr-release-dist
+          node --check .qr-release-dist/assets/pricing-renderer.js
+          node --check .qr-release-dist/assets/phase2-experience.js
           printf '%s\n' "$GITHUB_SHA" > .qr-release-dist/.well-known/duediligence-qr-release.txt
           test "$(sha256sum .qr-release-dist/assets/payments/bpi-instapay-199-qr.png | cut -d' ' -f1)" = 84959f96cfa8cbe9ff9c9a342d95c443c0ff670d6b1ae0d82efc151430861175
           diff -qr "$RUNNER_TEMP/qr-live-baseline/.pages-dist" .qr-release-dist | sort > "$RUNNER_TEMP/qr-changes.txt" || true
-          test "$(wc -l < "$RUNNER_TEMP/qr-changes.txt")" -eq 2
+          test "$(wc -l < "$RUNNER_TEMP/qr-changes.txt")" -eq 5
           cat "$RUNNER_TEMP/qr-changes.txt"
           grep -Fq 'duediligence-qr-release.txt' "$RUNNER_TEMP/qr-changes.txt"
           grep -Fq 'assets/payments/bpi-instapay-199-qr.png' "$RUNNER_TEMP/qr-changes.txt"
-          for file in index.html assets/phase2-experience.js assets/pricing-renderer.js service-worker.js assets/payments/bpi-instapay-199-qr.png; do
+          grep -Fq 'index.html' "$RUNNER_TEMP/qr-changes.txt"
+          grep -Fq 'assets/phase2-experience.js' "$RUNNER_TEMP/qr-changes.txt"
+          grep -Fq 'assets/pricing-renderer.js' "$RUNNER_TEMP/qr-changes.txt"
+          for file in index.html assets/phase2-experience.js assets/pricing-renderer.js service-worker.js; do
             route="$file"
             if test "$file" = index.html; then route=""; fi
             expected="$(sha256sum "$RUNNER_TEMP/qr-live-baseline/.pages-dist/$file" | cut -d' ' -f1)"
@@ -135,6 +142,8 @@ jobs:
             echo "Baseline check: $file expected=$expected served=$actual"
             test "$actual" = "$expected"
           done
+          qr_live="$(curl -fsSL --retry 2 --max-time 30 "https://duediligence.ph/assets/payments/bpi-instapay-199-qr.png?payment-qr=84959f96cfa8cbe9" | sha256sum | cut -d' ' -f1)"
+          test "$qr_live" = 84959f96cfa8cbe9ff9c9a342d95c443c0ff670d6b1ae0d82efc151430861175
       - name: Deploy only the QR overlay to existing Cloudflare isolated preview
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

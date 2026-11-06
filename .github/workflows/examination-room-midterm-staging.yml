@@ -5,6 +5,7 @@ on:
     branches:
       - fix/examination-room-submit-retry-normalization
       - hotfix/examination-room-nov07-user-test
+      - hotfix/examination-room-two-input-only-20261106
     paths:
       - .github/workflows/examination-room-midterm-staging.yml
       - scripts/verify-examination-room-v1-staging.mjs
@@ -35,7 +36,7 @@ jobs:
     name: Deploy reviewed examination to isolated staging and test real browser submission
     if: >-
       github.repository == 'codingwally/Bar-Exam-simulator' &&
-      github.ref == 'refs/heads/hotfix/examination-room-nov07-user-test'
+      github.ref == 'refs/heads/hotfix/examination-room-two-input-only-20261106'
     runs-on: ubuntu-latest
     environment: staging-e2e
     timeout-minutes: 65
@@ -52,7 +53,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "${GITHUB_REF_NAME}" = 'hotfix/examination-room-nov07-user-test'
+          test "${GITHUB_REF_NAME}" = 'hotfix/examination-room-two-input-only-20261106'
           grep -Fq 'EXAMINATION_ROOM_DURABLE_INTAKE = "true"' worker/wrangler.staging.toml
           grep -Fq 'EXAMINATION_ROOM_EMAIL_MODE = "suppressed"' worker/wrangler.staging.toml
           test -f supabase/migrations/20261105101000_examination_room_durable_submission.sql

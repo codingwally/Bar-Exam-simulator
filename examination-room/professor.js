@@ -2751,9 +2751,9 @@
       sessions.forEach((session, index) => {
         const identity = gradingDisplayIdentity(session, index);
         const grades = latestBy((data.gradeRevisions || []).filter((grade) => grade.sessionId === session.id), (grade) => grade.questionId);
-        const earned = state.questions.reduce((total, question) => total + (savedGradePoints(grades.get(question.id)) ?? 0), 0);
+        const earned = state.questions.reduce((total, question, index) => total + (savedGradePoints(grades.get(publishedQuestionKey(question, index))) ?? 0), 0);
         const possible = state.questions.reduce((total, question) => total + Number(question.points || 0), 0);
-        const complete = state.questions.every((question) => savedGradePoints(grades.get(question.id)) !== null);
+        const complete = state.questions.every((question, index) => savedGradePoints(grades.get(publishedQuestionKey(question, index))) !== null);
         composer.addText(`${index + 1}. ${identity.realName} (${identity.realStudentNumber || 'No student number'}) - ${earned} / ${possible} points - ${complete ? 'Fully graded' : 'Grading incomplete'}`, { size: 10, spaceAfter: 4 });
       });
     }
@@ -2764,9 +2764,9 @@
       const submission = submissionsBySession.get(session.id) || {};
       const submittedRevisions = (data.answerRevisions || []).filter((revision) => revision.sessionId === session.id);
       const grades = latestBy((data.gradeRevisions || []).filter((revision) => revision.sessionId === session.id), (revision) => revision.questionId);
-      const earned = state.questions.reduce((total, question) => total + (savedGradePoints(grades.get(question.id)) ?? 0), 0);
+      const earned = state.questions.reduce((total, question, index) => total + (savedGradePoints(grades.get(publishedQuestionKey(question, index))) ?? 0), 0);
       const possible = state.questions.reduce((total, question) => total + Number(question.points || 0), 0);
-      const complete = state.questions.every((question) => savedGradePoints(grades.get(question.id)) !== null);
+      const complete = state.questions.every((question, index) => savedGradePoints(grades.get(publishedQuestionKey(question, index))) !== null);
       composer.addText(`STUDENT ${studentIndex + 1} OF ${sessions.length}`, { size: 9, bold: true, spaceAfter: 5 });
       composer.addText(identity.realName, { size: 18, bold: true, leading: 23, spaceAfter: 5 });
       composer.addText(`Student number: ${identity.realStudentNumber || 'Not provided'} | Year level: ${session.yearLevel || 'Not provided'}`, { size: 10, spaceAfter: 3 });
@@ -2780,7 +2780,7 @@
         composer.addText('SUBMITTED ANSWER', { size: 9, bold: true, spaceAfter: 3 });
         composer.addText(answerText, { size: 10, leading: 14, x: 66, width: 475, spaceAfter: 5 });
         if (includeGrades) {
-          const grade = grades.get(question.id);
+          const grade = grades.get(publishedQuestionKey(question, questionIndex));
           const savedPoints = savedGradePoints(grade);
           const hasGrade = savedPoints !== null;
           composer.addText(`GRADE: ${hasGrade ? `${savedPoints} / ${Number(question.points || 0)} points` : `Not graded / ${Number(question.points || 0)} points`}`, { size: 10, bold: true, spaceAfter: 3 });
@@ -2894,6 +2894,15 @@
     return [...candidates].sort((left, right) => Number(left.revision || 0) - Number(right.revision || 0)).at(-1) || null;
   }
 
+  // Grading is bound to the immutable published question keys, not the
+  // editable draft UUIDs. The V1 publication contract uses q001, q002, etc.
+  function publishedQuestionKey(question, index) {
+    const candidate = safeText(question?.questionKey || question?.id, 128);
+    if (/^q\d{3}$/u.test(candidate)) return candidate;
+    const number = Number(question?.questionNumber || question?.number || index + 1);
+    return `q${String(number).padStart(3, '0')}`;
+  }
+
   function gradingDisplayIdentity(session, index) {
     return {
       realName: safeText(session?.realFullName || session?.fullName, 160) || `Student ${index + 1}`,
@@ -2921,7 +2930,7 @@
     }).join('') : '<div class="empty-feed">No submitted answer files are available yet. Student receipts will appear here automatically.</div>';
     renderGradingSheet();
     const latestGrades = latestBy(data.gradeRevisions || [], (grade) => `${grade.sessionId}:${grade.questionId}`);
-    const gradedStudents = sessions.filter((session) => state.questions.every((question) => latestGrades.has(`${session.id}:${question.id}`))).length;
+    const gradedStudents = sessions.filter((session) => state.questions.every((question, index) => latestGrades.has(`${session.id}:${publishedQuestionKey(question, index)}`))).length;
     $('#grading-summary').innerHTML = `<div class="grading-summary-content"><div class="summary-row"><span>Submitted</span><strong>${sessions.length}</strong></div><div class="summary-row"><span>Fully graded</span><strong>${gradedStudents}</strong></div><div class="summary-row"><span>Selected for release</span><strong>${state.selectedReleaseIds.size}</strong></div><div class="summary-row"><span>Identity view</span><strong>${state.anonymousGrading ? 'Anonymous' : 'Real names'}</strong></div></div>`;
   }
 
@@ -2940,7 +2949,7 @@
     $('#grading-sheet').innerHTML = `<header class="grading-student-head"><div><p class="section-kicker">Individual response</p><h2>${escapeHtml(displayName)}</h2><p>${escapeHtml(state.anonymousGrading ? 'The professor may reveal the real roster at any time.' : `${identity.realStudentNumber} · ${session.yearLevel}`)}</p></div><div class="grading-student-actions"><button class="button secondary compact" type="button" data-download-student-answers><i class="ph ph-file-pdf" aria-hidden="true"></i>Answers PDF</button><button class="button secondary compact" type="button" data-download-student-grades><i class="ph ph-file-pdf" aria-hidden="true"></i>Answers + grades PDF</button><span class="grade-save-state"><i class="ph ph-check-circle" aria-hidden="true"></i> Enter all scores, then save this student once</span></div></header>
       ${state.questions.map((question, index) => {
         const answer = submittedAnswerRevision(submittedRevisions, question, index)?.answer;
-        const grade = grades.get(question.id) || {};
+        const grade = grades.get(publishedQuestionKey(question, index)) || {};
         const answerText = viewModels?.professorAnswerLabel
           ? viewModels.professorAnswerLabel(question, answer)
           : answer == null
@@ -2951,7 +2960,7 @@
                 ? answer.join(', ')
                 : JSON.stringify(answer);
         const questionPrompt = safeText(question.prompt || question.text, 20_000) || 'Question prompt not available.';
-        return `<article class="grade-question" data-grade-question="${escapeHtml(question.id)}"><header><h3>Question ${index + 1}</h3><strong>${question.points} points</strong></header><div class="grading-question-prompt"><span class="grading-content-label">Question</span><div>${escapeHtml(questionPrompt)}</div></div><div class="student-answer"><span class="grading-content-label">Student answer</span><div>${escapeHtml(answerText)}</div></div><div class="grade-controls"><label><span>Points awarded</span><input type="number" min="0" max="${question.points}" step=".5" value="${grade.points ?? ''}" data-grade-points></label><label><span>Professor feedback</span><textarea maxlength="5000" data-grade-feedback>${escapeHtml(grade.feedback || '')}</textarea></label></div></article>`;
+        return `<article class="grade-question" data-grade-question="${escapeHtml(publishedQuestionKey(question, index))}"><header><h3>Question ${index + 1}</h3><strong>${question.points} points</strong></header><div class="grading-question-prompt"><span class="grading-content-label">Question</span><div>${escapeHtml(questionPrompt)}</div></div><div class="student-answer"><span class="grading-content-label">Student answer</span><div>${escapeHtml(answerText)}</div></div><div class="grade-controls"><label><span>Points awarded</span><input type="number" min="0" max="${question.points}" step=".5" value="${grade.points ?? ''}" data-grade-points></label><label><span>Professor feedback</span><textarea maxlength="5000" data-grade-feedback>${escapeHtml(grade.feedback || '')}</textarea></label></div></article>`;
       }).join('')}
       <div class="grading-save-all"><button class="button primary" type="button" data-save-all-grades>Save all grades</button><p>One save for this student's complete grading sheet. A score of 0 is valid; blank means not yet graded.</p></div>`;
   }
@@ -2996,7 +3005,8 @@
 
     $$('[data-grade-question]').forEach((container, index) => {
       const questionId = container.dataset.gradeQuestion;
-      const question = state.questions.find((entry) => entry.id === questionId);
+      const question = state.questions[index];
+      if (questionId !== publishedQuestionKey(question, index)) throw new Error('Grading question identity changed. Refresh before saving scores.');
       const rawPoints = String($('[data-grade-points]', container)?.value ?? '').trim();
       const feedback = String($('[data-grade-feedback]', container)?.value || '');
 
@@ -3093,7 +3103,7 @@
       }
 
       const latestGrades = latestBy(state.grading?.gradeRevisions || [], (grade) => `${grade.sessionId}:${grade.questionId}`);
-      const incompleteSession = sessionIds.find((sessionId) => state.questions.some((question) => !latestGrades.has(`${sessionId}:${question.id}`)));
+      const incompleteSession = sessionIds.find((sessionId) => state.questions.some((question, index) => !latestGrades.has(`${sessionId}:${publishedQuestionKey(question, index)}`)));
       if (incompleteSession) {
         const session = (state.grading?.sessions || []).find((entry) => entry.id === incompleteSession);
         const studentIndex = (state.grading?.sessions || []).findIndex((entry) => entry.id === incompleteSession);
@@ -3101,7 +3111,7 @@
         const displayName = state.anonymousGrading ? identity.alias : identity.realName;
         const missingNumbers = state.questions
           .map((question, index) => ({ question, number: index + 1 }))
-          .filter(({ question }) => !latestGrades.has(`${incompleteSession}:${question.id}`))
+          .filter(({ question, number }) => !latestGrades.has(`${incompleteSession}:${publishedQuestionKey(question, number - 1)}`))
           .map(({ number }) => number);
         const label = missingNumbers.length === 1 ? `Question ${missingNumbers[0]}` : `Questions ${missingNumbers.join(', ')}`;
         showError({

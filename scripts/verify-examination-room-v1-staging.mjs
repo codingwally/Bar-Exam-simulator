@@ -23,7 +23,10 @@ export async function verifyExaminationRoomV1Staging({ adminToken, runId }) {
     });
     const payload = await response.json().catch(() => null);
     if (!statusCodes.includes(response.status)) {
-      throw new Error(`${endpoint} HTTP ${response.status} ${String(payload?.error?.code || 'UNEXPECTED').slice(0, 80)}`);
+      const field = /^Reload the page because (the (?:examination|institution|student session) identifier) is invalid\.$/u.exec(
+        String(payload?.error?.message || ''),
+      )?.[1] || '';
+      throw new Error(`${endpoint} HTTP ${response.status} ${String(payload?.error?.code || 'UNEXPECTED').slice(0, 80)} ${field}`);
     }
     assert.equal(payload?.ok, true, `${endpoint} returned an unsuccessful result`);
     return payload;
@@ -70,7 +73,9 @@ export async function verifyExaminationRoomV1Staging({ adminToken, runId }) {
     publishedReady = true;
     results.push('professor_publish');
 
-    const approved = await adminCommand('activate_exam', { examId });
+    const approved = await adminCommand('activate_exam', {
+      examId, institutionId: 'ddc00000-0000-4000-8000-000000000001',
+    });
     const roomKey = String(approved.roomKey || approved.activation?.roomKey || '');
     assert.ok(roomKey.length > 12);
     results.push('student_key_approved');

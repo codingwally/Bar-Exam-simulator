@@ -335,7 +335,7 @@
         <figure class="dd-regular-qr-card">
           <img class="dd-regular-bpi-mark" src="/assets/payments/bpi-mark.png" width="110" height="60" alt="BPI">
           <strong>DUE DILIGENCE</strong>
-          <img class="dd-regular-qr-image" src="${escapeHtml(qrUrl)}" width="496" height="496" alt="BPI InstaPay QR code for PHP ${escapeHtml(exactAmount)}">
+          <img class="dd-regular-qr-image" src="${escapeHtml(qrUrl === '/assets/payments/bpi-instapay-199-qr.png' ? qrUrl + '?payment-qr=84959f96cfa8cbe9' : qrUrl)}" width="496" height="496" alt="BPI InstaPay QR code for PHP ${escapeHtml(exactAmount)}">
           <figcaption><strong>PHP ${escapeHtml(exactAmount)}</strong><span>Transfer fees may apply</span></figcaption>
         </figure>
       </section>

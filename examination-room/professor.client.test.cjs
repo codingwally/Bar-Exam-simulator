@@ -97,7 +97,7 @@ function loadProfessorStartupHooks({ storageBlocked = false, indexedDbAvailable 
   };
   const exposedSource = professorSource.replace(
     /\n\s*initialize\(\);\s*\n\}\)\(window\);\s*$/,
-    '\n  global.__professorStartupTestHooks = { clientOnlyBlankDraft, editorExamFromStored, examContentFingerprint, normalizeAllowedEmails, invalidAllowedEmails, creatorAccessUnlocked, scheduleActivationPoll, stopActivationPolling, resetActivationPollingWindow, activationPollDelay, stopMonitorPolling, scheduleMonitorPoll, refreshMonitor, draftDb, saveLocalDraft, readLocalDraft, readActiveLocalDraft, readLocalDraftIndex, localDraftBelongsToCurrentProfessor, prepareDecryptedGradePayload, validateCompleteGradedPackageSets, serverDraftBackupBlockers, serverBackupWaitingLabel, examSummariesFromSession, examSummariesWithCurrentExam, overviewExamItems, overviewStatusPresentation, lifecycleOperationForExam, summariesAfterRemoval, duplicateDraft, isPristineDraft, normalizeQuestion, submittedAnswerRevision, questionAfterTypeChange, questionSuggestion, marginSuggestion, parseExamDocumentText, documentPointValue, pdfPageText, pdfSafeText, wrapPdfText, serializePdfDocument, savedGradePoints, buildSubmittedAnswersPdf, state };\n})(window);',
+    '\n  global.__professorStartupTestHooks = { clientOnlyBlankDraft, editorExamFromStored, examContentFingerprint, normalizeAllowedEmails, invalidAllowedEmails, creatorAccessUnlocked, scheduleActivationPoll, stopActivationPolling, resetActivationPollingWindow, activationPollDelay, stopMonitorPolling, scheduleMonitorPoll, refreshMonitor, draftDb, saveLocalDraft, readLocalDraft, readActiveLocalDraft, readLocalDraftIndex, localDraftBelongsToCurrentProfessor, prepareDecryptedGradePayload, validateCompleteGradedPackageSets, serverDraftBackupBlockers, serverBackupWaitingLabel, examSummariesFromSession, examSummariesWithCurrentExam, overviewExamItems, overviewStatusPresentation, lifecycleOperationForExam, summariesAfterRemoval, duplicateDraft, isPristineDraft, normalizeQuestion, submittedAnswerRevision, publishedQuestionKey, questionAfterTypeChange, questionSuggestion, marginSuggestion, parseExamDocumentText, documentPointValue, pdfPageText, pdfSafeText, wrapPdfText, serializePdfDocument, savedGradePoints, buildSubmittedAnswersPdf, state };\n})(window);',
   );
   vm.runInNewContext(exposedSource, { window, indexedDB: window.indexedDB }, { filename: 'professor.js' });
   return { ...window.__professorStartupTestHooks, __testWindow: window };
@@ -1145,6 +1145,17 @@ test('Live Monitor exposes submitted answers through the professor grading endpo
   assert.ok(professorSource.includes('showMonitorSubmittedAnswers(viewAnswers.dataset.viewAnswers)'));
   assert.ok(professorSource.includes('escapeHtml(gradingAnswerText(question, response))'));
   assert.ok(professorHtml.includes('View answers'));
+});
+
+test('professor saves and counts grades under published question keys, not draft UUIDs', () => {
+  const { publishedQuestionKey } = loadProfessorStartupHooks();
+  assert.equal(publishedQuestionKey({ id: 'draft-uuid-1', number: 1 }, 0), 'q001');
+  assert.equal(publishedQuestionKey({ id: 'q002', number: 2 }, 1), 'q002');
+  assert.equal(publishedQuestionKey({ id: 'q-3' }, 2), 'q003');
+  assert.match(professorSource, /data-grade-question="\$\{escapeHtml\(publishedQuestionKey\(question, index\)\)\}"/);
+  assert.match(professorSource, /const question = state\.questions\[index\];/);
+  assert.match(professorSource, /const incompleteSession = sessionIds\.find\(\(sessionId\) => state\.questions\.some\(\(question, index\) => !latestGrades\.has\(/);
+  assert.match(professorSource, /const grade = grades\.get\(publishedQuestionKey\(question, index\)\) \|\| \{\};/);
 });
 
 test('grading sheet renders the full question prompt above the student answer', () => {

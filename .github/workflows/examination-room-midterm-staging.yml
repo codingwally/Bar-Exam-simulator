@@ -6,6 +6,9 @@ on:
       - fix/examination-room-submit-retry-normalization
     paths:
       - .github/workflows/examination-room-midterm-staging.yml
+      - scripts/verify-examination-room-v1-staging.mjs
+      - scripts/test-examinations-staging.mjs
+      - worker/wrangler.staging.toml
   workflow_dispatch:
 
 permissions:

@@ -155,6 +155,19 @@ export async function verifyExaminationRoomV1Staging({ adminToken, runId }) {
     assert.ok(sessions.some(entry => entry.id === sessionId || entry.sessionId === sessionId));
     assert.ok(submissions.some(entry => entry.sessionId === sessionId));
     results.push('professor_monitor');
+
+    // Monitoring alone has only status and event logs. Explicitly verify the
+    // protected, read-only submitted answer source used by the new View answers
+    // action so successful receipts never leave the professor with blank text.
+    const grading = await professorQuery('grading', { examId });
+    const submittedAnswers = Array.isArray(grading.answerRevisions) ? grading.answerRevisions : [];
+    const savedForStudent = submittedAnswers.find((revision) => (
+      revision.sessionId === sessionId && revision.questionId === 'q-1'
+    ));
+    assert.ok(savedForStudent, 'Professor grading endpoint omitted the submitted answer');
+    assert.equal(savedForStudent.answer, finalAnswer,
+      'Professor retrieved answer must exactly match the final student submission');
+    results.push('professor_submitted_answers');
     console.log('EXAMINATION_ROOM_V1_STAGING: PASS ' + results.join(','));
   } finally {
     if (examId) {

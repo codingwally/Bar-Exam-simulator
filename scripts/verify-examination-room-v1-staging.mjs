@@ -155,6 +155,35 @@ export async function verifyExaminationRoomV1Staging({ adminToken, runId }) {
     assert.ok(sessions.some(entry => entry.id === sessionId || entry.sessionId === sessionId));
     assert.ok(submissions.some(entry => entry.sessionId === sessionId));
     results.push('professor_monitor');
+
+    // Monitoring alone has only status and event logs. Explicitly verify the
+    // protected, read-only submitted answer source used by the new View answers
+    // action so successful receipts never leave the professor with blank text.
+    const grading = await professorQuery('grading', { examId });
+    const submittedAnswers = Array.isArray(grading.answerRevisions) ? grading.answerRevisions : [];
+    const savedForStudent = submittedAnswers.find((revision) => (
+      revision.sessionId === sessionId && Number(revision.questionNumber) === 1
+    ));
+    assert.ok(savedForStudent, 'Professor grading endpoint omitted the submitted answer');
+    assert.equal(savedForStudent.answer, finalAnswer,
+      'Professor retrieved answer must exactly match the final student submission');
+    results.push('professor_submitted_answers');
+
+    // Grades must be saved against the immutable published key (q001), not
+    // the editor's draft identifier (q-1). Verify the saved points survive
+    // a fresh professor grading query.
+    const gradeResponse = await professorCommand('save_grade', {
+      examId, sessionId, questionId: 'q001', points: 18,
+      feedback: 'Synthetic staging score. This exam is deleted after testing.',
+    });
+    assert.equal(gradeResponse.revision?.questionId, 'q001',
+      'Grade write did not use the published question key');
+    const gradedCopy = await professorQuery('grading', { examId });
+    assert.ok((gradedCopy.gradeRevisions || []).some((item) => (
+      item.sessionId === sessionId && item.questionId === 'q001' && Number(item.points) === 18
+    )), 'Professor grading did not persist the synthetic score');
+    results.push('professor_grade_save');
+
     console.log('EXAMINATION_ROOM_V1_STAGING: PASS ' + results.join(','));
   } finally {
     if (examId) {

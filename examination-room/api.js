@@ -1749,19 +1749,19 @@
   async function studentPreview(payload, requestOptions = {}) {
     return demoEnabled()
       ? demoStudentPreview(payload)
-      : post('/examination-room/v1/student/preview', payload, { ...requestOptions, auth: false });
+      : post('/examination-room/v1/student/preview', payload, { ...requestOptionsWithDefault(requestOptions, 60_000), auth: false });
   }
 
   async function studentBegin(payload, idempotencyKey = requestId(), requestOptions = {}) {
     return demoEnabled()
       ? demoStudentBegin(payload, idempotencyKey)
-      : post('/examination-room/v1/student/begin', { ...payload, idempotencyKey }, { ...requestOptions, auth: false, idempotencyKey });
+      : post('/examination-room/v1/student/begin', { ...payload, idempotencyKey }, { ...requestOptionsWithDefault(requestOptions, 60_000), auth: false, idempotencyKey });
   }
 
   async function studentQuery(operation, payload = {}, requestOptions = {}) {
     return demoEnabled()
       ? demoStudentQuery(operation, payload)
-      : post('/examination-room/v1/student/query', { operation, payload }, { ...requestOptions, auth: false });
+      : post('/examination-room/v1/student/query', { operation, payload }, { ...(operation === 'resume' ? requestOptionsWithDefault(requestOptions, 60_000) : requestOptions), auth: false });
   }
 
   async function studentCommand(operation, payload = {}, idempotencyKey = requestId(), requestOptions = {}) {

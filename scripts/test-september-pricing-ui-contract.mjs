@@ -66,7 +66,8 @@ assert.match(
   /Regular Subscription · \$\{formatPhp\(regularPlan\.priceCentavos\)\} · \$\{regularPlan\.durationDays\} Days/u,
 );
 
-const rendererSandbox = { window: {} };
+const MockElement = class {};
+const rendererSandbox = { window: {}, Element: MockElement };
 runInNewContext(renderer, rendererSandbox);
 const normalizePricing = rendererSandbox.window.DueDiligencePricingRenderer.normalizeConfig;
 const normalizedLegacyQr = normalizePricing({
@@ -92,6 +93,27 @@ assert.equal(rejectedArbitraryQr.paymentMethods[0].qrUrl, null);
 
 assert.match(renderer, /channelCode === 'bpi_instapay'[\s\S]*qrUrl === '\/assets\/payments\/bpi-instapay-199-qr\.png'[\s\S]*qrAmountMode === 'exact'/u);
 assert.match(renderer, /data-payment-method-version-id=/u);
+// A founder-uploaded, verified QR must render in the regular ₱199 checkout.
+const uploadedAssetId = '0d15b0d7-f342-4141-8aea-14d342b6edb1';
+const uploadedHost = new MockElement();
+const uploadedQrUrl = `https://duediligence-api.wallyesteban1993.workers.dev/pricing/assets/${uploadedAssetId}`;
+rendererSandbox.window.DueDiligencePricingRenderer.render(uploadedHost, {
+  plans: [{
+    planCode: 'bar_access_30d', name: 'Regular Subscription', priceCentavos: 19900,
+    durationDays: 30, entitlementMode: 'rolling_days', visible: true,
+    checkoutEnabled: true, checkoutOpen: true, displayOpen: true,
+  }],
+  paymentMethods: [{
+    versionId: 'dc45a274-4c3e-4e61-a3ab-990bc8f567f6',
+    planCode: 'bar_access_30d', channelCode: 'bpi_instapay', label: 'BPI InstaPay',
+    qrUrl: `/pricing/assets/${uploadedAssetId}`, qrAsset: {assetId: uploadedAssetId},
+    qrAmountMode: 'exact', qrAmountCentavos: 19900, enabled: true, visible: true,
+  }],
+}, {mode: 'public', serverNow: '2026-11-06T04:00:00.000Z', assetUrl: (method) =>
+  `https://duediligence-api.wallyesteban1993.workers.dev${method.qrUrl}`});
+assert.match(uploadedHost.innerHTML, /dd-pricing-regular/u);
+assert.ok(uploadedHost.innerHTML.includes(`src="${uploadedQrUrl}"`), 'Uploaded QR must load from the Worker origin.');
+
 assert.doesNotMatch(renderer, /Gilmar|GILMAR/u);
 
 const embedded = experience.slice(
@@ -195,11 +217,11 @@ for (const privateField of [
 assert.match(accessCore, /renewalAt: null[\s\S]*salesCloseAt: null/u);
 assert.doesNotMatch(payment.match(/create or replace function public\.phase4_create_payment_request_v3[\s\S]*?\n\$\$;/u)?.[0] || '', /p_payment_date|p_transaction_reference|p_student_note/u);
 
-assert.equal(qr.readUInt32BE(16), 496);
-assert.equal(qr.readUInt32BE(20), 496);
+assert.equal(qr.readUInt32BE(16), 442);
+assert.equal(qr.readUInt32BE(20), 442);
 assert.equal(
   createHash('sha256').update(qr).digest('hex').toUpperCase(),
-  'B1267985EC3263F9E5B2C6AACBBE81E2890E1AA36C0A8B58D7D7AA050CC8741C',
+  '84959F96CFA8CBE9FF9C9A342D95C443C0FF670D6B1AE0D82EFC151430861175',
 );
 
 console.log(JSON.stringify({

@@ -2534,7 +2534,10 @@
     if (isRegularSubscriptionPlan(plan)) {
       return method.planCode === plan.planCode
         && method.channelCode === 'bpi_instapay'
-        && method.qrUrl === '/assets/payments/bpi-instapay-199-qr.png'
+        && (method.qrUrl === '/assets/payments/bpi-instapay-199-qr.png'
+          || (method.qrAsset?.assetId
+            && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(method.qrAsset.assetId)
+            && method.qrUrl === `/pricing/assets/${method.qrAsset.assetId}`))
         && method.qrAmountMode === 'exact'
         && Number.isSafeInteger(amount)
         && amount === Number(plan.priceCentavos);

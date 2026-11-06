@@ -292,6 +292,8 @@ jobs:
             'assets/phase2-experience.js', 'assets/feature-loader.js', 'service-worker.js',
             'assets/vendor/supabase-2.49.8.umd.js', 'assets/vendor/591.supabase.js',
             'assets/examinations.css',
+            'assets/pricing-renderer.js',
+            'assets/payments/bpi-instapay-199-qr.png',
           ];
           await Promise.all(criticalAssets.map(async file => {
             const expected = sha256(execFileSync('git', ['show', `${env.GITHUB_SHA}:${file}`]));
@@ -438,6 +440,8 @@ jobs:
             'assets/phase2-experience.js', 'assets/feature-loader.js', 'service-worker.js',
             'assets/vendor/supabase-2.49.8.umd.js', 'assets/vendor/591.supabase.js',
             'assets/examinations.css',
+            'assets/pricing-renderer.js',
+            'assets/payments/bpi-instapay-199-qr.png',
           ];
           const expectedHashes = new Map(criticalAssets.map(file => [file,
             sha256(execFileSync('git', ['show', `${sha}:${file}`]))]));

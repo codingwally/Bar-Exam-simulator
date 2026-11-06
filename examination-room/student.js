@@ -133,7 +133,7 @@
   function cacheElements() {
     var ids = [
       'connectionLabel', 'studentIdentity', 'entryView', 'roomEntryForm',
-      'roomKey', 'fullName', 'email', 'studentNumber', 'yearLevel', 'subject',
+      'roomKey', 'fullName',
       'previewButton', 'entryError', 'demoModeNote', 'examPreview',
       'previewExamTitle', 'previewSubject', 'previewProfessor',
       'previewDuration', 'previewQuestionCount', 'previewAvailability',
@@ -351,10 +351,12 @@
       roomKey: normaliseRoomKey(elements.roomKey.value),
       fullName: normaliseHumanText(elements.fullName.value),
       guestIdentityId: studentGuestIdentityId(),
-      email: normaliseEmail(elements.email.value),
-      studentNumber: normaliseHumanText(elements.studentNumber.value),
-      subject: normaliseHumanText(elements.subject.value),
-      yearLevel: elements.yearLevel.value
+      // No extra visible or hidden fields. The server supplies the course
+      // and a room-scoped identity for guests without requiring an email.
+      email: '',
+      studentNumber: '',
+      subject: '',
+      yearLevel: ''
     };
   }
 
@@ -2474,16 +2476,10 @@
     if (state.api && state.api.demoRoomKey === 'DD26-LAW1-826K') {
       elements.roomKey.value = 'DD26-LAW1-826K';
       elements.fullName.value = 'Maria Theresa Dela Cruz';
-      elements.studentNumber.value = '2024-10001';
-      elements.subject.value = 'Constitutional Law';
-      elements.yearLevel.value = '2L';
       return;
     }
     elements.roomKey.value = 'DEMO-ROOM';
     elements.fullName.value = 'Maria Santos';
-    elements.studentNumber.value = '2026-0001';
-    elements.subject.value = 'Remedial Law';
-    elements.yearLevel.value = '4L';
   }
 
   function createDemoAdapter() {
@@ -2509,9 +2505,6 @@
         await pause();
         if (normaliseRoomKey(entry.roomKey) !== 'DEMO-ROOM') {
           throw createAppError('INVALID_ROOM_KEY');
-        }
-        if (normaliseHumanText(entry.subject).toLocaleLowerCase() !== 'remedial law' || entry.yearLevel !== '4L') {
-          throw createAppError('IDENTITY_MISMATCH');
         }
         var now = Date.now();
         return {

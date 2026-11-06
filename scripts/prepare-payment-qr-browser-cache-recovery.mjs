@@ -14,9 +14,9 @@ export function patchImageSource(source) {
 }
 
 export function patchIndex(source) {
-  const pricing = 'assets/pricing-renderer.js?v=regular-checkout-r2';
+  const pricing = 'assets/pricing-renderer.js?v=regular-checkout-r2"';
   assert.equal(source.split(pricing).length, 2, 'Expected one regular pricing renderer script URL');
-  let result = source.replace(pricing, pricing + '&amp;payment-qr=' + QR_VERSION);
+  let result = source.replace(pricing, 'assets/pricing-renderer.js?v=regular-checkout-r2&amp;payment-qr=' + QR_VERSION + '"');
   const re = /(<script src="assets\/phase2-experience\.js\?[^\"]+)("\s*><\/script>)/gu;
   const matches = [...result.matchAll(re)];
   assert.equal(matches.length, 1, 'Expected one checkout experience script URL');

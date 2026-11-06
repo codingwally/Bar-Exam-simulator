@@ -2869,7 +2869,7 @@
           ${method.accountDetails ? `<span>${escapeHtml(method.accountDetails)}</span>` : ''}
         </div>` : ''}
         <figure class="dd2-qr-frame">
-          <picture><img id="dd2-payment-qr" src="${escapeHtml(qrUrl)}" alt="${escapeHtml(method.label)} QR code for the ${planAmount} ${plan.name} payment" width="${Math.max(1, Number(method.qrAsset?.width) || 570)}" height="${Math.max(1, Number(method.qrAsset?.height) || 735)}"></picture>
+          <picture><img id="dd2-payment-qr" src="${escapeHtml(qrUrl === '/assets/payments/bpi-instapay-199-qr.png' ? qrUrl + '?payment-qr=84959f96cfa8cbe9' : qrUrl)}" alt="${escapeHtml(method.label)} QR code for the ${planAmount} ${plan.name} payment" width="${Math.max(1, Number(method.qrAsset?.width) || 570)}" height="${Math.max(1, Number(method.qrAsset?.height) || 735)}"></picture>
           <figcaption>${escapeHtml(method.instructions || `Scan with a compatible banking or e-wallet app. Pay exactly ${planAmount}, then upload the receipt below.`)}</figcaption>
         </figure>
         <form class="dd2-form dd2-proof-only-form" id="dd2-payment-form">

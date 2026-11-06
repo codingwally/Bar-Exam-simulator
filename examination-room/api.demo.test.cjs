@@ -197,7 +197,7 @@ test('the request deadline includes a stalled authentication lookup', async () =
   assert.equal(fetchCalls, 0, 'transport never starts after the authentication deadline expires');
 });
 
-test('assistant and Admin recovery operations receive bounded longer defaults without defeating explicit caller limits', async () => {
+test('assistant, Admin recovery and slow-data admission use bounded defaults without widening answer uploads', async () => {
   const scheduled = [];
   let timerId = 0;
   const api = liveApi(
@@ -215,8 +215,12 @@ test('assistant and Admin recovery operations receive bounded longer defaults wi
   await api.adminCommand('create_snapshot', { examId: 'exam-1' }, 'snapshot-request');
   await api.adminQuery('recovery_detail', { examId: 'exam-1', snapshotId: 'snapshot-1' });
   await api.studentPreview({ roomKey: 'ROOM-KEY' });
+  await api.studentBegin({ roomKey: 'ROOM-KEY', identity: { fullName: 'Student' } }, 'stable-attempt-key');
+  await api.studentQuery('resume', { sessionId: 'session' });
+  await api.studentQuery('result', { sessionId: 'session' });
+  await api.studentCommand('record_event', { sessionId: 'session' }, 'event-key');
   await api.professorAssistant({ message: 'Use caller deadline.' }, 'assistant-short', { timeoutMs: 7000 });
-  assert.deepEqual(scheduled, [60_000, 120_000, 120_000, 20_000, 7000]);
+  assert.deepEqual(scheduled, [60_000, 120_000, 120_000, 60_000, 60_000, 60_000, 20_000, 20_000, 7000]);
 });
 
 test('demo cross-tab storage and BroadcastChannel delivery is nonce-deduplicated with a bounded cache', () => {

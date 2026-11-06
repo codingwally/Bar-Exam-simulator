@@ -1,0 +1,59 @@
+name: Examination Room PR 419 automated staging verification
+
+# A repository push starts this protected verification without a manual click.
+# This workflow NEVER publishes to production and never bypasses staging approval.
+on:
+  push:
+    branches:
+      - fix/examination-room-submit-retry-normalization
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: examination-room-pr419-staging-verification
+  cancel-in-progress: true
+
+jobs:
+  verify-and-dispatch:
+    name: Validate PR branch and launch protected staging E2E
+    if: >-
+      github.repository == 'codingwally/Bar-Exam-simulator' &&
+      github.ref == 'refs/heads/fix/examination-room-submit-retry-normalization'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify examination regression and release contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+          node --test examination-room/*.test.cjs admin/examination-room-admin.test.cjs worker/*.test.mjs
+          node scripts/test-examination-room-database.mjs
+          node scripts/test-examination-room-release-workflows.mjs
+          node scripts/build-pages-artifact.mjs
+          node scripts/test-pages-artifact.mjs
+      - name: Launch existing protected staging E2E gate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF_NAME}" = "fix/examination-room-submit-retry-normalization"
+          # First gate is read-only against existing staging. This dispatch
+          # proves authenticated Actions access; it is NOT a new-code staging
+          # deployment and cannot be counted as the release proof.
+          gh workflow run staging-e2e-gate.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$GITHUB_REF_NAME" \
+            -f deploy_greenfield=false \
+            -f smoke_greenfield=true
+          echo 'Protected staging workflow dispatched for this exact PR branch.'

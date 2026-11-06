@@ -2219,3 +2219,11 @@ test('production submission enforcement rejects every anonymous user-generated s
     globalThis.fetch = originalFetch;
   }
 });
+
+test('durable submitted-answer backup still triggers the independent student receipt email', async () => {
+  const source = await readFile(new URL('./index.mjs', import.meta.url), 'utf8');
+  assert.match(source, /if \(receiptOnly\) return \{ studentReceipt \};/u);
+  assert.match(source, /if \(submissionEmailDetails\?\.sessionId && submissionEmailDetails\?\.idempotencyHash\)/u);
+  assert.match(source, /\{ receiptOnly: result\?\.backupManaged === true \}/u);
+  assert.match(source, /deliverExaminationRoomSubmissionReceiptEmail\(env, \{/u);
+});

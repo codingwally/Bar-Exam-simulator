@@ -53,6 +53,12 @@ jobs:
           live_hash="$(curl -fsSL --retry 2 --max-time 25 -H 'Cache-Control: no-cache' 'https://duediligence.ph/assets/payments/bpi-instapay-199-qr.png?payment-qr=84959f96cfa8cbe9' | sha256sum | cut -d' ' -f1)"
           test "$live_hash" = 84959f96cfa8cbe9ff9c9a342d95c443c0ff670d6b1ae0d82efc151430861175
           echo "Original Pages baseline and corrected QR image are already present and match by live SHA-256."
+      - name: Define an isolated Worker with static assets and no production route
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '{"name":"duediligence-qr-cache-20261106-preview","compatibility_date":"2026-10-01","workers_dev":true,"assets":{"directory":"%s/.pages-dist","html_handling":"auto-trailing-slash"}}\n' "$GITHUB_WORKSPACE" > qr-preview.jsonc
+          node --input-type=module -e "import fs from 'node:fs';const c=JSON.parse(fs.readFileSync('qr-preview.jsonc','utf8'));if(c.name!=='duediligence-qr-cache-20261106-preview'||!c.assets.directory.endsWith('/.pages-dist'))throw Error('Preview config must be isolated');"
       - name: Deploy isolated checkout static preview (never production)
         uses: cloudflare/wrangler-action@v3
         with:

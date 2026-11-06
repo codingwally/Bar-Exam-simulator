@@ -167,6 +167,16 @@ test('key-only student entry requires only the room key and real name, with stab
   assert.match(studentSource, /student: \{[\s\S]*fullName: state\.entry\.fullName,[\s\S]*guestIdentityId: state\.entry\.guestIdentityId/);
 });
 
+test('examination shows only server-adjusted Philippine Standard Time and never a countdown', () => {
+  assert.match(studentHtml, /id="philippineClock"/);
+  assert.match(studentHtml, /Current Philippine Time \(PHT\)/);
+  assert.doesNotMatch(studentHtml, /id="timerValue"|id="timerBox"|Time remaining/);
+  assert.match(studentSource, /timeZone: 'Asia\/Manila'/);
+  assert.match(studentSource, /Date\.now\(\) \+ Number\(state\.attempt\.clockOffsetMs \|\| 0\)/);
+  assert.doesNotMatch(studentSource, /elements\.timerValue|elements\.timerBox/);
+  assert.match(studentSource, /durationMinutes\) === 1440\) return/);
+});
+
 test('email-limited rooms give a self-resolving missing or unlisted email message', () => {
   assert.match(studentSource, /EMAIL_REQUIRED:[\s\S]*Enter the same email address/);
   assert.match(studentSource, /EMAIL_NOT_ALLOWED:[\s\S]*ask the examination creator to add the correct address/);

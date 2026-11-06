@@ -297,17 +297,21 @@
       method.enabled
       && method.visible
       && method.channelCode === 'bpi_instapay'
-      && method.qrUrl === '/assets/payments/bpi-instapay-199-qr.png'
+      && (method.qrUrl === '/assets/payments/bpi-instapay-199-qr.png'
+        || (method.qrAsset?.assetId
+          && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(method.qrAsset.assetId)
+          && method.qrUrl === `/pricing/assets/${method.qrAsset.assetId}`))
       && method.planCode === plan.planCode
       && method.qrAmountMode === 'exact'
       && method.qrAmountCentavos === plan.priceCentavos
     )) || null;
   }
 
-  function regularCheckoutHtml(plan, paymentMethod, availability) {
+  function regularCheckoutHtml(plan, paymentMethod, availability, assetUrl) {
     const exactAmount = (plan.priceCentavos / 100).toFixed(2);
-    const qrUrl = paymentMethod?.qrUrl || (paymentMethod?.qrAsset?.assetId
-      ? `/pricing/assets/${paymentMethod.qrAsset.assetId}` : '');
+    const qrUrl = (typeof assetUrl === 'function' ? assetUrl(paymentMethod) : '')
+      || paymentMethod?.qrUrl || (paymentMethod?.qrAsset?.assetId
+        ? `/pricing/assets/${paymentMethod.qrAsset.assetId}` : '');
     const features = plan.features.map((feature) => `<li>
       <img src="/assets/icons/navigation/circle-check.svg" width="22" height="22" alt="" aria-hidden="true">
       <span>${escapeHtml(feature)}</span>
@@ -366,7 +370,7 @@
       ? regularPaymentMethod(regularPlan, normalized.paymentMethods) : null;
     if (regularPlan && regularAvailability?.disabled === false && regularMethod) {
       host.innerHTML = `<section class="dd-pricing dd-pricing-regular" data-pricing-mode="${mode}">
-        ${regularCheckoutHtml(regularPlan, regularMethod, regularAvailability)}
+        ${regularCheckoutHtml(regularPlan, regularMethod, regularAvailability, options.assetUrl)}
       </section>`;
       return normalized;
     }

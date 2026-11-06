@@ -74,7 +74,7 @@
           <div class="form-heading">
             <p class="step-label">Step 1 of 2</p>
             <h2>Identify your examination</h2>
-            <p>Enter the details exactly as they appear in your school record.</p>
+            <p>Enter the room key and your real full name. The other details are optional for a key-only examination.</p>
           </div>
 
           <div id="entryError" class="error-panel" role="alert" hidden></div>
@@ -95,19 +95,19 @@
             </div>
 
             <div class="field field-wide">
-              <label for="email">Email</label>
-              <input id="email" name="email" type="email" autocomplete="email" maxlength="254" required aria-describedby="emailHelp" placeholder="student@gmail.com">
-              <small id="emailHelp">This email identifies your examination attempt and is used to recover your saved answers. Use the same email every time you return.</small>
+              <label for="email">Email <small>optional for key-only rooms</small></label>
+              <input id="email" name="email" type="email" autocomplete="email" maxlength="254" aria-describedby="emailHelp" placeholder="student@gmail.com">
+              <small id="emailHelp">Optional: enter a real email to receive an emailed receipt and help recover your attempt. If you leave this blank, answers remain saved on this device and the professor still receives the server backup.</small>
             </div>
 
             <div class="field">
-              <label for="studentNumber">Student number</label>
-              <input id="studentNumber" name="studentNumber" type="text" autocomplete="off" maxlength="64" required>
+              <label for="studentNumber">Student number <small>optional</small></label>
+              <input id="studentNumber" name="studentNumber" type="text" autocomplete="off" maxlength="64">
             </div>
 
             <div class="field">
-              <label for="yearLevel">Year level</label>
-              <select id="yearLevel" name="yearLevel" required>
+              <label for="yearLevel">Year level <small>optional</small></label>
+              <select id="yearLevel" name="yearLevel">
                 <option value="">Select year level</option>
                 <option value="1L">First year</option>
                 <option value="2L">Second year</option>
@@ -118,8 +118,8 @@
             </div>
 
             <div class="field field-wide">
-              <label for="subject">Subject</label>
-              <input id="subject" name="subject" type="text" autocomplete="off" maxlength="120" required placeholder="For example, Remedial Law">
+              <label for="subject">Subject <small>optional; detected from room key</small></label>
+              <input id="subject" name="subject" type="text" autocomplete="off" maxlength="120" placeholder="For example, Remedial Law">
             </div>
           </div>
 
@@ -181,6 +181,7 @@
             <i class="ph ph-cloud-check" aria-hidden="true"></i>
             <span>Saved on this device</span>
           </div>
+          <div class="timer-box" aria-live="off"><span>Philippine Standard Time</span><strong id="philippineClock" aria-label="Current Philippine time">--</strong></div>
           <div id="timerBox" class="timer-box">
             <span>Time remaining</span>
             <strong id="timerValue" role="timer" aria-label="Time remaining">--:--:--</strong>

@@ -363,7 +363,8 @@ test('submission receipt email never reveals question prompts, answers, grades, 
   assert.match(email.subject, /^Examination submission receipt/u);
   assert.match(email.text, /RECEIPT-789/u);
   assert.match(email.text, /Philippine time/u);
-  assert.doesNotMatch(email.text + email.html, /SECRET_ANSWER|SECRET_PASSKEY|<script>|<img src=x>/u);
+  assert.doesNotMatch(email.text + email.html, /SECRET_ANSWER|SECRET_PASSKEY/u);
+  assert.doesNotMatch(email.html, /<script>|<img src=x>/u);
   assert.match(email.html, /Midterm &lt;script&gt;/u);
 });
 

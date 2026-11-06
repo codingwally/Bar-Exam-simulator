@@ -148,11 +148,19 @@ test('camera and microphone permission starts only after entry and cannot block 
 test('key-only student entry requires only the room key and real name, with stable guest identity', () => {
   assert.match(studentHtml, /id="roomKey"[^>]*required/);
   assert.match(studentHtml, /id="fullName"[^>]*required/);
+  const entryForm = studentHtml.match(/<form id="roomEntryForm"[\\s\\S]*?<\\/form>/)?.[0];
+  assert.ok(entryForm, 'entry form exists');
+  const controls = [...entryForm.matchAll(/<(input|select|textarea)\\b[^>]*>/g)]
+    .map((match) => match[0]);
+  assert.equal(controls.length, 2, 'exactly two student entry controls');
+  assert.ok(controls.every((tag) => /\\brequired\\b/.test(tag)), 'both entry controls required');
   for (const field of ['email', 'studentNumber', 'yearLevel', 'subject']) {
-    const tag = studentHtml.match(new RegExp('<(?:input|select) id="' + field + '"[^>]*>'))?.[0];
-    assert.ok(tag && !/\\srequired(?:\\s|>)/.test(tag), field + ' is optional');
+    assert.doesNotMatch(entryForm, new RegExp('id="' + field + '"'), field + ' control absent');
+    assert.doesNotMatch(studentSource, new RegExp('elements\\\\.' + field + '\\b'), field + ' DOM dependency absent');
   }
   assert.match(studentSource, /guestIdentityId: studentGuestIdentityId\(\)/);
+  assert.match(studentSource, /email: ''/);
+  assert.match(studentSource, /subject: ''/);
   assert.match(studentSource, /student-device-/);
   assert.match(studentSource, /var emailIdentity = entry\.email\.toLocaleLowerCase\(\) \|\|/);
   assert.match(studentSource, /studentHash = await digestText\(emailIdentity\)/);

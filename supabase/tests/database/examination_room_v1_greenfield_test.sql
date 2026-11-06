@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, pg_catalog;
 
-select plan(154);
+select plan(157);
 
 select has_schema(
   'examination_room_v1',
@@ -41,7 +41,8 @@ select tables_are(
     'submission_intake',
     'submission_receipts',
     'submissions'
-  ],
+  ] || case when to_regclass('examination_room_v1.media_upload_intents') is not null
+       then array['media_upload_intents'] else array[]::text[] end,
   'only the expected normalized v1 tables exist in the schema'
 );
 
@@ -190,7 +191,7 @@ select is(
     join pg_catalog.pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'examination_room_v1'
       and c.relkind in ('r', 'p')
-      and c.relname <> 'submission_intake'
+      and c.relname not in ('submission_intake', 'media_upload_intents')
       and not (
         has_table_privilege('service_role', c.oid, 'SELECT')
         and has_table_privilege('service_role', c.oid, 'INSERT')
@@ -209,9 +210,10 @@ select is(
     join pg_catalog.pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'examination_room_v1'
       and p.prosecdef
+      and p.proname <> 'recover_existing_student_session'
   ),
   0::bigint,
-  'the v1 schema contains no SECURITY DEFINER functions'
+  'only the private deployed session-recovery helper may use SECURITY DEFINER'
 );
 
 select is(
@@ -1501,7 +1503,7 @@ select is(
       'activationId', (
         select id from examination_room_v1.room_activations
         where exam_id = '10000000-0000-4000-8000-000000000004'
-          and activation_status = 'scheduled'
+          and activation_status in ('scheduled', 'open')
         order by created_at desc limit 1
       ),
       'algorithm', 'aes-256-gcm-v1',
@@ -1547,7 +1549,7 @@ select is(
       'activationId', (
         select id from examination_room_v1.room_activations
         where exam_id = '10000000-0000-4000-8000-000000000004'
-          and activation_status = 'scheduled'
+          and activation_status in ('scheduled', 'open')
         order by created_at desc limit 1
       ),
       'requestHash', repeat('1d', 32),
@@ -1573,7 +1575,7 @@ select is(
       'activationId', (
         select id from examination_room_v1.room_activations
         where exam_id = '10000000-0000-4000-8000-000000000004'
-          and activation_status = 'scheduled'
+          and activation_status in ('scheduled', 'open')
         order by created_at desc limit 1
       ),
       'requestHash', repeat('1d', 32),
@@ -1599,7 +1601,7 @@ select is(
       'activationId', (
         select id from examination_room_v1.room_activations
         where exam_id = '10000000-0000-4000-8000-000000000004'
-          and activation_status = 'scheduled'
+          and activation_status in ('scheduled', 'open')
         order by created_at desc limit 1
       ),
       'requestHash', repeat('1d', 32),
@@ -1666,6 +1668,7 @@ select is(
       'roomKeyHash', repeat('b2', 32),
       'identity', jsonb_build_object(
         'realName', 'Maria Theresa Dela Cruz',
+        'email', 'maria.functional@example.edu.ph',
         'studentNumber', '2024-10001',
         'subject', 'Constitutional Law',
         'yearLevel', 'Second year'
@@ -1686,6 +1689,7 @@ select is(
       'roomKeyHash', repeat('b2', 32),
       'identity', jsonb_build_object(
         'realName', 'Maria Theresa Dela Cruz',
+        'email', 'maria.functional@example.edu.ph',
         'studentNumber', '2024-10001',
         'subject', 'Constitutional Law',
         'yearLevel', 'Second year'
@@ -1716,6 +1720,7 @@ select is(
       'roomKeyHash', repeat('b2', 32),
       'identity', jsonb_build_object(
         'realName', 'Maria Theresa Dela Cruz',
+        'email', 'maria.functional@example.edu.ph',
         'studentNumber', '2024-10001',
         'subject', 'Constitutional Law',
         'yearLevel', 'Second year'
@@ -1746,6 +1751,7 @@ select is(
       'roomKeyHash', repeat('b2', 32),
       'identity', jsonb_build_object(
         'realName', 'Maria Theresa Dela Cruz',
+        'email', 'maria.functional@example.edu.ph',
         'studentNumber', '2024-10001',
         'subject', 'Constitutional Law',
         'yearLevel', 'Second year'
@@ -2107,6 +2113,35 @@ select ok(
   'prolonged mail outage retains a retryable job on bounded hourly backoff'
 );
 
+-- A final local edit was not autosaved. Only its complete intake is durable.
+update examination_room_v1.submission_intake i
+set finalization_payload = jsonb_set(jsonb_set(i.finalization_payload,
+  '{submissionManifest,questions,0,revision}', '2'::jsonb),
+  '{answerSelections,0,revision}', '2'::jsonb) || jsonb_build_object(
+    'pendingAnswerWrites', jsonb_build_array(jsonb_build_object(
+      'sessionId', i.session_id, 'sessionTokenHash', repeat('c4', 32),
+      'requestHash', repeat('b7', 32),
+      'clientEventId', '10000000-0000-4000-8000-000000000099',
+      'submissionRequestHash', i.request_hash,
+      'answerRevision', jsonb_build_object(
+        'schemaVersion', 'examination-room/answer-revision/v1',
+        'attemptId', i.session_id,
+        'examinationId', '10000000-0000-4000-8000-000000000004',
+        'examinationVersion', 1,
+        'publicationHash', i.finalization_payload #>> '{submissionManifest,publicationHash}',
+        'questionNumber', 1, 'questionKey', 'q001', 'questionType', 'essay',
+        'revision', 2, 'answer', 'Checks and balances preserve the separation of powers.'
+      ),
+      'answerHash', repeat('b8', 32), 'flagged', false,
+      'source', 'submission', 'savedAt', clock_timestamp()
+    ))
+  )
+where i.request_hash = repeat('a', 64);
+
+select is((select count(*) from examination_room_v1.answer_revisions
+  where idempotency_key_hash = repeat('b7', 32)), 0::bigint,
+  'the complete intake exists before the pending answer write');
+
 create function pg_temp.interrupt_exam_submission()
 returns trigger language plpgsql as $$
 begin
@@ -2131,6 +2166,10 @@ select ok(
   'failed finalization retains all staged evidence and schedules a retry'
 );
 
+select is((select count(*) from examination_room_v1.answer_revisions
+  where idempotency_key_hash = repeat('b7', 32)), 0::bigint,
+  'failed finalization rolls back answer reconciliation while retaining intake');
+
 drop trigger local_exam_submission_interruption on examination_room_v1.submissions;
 update examination_room_v1.submission_intake set next_attempt_at = clock_timestamp()
 where request_hash = repeat('a', 64);
@@ -2140,6 +2179,10 @@ select is(
   '1',
   'scheduled recovery completes the interrupted submission without the browser'
 );
+
+select is((select count(*) from examination_room_v1.answer_revisions
+  where idempotency_key_hash = repeat('b7', 32)), 1::bigint,
+  'server recovery writes the preserved answer exactly once');
 
 select is(
   public.examination_room_v1_submission_intake(

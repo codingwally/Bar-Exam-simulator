@@ -2201,11 +2201,13 @@ test('durable submission stages the frozen answers before processing and retries
     idempotencyKey: REQUEST_KEY,
   }, null);
 
-  const initial = await handlers.studentCommand(request(revision.answer), ENV, ORIGIN, ORIGIN);
+  const initial = await handlers.studentCommand(request('Latest answer not yet autosaved.'), ENV, ORIGIN, ORIGIN);
   assert.equal(initial.status, 503);
   assert.equal((await initial.json()).error.code, 'EXAM_ROOM_V1_SUBMISSION_PENDING');
-  assert.deepEqual(steps, ['read', 'session_context', 'submission_intent', 'session_context', 'stage', 'drain']);
-  assert.equal(savedPayload.submissionManifest.questions[0].answer, revision.answer);
+  assert.deepEqual(steps, ['read', 'session_context', 'submission_intent', 'stage', 'drain']);
+  assert.equal(savedPayload.submissionManifest.questions[0].answer, 'Latest answer not yet autosaved.');
+  assert.equal(savedPayload.pendingAnswerWrites.length, 1);
+  assert.equal(savedPayload.pendingAnswerWrites[0].answerRevision.answer, 'Latest answer not yet autosaved.');
   assert.equal(savedPayload.answerSelections[0].revision, 1);
   assert.doesNotMatch(JSON.stringify(savedPayload), new RegExp(SESSION_TOKEN, 'u'));
   assert.equal(postSubmitCount, 0);

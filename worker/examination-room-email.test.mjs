@@ -343,4 +343,8 @@ test('intake backup sends a bounded UTF-8 TXT to the selected owner using a stab
   assert.deepEqual(await deliverExaminationRoomIntakeBackup(env, job, async () => {
     throw new Error('provider unavailable');
   }), { status: 'failed', safeErrorCode: 'provider_unavailable' });
+  for (const manifest of [null, {}, { questions: [null] }]) {
+    assert.deepEqual(await deliverExaminationRoomIntakeBackup(env, { ...job, manifest }, transport),
+      { status: 'failed', safeErrorCode: 'backup_snapshot_invalid' });
+  }
 });

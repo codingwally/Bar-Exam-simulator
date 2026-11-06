@@ -383,6 +383,10 @@ export async function deliverExaminationRoomIntakeBackup(env, job, transport = g
     return { status: 'failed', safeErrorCode: 'backup_not_configured' };
   }
   const manifest = job.manifest;
+  if (!manifest || !Array.isArray(manifest.questions)
+    || manifest.questions.some((question) => !question || typeof question !== 'object')) {
+    return { status: 'failed', safeErrorCode: 'backup_snapshot_invalid' };
+  }
   const name = cleanSingleLine(manifest.studentIdentity?.realName, 160, 'Student');
   const title = cleanSingleLine(manifest.title, 180, 'Examination');
   const reference = cleanSingleLine(manifest.submissionId, 64);

@@ -868,11 +868,27 @@ try {
     '20260922113200_examination_room_submission_intent_retry.sql',
     '20260922132200_examination_room_submit_replay_receipt_time.sql',
     '20260925173700_examination_room_submit_audit_hash_v2.sql',
-    '20261105101000_examination_room_durable_submission.sql',
   ]) {
     await database.exec(readFileSync(join(repositoryRoot, 'supabase', 'migrations', migration), 'utf8'));
   }
+  // Test the release against deployed function bodies when a read-only export
+  // is supplied. Historical patch migrations must run before this baseline.
+  const repositoryStudentApi = await scalar(database,
+    "select pg_get_functiondef('examination_room_v1.api_student(text,jsonb)'::regprocedure)");
+  if (process.env.EXAMINATION_ROOM_DATABASE_BASELINE_SQL) {
+    await database.exec(readFileSync(resolve(process.env.EXAMINATION_ROOM_DATABASE_BASELINE_SQL), 'utf8'));
+  }
+  await database.exec(readFileSync(join(repositoryRoot, 'supabase', 'migrations',
+    '20261105101000_examination_room_durable_submission.sql'), 'utf8'));
+  await database.exec(readFileSync(join(repositoryRoot, 'supabase', 'migrations',
+    '20261106011130_examination_room_snapshot_before_reconciliation.sql'), 'utf8'));
   await database.exec(runnablePgTapSql);
+  if (process.env.EXAMINATION_ROOM_DATABASE_BASELINE_SQL) {
+    console.log(`Deployed student API passed ${plannedAssertions} database assertions.`);
+    // The remaining tests exercise historical upgrades from the repository's
+    // original admission contract, independently of the deployed API probe.
+    await database.exec(repositoryStudentApi);
+  }
   await database.exec(readFileSync(migrationPaths[6], 'utf8'));
 
   // Upgrade fixtures prove that the additive migration opens only usable,

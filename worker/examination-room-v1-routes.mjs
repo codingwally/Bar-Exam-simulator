@@ -1646,6 +1646,9 @@ export function createExaminationRoomV1Handlers(dependencies) {
           };
         } else if (operation === 'submit') {
           const submittedAnswers = Array.isArray(payload.answers) ? payload.answers : [];
+          const pendingAnswerWrites = [];
+          const frozenRevisions = [...(sessionContext.answerRevisions || [])];
+          const submittedQuestionKeys = new Set();
           const submissionCompletedAt = isoInstant(
             payload.clientCompletedAt ?? payload.submittedAt ?? deps.now(),
             'submission time',
@@ -1700,6 +1703,11 @@ export function createExaminationRoomV1Handlers(dependencies) {
                 );
               }
 
+              if (submittedQuestionKeys.has(question.key)) {
+                fail('EXAM_ROOM_V1_ANSWER_DUPLICATE', 'A question appears twice in this submission.', 400, 'Retry with one answer per question.');
+              }
+              submittedQuestionKeys.add(question.key);
+
               // A blank response is still a final response. Persist a null
               // revision so students may intentionally leave a question
               // unanswered and the signed receipt can cover every question.
@@ -1747,28 +1755,33 @@ export function createExaminationRoomV1Handlers(dependencies) {
               delete answerPayload.idempotencyKey;
               delete answerPayload.idempotencyInput;
 
-              await callRpc(env, {
-                scope: 'student',
-                operation: 'save_answer',
-                actorUserId: null,
-                institutionId: null,
-                payload: {
-                  sessionId: credential.sessionId,
-                  sessionTokenHash: credential.sessionTokenHash,
-                  requestHash: answerRequest.requestHash,
-                  clientEventId: answerRequest.clientEventId,
-                  answerRevision: answerPayload,
-                  answerHash: await deps.sha256Hex?.(answerRevision.idempotencyInput)
-                    || await pepperedHmac(env, 'answer-revision', answerRevision.idempotencyInput),
-                  flagged: submittedAnswer.flagged === true,
-                  source: 'submission',
-                  submissionRequestHash: info.requestHash,
-                  savedAt: submissionCompletedAt,
-                },
-              }, [credential.rawSessionToken, answerRequest.rawRequestKey]);
+              const writePayload = {
+                sessionId: credential.sessionId,
+                sessionTokenHash: credential.sessionTokenHash,
+                requestHash: answerRequest.requestHash,
+                clientEventId: answerRequest.clientEventId,
+                answerRevision: answerPayload,
+                answerHash: await deps.sha256Hex?.(answerRevision.idempotencyInput)
+                  || await pepperedHmac(env, 'answer-revision', answerRevision.idempotencyInput),
+                flagged: submittedAnswer.flagged === true,
+                source: 'submission',
+                submissionRequestHash: info.requestHash,
+                savedAt: submissionCompletedAt,
+              };
+              if (durableSubmission) {
+                pendingAnswerWrites.push(writePayload);
+                const previousIndex = frozenRevisions.findIndex((entry) => entry.questionKey === question.key);
+                if (previousIndex >= 0) frozenRevisions.splice(previousIndex, 1);
+                frozenRevisions.push(answerRevision);
+              } else {
+                await callRpc(env, {
+                  scope: 'student', operation: 'save_answer', actorUserId: null, institutionId: null,
+                  payload: writePayload,
+                }, [credential.rawSessionToken, answerRequest.rawRequestKey]);
+              }
             }
 
-            sessionContext = ensureStoreResult(await deps.rpc(env, {
+            if (!durableSubmission) sessionContext = ensureStoreResult(await deps.rpc(env, {
               scope: 'student',
               operation: 'session_context',
               actorUserId: null,
@@ -1789,7 +1802,7 @@ export function createExaminationRoomV1Handlers(dependencies) {
             publicationHash,
             studentIdentity: sessionContext.studentIdentity,
             privacyConsent: sessionContext.privacyConsent,
-            answerRevisions: sessionContext.answerRevisions,
+            answerRevisions: durableSubmission ? frozenRevisions : sessionContext.answerRevisions,
             anonymousCandidateId: sessionContext.anonymousCandidateId,
           });
           const manifest = { ...submission.manifest };
@@ -1797,6 +1810,7 @@ export function createExaminationRoomV1Handlers(dependencies) {
           safePayload = {
             ...safePayload,
             submissionManifest: manifest,
+            ...(durableSubmission ? { pendingAnswerWrites } : {}),
             manifestHash: await deps.sha256Hex?.(submission.hashInput) || await pepperedHmac(env, 'submission-manifest', submission.hashInput),
             submissionRequestHash: info.requestHash,
             answerSelections: submission.manifest.questions.map((question) => ({

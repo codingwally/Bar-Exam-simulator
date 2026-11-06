@@ -791,6 +791,9 @@ try {
   const secondStudent = await createUser('student-b');
   await grantSyntheticSuperAdmin(admin.id);
   await verifyExaminationRoomV1Staging({ adminToken: admin.token, runId });
+  if (process.env.EXAMINATION_ROOM_V1_ONLY === 'true') {
+    outcome = { ok: true, runId, v1: true };
+  } else {
   const directDashboard = await serviceRpc('examination_admin', {
     p_actor_user_id: admin.id,
     p_operation: 'dashboard',
@@ -830,6 +833,7 @@ try {
     createdExamIds: [...new Set(createdExams)],
     createdUserCount: createdUsers.length,
   };
+  }
 } finally {
   const cleanupErrors = [];
   const verifiedUsers = [];

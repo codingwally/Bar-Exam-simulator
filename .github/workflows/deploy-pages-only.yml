@@ -132,6 +132,7 @@ jobs:
             if test "$file" = index.html; then route=""; fi
             expected="$(sha256sum "$RUNNER_TEMP/qr-live-baseline/.pages-dist/$file" | cut -d' ' -f1)"
             actual="$(curl -fsSL --retry 2 --max-time 30 "https://duediligence.ph/$route?qr-baseline=$GITHUB_SHA" | sha256sum | cut -d' ' -f1)"
+            echo "Baseline check: $file expected=$expected served=$actual"
             test "$actual" = "$expected"
           done
       - name: Deploy only the QR overlay to existing Cloudflare isolated preview

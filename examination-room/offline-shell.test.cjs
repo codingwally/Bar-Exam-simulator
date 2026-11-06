@@ -37,7 +37,7 @@ test('student registers the Examination Room service worker without blocking sta
   const release = registrationUrl.searchParams.get('release');
   assert.ok(version, 'registration has a cache-busting version');
   assert.equal(release, 'midterm-durable-20261106-1');
-  assert.equal(CACHE_VERSION, `duediligence-shell-${version}&release=${release}`);
+  assert.equal(CACHE_VERSION, `duediligence-shell-${version}-release-${release}`);
   const studentAsset = localAssets(studentHtml, '/examination-room/student.html')
     .find((url) => url.pathname === '/examination-room/student.js');
   assert.ok(studentAsset, 'the student entry script is loaded by its page');

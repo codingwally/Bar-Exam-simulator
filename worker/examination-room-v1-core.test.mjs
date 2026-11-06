@@ -450,6 +450,21 @@ test('validates privacy notice consent against the exact version', () => {
   );
 });
 
+test('standard-tier camera examinations preserve the independently recorded consent flag', () => {
+  const consent = validatePrivacyConsent(makePrivacyConsent({ recordingAccepted: true }), {
+    requiredNoticeVersion: '2026-08-26',
+    integrityTier: 'standard',
+  });
+  assert.equal(consent.recordingAccepted, true, 'do not clear server-recorded camera consent');
+
+  const publication = makePublication(makeReadyDraft({ integrityTier: 'standard' }));
+  const submission = makeSubmission({
+    publication,
+    input: { privacyConsent: makePrivacyConsent({ recordingAccepted: true }) },
+  });
+  assert.equal(submission.manifest.privacyConsent.recordingAccepted, true);
+});
+
 test('recorded proctoring requires separate recording consent and a valid UTC time', () => {
   expectCode(
     () => validatePrivacyConsent(makePrivacyConsent(), {

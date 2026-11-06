@@ -179,7 +179,7 @@ jobs:
             served="$(sha256sum /tmp/midterm-student.js 2>/dev/null | cut -d' ' -f1 || true)"
             served_html="$(sha256sum /tmp/midterm-student.html 2>/dev/null | cut -d' ' -f1 || true)"
             if [[ "$actual" == "$GITHUB_SHA" && "$served" == "$expected" && "$served_html" == "$expected_html" ]]; then
-              node -e 'const fs=require("node:fs");const h=fs.readFileSync("/tmp/midterm-student.html","utf8");const form=h.split("<form id=\"roomEntryForm\"")[1]?.split("</form>")[0]||"";const fields=[...form.matchAll(/<(input|select|textarea)\\b[^>]*>/g)].map(m=>m[0].match(/\\bid="([^"]+)"/)?.[1]);if(fields.join(",")!=="roomKey,fullName")throw Error("Live entry form must have only roomKey and fullName; got "+fields.join(","));'
+              node -e 'const fs=require("node:fs");const h=fs.readFileSync("/tmp/midterm-student.html","utf8");const form=h.split("<form id=\"roomEntryForm\"")[1]?.split("</form>")[0]||"";const fields=[...form.matchAll(/<(input|select|textarea)\b[^>]*>/g)].map(m=>m[0].match(/\bid="([^"]+)"/)?.[1]);if(fields.join(",")!=="roomKey,fullName")throw Error("Live entry form must have only roomKey and fullName; got "+fields.join(","));'
               echo "Production Pages verified: exact release SHA, exact student script/HTML, and exactly two entry inputs."
               exit 0
             fi

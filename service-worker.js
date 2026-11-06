@@ -28,7 +28,7 @@ const SHELL = Object.freeze([
   EXAMINATION_OFFLINE_GRADER,
   '/examination-room/student.css?v=renovation-20260828-4',
   '/examination-room/view-models.js?v=greenfield-v1-20260826-1',
-  '/examination-room/api.js?v=classroom-preflight-20260925-1-answer-sync-20261105-1&release=midterm-pht-clock-only-20261106-4',
+  '/examination-room/api.js?v=classroom-preflight-20260925-1-answer-sync-20261105-1&release=midterm-pht-clock-only-20261106-4&entry=low-data-20261106-1',
   '/examination-room/media-capture.js?v=reliability-20260828-1',
   '/examination-room/student.js?v=focus-fullscreen-20260926-1-native-close-20261023-1-answer-sync-20261105-1&release=midterm-pht-clock-only-20261106-4',
   '/examination-room/offline-grading.css?v=greenfield-v1-20260826-1',

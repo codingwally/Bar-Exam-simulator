@@ -10471,10 +10471,26 @@ async function examinationRoomProfessorSubmissionPdf(env, context) {
 
 async function deliverExaminationRoomProfessorSubmissionPackage(env, details) {
   const context = await examinationRoomSubmissionDeliveryContext(env, details.sessionId);
-  const artifact = await ensureExaminationRoomSubmissionPdf(env, context);
   const manifest = context?.submissionManifest && typeof context.submissionManifest === 'object'
     ? context.submissionManifest
     : {};
+  // Deliver the receipt independently of PDF artifact generation: a slow PDF
+  // or an unavailable storage provider must not suppress the student receipt.
+  const studentReceipt = await deliverExaminationRoomSubmissionReceiptEmail(env, {
+    recipient: context.studentEmail,
+    studentName: context.studentName,
+    examTitle: manifest.title,
+    submittedAt: context.submittedAt,
+    receiptCode: context.receiptCode,
+    idempotencyHash: details.idempotencyHash,
+  });
+  if (!['sent', 'suppressed', 'skipped'].includes(String(studentReceipt?.status || ''))) {
+    console.error('Examination Room student receipt email was not delivered', {
+      status: String(studentReceipt?.status || 'failed').slice(0, 40),
+      safeErrorCode: String(studentReceipt?.safeErrorCode || 'unknown').slice(0, 80),
+    });
+  }
+  const artifact = await ensureExaminationRoomSubmissionPdf(env, context);
   const delivery = await deliverExaminationRoomProfessorSubmissionEmail(env, {
     professorRecipient: context.professorEmail,
     professorName: context.professorName,
@@ -10495,23 +10511,6 @@ async function deliverExaminationRoomProfessorSubmissionPackage(env, details) {
     console.error('Examination Room professor submission email was not delivered', {
       status: String(delivery?.status || 'failed').slice(0, 40),
       safeErrorCode: String(delivery?.safeErrorCode || 'unknown').slice(0, 80),
-    });
-  }
-  // Only the server-confirmed receipt is emailed to the student. Never include
-  // answers or passkeys in this notification. Provider calls use a distinct
-  // stable idempotency key from the professor's PDF and owner TXT backups.
-  const studentReceipt = await deliverExaminationRoomSubmissionReceiptEmail(env, {
-    recipient: context.studentEmail,
-    studentName: context.studentName,
-    examTitle: manifest.title,
-    submittedAt: context.submittedAt,
-    receiptCode: context.receiptCode,
-    idempotencyHash: details.idempotencyHash,
-  });
-  if (!['sent', 'suppressed', 'skipped'].includes(String(studentReceipt?.status || ''))) {
-    console.error('Examination Room student receipt email was not delivered', {
-      status: String(studentReceipt?.status || 'failed').slice(0, 40),
-      safeErrorCode: String(studentReceipt?.safeErrorCode || 'unknown').slice(0, 80),
     });
   }
   return { artifact, delivery, studentReceipt };

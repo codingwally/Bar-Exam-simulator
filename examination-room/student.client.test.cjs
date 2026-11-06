@@ -148,11 +148,19 @@ test('camera and microphone permission starts only after entry and cannot block 
 test('key-only student entry requires only the room key and real name, with stable guest identity', () => {
   assert.match(studentHtml, /id="roomKey"[^>]*required/);
   assert.match(studentHtml, /id="fullName"[^>]*required/);
+  const entryForm = studentHtml.split('<form id="roomEntryForm"')[1]?.split('</form>')[0];
+  assert.ok(entryForm, 'entry form exists');
+  const controls = [...entryForm.matchAll(/<(input|select|textarea)\b[^>]*>/g)]
+    .map((match) => match[0]);
+  assert.equal(controls.length, 2, 'exactly two student entry controls');
+  assert.ok(controls.every((tag) => /\brequired\b/.test(tag)), 'both entry controls required');
   for (const field of ['email', 'studentNumber', 'yearLevel', 'subject']) {
-    const tag = studentHtml.match(new RegExp('<(?:input|select) id="' + field + '"[^>]*>'))?.[0];
-    assert.ok(tag && !/\\srequired(?:\\s|>)/.test(tag), field + ' is optional');
+    assert.ok(!entryForm.includes('id="' + field + '"'), field + ' control absent');
+    assert.ok(!studentSource.includes('elements.' + field), field + ' DOM dependency absent');
   }
   assert.match(studentSource, /guestIdentityId: studentGuestIdentityId\(\)/);
+  assert.match(studentSource, /email: ''/);
+  assert.match(studentSource, /subject: ''/);
   assert.match(studentSource, /student-device-/);
   assert.match(studentSource, /var emailIdentity = entry\.email\.toLocaleLowerCase\(\) \|\|/);
   assert.match(studentSource, /studentHash = await digestText\(emailIdentity\)/);
@@ -182,7 +190,7 @@ test('the final-question action remains enabled and opens review instead of trap
   assert.match(studentSource, /state\.currentIndex === state\.questions\.length - 1 \? 'Review and submit'/);
   assert.match(studentSource, /navigateToQuestion\(state\.currentIndex \+ 1\)/);
   assert.match(studentSource, /if \(index >= state\.questions\.length\) \{[\s\S]*openSubmitDialog\(\)/);
-  assert.match(studentHtml, /student\.js\?v=focus-fullscreen-20260926-1-native-close-20261023-1-answer-sync-20261105-1&release=midterm-testfix-20261106-2"/);
+  assert.match(studentHtml, /student\.js\?v=focus-fullscreen-20260926-1-native-close-20261023-1-answer-sync-20261105-1&release=midterm-key-name-only-20261106-3"/);
 });
 
 test('student storage open fails safely when IndexedDB is blocked or never settles', async () => {
@@ -279,7 +287,7 @@ test('successful receipt confirms professor grading and offers a local answer ba
   assert.match(text, /Question 3 \(q3\)\n\[Unanswered\]/);
   assert.doesNotMatch(text, /private-token/);
   assert.match(studentSource, /Answers successfully uploaded for professor grading/);
-  assert.match(studentHtml, /student\.js\?v=focus-fullscreen-20260926-1-native-close-20261023-1-answer-sync-20261105-1&release=midterm-testfix-20261106-2"/);
+  assert.match(studentHtml, /student\.js\?v=focus-fullscreen-20260926-1-native-close-20261023-1-answer-sync-20261105-1&release=midterm-key-name-only-20261106-3"/);
 });
 
 

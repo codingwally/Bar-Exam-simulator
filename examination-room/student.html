@@ -12,9 +12,9 @@
   <script defer src="../assets/phase2-config.js?v=provider-neutral-release2-20260827-1"></script>
   <script defer src="../assets/private-beta-session.js?v=beta-all-access-20260802-1"></script>
   <script defer src="view-models.js?v=greenfield-v1-20260826-1"></script>
-  <script defer src="api.js?v=classroom-preflight-20260925-1-answer-sync-20261105-1&release=midterm-testfix-20261106-2"></script>
+  <script defer src="api.js?v=classroom-preflight-20260925-1-answer-sync-20261105-1&release=midterm-key-name-only-20261106-3"></script>
   <script defer src="media-capture.js?v=reliability-20260828-1"></script>
-  <script defer src="student.js?v=focus-fullscreen-20260926-1-native-close-20261023-1-answer-sync-20261105-1&release=midterm-testfix-20261106-2"></script>
+  <script defer src="student.js?v=focus-fullscreen-20260926-1-native-close-20261023-1-answer-sync-20261105-1&release=midterm-key-name-only-20261106-3"></script>
 </head>
 <body>
   <a class="skip-link" href="#main-content">Skip to examination content</a>
@@ -74,7 +74,7 @@
           <div class="form-heading">
             <p class="step-label">Step 1 of 2</p>
             <h2>Identify your examination</h2>
-            <p>Enter the room key and your real full name. The other details are optional for a key-only examination.</p>
+            <p>Enter only your examination room key and real full name.</p>
           </div>
 
           <div id="entryError" class="error-panel" role="alert" hidden></div>
@@ -94,33 +94,6 @@
               <input id="fullName" name="fullName" type="text" autocomplete="name" maxlength="160" required>
             </div>
 
-            <div class="field field-wide">
-              <label for="email">Email <small>optional for key-only rooms</small></label>
-              <input id="email" name="email" type="email" autocomplete="email" maxlength="254" aria-describedby="emailHelp" placeholder="student@gmail.com">
-              <small id="emailHelp">Optional: enter a real email to receive an emailed receipt and help recover your attempt. If you leave this blank, answers remain saved on this device and the professor still receives the server backup.</small>
-            </div>
-
-            <div class="field">
-              <label for="studentNumber">Student number <small>optional</small></label>
-              <input id="studentNumber" name="studentNumber" type="text" autocomplete="off" maxlength="64">
-            </div>
-
-            <div class="field">
-              <label for="yearLevel">Year level <small>optional</small></label>
-              <select id="yearLevel" name="yearLevel">
-                <option value="">Select year level</option>
-                <option value="1L">First year</option>
-                <option value="2L">Second year</option>
-                <option value="3L">Third year</option>
-                <option value="4L">Fourth year</option>
-                <option value="5L">Fifth year or extended program</option>
-              </select>
-            </div>
-
-            <div class="field field-wide">
-              <label for="subject">Subject <small>optional; detected from room key</small></label>
-              <input id="subject" name="subject" type="text" autocomplete="off" maxlength="120" placeholder="For example, Remedial Law">
-            </div>
           </div>
 
           <button id="previewButton" class="button button-primary button-wide" type="submit">

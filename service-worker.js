@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'duediligence-shell-focus-fullscreen-20260926-1-native-close-20261023-1-answer-sync-20261105-1-release-midterm-testfix-20261106-2';
+const CACHE_VERSION = 'duediligence-shell-focus-fullscreen-20260926-1-native-close-20261023-1-answer-sync-20261105-1-release-midterm-key-name-only-20261106-3';
 const EXAMINATION_STUDENT_SHELL = '/examination-room/student.html';
 const EXAMINATION_OFFLINE_GRADER = '/examination-room/offline-grading.html';
 const SHELL = Object.freeze([
@@ -28,9 +28,9 @@ const SHELL = Object.freeze([
   EXAMINATION_OFFLINE_GRADER,
   '/examination-room/student.css?v=renovation-20260828-4',
   '/examination-room/view-models.js?v=greenfield-v1-20260826-1',
-  '/examination-room/api.js?v=classroom-preflight-20260925-1-answer-sync-20261105-1&release=midterm-testfix-20261106-2',
+  '/examination-room/api.js?v=classroom-preflight-20260925-1-answer-sync-20261105-1&release=midterm-key-name-only-20261106-3',
   '/examination-room/media-capture.js?v=reliability-20260828-1',
-  '/examination-room/student.js?v=focus-fullscreen-20260926-1-native-close-20261023-1-answer-sync-20261105-1&release=midterm-testfix-20261106-2',
+  '/examination-room/student.js?v=focus-fullscreen-20260926-1-native-close-20261023-1-answer-sync-20261105-1&release=midterm-key-name-only-20261106-3',
   '/examination-room/offline-grading.css?v=greenfield-v1-20260826-1',
   '/examination-room/offline-grading-core.js?v=greenfield-v1-20260826-3',
   '/examination-room/offline-grading.js?v=reliability-20260828-1',
@@ -79,6 +79,22 @@ self.addEventListener('fetch', (event) => {
       return;
     }
     event.respondWith(fetch(request).catch(() => caches.match('/offline.html')));
+    return;
+  }
+  // Always request the latest examination admission code first. Previously,
+  // a cache-first script response could keep the old six-field form behavior
+  // after an otherwise successful production release. Retain the offline copy.
+  if (url.pathname === '/examination-room/student.js'
+      || url.pathname === '/examination-room/api.js') {
+    event.respondWith(
+      fetch(request).then((response) => {
+        if (response.ok) {
+          const copy = response.clone();
+          event.waitUntil(caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy)));
+        }
+        return response;
+      }).catch(() => caches.match(request)),
+    );
     return;
   }
   if (!SHELL.some((path) => url.pathname + url.search === path || url.pathname === path)) return;

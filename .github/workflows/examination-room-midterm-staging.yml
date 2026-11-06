@@ -1,0 +1,93 @@
+name: Examination Room midterm protected staging deploy and E2E
+
+on:
+  push:
+    branches:
+      - fix/examination-room-submit-retry-normalization
+    paths:
+      - .github/workflows/examination-room-midterm-staging.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: examination-room-midterm-staging-deploy
+  cancel-in-progress: false
+
+jobs:
+  examination-staging:
+    name: Deploy reviewed examination to isolated staging and test real browser submission
+    if: >-
+      github.repository == 'codingwally/Bar-Exam-simulator' &&
+      github.ref == 'refs/heads/fix/examination-room-submit-retry-normalization'
+    runs-on: ubuntu-latest
+    environment: staging-e2e
+    timeout-minutes: 65
+    steps:
+      - name: Checkout reviewed release branch
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check source, migrations and examination regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF_NAME}" = 'fix/examination-room-submit-retry-normalization'
+          grep -Fq 'EXAMINATION_ROOM_DURABLE_INTAKE = "true"' worker/wrangler.staging.toml
+          grep -Fq 'EXAMINATION_ROOM_EMAIL_MODE = "suppressed"' worker/wrangler.staging.toml
+          test -f supabase/migrations/20261105101000_examination_room_durable_submission.sql
+          test -f supabase/migrations/20261106011130_examination_room_snapshot_before_reconciliation.sql
+          npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+          node --test examination-room/*.test.cjs admin/examination-room-admin.test.cjs worker/*.test.mjs
+          node scripts/test-examination-room-database.mjs
+          node scripts/test-examination-room-release-workflows.mjs
+      - name: Resolve existing staging publishable key without exposing credentials
+        shell: bash
+        env:
+          CONFIGURED_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          set -euo pipefail
+          key="$CONFIGURED_KEY"
+          if [[ -z "$key" ]]; then
+            key="$(node --input-type=module -e "const r=await fetch('https://duediligence-examinations-staging.wallyesteban1993.workers.dev/assets/phase2-config.js',{headers:{'cache-control':'no-cache'}});if(!r.ok)process.exit(1);const m=(await r.text()).match(/sb_publishable_[A-Za-z0-9_-]{20,}/);if(!m)process.exit(1);process.stdout.write(m[0]);")"
+          fi
+          [[ "$key" =~ ^sb_publishable_[A-Za-z0-9_-]{20,}$ ]]
+          echo "::add-mask::$key"
+          printf 'STAGING_SUPABASE_PUBLISHABLE_KEY=%s\n' "$key" >> "$GITHUB_ENV"
+      - name: Build isolated staging artifact (never production Pages)
+        run: node scripts/test-staging-artifact.mjs
+      - name: Deploy Worker and examination assets to isolated staging
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          wranglerVersion: '4.114.0'
+          command: deploy --config wrangler.staging.toml
+      - name: Verify actual staging routes
+        env:
+          STAGING_EXAMINATION_ROOM_URL: https://duediligence-examinations-staging.wallyesteban1993.workers.dev
+        run: node scripts/test-examination-room-v1-staging-smoke.mjs
+      - name: Test synthetic professor, student answers, submission and monitor on staging
+        env:
+          STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/run-staging-e2e-suite.mjs --preflight
+          npm install --no-save --no-package-lock playwright@1.54.2
+          node scripts/run-staging-e2e-suite.mjs examinations
+          node --input-type=module -e "import{readFileSync}from'node:fs';let e=JSON.parse(readFileSync('artifacts/staging-e2e/examinations.json','utf8'));if(e.status!=='PASS'||e.cleanup!=='completed'||e.commit!==process.env.GITHUB_SHA)process.exit(1);console.log('EXAMINATION_ROOM_STAGING_RELEASE_PASS '+e.commit);"
+      - name: Preserve sanitized staging release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: examination-room-midterm-staging-${{ github.run_id }}
+          path: artifacts/staging-e2e/examinations.json
+          retention-days: 14
+          if-no-files-found: warn

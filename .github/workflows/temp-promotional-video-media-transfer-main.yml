@@ -1,14 +1,10 @@
 name: Temporary promotional video media transfer
 
+# This is a one-off media transfer, not a release/PR validation gate.
+# The temporary narration download URL expired (HTTP 404 on 2026-11-06).
+# Retain manual invocation for a future replacement, but do not fail unrelated PRs.
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - .github/workflows/temp-promotional-video-media-transfer-main.yml
-  pull_request:
-    branches:
-      - main
+  workflow_dispatch:
 
 permissions:
   contents: read

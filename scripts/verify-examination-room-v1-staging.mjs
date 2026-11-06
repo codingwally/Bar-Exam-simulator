@@ -105,11 +105,30 @@ export async function verifyExaminationRoomV1Staging({ adminToken, runId }) {
 
     const finalAnswer = `Final confirmed answer ${runId}: The Constitution separates executive, legislative and judicial power.`;
     const submissionKey = 'submission-' + randomUUID();
-    const submission = await studentCommand('submit', {
+    const finalPayload = {
       sessionId, sessionToken, clientCompletedAt: new Date().toISOString(),
       answers: [{ questionId: 'q-1', answer: finalAnswer, flagged: false }],
-    }, submissionKey);
-    assert.ok(submission.submission || submission.receipt);
+    };
+    let submission = null;
+    for (let retry = 0; retry < 12; retry += 1) {
+      const response = await fetch(BASE + '/examination-room/v1/student/command', {
+        method: 'POST', signal: AbortSignal.timeout(45000),
+        headers: { Origin: BASE, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operation: 'submit', payload: finalPayload, idempotencyKey: submissionKey }),
+      });
+      const body = await response.json().catch(() => null);
+      if (response.status === 201 && body?.ok) {
+        submission = body;
+        break;
+      }
+      if (response.status !== 503 || body?.error?.code !== 'EXAM_ROOM_V1_SUBMISSION_PENDING') {
+        throw new Error('student submit HTTP ' + response.status
+          + ' code ' + String(body?.error?.code || 'UNKNOWN').slice(0, 80));
+      }
+      await new Promise(resolve => setTimeout(resolve, 3000));
+    }
+    assert.ok(submission?.submission?.receiptId || submission?.receipt?.id,
+      'Final submission never produced an official receipt');
     results.push('official_submission');
 
     const monitor = await professorQuery('monitor', { examId });

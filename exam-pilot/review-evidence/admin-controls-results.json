@@ -1,0 +1,11 @@
+{
+  "passed": true,
+  "outcomes": [
+    "Practice readiness remains incomplete when disconnect/reconnect were never exercised; saved answers and receipt are visible.",
+    "Authorized one-use recovery restores the existing attempt, original deadline and identical server receipt.",
+    "Explicit practice reset revokes access, permits a new practice start and preserves the old answer/receipt.",
+    "Next exam is created wholly in the dashboard, starts empty at the same official URL, and the previous examination is preserved read-only in history."
+  ],
+  "oldExamId": "official",
+  "newExamId": "980905d0-2cf2-4693-af87-fa3a1ccb92ac"
+}

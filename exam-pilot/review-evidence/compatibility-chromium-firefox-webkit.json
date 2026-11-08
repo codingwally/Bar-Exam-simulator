@@ -1,0 +1,52 @@
+[
+  {
+    "engine": "chromium",
+    "version": "156.0.8078.4",
+    "status": "PASS",
+    "scenarios": [
+      "keyboard entry and focus",
+      "name/email registration",
+      "incremental save",
+      "same-attempt recovery",
+      "unchanged five-minute deadline",
+      "390px no overflow",
+      "200% text scaling",
+      "manual server receipt"
+    ],
+    "limitations": []
+  },
+  {
+    "engine": "firefox",
+    "version": "157.0",
+    "status": "PASS",
+    "scenarios": [
+      "keyboard entry and focus",
+      "name/email registration",
+      "incremental save",
+      "same-attempt recovery",
+      "unchanged five-minute deadline",
+      "390px no overflow",
+      "200% text scaling",
+      "manual server receipt"
+    ],
+    "limitations": []
+  },
+  {
+    "engine": "webkit",
+    "version": "27.2",
+    "status": "PASS",
+    "scenarios": [
+      "keyboard entry and focus",
+      "name/email registration",
+      "incremental save",
+      "same-attempt recovery",
+      "unchanged five-minute deadline",
+      "390px no overflow",
+      "200% text scaling",
+      "manual server receipt"
+    ],
+    "limitations": [
+      "Local self-signed TLS WebKit rejected an unload event transport; the same queued pagehide event was confirmed on the server after reload retry."
+    ]
+  }
+]

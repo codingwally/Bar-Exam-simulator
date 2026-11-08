@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "retrievedAt": "2026-09-09T13:03:34.589Z",
+  "purpose": "Unmodified existing Due Diligence brand font files for the isolated Constitutional Law examination pilot.",
+  "license": "OFL-1.1",
+  "licenseRepositoryCommit": "0cf764bb712367b6079cbb4fd2353e6f54ec6850",
+  "cssSource": {
+    "file": "google-fonts-source.css.txt",
+    "url": "https://fonts.googleapis.com/css2?family=Fraunces:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+    "sha256": "a6194f5a78fd0ad22d96192e72e1b4d02f01503b5805a36e33e182fb285e277f"
+  },
+  "fonts": [
+    {
+      "file": "fraunces.woff2",
+      "sourceUrl": "https://fonts.gstatic.com/s/fraunces/v38/6NUu8FyLNQOQZAnv9bYEvDiIdE9Ea92uemAk_WBq8U_9v0c2Wa0K7iN7hzFUPJH58nib14c7qv8.woff2",
+      "family": "Fraunces",
+      "subset": "latin",
+      "weights": [
+        400,
+        500,
+        600
+      ],
+      "style": "normal",
+      "format": "woff2",
+      "contentType": "font/woff2",
+      "bytes": 36620,
+      "sha256": "7f9d191d999336d3b9790afa72e1358e50a13b06d4f289341e92a311967a80f9",
+      "fontAxes": {
+        "wght": {
+          "name": "Weight",
+          "min": 100,
+          "default": 900,
+          "max": 900
+        }
+      },
+      "sourceFile": "fraunces-v38-latin.woff2"
+    },
+    {
+      "file": "inter.woff2",
+      "sourceUrl": "https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7.woff2",
+      "family": "Inter",
+      "subset": "latin",
+      "weights": [
+        400,
+        500,
+        600,
+        700
+      ],
+      "style": "normal",
+      "format": "woff2",
+      "contentType": "font/woff2",
+      "bytes": 48256,
+      "sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62",
+      "fontAxes": {
+        "wght": {
+          "name": "Weight",
+          "min": 100,
+          "default": 400,
+          "max": 900
+        }
+      },
+      "sourceFile": "inter-v20-latin.woff2"
+    }
+  ],
+  "licenses": [
+    {
+      "file": "Fraunces.OFL.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/google/fonts/0cf764bb712367b6079cbb4fd2353e6f54ec6850/ofl/fraunces/OFL.txt",
+      "sha256": "bdf4c22802eaf804f998195871c6b8938aac2ac14b2d78a8bd66a6f1eced833b"
+    },
+    {
+      "file": "Inter.OFL.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/google/fonts/0cf764bb712367b6079cbb4fd2353e6f54ec6850/ofl/inter/OFL.txt",
+      "sha256": "5b9321a4298cfeb6b34354164a1c3afc3db114569984c502b9b35d988fd58c57"
+    }
+  ],
+  "verification": {
+    "binaryBytesUnmodified": true,
+    "localBrowserReadability": true,
+    "hostedFontDelivery": false
+  },
+  "sourceNote": {
+    "file": "SOURCE.md",
+    "sha256": "36105ad8bf73aa33f63799500e688ebd2368950d1e2452edfb91a1af656601b8"
+  },
+  "retainedUpstreamVerification": {
+    "magic": "wOF2",
+    "headerLengthEqualsFileBytes": true,
+    "decodedWith": "@pdf-lib/fontkit",
+    "familiesAndVariationAxesChecked": true,
+    "browserLayout": "PENDING_CI",
+    "hostedFontRequests": "PENDING_CI",
+    "declarationsMatchUpstreamExceptSourceUrl": true,
+    "existingLayoutDeclarationsUnchanged": true,
+    "weightRendering": "PENDING_CI: local fontkit checks parsed weight ranges only"
+  }
+}

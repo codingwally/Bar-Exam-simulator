@@ -1,0 +1,55 @@
+[
+  {
+    "width": 1440,
+    "entryOverflow": false,
+    "editorOverflow": false,
+    "runtimeErrors": [],
+    "touchTargets": true,
+    "serverSave": true
+  },
+  {
+    "width": 1024,
+    "entryOverflow": false,
+    "editorOverflow": false,
+    "runtimeErrors": [],
+    "touchTargets": true,
+    "serverSave": true
+  },
+  {
+    "width": 768,
+    "entryOverflow": false,
+    "editorOverflow": false,
+    "runtimeErrors": [],
+    "touchTargets": true,
+    "serverSave": true
+  },
+  {
+    "width": 390,
+    "entryOverflow": false,
+    "editorOverflow": false,
+    "runtimeErrors": [],
+    "touchTargets": true,
+    "serverSave": true
+  },
+  {
+    "width": 375,
+    "entryOverflow": false,
+    "editorOverflow": false,
+    "runtimeErrors": [],
+    "touchTargets": true,
+    "serverSave": true
+  },
+  {
+    "width": 320,
+    "entryOverflow": false,
+    "editorOverflow": false,
+    "runtimeErrors": [],
+    "touchTargets": true,
+    "serverSave": true
+  },
+  {
+    "zoomEquivalentCSSWidth": 720,
+    "deviceScaleFactor": 2,
+    "fontFailureContentUsable": true
+  }
+]

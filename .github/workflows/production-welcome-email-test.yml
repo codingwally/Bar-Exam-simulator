@@ -28,6 +28,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Inspect existing production Worker email capability
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/production-worker-welcome.mjs
       - name: Send Welcome back to Wally and Gilmar
         env:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}

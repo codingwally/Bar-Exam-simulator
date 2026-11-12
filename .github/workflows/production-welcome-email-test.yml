@@ -1,0 +1,35 @@
+name: Send production welcome email test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/production-welcome-email-test]
+    paths:
+      - .github/workflows/production-welcome-email-test.yml
+      - scripts/send-production-welcome-email.mjs
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-welcome-email-test
+  cancel-in-progress: false
+
+jobs:
+  send:
+    if: github.repository == 'codingwally/Bar-Exam-simulator'
+    runs-on: ubuntu-latest
+    environment: production-worker
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Send Welcome back to Wally and Gilmar
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_TEST_REQUEST_KEY: ${{ github.run_id }}
+        run: node scripts/send-production-welcome-email.mjs

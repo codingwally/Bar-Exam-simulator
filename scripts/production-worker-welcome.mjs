@@ -12,7 +12,7 @@ if (deployment.versions.length !== 1 || deployment.versions[0].percentage !== 10
 const versionId = deployment.versions[0].version_id;
 const settings = (await (await get('/settings')).json()).result;
 const version = (await (await get('/versions/' + versionId)).json()).result;
-const response = await get('/content');
+const response = await get('');
 const parts = await response.formData();
 console.log(JSON.stringify({ versionId, settingsKeys: Object.keys(settings), versionKeys: Object.keys(version),
   resourceKeys: Object.keys(version.resources || {}), runtime: version.resources?.script_runtime,

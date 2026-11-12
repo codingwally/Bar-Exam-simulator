@@ -58,8 +58,21 @@ if (!settings.bindings.some(b => b.name === 'RESEND_API_KEY' && b.type === 'secr
 if (settings.bindings.some(b => !['plain_text', 'secret_text', 'json'].includes(b.type))) throw new Error('Unreviewed resource bindings');
 const originalSettingsHash = hash(JSON.stringify(settings));
 const source = await api('');
-const main = source.headers.get('cf-entrypoint');
-const downloaded = modules(Buffer.from(await source.arrayBuffer()), source.headers.get('content-type') || '');
+let main = source.headers.get('cf-entrypoint');
+let downloaded = modules(Buffer.from(await source.arrayBuffer()), source.headers.get('content-type') || '');
+// Cloudflare's script download returns the latest uploaded bundle, even after
+// traffic is restored to an older version. Strip only our own inactive wrapper,
+// and require the exact original version and captured module hashes.
+if (main === 'authorized-welcome-test-entry.mjs') {
+  const baseline = {
+    'maintenance-entry.js': '8d427ebeaac24df3ef4637b3030e875ce287dcb71727fb7bd77de5ae66d9583f',
+    './8e867ae37cbf46a42986c8731bce699464545fd8-bpi-instapay-149.png': '00df8567b0068b980d2135bcc74dd2963e8398ae472209e9c84f89f6b0f3c1b9',
+  };
+  if (originalVersion !== 'c276a6aa-69da-439d-bf25-426bdc9780a9') throw new Error('Original production version changed');
+  downloaded = downloaded.filter(m => !['authorized-welcome-test-entry.mjs', 'authorized-welcome-test-helper.mjs'].includes(m.name));
+  if (downloaded.length !== 2 || downloaded.some(m => hash(m.bytes) !== baseline[m.name])) throw new Error('Original module bytes differ');
+  main = 'maintenance-entry.js';
+}
 if (!main || !downloaded.some(m => m.name === main) || !/^[\w.-]+\.js$/.test(main)) throw new Error('Module entrypoint unavailable');
 const authorization = 'Bearer ' + randomBytes(32).toString('hex');
 console.log('::add-mask::' + authorization);

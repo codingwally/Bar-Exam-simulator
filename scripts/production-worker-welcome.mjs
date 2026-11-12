@@ -43,8 +43,9 @@ function modules(bytes, contentType) {
     const next = bytes.indexOf(Buffer.concat([Buffer.from('\r\n'), marker]), headerEnd + 4);
     if (headerEnd < 0 || next < 0) throw new Error('Invalid multipart bundle');
     const headers = bytes.subarray(position + 2, headerEnd).toString();
-    const name = /\bname="([^"]+)"/.exec(headers)?.[1];
-    const type = /^Content-Type:\s*([^\r\n]+)/im.exec(headers)?.[1];
+    const nameMatch = /\bname=(?:"([^"]+)"|([^;\r\n]+))/.exec(headers);
+    const name = nameMatch?.[1] || nameMatch?.[2]?.trim();
+    const type = /^Content-Type:\s*([^\r\n]+)/im.exec(headers)?.[1] || (name?.endsWith('.js') ? 'application/javascript+module' : 'application/octet-stream');
     if (!name || !type) throw new Error('Module name or content type missing');
     result.push({ name, type, bytes: bytes.subarray(headerEnd + 4, next) });
     position = next + 2;

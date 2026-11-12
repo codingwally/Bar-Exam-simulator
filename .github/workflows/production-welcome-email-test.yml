@@ -2,11 +2,6 @@ name: Send production welcome email test
 
 on:
   workflow_dispatch:
-  push:
-    branches: [codex/production-welcome-email-test]
-    paths:
-      - .github/workflows/production-welcome-email-test.yml
-      - scripts/send-production-welcome-email.mjs
 
 permissions:
   contents: read
@@ -20,7 +15,7 @@ jobs:
     if: github.repository == 'codingwally/Bar-Exam-simulator'
     runs-on: ubuntu-latest
     environment: production-worker
-    timeout-minutes: 3
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -28,13 +23,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Inspect existing production Worker email capability
+      - name: Send through the existing production Worker and restore its version
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: node scripts/production-worker-welcome.mjs
-      - name: Send Welcome back to Wally and Gilmar
-        env:
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          EMAIL_TEST_REQUEST_KEY: ${{ github.run_id }}
-        run: node scripts/send-production-welcome-email.mjs

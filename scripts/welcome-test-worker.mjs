@@ -15,6 +15,7 @@ export function createWelcomeWorker(original, { tokenHash, expiresAt, requestKey
       const digest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(supplied)))].map(x => x.toString(16).padStart(2, '0')).join('');
       if (Date.now() > expiresAt || digest !== tokenHash || request.method !== 'POST') return reply({ error: 'Not found' }, 404);
       if (!env.RESEND_API_KEY) return reply({ error: 'Production Resend binding unavailable' }, 503);
+      if (pathname === '/_internal/authorized-welcome-email-test/ready') return reply({ ready: true, requestKey });
       if (pathname === '/_internal/authorized-welcome-email-test/status') {
         const ids = await request.json();
         if (!Array.isArray(ids) || ids.length !== 2 || ids.some(id => !/^[a-f0-9-]{36}$/i.test(id))) return reply({ error: 'Invalid IDs' }, 400);

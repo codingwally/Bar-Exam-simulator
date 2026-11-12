@@ -88,13 +88,21 @@ try {
   await deploy(uploaded.id, 'Authorized fixed-recipient welcome email test');
   if (await active() !== uploaded.id) throw new Error('Test version activation not confirmed');
   const endpoint = 'https://duediligence-api.wallyesteban1993.workers.dev/_internal/authorized-welcome-email-test';
-  const response = await fetch(endpoint, { method: 'POST', headers: { Authorization: authorization }, signal: AbortSignal.timeout(30000) });
+  let ready = false;
+  for (let attempt = 0; attempt < 30; attempt++) {
+    const probe = await fetch(endpoint + '/ready', { method: 'POST', headers: { Authorization: authorization, Origin: 'https://duediligence.ph' }, signal: AbortSignal.timeout(10000) });
+    const state = await probe.json().catch(() => ({}));
+    if (state.ready === true && state.requestKey === requestKey) { ready = true; break; }
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+  if (!ready) throw new Error('Temporary test route did not become ready; no send attempted');
+  const response = await fetch(endpoint, { method: 'POST', headers: { Authorization: authorization, Origin: 'https://duediligence.ph' }, signal: AbortSignal.timeout(30000) });
   const result = await response.json();
   console.log(JSON.stringify({ sendHttpStatus: response.status, ...result }));
   if (!response.ok || result.accepted?.length !== 2) throw new Error('Welcome email acceptance was not confirmed');
   if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, `Welcome back email accepted by Resend:\n\n${result.accepted.map(x => `- ${x.to}: ${x.id}`).join('\n')}\n`);
   await new Promise(resolve => setTimeout(resolve, 4000));
-  const statusResponse = await fetch(endpoint + '/status', { method: 'POST', headers: { Authorization: authorization, 'Content-Type': 'application/json' }, body: JSON.stringify(result.accepted.map(x => x.id)), signal: AbortSignal.timeout(40000) });
+  const statusResponse = await fetch(endpoint + '/status', { method: 'POST', headers: { Authorization: authorization, Origin: 'https://duediligence.ph', 'Content-Type': 'application/json' }, body: JSON.stringify(result.accepted.map(x => x.id)), signal: AbortSignal.timeout(40000) });
   console.log(JSON.stringify({ deliveryStatusHttpStatus: statusResponse.status, ...await statusResponse.json() }));
 } finally {
   if (activated) {
